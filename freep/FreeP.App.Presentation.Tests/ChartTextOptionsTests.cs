@@ -129,4 +129,48 @@ public sealed class ChartTextOptionsTests
 
         chart.TextStyle.Should().BeNull("blank values restore inherited chart defaults");
     }
+
+    [Fact]
+    public void SetChartTextOptions_TitleTarget_RoundTripsAndUndoRestores()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        var chart = new ChartShape { Title = "Revenue" };
+        var shape = new SlideShape { Id = 1, Kind = SlideShapeKind.Chart, Chart = chart };
+        slide.Shapes.Add(shape);
+        presentation.Slides.Add(slide);
+        var bus = new PresentationCommandBus(presentation);
+
+        var options = new ChartTextOptions(
+            "Calibri", 16, true, true,
+            new ThemeAwareColor(SrgbColor.FromRgb(0xC00000)),
+            ChartTextTarget.Title);
+        bus.Execute(new SetChartTextOptionsCommand(0, shape.Id, options));
+
+        chart.TitleStyle.Should().NotBeNull();
+        chart.TitleStyle!.FontFamily.Should().Be("Calibri");
+        chart.TextStyle.Should().BeNull();
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        roundTripped.TitleStyle.Should().NotBeNull();
+        roundTripped.TitleStyle!.FontSizePt.Should().Be(16);
+        roundTripped.TitleStyle.Bold.Should().BeTrue();
+        roundTripped.TitleStyle.Italic.Should().BeTrue();
+        roundTripped.TitleStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
+
+        var titlePlan = ChartRenderPlanner.BuildScenePlan(
+            roundTripped,
+            new ChartPlanRect(0, 0, 320, 220)).Title!.Value;
+        titlePlan.FontFamily.Should().Be("Calibri");
+        titlePlan.FontSize.Should().Be(16);
+        titlePlan.IsBold.Should().BeTrue();
+        titlePlan.IsItalic.Should().BeTrue();
+        titlePlan.TextColor.Should().Be(SrgbColor.FromRgb(0xC00000));
+
+        bus.Undo();
+        chart.TitleStyle.Should().BeNull();
+    }
 }

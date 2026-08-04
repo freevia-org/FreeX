@@ -49,9 +49,13 @@ public sealed class ChartTextOptionsPlanner
     private bool? _italic;
     private ThemeAwareColor? _color;
 
-    private ChartTextOptionsPlanner(ChartShape chart)
+    private readonly ChartTextTarget _target;
+
+    private ChartTextOptionsPlanner(ChartShape chart, ChartTextTarget target)
     {
-        if (chart.TextStyle is { IsImplicitDefault: false } style)
+        _target = target;
+        var style = target == ChartTextTarget.Title ? chart.TitleStyle : chart.TextStyle;
+        if (style is { IsImplicitDefault: false })
         {
             _fontFamily = style.FontFamily;
             _fontSizePt = style.FontSizePt;
@@ -61,9 +65,9 @@ public sealed class ChartTextOptionsPlanner
         }
     }
 
-    public static ChartTextOptionsSurfacePlan BuildSurfacePlan() => new(
+    public static ChartTextOptionsSurfacePlan BuildSurfacePlan(ChartTextTarget target = ChartTextTarget.Chart) => new(
         CommandId,
-        DialogTitle,
+        target == ChartTextTarget.Title ? "Chart Title Text Options" : DialogTitle,
         FontFamilyLabel,
         FontSizeLabel,
         BoldLabel,
@@ -73,10 +77,12 @@ public sealed class ChartTextOptionsPlanner
         OkLabel,
         CancelLabel);
 
-    public static ChartTextOptionsPlanner FromChart(ChartShape chart)
+    public static ChartTextOptionsPlanner FromChart(
+        ChartShape chart,
+        ChartTextTarget target = ChartTextTarget.Chart)
     {
         ArgumentNullException.ThrowIfNull(chart);
-        return new ChartTextOptionsPlanner(chart);
+        return new ChartTextOptionsPlanner(chart, target);
     }
 
     public string? FontFamily => _fontFamily;
@@ -102,7 +108,8 @@ public sealed class ChartTextOptionsPlanner
         _fontSizePt,
         _bold,
         _italic,
-        _color);
+        _color,
+        _target);
 
     public static double? ParseOptionalFontSize(string? text)
     {
