@@ -47,6 +47,7 @@ Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "defau
     ExcludedProjectPathPrefixes = @(
         "tests/FreeX.App.Host.Tests/",
         "tests/FreeX.App.UI.Tests/",
+        "tests/Free.Shared.Shell.Avalonia.Tests/",
         "tests/Free.Shared.Ribbon.Wpf.Tests/"
     )
 }
