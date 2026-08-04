@@ -209,6 +209,43 @@ public sealed class PresentationMediaTranscriptPlannerTests
     }
 
     [Fact]
+    public void BuildTranscriptPlan_ClampsTtmlCueToInheritedAncestorEnd()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 45,
+            Name = "Bounded TTML video",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        Source = "ppt/media/bounded.ttml",
+                        ContentType = "application/ttml+xml",
+                        Bytes = Encoding.UTF8.GetBytes("""
+                            <tt xmlns="http://www.w3.org/ns/ttml">
+                              <body begin="500ms" dur="1000ms"><div begin="250ms" end="400ms">
+                                <p begin="100ms" dur="1000ms">Bounded cue.</p>
+                              </div></body>
+                            </tt>
+                            """)
+                    }
+                }
+            }
+        });
+
+        var cue = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation)
+            .Tracks.Should().ContainSingle().Subject.Cues.Should().ContainSingle().Subject;
+
+        cue.StartTime.Should().Be(TimeSpan.FromMilliseconds(850));
+        cue.EndTime.Should().Be(TimeSpan.FromMilliseconds(900));
+    }
+
+    [Fact]
     public void BuildTranscriptPlan_ClassifiesExternalNoBytesAndUnsupportedTracks()
     {
         var presentation = Presentation.CreateEmpty();
