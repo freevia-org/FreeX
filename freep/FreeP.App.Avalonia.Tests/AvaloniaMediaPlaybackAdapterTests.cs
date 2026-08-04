@@ -276,6 +276,46 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
     }
 
     [Fact]
+    public void Controller_UsesPreferredCaptionTrackAndRetainsFallback()
+    {
+        var factory = new FakeBackendFactory();
+        var overlay = new Canvas();
+        var controller = new AvaloniaSlideShowMediaController(overlay, factory);
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 42,
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 9144000,
+            ExtentCyEmu = 6858000,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                PlaybackStartMode = MediaPlaybackStartMode.Automatically,
+                Bytes = [1, 2, 3],
+                ContentType = "video/mp4",
+            },
+        });
+        var tracks = new[]
+        {
+            new PresentationMediaTranscriptTrackDescriptor(
+                0, 42, "Video", 0, "English", "en-US", "english.vtt", "text/vtt",
+                PresentationMediaTranscriptTrackStatus.Available, string.Empty,
+                [new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "English caption")]),
+            new PresentationMediaTranscriptTrackDescriptor(
+                0, 42, "Video", 1, "Spanish", "es-ES", "spanish.vtt", "text/vtt",
+                PresentationMediaTranscriptTrackStatus.Available, string.Empty,
+                [new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Subtitulo")])
+        };
+
+        controller.EnterSlide(slide, 960, 720, 960, 720, tracks, 42, 1);
+        factory.Backend.Sessions.Single().Seek(TimeSpan.FromMilliseconds(500));
+        controller.RefreshCaptionsForTest();
+        controller.CaptionTextForTest(42).Should().Be("Subtitulo");
+        controller.Teardown();
+    }
+
+    [Fact]
     public void Controller_UsesAuthoredWebVttCuePlacement()
     {
         var factory = new FakeBackendFactory();

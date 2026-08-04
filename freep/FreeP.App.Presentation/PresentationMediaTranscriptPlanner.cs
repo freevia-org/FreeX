@@ -311,6 +311,55 @@ public static class PresentationMediaTranscriptPlanner
             && shape.Media is not null);
     }
 
+    public static PresentationMediaTranscriptTrackDescriptor? SelectPlaybackTrack(
+        IReadOnlyList<PresentationMediaTranscriptTrackDescriptor>? tracks,
+        uint shapeId,
+        int? preferredTrackIndex = null)
+        => SelectPlaybackTrackCore(
+            tracks,
+            slideIndex: null,
+            shapeId,
+            preferredSlideIndex: null,
+            preferredTrackIndex);
+
+    public static PresentationMediaTranscriptTrackDescriptor? SelectPlaybackTrack(
+        IReadOnlyList<PresentationMediaTranscriptTrackDescriptor>? tracks,
+        int slideIndex,
+        uint shapeId,
+        int? preferredSlideIndex,
+        int? preferredTrackIndex)
+        => SelectPlaybackTrackCore(
+            tracks,
+            slideIndex,
+            shapeId,
+            preferredSlideIndex,
+            preferredTrackIndex);
+
+    private static PresentationMediaTranscriptTrackDescriptor? SelectPlaybackTrackCore(
+        IReadOnlyList<PresentationMediaTranscriptTrackDescriptor>? tracks,
+        int? slideIndex,
+        uint shapeId,
+        int? preferredSlideIndex,
+        int? preferredTrackIndex)
+    {
+        if (tracks is null)
+        {
+            return null;
+        }
+
+        var shapeTracks = tracks.Where(track =>
+            (!slideIndex.HasValue || track.SlideIndex == slideIndex)
+            && track.ShapeId == shapeId
+            && track.HasTranscript).ToArray();
+        var selectedTrackIndex = preferredSlideIndex == slideIndex
+            ? preferredTrackIndex
+            : null;
+        return selectedTrackIndex is int preferred
+            ? shapeTracks.FirstOrDefault(track => track.TrackIndex == preferred)
+                ?? shapeTracks.FirstOrDefault()
+            : shapeTracks.FirstOrDefault();
+    }
+
     public static PresentationMediaCaptionAuthoringPanePlan BuildCaptionAuthoringPanePlan(
         Slide? slide,
         int slideIndex,

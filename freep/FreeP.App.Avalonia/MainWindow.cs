@@ -10717,7 +10717,14 @@ public sealed partial class MainWindow : Window
         if (animationStartIndex is int selectedAnimationIndex)
             route = route.WithAnimationStartIndex(selectedAnimationIndex);
 
-        var slideShow = new SlideShowWindow(_presentation, route, Editor.SetSlideNotesText);
+        var selectedCaption = GetSelectedCaptionPlaybackSelection();
+        var slideShow = new SlideShowWindow(
+            _presentation,
+            route,
+            Editor.SetSlideNotesText,
+            selectedCaption?.SlideIndex,
+            selectedCaption?.ShapeId,
+            selectedCaption?.TrackIndex);
         if (timingIntent != FreeP.App.Compositor.SlideShowTimingIntent.None)
             slideShow.SetPresenterTimingIntent(timingIntent);
 
@@ -10732,6 +10739,16 @@ public sealed partial class MainWindow : Window
             slideShow.Show(this);
         else
             slideShow.Show();
+    }
+
+    private (int SlideIndex, uint ShapeId, int TrackIndex)? GetSelectedCaptionPlaybackSelection()
+    {
+        var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
+            Editor.CurrentSlide,
+            Editor.SelectedShapeIds);
+        return mediaShape is not null && _selectedMediaCaptionTrackIndex is int trackIndex
+            ? (Editor.CurrentSlideIndex, mediaShape.Id, trackIndex)
+            : null;
     }
 
     internal bool TryBuildCustomSlideShowRoute(
@@ -10799,7 +10816,14 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
-        var slideShow = new SlideShowWindow(_presentation, route, Editor.SetSlideNotesText);
+        var selectedCaption = GetSelectedCaptionPlaybackSelection();
+        var slideShow = new SlideShowWindow(
+            _presentation,
+            route,
+            Editor.SetSlideNotesText,
+            selectedCaption?.SlideIndex,
+            selectedCaption?.ShapeId,
+            selectedCaption?.TrackIndex);
         // A named custom show is still a separate playback window. Restore the
         // editor's focus when it closes just like the normal slideshow route.
         slideShow.Closed += (_, _) => RestoreOwnerFocus();

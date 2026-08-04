@@ -131,7 +131,11 @@ internal sealed class AvaloniaSlideShowMediaController
         double slideDipH,
         double canvasW,
         double canvasH,
-        IReadOnlyList<PresentationMediaTranscriptTrackDescriptor>? captionTracks = null)
+        IReadOnlyList<PresentationMediaTranscriptTrackDescriptor>? captionTracks = null,
+        uint? preferredCaptionShapeId = null,
+        int? preferredCaptionTrackIndex = null,
+        int? captionSlideIndex = null,
+        int? preferredCaptionSlideIndex = null)
     {
         ArgumentNullException.ThrowIfNull(slide);
         SetCanvasBounds(canvasW, canvasH);
@@ -172,8 +176,17 @@ internal sealed class AvaloniaSlideShowMediaController
                         plan.Bounds);
                 }
 
-                var captionTrack = captionTracks?.FirstOrDefault(track =>
-                    track.ShapeId == shape.Id && track.HasTranscript);
+                var captionTrack = captionSlideIndex is int currentSlideIndex
+                    ? PresentationMediaTranscriptPlanner.SelectPlaybackTrack(
+                        captionTracks,
+                        currentSlideIndex,
+                        shape.Id,
+                        preferredCaptionSlideIndex,
+                        preferredCaptionShapeId == shape.Id ? preferredCaptionTrackIndex : null)
+                    : PresentationMediaTranscriptPlanner.SelectPlaybackTrack(
+                        captionTracks,
+                        shape.Id,
+                        preferredCaptionShapeId == shape.Id ? preferredCaptionTrackIndex : null);
                 Border? captionHost = null;
                 TextBlock? captionText = null;
                 if (captionTrack is not null)

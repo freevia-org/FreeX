@@ -4471,13 +4471,30 @@ public sealed partial class MainWindow : Window
         if (animationStartIndex is int selectedAnimationIndex)
             route = route.WithAnimationStartIndex(selectedAnimationIndex);
 
-        var window = new SlideShowWindow(_presentation, route, Editor.SetSlideNotesText);
+        var selectedCaption = GetSelectedCaptionPlaybackSelection();
+        var window = new SlideShowWindow(
+            _presentation,
+            route,
+            Editor.SetSlideNotesText,
+            selectedCaption?.SlideIndex,
+            selectedCaption?.ShapeId,
+            selectedCaption?.TrackIndex);
         if (timingIntent != FreeP.App.Compositor.SlideShowTimingIntent.None)
             window.SetPresenterTimingIntent(timingIntent);
         // Owner can only be set when the main window is already shown (not during unit tests).
         if (IsVisible)
             window.Owner = this;
         window.Show();
+    }
+
+    private (int SlideIndex, uint ShapeId, int TrackIndex)? GetSelectedCaptionPlaybackSelection()
+    {
+        var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
+            Editor.CurrentSlide,
+            Editor.SelectedShapeIds);
+        return mediaShape is not null && _selectedMediaCaptionTrackIndex is int trackIndex
+            ? (Editor.CurrentSlideIndex, mediaShape.Id, trackIndex)
+            : null;
     }
 
     // ── Chart data editing (Wave 9B) ──────────────────────────────────────────────
@@ -4550,7 +4567,14 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
-        var window = new SlideShowWindow(_presentation, route, Editor.SetSlideNotesText);
+        var selectedCaption = GetSelectedCaptionPlaybackSelection();
+        var window = new SlideShowWindow(
+            _presentation,
+            route,
+            Editor.SetSlideNotesText,
+            selectedCaption?.SlideIndex,
+            selectedCaption?.ShapeId,
+            selectedCaption?.TrackIndex);
         if (IsVisible)
             window.Owner = this;
         window.Show();

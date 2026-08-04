@@ -7,6 +7,59 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class PresentationMediaTranscriptPlannerTests
 {
     [Fact]
+    public void SelectPlaybackTrack_PrefersSelectedLanguageAndFallsBackToFirstPlayable()
+    {
+        var english = new PresentationMediaTranscriptTrackDescriptor(
+            0, 42, "Video", 0, "English", "en-US", "english.vtt", "text/vtt",
+            PresentationMediaTranscriptTrackStatus.Available, string.Empty,
+            [new(TimeSpan.Zero, TimeSpan.FromSeconds(1), "English")]);
+        var spanish = english with
+        {
+            TrackIndex = 1,
+            Label = "Spanish",
+            Language = "es-ES",
+            Source = "spanish.vtt",
+            Cues = [new(TimeSpan.Zero, TimeSpan.FromSeconds(1), "Espanol")]
+        };
+
+        PresentationMediaTranscriptPlanner.SelectPlaybackTrack([english, spanish], 42, 1)
+            .Should().Be(spanish);
+        PresentationMediaTranscriptPlanner.SelectPlaybackTrack([english, spanish], 42, 8)
+            .Should().Be(english);
+        PresentationMediaTranscriptPlanner.SelectPlaybackTrack([english, spanish], 99, 1)
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void SelectPlaybackTrack_DuplicateShapeIdsRemainBoundToSourceSlide()
+    {
+        var slideZeroEnglish = new PresentationMediaTranscriptTrackDescriptor(
+            0, 42, "Video", 0, "English", "en-US", "slide0-en.vtt", "text/vtt",
+            PresentationMediaTranscriptTrackStatus.Available, string.Empty,
+            [new(TimeSpan.Zero, TimeSpan.FromSeconds(1), "Slide zero English")]);
+        var slideZeroSpanish = slideZeroEnglish with
+        {
+            TrackIndex = 1,
+            Label = "Spanish",
+            Language = "es-ES",
+            Source = "slide0-es.vtt",
+            Cues = [new(TimeSpan.Zero, TimeSpan.FromSeconds(1), "Slide zero Spanish")]
+        };
+        var slideOneEnglish = slideZeroEnglish with
+        {
+            SlideIndex = 1,
+            Source = "slide1-en.vtt",
+            Cues = [new(TimeSpan.Zero, TimeSpan.FromSeconds(1), "Slide one English")]
+        };
+
+        var tracks = new[] { slideZeroEnglish, slideZeroSpanish, slideOneEnglish };
+        PresentationMediaTranscriptPlanner.SelectPlaybackTrack(tracks, 0, 42, 0, 1)
+            .Should().Be(slideZeroSpanish);
+        PresentationMediaTranscriptPlanner.SelectPlaybackTrack(tracks, 1, 42, 0, 1)
+            .Should().Be(slideOneEnglish);
+    }
+
+    [Fact]
     public void FindActiveCue_UsesHalfOpenTimeIntervals()
     {
         var track = new PresentationMediaTranscriptTrackDescriptor(

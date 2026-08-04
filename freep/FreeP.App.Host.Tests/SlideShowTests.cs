@@ -2053,6 +2053,31 @@ public sealed class SlideShowMediaControllerTests
     }
 
     [StaFact]
+    public void EnterSlide_WithPreferredCaptionTrack_UsesSelectedLanguage()
+    {
+        var overlay = new System.Windows.Controls.Canvas();
+        var ctrl = new SlideShowMediaController(overlay, new FakeFileWriter());
+        var slide = SlideWithMedia(MakeMediaShape());
+        var tracks = new[]
+        {
+            new PresentationMediaTranscriptTrackDescriptor(
+                0, 1, "Video1", 0, "English", "en-US", "english.vtt", "text/vtt",
+                PresentationMediaTranscriptTrackStatus.Available, string.Empty,
+                [new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "English caption")]),
+            new PresentationMediaTranscriptTrackDescriptor(
+                0, 1, "Video1", 1, "Spanish", "es-ES", "spanish.vtt", "text/vtt",
+                PresentationMediaTranscriptTrackStatus.Available, string.Empty,
+                [new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Subtitulo")])
+        };
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720, tracks, 1, 1);
+        ctrl.RefreshCaptionsForTest(TimeSpan.FromMilliseconds(500));
+
+        ctrl.CaptionTextForTest(1).Should().Be("Subtitulo");
+        ctrl.Teardown();
+    }
+
+    [StaFact]
     public void ActiveWebVttCue_RendersBasicInlineEmphasis()
     {
         var overlay = new System.Windows.Controls.Canvas();

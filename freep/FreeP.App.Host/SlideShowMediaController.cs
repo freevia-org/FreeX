@@ -206,7 +206,11 @@ public sealed class SlideShowMediaController
     /// <param name="canvasH">Actual pixel height of the slide canvas.</param>
     public void EnterSlide(Slide slide, double slideDipW, double slideDipH,
                            double canvasW, double canvasH,
-                           IReadOnlyList<PresentationMediaTranscriptTrackDescriptor>? captionTracks = null)
+                           IReadOnlyList<PresentationMediaTranscriptTrackDescriptor>? captionTracks = null,
+                           uint? preferredCaptionShapeId = null,
+                           int? preferredCaptionTrackIndex = null,
+                           int? captionSlideIndex = null,
+                           int? preferredCaptionSlideIndex = null)
     {
         // Teardown any previous slide's media first (guard against double-call).
         Teardown();
@@ -224,8 +228,17 @@ public sealed class SlideShowMediaController
 
             var rect = ComputeMediaRect(shape, slideDipW, slideDipH, canvasW, canvasH);
             var slot = CreateSlot(shape.Id, shape.Media, rect, shape.Media.IsVideo);
-            var captionTrack = captionTracks?.FirstOrDefault(track =>
-                track.ShapeId == shape.Id && track.HasTranscript);
+            var captionTrack = captionSlideIndex is int currentSlideIndex
+                ? PresentationMediaTranscriptPlanner.SelectPlaybackTrack(
+                    captionTracks,
+                    currentSlideIndex,
+                    shape.Id,
+                    preferredCaptionSlideIndex,
+                    preferredCaptionShapeId == shape.Id ? preferredCaptionTrackIndex : null)
+                : PresentationMediaTranscriptPlanner.SelectPlaybackTrack(
+                    captionTracks,
+                    shape.Id,
+                    preferredCaptionShapeId == shape.Id ? preferredCaptionTrackIndex : null);
             if (captionTrack is not null)
             {
                 var caption = CreateCaptionView(rect);

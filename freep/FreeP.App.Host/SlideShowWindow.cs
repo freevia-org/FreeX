@@ -107,6 +107,9 @@ public sealed class SlideShowWindow : Window
     // Current slide dimensions in DIP (computed once when the slide is displayed).
     private double _slideDipW;
     private double _slideDipH;
+    private readonly int? _preferredCaptionSlideIndex;
+    private readonly uint? _preferredCaptionShapeId;
+    private readonly int? _preferredCaptionTrackIndex;
 
     // ── Construction ─────────────────────────────────────────────────────────────
 
@@ -141,8 +144,18 @@ public sealed class SlideShowWindow : Window
     public SlideShowWindow(
         Presentation presentation,
         SlideShowPlaybackRoute playbackRoute,
-        Action<int, string?>? setSlideNotesText)
-        : this(presentation, playbackRoute, captureBackend: null, setSlideNotesText)
+        Action<int, string?>? setSlideNotesText,
+        int? preferredCaptionSlideIndex = null,
+        uint? preferredCaptionShapeId = null,
+        int? preferredCaptionTrackIndex = null)
+        : this(
+            presentation,
+            playbackRoute,
+            captureBackend: null,
+            setSlideNotesText,
+            preferredCaptionSlideIndex,
+            preferredCaptionShapeId,
+            preferredCaptionTrackIndex)
     {
     }
 
@@ -150,11 +163,17 @@ public sealed class SlideShowWindow : Window
         Presentation presentation,
         SlideShowPlaybackRoute playbackRoute,
         ISlideShowRecordingCaptureBackend? captureBackend,
-        Action<int, string?>? setSlideNotesText = null)
+        Action<int, string?>? setSlideNotesText = null,
+        int? preferredCaptionSlideIndex = null,
+        uint? preferredCaptionShapeId = null,
+        int? preferredCaptionTrackIndex = null)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _playbackRoute = playbackRoute ?? throw new ArgumentNullException(nameof(playbackRoute));
         _setSlideNotesText = setSlideNotesText;
+        _preferredCaptionSlideIndex = preferredCaptionSlideIndex;
+        _preferredCaptionShapeId = preferredCaptionShapeId;
+        _preferredCaptionTrackIndex = preferredCaptionTrackIndex;
         _controller = new SlideShowController(
             _playbackRoute.Slides,
             _playbackRoute.StartIndex,
@@ -987,6 +1006,10 @@ public sealed class SlideShowWindow : Window
         var slide = _revealedHiddenSlide ?? plan.Slide;
         if (slide is null) return;
 
+        var captionSlideIndex = _revealedHiddenSlideSourceIndex >= 0
+            ? _revealedHiddenSlideSourceIndex
+            : CurrentPresentationSlideIndex;
+
         // Prepare animation overlay for the new slide.
         PrepareAnimationOverlay(slide);
 
@@ -997,9 +1020,7 @@ public sealed class SlideShowWindow : Window
         var captionTracks = PresentationMediaTranscriptPlanner
             .BuildTranscriptPlan(_presentation)
             .Tracks
-            .Where(track => track.SlideIndex == (_revealedHiddenSlideSourceIndex >= 0
-                ? _revealedHiddenSlideSourceIndex
-                : CurrentPresentationSlideIndex))
+            .Where(track => track.SlideIndex == captionSlideIndex)
             .ToArray();
         _mediaController.EnterSlide(
             slide,
@@ -1007,7 +1028,11 @@ public sealed class SlideShowWindow : Window
             _slideDipH,
             mediaCanvasW,
             mediaCanvasH,
-            captionTracks);
+            captionTracks,
+            preferredCaptionShapeId: _preferredCaptionSlideIndex == captionSlideIndex ? _preferredCaptionShapeId : null,
+            preferredCaptionTrackIndex: _preferredCaptionTrackIndex,
+            captionSlideIndex: captionSlideIndex,
+            preferredCaptionSlideIndex: _preferredCaptionSlideIndex);
 
         // Apply transition if requested.
         if (plan.Transition is { } t)
