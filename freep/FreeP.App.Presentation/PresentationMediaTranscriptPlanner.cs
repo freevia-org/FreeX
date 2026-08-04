@@ -44,7 +44,14 @@ public sealed record PresentationMediaTranscriptCueSpan(
     string Text,
     bool Bold = false,
     bool Italic = false,
-    bool Underline = false);
+    bool Underline = false)
+{
+    public string? Voice { get; init; }
+
+    public string? Language { get; init; }
+
+    public IReadOnlyList<string> Classes { get; init; } = [];
+}
 
 public sealed record PresentationMediaTranscriptCueDescriptor(
     TimeSpan StartTime,
@@ -1711,21 +1718,66 @@ public static class PresentationMediaTranscriptPlanner
         var bold = 0;
         var italic = 0;
         var underline = 0;
+        var voices = new List<string>();
+        var languages = new List<string>();
+        var classScopes = new List<IReadOnlyList<string>>();
 
         foreach (Match match in Regex.Matches(
                      markup,
-                     "(?<tag><(?<close>/)?(?<name>b|i|u|c(?:\\.[^ >]+)*|v(?:\\.[^ >]+)*|lang(?:\\.[^ >]+)*)(?: [^>]*)?>)|(?<text>[^<]+)",
+                     "(?<tag><(?<close>/)?(?<name>b|i|u|c(?:\\.[^ >]+)*|v(?:\\.[^ >]+)*|lang(?:\\.[^ >]+)*)(?<args>[^>]*)>)|(?<text>[^<]+)",
                      RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
         {
             if (match.Groups["tag"].Success)
             {
-                var name = match.Groups["name"].Value.Split('.')[0].ToLowerInvariant();
+                var rawName = match.Groups["name"].Value;
+                var name = rawName.Split('.')[0].ToLowerInvariant();
+                var dottedValue = rawName.Contains('.', StringComparison.Ordinal)
+                    ? NormalizeTagValue(string.Join('.', rawName.Split('.').Skip(1)))
+                    : null;
+                var tagValue = NormalizeTagValue(match.Groups["args"].Value) ?? dottedValue;
                 var delta = match.Groups["close"].Success ? -1 : 1;
                 switch (name)
                 {
                     case "b": bold = Math.Max(0, bold + delta); break;
                     case "i": italic = Math.Max(0, italic + delta); break;
                     case "u": underline = Math.Max(0, underline + delta); break;
+                    case "v":
+                        if (delta < 0)
+                        {
+                            PopScope(voices);
+                        }
+                        else if (tagValue is { } voice)
+                        {
+                            voices.Add(voice);
+                        }
+                        break;
+                    case "lang":
+                        if (delta < 0)
+                        {
+                            PopScope(languages);
+                        }
+                        else if (tagValue is { } language)
+                        {
+                            languages.Add(language);
+                        }
+                        break;
+                    case "c":
+                        if (delta < 0)
+                        {
+                            PopScope(classScopes);
+                        }
+                        else
+                        {
+                            var classes = rawName
+                                .Split('.')
+                                .Skip(1)
+                                .Select(NormalizeTagValue)
+                                .Where(value => value is not null)
+                                .Cast<string>()
+                                .ToArray();
+                            classScopes.Add(classes);
+                        }
+                        break;
                 }
 
                 continue;
@@ -1738,7 +1790,12 @@ public static class PresentationMediaTranscriptPlanner
                     text,
                     bold > 0,
                     italic > 0,
-                    underline > 0));
+                    underline > 0)
+                {
+                    Voice = voices.LastOrDefault(),
+                    Language = languages.LastOrDefault(),
+                    Classes = classScopes.SelectMany(scope => scope).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
+                });
             }
         }
 
@@ -1750,6 +1807,18 @@ public static class PresentationMediaTranscriptPlanner
         spans[0] = spans[0] with { Text = spans[0].Text.TrimStart() };
         spans[^1] = spans[^1] with { Text = spans[^1].Text.TrimEnd() };
         return spans.Where(span => span.Text.Length > 0).ToArray();
+
+        static void PopScope<T>(List<T> scopes)
+        {
+            if (scopes.Count > 0)
+                scopes.RemoveAt(scopes.Count - 1);
+        }
+
+        static string? NormalizeTagValue(string value)
+        {
+            var normalized = value.Trim();
+            return normalized.Length == 0 ? null : normalized;
+        }
     }
 
     private static string StripCueMarkup(string line)
