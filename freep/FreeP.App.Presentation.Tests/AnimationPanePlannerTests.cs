@@ -1372,7 +1372,9 @@ public sealed class AnimationPanePlannerTests
 
         session.Segments.Select(segment => segment.ShapeId).Should().Equal(20u, 21u, 22u);
         session.Segments.Should().NotContain(segment => segment.ShapeId == 30u);
-        session.TotalDurationMs.Should().Be(1100);
+        session.Segments.Select(segment => segment.RelativeStartMs).Should().Equal(0, 0, 500);
+        session.Segments.Select(segment => segment.RelativeEndMs).Should().Equal(400, 500, 700);
+        session.TotalDurationMs.Should().Be(700);
     }
 
     [Theory]
