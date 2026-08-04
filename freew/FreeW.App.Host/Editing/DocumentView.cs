@@ -9592,10 +9592,11 @@ public sealed class DocumentView : RichTextBox
         // recovers the toggles and style id from this tag, which WPF FlowDocument tables can't express).
         var isPaginationSegment = paginationPage is not null && segmentCount > 1;
         var autoFitColumnWidthsDip = ResolveContentAutoFitColumnWidths(table, document);
+        tableLayoutPlan ??= DocumentViewLayoutPlanner.BuildTableLayoutPlan(table, page: document.Page);
         var wpf = new WpfTable
         {
             BreakPageBefore = isPaginationSegment && segmentIndex > 0,
-            Margin = ResolveTableBlockMargin(table, document, autoFitColumnWidthsDip?.Sum()),
+            Margin = ResolveTableBlockMargin(table, document, autoFitColumnWidthsDip?.Sum(), tableLayoutPlan),
             Tag = new WpfTableTag(
                 table.Formatting,
                 table.TableStyleId,
@@ -9630,7 +9631,6 @@ public sealed class DocumentView : RichTextBox
                 column.Width = new GridLength(table.ColumnWidthsPt[c] * PxPerPoint);
             wpf.Columns.Add(column);
         }
-        tableLayoutPlan ??= DocumentViewLayoutPlanner.BuildTableLayoutPlan(table, page: document.Page);
         var cellEffectiveFills = tableLayoutPlan.Cells.ToDictionary(
             cell => (cell.RowIndex, cell.CellIndex),
             cell => cell.EffectiveFill);
@@ -9949,7 +9949,8 @@ public sealed class DocumentView : RichTextBox
     private static Thickness ResolveTableBlockMargin(
         ModelTable table,
         TextDocument document,
-        double? measuredWidthDip = null)
+        double? measuredWidthDip = null,
+        DocumentTableLayoutPlan? tableLayoutPlan = null)
     {
         var indent = Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint;
         var widthDip = measuredWidthDip is > 0
@@ -9967,12 +9968,30 @@ public sealed class DocumentView : RichTextBox
             ? DocumentViewLayoutPlanner.BuildColumnPlan(document.Page, metrics.ContentWidthDip, usePageColumns: true).WidthDip
             : metrics.ContentWidthDip;
         var slack = Math.Max(0, contentWidth - widthDip - indent);
-        return table.Alignment switch
+        var inlineMargin = table.Alignment switch
         {
             TableAlignment.Center => new Thickness(indent + slack / 2, 0, slack / 2, 0),
             TableAlignment.Right => new Thickness(indent + slack, 0, 0, 0),
             _ => new Thickness(indent, 0, slack, 0)
         };
+        if (tableLayoutPlan?.FloatingPosition is not { } floatingPosition)
+            return inlineMargin;
+
+        var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            document.Page,
+            DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: metrics.PageWidthDip + 48);
+        var placement = DocumentViewLayoutPlanner.BuildFloatingTablePlacement(
+            surface,
+            anchorContentYDip: 0,
+            columnCount: 1,
+            tableWidthDip: widthDip,
+            tableHeightDip: 0,
+            position: floatingPosition,
+            textAnchorLeftDip: surface.ContentLeftDip,
+            textAnchorWidthDip: contentWidth);
+        var left = placement.XDip - surface.ContentLeftDip;
+        return new Thickness(left, 0, contentWidth - widthDip - left, 0);
     }
 
     private static IReadOnlyList<double>? ResolveContentAutoFitColumnWidths(

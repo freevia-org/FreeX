@@ -1541,6 +1541,36 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void FloatingTableHorizontalOffset_UsesTheSharedPlacementContract()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var inline = Table.Create(1, 1);
+        inline.PreferredWidthPt = 120;
+        inline.ColumnWidthsPt.Add(120);
+        var floating = Table.Create(1, 1);
+        floating.PreferredWidthPt = 120;
+        floating.ColumnWidthsPt.Add(120);
+        floating.FloatingPosition = new TableFloatingPosition(
+            HorizontalAnchor: TableHorizontalAnchor.Text,
+            VerticalAnchor: TableVerticalAnchor.Text,
+            HorizontalOffsetPt: 36,
+            VerticalOffsetPt: 24);
+        doc.Blocks.Add(inline);
+        doc.Blocks.Add(floating);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var rendered = RenderedTables(view.Document);
+
+        rendered.Should().HaveCount(2);
+        rendered[0].Margin.Left.Should().Be(0);
+        rendered[1].Margin.Left.Should().BeApproximately(48, 0.01);
+        rendered[1].Margin.Top.Should().Be(0,
+            "vertical placement remains retained until WPF has a true floating block container");
+    }
+
+    [StaFact]
     public void LeftAlignedPreferredWidthFlowTable_ReservesTrailingWidth()
     {
         var doc = TextDocument.CreateEmpty();
