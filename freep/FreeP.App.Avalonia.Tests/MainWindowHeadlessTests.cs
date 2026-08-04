@@ -6499,6 +6499,36 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_convert_to_shapes_routes_through_command_and_undo_bus()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape();
+            var slide = window.Editor.CurrentSlide!;
+            slide.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(SmartArtAuthoringPlanner.ConvertToShapesCommandId, out var command)
+                .Should().BeTrue();
+            command!.Execute(RibbonCommandContext.Empty);
+
+            slide.Shapes.Should().NotContain(candidate => candidate.Kind == SlideShapeKind.SmartArt);
+            slide.Shapes.Should().Contain(candidate => candidate.Kind != SlideShapeKind.SmartArt);
+
+            window.Editor.Undo();
+            slide.Shapes.Should().ContainSingle(candidate =>
+                candidate.Id == shape.Id && candidate.Kind == SlideShapeKind.SmartArt);
+
+            window.Editor.Redo();
+            slide.Shapes.Should().NotContain(candidate => candidate.Kind == SlideShapeKind.SmartArt);
+        });
+
+        if (!ran) return;
+    }
+
+    [Fact]
     public async Task SmartArt_all_quick_style_gallery_commands_are_registered()
     {
         var ran = await OnUiThread(() =>
