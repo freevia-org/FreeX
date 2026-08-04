@@ -78,7 +78,10 @@ public sealed partial class MainWindow
             return;
         }
 
-        await ShowPrintPreviewWindowCoreAsync(context, fixturePrinterName, parityPages);
+        await ShowPrintPreviewWindowCoreAsync(
+            AvaloniaPrintPreviewPaginationContext.FromSheetContext(context),
+            fixturePrinterName,
+            parityPages);
     }
 
     /// <summary>
@@ -146,7 +149,7 @@ public sealed partial class MainWindow
     }
 
     private async Task ShowPrintPreviewWindowCoreAsync(
-        PrintPreviewPaginationContext context,
+        AvaloniaPrintPreviewPaginationContext context,
         string? fixturePrinterName = null,
         IReadOnlyList<PrintPreviewParityPage>? parityPages = null)
     {
@@ -258,13 +261,16 @@ public sealed partial class MainWindow
         void RepaginateAndRender()
         {
             if (parityPages is null &&
-                PrintPreviewPaginationContext.TryCreate(
+                AvaloniaPrintPreviewPaginationContext.TryCreate(
                     _session.Workbook,
                     _session.ActiveSheet,
                     PrintPreviewTextMeasurer,
+                    currentSettings.PrintWhat == PrintWhat.Selection
+                        ? _session.SelectedRange
+                        : null,
                     out var updatedContext,
                     ResolveWorkbookDirectoryForHeaderFooter(),
-                    currentSettings.IgnorePrintArea))
+                    currentSettings.PrintWhat == PrintWhat.Selection || currentSettings.IgnorePrintArea))
             {
                 context = updatedContext;
                 pageCount = updatedContext.PageCount;
@@ -358,14 +364,9 @@ public sealed partial class MainWindow
                 parityPages is null ? pageCount : 1,
                 printerName,
                 currentSettings,
-                // "Print Selection" stays disabled regardless of the actual grid selection: unlike
-                // WPF's RenderWorksheet(printRangeOverride: selection), this preview's pagination
-                // context (PrintPreviewPaginationContext) always paginates the active sheet's
-                // configured print area/used range, with no selection-scoped override yet. Leaving
-                // this option selectable without that support would recreate the exact
-                // looks-functional-does-nothing bug this fix removes for every other control
-                // (R118-print-preview-settings-rail-wiring; tracked as a leftOpen follow-up).
-                hasSelection: false,
+                 // Match WPF's PrintRenderer.RenderWorksheet(printRangeOverride: selectionRange,
+                 // ignorePrintArea: true) when the user switches the live preview to Selection.
+                 hasSelection: HasPrintSelection(_session.SelectedRange),
                 canUpdatePrintPreviewSettings: parityPages is null,
                 PrintPreviewSettingsTextResolver),
             parityPages is null
@@ -632,7 +633,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
 
-        // "Print Entire Workbook" stays disabled on the live rail too: PrintPreviewPaginationContext
+        // "Print Entire Workbook" stays disabled on the live rail too: the Avalonia preview context
         // only ever paginates the one active sheet passed to it (there is no multi-sheet workbook
         // pagination context yet), so selecting this choice could update the setting but could never
         // re-paginate the preview to show it -- the same looks-functional-does-nothing gap this fix
@@ -641,6 +642,7 @@ public sealed partial class MainWindow
             ? plan.Settings.PrintWhatOptions
             : DisableUnsupportedPrintWhatScopes(plan.Settings.PrintWhatOptions);
         var printWhatBox = CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, printWhatOptions, plan.Settings.PrintWhatSelectedIndex);
+        AutomationProperties.SetAutomationId(printWhatBox, "PrintPreviewSettingsPrintWhatBox");
         if (interaction is not null)
         {
             printWhatBox.SelectionChanged += (_, _) => ApplyAction(
@@ -1137,7 +1139,7 @@ public sealed partial class MainWindow
     }
 
     private static Control BuildPreviewDocumentViewerSurface(
-        PrintPreviewPaginationContext context,
+        AvaloniaPrintPreviewPaginationContext context,
         int pageIndex,
         IReadOnlyList<PrintPreviewParityPage>? parityPages = null)
     {
@@ -1223,9 +1225,14 @@ public sealed partial class MainWindow
     /// Builds the zoom-to-fit view for one preview page: a <see cref="Viewbox"/> wrapping a Canvas the
     /// size of the page rectangle, onto which the page's flattened paint primitives are rendered.
     /// </summary>
-    internal static Control BuildPreviewPageView(PrintPreviewPaginationContext context, int pageIndex)
+    internal static Control BuildPreviewPageView(PrintPreviewPaginationContext context, int pageIndex) =>
+        BuildPreviewPageViewCore(context.BuildPage(pageIndex));
+
+    internal static Control BuildPreviewPageView(AvaloniaPrintPreviewPaginationContext context, int pageIndex) =>
+        BuildPreviewPageViewCore(context.BuildPage(pageIndex));
+
+    private static Control BuildPreviewPageViewCore(PageContentLayout? layout)
     {
-        var layout = context.BuildPage(pageIndex);
         if (layout is null)
         {
             return new TextBlock
