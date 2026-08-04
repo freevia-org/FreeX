@@ -395,7 +395,6 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
 
         return Stack(
             grid,
-            BuildFloatingPositioningPanel(),
             Header("Default cell margins (pt):"),
             margins,
             spacing);
@@ -403,7 +402,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
 
     private Control BuildFloatingPositioningPanel()
     {
-        var position = TwoColumnGrid(6, 160);
+        var position = TwoColumnGrid(6, 137);
         AddRow(position, 0, "Horizontal relative to:", _floatingHorizontalAnchor);
         AddRow(position, 1, "Horizontal alignment:", _floatingHorizontalMode);
         AddRow(position, 2, "Horizontal position (pt):", _floatingHorizontalOffset);
@@ -419,11 +418,13 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
 
         var stack = new StackPanel { Margin = new Thickness(8) };
         stack.Children.Add(position);
-        stack.Children.Add(Header("Distance from surrounding text (pt):"));
+        stack.Children.Add(Header("Distance from surrounding text (pt):", top: 8));
         stack.Children.Add(distances);
         stack.Children.Add(_allowFloatingOverlap);
+        var expander = new Expander { Header = "Positioning", IsExpanded = true, Content = stack };
+        AvaloniaCompactDialogChrome.ApplyWpfExpander(expander, DialogChromeStyle);
         UpdateFloatingPositionControls();
-        return new Expander { Header = "Positioning", IsExpanded = true, Content = stack };
+        return expander;
     }
 
     private void UpdateFloatingPositionControls()
@@ -477,7 +478,14 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         AddRow(margins, 1, "Left:", _cmLeft);
         AddRow(margins, 2, "Bottom:", _cmBottom);
         AddRow(margins, 3, "Right:", _cmRight);
-        return Stack(grid, _cellWrapText, _cellFitText, _cellMarginsOn, Header("Cell margins (pt):"), margins);
+        return Stack(
+            grid,
+            BuildFloatingPositioningPanel(),
+            _cellWrapText,
+            _cellFitText,
+            _cellMarginsOn,
+            Header("Cell margins (pt):"),
+            margins);
     }
 
     private void Accept() => TryAccept(close: true);
@@ -560,12 +568,12 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         return panel;
     }
 
-    private static TextBlock Header(string text) => new()
+    private static TextBlock Header(string text, double top = 10) => new()
     {
         Text = text,
         Foreground = Brushes.Black,
         FontWeight = FontWeight.SemiBold,
-        Margin = new Thickness(0, 10, 0, 4),
+        Margin = new Thickness(0, top, 0, 4),
     };
 
     private static Grid TwoColumnGrid(int rows, double? firstColumnWidth = null)
