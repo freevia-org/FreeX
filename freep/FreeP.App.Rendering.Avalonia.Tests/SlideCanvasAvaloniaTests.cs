@@ -308,6 +308,31 @@ public sealed class SlideCanvasAvaloniaTests
         };
     }
 
+    private static SlideShape MakeTwoByTwoTableShape(uint id)
+    {
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerPixel * 100);
+        table.ColumnWidthsEmu.Add(DrawingMlCoordinateUnits.EmuPerPixel * 100);
+        for (var rowIndex = 0; rowIndex < 2; rowIndex++)
+        {
+            var row = new TableRow { HeightEmu = DrawingMlCoordinateUnits.EmuPerPixel * 40 };
+            row.Cells.Add(new TableCell { TextBody = MakeTextBody($"R{rowIndex}C0") });
+            row.Cells.Add(new TableCell { TextBody = MakeTextBody($"R{rowIndex}C1") });
+            table.Rows.Add(row);
+        }
+
+        return new SlideShape
+        {
+            Id = id,
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = DrawingMlCoordinateUnits.EmuPerPixel * 200,
+            ExtentCyEmu = DrawingMlCoordinateUnits.EmuPerPixel * 80,
+            Table = table,
+        };
+    }
+
 
     [Fact]
     public async Task InCanvasTextEditor_CommitPlainText_UsesSharedPlannerCommand()
@@ -1830,6 +1855,105 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task TableCellTextEditor_TableCommandsCommitChildAndUseSharedTransactions()
+    {
+        async Task AssertOperation(
+            Func<AvaloniaInCanvasTextEditor, bool> operation,
+            Action<SlideShape> assertResult)
+        {
+            SlideShape? shape = null;
+
+            await Run(() =>
+            {
+                var presentation = MakePresentation(presence =>
+                {
+                    presence.Slides[0].Shapes.Clear();
+                    shape = MakeTwoByTwoTableShape(31);
+                    presence.Slides[0].Shapes.Add(shape);
+                });
+                var editor = new EditingSession(
+                    presentation,
+                    new PresentationCommandBus(presentation));
+                var canvas = new SlideCanvas
+                {
+                    Presentation = presentation,
+                    Slide = presentation.Slides[0],
+                };
+                var overlay = new global::Avalonia.Controls.Canvas();
+                var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+                textEditor.ActivateCellEdit(shape!.Id, 0, 0);
+                RichInput(overlay).Text = "Committed before table command";
+                operation(textEditor).Should().BeTrue();
+                textEditor.IsCellEditActive.Should().BeFalse();
+                editor.CanUndo.Should().BeTrue();
+                assertResult(shape);
+            });
+        }
+
+        await AssertOperation(
+            textEditor => textEditor.TryInsertActiveTableRowAbove(),
+            shape =>
+            {
+                shape.Table!.Rows.Should().HaveCount(3);
+                shape.Table.Rows[1].Cells[0].TextBody.Should().NotBeNull();
+                InCanvasTextEditPlanner.ExtractPlainText(shape.Table.Rows[1].Cells[0].TextBody)
+                    .Should().Be("Committed before table command");
+            });
+
+        await AssertOperation(
+            textEditor => textEditor.TryInsertActiveTableRowBelow(),
+            shape => shape.Table!.Rows.Should().HaveCount(3));
+
+        await AssertOperation(
+            textEditor => textEditor.TryInsertActiveTableColumnLeft(),
+            shape => shape.Table!.ColumnWidthsEmu.Should().HaveCount(3));
+
+        await AssertOperation(
+            textEditor => textEditor.TryInsertActiveTableColumnRight(),
+            shape => shape.Table!.ColumnWidthsEmu.Should().HaveCount(3));
+
+        await AssertOperation(
+            textEditor => textEditor.TryDeleteActiveTableRow(),
+            shape => shape.Table!.Rows.Should().HaveCount(1));
+
+        await AssertOperation(
+            textEditor => textEditor.TryDeleteActiveTableColumn(),
+            shape => shape.Table!.ColumnWidthsEmu.Should().HaveCount(1));
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(presence =>
+            {
+                presence.Slides[0].Shapes.Clear();
+                presence.Slides[0].Shapes.Add(MakeTwoByTwoTableShape(32));
+            });
+            var shape = presentation.Slides[0].Shapes.Single();
+            var editor = new EditingSession(
+                presentation,
+                new PresentationCommandBus(presentation));
+            var canvas = new SlideCanvas
+            {
+                Presentation = presentation,
+                Slide = presentation.Slides[0],
+            };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.ActivateCellEdit(shape.Id, 0, 0);
+            textEditor.TryMergeActiveTableCell().Should().BeTrue();
+            shape.Table!.Rows[0].Cells[0].GridSpan.Should().Be(2);
+            shape.Table.Rows[0].Cells[1].HMerge.Should().BeTrue();
+
+            textEditor.ActivateCellEdit(shape.Id, 0, 0);
+            textEditor.TrySplitActiveTableCell().Should().BeTrue();
+            shape.Table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+            shape.Table.Rows[0].Cells[1].HMerge.Should().BeFalse();
+            editor.CanUndo.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public async Task TableCellTextEditor_DoubleClickContinuationCell_NormalizesToMergeAnchor()
     {
         EditingSession? editor = null;
@@ -2006,6 +2130,15 @@ public sealed class SlideCanvasAvaloniaTests
         source.Should().Contain("TryApplyActiveTableCellTextFormat");
         source.Should().Contain("TryApplyActiveTableCellParagraphListPreset");
         source.Should().Contain("TryNavigateActiveTableCell");
+        source.Should().Contain("TryInsertActiveTableRowAbove");
+        source.Should().Contain("TryInsertActiveTableRowBelow");
+        source.Should().Contain("TryInsertActiveTableColumnLeft");
+        source.Should().Contain("TryInsertActiveTableColumnRight");
+        source.Should().Contain("TryDeleteActiveTableRow");
+        source.Should().Contain("TryDeleteActiveTableColumn");
+        source.Should().Contain("TryMergeActiveTableCell");
+        source.Should().Contain("TrySplitActiveTableCell");
+        source.Should().Contain("TryApplyActiveTableCommand");
     }
 
     // ── 1. Geometry factory round-trip ────────────────────────────────────────
