@@ -4,18 +4,37 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell;
 
 namespace Free.Shared.Shell.Avalonia;
 
 public sealed record AvaloniaBackstageChromeStyle(IBrush PrimaryInk, IBrush SecondaryInk)
 {
     public IBrush SeparatorBrush { get; init; } = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD));
-    public double SectionHeaderFontSize { get; init; } = 13;
-    public Thickness SectionHeaderMargin { get; init; } = new(0, 4, 0, 2);
-    public Thickness DetailLabelMargin { get; init; } = new(0, 3, 16, 3);
-    public Thickness DetailValueMargin { get; init; } = new(0, 3, 0, 3);
+    public double HeadingFontSize { get; init; } = BackstageVisualContract.Pane.HeadingFontSize;
+    public Thickness HeadingMargin { get; init; } = ToThickness(BackstageVisualContract.Pane.HeadingMargin);
+    public double DescriptionFontSize { get; init; } = BackstageVisualContract.Pane.DescriptionFontSize;
+    public double SectionHeaderFontSize { get; init; } = BackstageVisualContract.Pane.SectionHeaderFontSize;
+    public Thickness SectionHeaderMargin { get; init; } = ToThickness(BackstageVisualContract.Pane.SectionHeaderMargin);
+    public Thickness DetailGridMargin { get; init; } = ToThickness(BackstageVisualContract.Pane.DetailGridMargin);
+    public Thickness DetailLabelMargin { get; init; } = ToThickness(BackstageVisualContract.Pane.DetailGridMargin);
+    public Thickness DetailValueMargin { get; init; } = ToThickness(BackstageVisualContract.Pane.DetailGridMargin);
+    public double DetailFontSize { get; init; } = BackstageVisualContract.Pane.DetailFontSize;
+    public double ActionFontSize { get; init; } = BackstageVisualContract.Pane.ActionFontSize;
+    public double ActionDescriptionFontSize { get; init; } = BackstageVisualContract.Pane.ActionDescriptionFontSize;
+    public Thickness ActionRowMargin { get; init; } = ToThickness(BackstageVisualContract.Pane.ActionRowMargin);
+    public Thickness ActionDescriptionMargin { get; init; } = ToThickness(BackstageVisualContract.Pane.ActionDescriptionMargin);
     public VerticalAlignment DetailLabelVerticalAlignment { get; init; } = VerticalAlignment.Stretch;
     public double? NoteLineHeight { get; init; }
+
+    public static AvaloniaBackstageChromeStyle FromContract() => new(
+        new SolidColorBrush(ToColor(BackstageVisualContract.Theme.PrimaryText)),
+        new SolidColorBrush(ToColor(BackstageVisualContract.Theme.SecondaryText)));
+
+    private static Thickness ToThickness(BackstageVisualThickness thickness) =>
+        new(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
+
+    private static Color ToColor(BackstageVisualColor color) => Color.FromRgb(color.Red, color.Green, color.Blue);
 }
 
 public sealed record AvaloniaBackstageActionButtonSpec(string Text, string AutomationId, Action Action)
@@ -174,14 +193,15 @@ public static class AvaloniaBackstageChrome
         stack.Children.Add(new TextBlock
         {
             Text = title,
-            FontSize = 22,
+            FontSize = style.HeadingFontSize,
             FontWeight = FontWeight.SemiBold,
             Foreground = style.PrimaryInk,
+            Margin = style.HeadingMargin,
         });
         stack.Children.Add(new TextBlock
         {
             Text = description,
-            FontSize = 13,
+            FontSize = style.DescriptionFontSize,
             Foreground = style.SecondaryInk,
             TextWrapping = TextWrapping.Wrap,
         });
@@ -197,8 +217,9 @@ public static class AvaloniaBackstageChrome
         {
             Text = text,
             FontWeight = FontWeight.SemiBold,
-            FontSize = 22,
+            FontSize = BackstageVisualContract.Pane.HeadingFontSize,
             Foreground = style.PrimaryInk,
+            Margin = style.HeadingMargin,
         };
     }
 
@@ -243,8 +264,8 @@ public static class AvaloniaBackstageChrome
     public static Grid CreateDetailGrid() =>
         new()
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-            Margin = new Thickness(0, 2, 0, 0),
+            ColumnDefinitions = new ColumnDefinitions($"{BackstageVisualContract.Pane.DetailLabelColumnWidth},*"),
+            Margin = ToThickness(BackstageVisualContract.Pane.DetailGridMargin),
         };
 
     public static void AddDetailRow(
@@ -264,6 +285,7 @@ public static class AvaloniaBackstageChrome
         {
             Text = label,
             Foreground = style.SecondaryInk,
+            FontSize = style.DetailFontSize,
             Margin = style.DetailLabelMargin,
             VerticalAlignment = style.DetailLabelVerticalAlignment,
         };
@@ -274,6 +296,7 @@ public static class AvaloniaBackstageChrome
         {
             Text = value,
             Foreground = style.PrimaryInk,
+            FontSize = style.DetailFontSize,
             TextWrapping = TextWrapping.Wrap,
             Margin = style.DetailValueMargin,
         };
@@ -385,14 +408,15 @@ public static class AvaloniaBackstageChrome
             Text = spec.Label,
             Foreground = style.PrimaryInk,
             FontWeight = FontWeight.Medium,
-            FontSize = 13,
+            FontSize = style.ActionFontSize,
         };
         var desc = new TextBlock
         {
             Text = spec.Description,
             Foreground = style.SecondaryInk,
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 12,
+            FontSize = style.ActionDescriptionFontSize,
+            Margin = style.ActionDescriptionMargin,
         };
         var inner = new StackPanel { Children = { label, desc } };
 
@@ -452,4 +476,7 @@ public static class AvaloniaBackstageChrome
             Margin = margin,
         };
     }
+
+    private static Thickness ToThickness(BackstageVisualThickness thickness) =>
+        new(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
 }

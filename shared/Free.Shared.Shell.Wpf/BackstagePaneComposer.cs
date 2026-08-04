@@ -270,9 +270,9 @@ public sealed class BackstagePaneComposer
             {
                 Text = action.Description,
                 Foreground = _kit.Muted,
-                FontSize = 11,
+                FontSize = BackstageVisualContract.Pane.ActionDescriptionFontSize,
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 2, 0, 0)
+                Margin = ToThickness(BackstageVisualContract.Pane.ActionDescriptionMargin)
             });
         }
 
@@ -282,9 +282,9 @@ public sealed class BackstagePaneComposer
 
     private UIElement ExportActionRow(BackstageActionRow action)
     {
-        var row = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var row = new StackPanel { Margin = ToThickness(BackstageVisualContract.Pane.ActionRowMargin) };
         var button = _kit.LinkButton(action.Label, action.Invoke);
-        button.FontSize = 14;
+        button.FontSize = BackstageVisualContract.Pane.ActionFontSize;
         AutomationProperties.SetName(button, action.Label);
         row.Children.Add(button);
 
@@ -294,14 +294,17 @@ public sealed class BackstagePaneComposer
             {
                 Text = action.Description,
                 Foreground = _kit.Muted,
-                FontSize = 11,
+                FontSize = BackstageVisualContract.Pane.ActionDescriptionFontSize,
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 2, 0, 0)
+                Margin = ToThickness(BackstageVisualContract.Pane.ActionDescriptionMargin)
             });
         }
 
         return row;
     }
+
+    private static Thickness ToThickness(BackstageVisualThickness thickness) =>
+        new(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
 }
 
 public sealed record BackstageRecentPaneSpec(

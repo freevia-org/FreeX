@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Free.Shared.Shell;
 
 namespace Free.Shared.Shell.Wpf;
 
@@ -15,8 +16,8 @@ namespace Free.Shared.Shell.Wpf;
 /// </summary>
 public sealed class BackstageVisualKit
 {
-    private static readonly Brush HeadingBrush = Freeze(Color.FromRgb(0x33, 0x33, 0x33));
-    private static readonly Brush MutedBrush = Freeze(Color.FromRgb(0x70, 0x70, 0x70));
+    private static readonly Brush HeadingBrush = Freeze(ToColor(BackstageVisualContract.Theme.PrimaryText));
+    private static readonly Brush MutedBrush = Freeze(ToColor(BackstageVisualContract.Theme.SecondaryText));
     private static readonly Brush TileBorderBrush = Freeze(Color.FromRgb(0xD0, 0xD7, 0xE5));
     private static readonly Brush TileInnerBorderBrush = Freeze(Color.FromRgb(0xE2, 0xE6, 0xEF));
 
@@ -50,30 +51,35 @@ public sealed class BackstageVisualKit
     public TextBlock HeadingText(string text) => new()
     {
         Text = text,
-        FontSize = 26,
+        FontSize = BackstageVisualContract.Pane.HeadingFontSize,
         FontWeight = FontWeights.Light,
         Foreground = HeadingBrush,
-        Margin = new Thickness(0, 0, 0, 18)
+        Margin = ToThickness(BackstageVisualContract.Pane.HeadingMargin)
     };
 
     /// <summary>A semibold section sub-heading.</summary>
     public TextBlock SubHeading(string text) => new()
     {
         Text = text,
-        FontSize = 15,
+        FontSize = BackstageVisualContract.Pane.SectionHeaderFontSize,
         FontWeight = FontWeights.SemiBold,
         Foreground = HeadingBrush,
-        Margin = new Thickness(0, 16, 0, 6)
+        Margin = ToThickness(BackstageVisualContract.Pane.SectionHeaderMargin)
     };
 
     /// <summary>A labelled value row (fixed-width label + wrapping value).</summary>
     public UIElement Field(string label, string value)
     {
-        var grid = new Grid { Margin = new Thickness(0, 2, 0, 2) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+        var grid = new Grid { Margin = ToThickness(BackstageVisualContract.Pane.DetailGridMargin) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(BackstageVisualContract.Pane.DetailLabelColumnWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var name = new TextBlock { Text = label, Foreground = MutedBrush, FontSize = 12 };
+        var name = new TextBlock
+        {
+            Text = label,
+            Foreground = MutedBrush,
+            FontSize = BackstageVisualContract.Pane.DetailFontSize
+        };
         Grid.SetColumn(name, 0);
         grid.Children.Add(name);
 
@@ -81,7 +87,7 @@ public sealed class BackstageVisualKit
         {
             Text = value,
             Foreground = HeadingBrush,
-            FontSize = 12,
+            FontSize = BackstageVisualContract.Pane.DetailFontSize,
             TextWrapping = TextWrapping.Wrap
         };
         Grid.SetColumn(content, 1);
@@ -158,4 +164,9 @@ public sealed class BackstageVisualKit
         brush.Freeze();
         return brush;
     }
+
+    private static Color ToColor(BackstageVisualColor color) => Color.FromRgb(color.Red, color.Green, color.Blue);
+
+    private static Thickness ToThickness(BackstageVisualThickness thickness) =>
+        new(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
 }

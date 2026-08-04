@@ -111,7 +111,7 @@ public sealed class AvaloniaBackstageFrame : UserControl
     {
         var layout = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("190,*"),
+            ColumnDefinitions = new ColumnDefinitions($"{BackstageVisualContract.Frame.RailWidth},*"),
             Background = Brushes.White,
         };
 
@@ -124,7 +124,7 @@ public sealed class AvaloniaBackstageFrame : UserControl
         DockPanel.SetDock(_backButton, Dock.Top);
         railDock.Children.Add(_backButton);
 
-        _bottomNav.Margin = new Thickness(0, 0, 0, 10);
+        _bottomNav.Margin = ToThickness(BackstageVisualContract.Frame.BottomNavigationMargin);
         DockPanel.SetDock(_bottomNav, Dock.Bottom);
         railDock.Children.Add(_bottomNav);
 
@@ -142,7 +142,7 @@ public sealed class AvaloniaBackstageFrame : UserControl
         var contentArea = AvaloniaBackstageChrome.CreateContentArea(
             new AvaloniaBackstageContentAreaSpec(_content, Brushes.White)
             {
-                Padding = new Thickness(40, 28),
+                Padding = ToThickness(BackstageVisualContract.Frame.ContentPadding),
             });
         Grid.SetColumn(contentArea, 1);
         layout.Children.Add(contentArea);
@@ -188,7 +188,7 @@ public sealed class AvaloniaBackstageFrame : UserControl
                 {
                     Height = 1,
                     Background = Brush(_accent.Separator),
-                    Margin = new Thickness(0, 6),
+                    Margin = ToThickness(BackstageVisualContract.Frame.SeparatorMargin),
                 });
                 continue;
             }
@@ -346,4 +346,7 @@ public sealed class AvaloniaBackstageFrame : UserControl
         string.Concat(label.Where(char.IsLetterOrDigit));
 
     private static IBrush Brush(Color color) => new SolidColorBrush(color);
+
+    private static Thickness ToThickness(BackstageVisualThickness thickness) =>
+        new(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
 }

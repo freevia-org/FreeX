@@ -172,7 +172,7 @@ public sealed class BackstageFrame : UserControl
         Focusable = true;
 
         var layout = new Grid();
-        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
+        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(BackstageVisualContract.Frame.RailWidth) });
         layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         // The rail is a DockPanel so top entries flow from the top and bottom entries pin to the bottom.
@@ -185,7 +185,7 @@ public sealed class BackstageFrame : UserControl
         DockPanel.SetDock(_back, Dock.Top);
         railDock.Children.Add(_back);
 
-        _bottomNav = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        _bottomNav = new StackPanel { Margin = ToThickness(BackstageVisualContract.Frame.BottomNavigationMargin) };
         DockPanel.SetDock(_bottomNav, Dock.Bottom);
         railDock.Children.Add(_bottomNav);
 
@@ -196,7 +196,7 @@ public sealed class BackstageFrame : UserControl
         Grid.SetColumn(_rail, 0);
         layout.Children.Add(_rail);
 
-        _content = new ContentControl { Margin = new Thickness(40, 28, 40, 28) };
+        _content = new ContentControl { Margin = ToThickness(BackstageVisualContract.Frame.ContentPadding) };
         Grid.SetColumn(_content, 1);
         layout.Children.Add(_content);
 
@@ -330,7 +330,7 @@ public sealed class BackstageFrame : UserControl
                 host.Children.Add(new System.Windows.Shapes.Rectangle
                 {
                     Height = 1,
-                    Margin = new Thickness(0, 6, 0, 6),
+                    Margin = ToThickness(BackstageVisualContract.Frame.SeparatorMargin),
                     Fill = ResolveSeparatorBrush()
                 });
                 continue;
@@ -572,4 +572,7 @@ public sealed class BackstageFrame : UserControl
         brush.Freeze();
         return brush;
     }
+
+    private static Thickness ToThickness(BackstageVisualThickness thickness) =>
+        new(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
 }
