@@ -276,18 +276,16 @@ public sealed class W21LabelCellAndSectionHfTests
     }
 
     /// <summary>
-    /// Per-section header DOCX round-trip tested directly (without PaginatedCommitCoordinator,
-    /// which would strip section breaks from body blocks during reassembly): a two-section
-    /// document's section 1 header must survive DocxWriter + DocxReader.
+    /// Per-section header DOCX round-trip tested directly: a two-section document's section 1
+    /// header must survive DocxWriter + DocxReader.
     ///
-    /// This verifies the storage model and DocxWriter/DocxReader are correct; the separate
-    /// SectionAwareCommit_CommitsToCorrectSectionHfInstance test verifies the coordinator.
+    /// This verifies the storage model and DocxWriter/DocxReader directly; the Release-enabled
+    /// PaginatedCommitCoordinatorTests suite verifies editable pagination reassembly.
     /// </summary>
     [StaFact]
     public void SectionAwareCommit_DocxRoundTrip_PerSectionHeaderPreserved()
     {
         // Build a 2-section document with per-section headers, write to DOCX, read back.
-        // No PaginatedCommitCoordinator involved (body-commit strips SectionBreaks -- known gap).
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
 

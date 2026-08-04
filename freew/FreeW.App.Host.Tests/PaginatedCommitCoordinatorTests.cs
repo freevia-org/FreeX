@@ -1,7 +1,8 @@
-#if DEBUG
+using System.IO;
 using System.Linq;
 using System.Windows.Documents;
 using FreeW.App.Host.Editing;
+using FreeW.Core.IO;
 using FreeW.Core.Model;
 using ModelSection = FreeW.Core.Model.Section;
 using Xunit;
@@ -160,6 +161,43 @@ public sealed class PaginatedCommitCoordinatorTests
     }
 
     [StaFact]
+    public void Coordinator_PreservesSectionHeaderThroughDocxReopen()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var first = new Paragraph("Section 1 body")
+        {
+            SectionBreak = new ModelSection(
+                new PageSettings
+                {
+                    WidthPt = 792,
+                    HeightPt = 612,
+                    Landscape = true
+                },
+                SectionBreakKind.NextPage)
+        };
+        first.SectionBreak.HeadersFooters.Header = new HeaderFooter("Section 1 header");
+        doc.Blocks.Add(first);
+        doc.Blocks.Add(new Paragraph("Section 2 body"));
+
+        var editor = NewEditor(doc);
+        var panel = PaginatedEditorPanel.Build(editor);
+        PaginatedCommitCoordinator.Commit(panel, editor);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(editor.Model, stream);
+        stream.Position = 0;
+        var reopened = DocxReader.Read(stream);
+
+        reopened.Sections.Should().HaveCount(2);
+        reopened.Sections[0].BreakKind.Should().Be(SectionBreakKind.NextPage);
+        reopened.Sections[0].Page.Landscape.Should().BeTrue();
+        reopened.Sections[0].Page.WidthPt.Should().BeApproximately(792, 0.1);
+        reopened.Sections[0].HeadersFooters.Header.Should().NotBeNull();
+        reopened.Sections[0].HeadersFooters.Header!.PlainText.Should().Contain("Section 1 header");
+    }
+
+    [StaFact]
     public void Coordinator_PreservesAllSectionBreakKinds()
     {
         // Continuous / EvenPage / OddPage must also survive the coordinator path.
@@ -192,4 +230,3 @@ public sealed class PaginatedCommitCoordinatorTests
         }
     }
 }
-#endif
