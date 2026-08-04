@@ -890,9 +890,9 @@ public sealed class SlideCanvas : FrameworkElement
         if (hasAlpha) dc.Pop();
 
         // P3 / Wave 26: draw the picture frame outline (rounded when HasFrameClip).
-        if (pic.Outline is ResolvedOutline.Visible visOutline)
+        if (pic.Outline is not ResolvedOutline.None)
         {
-            var pen = MakePen(visOutline);
+            var pen = MakePen(pic.Outline);
             if (pen is not null)
             {
                 if (pic.HasFrameClip && pic.PictureFrameGeometry == "ellipse")
@@ -3874,6 +3874,16 @@ public sealed class SlideCanvas : FrameworkElement
             if (gradBrush.CanFreeze) gradBrush.Freeze();
             var pen = new Pen(gradBrush, grad.WidthDip);
             pen.DashStyle = MapDashStyleWpf(grad.Dash);
+            if (pen.CanFreeze) pen.Freeze();
+            return pen;
+        }
+
+        if (outline is ResolvedOutline.Pattern pattern)
+        {
+            var brush = MakePatternBrush(pattern.Fill);
+            if (brush.CanFreeze) brush.Freeze();
+            var pen = new Pen(brush, pattern.WidthDip);
+            pen.DashStyle = MapDashStyleWpf(pattern.Dash);
             if (pen.CanFreeze) pen.Freeze();
             return pen;
         }

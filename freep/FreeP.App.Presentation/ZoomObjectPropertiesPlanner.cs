@@ -20,6 +20,8 @@ public static class ZoomObjectPropertiesPlanner
         "Border dash must be a supported PowerPoint line pattern.";
     public const string InvalidFrameBorderGradientMessage =
         "Gradient border requires two six-digit RGB colors and an angle from 0 to 360 degrees.";
+    public const string InvalidFrameBorderPatternMessage =
+        "Pattern border requires a supported preset and two six-digit RGB colors.";
     public const string InvalidFrameGeometryMessage =
         "Frame shape must be Rectangle, Rounded rectangle, or Ellipse.";
     public const string InvalidCropEdgesMessage =
@@ -86,7 +88,8 @@ public static class ZoomObjectPropertiesPlanner
             ReadFrameBorderWidth(properties),
             ReadFrameBorderDash(properties),
             ReadFrameGeometry(properties),
-            ReadFrameBorderGradient(properties));
+            ReadFrameBorderGradient(properties),
+            ReadFrameBorderPattern(properties));
         return value.IsEmpty ? fallback : value;
     }
 
@@ -154,6 +157,36 @@ public static class ZoomObjectPropertiesPlanner
         return start is not null && end is not null
             && angle is >= 0 and <= 21_600_000
             ? new ZoomFrameBorderGradient(start, end, angle)
+            : null;
+    }
+
+    private static ZoomFrameBorderPattern? ReadFrameBorderPattern(XElement properties)
+    {
+        var line = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
+        var pattern = line?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "pattFill", StringComparison.OrdinalIgnoreCase));
+        var preset = pattern?.Attribute("prst")?.Value;
+        var foreground = ReadPatternRgb(pattern?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "fgClr", StringComparison.OrdinalIgnoreCase)));
+        var background = ReadPatternRgb(pattern?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "bgClr", StringComparison.OrdinalIgnoreCase)));
+        return TryNormalizeFrameBorderPatternPreset(preset, out var normalizedPreset)
+            && foreground is not null
+            && background is not null
+            ? new ZoomFrameBorderPattern(normalizedPreset!, foreground, background)
+            : null;
+    }
+
+    private static string? ReadPatternRgb(XElement? color)
+    {
+        var value = color?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value?.Trim().TrimStart('#');
+        return value is { Length: 6 } && value.All(Uri.IsHexDigit)
+            ? value.ToUpperInvariant()
             : null;
     }
 
@@ -235,7 +268,8 @@ public static class ZoomObjectPropertiesPlanner
 
     public static bool IsFrameBorderEnabled(ZoomObjectProperties properties) =>
         TryNormalizeFrameBorderColor(properties.FrameBorderColor, out _)
-        || properties.FrameBorderGradient is not null;
+        || properties.FrameBorderGradient is not null
+        || properties.FrameBorderPattern is not null;
 
     public static string FormatFrameBorderWidth(ZoomObjectProperties properties) =>
         properties.FrameBorderWidthEmu is int width
@@ -258,6 +292,53 @@ public static class ZoomObjectPropertiesPlanner
 
     public static bool IsFrameBorderGradientEnabled(ZoomObjectProperties properties) =>
         properties.FrameBorderGradient is not null;
+
+    public static IReadOnlyList<string> FrameBorderPatternOptions =>
+        ZoomFrameBorderPatternCatalog.Presets;
+
+    public static bool IsFrameBorderPatternEnabled(ZoomObjectProperties properties) =>
+        properties.FrameBorderPattern is not null;
+
+    public static string FormatFrameBorderPatternPreset(ZoomObjectProperties properties) =>
+        properties.FrameBorderPattern?.Preset ?? FrameBorderPatternOptions[0];
+
+    public static string FormatFrameBorderPatternForeground(ZoomObjectProperties properties) =>
+        properties.FrameBorderPattern?.ForegroundColor ?? string.Empty;
+
+    public static string FormatFrameBorderPatternBackground(ZoomObjectProperties properties) =>
+        properties.FrameBorderPattern?.BackgroundColor ?? string.Empty;
+
+    public static bool TryParseFrameBorderPattern(
+        string? presetText,
+        string? foregroundText,
+        string? backgroundText,
+        bool enabled,
+        out ZoomFrameBorderPattern? normalized)
+    {
+        normalized = null;
+        if (!enabled)
+            return true;
+
+        if (!TryNormalizeFrameBorderPatternPreset(presetText, out var preset)
+            || !TryNormalizeFrameBorderColor(foregroundText, out var foreground)
+            || !TryNormalizeFrameBorderColor(backgroundText, out var background))
+            return false;
+
+        normalized = new ZoomFrameBorderPattern(preset!, foreground!, background!);
+        return true;
+    }
+
+    private static bool TryNormalizeFrameBorderPatternPreset(
+        string? text,
+        out string? normalized)
+    {
+        normalized = null;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        normalized = ZoomFrameBorderPatternCatalog.Normalize(text);
+        return normalized is not null;
+    }
 
     public static bool TryParseFrameBorderGradient(
         string? startText,

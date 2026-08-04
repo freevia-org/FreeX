@@ -1741,7 +1741,8 @@ public static class PptxPackageReader
             ReadZoomFrameBorderWidth(properties),
             ReadZoomFrameBorderDash(properties),
             ReadZoomFrameGeometry(properties),
-            ReadZoomFrameBorderGradient(properties));
+            ReadZoomFrameBorderGradient(properties),
+            ReadZoomFrameBorderPattern(properties));
         return value.IsEmpty ? null : value;
     }
 
@@ -1840,6 +1841,36 @@ public static class PptxPackageReader
         return start is not null && end is not null
             && angle is >= 0 and <= 21_600_000
             ? new ZoomFrameBorderGradient(start, end, angle)
+            : null;
+    }
+
+    private static ZoomFrameBorderPattern? ReadZoomFrameBorderPattern(XElement properties)
+    {
+        var line = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
+        var pattern = line?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "pattFill", StringComparison.OrdinalIgnoreCase));
+        var preset = ZoomFrameBorderPatternCatalog.Normalize(pattern?.Attribute("prst")?.Value);
+        var foreground = ReadZoomPatternColor(pattern?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "fgClr", StringComparison.OrdinalIgnoreCase)));
+        var background = ReadZoomPatternColor(pattern?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "bgClr", StringComparison.OrdinalIgnoreCase)));
+        return preset is { Length: > 0 }
+            && foreground is not null
+            && background is not null
+            ? new ZoomFrameBorderPattern(preset, foreground, background)
+            : null;
+    }
+
+    private static string? ReadZoomPatternColor(XElement? color)
+    {
+        var value = color?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value?.Trim().TrimStart('#');
+        return value is { Length: 6 } && value.All(Uri.IsHexDigit)
+            ? value.ToUpperInvariant()
             : null;
     }
 

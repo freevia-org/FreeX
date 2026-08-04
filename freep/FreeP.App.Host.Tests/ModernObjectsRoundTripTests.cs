@@ -527,6 +527,44 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void ZoomFrameBorder_PatternIsUndoableAndRoundTripsNativeColors()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var zoom = session.InsertSlideZoom("slide-2");
+        var pattern = new ZoomFrameBorderPattern("pct50", "F2F2F2", "FFFFFF");
+        session.SetZoomObjectProperties(
+                zoom.Id,
+                new ZoomObjectProperties(
+                    FrameBorderWidthEmu: 25400,
+                    FrameBorderDash: OutlineDash.Dot,
+                    FrameBorderPattern: pattern))
+            .Should().BeTrue();
+
+        var line = XElement.Parse(zoom.PreservedObject!.RawXml)
+            .Descendants().Single(element => element.Name.LocalName == "ln");
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var patternXml = line.Element(drawing + "pattFill");
+        patternXml.Should().NotBeNull();
+        patternXml!.Attribute("prst")!.Value.Should().Be("pct50");
+        patternXml.Descendants().Where(element => element.Name.LocalName == "srgbClr")
+            .Select(element => element.Attribute("val")!.Value)
+            .Should().Equal("F2F2F2", "FFFFFF");
+        zoom.PreservedObject.ZoomProperties!.FrameBorderPattern.Should().Be(pattern);
+
+        session.Undo();
+        zoom.PreservedObject.RawXml.Should().NotContain("F2F2F2");
+        session.Redo();
+
+        var reopened = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
+            .PreservedObject!.ZoomProperties!.FrameBorderPattern.Should().Be(pattern);
+    }
+
+    [Fact]
     public void ZoomFrameGeometry_IsUndoableAndRoundTripsNativePreset()
     {
         var presentation = new Presentation();

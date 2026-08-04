@@ -751,6 +751,16 @@ public static class SlideCompositor
             return new ResolvedOutline.Gradient(
                 resolvedGradient!, PointsToDip(widthPoints), resolvedDash);
 
+        var patternFill = line?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "pattFill", StringComparison.OrdinalIgnoreCase));
+        if (TryResolveZoomPattern(patternFill, theme, effectiveClrMap, out var resolvedPattern))
+            return new ResolvedOutline.Pattern(
+                resolvedPattern!, PointsToDip(widthPoints), resolvedDash);
+        if (patternFill is null
+            && TryResolveZoomPattern(fallback?.FrameBorderPattern, out resolvedPattern))
+            return new ResolvedOutline.Pattern(
+                resolvedPattern!, PointsToDip(widthPoints), resolvedDash);
+
         var resolvedColor = ResolveZoomFrameColor(solidFill, theme, effectiveClrMap);
         if (resolvedColor is null
             && TryParseZoomRgb(fallback?.FrameBorderColor, out var fallbackColor))
@@ -812,6 +822,46 @@ public static class SlideCompositor
             return false;
 
         resolved = new ResolvedFill.Gradient(start, end, gradient.Angle / 60000d);
+        return true;
+    }
+
+    private static bool TryResolveZoomPattern(
+        XElement? pattern,
+        PresentationTheme? theme,
+        IReadOnlyDictionary<string, string>? effectiveClrMap,
+        out ResolvedFill.PatternFill? resolved)
+    {
+        resolved = null;
+        var preset = ZoomFrameBorderPatternCatalog.Normalize(pattern?.Attribute("prst")?.Value);
+        var foreground = ResolveZoomFrameColor(
+            pattern?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "fgClr", StringComparison.OrdinalIgnoreCase)),
+            theme,
+            effectiveClrMap);
+        var background = ResolveZoomFrameColor(
+            pattern?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "bgClr", StringComparison.OrdinalIgnoreCase)),
+            theme,
+            effectiveClrMap);
+        if (preset is null || foreground is null || background is null)
+            return false;
+
+        resolved = new ResolvedFill.PatternFill(preset, foreground.Value, background.Value);
+        return true;
+    }
+
+    private static bool TryResolveZoomPattern(
+        ZoomFrameBorderPattern? pattern,
+        out ResolvedFill.PatternFill? resolved)
+    {
+        resolved = null;
+        if (pattern is null
+            || ZoomFrameBorderPatternCatalog.Normalize(pattern.Preset) is not { } preset
+            || !TryParseZoomRgb(pattern.ForegroundColor, out var foreground)
+            || !TryParseZoomRgb(pattern.BackgroundColor, out var background))
+            return false;
+
+        resolved = new ResolvedFill.PatternFill(preset, foreground, background);
         return true;
     }
 
