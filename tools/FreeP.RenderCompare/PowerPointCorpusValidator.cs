@@ -32,7 +32,9 @@ internal static class PowerPointCorpusValidator
         int width,
         int height,
         Func<string, string, int, int, PowerPointExportResult>? exporter = null,
-        TimeSpan? deckTimeout = null)
+        TimeSpan? deckTimeout = null,
+        IReadOnlySet<string>? deckFilter = null,
+        Action<PowerPointCorpusDeckResult>? onDeckCompleted = null)
     {
         exporter ??= (deckPath, deckOutputDirectory, exportWidth, exportHeight) =>
             PowerPointCorpusProcessExporter.Export(
@@ -44,7 +46,15 @@ internal static class PowerPointCorpusValidator
 
         var decks = Directory.GetFiles(corpusDirectory, "*.pptx", SearchOption.TopDirectoryOnly)
             .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+            .Where(deckPath => deckFilter is null ||
+                deckFilter.Contains(Path.GetFileName(deckPath)) ||
+                deckFilter.Contains(Path.GetFileNameWithoutExtension(deckPath)))
             .ToArray();
+        if (deckFilter is not null && decks.Length == 0)
+        {
+            throw new InvalidOperationException(
+                $"No PowerPoint corpus decks matched --decks: {string.Join(", ", deckFilter)}.");
+        }
         var results = new List<PowerPointCorpusDeckResult>(decks.Length);
 
         Directory.CreateDirectory(outputDirectory);
@@ -66,7 +76,7 @@ internal static class PowerPointCorpusValidator
                 : Path.Combine(referenceDirectory, stem);
             var comparisons = CompareReferences(generated, referenceRoot);
 
-            results.Add(new PowerPointCorpusDeckResult(
+            var deckResult = new PowerPointCorpusDeckResult(
                 deckName,
                 export.ExitCode,
                 export.FailureKind,
@@ -76,7 +86,9 @@ internal static class PowerPointCorpusValidator
                 comparisons.ComparedSlides,
                 comparisons.MatchingSlides,
                 comparisons.MissingReferences,
-                comparisons.MismatchedReferences));
+                comparisons.MismatchedReferences);
+            results.Add(deckResult);
+            onDeckCompleted?.Invoke(deckResult);
         }
 
         return new PowerPointCorpusValidationResult(
