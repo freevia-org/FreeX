@@ -402,6 +402,35 @@ public sealed class DocumentViewRoundTripTests
         recovered.Borders.Should().Be(table.Borders);
     }
 
+    [StaFact]
+    public void Table_FloatingPositionAndOverlap_SurviveViewRoundTrip()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var floating = Table.Create(1, 1);
+        floating.FloatingPosition = new TableFloatingPosition(
+            HorizontalAnchor: TableHorizontalAnchor.Page,
+            VerticalAnchor: TableVerticalAnchor.Margin,
+            HorizontalOffsetPt: -12.5,
+            VerticalOffsetPt: 18.25,
+            HorizontalAlignment: TableHorizontalPositionAlignment.Outside,
+            VerticalAlignment: TableVerticalPositionAlignment.Bottom,
+            LeftFromTextPt: 3,
+            RightFromTextPt: 4,
+            TopFromTextPt: 5,
+            BottomFromTextPt: 6);
+        floating.FloatingTableAllowsOverlap = false;
+        document.Blocks.Add(floating);
+        document.Blocks.Add(Table.Create(1, 1));
+
+        var recovered = RoundTrip(document).Blocks.OfType<Table>().ToList();
+
+        recovered[0].FloatingPosition.Should().Be(floating.FloatingPosition);
+        recovered[0].FloatingTableAllowsOverlap.Should().BeFalse();
+        recovered[1].FloatingPosition.Should().BeNull();
+        recovered[1].FloatingTableAllowsOverlap.Should().BeNull();
+    }
+
     private static List<T> LogicalDescendants<T>(DependencyObject root) where T : DependencyObject
     {
         var result = new List<T>();
