@@ -67,6 +67,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
     private bool? _oldWaterfallConnectorLines;
     private bool? _oldDropLines;
     private bool? _oldUpDownBars;
+    private bool? _oldSeriesLines;
     private int? _oldStyleId;
 
     public SetChartDisplayOptionsCommand(
@@ -108,6 +109,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
             : null;
         _oldDropLines = SupportsLineDecorations(chart.ChartType) ? chart.ShowDropLines : null;
         _oldUpDownBars = SupportsLineDecorations(chart.ChartType) ? chart.ShowUpDownBars : null;
+        _oldSeriesLines = SupportsSeriesLines(chart.ChartType) ? chart.SeriesLinesSpecified : null;
         _oldStyleId = chart.StyleId;
 
         chart.Title = string.IsNullOrWhiteSpace(_newOptions.Title) ? null : _newOptions.Title;
@@ -136,6 +138,8 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
             chart.ShowDropLines = _newOptions.ShowDropLines.Value;
         if (SupportsLineDecorations(chart.ChartType) && _newOptions.ShowUpDownBars.HasValue)
             chart.ShowUpDownBars = _newOptions.ShowUpDownBars.Value;
+        if (SupportsSeriesLines(chart.ChartType) && _newOptions.ShowSeriesLines.HasValue)
+            chart.SeriesLinesSpecified = _newOptions.ShowSeriesLines.Value;
 
         if (chart.DataLabels is not null)
         {
@@ -211,6 +215,8 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
             chart.ShowDropLines = _oldDropLines.Value;
         if (SupportsLineDecorations(chart.ChartType) && _oldUpDownBars.HasValue)
             chart.ShowUpDownBars = _oldUpDownBars.Value;
+        if (SupportsSeriesLines(chart.ChartType) && _oldSeriesLines.HasValue)
+            chart.SeriesLinesSpecified = _oldSeriesLines.Value;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -246,6 +252,10 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
 
     private static bool SupportsLineDecorations(ChartType chartType) =>
         chartType is ChartType.Line or ChartType.LineMarkers or ChartType.Stock;
+
+    private static bool SupportsSeriesLines(ChartType chartType) =>
+        chartType is ChartType.ColumnStacked or ChartType.ColumnStacked100 or
+            ChartType.BarStacked or ChartType.BarStacked100;
 
     private static ChartTextStyle? CloneTextStyle(ChartTextStyle? source) => source is null
         ? null

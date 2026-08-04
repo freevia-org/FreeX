@@ -448,7 +448,7 @@ public sealed class ChartDataDialogPlannerTests
         commit.Should().Be(new ChartDisplayOptions(
             "Revenue", LegendPosition.Bottom, false, DataLabelPosition.OutsideEnd, false, true,
             true, true, true, true, "0.0%", " | ", 40, 55, ChartDisplayBlanksAs.Span, true, true, true, false,
-            commit.LabelTextStyle, true, 12, true, true, true, true, null, false, false));
+            commit.LabelTextStyle, true, 12, true, true, true, true, null, false, false, null));
         commit.RoundedCorners.Should().BeTrue();
         commit.LabelTextStyle.Should().NotBeNull();
         commit.LabelTextStyle!.FontFamily.Should().Be("Aptos");
@@ -506,6 +506,24 @@ public sealed class ChartDataDialogPlannerTests
         column.SupportsUpDownBars.Should().BeFalse();
         column.BuildCommitPlan().ShowDropLines.Should().BeNull();
         column.BuildCommitPlan().ShowUpDownBars.Should().BeNull();
+    }
+
+    [Fact]
+    public void ChartDisplayOptionsPlanner_SeriesLinesAreScopedToStackedBarFamilies()
+    {
+        var stacked = MakeChart();
+        stacked.ChartType = ChartType.ColumnStacked;
+        stacked.SeriesLinesSpecified = true;
+
+        var planner = ChartDisplayOptionsPlanner.FromChart(stacked);
+        planner.SupportsSeriesLines.Should().BeTrue();
+        planner.SeriesLines.Should().BeTrue();
+        planner.SetSeriesLines(false);
+        planner.BuildCommitPlan().ShowSeriesLines.Should().BeFalse();
+
+        var line = ChartDisplayOptionsPlanner.FromChart(MakeChart());
+        line.SupportsSeriesLines.Should().BeFalse();
+        line.BuildCommitPlan().ShowSeriesLines.Should().BeNull();
     }
 
     [Fact]

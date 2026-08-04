@@ -47,6 +47,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private readonly CheckBox _waterfallConnectorLinesCheck;
     private readonly CheckBox _dropLinesCheck;
     private readonly CheckBox _upDownBarsCheck;
+    private readonly CheckBox _seriesLinesCheck;
 
     internal ChartDisplayOptionsDialog(EditingSession editor)
     {
@@ -205,6 +206,13 @@ internal sealed class ChartDisplayOptionsDialog : Window
             IsChecked = _planner.UpDownBars,
             IsEnabled = _planner.SupportsUpDownBars,
         };
+        _seriesLinesCheck = new CheckBox
+        {
+            Content = surface.SeriesLinesLabel,
+            IsThreeState = true,
+            IsChecked = _planner.SeriesLines,
+            IsEnabled = _planner.SupportsSeriesLines,
+        };
 
         var buttons = new StackPanel
         {
@@ -258,6 +266,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
                 _waterfallConnectorLinesCheck,
                 _dropLinesCheck,
                 _upDownBarsCheck,
+                _seriesLinesCheck,
                 new TextBlock { Text = surface.PlotHint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7 },
                 buttons,
             },
@@ -289,6 +298,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
     internal void SetDropLinesForTests(bool? value) => _dropLinesCheck.IsChecked = value;
 
     internal void SetUpDownBarsForTests(bool? value) => _upDownBarsCheck.IsChecked = value;
+
+    internal void SetSeriesLinesForTests(bool? value) => _seriesLinesCheck.IsChecked = value;
 
     internal void SetLeaderLinesForTests(bool? value) => _showLeaderLinesCheck.IsChecked = value;
 
@@ -391,6 +402,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
         _planner.SetWaterfallConnectorLines(_waterfallConnectorLinesCheck.IsChecked);
         _planner.SetDropLines(_dropLinesCheck.IsChecked);
         _planner.SetUpDownBars(_upDownBarsCheck.IsChecked);
+        _planner.SetSeriesLines(_seriesLinesCheck.IsChecked);
     }
 
     private static Control MakeRow(string label, Control control)

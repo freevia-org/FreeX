@@ -1403,6 +1403,37 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartDisplayOptions_SeriesLines_RoundTripAndUndo()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.ColumnStacked;
+        chart.SeriesLinesSpecified = true;
+
+        bus.Execute(new SetChartDisplayOptionsCommand(
+            0,
+            id,
+            new ChartDisplayOptions(
+                null,
+                null,
+                false,
+                DataLabelPosition.BestFit,
+                false,
+                false,
+                ShowSeriesLines: false)));
+
+        chart.SeriesLinesSpecified.Should().BeFalse();
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!.SeriesLinesSpecified.Should().BeFalse();
+
+        bus.Undo();
+        chart.SeriesLinesSpecified.Should().BeTrue();
+    }
+
+    [Fact]
     public void SetChartDisplayOptions_ChangesChartStyleAndUndoRestoresIt()
     {
         var (p, bus, id) = MakeChartPresentation();
