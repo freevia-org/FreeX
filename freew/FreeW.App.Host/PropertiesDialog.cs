@@ -9,13 +9,11 @@ namespace FreeW.App.Host;
 
 /// <summary>
 /// A small modal editor for the document's core metadata (docProps/core.xml). Shows and edits
-/// Title / Author / Subject / Keywords / Comments and, on OK, writes the values straight back to
-/// <see cref="DocumentProperties"/> so the next save round-trips them. Code-only to match the rest
-/// of the FreeW window style.
+/// Title / Author / Subject / Keywords / Comments and returns an immutable payload on OK. The editor
+/// applies that payload through its undo stack. Code-only to match the rest of the FreeW window style.
 /// </summary>
 internal sealed class PropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly DocumentProperties _properties;
     private readonly TextBox _title = new() { MinWidth = 280 };
     private readonly TextBox _author = new() { MinWidth = 280 };
     private readonly TextBox _subject = new() { MinWidth = 280 };
@@ -30,9 +28,10 @@ internal sealed class PropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     };
     private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.Properties;
 
+    public DocumentPropertiesDialogValues? Result { get; private set; }
+
     public PropertiesDialog(Window owner, DocumentProperties properties)
     {
-        _properties = properties;
         Owner = owner;
         Title = "Document Properties";
         Width = 420;
@@ -81,15 +80,14 @@ internal sealed class PropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Commit()
     {
-        _properties.Title = Normalize(_title.Text);
-        _properties.Author = Normalize(_author.Text);
-        _properties.Subject = Normalize(_subject.Text);
-        _properties.Keywords = Normalize(_keywords.Text);
-        _properties.Comments = Normalize(_comments.Text);
+        Result = DocumentPropertiesDialogValues.FromInput(
+            _title.Text,
+            _author.Text,
+            _subject.Text,
+            _keywords.Text,
+            _comments.Text);
         DialogResult = true;
     }
-
-    private static string? Normalize(string value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     private static void AddRow(Grid grid, int row, string label, FrameworkElement field)
     {

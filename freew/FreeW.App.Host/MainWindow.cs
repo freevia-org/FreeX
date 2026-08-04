@@ -3144,8 +3144,11 @@ public sealed class MainWindow : Window
     private void OpenProperties()
     {
         var dialog = new PropertiesDialog(this, _editor.Model.Properties);
-        if (dialog.ShowDialog() == true)
+        if (dialog.ShowDialog() == true && dialog.Result is { } result)
+        {
+            _editor.ApplyDocumentProperties(result);
             _file.MarkDirty();
+        }
     }
 
     private void ToggleMarkAsFinal()

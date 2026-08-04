@@ -5,6 +5,25 @@ namespace FreeW.App.Host.Tests;
 public sealed class SharedPresentationBoundarySourceGuardTests
 {
     [Fact]
+    public void DocumentPropertiesHosts_ReturnSharedPayload_AndApplyThroughEditorHistory()
+    {
+        var wpfDialog = ReadSource("freew", "FreeW.App.Host", "PropertiesDialog.cs");
+        var avaloniaDialog = ReadSource("freew", "FreeW.App.Avalonia", "PropertiesDialog.cs");
+        var wpfWindow = ReadSource("freew", "FreeW.App.Host", "MainWindow.cs");
+        var avaloniaWindow = ReadSource("freew", "FreeW.App.Avalonia", "MainWindow.cs");
+
+        foreach (var source in new[] { wpfDialog, avaloniaDialog })
+        {
+            source.Should().Contain("DocumentPropertiesDialogValues.FromInput(");
+            source.Should().NotContain("_properties.Title =");
+            source.Should().NotContain("_properties.Author =");
+        }
+
+        wpfWindow.Should().Contain("_editor.ApplyDocumentProperties(result);");
+        avaloniaWindow.Should().Contain("_editor.ApplyDocumentProperties(result);");
+    }
+
+    [Fact]
     public void PasteSpecialHosts_ConsumeSharedCatalogWithoutReowningOptions()
     {
         var catalog = ReadSource("freew", "FreeW.App.Presentation", "Dialogs", "PasteSpecialOptionCatalog.cs");
