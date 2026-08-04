@@ -18,13 +18,17 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 internal sealed class OptionsDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            DefaultButtonBorderBrush = AvaloniaCompactDialogChrome.NeutralButtonBorderBrush,
+        };
 
     private readonly FreeWOptions _seed;
     private readonly OptionsDialogSurfaceSpec _surface;
-    private readonly TextBox _recentFilesCap = new() { Width = 72 };
-    private readonly ComboBox _defaultFormat = new() { Width = 180 };
-    private readonly TextBox _uiLanguage = new() { Width = 180 };
+    private readonly TextBox _recentFilesCap = new() { Width = 72, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly ComboBox _defaultFormat = new() { Width = 180, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly TextBox _uiLanguage = new() { Width = 180, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly CheckBox _autoCorrectEnabled = new();
     private readonly CheckBox _smartQuotes = new();
     private readonly CheckBox _dashes = new();
@@ -42,7 +46,7 @@ internal sealed class OptionsDialog : FreeWDialogWindow
     private readonly Border _replacements = new()
     {
         Height = OptionsDialogPlanner.ReplacementTableHeight,
-        Margin = new Thickness(0, 6, 0, 0),
+        Margin = new Thickness(0, 7, 0, 0),
         VerticalAlignment = VerticalAlignment.Top
     };
     private readonly Grid _replacementGrid = new();
@@ -81,7 +85,12 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyTextBox(_uiLanguage, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(16, 8, 16, 0));
 
-        var tabs = new TabControl { Margin = new Thickness(OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, 0) };
+        var tabs = new TabControl
+        {
+            Margin = new Thickness(OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, 0),
+            Focusable = true,
+            IsTabStop = true,
+        };
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             tabs,
             DialogChromeStyle,
@@ -103,7 +112,14 @@ internal sealed class OptionsDialog : FreeWDialogWindow
                     0);
         }
         tabs.SelectionChanged += (_, _) =>
+        {
+            // WPF keeps focus on the tab strip when a secondary options page is selected;
+            // keeping that focus target also prevents the default OK adorner from appearing
+            // on a page that the user has not keyboard-focused.
+            if (tabs.SelectedIndex > 0)
+                tabs.Focus();
             Dispatcher.UIThread.Post(ApplyAutoCorrectPaneInset, DispatcherPriority.Render);
+        };
         tabs.AttachedToVisualTree += (_, _) =>
             Dispatcher.UIThread.Post(ApplyAutoCorrectPaneInset, DispatcherPriority.Render);
 
@@ -128,7 +144,17 @@ internal sealed class OptionsDialog : FreeWDialogWindow
             },
         };
 
-        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_recentFilesCap);
+        Opened += (_, _) =>
+        {
+            // FreeWDialogWindow applies the shared default chrome during construction. Reapply
+            // this route's WPF action-row palette after the visual tree exists so the default
+            // button remains neutral gray until it is actually focused.
+            AvaloniaCompactDialogChrome.ApplyDescendantChrome(this, DialogChromeStyle);
+            _recentFilesCap.HorizontalAlignment = HorizontalAlignment.Left;
+            _defaultFormat.HorizontalAlignment = HorizontalAlignment.Left;
+            _uiLanguage.HorizontalAlignment = HorizontalAlignment.Left;
+            AvaloniaCompactDialogChrome.FocusAndSelect(_recentFilesCap);
+        };
     }
 
     private void Accept()
@@ -187,7 +213,11 @@ internal sealed class OptionsDialog : FreeWDialogWindow
                 OptionsDialogPlanner.ContentMargin,
                 OptionsDialogPlanner.ContentMargin,
                 OptionsDialogPlanner.ContentBottomMargin),
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnDefinitions = new ColumnDefinitions
+            {
+                new ColumnDefinition(GridLength.Auto),
+                new ColumnDefinition(new GridLength(1, GridUnitType.Star)),
+            },
         };
         AddRow(grid, 0, _surface.General.RecentFilesLabel, _recentFilesCap);
         AddRow(grid, 1, _surface.General.DefaultSaveFormatLabel, _defaultFormat);
@@ -237,7 +267,7 @@ internal sealed class OptionsDialog : FreeWDialogWindow
     {
         _replacementGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
         _replacementGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(2, GridUnitType.Star)));
-        _replacementGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        _replacementGrid.RowDefinitions.Add(new RowDefinition(new GridLength(26)));
         _replacementGrid.Children.Add(HeaderCell("Replace", 0));
         _replacementGrid.Children.Add(HeaderCell("With", 1));
 
@@ -267,7 +297,7 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         row.With.Text = with;
         AvaloniaCompactDialogChrome.ApplyTextBox(row.Replace, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(row.With, DialogChromeStyle);
-        var gridlineBrush = new SolidColorBrush(Color.FromRgb(171, 173, 179));
+        var gridlineBrush = Brushes.Black;
         row.Replace.BorderBrush = gridlineBrush;
         row.With.BorderBrush = gridlineBrush;
 

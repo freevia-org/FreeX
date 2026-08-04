@@ -322,6 +322,26 @@ public sealed class WpfAuthoritySurfaceParityTests
     }
 
     [Fact]
+    public async Task Table_properties_keeps_positioning_section_on_the_Wpf_cell_tab()
+    {
+        await Session.Dispatch(() =>
+        {
+            var (_, table) = CreateTableEditor();
+            var dialog = new TablePropertiesDialog(
+                new ModelTableContext(table, table.Rows[0], table.Rows[0].Cells[0]));
+
+            var tabs = dialog.TabsForTest.Items.OfType<TabItem>().ToArray();
+            tabs.Should().HaveCount(4);
+
+            tabs[0].GetLogicalDescendants().OfType<Expander>()
+                .Should().BeEmpty();
+            tabs[3].GetLogicalDescendants().OfType<Expander>()
+                .Select(expander => Convert.ToString(expander.Header))
+                .Should().ContainSingle("Positioning");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Page_setup_preserves_Wpf_action_semantics_and_child_order()
     {
         await Session.Dispatch(() =>

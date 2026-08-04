@@ -262,7 +262,14 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
             [
                 new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Hello from the video")
                 {
-                    Spans = [new("Hello from the video", ForegroundColorHex: "FFCC00", BackgroundColorHex: "000000")]
+                    Spans =
+                    [
+                        new("Hello from the video")
+                        {
+                            ForegroundColorHex = "FFCC00",
+                            BackgroundColorHex = "000000"
+                        }
+                    ]
                 }
             ]);
 
@@ -270,11 +277,11 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
         var session = factory.Backend.Sessions[0];
         session.Seek(TimeSpan.FromMilliseconds(500));
         controller.RefreshCaptionsForTest();
-        controller.CaptionTextForTest(42).Should().Be("Hello from the video");
         overlay.Children.OfType<Border>().Should().Contain(border => border.IsVisible);
         var captionText = overlay.Children.OfType<Border>().Single().Child
             .Should().BeOfType<TextBlock>().Subject;
         var captionRun = captionText.Inlines!.OfType<global::Avalonia.Controls.Documents.Run>().Single();
+        captionRun.Text.Should().Be("Hello from the video");
         captionRun.Foreground.Should().BeOfType<global::Avalonia.Media.SolidColorBrush>()
             .Which.Color.Should().Be(global::Avalonia.Media.Color.FromRgb(0xFF, 0xCC, 0x00));
         captionRun.Background.Should().BeOfType<global::Avalonia.Media.SolidColorBrush>()
