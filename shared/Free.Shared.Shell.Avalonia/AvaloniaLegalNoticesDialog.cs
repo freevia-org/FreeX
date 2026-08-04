@@ -90,7 +90,17 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         string closeButtonContent,
         string helpText)
     {
-        var root = new DockPanel { Margin = new Thickness(LegalNoticesDialogMetrics.ContentMargin) };
+        // WPF's dialog authority registers the content one pixel higher while
+        // keeping the outer bottom margin unchanged. Keep this compensation
+        // local to the Avalonia host instead of changing shared dialog metrics.
+        var root = new DockPanel
+        {
+            Margin = new Thickness(
+                LegalNoticesDialogMetrics.ContentMargin,
+                LegalNoticesDialogMetrics.ContentMargin - 1,
+                LegalNoticesDialogMetrics.ContentMargin,
+                LegalNoticesDialogMetrics.ContentMargin),
+        };
 
         var intro = new TextBlock
         {
