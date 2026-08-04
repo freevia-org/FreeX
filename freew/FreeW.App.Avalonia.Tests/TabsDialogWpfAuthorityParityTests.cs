@@ -2,11 +2,9 @@ using System.IO;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
-using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeW.Core.Model;
 
@@ -61,9 +59,7 @@ public sealed class TabsDialogWpfAuthorityParityTests
 
             var actionButtons = dialog.GetLogicalDescendants().OfType<Button>().ToArray();
             actionButtons
-                .Select(button => button.Content is AccessText accessText
-                    ? ShellStrings.Current.CreateAutomationName(accessText.Text ?? string.Empty)
-                    : button.Content?.ToString())
+                .Select(button => AvaloniaActionLabelInspector.Inspect(button).DisplayText)
                 .Should().Equal("Set", "Clear", "Clear All", "OK", "Cancel");
             actionButtons
                 .Should().ContainSingle(button => button.IsDefault && AutomationProperties.GetName(button) == "OK")

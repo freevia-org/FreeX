@@ -36,7 +36,7 @@ public sealed class FootnoteEndnoteOptionsDialogVisualParityTests
                     .OfType<Button>()
                     .Where(button => button is not ToggleButton)
                     .ToArray();
-                buttons.Select(UserFacingButtonText)
+                buttons.Select(button => AvaloniaActionLabelInspector.Inspect(button).DisplayText)
                     .Should().Equal(
                         ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Ok),
                         ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Cancel));
@@ -105,11 +105,4 @@ public sealed class FootnoteEndnoteOptionsDialogVisualParityTests
         typeof(FootnoteEndnoteOptionsDialog).GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
             .GetValue(dialog)!;
 
-    private static string UserFacingButtonText(Button button) => button.Content switch
-    {
-        AccessText accessText => ShellStrings.Current.CreateAutomationName(accessText.Text ?? string.Empty),
-        string text => ShellStrings.Current.CreateAutomationName(text),
-        TextBlock textBlock => textBlock.Text ?? string.Empty,
-        _ => button.Content?.ToString() ?? string.Empty,
-    };
 }

@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
@@ -13,6 +12,7 @@ using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -292,12 +292,7 @@ public sealed class WpfAuthoritySurfaceParityTests
             var dialog = new PageSetupDialog(new PageSettings());
             var buttons = dialog.GetLogicalDescendants().OfType<Button>()
                 .Where(button => button is not global::Avalonia.Controls.Primitives.ToggleButton)
-                .Select(button => button.Content switch
-                {
-                    AccessText accessText => ShellStrings.Current.CreateAutomationName(accessText.Text ?? string.Empty),
-                    string text => text.TrimStart('_'),
-                    _ => button.Content?.ToString()?.TrimStart('_'),
-                })
+                .Select(button => AvaloniaActionLabelInspector.Inspect(button).DisplayText)
                 .ToArray();
 
             buttons.Should().Equal("OK", "Cancel", "Line Numbers\u2026", "Borders\u2026");
