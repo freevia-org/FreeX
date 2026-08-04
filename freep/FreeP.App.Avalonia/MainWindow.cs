@@ -1172,6 +1172,7 @@ public sealed partial class MainWindow : Window
         Editor.Changed             += OnEditorChanged;
         Editor.CurrentSlideChanged += OnCurrentSlideChanged;
         Editor.SelectionChanged    += OnEditorSelectionChanged;
+        Editor.ActiveTableCellChanged += OnEditorActiveTableCellChanged;
     }
 
     private void RebuildEditorAndRewireInteraction()
@@ -2409,6 +2410,7 @@ public sealed partial class MainWindow : Window
         if (!cellHit.HasValue)
             return;
 
+        Editor.Select(shape.Id);
         Editor.SetActiveTableCell(cellHit.Value.Row, cellHit.Value.Col);
         var menu = BuildTableContextMenu(shape);
         _slideCanvas.ContextMenu = menu;
@@ -2493,21 +2495,22 @@ public sealed partial class MainWindow : Window
             Placement = PlacementMode.Pointer,
         };
 
-        void Add(string header, Action action)
+        void Add(string header, bool isEnabled, Action action)
         {
-            var item = new MenuItem { Header = header };
+            var item = new MenuItem { Header = header, IsEnabled = isEnabled };
             item.Click += (_, _) => action();
             menu.Items.Add(item);
         }
 
-        Add("Insert Row Above", () => { Editor.Select(shape.Id); Editor.InsertRowAbove(); });
-        Add("Insert Row Below", () => { Editor.Select(shape.Id); Editor.InsertRowBelow(); });
+        var state = CurrentTableCellEditState();
+        Add("Insert Row Above", state.CanInsertRow, () => TryInsertActiveTableRowAbove(shape.Id));
+        Add("Insert Row Below", state.CanInsertRow, () => TryInsertActiveTableRowBelow(shape.Id));
         menu.Items.Add(new Separator());
-        Add("Insert Column Left", () => { Editor.Select(shape.Id); Editor.InsertColumnLeft(); });
-        Add("Insert Column Right", () => { Editor.Select(shape.Id); Editor.InsertColumnRight(); });
+        Add("Insert Column Left", state.CanInsertColumn, () => TryInsertActiveTableColumnLeft(shape.Id));
+        Add("Insert Column Right", state.CanInsertColumn, () => TryInsertActiveTableColumnRight(shape.Id));
         menu.Items.Add(new Separator());
-        Add("Delete Row", () => { Editor.Select(shape.Id); Editor.DeleteRow(); });
-        Add("Delete Column", () => { Editor.Select(shape.Id); Editor.DeleteColumn(); });
+        Add("Delete Row", state.CanDeleteRow, () => TryDeleteActiveTableRow(shape.Id));
+        Add("Delete Column", state.CanDeleteColumn, () => TryDeleteActiveTableColumn(shape.Id));
         menu.Items.Add(new Separator());
 
         var widthMenu = new MenuItem { Header = "Column Width" };
@@ -2531,43 +2534,122 @@ public sealed partial class MainWindow : Window
         }
         menu.Items.Add(widthMenu);
 
-        var table = shape.Table!;
-        var activeCell = Editor.ActiveTableCell;
-        var canMerge = activeCell.HasValue &&
-            (activeCell.Value.Col + 1 < table.ColumnWidthsEmu.Count ||
-             activeCell.Value.Row + 1 < table.Rows.Count);
-        var canSplit = activeCell.HasValue &&
-            table.Rows.Count > activeCell.Value.Row &&
-            table.Rows[activeCell.Value.Row].Cells.ElementAtOrDefault(activeCell.Value.Col) is { } cell &&
-            (cell.GridSpan > 1 || cell.RowSpan > 1);
+        var canMerge = state.CanMergeWithRight || state.CanMergeWithBelow;
+        var canSplit = state.CanSplitCell;
 
         var mergeItem = new MenuItem { Header = "Merge with Right Cell", IsEnabled = canMerge };
-        if (canMerge && activeCell is { } mergeCell)
-        {
-            var row = mergeCell.Row;
-            var col = mergeCell.Col;
-            var rightColumn = col + 1 < table.ColumnWidthsEmu.Count ? col + 1 : col;
-            var belowRow = row + 1 < table.Rows.Count && rightColumn == col ? row + 1 : row;
-            mergeItem.Click += (_, _) =>
-            {
-                Editor.Select(shape.Id);
-                Editor.MergeTableCells(row, col, belowRow, rightColumn);
-            };
-        }
+        if (canMerge)
+            mergeItem.Click += (_, _) => TryMergeActiveTableCell(shape.Id);
         menu.Items.Add(mergeItem);
 
         var splitItem = new MenuItem { Header = "Split Cell", IsEnabled = canSplit };
-        if (canSplit && activeCell is { } splitCell)
-        {
-            splitItem.Click += (_, _) =>
-            {
-                Editor.Select(shape.Id);
-                Editor.SplitTableCell(splitCell.Row, splitCell.Col);
-            };
-        }
+        if (canSplit)
+            splitItem.Click += (_, _) => TrySplitActiveTableCell(shape.Id);
         menu.Items.Add(splitItem);
         return menu;
     }
+
+    private TableCellEditState CurrentTableCellEditState() =>
+        TableCellEditPlanner.PlanSelectedCell(
+            Editor.CurrentSlide,
+            Editor.SelectedShapeIds,
+            Editor.ActiveTableCell);
+
+    private bool TryRouteActiveTableCommand(
+        Func<AvaloniaInCanvasTextEditor, bool> inlineAction,
+        Func<TableCellEditState, bool> canApply,
+        Func<EditingSession, bool> fallbackAction,
+        uint? fallbackShapeId = null)
+    {
+        if (_textEditor?.IsCellEditActive == true)
+            return inlineAction(_textEditor);
+
+        if (fallbackShapeId is { } shapeId)
+            Editor.Select(shapeId);
+
+        var state = CurrentTableCellEditState();
+        return canApply(state) && fallbackAction(Editor);
+    }
+
+    private bool TryInsertActiveTableRowAbove(uint? fallbackShapeId = null) =>
+        TryRouteActiveTableCommand(
+            editor => editor.TryInsertActiveTableRowAbove(),
+            state => state.CanInsertRow,
+            editor =>
+            {
+                editor.InsertRowAbove();
+                return true;
+            },
+            fallbackShapeId);
+
+    private bool TryInsertActiveTableRowBelow(uint? fallbackShapeId = null) =>
+        TryRouteActiveTableCommand(
+            editor => editor.TryInsertActiveTableRowBelow(),
+            state => state.CanInsertRow,
+            editor =>
+            {
+                editor.InsertRowBelow();
+                return true;
+            },
+            fallbackShapeId);
+
+    private bool TryInsertActiveTableColumnLeft(uint? fallbackShapeId = null) =>
+        TryRouteActiveTableCommand(
+            editor => editor.TryInsertActiveTableColumnLeft(),
+            state => state.CanInsertColumn,
+            editor =>
+            {
+                editor.InsertColumnLeft();
+                return true;
+            },
+            fallbackShapeId);
+
+    private bool TryInsertActiveTableColumnRight(uint? fallbackShapeId = null) =>
+        TryRouteActiveTableCommand(
+            editor => editor.TryInsertActiveTableColumnRight(),
+            state => state.CanInsertColumn,
+            editor =>
+            {
+                editor.InsertColumnRight();
+                return true;
+            },
+            fallbackShapeId);
+
+    private bool TryDeleteActiveTableRow(uint? fallbackShapeId = null) =>
+        TryRouteActiveTableCommand(
+            editor => editor.TryDeleteActiveTableRow(),
+            state => state.CanDeleteRow,
+            editor =>
+            {
+                editor.DeleteRow();
+                return true;
+            },
+            fallbackShapeId);
+
+    private bool TryDeleteActiveTableColumn(uint? fallbackShapeId = null) =>
+        TryRouteActiveTableCommand(
+            editor => editor.TryDeleteActiveTableColumn(),
+            state => state.CanDeleteColumn,
+            editor =>
+            {
+                editor.DeleteColumn();
+                return true;
+            },
+            fallbackShapeId);
+
+    private bool TryMergeActiveTableCell(uint? fallbackShapeId = null) =>
+        TryRouteActiveTableCommand(
+            editor => editor.TryMergeActiveTableCell(),
+            state => state.CanMergeWithRight || state.CanMergeWithBelow,
+            editor => editor.TryMergeActiveTableCell(),
+            fallbackShapeId);
+
+    private bool TrySplitActiveTableCell(uint? fallbackShapeId = null) =>
+        TryRouteActiveTableCommand(
+            editor => editor.TrySplitActiveTableCell(),
+            state => state.CanSplitCell,
+            editor => editor.TrySplitActiveTableCell(),
+            fallbackShapeId);
 
     internal ContextMenu? BuildTableContextMenuForTests(uint shapeId)
     {
@@ -2576,6 +2658,14 @@ public sealed partial class MainWindow : Window
             ? BuildTableContextMenu(shape)
             : null;
     }
+
+    internal bool ActivateTableCellEditForTests(uint shapeId, int row, int col)
+    {
+        _textEditor?.ActivateCellEdit(shapeId, row, col);
+        return _textEditor?.IsCellEditActive == true;
+    }
+
+    internal bool IsTableCellEditActiveForTests => _textEditor?.IsCellEditActive == true;
 
     // ── Ribbon ─────────────────────────────────────────────────────────────────
 
@@ -2796,9 +2886,17 @@ public sealed partial class MainWindow : Window
             Editor.TryApplyActiveTableRowHeight(heightEmu);
         }));
         r.Register(TableCellEditPlanner.MergeCellsCommandId,
-            new ActionRibbonCommand(() => Editor.TryMergeActiveTableCell()));
+            new TableCellRouteRibbonCommand(
+                () => TryMergeActiveTableCell(),
+                () =>
+                {
+                    var state = CurrentTableCellEditState();
+                    return state.CanMergeWithRight || state.CanMergeWithBelow;
+                }));
         r.Register(TableCellEditPlanner.SplitCellCommandId,
-            new ActionRibbonCommand(() => Editor.TrySplitActiveTableCell()));
+            new TableCellRouteRibbonCommand(
+                () => TrySplitActiveTableCell(),
+                () => CurrentTableCellEditState().CanSplitCell));
         r.Register(TableCellEditPlanner.TableFirstRowCommandId,
             new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.FirstRow)));
         r.Register(TableCellEditPlanner.TableLastRowCommandId,
@@ -10034,6 +10132,7 @@ public sealed partial class MainWindow : Window
 
     private void OnEditorSelectionChanged(object? sender, EventArgs e)
     {
+        SyncRibbonCommandStates();
         RefreshAltTextRequestPlan();
         RefreshReadingOrderPlan();
         if (IsAltTextPaneVisible)
@@ -10045,6 +10144,9 @@ public sealed partial class MainWindow : Window
         _selectionPane?.Refresh();
         RefreshPaneAccessibilityMetadata();
     }
+
+    private void OnEditorActiveTableCellChanged(object? sender, EventArgs e) =>
+        SyncRibbonCommandStates();
 
     private static string FormatNotesText(TextBody? notes) => notes is null
         ? string.Empty
@@ -10858,6 +10960,19 @@ public sealed partial class MainWindow : Window
     {
         var dialog = new CustomShowDialog(this);
         await dialog.ShowDialog(this);
+    }
+
+    private sealed class TableCellRouteRibbonCommand(
+        Func<bool> execute,
+        Func<bool> canExecute) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (canExecute())
+                execute();
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: canExecute());
     }
 
     private sealed class EditPointsToggleCommand(SlideCanvas canvas) : IRibbonStatefulCommand

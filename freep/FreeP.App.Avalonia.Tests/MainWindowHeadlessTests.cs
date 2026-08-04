@@ -2151,6 +2151,137 @@ public sealed class MainWindowHeadlessTests
         splitSpan.Should().Be(1);
     }
 
+    [Fact]
+    public async Task Ribbon_table_merge_and_split_route_through_active_inline_editor()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            try
+            {
+                window.Show();
+                var shape = window.Editor.InsertTable(1, 2);
+                shape.Table!.Rows[0].Cells[0].TextBody = new TextBody
+                {
+                    Paragraphs =
+                    {
+                        new Paragraph
+                        {
+                            Runs = { new Run { Text = "Inline cell", Bold = true } },
+                        },
+                    },
+                };
+                window.Editor.Select(shape.Id);
+                window.Editor.SetActiveTableCell(0, 0);
+                window.ActivateTableCellEditForTests(shape.Id, 0, 0).Should().BeTrue();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+                var inlineEditor = window.GetVisualDescendants()
+                    .OfType<TextBox>()
+                    .Single(control => control.Classes.Contains("freep-table-cell-rich-editor"));
+                inlineEditor.Text = "Committed by ribbon";
+
+                var registry = window.BuildCommandRegistry();
+                registry.TryGet(TableCellEditPlanner.MergeCellsCommandId, out var merge).Should().BeTrue();
+                registry.TryGet(TableCellEditPlanner.SplitCellCommandId, out var split).Should().BeTrue();
+                var mergeState = merge.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+                var splitState = split.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+                mergeState.GetState().IsEnabled.Should().BeTrue();
+                splitState.GetState().IsEnabled.Should().BeFalse();
+
+                merge!.Execute(RibbonCommandContext.Empty);
+
+                window.IsTableCellEditActiveForTests.Should().BeFalse(
+                    "the real ribbon route must commit and close the inline editor bridge");
+                InCanvasTextEditPlanner.ExtractPlainText(
+                        shape.Table.Rows[0].Cells[0].TextBody)
+                    .Should().Be("Committed by ribbon");
+                shape.Table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+                mergeState.GetState().IsEnabled.Should().BeFalse();
+                splitState.GetState().IsEnabled.Should().BeTrue();
+
+                window.ActivateTableCellEditForTests(shape.Id, 0, 0).Should().BeTrue();
+                split!.Execute(RibbonCommandContext.Empty);
+
+                window.IsTableCellEditActiveForTests.Should().BeFalse();
+                shape.Table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+                splitState.GetState().IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        if (!ran) return;
+    }
+
+    [Fact]
+    public async Task Table_context_routes_active_inline_editor_then_uses_direct_fallback()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            try
+            {
+                window.Show();
+                var shape = window.Editor.InsertTable(2, 2);
+                shape.Table!.Rows[0].Cells[0].TextBody = new TextBody
+                {
+                    Paragraphs =
+                    {
+                        new Paragraph { Runs = { new Run { Text = "Context cell", Italic = true } } },
+                    },
+                };
+                window.Editor.Select(shape.Id);
+                window.Editor.SetActiveTableCell(0, 0);
+                window.ActivateTableCellEditForTests(shape.Id, 0, 0).Should().BeTrue();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                window.GetVisualDescendants()
+                    .OfType<TextBox>()
+                    .Single(control => control.Classes.Contains("freep-table-cell-rich-editor"))
+                    .Text = "Committed by context menu";
+
+                var menu = window.BuildTableContextMenuForTests(shape.Id);
+                menu.Should().NotBeNull();
+                var insertBelow = menu!.Items.OfType<MenuItem>()
+                    .Single(item => Equals(item.Header, "Insert Row Below"));
+                var deleteColumn = menu.Items.OfType<MenuItem>()
+                    .Single(item => Equals(item.Header, "Delete Column"));
+                insertBelow.IsEnabled.Should().BeTrue();
+                deleteColumn.IsEnabled.Should().BeTrue();
+
+                insertBelow.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+
+                window.IsTableCellEditActiveForTests.Should().BeFalse();
+                shape.Table.Rows.Should().HaveCount(3);
+                InCanvasTextEditPlanner.ExtractPlainText(shape.Table.Rows[0].Cells[0].TextBody)
+                    .Should().Be("Committed by context menu");
+
+                var fallbackMenu = window.BuildTableContextMenuForTests(shape.Id);
+                fallbackMenu.Should().NotBeNull();
+                var fallbackDeleteColumn = fallbackMenu!.Items.OfType<MenuItem>()
+                    .Single(item => Equals(item.Header, "Delete Column"));
+                fallbackDeleteColumn.RaiseEvent(
+                    new global::Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+
+                shape.Table.ColumnWidthsEmu.Should().HaveCount(1,
+                    "without an inline editor the same user route must fall back to EditingSession");
+                var finalMenu = window.BuildTableContextMenuForTests(shape.Id);
+                finalMenu.Should().NotBeNull();
+                finalMenu!.Items.OfType<MenuItem>()
+                    .Single(item => Equals(item.Header, "Delete Column"))
+                    .IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        if (!ran) return;
+    }
+
     [Theory]
     [InlineData(TableCellEditPlanner.TableFirstRowCommandId, TableStyleFlagKind.FirstRow)]
     [InlineData(TableCellEditPlanner.TableLastRowCommandId, TableStyleFlagKind.LastRow)]
