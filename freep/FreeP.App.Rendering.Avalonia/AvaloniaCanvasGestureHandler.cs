@@ -30,6 +30,8 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
     private readonly EditingSession         _editor;
     private readonly SelectionAdornerLayer  _adorner;
     private readonly Action<ChartPointHit>? _onChartPointDoubleClick;
+    private readonly Func<SlideShape, bool>? _tryOpenOleInPlace;
+    private readonly Func<OleObjectInfo?, bool>? _tryActivateOleExternally;
     private IPointer? _capturedPointer;
     private bool _disposed;
 
@@ -95,12 +97,16 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
 
     public AvaloniaCanvasGestureHandler(SlideCanvas canvas, EditingSession editor,
                                          SelectionAdornerLayer adorner,
-                                         Action<ChartPointHit>? onChartPointDoubleClick = null)
+                                         Action<ChartPointHit>? onChartPointDoubleClick = null,
+                                         Func<SlideShape, bool>? tryOpenOleInPlace = null,
+                                         Func<OleObjectInfo?, bool>? tryActivateOleExternally = null)
     {
         _canvas  = canvas  ?? throw new ArgumentNullException(nameof(canvas));
         _editor  = editor  ?? throw new ArgumentNullException(nameof(editor));
         _adorner = adorner ?? throw new ArgumentNullException(nameof(adorner));
         _onChartPointDoubleClick = onChartPointDoubleClick;
+        _tryOpenOleInPlace = tryOpenOleInPlace;
+        _tryActivateOleExternally = tryActivateOleExternally;
 
         _canvas.PointerPressed      += OnPointerPressed;
         _canvas.PointerReleased     += OnPointerReleased;
@@ -322,7 +328,7 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
                 : null;
             if (shape?.Kind == SlideShapeKind.Ole)
             {
-                OleActivationService.TryActivate(shape.OleObject);
+                HandleOleDoubleClick(shape);
                 e.Handled = true;
                 return;
             }
@@ -440,6 +446,22 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
 
         e.Handled = true;
     }
+
+    /// <summary>
+    /// Applies the same in-place-first OLE activation order as the WPF canvas.
+    /// The optional external callback is a test seam; production falls back to the
+    /// shared activation service when no native in-place host can be created.
+    /// </summary>
+    private bool HandleOleDoubleClick(SlideShape shape)
+    {
+        if (_tryOpenOleInPlace?.Invoke(shape) == true)
+            return true;
+
+        return _tryActivateOleExternally?.Invoke(shape.OleObject)
+            ?? OleActivationService.TryActivate(shape.OleObject);
+    }
+
+    internal bool HandleOleDoubleClickForTests(SlideShape shape) => HandleOleDoubleClick(shape);
 
     internal static bool ShouldContinueDoubleClickSelection(SlideShape? shape) =>
         shape?.TextBody is null;

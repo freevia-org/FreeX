@@ -210,6 +210,10 @@ public sealed partial class MainWindow : Window
 
     private readonly SlideCanvas _slideCanvas;
     private Border _canvasHost = null!;
+    private Canvas _oleOverlay = null!;
+#if FREEP_WINDOWS_CAPTURE
+    private AvaloniaOleInPlaceHost? _activeOleHost;
+#endif
     private readonly ListBox _slidePaneList;
     private readonly Border _slidePaneInsertionIndicator;
     private readonly Button _slidePaneNewSlideButton;
@@ -933,6 +937,7 @@ public sealed partial class MainWindow : Window
             _closeCoordinator.ShouldCancelClosing();
         Closed += (_, _) =>
         {
+            CloseActiveOleHost();
             _findReplaceDialog?.Close();
             _slideSizeDialog?.Close(false);
             _headerFooterDialog?.Close(false);
@@ -1219,6 +1224,11 @@ public sealed partial class MainWindow : Window
         };
 
         canvasContent.Children.Add(_slideCanvas);
+        _oleOverlay = new Canvas
+        {
+            IsHitTestVisible = false,
+        };
+        canvasContent.Children.Add(_oleOverlay);
 
         var canvasStack = new Grid
         {
@@ -2235,7 +2245,8 @@ public sealed partial class MainWindow : Window
             _slideCanvas,
             Editor,
             _adorner,
-            OnChartPointDoubleClick);
+            OnChartPointDoubleClick,
+            tryOpenOleInPlace: TryOpenOleInPlace);
         _slideCanvas.AttachGestureHandler(_gestureHandler);
         ApplyPresentationViewShowState(_viewShowState);
 
@@ -2259,6 +2270,7 @@ public sealed partial class MainWindow : Window
     private void RewireInteractionToEditor()
     {
         if (_adorner is null) return;
+        CloseActiveOleHost();
         // The gesture handler and text editor subscribe strongly to the canvas's routed
         // pointer events, so detach them before binding the new EditingSession.
         // Find the textOverlay in the visual tree (it's the 3rd child of the canvasStack).
@@ -2275,7 +2287,9 @@ public sealed partial class MainWindow : Window
         if (_slideCanvas.Parent is Grid canvasContent &&
             canvasContent.Parent is Grid canvasStack)
         {
-            textOverlay = canvasStack.Children.OfType<Canvas>().SingleOrDefault();
+            textOverlay = canvasStack.Children
+                .OfType<Canvas>()
+                .FirstOrDefault(candidate => !ReferenceEquals(candidate, _oleOverlay));
         }
 
         if (textOverlay is not null)
@@ -2284,7 +2298,8 @@ public sealed partial class MainWindow : Window
                 _slideCanvas,
                 Editor,
                 _adorner,
-                OnChartPointDoubleClick);
+                OnChartPointDoubleClick,
+                tryOpenOleInPlace: TryOpenOleInPlace);
             _slideCanvas.AttachGestureHandler(_gestureHandler);
             ApplyPresentationViewShowState(_viewShowState);
             _textEditor = new AvaloniaInCanvasTextEditor(
@@ -2298,6 +2313,57 @@ public sealed partial class MainWindow : Window
 #endif
             WireTableContextMenu();
         }
+    }
+
+    private bool TryOpenOleInPlace(SlideShape shape)
+    {
+#if FREEP_WINDOWS_CAPTURE
+        if (shape.Kind != SlideShapeKind.Ole
+            || shape.OleObject is null
+            || Math.Abs(shape.RotationDeg) > 0.01
+            || shape.FlipH
+            || shape.FlipV)
+            return false;
+
+        CloseActiveOleHost();
+        var bounds = SlideCanvasGeometryPlanner.EmuBoundsToScreen(
+            shape.OffsetXEmu,
+            shape.OffsetYEmu,
+            shape.ExtentCxEmu,
+            shape.ExtentCyEmu,
+            _slideCanvas.CurrentTransform);
+        var overlayBounds = new Rect(
+            bounds.Left,
+            bounds.Top,
+            bounds.Width,
+            bounds.Height);
+
+        return AvaloniaOleInPlaceHost.TryShow(
+            _oleOverlay,
+            shape.OleObject,
+            overlayBounds,
+            onActivationFailed: () =>
+            {
+                CloseActiveOleHost();
+                OleActivationService.TryActivate(shape.OleObject);
+            },
+            out _activeOleHost);
+#else
+        return false;
+#endif
+    }
+
+    private void CloseActiveOleHost()
+    {
+#if FREEP_WINDOWS_CAPTURE
+        if (_activeOleHost is null)
+            return;
+
+        _activeOleHost.Dispose();
+        _oleOverlay.Children.Remove(_activeOleHost);
+        _oleOverlay.IsHitTestVisible = false;
+        _activeOleHost = null;
+#endif
     }
 
     private void WireTableContextMenu()
@@ -9003,6 +9069,7 @@ public sealed partial class MainWindow : Window
 
     private void RefreshCanvas()
     {
+        CloseActiveOleHost();
         _slideCanvas.Presentation = _presentation;
         _slideCanvas.Slide        = Editor.CurrentSlide;
         _slideCanvas.SlideIndex   = Editor.CurrentSlideIndex;

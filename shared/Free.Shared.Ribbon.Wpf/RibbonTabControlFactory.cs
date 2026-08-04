@@ -56,7 +56,7 @@ public static class RibbonTabControlFactory
             Background = SurfaceBrush,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(0),
-            MinHeight = RibbonVisualMetrics.TabContentMinHeight + 28
+            MinHeight = RibbonVisualMetrics.TabContentMinHeight + RibbonTabChromeMetrics.HeaderHeight
         };
 
         // Resolve accent brushes from Application.Current.Resources (set by WpfThemeApplier) so
@@ -89,8 +89,12 @@ public static class RibbonTabControlFactory
     private static Style BuildTabItemStyle(Brush accentBrush, Brush accentSoftBrush)
     {
         var style = new Style(typeof(TabItem));
-        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(5, 4, 5, 4)));
-        style.Setters.Add(new Setter(Control.FontSizeProperty, 12.0));
+        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(
+            RibbonTabChromeMetrics.HeaderHorizontalPadding,
+            RibbonTabChromeMetrics.HeaderVerticalPadding,
+            RibbonTabChromeMetrics.HeaderHorizontalPadding,
+            RibbonTabChromeMetrics.HeaderVerticalPadding)));
+        style.Setters.Add(new Setter(Control.FontSizeProperty, RibbonTabChromeMetrics.FontSize));
         style.Setters.Add(new Setter(Control.ForegroundProperty, TextBrush));
         style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
         style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
@@ -107,10 +111,12 @@ public static class RibbonTabControlFactory
         // header content vertically centred. Hover/selected handled by template triggers below.
         var border = new FrameworkElementFactory(typeof(Border), "TabBorder");
         border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
-        border.SetValue(Border.BorderThicknessProperty, new Thickness(0, 0, 0, 3));
+        border.SetValue(Border.BorderThicknessProperty, new Thickness(
+            0, 0, 0, RibbonTabChromeMetrics.SelectedUnderlineThickness));
         border.SetValue(Border.BorderBrushProperty, Brushes.Transparent);
         border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
-        border.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 1, 0));
+        border.SetValue(FrameworkElement.MarginProperty, new Thickness(
+            0, 0, RibbonTabChromeMetrics.InterTabGap, 0));
         border.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
 
         var content = new FrameworkElementFactory(typeof(ContentPresenter));

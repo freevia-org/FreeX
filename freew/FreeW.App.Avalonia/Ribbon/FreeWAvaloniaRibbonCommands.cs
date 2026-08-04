@@ -1254,7 +1254,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.equation.groupchr",  new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.GroupCharOf("x+y")]))));
 
         // ── Text from File ───────────────────────────────────────────────────
-        // Opens a file picker (shell callback) and inserts the loaded document's text at the caret.
+        // Opens a file picker (shell callback); DOCX content is inserted as model blocks and TXT as plain text.
         var textFromFileCommand = new ActionRibbonCommand(callbacks.InsertTextFromFile ?? (() => { }));
         r.Register("freew.insert-file", textFromFileCommand);
         r.Register("freew.text-from-file", textFromFileCommand);

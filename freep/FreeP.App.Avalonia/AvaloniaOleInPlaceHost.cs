@@ -1,6 +1,7 @@
 #if FREEP_WINDOWS_CAPTURE
 using System.IO;
 using System.Runtime.InteropServices;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
 using FreeP.App.Compositor;
@@ -27,21 +28,97 @@ internal sealed class AvaloniaOleInPlaceHost : NativeControlHost, IDisposable
     private readonly string _storagePath;
     private readonly byte[] _originalBytes;
     private readonly Action<byte[]> _commitBytes;
+    private readonly Action? _onActivationFailed;
     private OleSite? _site;
     private IOleObject? _ole;
     private IntPtr _child;
     private bool _started;
     private bool _closed;
+    private bool _activationFailureRaised;
 
     private AvaloniaOleInPlaceHost(
         string sourcePath,
         byte[] originalBytes,
-        Action<byte[]> commitBytes)
+        Action<byte[]> commitBytes,
+        Action? onActivationFailed = null)
     {
         _sourcePath = sourcePath;
         _storagePath = sourcePath + ".stg";
         _originalBytes = originalBytes.ToArray();
         _commitBytes = commitBytes;
+        _onActivationFailed = onActivationFailed;
+    }
+
+    internal static bool TryShow(
+        Canvas overlay,
+        OleObjectInfo? oleObject,
+        Rect bounds,
+        Action? onActivationFailed,
+        out AvaloniaOleInPlaceHost? host)
+    {
+        host = null;
+        if (overlay is null || oleObject is null || oleObject.EmbeddedBytes.Length == 0)
+            return false;
+
+        string extension = OleActivationService.ResolveExtension(oleObject);
+        string directory = Path.Combine(Path.GetTempPath(), "FreeP", "Ole", "InPlace");
+        string path = Path.Combine(directory, $"inplace-{Guid.NewGuid():N}.{extension}");
+        AvaloniaOleInPlaceHost? candidate = null;
+        bool published = false;
+        void RemoveCandidate()
+        {
+            if (candidate is not null && overlay.Children.Contains(candidate))
+                overlay.Children.Remove(candidate);
+            overlay.IsHitTestVisible = overlay.Children.Count > 0;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            File.WriteAllBytes(path, oleObject.EmbeddedBytes);
+
+            candidate = new AvaloniaOleInPlaceHost(
+                path,
+                oleObject.EmbeddedBytes,
+                bytes => oleObject.EmbeddedBytes = bytes,
+                onActivationFailed: () =>
+                {
+                    // NativeControlHost can fail synchronously from Children.Add. In
+                    // that case TryShow must return false and let the gesture route own
+                    // the one external fallback. A later failure is already published.
+                    RemoveCandidate();
+                    if (published)
+                        onActivationFailed?.Invoke();
+                })
+            {
+                Width = Math.Max(1, bounds.Width),
+                Height = Math.Max(1, bounds.Height),
+            };
+            Canvas.SetLeft(candidate, bounds.Left);
+            Canvas.SetTop(candidate, bounds.Top);
+            overlay.Children.Add(candidate);
+            overlay.IsHitTestVisible = true;
+
+            if (candidate._closed)
+            {
+                RemoveCandidate();
+                candidate.Dispose();
+                return false;
+            }
+
+            host = candidate;
+            published = true;
+            return true;
+        }
+        catch
+        {
+            // Any construction or attachment failure must dispose the exact local
+            // candidate before TryShow exposes failure to the gesture route.
+            RemoveCandidate();
+            candidate?.Dispose();
+            TryDelete(path);
+            return false;
+        }
     }
 
     internal static Control? TryCreate(
@@ -80,6 +157,7 @@ internal sealed class AvaloniaOleInPlaceHost : NativeControlHost, IDisposable
                 NativeMethods.DestroyWindow(_child);
             _child = IntPtr.Zero;
             CloseAndCommit();
+            NotifyActivationFailure();
             return null!;
         }
 
@@ -179,6 +257,15 @@ internal sealed class AvaloniaOleInPlaceHost : NativeControlHost, IDisposable
             TryDelete(_sourcePath);
             TryDelete(_storagePath);
         }
+    }
+
+    private void NotifyActivationFailure()
+    {
+        if (_activationFailureRaised)
+            return;
+
+        _activationFailureRaised = true;
+        _onActivationFailed?.Invoke();
     }
 
     private static void TryDelete(string path)
