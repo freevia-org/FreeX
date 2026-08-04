@@ -9,6 +9,7 @@ namespace FreeW.Core.IO.Tests;
 
 public sealed class DataBoundContentControlRoundTripTests
 {
+    private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     private const string StoreItemId = "{11111111-2222-3333-4444-555555555555}";
     private static readonly byte[] ItemBytes = Encoding.UTF8.GetBytes(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?><root xmlns=\"urn:freew:test\"><name>Original value</name></root>");
@@ -224,7 +225,6 @@ public sealed class DataBoundContentControlRoundTripTests
     [Theory]
     [InlineData("date", "08/04/2026")]
     [InlineData("dateTime", "not-a-date")]
-    [InlineData("text", "August 4, 2026")]
     public void BoundDatePicker_InvalidOrUnsupportedStoragePreservesSerializedStateAndDisplay(
         string storage,
         string storedValue)
@@ -240,6 +240,48 @@ public sealed class DataBoundContentControlRoundTripTests
 
         run.Text.Should().Be("Original display value");
         run.Control!.DateMetadata!.FullDate.Should().Be("2026-06-19T00:00:00Z");
+    }
+
+    [Theory]
+    [InlineData("text")]
+    [InlineData(null)]
+    public void BoundDatePicker_TextOrOmittedStorageUsesMappedTextWithoutChangingDateMetadata(
+        string? storage)
+    {
+        const string mappedText = "Review after the next quarter";
+        using var input = BuildPackage(
+            itemBytes: Encoding.UTF8.GetBytes(
+                $"<?xml version=\"1.0\" encoding=\"utf-8\"?><root xmlns=\"urn:freew:test\"><name>{mappedText}</name></root>"),
+            controlElement: "date",
+            dateStorage: storage,
+            multipleRuns: true);
+
+        var document = DocxReader.Read(input);
+        var runs = document.Paragraphs.Single().Runs;
+
+        runs.Should().HaveCount(2);
+        runs[0].Text.Should().Be(mappedText);
+        runs[1].Text.Should().BeEmpty();
+        runs[0].Control.Should().BeSameAs(runs[1].Control);
+        runs[0].Control!.DateMetadata!.FullDate.Should().Be("2026-06-19T00:00:00Z");
+        runs[0].Control!.DateMetadata!.StoreMappedDataAs.Should().Be(storage);
+
+        var saved = Write(document);
+        var savedDate = GetDateElement(saved);
+        savedDate.Attribute(W + "fullDate")!.Value.Should().Be("2026-06-19T00:00:00Z");
+        savedDate.Element(W + "storeMappedDataAs")?.Attribute(W + "val")?.Value
+            .Should().Be(storage);
+        XDocument.Load(new MemoryStream(EntryBytes(saved, "word/document.xml")))
+            .Descendants(W + "t")
+            .Select(text => text.Value)
+            .Should().Equal(mappedText, string.Empty);
+
+        var reopened = DocxReader.Read(new MemoryStream(saved));
+        var reopenedRun = reopened.Paragraphs.Single().Runs.Should().ContainSingle().Subject;
+        reopenedRun.Text.Should().Be(mappedText);
+        reopenedRun.Control!.DateMetadata!.FullDate.Should().Be("2026-06-19T00:00:00Z");
+        reopenedRun.Control.DateMetadata.StoreMappedDataAs.Should().Be(storage);
+        SchemaErrors(saved).Should().BeEmpty();
     }
 
     [Fact]
@@ -419,11 +461,14 @@ public sealed class DataBoundContentControlRoundTripTests
 
         if (controlElement == "date")
         {
+            var storage = dateStorage is null
+                ? string.Empty
+                : $"<w:storeMappedDataAs w:val=\"{dateStorage}\"/>";
             return $$"""
                 <w:date w:fullDate="2026-06-19T00:00:00Z">
                   <w:dateFormat w:val="MMMM d, yyyy"/>
                   <w:lid w:val="en-US"/>
-                  <w:storeMappedDataAs w:val="{{dateStorage}}"/>
+                  {{storage}}
                   <w:calendar w:val="gregorian"/>
                 </w:date>
                 """;
