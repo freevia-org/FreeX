@@ -271,53 +271,20 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
-    public void WeavingRibbon_UsesContinuousRailsAndAlternatingDiagonalStripes()
+    public void WeavingRibbon_UsesContinuousRailsAndMeasuredMaterialSprites()
     {
         PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(95, 3, 816, 1056, 32, out var plan)
             .Should().BeTrue();
 
-        plan.Fills.Should().Equal(
+        plan.Fills.Take(4).Should().Equal(
             new PageBorderArtFillRectangle(32, 32, 752, 32, 0, 0, 0),
             new PageBorderArtFillRectangle(32, 992, 752, 32, 0, 0, 0),
-            new PageBorderArtFillRectangle(31, 32, 32, 992, 0, 0, 0),
-            new PageBorderArtFillRectangle(752, 32, 32, 992, 0, 0, 0),
-            new PageBorderArtFillRectangle(63, 128, 1, 800, 0, 0, 0));
-        plan.Polygons.Should().HaveCount(224);
-        plan.Polygons[0].Points.Should().Equal(
-            new PageBorderArtPoint(44, 63),
-            new PageBorderArtPoint(44, 64),
-            new PageBorderArtPoint(55, 64),
-            new PageBorderArtPoint(76, 43),
-            new PageBorderArtPoint(76, 32),
-            new PageBorderArtPoint(65, 32));
-        plan.Polygons[4].Points.Should().Equal(
-            new PageBorderArtPoint(108, 63),
-            new PageBorderArtPoint(108, 64),
-            new PageBorderArtPoint(118, 64),
-            new PageBorderArtPoint(140, 40),
-            new PageBorderArtPoint(140, 32),
-            new PageBorderArtPoint(132, 32));
-        plan.Polygons[96].Points.Should().Equal(
-            new PageBorderArtPoint(31, 32),
-            new PageBorderArtPoint(39, 32),
-            new PageBorderArtPoint(63, 56),
-            new PageBorderArtPoint(63, 64),
-            new PageBorderArtPoint(55, 64),
-            new PageBorderArtPoint(31, 40));
-        plan.Polygons[104].Points.Should().Equal(
-            new PageBorderArtPoint(31, 136),
-            new PageBorderArtPoint(42, 136),
-            new PageBorderArtPoint(63, 167),
-            new PageBorderArtPoint(63, 168),
-            new PageBorderArtPoint(52, 168),
-            new PageBorderArtPoint(31, 147));
-        plan.Polygons[168].Points.Should().Equal(
-            new PageBorderArtPoint(752, 149),
-            new PageBorderArtPoint(763, 149),
-            new PageBorderArtPoint(784, 180),
-            new PageBorderArtPoint(784, 181),
-            new PageBorderArtPoint(773, 181),
-            new PageBorderArtPoint(752, 160));
+            new PageBorderArtFillRectangle(32, 32, 32, 992, 0, 0, 0),
+            new PageBorderArtFillRectangle(752, 32, 32, 992, 0, 0, 0));
+        plan.Fills.Should().HaveCount(8972);
+        plan.Fills[4].Should().Be(new PageBorderArtFillRectangle(67, 32, 1, 1, 0xC0, 0xC0, 0xC0));
+        plan.Fills[5].Should().Be(new PageBorderArtFillRectangle(68, 32, 6, 1, 0xFF, 0xFF, 0xFF));
+        plan.Polygons.Should().BeEmpty();
     }
 
     [Fact]

@@ -300,6 +300,64 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
     }
 
     [Fact]
+    public void Controller_UsesVerticalWebVttCueWritingDirection()
+    {
+        var factory = new FakeBackendFactory();
+        var overlay = new Canvas();
+        var controller = new AvaloniaSlideShowMediaController(overlay, factory);
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 42,
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 9144000,
+            ExtentCyEmu = 6858000,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                PlaybackStartMode = MediaPlaybackStartMode.Automatically,
+                Bytes = [1, 2, 3],
+                ContentType = "video/mp4",
+            },
+        });
+        var track = new PresentationMediaTranscriptTrackDescriptor(
+            SlideIndex: 0,
+            ShapeId: 42,
+            ShapeName: "Video",
+            TrackIndex: 0,
+            Label: "Japanese",
+            Language: "ja-JP",
+            Source: "captions.vtt",
+            ContentType: "text/vtt",
+            Status: PresentationMediaTranscriptTrackStatus.Available,
+            StatusMessage: string.Empty,
+            Cues:
+            [
+                new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Vertical")
+                {
+                    PositionPercent = 75,
+                    SizePercent = 40,
+                    WritingMode = PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft
+                }
+            ]);
+
+        controller.EnterSlide(slide, 960, 720, 960, 720, [track]);
+        factory.Backend.Sessions.Single().Seek(TimeSpan.FromMilliseconds(500));
+        controller.RefreshCaptionsForTest();
+
+        var caption = overlay.Children.OfType<Border>().Single();
+        Canvas.GetLeft(caption).Should().Be(874);
+        Canvas.GetTop(caption).Should().Be(396);
+        caption.Width.Should().Be(86);
+        caption.Height.Should().Be(288);
+        var text = caption.Child.Should().BeOfType<TextBlock>().Subject;
+        text.RenderTransform.Should().BeOfType<global::Avalonia.Media.RotateTransform>()
+            .Which.Angle.Should().Be(90);
+        text.Width.Should().Be(288);
+        text.Height.Should().Be(86);
+    }
+
+    [Fact]
     public void Controller_UpdateLayout_RepositionsCaptionOverlayAfterCanvasResize()
     {
         var factory = new FakeBackendFactory();

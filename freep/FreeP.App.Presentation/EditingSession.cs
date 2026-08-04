@@ -2323,6 +2323,9 @@ public sealed class EditingSession
             before,
             staged.CaptionTracks));
 
+        if (plan.Intent == PresentationMediaCaptionAuthoringIntentKind.Delete)
+            return result;
+
         if (result.TrackIndex >= 0 && result.TrackIndex < media.CaptionTracks.Count)
             return PresentationMediaCaptionTrackMutationResult.Success(
                 result.TrackIndex,
