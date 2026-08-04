@@ -27,8 +27,9 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
     private readonly ComboBox _leaderCombo;
     private Result? _result;
 
-    private TableOfAuthoritiesDialog(Window? owner)
+    private TableOfAuthoritiesDialog(Window? owner, ToaOptions options)
     {
+        ArgumentNullException.ThrowIfNull(options);
         Owner = owner;
         Title = TableOfAuthoritiesDialogPlanner.Title;
         Width = 380;
@@ -37,18 +38,32 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _categoryCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 8) };
-        foreach (var choice in TableOfAuthoritiesDialogPlanner.BuildCategoryChoices())
-            _categoryCombo.Items.Add(choice);
-        _categoryCombo.SelectedIndex = 0;
+        var state = TableOfAuthoritiesDialogPlanner.BuildInitialState(options);
+        var categories = TableOfAuthoritiesDialogPlanner.BuildCategoryChoices();
+        var leaders = TableOfAuthoritiesDialogPlanner.BuildTabLeaderChoices();
 
-        _passimBox = new CheckBox { Content = TableOfAuthoritiesDialogPlanner.UsePassimLabel, Margin = new Thickness(0, 0, 0, 6) };
-        _keepFormattingBox = new CheckBox { Content = TableOfAuthoritiesDialogPlanner.KeepOriginalFormattingLabel, Margin = new Thickness(0, 0, 0, 8) };
+        _categoryCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 8) };
+        foreach (var choice in categories)
+            _categoryCombo.Items.Add(choice);
+        _categoryCombo.SelectedIndex = TableOfAuthoritiesDialogPlanner.SelectCategoryIndex(categories, state.CategoryFilter);
+
+        _passimBox = new CheckBox
+        {
+            Content = TableOfAuthoritiesDialogPlanner.UsePassimLabel,
+            IsChecked = state.UsePassim,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        _keepFormattingBox = new CheckBox
+        {
+            Content = TableOfAuthoritiesDialogPlanner.KeepOriginalFormattingLabel,
+            IsChecked = state.KeepOriginalFormatting,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
 
         _leaderCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 8) };
-        foreach (var choice in TableOfAuthoritiesDialogPlanner.BuildTabLeaderChoices())
+        foreach (var choice in leaders)
             _leaderCombo.Items.Add(choice);
-        _leaderCombo.SelectedIndex = 0;
+        _leaderCombo.SelectedIndex = TableOfAuthoritiesDialogPlanner.SelectTabLeaderIndex(leaders, state.TabLeader);
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 80, rowMargin: new Thickness(0, 12, 0, 0));
 
@@ -96,9 +111,15 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
         CitationCategory? categoryFilter = null,
         ToaTabLeader leader = ToaTabLeader.Dots)
     {
-        var dlg = new TableOfAuthoritiesDialog(owner: null);
-        dlg._passimBox.IsChecked = passim;
-        dlg._keepFormattingBox.IsChecked = keepFormatting;
+        var dlg = new TableOfAuthoritiesDialog(
+            owner: null,
+            options: new ToaOptions
+            {
+                UsePassim = passim,
+                KeepOriginalFormatting = keepFormatting,
+                CategoryFilter = categoryFilter,
+                TabLeader = leader
+            });
 
         dlg._categoryCombo.SelectedIndex = TableOfAuthoritiesDialogPlanner.SelectCategoryIndex(
             dlg._categoryCombo.Items.OfType<TableOfAuthoritiesCategoryChoice>().ToList(),
@@ -128,9 +149,9 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
     /// Show the Table of Authorities options dialog. Returns the chosen <see cref="Result"/>, or null if
     /// cancelled.
     /// </summary>
-    public static Result? Prompt(Window? owner)
+    public static Result? Prompt(Window? owner, ToaOptions? options = null)
     {
-        var dlg = new TableOfAuthoritiesDialog(owner);
+        var dlg = new TableOfAuthoritiesDialog(owner, options ?? ToaOptions.Default);
         dlg.ShowDialog();
         return dlg._result;
     }

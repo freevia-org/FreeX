@@ -26,11 +26,19 @@ public enum PresentationMediaTranscriptCueAlignment
     Right
 }
 
+public enum PresentationMediaTranscriptCueWritingMode
+{
+    Horizontal,
+    VerticalRightToLeft,
+    VerticalLeftToRight
+}
+
 public sealed record PresentationMediaCaptionPlacement(
     double X,
     double Y,
     double Width,
-    double Height);
+    double Height,
+    double RotationDegrees = 0);
 
 public sealed record PresentationMediaTranscriptCueDescriptor(
     TimeSpan StartTime,
@@ -45,6 +53,9 @@ public sealed record PresentationMediaTranscriptCueDescriptor(
 
     public PresentationMediaTranscriptCueAlignment Alignment { get; init; } =
         PresentationMediaTranscriptCueAlignment.Center;
+
+    public PresentationMediaTranscriptCueWritingMode WritingMode { get; init; } =
+        PresentationMediaTranscriptCueWritingMode.Horizontal;
 
     public string StartTimeText => FormatTime(StartTime);
 
@@ -463,6 +474,10 @@ public static class PresentationMediaTranscriptPlanner
         double mediaHeight,
         double defaultHeight)
     {
+        var writingMode = cue?.WritingMode ?? PresentationMediaTranscriptCueWritingMode.Horizontal;
+        if (writingMode is not PresentationMediaTranscriptCueWritingMode.Horizontal)
+            return ComputeVerticalCaptionPlacement(cue, mediaWidth, mediaHeight, defaultHeight, writingMode);
+
         var widthPercent = Math.Clamp(cue?.SizePercent ?? 100, 1, 100);
         var width = Math.Max(1, mediaWidth * widthPercent / 100);
         var height = Math.Max(1, defaultHeight);
@@ -484,6 +499,43 @@ public static class PresentationMediaTranscriptPlanner
         y = Math.Clamp(y, 0, Math.Max(0, mediaHeight - height));
 
         return new PresentationMediaCaptionPlacement(x, y, width, height);
+    }
+
+    private static PresentationMediaCaptionPlacement ComputeVerticalCaptionPlacement(
+        PresentationMediaTranscriptCueDescriptor? cue,
+        double mediaWidth,
+        double mediaHeight,
+        double defaultHeight,
+        PresentationMediaTranscriptCueWritingMode writingMode)
+    {
+        var height = Math.Max(1, mediaHeight * Math.Clamp(cue?.SizePercent ?? 100, 1, 100) / 100);
+        var width = Math.Max(1, defaultHeight);
+        var positionPercent = Math.Clamp(cue?.PositionPercent ?? 50, 0, 100);
+        var anchorY = mediaHeight * positionPercent / 100;
+        var alignment = cue?.Alignment ?? PresentationMediaTranscriptCueAlignment.Center;
+        var y = alignment is PresentationMediaTranscriptCueAlignment.Start
+            or PresentationMediaTranscriptCueAlignment.Left
+            ? anchorY
+            : alignment is PresentationMediaTranscriptCueAlignment.End
+                or PresentationMediaTranscriptCueAlignment.Right
+                    ? anchorY - height
+                    : anchorY - height / 2;
+        y = Math.Clamp(y, 0, Math.Max(0, mediaHeight - height));
+
+        var defaultLinePercent = writingMode == PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft
+            ? 100
+            : 0;
+        var linePercent = Math.Clamp(cue?.LinePercent ?? defaultLinePercent, 0, 100);
+        var lineAnchorX = mediaWidth * linePercent / 100;
+        var x = writingMode == PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft
+            ? lineAnchorX - width
+            : lineAnchorX;
+        x = Math.Clamp(x, 0, Math.Max(0, mediaWidth - width));
+
+        var rotation = writingMode == PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft
+            ? 90
+            : -90;
+        return new PresentationMediaCaptionPlacement(x, y, width, height, rotation);
     }
 
     private static PresentationMediaCaptionAuthoringPanePlan EmptyCaptionAuthoringPanePlan(int slideIndex)
@@ -777,6 +829,8 @@ public static class PresentationMediaTranscriptPlanner
             builder.Append(" line:").Append(line.ToString("0.###", CultureInfo.InvariantCulture)).Append('%');
         if (cue.SizePercent is { } size)
             builder.Append(" size:").Append(size.ToString("0.###", CultureInfo.InvariantCulture)).Append('%');
+        if (cue.WritingMode != PresentationMediaTranscriptCueWritingMode.Horizontal)
+            builder.Append(" vertical:").Append(cue.WritingMode == PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft ? "rl" : "lr");
     }
 
     private static byte[] BuildCaptionBytes(
@@ -1102,9 +1156,10 @@ public static class PresentationMediaTranscriptPlanner
                     out var start,
                     out var end,
                     out var positionPercent,
-                    out var linePercent,
-                    out var sizePercent,
-                    out var alignment))
+            out var linePercent,
+            out var sizePercent,
+                    out var alignment,
+                    out var writingMode))
             {
                 continue;
             }
@@ -1120,7 +1175,8 @@ public static class PresentationMediaTranscriptPlanner
                 PositionPercent = positionPercent,
                 LinePercent = linePercent,
                 SizePercent = sizePercent,
-                Alignment = alignment
+                Alignment = alignment,
+                WritingMode = writingMode
             });
         }
 
@@ -1390,6 +1446,7 @@ public static class PresentationMediaTranscriptPlanner
             out _,
             out _,
             out _,
+            out _,
             out _);
 
     private static bool TryParseTimingLine(
@@ -1399,7 +1456,8 @@ public static class PresentationMediaTranscriptPlanner
         out double? positionPercent,
         out double? linePercent,
         out double? sizePercent,
-        out PresentationMediaTranscriptCueAlignment alignment)
+        out PresentationMediaTranscriptCueAlignment alignment,
+        out PresentationMediaTranscriptCueWritingMode writingMode)
     {
         start = default;
         end = default;
@@ -1407,6 +1465,7 @@ public static class PresentationMediaTranscriptPlanner
         linePercent = null;
         sizePercent = null;
         alignment = PresentationMediaTranscriptCueAlignment.Center;
+        writingMode = PresentationMediaTranscriptCueWritingMode.Horizontal;
 
         var parts = line.Split(["-->"], 2, StringSplitOptions.None);
         if (parts.Length != 2)
@@ -1453,6 +1512,14 @@ public static class PresentationMediaTranscriptPlanner
                     break;
                 case "size":
                     sizePercent = ParseWebVttPercent(value);
+                    break;
+                case "vertical":
+                    writingMode = value.ToLowerInvariant() switch
+                    {
+                        "rl" => PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft,
+                        "lr" => PresentationMediaTranscriptCueWritingMode.VerticalLeftToRight,
+                        _ => PresentationMediaTranscriptCueWritingMode.Horizontal
+                    };
                     break;
             }
         }

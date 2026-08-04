@@ -82,4 +82,21 @@ public sealed class TableOfAuthoritiesDialogTests
         result.Options.CategoryFilter.Should().Be(CitationCategory.Cases);
         result.Options.TabLeader.Should().Be(ToaTabLeader.None);
     }
+
+    [StaFact]
+    public void Dialog_RepresentativePopulatedState_matches_shared_evidence_seed()
+    {
+        var state = FreeW.App.Presentation.Ribbon.TableOfAuthoritiesDialogPlanner.RepresentativePopulatedState;
+        var dlg = TableOfAuthoritiesDialog.CreateForTest(
+            passim: state.UsePassim,
+            keepFormatting: state.KeepOriginalFormatting,
+            categoryFilter: state.CategoryFilter,
+            leader: state.TabLeader);
+
+        var result = dlg.AcceptForTest();
+
+        result.Should().NotBeNull();
+        result!.Options.Should().BeEquivalentTo(
+            FreeW.App.Presentation.Ribbon.TableOfAuthoritiesDialogPlanner.BuildOptions(state));
+    }
 }

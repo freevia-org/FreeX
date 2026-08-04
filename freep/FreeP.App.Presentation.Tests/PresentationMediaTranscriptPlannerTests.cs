@@ -167,6 +167,62 @@ public sealed class PresentationMediaTranscriptPlannerTests
     }
 
     [Fact]
+    public void WebVttVerticalCueSettings_ArePreservedAuthoredAndPlacedInWritingDirection()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 47,
+            Name = "Vertical video",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        Source = "ppt/media/vertical.vtt",
+                        ContentType = "text/vtt",
+                        Bytes = Encoding.UTF8.GetBytes("""
+                            WEBVTT
+
+                            00:00.000 --> 00:02.000 position:75% line:10% size:40% align:end vertical:rl
+                            Vertical cue
+                            """)
+                    }
+                }
+            }
+        });
+
+        var cue = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation)
+            .Tracks.Should().ContainSingle().Subject.Cues.Should().ContainSingle().Subject;
+
+        cue.WritingMode.Should().Be(PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft);
+        var placement = PresentationMediaTranscriptPlanner.ComputeCaptionPlacement(cue, 800, 400, 80);
+        placement.Should().Be(new PresentationMediaCaptionPlacement(0, 140, 80, 160, 90));
+
+        var media = new MediaInfo { IsVideo = true };
+        var result = PresentationMediaTranscriptPlanner.CreateInternalCaptionTrack(
+            media,
+            new PresentationMediaCaptionTrackAuthoringDescriptor(
+                "Vertical captions",
+                "ja-JP",
+                "ppt/media/vertical-authored.vtt",
+                null,
+                [new PresentationMediaTranscriptCueDescriptor(
+                    TimeSpan.Zero,
+                    TimeSpan.FromSeconds(2),
+                    "Vertical text")
+                {
+                    WritingMode = PresentationMediaTranscriptCueWritingMode.VerticalLeftToRight
+                }]));
+
+        result.Succeeded.Should().BeTrue();
+        Encoding.UTF8.GetString(media.CaptionTracks.Single().Bytes)
+            .Should().Contain("vertical:lr");
+    }
+
+    [Fact]
     public void BuildTranscriptPlan_ParsesTtmlClockAndUnitTiming()
     {
         var presentation = Presentation.CreateEmpty();

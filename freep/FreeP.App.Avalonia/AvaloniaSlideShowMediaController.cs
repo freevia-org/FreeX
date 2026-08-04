@@ -114,8 +114,13 @@ internal sealed class AvaloniaSlideShowMediaController
                 Canvas.SetTop(slot.VideoView, bounds.Y);
             }
 
-            if (slot.CaptionHost is not null)
-                ApplyCaptionPlacement(slot.CaptionHost, bounds, cue: null);
+            if (slot.CaptionHost is not null && slot.CaptionText is not null)
+            {
+                var cue = PresentationMediaTranscriptPlanner.FindActiveCue(
+                    slot.CaptionTrack,
+                    slot.Session.Position);
+                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue);
+            }
         }
     }
 
@@ -338,13 +343,14 @@ internal sealed class AvaloniaSlideShowMediaController
             IsHitTestVisible = false,
             ZIndex = 10,
         };
-        ApplyCaptionPlacement(host, bounds, cue: null);
+        ApplyCaptionPlacement(host, text, bounds, cue: null);
         _overlay.Children.Add(host);
         return (host, text);
     }
 
     private static void ApplyCaptionPlacement(
         Border host,
+        TextBlock text,
         LayoutRect bounds,
         PresentationMediaTranscriptCueDescriptor? cue)
     {
@@ -356,6 +362,13 @@ internal sealed class AvaloniaSlideShowMediaController
             defaultHeight);
         host.Width = placement.Width;
         host.Height = placement.Height;
+        var isVertical = placement.RotationDegrees != 0;
+        text.Width = isVertical ? placement.Height : double.NaN;
+        text.Height = isVertical ? placement.Width : double.NaN;
+        text.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
+        text.RenderTransform = isVertical
+            ? new RotateTransform(placement.RotationDegrees)
+            : null;
         Canvas.SetLeft(host, bounds.X + placement.X);
         Canvas.SetTop(host, bounds.Y + placement.Y);
     }
@@ -381,7 +394,7 @@ internal sealed class AvaloniaSlideShowMediaController
                     _slideDipH,
                     _canvasW,
                     _canvasH);
-                ApplyCaptionPlacement(slot.CaptionHost, bounds, cue);
+                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue);
             }
             slot.CaptionHost.IsVisible = cue is not null;
         }

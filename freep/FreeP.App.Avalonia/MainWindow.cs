@@ -2303,7 +2303,11 @@ public sealed partial class MainWindow : Window
 
     private ContextMenu BuildChartContextMenu(ChartSubtargetHit hit)
     {
-        var menu = new ContextMenu();
+        var menu = new ContextMenu
+        {
+            // WPF opens chart context menus at the right-click location.
+            Placement = PlacementMode.Pointer,
+        };
         void Add(string header, Action action)
         {
             var item = new MenuItem { Header = header };
@@ -2368,7 +2372,11 @@ public sealed partial class MainWindow : Window
 
     private ContextMenu BuildTableContextMenu(SlideShape shape)
     {
-        var menu = new ContextMenu();
+        var menu = new ContextMenu
+        {
+            // WPF opens table context menus at the right-click location.
+            Placement = PlacementMode.Pointer,
+        };
 
         void Add(string header, Action action)
         {

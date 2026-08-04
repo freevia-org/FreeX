@@ -31,12 +31,12 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
         CanResize = false;
         ShowInTaskbar = false;
 
-        _category = Combo(_categories.Select(choice => choice.Label),
+        _category = Combo(_categories,
             TableOfAuthoritiesDialogPlanner.SelectCategoryIndex(_categories, state.CategoryFilter));
         _category.Margin = new Thickness(0, 0, 0, 8);
         _passim = CheckBox(TableOfAuthoritiesDialogPlanner.UsePassimLabel, state.UsePassim, new Thickness(0, 0, 0, 6));
         _keepFormatting = CheckBox(TableOfAuthoritiesDialogPlanner.KeepOriginalFormattingLabel, state.KeepOriginalFormatting, new Thickness(0, 0, 0, 8));
-        _leader = Combo(_leaders.Select(choice => choice.Label),
+        _leader = Combo(_leaders,
             TableOfAuthoritiesDialogPlanner.SelectTabLeaderIndex(_leaders, state.TabLeader));
         _leader.Margin = new Thickness(0, 0, 0, 8);
 
@@ -44,7 +44,10 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
         var cancel = Button("Cancel", false, true, () => Close(null));
         Content = new StackPanel
         {
-            Margin = new Thickness(16),
+            // WPF's painted client content ends one pixel earlier on the right while its action
+            // row paints one pixel farther down. Preserve that measured authority geometry in the
+            // otherwise shared 16-DIP dialog inset.
+            Margin = new Thickness(16, 16, 17, 16),
             Children =
             {
                 new TextBlock { Text = TableOfAuthoritiesDialogPlanner.CategoryLabel, Margin = new Thickness(0, 0, 0, 4) },
@@ -53,7 +56,7 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
                 _keepFormatting,
                 new TextBlock { Text = TableOfAuthoritiesDialogPlanner.TabLeaderLabel, Margin = new Thickness(0, 0, 0, 4) },
                 _leader,
-                AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)),
+                AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 1)),
             },
         };
         Opened += (_, _) =>
@@ -90,7 +93,7 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
 
     private void Accept() => Close(BuildResultForTest());
 
-    private static ComboBox Combo(IEnumerable<string> items, int selectedIndex)
+    private static ComboBox Combo(IEnumerable<object> items, int selectedIndex)
     {
         var combo = new ComboBox { ItemsSource = items.ToArray(), SelectedIndex = selectedIndex };
         AvaloniaCompactDialogChrome.ApplyComboBox(combo, Chrome);

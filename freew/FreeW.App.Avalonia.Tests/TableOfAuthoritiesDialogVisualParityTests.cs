@@ -6,6 +6,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Controls.Primitives;
 using FreeW.App.Avalonia;
+using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -43,6 +44,8 @@ public sealed class TableOfAuthoritiesDialogVisualParityTests
             buttons.Should().OnlyContain(button => ((ISolidColorBrush)button.Background!).Color == Colors.White);
             buttons.Single(button => button.IsDefault).IsCancel.Should().BeFalse();
             buttons.Single(button => button.IsCancel).IsDefault.Should().BeFalse();
+            category.Items.Cast<object>().Should().OnlyContain(item => item is TableOfAuthoritiesCategoryChoice);
+            leader.Items.Cast<object>().Should().OnlyContain(item => item is TableOfAuthoritiesTabLeaderChoice);
         }, CancellationToken.None);
     }
 
@@ -65,7 +68,11 @@ public sealed class TableOfAuthoritiesDialogVisualParityTests
             category.SelectedIndex = 2;
             leader.SelectedIndex = 1;
 
-            Invoke(dialog, "BuildResultForTest").Should().NotBeNull();
+            var result = (FreeW.Core.Model.ToaOptions)Invoke(dialog, "BuildResultForTest")!;
+            result.UsePassim.Should().BeTrue();
+            result.KeepOriginalFormatting.Should().BeTrue();
+            result.CategoryFilter.Should().Be(FreeW.Core.Model.CitationCategory.Statutes);
+            result.TabLeader.Should().Be(FreeW.Core.Model.ToaTabLeader.Dashes);
             buttons.Single(button => button.IsDefault).IsDefault.Should().BeTrue();
             buttons.Single(button => button.IsCancel).IsCancel.Should().BeTrue();
         }, CancellationToken.None);
