@@ -86,6 +86,22 @@ public static class PageBorderArtVisualPlanner
         (0xD4, 0xD4, 0xD4),
     ];
 
+    private static readonly IReadOnlyList<(byte Red, byte Green, byte Blue)?> IceCreamConesPalette =
+    [
+        null,
+        (0xFE, 0xFE, 0x7F),
+        (0xFC, 0x7F, 0xFC),
+        (0x57, 0x3F, 0x27),
+        (0xEF, 0xEF, 0xEF),
+        (0x1E, 0x18, 0x16),
+        (0xBB, 0xBB, 0x5E),
+        (0x79, 0x6D, 0x73),
+        (0xDF, 0xDF, 0xDF),
+        (0xCF, 0xCF, 0xCF),
+        (0xAE, 0x57, 0xAE),
+        (0xB0, 0xB0, 0xB0),
+    ];
+
     private static readonly IReadOnlyList<(byte Red, byte Green, byte Blue)?> FlowersRosesPalette =
     [
         null,
@@ -511,10 +527,18 @@ public static class PageBorderArtVisualPlanner
             return false;
         }
 
-        var polygons = new List<PageBorderArtPolygon>();
+        var fills = new List<PageBorderArtFillRectangle>();
         foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
-            AddIceCreamCone(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
-        plan = new PageBorderArtFilledShapePlan([], polygons);
+            AddIndexedPaletteMask(
+                fills,
+                PageBorderArtSpriteMasks.IceCreamConesMask,
+                IceCreamConesPalette,
+                placement.Xdip,
+                placement.Ydip,
+                placement.SizeDip,
+                horizontal: true,
+                transparentMaterial: 0);
+        plan = new PageBorderArtFilledShapePlan(fills, []);
         return true;
     }
 
@@ -1242,29 +1266,6 @@ public static class PageBorderArtVisualPlanner
             (3, 4), (13, 4), (15, 10), (1, 10));
         Add(0xFF, 0xFF, 0xFF,
             (8, 1), (11, 3), (13, 5), (3, 5), (5, 3));
-    }
-
-    private static void AddIceCreamCone(
-        List<PageBorderArtPolygon> polygons,
-        double x,
-        double y,
-        double size)
-    {
-        var scale = size / 32.0;
-        PageBorderArtPoint Point(double px, double py) => new(x + px * scale, y + py * scale);
-        void Add(byte red, byte green, byte blue, params (double X, double Y)[] points) =>
-            polygons.Add(new PageBorderArtPolygon(
-                points.Select(point => Point(point.X, point.Y)).ToList(), red, green, blue));
-
-        Add(0, 0, 0, (9, 11), (23, 11), (16, 31));
-        Add(0x60, 0x40, 0x20, (11, 13), (21, 13), (16, 28));
-        Add(0, 0, 0,
-            (5, 7), (7, 4), (11, 1), (21, 1), (25, 4), (27, 7),
-            (25, 11), (22, 14), (10, 14), (7, 11));
-        Add(0xFF, 0x80, 0xFF,
-            (6, 8), (26, 8), (24, 11), (22, 13), (10, 13), (8, 11));
-        Add(0xFF, 0xFF, 0x80,
-            (7, 6), (9, 3), (13, 1), (20, 1), (24, 3), (26, 6), (24, 9), (8, 9));
     }
 
     private static void AddPerson(

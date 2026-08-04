@@ -118,20 +118,18 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
-    public void IceCreamCones_UsesWordCadenceAndExactSourcePalette()
+    public void IceCreamCones_UsesWordCadenceAndMeasuredIndexedPalette()
     {
         PageBorderArtVisualPlanner.TryBuildIceCreamConesFrame(5, 3, 816, 1056, 32, out var plan)
             .Should().BeTrue();
 
-        plan.Fills.Should().BeEmpty();
-        plan.Polygons.Should().HaveCount(510);
-        plan.Polygons[0].Points[0].Should().Be(new PageBorderArtPoint(41, 43));
-        plan.Polygons[1].Should().Match<PageBorderArtPolygon>(polygon =>
-            polygon.Red == 0x60 && polygon.Green == 0x40 && polygon.Blue == 0x20);
-        plan.Polygons[3].Should().Match<PageBorderArtPolygon>(polygon =>
-            polygon.Red == 0xFF && polygon.Green == 0x80 && polygon.Blue == 0xFF);
-        plan.Polygons[4].Should().Match<PageBorderArtPolygon>(polygon =>
-            polygon.Red == 0xFF && polygon.Green == 0xFF && polygon.Blue == 0x80);
+        plan.Polygons.Should().BeEmpty();
+        plan.Fills.Should().HaveCount(13056);
+        plan.Fills[0].Should().Be(new PageBorderArtFillRectangle(46, 32, 1, 1, 0xEF, 0xEF, 0xEF));
+        plan.Fills.Should().Contain(fill => fill.Red == 0xFE && fill.Green == 0xFE && fill.Blue == 0x7F);
+        plan.Fills.Should().Contain(fill => fill.Red == 0xFC && fill.Green == 0x7F && fill.Blue == 0xFC);
+        plan.Fills.Should().Contain(fill => fill.Red == 0x57 && fill.Green == 0x3F && fill.Blue == 0x27);
+        plan.Fills.Should().NotContain(fill => fill.Red == 0xFF && fill.Green == 0xFF && fill.Blue == 0xFF);
     }
 
     [Fact]

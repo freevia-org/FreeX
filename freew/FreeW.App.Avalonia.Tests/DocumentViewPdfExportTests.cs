@@ -1593,15 +1593,14 @@ public sealed class DocumentViewPdfExportTests
             view.LoadDocument(document);
 
             var pdf = view.BuildPdfContent();
-            var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
-            pdf.Pages.Single().Ops.OfType<PdfFillRect>().Should().BeEmpty();
-            paths.Should().HaveCount(510);
-            paths[0].FillColor.Should().Be(PdfColor.Black);
-            paths[0].Contours.Single().Start.Should().Be(new PdfPathPoint(30.75, 759.75));
-            paths[1].FillColor.Should().Be(new PdfColor(0x60, 0x40, 0x20));
-            paths[2].FillColor.Should().Be(PdfColor.Black);
-            paths[3].FillColor.Should().Be(new PdfColor(0xFF, 0x80, 0xFF));
-            paths[4].FillColor.Should().Be(new PdfColor(0xFF, 0xFF, 0x80));
+            var fills = pdf.Pages.Single().Ops.OfType<PdfFillRect>().ToArray();
+            pdf.Pages.Single().Ops.OfType<PdfPath>().Should().BeEmpty();
+            fills.Should().HaveCount(13056);
+            fills[0].Should().Be(new PdfFillRect(34.5, 767.25, 0.75, 0.75, new PdfColor(0xEF, 0xEF, 0xEF)));
+            fills.Should().Contain(fill => fill.Color == new PdfColor(0xFE, 0xFE, 0x7F));
+            fills.Should().Contain(fill => fill.Color == new PdfColor(0xFC, 0x7F, 0xFC));
+            fills.Should().Contain(fill => fill.Color == new PdfColor(0x57, 0x3F, 0x27));
+            fills.Should().NotContain(fill => fill.Color == new PdfColor(0xFF, 0xFF, 0xFF));
             pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
 
             using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
@@ -1620,8 +1619,8 @@ public sealed class DocumentViewPdfExportTests
                     yellowInk++;
             }
             brownInk.Should().BeGreaterThan(50);
-            pinkInk.Should().BeGreaterThan(50);
-            yellowInk.Should().BeGreaterThan(80);
+            pinkInk.Should().BeGreaterThan(40);
+            yellowInk.Should().BeGreaterThan(60);
             bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
         }, CancellationToken.None);
 
