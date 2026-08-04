@@ -65,6 +65,7 @@ internal static class WpfPresentationPrintService
             return false;
 
         var dialog = new PrintDialog();
+        dialog.PrintTicket = ApplyPrintTicketOptions(new PrintTicket(), request);
         if (dialog.ShowDialog() != true)
             return false;
 
@@ -73,6 +74,27 @@ internal static class WpfPresentationPrintService
         var paginator = new WpfRasterPagePaginator(source.Pages, new Size(pageWidth, pageHeight));
         dialog.PrintDocument(paginator, BuildDocumentName(request));
         return true;
+    }
+
+    internal static PrintTicket ApplyPrintTicketOptions(
+        PrintTicket ticket,
+        PresentationPrintRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(ticket);
+        ArgumentNullException.ThrowIfNull(request);
+
+        ticket.CopyCount = Math.Clamp(request.Copies, 1, 999);
+        ticket.Collation = request.Collate
+            ? Collation.Collated
+            : Collation.Uncollated;
+        ticket.OutputColor = request.ColorMode switch
+        {
+            PresentationPrintColorMode.Color => OutputColor.Color,
+            PresentationPrintColorMode.Grayscale => OutputColor.Grayscale,
+            PresentationPrintColorMode.PureBlackAndWhite => OutputColor.Monochrome,
+            _ => OutputColor.Color,
+        };
+        return ticket;
     }
 
     internal static WpfPrintPageSource BuildPageSource(
