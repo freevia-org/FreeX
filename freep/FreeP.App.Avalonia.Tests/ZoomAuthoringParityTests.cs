@@ -21,6 +21,8 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderWidth(");
         source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderDash(");
         source.Should().Contain("_frameBorderColor.IsEnabled");
+        source.Should().Contain("Apply format to all Summary Zoom tiles");
+        source.Should().Contain("ApplySummaryPropertiesToAllTiles");
     }
 
     [Fact]
@@ -33,6 +35,7 @@ public sealed class ZoomAuthoringParityTests
 
         source.Should().Contain("ZoomObjectPropertiesPlanner.CommandId");
         source.Should().Contain("Editor.SetSelectedZoomObjectProperties(dialog.Properties)");
+        source.Should().Contain("dialog.ApplySummaryPropertiesToAllTiles");
     }
 
     [Fact]
