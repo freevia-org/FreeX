@@ -4209,10 +4209,10 @@ public sealed partial class MainWindow : Window
     {
         var dialog = new PropertiesDialog(_editor.Document.Properties);
         await dialog.ShowDialog(this);
-        if (!dialog.Accepted)
+        if (!dialog.Accepted || dialog.Result is not { } result)
             return;
 
-        _fileWorkflow.MarkDirty();
+        _editor.ApplyDocumentProperties(result);
         _status.Text = "Document properties updated.";
         _editor.Focus();
     }

@@ -2323,6 +2323,13 @@ public sealed class DocumentView : Control
             _bus.Execute(new ApplyTablePropertiesCommand(caret.TableBlock, caret.Row, cellIndex, values));
     }
 
+    /// <summary>Apply the five editable core properties as one undoable operation.</summary>
+    public void ApplyDocumentProperties(DocumentPropertiesDialogValues values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        _bus.Execute(new ApplyDocumentPropertiesCommand(values));
+    }
+
     public void InsertTableFormula(TableFormulaField formula)
     {
         if (IsEditingLocked || _cellCaret is not { } cc)

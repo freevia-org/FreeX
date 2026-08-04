@@ -14,7 +14,6 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
-    private readonly DocumentProperties _properties;
     private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.Properties;
     private readonly TextBox _title = new() { MinWidth = 280 };
     private readonly TextBox _author = new() { MinWidth = 280 };
@@ -29,10 +28,11 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
     };
 
     public bool Accepted { get; private set; }
+    public DocumentPropertiesDialogValues? Result { get; private set; }
 
     public PropertiesDialog(DocumentProperties properties)
     {
-        _properties = properties ?? throw new ArgumentNullException(nameof(properties));
+        ArgumentNullException.ThrowIfNull(properties);
 
         Title = "Document Properties";
         Width = 440;
@@ -92,11 +92,12 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
 
     private void Commit()
     {
-        _properties.Title = Normalize(_title.Text);
-        _properties.Author = Normalize(_author.Text);
-        _properties.Subject = Normalize(_subject.Text);
-        _properties.Keywords = Normalize(_keywords.Text);
-        _properties.Comments = Normalize(_comments.Text);
+        Result = DocumentPropertiesDialogValues.FromInput(
+            _title.Text,
+            _author.Text,
+            _subject.Text,
+            _keywords.Text,
+            _comments.Text);
         Accepted = true;
         Close();
     }
@@ -123,6 +124,4 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
         grid.Children.Add(field);
     }
 
-    private static string? Normalize(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

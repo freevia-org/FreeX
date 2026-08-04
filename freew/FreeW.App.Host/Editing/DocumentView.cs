@@ -12470,6 +12470,14 @@ public sealed class DocumentView : RichTextBox
         _commands.Execute(new ApplyTablePropertiesCommand(blockIndex, rowIndex, columnIndex, values));
     }
 
+    /// <summary>Apply the five editable core properties as one undoable operation.</summary>
+    public void ApplyDocumentProperties(DocumentPropertiesDialogValues values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        CommitToModel();
+        _commands.Execute(new ApplyDocumentPropertiesCommand(values));
+    }
+
     // Snapshot of the caret table's previous style id for table-style live-preview.
     private (int BlockIndex, string? PriorStyleId, string? PriorBorderColorHex, bool PriorBorders)? _tableStyleSnapshot;
 

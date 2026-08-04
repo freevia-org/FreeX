@@ -924,6 +924,33 @@ public sealed class EditingSession
             scaleFactorX,
             scaleFactorY);
 
+    /// <summary>Replaces the ordered section membership of a Summary Zoom. Undoable.</summary>
+    public bool SetSummaryZoomTargets(uint shapeId, IEnumerable<string> targetSectionIds)
+    {
+        var slide = CurrentSlide;
+        var shape = slide is null ? null : FindShape(slide.Shapes, shapeId);
+        if (shape is not { Kind: SlideShapeKind.Zoom }
+            || shape.PreservedObject?.ObjectKind != PreservedObjectKind.Zoom
+            || shape.PreservedObject.SummaryZoomTargets.Count < 2
+            || !SummaryZoomTargetPlanner.TryBuildPlan(
+                Presentation,
+                shape.PreservedObject,
+                targetSectionIds,
+                out var plan))
+            return false;
+
+        Bus.Execute(new SetSummaryZoomTargetsCommand(
+            _currentSlideIndex,
+            shapeId,
+            plan.Targets,
+            plan.RawXml));
+        return string.Equals(shape.PreservedObject.RawXml, plan.RawXml, StringComparison.Ordinal);
+    }
+
+    public bool SetSelectedSummaryZoomTargets(IEnumerable<string> targetSectionIds) =>
+        _selectedShapeIds.Count == 1
+        && SetSummaryZoomTargets(_selectedShapeIds[0], targetSectionIds);
+
     private static bool HasSummaryTileCover(PreservedObjectInfo info, string sectionId)
     {
         try

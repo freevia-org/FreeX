@@ -586,6 +586,8 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Zoom, FreePRibbonText.InsertSummaryZoomKeyTip);
             group.Medium(ZoomTargetPlanner.CommandId, FreePRibbonText.ChangeZoomTargetLabel,
                 RibbonCommandIconKind.Zoom, FreePRibbonText.ChangeZoomTargetKeyTip);
+            group.Medium(SummaryZoomTargetPlanner.CommandId, FreePRibbonText.EditSummaryZoomTargetsLabel,
+                RibbonCommandIconKind.Zoom, FreePRibbonText.EditSummaryZoomTargetsKeyTip);
             group.Medium(ZoomObjectPropertiesPlanner.CommandId, FreePRibbonText.FormatZoomLabel,
                 RibbonCommandIconKind.Effects, FreePRibbonText.FormatZoomKeyTip);
             group.Medium(ZoomCoverImagePlanner.CommandId, FreePRibbonText.SetZoomCoverImageLabel,

@@ -17,6 +17,7 @@ using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Presentation.Backstage;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -964,7 +965,7 @@ public class BackstageViewTests
     }
 
     [Fact]
-    public async Task DocumentPropertiesDialog_commits_all_WPF_authority_core_fields()
+    public async Task DocumentPropertiesDialog_returns_all_WPF_authority_core_fields_without_mutating_model()
     {
         await Session.Dispatch(() =>
         {
@@ -980,11 +981,13 @@ public class BackstageViewTests
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
             dialog.Accepted.Should().BeTrue();
-            properties.Title.Should().Be("Report");
-            properties.Author.Should().Be("Ada");
-            properties.Subject.Should().Be("Parity");
-            properties.Keywords.Should().Be("freew backstage");
-            properties.Comments.Should().BeNull();
+            properties.CountNonEmptyCoreProperties().Should().Be(0);
+            dialog.Result.Should().Be(new DocumentPropertiesDialogValues(
+                "Report",
+                "Ada",
+                "Parity",
+                "freew backstage",
+                null));
         }, CancellationToken.None);
     }
 
