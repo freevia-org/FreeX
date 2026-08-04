@@ -44,6 +44,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private readonly CheckBox _varyColorsCheck;
     private readonly CheckBox _legendOverlayCheck;
     private readonly CheckBox _highLowLinesCheck;
+    private readonly CheckBox _waterfallConnectorLinesCheck;
 
     internal ChartDisplayOptionsDialog(EditingSession editor)
     {
@@ -181,6 +182,13 @@ internal sealed class ChartDisplayOptionsDialog : Window
             IsChecked = _planner.HighLowLines,
             IsEnabled = _planner.SupportsHighLowLines,
         };
+        _waterfallConnectorLinesCheck = new CheckBox
+        {
+            Content = surface.WaterfallConnectorLinesLabel,
+            IsThreeState = true,
+            IsChecked = _planner.WaterfallConnectorLines,
+            IsEnabled = _planner.SupportsWaterfallConnectorLines,
+        };
 
         var buttons = new StackPanel
         {
@@ -231,6 +239,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
                 _varyColorsCheck,
                 _legendOverlayCheck,
                 _highLowLinesCheck,
+                _waterfallConnectorLinesCheck,
                 new TextBlock { Text = surface.PlotHint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7 },
                 buttons,
             },
@@ -256,6 +265,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
     internal void SetLegendOverlayForTests(bool? value) => _legendOverlayCheck.IsChecked = value;
 
     internal void SetHighLowLinesForTests(bool? value) => _highLowLinesCheck.IsChecked = value;
+
+    internal void SetWaterfallConnectorLinesForTests(bool? value) => _waterfallConnectorLinesCheck.IsChecked = value;
 
     internal void SetLeaderLinesForTests(bool? value) => _showLeaderLinesCheck.IsChecked = value;
 
@@ -355,6 +366,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
         _planner.SetVaryColors(_varyColorsCheck.IsChecked == true);
         _planner.SetLegendOverlay(_legendOverlayCheck.IsChecked);
         _planner.SetHighLowLines(_highLowLinesCheck.IsChecked);
+        _planner.SetWaterfallConnectorLines(_waterfallConnectorLinesCheck.IsChecked);
     }
 
     private static Control MakeRow(string label, Control control)

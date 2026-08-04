@@ -41,6 +41,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly CheckBox _varyColorsCheck;
     private readonly CheckBox _legendOverlayCheck;
     private readonly CheckBox _highLowLinesCheck;
+    private readonly CheckBox _waterfallConnectorLinesCheck;
 
     public ChartDisplayOptionsDialog(EditingSession editor)
     {
@@ -181,6 +182,13 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             IsChecked = _planner.HighLowLines,
             IsEnabled = _planner.SupportsHighLowLines,
         };
+        _waterfallConnectorLinesCheck = new CheckBox
+        {
+            Content = surface.WaterfallConnectorLinesLabel,
+            IsThreeState = true,
+            IsChecked = _planner.WaterfallConnectorLines,
+            IsEnabled = _planner.SupportsWaterfallConnectorLines,
+        };
 
         var buttons = new StackPanel
         {
@@ -226,6 +234,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         content.Children.Add(_varyColorsCheck);
         content.Children.Add(_legendOverlayCheck);
         content.Children.Add(_highLowLinesCheck);
+        content.Children.Add(_waterfallConnectorLinesCheck);
         content.Children.Add(new TextBlock { Text = surface.PlotHint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
         Content = content;
@@ -250,6 +259,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     internal void SetLegendOverlayForTests(bool? value) => _legendOverlayCheck.IsChecked = value;
 
     internal void SetHighLowLinesForTests(bool? value) => _highLowLinesCheck.IsChecked = value;
+
+    internal void SetWaterfallConnectorLinesForTests(bool? value) => _waterfallConnectorLinesCheck.IsChecked = value;
 
     internal void SetLabelTextStyleForTests(string? family, double? sizePt, bool? bold, bool? italic, string? color)
     {
@@ -305,6 +316,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _planner.SetVaryColors(_varyColorsCheck.IsChecked == true);
         _planner.SetLegendOverlay(_legendOverlayCheck.IsChecked);
         _planner.SetHighLowLines(_highLowLinesCheck.IsChecked);
+        _planner.SetWaterfallConnectorLines(_waterfallConnectorLinesCheck.IsChecked);
     }
 
     private static StackPanel MakeRow(string label, Control control)

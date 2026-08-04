@@ -1339,6 +1339,32 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartDisplayOptions_WaterfallConnectorLines_RoundTripsAndUndo()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.Waterfall;
+        chart.ShowWaterfallConnectorLines = true;
+
+        bus.Execute(new SetChartDisplayOptionsCommand(
+            0,
+            id,
+            new ChartDisplayOptions(
+                null,
+                null,
+                false,
+                DataLabelPosition.BestFit,
+                false,
+                false,
+                ShowWaterfallConnectorLines: false)));
+
+        chart.ShowWaterfallConnectorLines.Should().BeFalse();
+
+        bus.Undo();
+        chart.ShowWaterfallConnectorLines.Should().BeTrue();
+    }
+
+    [Fact]
     public void SetChartDisplayOptions_ChangesChartStyleAndUndoRestoresIt()
     {
         var (p, bus, id) = MakeChartPresentation();

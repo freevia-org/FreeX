@@ -64,6 +64,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
     private bool _oldVaryColors;
     private bool? _oldLegendOverlay;
     private bool? _oldHighLowLines;
+    private bool? _oldWaterfallConnectorLines;
     private int? _oldStyleId;
 
     public SetChartDisplayOptionsCommand(
@@ -100,6 +101,9 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         _oldVaryColors = chart.VaryColors;
         _oldLegendOverlay = chart.LegendOverlay;
         _oldHighLowLines = chart.ChartType == ChartType.Stock ? chart.HasHighLowLines : null;
+        _oldWaterfallConnectorLines = chart.ChartType == ChartType.Waterfall
+            ? chart.ShowWaterfallConnectorLines
+            : null;
         _oldStyleId = chart.StyleId;
 
         chart.Title = string.IsNullOrWhiteSpace(_newOptions.Title) ? null : _newOptions.Title;
@@ -122,6 +126,8 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         chart.StyleId = _newOptions.StyleId;
         if (chart.ChartType == ChartType.Stock && _newOptions.HighLowLines.HasValue)
             chart.HasHighLowLines = _newOptions.HighLowLines.Value;
+        if (chart.ChartType == ChartType.Waterfall && _newOptions.ShowWaterfallConnectorLines.HasValue)
+            chart.ShowWaterfallConnectorLines = _newOptions.ShowWaterfallConnectorLines.Value;
 
         if (chart.DataLabels is not null)
         {
@@ -191,6 +197,8 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         chart.StyleId = _oldStyleId;
         if (chart.ChartType == ChartType.Stock && _oldHighLowLines.HasValue)
             chart.HasHighLowLines = _oldHighLowLines.Value;
+        if (chart.ChartType == ChartType.Waterfall && _oldWaterfallConnectorLines.HasValue)
+            chart.ShowWaterfallConnectorLines = _oldWaterfallConnectorLines.Value;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
