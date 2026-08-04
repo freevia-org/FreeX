@@ -220,6 +220,8 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
     private readonly TextBox _cmLeft;
     private readonly TextBox _cmBottom;
     private readonly TextBox _cmRight;
+    private readonly CheckBox _cellWrapText;
+    private readonly CheckBox _cellFitText;
     private readonly TextBlock _validation = new();
     private readonly TabControl _tabs;
     private readonly Control[] _initialFocusTargets;
@@ -273,6 +275,8 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         _cmBottom = NumberBox(state.CellMarginBottomText, "TablePropertiesCellMarginBottomBox");
         _cmRight = NumberBox(state.CellMarginRightText, "TablePropertiesCellMarginRightBox");
         _cellMarginsOn = Check("Same as the whole table", state.CellMarginsSameAsTable, "TablePropertiesSameMarginsCheckBox");
+        _cellWrapText = Check("Wrap text", state.CellWrapText, "TablePropertiesCellWrapTextCheckBox");
+        _cellFitText = Check("Fit text", state.CellFitText, "TablePropertiesCellFitTextCheckBox");
 
         _tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
         _tabs.Items.Add(TabPage("Table", "TablePropertiesTableTab", BuildTableTab()));
@@ -385,7 +389,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         AddRow(margins, 1, "Left:", _cmLeft);
         AddRow(margins, 2, "Bottom:", _cmBottom);
         AddRow(margins, 3, "Right:", _cmRight);
-        return Stack(grid, _cellMarginsOn, Header("Cell margins (pt):"), margins);
+        return Stack(grid, _cellWrapText, _cellFitText, _cellMarginsOn, Header("Cell margins (pt):"), margins);
     }
 
     private void Accept() => TryAccept(close: true);
@@ -418,7 +422,9 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
             _cmTop.Text,
             _cmLeft.Text,
             _cmBottom.Text,
-            _cmRight.Text);
+            _cmRight.Text,
+            _cellWrapText.IsChecked == true,
+            _cellFitText.IsChecked == true);
 
         if (!TablePropertiesDialogPlanner.TryBuildResult(
                 input,

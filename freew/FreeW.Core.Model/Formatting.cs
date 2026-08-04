@@ -201,6 +201,16 @@ public sealed record ParagraphBorder(string ColorHex = "#000000", double WidthPt
 }
 
 /// <summary>
+/// Authored Word theme linkage for a run color. <see cref="ValueToken"/> is the cached <c>w:val</c>
+/// fallback Word writes beside <c>w:themeColor</c>; tint and shade retain their hexadecimal byte tokens.
+/// </summary>
+public sealed record WordThemeColor(
+    string ThemeToken,
+    string ValueToken,
+    string? TintHex = null,
+    string? ShadeHex = null);
+
+/// <summary>
 /// Immutable character formatting for a run. Null members inherit from the paragraph style /
 /// document default, mirroring how Word resolves run properties (rPr).
 /// </summary>
@@ -241,6 +251,14 @@ public sealed record RunFormatting
     public string? FontFamily { get; init; }
     public double? FontSizePt { get; init; }
     public string? ColorHex { get; init; }
+
+    /// <summary>
+    /// Optional Word theme source for <see cref="ColorHex"/> (<c>w:color/@w:themeColor</c>, tint, and
+    /// shade). The cached <see cref="ColorHex"/> remains the renderer fallback. Writers retain this link
+    /// only while that fallback is unchanged, so a later fixed-color edit cannot be overridden by stale
+    /// theme metadata.
+    /// </summary>
+    public WordThemeColor? ThemeColor { get; init; }
 
     /// <summary>
     /// Highlight (text background) colour as an RRGGBB hex (e.g. <c>"#FFFF00"</c>). Null means no

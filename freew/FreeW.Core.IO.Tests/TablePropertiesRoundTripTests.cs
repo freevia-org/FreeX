@@ -1,5 +1,7 @@
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Xml.Linq;
 using FreeW.Core.Model;
 
 namespace FreeW.Core.IO.Tests;
@@ -11,6 +13,8 @@ namespace FreeW.Core.IO.Tests;
 /// </summary>
 public class TablePropertiesRoundTripTests
 {
+    private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
     private static TextDocument RoundTrip(TextDocument document)
     {
         using var stream = new MemoryStream();
@@ -24,6 +28,17 @@ public class TablePropertiesRoundTripTests
         var doc = new TextDocument();
         doc.Blocks.Add(table);
         return RoundTrip(doc).Blocks.OfType<Table>().Single();
+    }
+
+    private static XElement DocumentXml(Table table)
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(table);
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        using var archive = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = archive.GetEntry("word/document.xml")!.Open();
+        return XDocument.Load(entry).Root!;
     }
 
     [Fact]
@@ -103,6 +118,38 @@ public class TablePropertiesRoundTripTests
     }
 
     [Fact]
+    public void Table_CellWrapAndFitText_EmitOnlyNonDefaultsAndRoundTrip()
+    {
+        var table = Table.Create(1, 3);
+        table.Rows[0].Cells[0] = new TableCell("no wrap") { WrapText = false };
+        table.Rows[0].Cells[1] = new TableCell("fit")
+        {
+            FitText = true,
+            VerticalAlignment = TableCellVerticalAlignment.Center,
+            TextDirection = CellTextDirection.Rotate90,
+            Margins = new TableCellMargins(1, 2, 3, 4)
+        };
+        table.Rows[0].Cells[2] = new TableCell("defaults");
+
+        var cells = DocumentXml(table).Descendants(W + "tc").ToList();
+        cells[0].Element(W + "tcPr")!.Elements(W + "noWrap").Should().ContainSingle();
+        cells[0].Element(W + "tcPr")!.Elements(W + "tcFitText").Should().BeEmpty();
+        cells[1].Element(W + "tcPr")!.Elements(W + "noWrap").Should().BeEmpty();
+        cells[1].Element(W + "tcPr")!.Elements(W + "tcFitText").Should().ContainSingle();
+        cells[1].Element(W + "tcPr")!.Elements().Select(element => element.Name.LocalName)
+            .Should().Equal("tcMar", "textDirection", "tcFitText", "vAlign");
+        cells[2].Element(W + "tcPr").Should().BeNull();
+
+        var read = SingleTableAfterRoundTrip(table);
+        read.Rows[0].Cells[0].WrapText.Should().BeFalse();
+        read.Rows[0].Cells[0].FitText.Should().BeFalse();
+        read.Rows[0].Cells[1].WrapText.Should().BeTrue();
+        read.Rows[0].Cells[1].FitText.Should().BeTrue();
+        read.Rows[0].Cells[2].WrapText.Should().BeTrue();
+        read.Rows[0].Cells[2].FitText.Should().BeFalse();
+    }
+
+    [Fact]
     public void Table_PlainTable_HasDefaultPropertiesAfterRoundTrip()
     {
         var table = Table.Create(1, 1);
@@ -121,5 +168,7 @@ public class TablePropertiesRoundTripTests
         read.Rows[0].AllowBreakAcrossPages.Should().BeTrue();
         read.Rows[0].Cells[0].VerticalAlignment.Should().Be(TableCellVerticalAlignment.Top);
         read.Rows[0].Cells[0].Margins.Should().BeNull();
+        read.Rows[0].Cells[0].WrapText.Should().BeTrue();
+        read.Rows[0].Cells[0].FitText.Should().BeFalse();
     }
 }

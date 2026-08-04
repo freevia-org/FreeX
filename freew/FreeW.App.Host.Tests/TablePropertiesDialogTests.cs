@@ -55,6 +55,8 @@ public sealed class TablePropertiesDialogTests
         cell.WidthPt = 150;
         cell.VerticalAlignment = TableCellVerticalAlignment.Bottom;
         cell.Margins = new TableCellMargins(1, 7, 1, 7);
+        cell.WrapText = false;
+        cell.FitText = true;
 
         var dialog = TablePropertiesDialog.CreateForTest(new ModelTableContext(table, row, cell));
         var result = dialog.AcceptForTest();
@@ -72,6 +74,8 @@ public sealed class TablePropertiesDialogTests
         Assert.Equal(TableCellVerticalAlignment.Bottom, result.CellVerticalAlignment);
         Assert.NotNull(result.CellMargins);
         Assert.Equal(7, result.CellMargins!.LeftPt);
+        Assert.False(result.CellWrapText);
+        Assert.True(result.CellFitText);
     }
 
     [StaFact]
@@ -95,7 +99,9 @@ public sealed class TablePropertiesDialogTests
             ColumnWidthPt: 120,
             CellPreferredWidthPt: 120,
             CellVerticalAlignment: TableCellVerticalAlignment.Center,
-            CellMargins: new TableCellMargins(2, 8, 2, 8)));
+            CellMargins: new TableCellMargins(2, 8, 2, 8),
+            CellWrapText: false,
+            CellFitText: true));
 
         var table = view.Model.Blocks.OfType<Table>().Single();
         Assert.Equal(400, table.PreferredWidthPt);
@@ -118,6 +124,8 @@ public sealed class TablePropertiesDialogTests
         var cell = row.Cells[1];
         Assert.Equal(TableCellVerticalAlignment.Center, cell.VerticalAlignment);
         Assert.Equal(8, cell.Margins!.LeftPt);
+        Assert.False(cell.WrapText);
+        Assert.True(cell.FitText);
 
         Assert.True(view.CanUndo);
         view.Undo();
@@ -127,11 +135,15 @@ public sealed class TablePropertiesDialogTests
         Assert.Null(table.Rows[1].HeightPt);
         Assert.Null(table.Rows[1].Cells[1].WidthPt);
         Assert.Equal(TableCellVerticalAlignment.Top, table.Rows[1].Cells[1].VerticalAlignment);
+        Assert.True(table.Rows[1].Cells[1].WrapText);
+        Assert.False(table.Rows[1].Cells[1].FitText);
 
         view.Redo();
         table = view.Model.Blocks.OfType<Table>().Single();
         Assert.Equal(400, table.PreferredWidthPt);
         Assert.Equal(120, table.Rows[1].Cells[1].WidthPt);
+        Assert.False(table.Rows[1].Cells[1].WrapText);
+        Assert.True(table.Rows[1].Cells[1].FitText);
     }
 
     [StaFact]

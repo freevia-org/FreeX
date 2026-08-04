@@ -2112,6 +2112,9 @@ public static class DocxReader
         FontFamily = direct.FontFamily ?? inherited.FontFamily,
         FontSizePt = direct.FontSizePt ?? inherited.FontSizePt,
         ColorHex = direct.ColorHex ?? inherited.ColorHex,
+        ThemeColor = direct.ColorHex is not null || direct.ThemeColor is not null
+            ? direct.ThemeColor
+            : inherited.ThemeColor,
         HighlightColorHex = direct.HighlightColorHex ?? inherited.HighlightColorHex,
         CharacterBorder = direct.CharacterBorder ?? inherited.CharacterBorder,
         CharacterShadingHex = direct.CharacterShadingHex ?? inherited.CharacterShadingHex,
@@ -3962,6 +3965,11 @@ public static class DocxReader
                         "tbRl" => CellTextDirection.Rotate270,
                         _ => CellTextDirection.Horizontal
                     };
+
+                    // Cell Options: Word represents disabled wrapping through the inverse w:noWrap toggle;
+                    // fit-text is the ordinary w:tcFitText on/off property.
+                    cell.WrapText = !ReadToggle(tcPr, "noWrap");
+                    cell.FitText = ReadToggle(tcPr, "tcFitText");
                 }
                 foreach (var child in tc.Elements())
                 {
@@ -6625,7 +6633,9 @@ public static class DocxReader
             return RunFormatting.Default;
 
         var underline = rPr.Element(W + "u");
-        var color = rPr.Element(W + "color")?.Attribute(W + "val")?.Value;
+        var colorElement = rPr.Element(W + "color");
+        var color = colorElement?.Attribute(W + "val")?.Value;
+        var themeColorToken = colorElement?.Attribute(W + "themeColor")?.Value;
         var shdEl = rPr.Element(W + "shd");
         var highlight = shdEl?.Attribute(W + "fill")?.Value;
         var shdVal = shdEl?.Attribute(W + "val")?.Value;
@@ -6685,6 +6695,13 @@ public static class DocxReader
             FontFamily = rPr.Element(W + "rFonts")?.Attribute(W + "ascii")?.Value,
             FontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value),
             ColorHex = color is null or "auto" ? null : "#" + color.TrimStart('#'),
+            ThemeColor = string.IsNullOrWhiteSpace(themeColorToken)
+                ? null
+                : new WordThemeColor(
+                    themeColorToken,
+                    color ?? "auto",
+                    colorElement?.Attribute(W + "themeTint")?.Value,
+                    colorElement?.Attribute(W + "themeShade")?.Value),
             HighlightColorHex = highlightHex,
             VerticalAlign = vertAlign switch
             {
@@ -7066,6 +7083,9 @@ public static class DocxReader
                 FontFamily = defaultRun.FontFamily ?? document.DefaultRun.FontFamily,
                 FontSizePt = defaultRun.FontSizePt ?? document.DefaultRun.FontSizePt,
                 ColorHex = defaultRun.ColorHex ?? document.DefaultRun.ColorHex,
+                ThemeColor = defaultRun.ColorHex is not null || defaultRun.ThemeColor is not null
+                    ? defaultRun.ThemeColor
+                    : document.DefaultRun.ThemeColor,
                 HighlightColorHex = defaultRun.HighlightColorHex ?? document.DefaultRun.HighlightColorHex,
                 CharacterShadingHex = defaultRun.CharacterShadingHex ?? document.DefaultRun.CharacterShadingHex,
                 CharacterShadingPattern = defaultRun.CharacterShadingHex is not null

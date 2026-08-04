@@ -21,7 +21,9 @@ public sealed record TablePropertiesValues(
     double? ColumnWidthPt,
     double? CellPreferredWidthPt,
     TableCellVerticalAlignment CellVerticalAlignment,
-    TableCellMargins? CellMargins);
+    TableCellMargins? CellMargins,
+    bool CellWrapText,
+    bool CellFitText);
 
 /// <summary>
 /// The model objects under the caret that seed the Table Properties dialog.
@@ -54,7 +56,9 @@ public sealed record TablePropertiesDialogInitialState(
     string CellMarginTopText,
     string CellMarginLeftText,
     string CellMarginBottomText,
-    string CellMarginRightText);
+    string CellMarginRightText,
+    bool CellWrapText,
+    bool CellFitText);
 
 public sealed record TablePropertiesDialogInput(
     bool PreferredWidthOn,
@@ -82,7 +86,9 @@ public sealed record TablePropertiesDialogInput(
     string? CellMarginTopText,
     string? CellMarginLeftText,
     string? CellMarginBottomText,
-    string? CellMarginRightText);
+    string? CellMarginRightText,
+    bool CellWrapText,
+    bool CellFitText);
 
 public static class TablePropertiesDialogPlanner
 {
@@ -147,7 +153,9 @@ public static class TablePropertiesDialogPlanner
             CellMarginTopText: FormatPoints(cellMargins.TopPt, culture),
             CellMarginLeftText: FormatPoints(cellMargins.LeftPt, culture),
             CellMarginBottomText: FormatPoints(cellMargins.BottomPt, culture),
-            CellMarginRightText: FormatPoints(cellMargins.RightPt, culture));
+            CellMarginRightText: FormatPoints(cellMargins.RightPt, culture),
+            CellWrapText: cell?.WrapText ?? true,
+            CellFitText: cell?.FitText ?? false);
     }
 
     public static bool TryBuildResult(
@@ -199,7 +207,9 @@ public static class TablePropertiesDialogPlanner
             CellVerticalAlignment: DialogOptionPolicy.ValueAtOrDefault(
                 CellVerticalAlignmentValues,
                 input.CellVerticalAlignmentIndex),
-            CellMargins: input.CellMarginsSameAsTable ? null : new TableCellMargins(cmTop, cmLeft, cmBottom, cmRight));
+            CellMargins: input.CellMarginsSameAsTable ? null : new TableCellMargins(cmTop, cmLeft, cmBottom, cmRight),
+            CellWrapText: input.CellWrapText,
+            CellFitText: input.CellFitText);
         return true;
     }
 
@@ -239,6 +249,8 @@ public static class TablePropertiesDialogPlanner
                 cell.WidthPt = cellWidthPt;
             cell.VerticalAlignment = values.CellVerticalAlignment;
             cell.Margins = values.CellMargins;
+            cell.WrapText = values.CellWrapText;
+            cell.FitText = values.CellFitText;
         }
     }
 

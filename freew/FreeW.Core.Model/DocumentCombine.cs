@@ -285,7 +285,13 @@ public static class DocumentCombine
                     ShadingColorHex = cell.ShadingColorHex,
                     WidthPt = cell.WidthPt,
                     GridSpan = cell.GridSpan,
-                    VerticalMerge = cell.VerticalMerge
+                    VerticalMerge = cell.VerticalMerge,
+                    VerticalAlignment = cell.VerticalAlignment,
+                    Margins = cell.Margins,
+                    Borders = cell.Borders,
+                    TextDirection = cell.TextDirection,
+                    WrapText = cell.WrapText,
+                    FitText = cell.FitText
                 };
                 foreach (var paragraph in cell.Paragraphs)
                     cellClone.Paragraphs.Add(ClonePlain(paragraph));

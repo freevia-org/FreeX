@@ -2435,6 +2435,17 @@ public sealed class TableCell
     /// </summary>
     public CellTextDirection TextDirection { get; set; } = CellTextDirection.Horizontal;
 
+    /// <summary>
+    /// Whether text wraps within the cell. Word stores the disabled form as <c>w:noWrap</c>; true is the
+    /// default and emits no element.
+    /// </summary>
+    public bool WrapText { get; set; } = true;
+
+    /// <summary>
+    /// Whether Word compresses the cell's text to fit its width (<c>w:tcFitText</c>). False is the default.
+    /// </summary>
+    public bool FitText { get; set; }
+
     public TableCell() { }
 
     public TableCell(string text) => Paragraphs.Add(new Paragraph(text));

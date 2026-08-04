@@ -275,6 +275,8 @@ public class DocumentMergeTests
         sourceTable.Rows[0].Cells[0].VerticalAlignment = TableCellVerticalAlignment.Center;
         sourceTable.Rows[0].Cells[0].Margins = new TableCellMargins(5, 6, 7, 8);
         sourceTable.Rows[0].Cells[0].TextDirection = CellTextDirection.Rotate90;
+        sourceTable.Rows[0].Cells[0].WrapText = false;
+        sourceTable.Rows[0].Cells[0].FitText = true;
         source.Blocks.Add(sourceTable);
 
         var target = new TextDocument();
@@ -300,6 +302,8 @@ public class DocumentMergeTests
         insertedTable.Rows[0].Cells[0].VerticalAlignment.Should().Be(TableCellVerticalAlignment.Center);
         insertedTable.Rows[0].Cells[0].Margins.Should().Be(new TableCellMargins(5, 6, 7, 8));
         insertedTable.Rows[0].Cells[0].TextDirection.Should().Be(CellTextDirection.Rotate90);
+        insertedTable.Rows[0].Cells[0].WrapText.Should().BeFalse();
+        insertedTable.Rows[0].Cells[0].FitText.Should().BeTrue();
         target.Styles["SourceStyle_FreeW1"].BasedOnStyleId.Should().Be("Base_FreeW1");
         target.Styles["SourceStyle_FreeW1"].NextStyleId.Should().Be("Follow_FreeW1");
         target.Styles["Base_FreeW1"].Run.ColorHex.Should().Be("#AA0000");

@@ -23,6 +23,8 @@ public sealed class TablePropertiesDialogPlannerTests
         cell.WidthPt = 150;
         cell.VerticalAlignment = TableCellVerticalAlignment.Bottom;
         cell.Margins = new TableCellMargins(1, 7, 1, 7);
+        cell.WrapText = false;
+        cell.FitText = true;
 
         var state = TablePropertiesDialogPlanner.BuildInitialState(
             new ModelTableContext(table, row, cell),
@@ -42,6 +44,8 @@ public sealed class TablePropertiesDialogPlannerTests
         state.CellVerticalAlignmentIndex.Should().Be(2);
         state.CellMarginsSameAsTable.Should().BeFalse();
         state.CellMarginLeftText.Should().Be("7");
+        state.CellWrapText.Should().BeFalse();
+        state.CellFitText.Should().BeTrue();
     }
 
     [Fact]
@@ -54,6 +58,8 @@ public sealed class TablePropertiesDialogPlannerTests
             RowRuleIndex = 1,
             CellVerticalAlignmentIndex = 1,
             CellMarginsSameAsTable = false,
+            CellWrapText = false,
+            CellFitText = true,
         };
 
         TablePropertiesDialogPlanner.TryBuildResult(
@@ -79,6 +85,8 @@ public sealed class TablePropertiesDialogPlannerTests
         result.CellPreferredWidthPt.Should().Be(140);
         result.CellVerticalAlignment.Should().Be(TableCellVerticalAlignment.Center);
         result.CellMargins!.LeftPt.Should().Be(8);
+        result.CellWrapText.Should().BeFalse();
+        result.CellFitText.Should().BeTrue();
     }
 
     [Fact]
@@ -151,7 +159,9 @@ public sealed class TablePropertiesDialogPlannerTests
             ColumnWidthPt: 120,
             CellPreferredWidthPt: 140,
             CellVerticalAlignment: TableCellVerticalAlignment.Center,
-            CellMargins: new TableCellMargins(2, 8, 2, 8));
+            CellMargins: new TableCellMargins(2, 8, 2, 8),
+            CellWrapText: false,
+            CellFitText: true);
 
         TablePropertiesDialogPlanner.ApplyValues(new ModelTableContext(table, row, cell), values);
 
@@ -169,6 +179,8 @@ public sealed class TablePropertiesDialogPlannerTests
         cell.WidthPt.Should().Be(140);
         cell.VerticalAlignment.Should().Be(TableCellVerticalAlignment.Center);
         cell.Margins.Should().Be(new TableCellMargins(2, 8, 2, 8));
+        cell.WrapText.Should().BeFalse();
+        cell.FitText.Should().BeTrue();
     }
 
     [Fact]
@@ -195,11 +207,15 @@ public sealed class TablePropertiesDialogPlannerTests
             ColumnWidthPt: 120,
             CellPreferredWidthPt: 140,
             CellVerticalAlignment: TableCellVerticalAlignment.Center,
-            CellMargins: new TableCellMargins(2, 8, 2, 8));
+            CellMargins: new TableCellMargins(2, 8, 2, 8),
+            CellWrapText: false,
+            CellFitText: true);
         var bus = new DocumentCommandBus(new CommandContext(document));
 
         bus.Execute(new ApplyTablePropertiesCommand(0, 0, 1, values));
         cell.WidthPt.Should().Be(140);
+        cell.WrapText.Should().BeFalse();
+        cell.FitText.Should().BeTrue();
         table.Rows[1].Cells[1].WidthPt.Should().Be(120);
 
         bus.Undo().Should().BeTrue();
@@ -212,10 +228,14 @@ public sealed class TablePropertiesDialogPlannerTests
         row.AllowBreakAcrossPages.Should().BeTrue();
         cell.VerticalAlignment.Should().Be(TableCellVerticalAlignment.Top);
         cell.Margins.Should().BeNull();
+        cell.WrapText.Should().BeTrue();
+        cell.FitText.Should().BeFalse();
 
         bus.Redo().Should().BeTrue();
         table.PreferredWidthPt.Should().Be(300);
         cell.WidthPt.Should().Be(140);
+        cell.WrapText.Should().BeFalse();
+        cell.FitText.Should().BeTrue();
         table.Rows[1].Cells[1].WidthPt.Should().Be(120);
     }
 
@@ -250,5 +270,7 @@ public sealed class TablePropertiesDialogPlannerTests
         CellMarginTopText: "2",
         CellMarginLeftText: "8",
         CellMarginBottomText: "2",
-        CellMarginRightText: "8");
+        CellMarginRightText: "8",
+        CellWrapText: true,
+        CellFitText: false);
 }

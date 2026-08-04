@@ -43,6 +43,8 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
     private readonly TextBox _cmLeft;
     private readonly TextBox _cmBottom;
     private readonly TextBox _cmRight;
+    private readonly CheckBox _cellWrapText;
+    private readonly CheckBox _cellFitText;
 
     private TablePropertiesValues? _result;
 
@@ -87,6 +89,10 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _cmBottom = NumberBox(state.CellMarginBottomText);
         _cmRight = NumberBox(state.CellMarginRightText);
         _cellMarginsOn = Check("Same as the whole table", state.CellMarginsSameAsTable);
+        _cellWrapText = Check("Wrap text", state.CellWrapText);
+        _cellFitText = Check("Fit text", state.CellFitText);
+        AutomationProperties.SetAutomationId(_cellWrapText, "TablePropertiesCellWrapTextCheckBox");
+        AutomationProperties.SetAutomationId(_cellFitText, "TablePropertiesCellFitTextCheckBox");
 
         AutomationProperties.SetAutomationId(_preferredWidth, "TablePropertiesPreferredWidthBox");
         AutomationProperties.SetAutomationId(_rowHeight, "TablePropertiesRowHeightBox");
@@ -182,6 +188,8 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
         var stack = new StackPanel { Margin = new Thickness(14) };
         stack.Children.Add(grid);
+        stack.Children.Add(_cellWrapText);
+        stack.Children.Add(_cellFitText);
         stack.Children.Add(_cellMarginsOn);
         stack.Children.Add(marginsHeader);
         stack.Children.Add(marginsGrid);
@@ -270,7 +278,9 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
             CellMarginTopText: _cmTop.Text,
             CellMarginLeftText: _cmLeft.Text,
             CellMarginBottomText: _cmBottom.Text,
-            CellMarginRightText: _cmRight.Text);
+            CellMarginRightText: _cmRight.Text,
+            CellWrapText: _cellWrapText.IsChecked == true,
+            CellFitText: _cellFitText.IsChecked == true);
 
         if (!TablePropertiesDialogPlanner.TryBuildResult(
                 input,
