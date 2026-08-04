@@ -238,13 +238,16 @@ internal static class FreeWRibbonCommands
             v => v is TextDecorationCollection d && d.Count > 0,
             () => editor.TryToggleSelectedRunFormatting(f => f.Underline, (f, value) => f with { Underline = value }));
 
-        // Live ribbon state: when the caret/selection moves, recompute the toggle states and push
-        // them into the shared RibbonStateStore, which the toggle buttons observe.
-        editor.SelectionChanged += (_, _) =>
+        // Live ribbon state: when the caret/selection moves or a document render replaces the model,
+        // recompute state and push it into the shared store. The store deduplicates unchanged values.
+        void RefreshStatefulCommands()
         {
             foreach (var (id, command) in stateful)
                 stateStore.SetState(id, command.GetState());
-        };
+        }
+
+        editor.SelectionChanged += (_, _) => RefreshStatefulCommands();
+        editor.LayoutChanged += (_, _) => RefreshStatefulCommands();
 
         // Home > Font: character effects. Superscript/subscript are mutually exclusive baseline
         // offsets; small caps / all caps map to WPF typography. Each is a toggle over the selection.
@@ -1198,8 +1201,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.manage-sources", new ManageSourcesCommand(editor));
         registry.Register("freew.bibliography", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertBibliography(); }));
         // Insert tab — References: select the active citation/bibliography style (APA / MLA / Chicago) used
-        // by the citation + bibliography commands. The combo box delivers its label via the "value" param.
-        registry.Register("freew.citation-style", new CitationStyleCommand(editor));
+        // by the citation + bibliography commands. The combo box delivers its label as SelectedValue.
+        var citationStyle = new CitationStyleCommand(editor, stateStore);
+        registry.Register("freew.citation-style", citationStyle);
+        stateful.Add(("freew.citation-style", citationStyle));
+        stateStore.SetState("freew.citation-style", citationStyle.GetState());
         // Insert tab — References: insert a numbered figure/table caption under the caret's block.
         registry.Register("freew.caption", new InsertCaptionCommand(editor));
         registry.Register("freew.insert-caption.figure", new InsertCaptionLabelCommand(editor, CaptionLabel.Figure));
@@ -8960,15 +8966,26 @@ internal static class FreeWRibbonCommands
     // DocumentView.ActiveCitationStyle) so it persists and atomically refreshes existing native citations,
     // an existing generated bibliography, and subsequently inserted references. Unrecognised labels leave
     // the current style unchanged.
-    private sealed class CitationStyleCommand(DocumentView editor) : IRibbonCommand
+    private sealed class CitationStyleCommand(DocumentView editor, RibbonStateStore stateStore) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            var value = context.SelectedValue;
+            if (value is null
+                && context.Parameters.TryGetValue("value", out var legacyRaw))
+            {
+                value = legacyRaw as string;
+            }
+
+            if (string.IsNullOrWhiteSpace(value))
                 return;
 
             editor.ApplyCitationStyle(Citations.ParseStyle(value, editor.ActiveCitationStyle));
+            stateStore.SetState("freew.citation-style", GetState());
         }
+
+        public RibbonCommandState GetState() =>
+            new(Value: Citations.StyleName(editor.ActiveCitationStyle));
     }
 
     private sealed class SelectionValueCommand(
