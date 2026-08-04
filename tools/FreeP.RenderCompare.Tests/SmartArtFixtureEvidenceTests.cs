@@ -30,6 +30,7 @@ public sealed class SmartArtFixtureEvidenceTests
             .Should().Equal("Plan", "Design", "Build", "Test", "Deploy");
         ReadXml(archive, "ppt/diagrams/data1.xml")
             .Descendants(dgm + "pt")
+            .Where(element => (string?)element.Attribute("type") != "doc")
             .Should().HaveCount(5);
     }
 
@@ -51,6 +52,7 @@ public sealed class SmartArtFixtureEvidenceTests
         drawing.Descendants(a + "t").Should().HaveCount(6);
         ReadXml(archive, "ppt/diagrams/data6.xml")
             .Descendants(dgm + "pt")
+            .Where(element => (string?)element.Attribute("type") != "doc")
             .Should().HaveCount(6);
     }
 
@@ -85,6 +87,7 @@ public sealed class SmartArtFixtureEvidenceTests
         drawing.Descendants(a + "t").Should().HaveCount(3);
         ReadXml(archive, "ppt/diagrams/data7.xml")
             .Descendants(dgm + "pt")
+            .Where(element => (string?)element.Attribute("type") != "doc")
             .Should().HaveCount(3);
     }
 
@@ -121,6 +124,7 @@ public sealed class SmartArtFixtureEvidenceTests
         drawing.Descendants(a + "t").Should().HaveCount(4);
         ReadXml(archive, "ppt/diagrams/data8.xml")
             .Descendants(dgm + "pt")
+            .Where(element => (string?)element.Attribute("type") != "doc")
             .Should().HaveCount(4);
     }
 
@@ -150,6 +154,7 @@ public sealed class SmartArtFixtureEvidenceTests
             .Should().Equal("Phase A", "Phase B", "Phase C", "Phase D");
         ReadXml(archive, "ppt/diagrams/data9.xml")
             .Descendants(dgm + "pt")
+            .Where(element => (string?)element.Attribute("type") != "doc")
             .Should().HaveCount(4);
     }
 
@@ -184,6 +189,7 @@ public sealed class SmartArtFixtureEvidenceTests
             .Should().Equal("Collect", "Shape", "Review", "Share");
         ReadXml(archive, "ppt/diagrams/data10.xml")
             .Descendants(dgm + "pt")
+            .Where(element => (string?)element.Attribute("type") != "doc")
             .Should().HaveCount(4);
     }
 
