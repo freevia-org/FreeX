@@ -14,6 +14,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private readonly ComboBox _imageType;
     private readonly TextBox _transitionDuration;
     private readonly TextBox _frameBorderColor;
+    private readonly TextBox _frameBorderWidth;
     private readonly TextBox _cropEdges;
     private readonly IReadOnlyList<SummaryZoomTarget> _summaryTargets;
     private readonly IReadOnlyList<ZoomObjectProperties> _summaryTileProperties;
@@ -77,6 +78,12 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             MinWidth = 180,
             ToolTip = "six-digit RGB value; for example 4472C4",
         };
+        _frameBorderWidth = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderWidth(current),
+            MinWidth = 180,
+            ToolTip = "positive width in points; for example 1.5",
+        };
         _frameBorderEnabled = new CheckBox
         {
             Content = "Use Zoom border",
@@ -124,6 +131,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         Grid.SetColumnSpan(_frameBorderEnabled, 2);
         grid.Children.Add(_frameBorderEnabled);
         AddRow(grid, row++, "Border color:", _frameBorderColor);
+        AddRow(grid, row++, "Border width (pt):", _frameBorderWidth);
         AddRow(grid, row++, "Preview crop (%):", _cropEdges);
         if (_summaryTile is not null)
         {
@@ -195,6 +203,18 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                 MessageBoxImage.Warning);
             return;
         }
+        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderWidth(
+                _frameBorderWidth.Text,
+                _frameBorderEnabled.IsChecked == true,
+                out var frameBorderWidth))
+        {
+            MessageBox.Show(this,
+                ZoomObjectPropertiesPlanner.InvalidFrameBorderWidthMessage,
+                ZoomObjectPropertiesPlanner.DialogTitle,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
         if (!ZoomObjectPropertiesPlanner.TryParseCropEdges(
                 _cropEdges.Text, out var cropLeft, out var cropTop, out var cropRight, out var cropBottom))
         {
@@ -234,7 +254,8 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             cropTop,
             cropRight,
             cropBottom,
-            frameBorderColor);
+            frameBorderColor,
+            frameBorderWidth);
         if (_summaryTile is not null && _summaryTile.SelectedIndex >= 0
             && _summaryTile.SelectedIndex < _summaryTargets.Count)
         {
@@ -261,6 +282,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _transitionEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsTransitionEnabled(properties);
         SyncTransitionState();
         _frameBorderColor.Text = properties.FrameBorderColor ?? string.Empty;
+        _frameBorderWidth.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderWidth(properties);
         _frameBorderEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderEnabled(properties);
         SyncFrameBorderState();
         _cropEdges.Text = ZoomObjectPropertiesPlanner.FormatCropEdges(properties);
@@ -275,6 +297,10 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private void SyncTransitionState() =>
         _transitionDuration.IsEnabled = _transitionEnabled.IsChecked == true;
 
-    private void SyncFrameBorderState() =>
-        _frameBorderColor.IsEnabled = _frameBorderEnabled.IsChecked == true;
+    private void SyncFrameBorderState()
+    {
+        var enabled = _frameBorderEnabled.IsChecked == true;
+        _frameBorderColor.IsEnabled = enabled;
+        _frameBorderWidth.IsEnabled = enabled;
+    }
 }

@@ -2,16 +2,16 @@ using System.Xml.Linq;
 
 namespace FreeP.Core.Model;
 
-/// <summary>Mutates only the supported solid RGB outline inside native Zoom <c>zmPr/spPr</c>.</summary>
+/// <summary>Mutates supported outline color/width inside native Zoom <c>zmPr/spPr</c>.</summary>
 internal static class ZoomFrameBorderXml
 {
     private static readonly XNamespace Drawing =
         "http://schemas.openxmlformats.org/drawingml/2006/main";
 
-    public static void Set(XElement zoomProperties, string? color)
+    public static void Set(XElement zoomProperties, string? color, int? widthEmu)
     {
         // Null means the model did not understand the native line; preserve it verbatim.
-        if (color is null)
+        if (color is null && widthEmu is null)
             return;
 
         var shapeProperties = zoomProperties.Elements().FirstOrDefault(element =>
@@ -20,8 +20,16 @@ internal static class ZoomFrameBorderXml
             return;
 
         var line = shapeProperties.Elements(Drawing + "ln").FirstOrDefault();
+        if (line is null && widthEmu is not null)
+        {
+            line = new XElement(Drawing + "ln");
+            shapeProperties.Add(line);
+        }
+        if (line is not null && widthEmu is not null)
+            line.SetAttributeValue("w", widthEmu.Value);
+
         var solidFill = line?.Elements(Drawing + "solidFill").FirstOrDefault();
-        if (color.Length == 0)
+        if (color is { Length: 0 })
         {
             var rgb = solidFill?.Elements(Drawing + "srgbClr").FirstOrDefault();
             if (rgb is null)
@@ -32,6 +40,9 @@ internal static class ZoomFrameBorderXml
                 line.Remove();
             return;
         }
+
+        if (color is null)
+            return;
 
         line ??= new XElement(Drawing + "ln");
         foreach (var fill in line.Elements().Where(element =>

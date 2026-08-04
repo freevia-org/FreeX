@@ -1737,7 +1737,8 @@ public static class PptxPackageReader
                 element.Name.LocalName == "srcRect")?.Attribute("r")?.Value),
             ParseNullableInt(properties.Descendants().FirstOrDefault(element =>
                 element.Name.LocalName == "srcRect")?.Attribute("b")?.Value),
-            ReadZoomFrameBorderColor(properties));
+            ReadZoomFrameBorderColor(properties),
+            ReadZoomFrameBorderWidth(properties));
         return value.IsEmpty ? null : value;
     }
 
@@ -1758,6 +1759,17 @@ public static class PptxPackageReader
         var value = color.Trim().TrimStart('#');
         return value.Length == 6 && value.All(Uri.IsHexDigit)
             ? value.ToUpperInvariant()
+            : null;
+    }
+
+    private static int? ReadZoomFrameBorderWidth(XElement properties)
+    {
+        var line = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
+        return int.TryParse(line?.Attribute("w")?.Value, out var width) && width > 0
+            ? width
             : null;
     }
 
