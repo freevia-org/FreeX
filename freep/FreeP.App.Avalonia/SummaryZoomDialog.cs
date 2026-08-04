@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -11,6 +12,7 @@ internal sealed class SummaryZoomDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private readonly ListBox _targetList;
+    private readonly ObservableCollection<TargetOption> _items;
 
     internal IReadOnlyList<string> SelectedTargetSectionIds { get; private set; } = Array.Empty<string>();
 
@@ -27,19 +29,22 @@ internal sealed class SummaryZoomDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         AvaloniaCompactDialogChrome.ApplyWindow(this, DialogChromeStyle);
 
-        var items = options.Select(option => new TargetOption(option.Id, option.DisplayName)).ToArray();
+        _items = new ObservableCollection<TargetOption>(
+            options.Select(option => new TargetOption(option.Id, option.DisplayName)));
         _targetList = new ListBox
         {
-            ItemsSource = items,
+            ItemsSource = _items,
             SelectionMode = SelectionMode.Multiple,
             Height = 210,
         };
-        foreach (var item in items)
+        foreach (var item in _items)
             if (selectedTargetIds?.Contains(item.Id, StringComparer.OrdinalIgnoreCase) == true)
                 _targetList.SelectedItems?.Add(item);
 
+        var moveUp = MakeButton("Move Up", false, () => MoveSelected(_items, -1));
+        var moveDown = MakeButton("Move Down", false, () => MoveSelected(_items, 1));
         var ok = MakeButton("OK", true, Apply);
-        ok.IsEnabled = items.Length >= 2;
+        ok.IsEnabled = _items.Count >= 2;
         Content = new StackPanel
         {
             Margin = new Thickness(14),
@@ -48,6 +53,12 @@ internal sealed class SummaryZoomDialog : Window
             {
                 new TextBlock { Text = "Target sections (select at least two):" },
                 _targetList,
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Children = { moveUp, moveDown },
+                },
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -61,15 +72,33 @@ internal sealed class SummaryZoomDialog : Window
 
     private void Apply()
     {
-        var selected = _targetList.SelectedItems?
+        var selectedIds = _targetList.SelectedItems?
             .OfType<TargetOption>()
             .Select(option => option.Id)
             .ToArray() ?? Array.Empty<string>();
-        if (selected.Length >= 2)
+        var selected = SummaryZoomTargetPlanner.SelectOrderedTargets(
+            _items.Select(option => option.Id),
+            selectedTargetIds: selectedIds);
+        if (selected.Count >= 2)
         {
             SelectedTargetSectionIds = selected;
             Close(true);
         }
+    }
+
+    private void MoveSelected(ObservableCollection<TargetOption> items, int delta)
+    {
+        var selected = _targetList.SelectedItems?.OfType<TargetOption>().ToArray();
+        if (selected is not { Length: 1 })
+            return;
+
+        var index = items.IndexOf(selected[0]);
+        var targetIndex = index + delta;
+        if (index < 0 || targetIndex < 0 || targetIndex >= items.Count)
+            return;
+
+        items.Move(index, targetIndex);
+        _targetList.SelectedItem = selected[0];
     }
 
     private static Button MakeButton(string label, bool isDefault, Action action)

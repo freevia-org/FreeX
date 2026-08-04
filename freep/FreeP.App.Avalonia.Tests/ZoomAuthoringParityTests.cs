@@ -36,6 +36,19 @@ public sealed class ZoomAuthoringParityTests
     }
 
     [Fact]
+    public void Avalonia_summary_zoom_dialog_exposes_target_reordering()
+    {
+        var source = File.ReadAllText(RepoFile(
+            "freep",
+            "FreeP.App.Avalonia",
+            "SummaryZoomDialog.cs"));
+
+        source.Should().Contain("Move Up");
+        source.Should().Contain("Move Down");
+        source.Should().Contain("SelectOrderedTargets");
+    }
+
+    [Fact]
     public void Avalonia_zoom_validation_matches_wpf_with_the_shared_modal_warning_surface()
     {
         var source = File.ReadAllText(RepoFile(

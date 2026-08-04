@@ -8,6 +8,16 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class SummaryZoomInsertionPlannerTests
 {
     [Fact]
+    public void SelectOrderedTargets_UsesEditorOrderAndIgnoresUnselectedEntries()
+    {
+        var ordered = SummaryZoomTargetPlanner.SelectOrderedTargets(
+            ["section-c", "section-a", "section-b"],
+            ["section-b", "section-c"]);
+
+        ordered.Should().Equal("section-c", "section-b");
+    }
+
+    [Fact]
     public void Builds_native_multi_target_summary_zoom_with_fixed_layout()
     {
         var presentation = BuildPresentation();

@@ -13,6 +13,22 @@ public static class SummaryZoomTargetPlanner
     public const string CommandId = "freep.edit-summary-zoom-targets";
     public const string DialogTitle = "Edit Summary Zoom Targets";
 
+    /// <summary>Returns the selected target ids in the order shown by the editor.</summary>
+    public static IReadOnlyList<string> SelectOrderedTargets(
+        IEnumerable<string> orderedTargetIds,
+        IEnumerable<string> selectedTargetIds)
+    {
+        ArgumentNullException.ThrowIfNull(orderedTargetIds);
+        ArgumentNullException.ThrowIfNull(selectedTargetIds);
+
+        var selected = selectedTargetIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return orderedTargetIds
+            .Where(id => !string.IsNullOrWhiteSpace(id) && selected.Contains(id))
+            .ToArray();
+    }
+
     public static bool TryBuildPlan(
         Presentation presentation,
         PreservedObjectInfo info,

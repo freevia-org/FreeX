@@ -38,6 +38,20 @@ public sealed class ZoomAuthoringParityTests
     }
 
     [Fact]
+    public void Wpf_summary_zoom_dialog_exposes_target_reordering()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Host",
+            "SummaryZoomDialog.cs"));
+
+        source.Should().Contain("Move Up");
+        source.Should().Contain("Move Down");
+        source.Should().Contain("SelectOrderedTargets");
+    }
+
+    [Fact]
     public void Wpf_zoom_validation_uses_the_shared_messages_and_modal_warning_surface()
     {
         var source = File.ReadAllText(Path.Combine(
