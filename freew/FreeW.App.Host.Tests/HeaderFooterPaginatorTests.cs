@@ -151,6 +151,50 @@ public sealed class HeaderFooterPaginatorTests
     }
 
     [StaFact]
+    public void PrintLayout_LongFootnoteUsesBoundedCanonicalContinuationFlow()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Footnotes[1] = new Footnote(
+            1,
+            "Footnote 1 overflow authority: "
+            + string.Join(" ", Enumerable.Range(1, 700).Select(index => $"continuation{index}")));
+        model.Footnotes[2] = new Footnote(2, "Footnote 2 remains attached to its later reference.");
+
+        model.Blocks.Add(new FreeW.Core.Model.Paragraph("Footnotes Test"));
+        model.Blocks.Add(new FreeW.Core.Model.Paragraph(
+            "This tests whether footnote content appears at the foot of each page."));
+        var firstReference = new FreeW.Core.Model.Paragraph();
+        firstReference.Runs.Add(new FreeW.Core.Model.Run("This sentence has a footnote reference"));
+        firstReference.Runs.Add(FreeW.Core.Model.Run.FootnoteReference(1));
+        model.Blocks.Add(firstReference);
+        for (var index = 1; index <= 22; index++)
+            model.Blocks.Add(new FreeW.Core.Model.Paragraph(
+                $"Filler paragraph {index}: Lorem ipsum dolor sit amet consectetur adipiscing."));
+
+        var secondReference = new FreeW.Core.Model.Paragraph();
+        secondReference.Runs.Add(new FreeW.Core.Model.Run("This sentence has a second footnote reference"));
+        secondReference.Runs.Add(FreeW.Core.Model.Run.FootnoteReference(2));
+        model.Blocks.Add(secondReference);
+        for (var index = 1; index <= 20; index++)
+            model.Blocks.Add(new FreeW.Core.Model.Paragraph(
+                $"More filler {index}: Additional content to ensure footnote reference is on page 2."));
+
+        var view = new DocumentView();
+        view.LoadModel(model);
+        var paginator = PrintLayout.BuildPaginator(view);
+        paginator.ComputePageCount();
+
+        Assert.Equal(6, paginator.PageCount);
+        for (var pageIndex = 0; pageIndex < 3; pageIndex++)
+        {
+            var page = paginator.GetPage(pageIndex);
+            var container = Assert.IsType<ContainerVisual>(page.Visual);
+            Assert.True(container.Children.Count >= 2, $"page {pageIndex + 1} should include its note overlay");
+        }
+    }
+
+    [StaFact]
     public void CanonicalPageStartOffsets_FollowWpfPaginatorPagePositions()
     {
         var flow = new FlowDocument { PagePadding = new Thickness(48) };

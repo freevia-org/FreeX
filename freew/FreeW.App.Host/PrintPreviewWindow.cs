@@ -52,13 +52,21 @@ public sealed class PrintPreviewWindow : Window
 /// </summary>
 internal static class PrintLayout
 {
+    private const double FootnoteContinuationTrailingReserveDip = 15.0;
+
     /// <summary>
     /// Produces a fresh <see cref="FlowDocument"/> whose page size and margins match the model's
     /// <see cref="PageSettings"/>, carrying a display-only clone of the editor's content. The clone is
     /// taken via XAML round-tripping over the editor's FlowDocument so this path never reaches into
     /// the model&lt;-&gt;FlowDocument mapping owned by <see cref="DocumentView"/>.
     /// </summary>
-    public static FlowDocument BuildPaginatedDocument(DocumentView editor)
+    public static FlowDocument BuildPaginatedDocument(DocumentView editor) =>
+        BuildPaginatedDocument(editor, applyFragmentedFootnoteFlow: false, out _);
+
+    private static FlowDocument BuildPaginatedDocument(
+        DocumentView editor,
+        bool applyFragmentedFootnoteFlow,
+        out FootnoteContinuationFlowComposition? footnoteComposition)
     {
         var page = editor.Model.Page;
         var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
@@ -79,9 +87,26 @@ internal static class PrintLayout
         foreach (var block in CloneBlocks(editor.Document))
             flow.Blocks.Add(block);
 
-        // Word reserves room in the body frame for footnotes before it paginates the body. Keep the
-        // shared print/preview paginator on the same page-count path as the paged editor.
-        ApplyFootnoteBodyReserve(flow, editor.Model);
+        // Word paginates long notes as page-local fragments in the same physical body flow. Keep
+        // ordinary notes on the established reserve path and use fragment owners only for the
+        // narrow plain-flow overflow signature proven by the fidelity compositor.
+        var (contentWidthDip, contentHeightDip) = PageLayout.ContentAreaDip(page);
+        if (!applyFragmentedFootnoteFlow
+            || !FootnoteContinuationFlowComposer.TryApply(
+                flow,
+                editor.Model,
+                contentWidthDip,
+                contentHeightDip,
+                FootnoteContinuationTrailingReserveDip,
+                out var composition))
+        {
+            footnoteComposition = null;
+            ApplyFootnoteBodyReserve(flow, editor.Model);
+        }
+        else
+        {
+            footnoteComposition = composition;
+        }
 
         return flow;
     }
@@ -122,15 +147,29 @@ internal static class PrintLayout
         var page = editor.Model.Page;
         var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
 
-        var flow = BuildPaginatedDocument(editor);
+        var flow = BuildPaginatedDocument(editor, applyFragmentedFootnoteFlow: true, out var footnoteComposition);
         var paginator = ((IDocumentPaginatorSource)flow).DocumentPaginator;
         paginator.PageSize = new Size(pageWidth, pageHeight);
+
+        IReadOnlyDictionary<int, DocumentFootnoteContinuationPagePlan>? fragmentedFootnotePages = null;
+        if (footnoteComposition is not null)
+        {
+            var ownership = FootnoteContinuationFlowComposer.BuildPageOwnership(paginator, footnoteComposition);
+            fragmentedFootnotePages = FootnoteContinuationFlowComposer.BuildPageMap(
+                ownership,
+                footnoteComposition.ContinuationById);
+        }
 
         // The line height used to estimate text lines for margin line numbering. The editor's
         // FlowDocument FontSize is already in DIP; WPF lays a line out at ~1.33x the font size
         // (LineHeight defaults to FontSize * 4/3).
         var lineHeightDip = editor.Document.FontSize * (4.0 / 3.0);
-        return new HeaderFooterPaginator(paginator, editor.Model, page, lineHeightDip);
+        return new HeaderFooterPaginator(
+            paginator,
+            editor.Model,
+            page,
+            lineHeightDip,
+            fragmentedFootnotePages: fragmentedFootnotePages);
     }
 
     private static bool NeedsSectionAwareRendering(TextDocument document) =>
@@ -264,7 +303,8 @@ internal sealed class HeaderFooterPaginator(
     TextDocument model,
     PageSettings page,
     double lineHeightDip = 0,
-    IReadOnlyList<IReadOnlyList<int>>? footnoteIdsByPage = null) : DocumentPaginator
+    IReadOnlyList<IReadOnlyList<int>>? footnoteIdsByPage = null,
+    IReadOnlyDictionary<int, DocumentFootnoteContinuationPagePlan>? fragmentedFootnotePages = null) : DocumentPaginator
 {
     private bool? _requiresDedicatedEndnotePage;
 
@@ -299,6 +339,7 @@ internal sealed class HeaderFooterPaginator(
         var pageFootnoteIds = pageNumber < resolvedFootnoteIdsByPage.Count
             ? resolvedFootnoteIdsByPage[pageNumber]
             : null;
+        var fragmentedFootnotePage = fragmentedFootnotePages?.GetValueOrDefault(pageNumber);
         var hasMappedNotesAtFoot = pageFootnoteIds is { Count: > 0 };
         var hasAnyMappedFootnotes = resolvedFootnoteIdsByPage.Any(ids => ids.Count > 0);
         var hasFallbackNotesAtFoot = !hasAnyMappedFootnotes
@@ -309,7 +350,10 @@ internal sealed class HeaderFooterPaginator(
         var hasEndnotesAtFoot = model.Endnotes.Count > 0
             && !RequiresDedicatedEndnotePage
             && pageNumber == inner.PageCount - 1;
-        var hasNotesAtFoot = hasMappedNotesAtFoot || hasFallbackNotesAtFoot || hasEndnotesAtFoot;
+        var hasNotesAtFoot = fragmentedFootnotePage is not null
+            || hasMappedNotesAtFoot
+            || hasFallbackNotesAtFoot
+            || hasEndnotesAtFoot;
         if (model.Header is not { IsEmpty: false } && model.Footer is not { IsEmpty: false }
             && !hasWatermark && !hasBorder && !hasLineNumbers && !hasColumnRule && !hasNotesAtFoot)
             return basePage;
@@ -354,13 +398,17 @@ internal sealed class HeaderFooterPaginator(
         }
 
         if (hasNotesAtFoot)
-            visual.Children.Add(BuildNotesAtFoot(
-                size,
-                marginLeft,
-                contentWidth,
-                pageFootnoteIds,
-                includeAllNotes: hasFallbackNotesAtFoot,
-                includeEndnotes: !RequiresDedicatedEndnotePage && pageNumber == inner.PageCount - 1));
+        {
+            visual.Children.Add(fragmentedFootnotePage is not null
+                ? BuildContinuationNotesAtFoot(size, marginLeft, contentWidth, fragmentedFootnotePage)
+                : BuildNotesAtFoot(
+                    size,
+                    marginLeft,
+                    contentWidth,
+                    pageFootnoteIds,
+                    includeAllNotes: hasFallbackNotesAtFoot,
+                    includeEndnotes: !RequiresDedicatedEndnotePage && pageNumber == inner.PageCount - 1));
+        }
 
         return new DocumentPage(visual, size, basePage.BleedBox, basePage.ContentBox);
     }
@@ -426,6 +474,55 @@ internal sealed class HeaderFooterPaginator(
             };
             dc.DrawText(formatted, new Point(marginLeft, y));
             y += formatted.Height + PageLayout.PointsToDip(1);
+        }
+        return visual;
+    }
+
+    private DrawingVisual BuildContinuationNotesAtFoot(
+        Size size,
+        double marginLeft,
+        double contentWidth,
+        DocumentFootnoteContinuationPagePlan continuationPage)
+    {
+        var visual = new DrawingVisual();
+        if (contentWidth <= 0)
+            return visual;
+
+        var plan = DocumentNoteRegionPlanner.BuildFootnoteContinuationRegion(
+            continuationPage,
+            contentWidth);
+        const double trailingReserveDip = 15.0;
+        var contentTop = PageLayout.PointsToDip(page.MarginTopPt);
+        var contentBottom = size.Height - PageLayout.PointsToDip(page.MarginBottomPt);
+        var y = Math.Max(contentTop, contentBottom - plan.EstimatedHeightDip - trailingReserveDip);
+        using var dc = visual.RenderOpen();
+        if (continuationPage.SeparatorKind is not DocumentFootnoteSeparatorKind.None)
+        {
+            var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.5);
+            dc.DrawLine(
+                pen,
+                new Point(marginLeft + plan.SeparatorXOffsetDip, y),
+                new Point(marginLeft + plan.SeparatorXOffsetDip + plan.SeparatorWidthDip, y));
+            y += 8;
+        }
+
+        foreach (var row in plan.Rows)
+        {
+            var label = string.IsNullOrEmpty(row.Label) ? string.Empty : $"{row.Label}. ";
+            var formatted = new FormattedText(
+                label + row.Text,
+                System.Globalization.CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                new Typeface("Calibri"),
+                PageLayout.PointsToDip(plan.TextFontSizePt),
+                Brushes.Black,
+                1.0)
+            {
+                MaxTextWidth = contentWidth,
+                Trimming = TextTrimming.None
+            };
+            dc.DrawText(formatted, new Point(marginLeft, y));
+            y += Math.Max(row.EstimatedHeightDip, formatted.Height);
         }
         return visual;
     }

@@ -43,12 +43,14 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     public void FidelityRender_ComposesOverflowingPlainFootnotesThroughCanonicalFlowReservations()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+        var composerSource = File.ReadAllText(RepositoryFile(
+            "freew", "FreeW.App.Host", "Editing", "FootnoteContinuationFlowComposer.cs"));
 
-        source.Should().Contain("TryApplyPlainFootnoteContinuationReservations(");
-        source.Should().Contain("EstimatedHeightDip + trailingReserveDip > contentHeightDip");
-        source.Should().Contain("VerticalAnchor = FigureVerticalAnchor.ContentBottom");
+        source.Should().Contain("FootnoteContinuationFlowComposer.TryApply(");
+        composerSource.Should().Contain("EstimatedHeightDip + trailingReserveDip > contentHeightDip");
+        composerSource.Should().Contain("VerticalAnchor = FigureVerticalAnchor.ContentBottom");
         source.Should().Contain("usesFragmentedFootnoteFlow ? 0 : footnoteReserveDip");
-        source.Should().Contain("BuildFragmentedFootnotePageMap(");
+        source.Should().Contain("FootnoteContinuationFlowComposer.BuildPageMap(");
         source.Should().Contain("BuildFootnoteContinuationRegion(");
     }
 
