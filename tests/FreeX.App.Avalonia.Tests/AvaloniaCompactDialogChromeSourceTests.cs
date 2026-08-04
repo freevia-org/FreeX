@@ -158,7 +158,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("Name(\"PART_SelectedContentHost\")");
         source.Should().Contain("style.DialogTabPaneBorderBrush ?? DialogTabPaneBorderBrush");
         source.Should().Contain("style.TabHeight ?? style.ControlHeight");
-        source.Should().Contain("new Thickness(0, 0, -1, -1)");
+        source.Should().Contain("DialogTabChromeMetrics.AdjacentTabOverlap");
+        source.Should().Contain("DialogTabChromeMetrics.SelectedTabContentOverlap");
         source.Should().Contain("FuncControlTemplate<TabItem>");
     }
 

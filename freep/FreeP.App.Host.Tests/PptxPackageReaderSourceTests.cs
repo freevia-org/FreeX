@@ -171,7 +171,9 @@ public sealed class PptxPackageReaderSourceTests
 
         ExtractMethod(source, "private static bool CanUseGridMatrixCache(")
             .Should()
-            .Contain("nodes.Count != 4")
+            .Contain("nodes.Count is < 1 or > 4")
+            .And.Contain("shapes.Count != nodes.Count")
+            .And.Contain("if (shapes.Count == 1)")
             .And.Contain("DrawingShapeKind.Rectangle")
             .And.Contain("shape.ExtentCyEmu != cellSize")
             .And.Contain("gridSize * 0.025")
