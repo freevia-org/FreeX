@@ -446,6 +446,7 @@ public sealed class SlideShowMediaController
                 LoadedBehavior   = MediaState.Manual,
                 UnloadedBehavior = MediaState.Stop,
                 Source           = source,
+                Volume           = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(media.VolumePercent) / 100d,
                 // For audio: collapse the visual (no video frame to show).
                 Visibility       = isVideo ? Visibility.Visible : Visibility.Collapsed,
                 IsHitTestVisible = false,   // we do our own hit-testing

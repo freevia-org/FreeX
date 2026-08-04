@@ -162,6 +162,7 @@ internal sealed class AvaloniaSlideShowMediaController
                 var session = _backend!.CreateSession();
                 session.Failed += OnSessionFailed;
                 session.Open(source!);
+                session.Volume = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(shape.Media.VolumePercent);
                 VideoView? view = null;
                 if (shape.Media.IsVideo && session is LibVlcMediaPlaybackSession)
                 {

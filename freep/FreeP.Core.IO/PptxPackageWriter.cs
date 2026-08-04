@@ -2147,7 +2147,8 @@ public static class PptxPackageWriter
         var timedMedia = AllShapes(slide.Shapes)
             .Where(shape => shape.Kind == SlideShapeKind.Media
                 && (shape.Media?.PlaybackStartMode == MediaPlaybackStartMode.Automatically
-                    || shape.Media?.Loop == true))
+                    || shape.Media?.Loop == true
+                    || shape.Media?.VolumePercent != 80))
             .ToList();
         if (animations.Count == 0 && timedMedia.Count == 0 && string.IsNullOrWhiteSpace(slide.AnimationBuildListXml))
             return null;
@@ -2257,6 +2258,7 @@ public static class PptxPackageWriter
     {
         var mediaElementName = shape.Media?.IsVideo == true ? P + "video" : P + "audio";
         bool automatic = shape.Media?.PlaybackStartMode == MediaPlaybackStartMode.Automatically;
+        int volume = Math.Clamp(shape.Media?.VolumePercent ?? 80, 0, 100);
         var condition = automatic
             ? new XElement(P + "cond",
                 new XAttribute("evt", "onBegin"),
@@ -2279,7 +2281,7 @@ public static class PptxPackageWriter
 
         return new XElement(mediaElementName,
             new XElement(P + "cMediaNode",
-                new XAttribute("vol", "80000"),
+                new XAttribute("vol", (volume * 1000).ToString(CultureInfo.InvariantCulture)),
                 new XElement(P + "cTn",
                     cTnAttributes.Cast<object>().ToArray(),
                     new XElement(P + "stCondLst", condition)),

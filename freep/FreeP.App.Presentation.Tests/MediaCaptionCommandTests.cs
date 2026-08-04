@@ -114,4 +114,48 @@ public sealed class MediaCaptionCommandTests
         mediaShape.Media.CaptionTracks.Should().ContainSingle();
         mediaShape.Media.CaptionTracks[0].Bytes.Should().Equal(1, 2, 3);
     }
+
+    [Fact]
+    public void SetMediaVolumeCommand_UndoAndRedoClampAndRestoreVolume()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var mediaShape = new SlideShape
+        {
+            Id = 51,
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo { IsVideo = true, VolumePercent = 80 }
+        };
+        presentation.Slides[0].Shapes.Add(mediaShape);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetMediaVolumeCommand(0, mediaShape.Id, 80, 125));
+
+        mediaShape.Media.VolumePercent.Should().Be(100);
+        bus.Undo();
+        mediaShape.Media.VolumePercent.Should().Be(80);
+        bus.Redo();
+        mediaShape.Media.VolumePercent.Should().Be(100);
+    }
+
+    [Fact]
+    public void EditingSessionSelectedMediaVolume_UsesUndoBus()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var mediaShape = new SlideShape
+        {
+            Id = 52,
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo { IsVideo = false, VolumePercent = 80 }
+        };
+        presentation.Slides[0].Shapes.Add(mediaShape);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        editor.Select(mediaShape.Id);
+
+        editor.SetSelectedMediaVolume(25).Should().BeTrue();
+        mediaShape.Media.VolumePercent.Should().Be(25);
+        editor.Undo();
+        mediaShape.Media.VolumePercent.Should().Be(80);
+        editor.Redo();
+        mediaShape.Media.VolumePercent.Should().Be(25);
+    }
 }
