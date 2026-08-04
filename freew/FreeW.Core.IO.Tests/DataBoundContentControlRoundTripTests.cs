@@ -1,6 +1,9 @@
 using System.IO.Compression;
 using System.Text;
 using System.Xml.Linq;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 
 namespace FreeW.Core.IO.Tests;
 
@@ -168,6 +171,77 @@ public sealed class DataBoundContentControlRoundTripTests
         run.Text.Should().Be("Original display value");
     }
 
+    [Theory]
+    [InlineData("date", "2026-08-04", "2026-08-04T00:00:00Z")]
+    [InlineData("dateTime", "2026-08-04T15:30:00Z", "2026-08-04T15:30:00Z")]
+    public void BoundDatePicker_RefreshesFullDateAndFormattedDisplayAcrossItsRunRange(
+        string storage,
+        string storedValue,
+        string expectedFullDate)
+    {
+        using var input = BuildPackage(
+            itemBytes: Encoding.UTF8.GetBytes(
+                $"<?xml version=\"1.0\" encoding=\"utf-8\"?><root xmlns=\"urn:freew:test\"><name>{storedValue}</name></root>"),
+            controlElement: "date",
+            dateStorage: storage,
+            multipleRuns: true);
+
+        var document = DocxReader.Read(input);
+        var runs = document.Paragraphs.Single().Runs;
+
+        runs.Should().HaveCount(2);
+        runs[0].Text.Should().Be("August 4, 2026");
+        runs[1].Text.Should().BeEmpty();
+        runs[0].Control.Should().BeSameAs(runs[1].Control);
+        runs[0].Control!.DateMetadata!.FullDate.Should().Be(expectedFullDate);
+
+        var first = Write(document);
+        XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        var savedDocument = XDocument.Load(new MemoryStream(EntryBytes(first, "word/document.xml")));
+        var date = savedDocument.Descendants(w + "date").Should().ContainSingle().Subject;
+        date.Attribute(w + "fullDate")!.Value.Should().Be(expectedFullDate);
+        date.Elements().Select(element => element.Name.LocalName).Should().Equal(
+            "dateFormat", "lid", "storeMappedDataAs", "calendar");
+        savedDocument.Descendants(w + "t").Select(text => text.Value)
+            .Should().Equal("August 4, 2026", string.Empty);
+
+        var reopened = DocxReader.Read(new MemoryStream(first));
+        var reopenedRuns = reopened.Paragraphs.Single().Runs;
+        reopenedRuns.Should().ContainSingle().Which.Text.Should().Be("August 4, 2026");
+        reopenedRuns[0].Control!.DateMetadata!.FullDate.Should().Be(expectedFullDate);
+
+        var second = Write(reopened);
+        GetDateElement(second).ToString(SaveOptions.DisableFormatting)
+            .Should().Be(date.ToString(SaveOptions.DisableFormatting));
+        EntryBytes(second, "customXml/item1.xml").Should().Equal(
+            EntryBytes(first, "customXml/item1.xml"));
+        EntryBytes(second, "customXml/itemProps1.xml").Should().Equal(
+            EntryBytes(first, "customXml/itemProps1.xml"));
+        SchemaErrors(first).Should().BeEmpty();
+        SchemaErrors(second).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("date", "08/04/2026")]
+    [InlineData("dateTime", "not-a-date")]
+    [InlineData("text", "August 4, 2026")]
+    public void BoundDatePicker_InvalidOrUnsupportedStoragePreservesSerializedStateAndDisplay(
+        string storage,
+        string storedValue)
+    {
+        using var input = BuildPackage(
+            itemBytes: Encoding.UTF8.GetBytes(
+                $"<?xml version=\"1.0\" encoding=\"utf-8\"?><root xmlns=\"urn:freew:test\"><name>{storedValue}</name></root>"),
+            controlElement: "date",
+            dateStorage: storage);
+
+        var document = DocxReader.Read(input);
+        var run = document.Paragraphs.Single().Runs.Single();
+
+        run.Text.Should().Be("Original display value");
+        run.Control!.DateMetadata!.FullDate.Should().Be("2026-06-19T00:00:00Z");
+    }
+
     [Fact]
     public void BoundBlockPlainTextControl_RefreshesDisplayedTextFromCustomXmlOnOpen()
     {
@@ -238,14 +312,37 @@ public sealed class DataBoundContentControlRoundTripTests
     private static string EntryText(byte[] package, string path) =>
         Encoding.UTF8.GetString(EntryBytes(package, path));
 
+    private static XElement GetDateElement(byte[] package)
+    {
+        XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        using var stream = new MemoryStream(EntryBytes(package, "word/document.xml"));
+        return XDocument.Load(stream).Descendants(w + "date").Single();
+    }
+
+    private static List<string> SchemaErrors(byte[] package)
+    {
+        using var stream = new MemoryStream(package);
+        using var document = WordprocessingDocument.Open(stream, isEditable: false);
+        return new OpenXmlValidator(FileFormatVersions.Microsoft365)
+            .Validate(document)
+            .Where(error => error.ErrorType == ValidationErrorType.Schema)
+            .Select(error => $"{error.Description} @ {error.Path?.XPath}")
+            .ToList();
+    }
+
     private static MemoryStream BuildPackage(
         string xpath = "/ns0:root/ns0:name",
         byte[]? itemBytes = null,
         bool blockLevel = false,
         string controlElement = "text",
-        IReadOnlyList<ContentControlListItem>? listItems = null)
+        IReadOnlyList<ContentControlListItem>? listItems = null,
+        string? dateStorage = null,
+        bool multipleRuns = false)
     {
-        var controlProperties = BuildControlProperties(controlElement, listItems);
+        var controlProperties = BuildControlProperties(controlElement, listItems, dateStorage);
+        var inlineContent = multipleRuns
+            ? "<w:r><w:t>Original display</w:t></w:r><w:r><w:t> value</w:t></w:r>"
+            : "<w:r><w:t>Original display value</w:t></w:r>";
         var stream = new MemoryStream();
         using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
         {
@@ -280,7 +377,7 @@ public sealed class DataBoundContentControlRoundTripTests
                       <w:body><w:p><w:sdt><w:sdtPr>
                         <w:dataBinding w:prefixMappings="xmlns:ns0='urn:freew:test'" w:xpath="{{xpath}}" w:storeItemID="{{StoreItemId}}"/>
                         <w:id w:val="17"/><w:tag w:val="BoundName"/>{{controlProperties}}
-                      </w:sdtPr><w:sdtContent><w:r><w:t>Original display value</w:t></w:r></w:sdtContent></w:sdt></w:p><w:sectPr/></w:body>
+                      </w:sdtPr><w:sdtContent>{{inlineContent}}</w:sdtContent></w:sdt></w:p><w:sectPr/></w:body>
                     </w:document>
                     """);
             }
@@ -303,7 +400,8 @@ public sealed class DataBoundContentControlRoundTripTests
 
     private static string BuildControlProperties(
         string controlElement,
-        IReadOnlyList<ContentControlListItem>? listItems)
+        IReadOnlyList<ContentControlListItem>? listItems,
+        string? dateStorage)
     {
         if (controlElement == "text")
             return "<w:text/>";
@@ -316,6 +414,18 @@ public sealed class DataBoundContentControlRoundTripTests
                   <w14:checkedState w14:val="2611" w14:font="Segoe UI Symbol"/>
                   <w14:uncheckedState w14:val="2610" w14:font="Segoe UI Symbol"/>
                 </w14:checkbox>
+                """;
+        }
+
+        if (controlElement == "date")
+        {
+            return $$"""
+                <w:date w:fullDate="2026-06-19T00:00:00Z">
+                  <w:dateFormat w:val="MMMM d, yyyy"/>
+                  <w:lid w:val="en-US"/>
+                  <w:storeMappedDataAs w:val="{{dateStorage}}"/>
+                  <w:calendar w:val="gregorian"/>
+                </w:date>
                 """;
         }
 

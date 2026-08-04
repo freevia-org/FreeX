@@ -547,6 +547,43 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void ZoomFrameBorder_EditPreservesNativeThemeFill()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+        var zoom = SlideZoomInsertionPlanner.CreateShape(presentation, 0, "slide-2");
+        presentation.Slides[0].Shapes.Add(zoom);
+
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var raw = XElement.Parse(zoom.PreservedObject!.RawXml);
+        var shapeProperties = raw.Descendants()
+            .Single(element => element.Name.LocalName == "spPr");
+        var line = new XElement(drawing + "ln");
+        shapeProperties.Add(line);
+        line.Elements(drawing + "solidFill").Remove();
+        line.Add(new XElement(drawing + "solidFill",
+            new XElement(drawing + "schemeClr", new XAttribute("val", "accent1"))));
+        zoom.PreservedObject.RawXml = raw.ToString(SaveOptions.DisableFormatting);
+
+        var session = new EditingSession(
+            presentation, new PresentationCommandBus(presentation));
+        session.SetZoomObjectProperties(
+                zoom.Id,
+                new ZoomObjectProperties(
+                    FrameBorderWidthEmu: 25400,
+                    FrameBorderDash: OutlineDash.Dot))
+            .Should().BeTrue();
+
+        var edited = XElement.Parse(zoom.PreservedObject.RawXml);
+        edited.Descendants(drawing + "schemeClr").Should().ContainSingle(element =>
+            element.Attribute("val")!.Value == "accent1");
+        edited.Descendants(drawing + "srgbClr").Should().BeEmpty();
+        edited.Descendants(drawing + "prstDash").Single()
+            .Attribute("val")!.Value.Should().Be("dot");
+    }
+
+    [Fact]
     public void SummaryZoomTileLayout_IsUndoableAndRoundTripsNativeFactors()
     {
         var presentation = new Presentation();
