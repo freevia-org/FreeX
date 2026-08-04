@@ -70,6 +70,43 @@ public sealed record PageBorderArtFilledShapePlan(
 
 public static class PageBorderArtVisualPlanner
 {
+    // Word's Vine border is a fixed 48x32 monochrome sprite repeated along each rail.
+    private static readonly string[] VineRailMask =
+    [
+        "................................................",
+        "................................................",
+        "................................................",
+        "................................................",
+        "..........................##########............",
+        ".........................###########............",
+        "..........................############..........",
+        "...............#######....##############........",
+        "..........################.##################...",
+        ".........#################..#######.#########...",
+        "........#########......###.#.......#########....",
+        ".......#########..........##################....",
+        "....########............#################.......",
+        "....########............################........",
+        "..#########.............###############.........",
+        "############.............############...........",
+        "##############....###.......#.................##",
+        "##############..########...................#####",
+        "####....#######.########........################",
+        "##........#####.#########.......################",
+        ".............#######.######........############.",
+        "............#########.#####.....................",
+        "...........###########.#####....................",
+        "...........#################....................",
+        "...........##################...................",
+        "............###################.................",
+        "............###################.................",
+        "..............##############....................",
+        "................................................",
+        "................................................",
+        "................................................",
+        "................................................",
+    ];
+
     public const int ApplesArtId = 1;
     public const int MapleMuffinsArtId = 2;
     public const int CakeSliceArtId = 3;
@@ -626,10 +663,10 @@ public static class PageBorderArtVisualPlanner
         var horizontalLength = frameWidth - 2 * horizontalStart;
         var verticalStart = inset + size;
         var verticalLength = frameHeight - 2 * verticalStart;
-        AddVineRail(polygons, horizontalStart, horizontalLength, inset, size, horizontal: true, reverseAcross: false);
-        AddVineRail(polygons, horizontalStart, horizontalLength, frameHeight - inset - size, size, horizontal: true, reverseAcross: false);
-        AddVineRail(polygons, verticalStart, verticalLength, inset, size, horizontal: false, reverseAcross: true);
-        AddVineRail(polygons, verticalStart, verticalLength, frameWidth - inset - size, size, horizontal: false, reverseAcross: true);
+        AddVineRail(fills, horizontalStart, horizontalLength, inset, size, horizontal: true, reverseAcross: false);
+        AddVineRail(fills, horizontalStart, horizontalLength, frameHeight - inset - size, size, horizontal: true, reverseAcross: false);
+        AddVineRail(fills, verticalStart, verticalLength, inset, size, horizontal: false, reverseAcross: true);
+        AddVineRail(fills, verticalStart, verticalLength, frameWidth - inset - size, size, horizontal: false, reverseAcross: true);
         AddVineCorner(polygons, inset, inset, size);
         AddVineCorner(polygons, frameWidth - inset - size, inset, size);
         AddVineCorner(polygons, inset, frameHeight - inset - size, size);
@@ -951,7 +988,7 @@ public static class PageBorderArtVisualPlanner
     }
 
     private static void AddVineRail(
-        List<PageBorderArtPolygon> polygons,
+        List<PageBorderArtFillRectangle> fills,
         double alongStart,
         double alongLength,
         double acrossStart,
@@ -965,26 +1002,37 @@ public static class PageBorderArtVisualPlanner
         for (var index = 0; index < count; index++)
         {
             var motifStart = alongStart + index * step;
-            PageBorderArtPoint Point(double along, double across)
+            var scale = size / 32.0;
+            for (var row = 0; row < VineRailMask.Length; row++)
             {
-                var scaledAlong = along * size / 32.0;
-                var scaledAcross = across * size / 32.0;
-                if (reverseAcross)
-                    scaledAcross = size - scaledAcross;
-                return horizontal
-                    ? new PageBorderArtPoint(motifStart + scaledAlong, acrossStart + scaledAcross)
-                    : new PageBorderArtPoint(acrossStart + scaledAcross, motifStart + scaledAlong);
-            }
+                var mask = VineRailMask[row];
+                var runStart = -1;
+                for (var column = 0; column <= mask.Length; column++)
+                {
+                    var isFilled = column < mask.Length && mask[column] == '#';
+                    if (isFilled && runStart < 0)
+                        runStart = column;
+                    if (isFilled || runStart < 0)
+                        continue;
 
-            AddWhitePolygon(polygons, Point,
-                (0, 24), (7, 24), (13, 21), (19, 15), (26, 12), (33, 12), (40, 15), (48, 15),
-                (48, 20), (40, 20), (33, 17), (27, 17), (22, 20), (16, 25), (8, 29), (0, 29));
-            AddWhitePolygon(polygons, Point,
-                (24, 11), (28, 5), (36, 4), (43, 8), (38, 13), (31, 14));
-            AddWhitePolygon(polygons, Point,
-                (20, 18), (27, 20), (34, 25), (31, 30), (23, 29), (18, 24));
-            AddWhitePolygon(polygons, Point,
-                (4, 19), (0, 14), (4, 10), (10, 13), (10, 17));
+                    var runLength = column - runStart;
+                    var across = reverseAcross ? size - (row + 1) * scale : row * scale;
+                    fills.Add(horizontal
+                        ? new PageBorderArtFillRectangle(
+                            motifStart + runStart * scale,
+                            acrossStart + across,
+                            runLength * scale,
+                            scale,
+                            0xFF, 0xFF, 0xFF)
+                        : new PageBorderArtFillRectangle(
+                            acrossStart + across,
+                            motifStart + runStart * scale,
+                            scale,
+                            runLength * scale,
+                            0xFF, 0xFF, 0xFF));
+                    runStart = -1;
+                }
+            }
         }
     }
 
