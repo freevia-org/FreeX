@@ -37,6 +37,39 @@ public sealed class PresentationViewZoomPlannerTests
             .BeFalse();
     }
 
+    [Theory]
+    [InlineData("#4472c4", true, "4472C4")]
+    [InlineData(" 00aaFF ", true, "00AAFF")]
+    [InlineData("4472C4", false, "")]
+    public void Zoom_border_control_normalizes_enabled_and_disabled_values(
+        string input,
+        bool enabled,
+        string expected)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderColor(
+                input,
+                enabled,
+                out var normalized)
+            .Should()
+            .BeTrue();
+
+        normalized.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("12345")]
+    [InlineData("GGGGGG")]
+    public void Zoom_border_control_rejects_invalid_enabled_values(string input)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderColor(
+                input,
+                enabled: true,
+                out _)
+            .Should()
+            .BeFalse();
+    }
+
     [Fact]
     public void Built_in_plans_expose_zoom_and_fit_to_window_command_ids()
     {

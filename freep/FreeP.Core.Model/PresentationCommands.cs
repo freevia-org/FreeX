@@ -822,6 +822,7 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             CropTop = ValidateCrop(properties.CropTop, nameof(properties.CropTop)),
             CropRight = ValidateCrop(properties.CropRight, nameof(properties.CropRight)),
             CropBottom = ValidateCrop(properties.CropBottom, nameof(properties.CropBottom)),
+            FrameBorderColor = ValidateFrameBorderColor(properties.FrameBorderColor),
         };
     }
 
@@ -831,6 +832,17 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             throw new ArgumentOutOfRangeException(parameterName, value,
                 "Zoom crop edges must be between 0 and 100000 (thousandths of a percent).");
         return value;
+    }
+
+    private static string? ValidateFrameBorderColor(string? value)
+    {
+        if (value is null or { Length: 0 })
+            return value;
+
+        var normalized = value.Trim().TrimStart('#');
+        if (normalized.Length != 6 || !normalized.All(Uri.IsHexDigit))
+            throw new ArgumentException("Zoom frame border color must be a six-digit RGB value.", nameof(value));
+        return normalized.ToUpperInvariant();
     }
 
     private static bool TryPatchRawXml(
@@ -860,6 +872,7 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             SetAttribute(zoomProperty, "transitionDur", properties.TransitionDuration);
             SetAttribute(zoomProperty, "showBg", properties.ShowBackground);
             SetCrop(zoomProperty, properties);
+            ZoomFrameBorderXml.Set(zoomProperty, properties.FrameBorderColor);
         }
         patchedXml = root.ToString(SaveOptions.DisableFormatting);
         return true;
@@ -1115,6 +1128,7 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
         SetAttribute(properties, "transitionDur", _newValue.TransitionDuration);
         SetAttribute(properties, "showBg", _newValue.ShowBackground);
         SetCrop(properties, _newValue);
+        ZoomFrameBorderXml.Set(properties, _newValue.FrameBorderColor);
         patchedXml = document.Root!.ToString(SaveOptions.DisableFormatting);
         return true;
     }
@@ -1131,7 +1145,19 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
         {
             ImageType = properties.ImageType?.Trim().ToLowerInvariant(),
             TransitionDuration = properties.TransitionDuration?.Trim(),
+            FrameBorderColor = ValidateFrameBorderColor(properties.FrameBorderColor),
         };
+    }
+
+    private static string? ValidateFrameBorderColor(string? value)
+    {
+        if (value is null or { Length: 0 })
+            return value;
+
+        var normalized = value.Trim().TrimStart('#');
+        if (normalized.Length != 6 || !normalized.All(Uri.IsHexDigit))
+            throw new ArgumentException("Zoom frame border color must be a six-digit RGB value.", nameof(value));
+        return normalized.ToUpperInvariant();
     }
 
     private static void SetAttribute(XElement element, string name, bool? value)

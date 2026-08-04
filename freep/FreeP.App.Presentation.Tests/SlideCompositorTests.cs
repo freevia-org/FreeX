@@ -335,7 +335,8 @@ public sealed class SlideCompositorTests
                 CropLeft: 20000,
                 CropTop: 10000,
                 CropRight: 30000,
-                CropBottom: 5000)).Should().BeTrue();
+                CropBottom: 5000,
+                FrameBorderColor: "4472C4")).Should().BeTrue();
 
         var pictures = SlideCompositor.Compose(presentation, presentation.Slides[0])
             .OfType<DrawOp.Picture>()
@@ -352,6 +353,8 @@ public sealed class SlideCompositorTests
         pictures[0].CropTop.Should().BeApproximately(0.1, 0.00001);
         pictures[0].CropRight.Should().BeApproximately(0.3, 0.00001);
         pictures[0].CropBottom.Should().BeApproximately(0.05, 0.00001);
+        var border = pictures[0].Outline.Should().BeOfType<ResolvedOutline.Visible>().Subject;
+        border.Color.Should().Be(new SrgbColor(0x44, 0x72, 0xC4));
         pictures[1].HasCrop.Should().BeFalse();
     }
 

@@ -1690,8 +1690,29 @@ public static class PptxPackageReader
             ParseNullableInt(properties.Descendants().FirstOrDefault(element =>
                 element.Name.LocalName == "srcRect")?.Attribute("r")?.Value),
             ParseNullableInt(properties.Descendants().FirstOrDefault(element =>
-                element.Name.LocalName == "srcRect")?.Attribute("b")?.Value));
+                element.Name.LocalName == "srcRect")?.Attribute("b")?.Value),
+            ReadZoomFrameBorderColor(properties));
         return value.IsEmpty ? null : value;
+    }
+
+    private static string? ReadZoomFrameBorderColor(XElement properties)
+    {
+        var shapeProperties = properties.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase));
+        var line = shapeProperties?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
+        var solidFill = line?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "solidFill", StringComparison.OrdinalIgnoreCase));
+        var color = solidFill?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value;
+        if (color is null)
+            return null;
+
+        var value = color.Trim().TrimStart('#');
+        return value.Length == 6 && value.All(Uri.IsHexDigit)
+            ? value.ToUpperInvariant()
+            : null;
     }
 
     private static IEnumerable<SummaryZoomTarget> ReadSummaryZoomTargets(XElement graphicFrame)

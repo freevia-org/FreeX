@@ -16,6 +16,9 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseTransitionDuration(");
         source.Should().Contain("_transitionEnabled.IsChecked == true");
         source.Should().Contain("_transitionDuration.IsEnabled");
+        source.Should().Contain("Use Zoom border");
+        source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderColor(");
+        source.Should().Contain("_frameBorderColor.IsEnabled");
     }
 
     [Fact]
