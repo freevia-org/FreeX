@@ -132,28 +132,47 @@ public sealed class StylesGalleryTests
         string? appliedStyleId = null;
         string? undoneStyleId = "not-observed";
         string? afterUnknownStyleId = "not-observed";
+        string? initialValue = null;
+        string? appliedValue = null;
+        string? undoneValue = null;
+        string? loadedValue = null;
         var ran = await OnUiThread(() =>
         {
             var (view, doc) = MakeBodyDoc("Heading text");
             view.MoveCaretToBlock(0, 0);
             var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
             registry.TryGet(new RibbonCommandId("freew.style"), out var command).Should().BeTrue();
+            var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+            initialValue = stateful.GetState().Value;
 
             command!.Execute(RibbonCommandContext.ForSelectedValue("Heading 1"));
             appliedStyleId = ((Paragraph)doc.Blocks[0]).StyleId;
+            appliedValue = stateful.GetState().Value;
 
             view.Undo();
             undoneStyleId = ((Paragraph)doc.Blocks[0]).StyleId;
+            undoneValue = stateful.GetState().Value;
 
             command.Execute(RibbonCommandContext.ForSelectedValue("Missing Style"));
             command.Execute(RibbonCommandContext.Empty);
             afterUnknownStyleId = ((Paragraph)doc.Blocks[0]).StyleId;
+
+            var loaded = TextDocument.CreateEmpty();
+            loaded.Blocks.Clear();
+            loaded.Blocks.Add(new Paragraph("Loaded title") { StyleId = "Title" });
+            view.LoadDocument(loaded);
+            view.MoveCaretToBlock(0, 0);
+            loadedValue = stateful.GetState().Value;
         });
         if (!ran) return;
 
+        initialValue.Should().Be("Normal");
         appliedStyleId.Should().Be("Heading1");
+        appliedValue.Should().Be("Heading 1");
         undoneStyleId.Should().BeNull();
+        undoneValue.Should().Be("Normal");
         afterUnknownStyleId.Should().BeNull();
+        loadedValue.Should().Be("Title");
     }
 
     [Fact]
