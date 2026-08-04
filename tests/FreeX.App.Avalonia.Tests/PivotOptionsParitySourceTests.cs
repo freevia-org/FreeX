@@ -57,6 +57,53 @@ public sealed class PivotOptionsParitySourceTests
             source.Should().Contain(argument);
     }
 
+    [Fact]
+    public void PivotOptionsParityFixture_SeedsDisplayStyleOptionsLikeWpf()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+
+        source.Should().Contain("StyleName = PivotStyleGalleryPlanner.DefaultStyleName,");
+        source.Should().Contain("ShowRowStripes = true,");
+    }
+
+    [Fact]
+    public void PivotOptionsDisplay_UsesSharedDisplayValuesAndLocalizedWpfLabels()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotOptions.cs"));
+
+        foreach (var value in new[]
+                 {
+                     "values.ShowRowHeaders",
+                     "values.ShowColumnHeaders",
+                     "values.ShowFieldHeaders",
+                     "values.ShowContextualTooltips",
+                     "values.ShowPropertiesInTooltips",
+                     "values.ShowClassicLayout",
+                     "values.ShowItemsWithNoDataOnRows",
+                     "values.ShowItemsWithNoDataOnColumns",
+                     "values.ShowRowStripes",
+                     "values.ShowColumnStripes",
+                     "values.ShowExpandCollapseButtons"
+                 })
+            source.Should().Contain(value);
+
+        foreach (var key in new[]
+                 {
+                     "PivotTableOptions_RowHeaders",
+                     "PivotTableOptions_ColumnHeaders",
+                     "PivotTableOptions_DisplayFieldCaptionsAndFilterDropDowns",
+                     "PivotTableOptions_ShowContextualTooltips",
+                     "PivotTableOptions_ShowPropertiesInTooltips",
+                     "PivotTableOptions_ClassicPivotTableLayoutEnablesDraggingOfFieldsInTheGrid",
+                     "PivotTableOptions_ShowItemsWithNoDataOnRows",
+                     "PivotTableOptions_ShowItemsWithNoDataOnColumns",
+                     "PivotTableOptions_BandedRows",
+                     "PivotTableOptions_BandedColumns",
+                     "PivotTableOptions_ShowExpandCollapseButtons"
+                 })
+            source.Should().Contain($"UiText.Get(\"{key}\")");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

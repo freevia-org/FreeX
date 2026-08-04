@@ -2079,6 +2079,8 @@ public sealed partial class MainWindow
             CacheId = cacheId,
             SourceRange = sourceRange,
             TargetRange = targetRange,
+            StyleName = PivotStyleGalleryPlanner.DefaultStyleName,
+            ShowRowStripes = true,
             LastRenderedRange = new GridRange(
                 targetRange.Start,
                 new CellAddress(sheetId, targetRange.Start.Row + 4, targetRange.Start.Col + 2)),
