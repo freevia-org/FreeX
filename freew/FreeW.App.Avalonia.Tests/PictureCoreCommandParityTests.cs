@@ -463,6 +463,24 @@ public sealed class PictureCoreCommandParityTests
     }
 
     [Fact]
+    public async Task AvaloniaBakedArtisticPreview_IsNotFilteredAgain()
+    {
+        await Session.Dispatch(() =>
+        {
+            using var source = new Bitmap(new MemoryStream(OnePixelPng()));
+            var image = new InlineImage(OnePixelPng(), 40, 40)
+            {
+                ArtisticEffect = ImageArtisticEffect.GlowDiffused,
+                HasBakedArtisticEffectPreview = true,
+            };
+
+            var result = AvaloniaImageAdjustHelper.Apply(source, image);
+
+            result.Should().BeSameAs(source, "Word's a:blip already contains the rendered artistic preview");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task DecodeBitmap_UsesResolvedLinkedPreviewWhenEmbeddedBytesAreAbsent()
     {
         await Session.Dispatch(() =>

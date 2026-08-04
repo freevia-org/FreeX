@@ -44,7 +44,7 @@ internal static class ImageAdjustHelper
                 image.ColorTemperature)
             : source;
 
-        if (image.HasArtisticEffect)
+        if (image.RequiresArtisticEffectRendering)
             adjusted = ApplyArtistic(adjusted, image.ArtisticEffect);
 
         return adjusted;

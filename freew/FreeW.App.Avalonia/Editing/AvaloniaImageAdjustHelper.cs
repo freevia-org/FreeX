@@ -39,7 +39,7 @@ internal static partial class AvaloniaImageAdjustHelper
                 owned = current;
             }
 
-            if (image.HasArtisticEffect)
+            if (image.RequiresArtisticEffectRendering)
             {
                 var next = ApplyArtistic(current, image.ArtisticEffect);
                 if (owned is not null)

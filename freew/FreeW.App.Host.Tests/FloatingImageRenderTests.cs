@@ -275,6 +275,31 @@ public sealed class FloatingImageRenderTests
     }
 
     [StaFact]
+    public void ObjectFormatSquareImage_BakedPreviewUsesWordMeasuredReflectionOpacity()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildObjectFormatPositionSizeStyleDocument();
+        var image = document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.Image)
+            .Single(candidate => candidate?.AltText ==
+                "Square wrapped sample picture with glow reflection soft edge and artistic effect")!;
+        image.HasBakedArtisticEffectPreview = true;
+
+        var canvas = new Canvas();
+        var view = new DocumentView();
+        view.SetFloatingCanvas(canvas);
+        view.LoadModel(document);
+
+        var reflection = canvas.Children.OfType<StackPanel>()
+            .Single(panel => ReferenceEquals(panel.Tag, image));
+        var reflectionSurface = reflection.Children[1]
+            .Should().BeOfType<System.Windows.Shapes.Rectangle>().Subject;
+        var mask = reflectionSurface.OpacityMask
+            .Should().BeOfType<System.Windows.Media.LinearGradientBrush>().Subject;
+        mask.GradientStops[0].Color.A.Should().Be((byte)(0.25 * 255));
+    }
+
+    [StaFact]
     public void ImportedEffectImage_UsesItsMeasuredWordOverlayRegistration()
     {
         var doc = DocWithFloating(

@@ -38,6 +38,7 @@ public static class DocxWriter
     private const string ThemeRelationshipId = "rIdTheme1";
     private const string FreeWChartDesignExtensionUri = "urn:freew:chart-design:2026";
     private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+    private static readonly XNamespace A14 = "http://schemas.microsoft.com/office/drawing/2010/main";
 
     // Minimal numbering scheme: one abstract num per list kind, mapped 1:1 to a w:num. Bullets use
     // abstractNumId 0 / numId 1; decimal numbering uses abstractNumId 1 / numId 2; multilevel (legal
@@ -4387,7 +4388,7 @@ public static class DocxWriter
             ? (long?)Math.Round(image.ColorTemperature * 1000)
             : null;
         var artisticEffect = image.ArtisticEffect != ImageArtisticEffect.None
-            ? (int?)image.ArtisticEffect
+            ? (ImageArtisticEffect?)image.ArtisticEffect
             : null;
 
         // Standard blip adjustments — omitted when Washout/BlackWhite recolor has already emitted lum.
@@ -4412,7 +4413,12 @@ public static class DocxWriter
             blip.Add(new XElement(A + "alphaModFix",
                 new XAttribute("amt", opacityPermille)));
         }
-        AddFreeWBlipExtensions(blip, colorTemperature, artisticEffect);
+        AddBlipExtensions(
+            blip,
+            colorTemperature,
+            artisticEffect,
+            part.HasEmbeddedPayload ? part.RelationshipId : null,
+            image.HasBakedArtisticEffectPreview);
         var blipFill = new XElement(Pic + "blipFill",
             blip,
             new XElement(A + "stretch", new XElement(A + "fillRect")));
@@ -4558,20 +4564,62 @@ public static class DocxWriter
                     spPr)));
     }
 
-    private static void AddFreeWBlipExtensions(XElement blip, long? colorTemperature, int? artisticEffect)
+    private static void AddBlipExtensions(
+        XElement blip,
+        long? colorTemperature,
+        ImageArtisticEffect? artisticEffect,
+        string? embeddedRelationshipId,
+        bool hasBakedArtisticEffectPreview)
     {
         if (colorTemperature is null && artisticEffect is null)
             return;
 
-        var ext = new XElement(A + "ext",
+        var extLst = new XElement(A + "extLst");
+        if (hasBakedArtisticEffectPreview
+            && artisticEffect is { } effect
+            && embeddedRelationshipId is not null
+            && GetOfficeArtisticEffectElementName(effect) is { } officeElementName)
+        {
+            extLst.Add(new XElement(A + "ext",
+                new XAttribute("uri", "{BEBA8EAE-BF5A-486C-A8C5-ECC9F3942E4B}"),
+                new XElement(A14 + "imgProps",
+                    new XElement(A14 + "imgLayer",
+                        new XAttribute(R + "embed", embeddedRelationshipId),
+                        new XElement(A14 + "imgEffect",
+                            new XElement(A14 + officeElementName))))));
+        }
+
+        var freeWExtension = new XElement(A + "ext",
             new XAttribute("uri", "{FREEW-BLIP-EXT-2024}"));
         XNamespace freeWExt = "http://schemas.freew.app/2024/ext";
         if (colorTemperature is { } temp)
-            ext.Add(new XElement(freeWExt + "colorTemp", new XAttribute("val", temp)));
-        if (artisticEffect is { } effect)
-            ext.Add(new XElement(freeWExt + "artisticEffect", new XAttribute("val", effect)));
-        blip.Add(new XElement(A + "extLst", ext));
+            freeWExtension.Add(new XElement(freeWExt + "colorTemp", new XAttribute("val", temp)));
+        if (artisticEffect is { } extensionEffect)
+            freeWExtension.Add(new XElement(freeWExt + "artisticEffect", new XAttribute("val", (int)extensionEffect)));
+        if (hasBakedArtisticEffectPreview)
+            freeWExtension.Add(new XElement(freeWExt + "artisticEffectBaked", new XAttribute("val", 1)));
+        extLst.Add(freeWExtension);
+        blip.Add(extLst);
     }
+
+    private static string? GetOfficeArtisticEffectElementName(ImageArtisticEffect effect) => effect switch
+    {
+        ImageArtisticEffect.Blur => "artisticBlur",
+        ImageArtisticEffect.GlowDiffused => "artisticGlowDiffused",
+        ImageArtisticEffect.GlowEdges => "artisticGlowEdges",
+        ImageArtisticEffect.PencilGrayscale => "artisticPencilGrayscale",
+        ImageArtisticEffect.PencilSketch => "artisticPencilSketch",
+        ImageArtisticEffect.LineDrawing => "artisticLineDrawing",
+        ImageArtisticEffect.Paintbrush => "artisticPaintBrush",
+        ImageArtisticEffect.PaintStrokes => "artisticPaintStrokes",
+        ImageArtisticEffect.Photocopy => "artisticPhotocopy",
+        ImageArtisticEffect.Posterize => "artisticCutout",
+        ImageArtisticEffect.Pastels => "artisticPastelsSmooth",
+        ImageArtisticEffect.Watercolor => "artisticWatercolorSponge",
+        ImageArtisticEffect.FilmGrain => "artisticFilmGrain",
+        ImageArtisticEffect.Mosaic => "artisticMosiaicBubbles",
+        _ => null,
+    };
 
     /// <summary>The DrawingML preset-geometry token (a:prstGeom/@prst) for a shape kind.</summary>
     private static string PresetGeometry(ShapeKind kind) => kind switch

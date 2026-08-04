@@ -19,6 +19,7 @@ namespace FreeW.Core.IO;
 public static class DocxReader
 {
     private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+    private static readonly XNamespace A14 = "http://schemas.microsoft.com/office/drawing/2010/main";
     private const string FreeWChartDesignExtensionUri = "urn:freew:chart-design:2026";
     private const string LegacyFreeWChartDesignExtensionUri = "{FW-ChartDesign-2026}";
 
@@ -4378,6 +4379,13 @@ public static class DocxReader
                 }
             }
 
+            var officeArtisticEffect = ReadOfficeArtisticEffect(blip);
+            if (officeArtisticEffect != ImageArtisticEffect.None)
+            {
+                image.ArtisticEffect = officeArtisticEffect;
+                image.HasBakedArtisticEffectPreview = true;
+            }
+
             // FreeW private image extensions. Older packages used direct freew:* attributes on a:blip;
             // current packages use a:extLst so Word's schema validator accepts the document.
             var tempRaw = blip.Attribute(FreeWExt + "colorTemp")?.Value
@@ -4390,6 +4398,9 @@ public static class DocxReader
             if (artisticRaw is not null && int.TryParse(artisticRaw, out var artisticId)
                 && Enum.IsDefined(typeof(ImageArtisticEffect), artisticId))
                 image.ArtisticEffect = (ImageArtisticEffect)artisticId;
+            var artisticBakedRaw = ReadFreeWBlipExtensionValue(blip, "artisticEffectBaked");
+            if (artisticBakedRaw is "1" or "true")
+                image.HasBakedArtisticEffectPreview = true;
 
             // Standard adjustments — only when no recolor mode already consumed lum/alphaModFix.
             if (image.RecolorMode == ImageRecolorMode.None)
@@ -4537,6 +4548,35 @@ public static class DocxReader
             if (!string.IsNullOrEmpty(dash) && dash != "solid")
                 image.BorderDash = dash;
         }
+    }
+
+    private static ImageArtisticEffect ReadOfficeArtisticEffect(XElement blip)
+    {
+        foreach (var effectElement in blip.Descendants(A14 + "imgEffect").Elements())
+        {
+            var effect = effectElement.Name.LocalName switch
+            {
+                "artisticBlur" => ImageArtisticEffect.Blur,
+                "artisticGlowDiffused" => ImageArtisticEffect.GlowDiffused,
+                "artisticGlowEdges" => ImageArtisticEffect.GlowEdges,
+                "artisticPencilGrayscale" => ImageArtisticEffect.PencilGrayscale,
+                "artisticPencilSketch" => ImageArtisticEffect.PencilSketch,
+                "artisticLineDrawing" => ImageArtisticEffect.LineDrawing,
+                "artisticPaintBrush" => ImageArtisticEffect.Paintbrush,
+                "artisticPaintStrokes" => ImageArtisticEffect.PaintStrokes,
+                "artisticPhotocopy" => ImageArtisticEffect.Photocopy,
+                "artisticCutout" => ImageArtisticEffect.Posterize,
+                "artisticPastelsSmooth" => ImageArtisticEffect.Pastels,
+                "artisticWatercolorSponge" => ImageArtisticEffect.Watercolor,
+                "artisticFilmGrain" => ImageArtisticEffect.FilmGrain,
+                "artisticMosiaicBubbles" or "artisticMosaicBubbles" => ImageArtisticEffect.Mosaic,
+                _ => ImageArtisticEffect.None,
+            };
+            if (effect != ImageArtisticEffect.None)
+                return effect;
+        }
+
+        return ImageArtisticEffect.None;
     }
 
     private static string? ReadFreeWBlipExtensionValue(XElement blip, string localName)
