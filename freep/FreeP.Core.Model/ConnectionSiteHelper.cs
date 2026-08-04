@@ -50,7 +50,7 @@ public static class ConnectionSiteHelper
     /// <returns>The (x, y) point in EMU relative to the slide top-left corner.</returns>
     public static (long X, long Y) Resolve(SlideShape shape, int siteIndex)
     {
-        if (shape.CustomGeometry.Count > 0)
+        if (shape.CustomGeometry.Count > 0 || shape.CustomConnectionSites.Count > 0)
         {
             var customSite = ResolveCustomGeometrySite(shape, siteIndex);
             if (customSite.HasValue)
@@ -76,7 +76,31 @@ public static class ConnectionSiteHelper
     /// </summary>
     private static (long X, long Y)? ResolveCustomGeometrySite(SlideShape shape, int siteIndex)
     {
-        if (siteIndex is < 0 or > 3)
+        if (siteIndex < 0)
+            return null;
+
+        // Prefer the authored a:custGeom/a:cxnLst position. Unlike path-derived
+        // extrema, this is the connection-site contract PowerPoint uses for custom
+        // geometry. Keep guide expressions on the model for round-trip and resolve
+        // the common literal/edge tokens here; an unrecognized guide still falls
+        // through to the existing outline heuristic.
+        if (siteIndex < shape.CustomConnectionSites.Count)
+        {
+            var authored = shape.CustomConnectionSites[siteIndex];
+            var pathW = shape.CustomGeometry.FirstOrDefault(path => path.PathW > 0)?.PathW
+                ?? Math.Max(1, shape.ExtentCxEmu);
+            var pathH = shape.CustomGeometry.FirstOrDefault(path => path.PathH > 0)?.PathH
+                ?? Math.Max(1, shape.ExtentCyEmu);
+            if (TryResolveGeometryCoordinate(authored.X, pathW, pathH, horizontal: true, out var x)
+                && TryResolveGeometryCoordinate(authored.Y, pathW, pathH, horizontal: false, out var y))
+            {
+                return (
+                    (long)Math.Round(shape.OffsetXEmu + x / pathW * shape.ExtentCxEmu),
+                    (long)Math.Round(shape.OffsetYEmu + y / pathH * shape.ExtentCyEmu));
+            }
+        }
+
+        if (siteIndex > 3)
             return null;
 
         var candidates = new List<(double X, double Y)>();
@@ -119,6 +143,36 @@ public static class ConnectionSiteHelper
         };
 
         return ((long)Math.Round(selected.X), (long)Math.Round(selected.Y));
+    }
+
+    private static bool TryResolveGeometryCoordinate(
+        string? token,
+        long pathW,
+        long pathH,
+        bool horizontal,
+        out double value)
+    {
+        value = 0;
+        if (string.IsNullOrWhiteSpace(token))
+            return false;
+
+        if (double.TryParse(token, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out value))
+            return true;
+
+        var normalized = token.Trim().ToLowerInvariant();
+        var extent = horizontal ? pathW : pathH;
+        var otherExtent = horizontal ? pathH : pathW;
+        value = normalized switch
+        {
+            "l" or "t" => 0,
+            "r" or "b" => extent,
+            "hc" or "vc" => extent / 2.0,
+            "ss" => Math.Min(extent, otherExtent),
+            "ls" => Math.Max(extent, otherExtent),
+            _ => double.NaN,
+        };
+        return !double.IsNaN(value);
     }
 
     private static (long X, long Y) TransformSite(SlideShape shape, (long X, long Y) site)

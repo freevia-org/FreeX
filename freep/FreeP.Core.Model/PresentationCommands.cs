@@ -2074,6 +2074,7 @@ public sealed class ChangeAutoShapeKindCommand : IPresentationCommand
     private DrawingShapeKind _oldKind;
     private Dictionary<string, double>? _oldAdjustments;
     private List<CustomGeometryPath>? _oldCustomGeometry;
+    private List<CustomGeometryConnectionSite>? _oldCustomConnectionSites;
 
     public ChangeAutoShapeKindCommand(int slideIndex, uint shapeId, DrawingShapeKind newKind)
     {
@@ -2099,9 +2100,11 @@ public sealed class ChangeAutoShapeKindCommand : IPresentationCommand
         _oldAdjustments = new Dictionary<string, double>(shape.PresetGeometryAdjustments,
             StringComparer.OrdinalIgnoreCase);
         _oldCustomGeometry = CloneCustomGeometry(shape.CustomGeometry);
+        _oldCustomConnectionSites = CloneCustomConnectionSites(shape.CustomConnectionSites);
         shape.AutoShapeKind = _newKind;
         shape.PresetGeometryAdjustments.Clear();
         shape.CustomGeometry.Clear();
+        shape.CustomConnectionSites.Clear();
     }
 
     public void Revert(Presentation presentation)
@@ -2121,6 +2124,9 @@ public sealed class ChangeAutoShapeKindCommand : IPresentationCommand
         shape.CustomGeometry.Clear();
         if (_oldCustomGeometry is not null)
             shape.CustomGeometry.AddRange(CloneCustomGeometry(_oldCustomGeometry));
+        shape.CustomConnectionSites.Clear();
+        if (_oldCustomConnectionSites is not null)
+            shape.CustomConnectionSites.AddRange(CloneCustomConnectionSites(_oldCustomConnectionSites));
     }
 
     private static List<CustomGeometryPath> CloneCustomGeometry(IEnumerable<CustomGeometryPath> paths) =>
@@ -2135,6 +2141,15 @@ public sealed class ChangeAutoShapeKindCommand : IPresentationCommand
             };
             copy.Segments.AddRange(path.Segments);
             return copy;
+        }).ToList();
+
+    private static List<CustomGeometryConnectionSite> CloneCustomConnectionSites(
+        IEnumerable<CustomGeometryConnectionSite> sites) =>
+        sites.Select(site => new CustomGeometryConnectionSite
+        {
+            X = site.X,
+            Y = site.Y,
+            Angle = site.Angle,
         }).ToList();
 }
 

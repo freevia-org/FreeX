@@ -175,6 +175,32 @@ public sealed class ConnectorAttachmentTests
     }
 
     [Fact]
+    public void ConnectionSiteHelper_CustomGeometryUsesAuthoredConnectionSites()
+    {
+        var shape = MakeRect(1, 1000, 2000, 2000, 1000);
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, 0, 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 100, 100));
+        shape.CustomGeometry.Add(path);
+        shape.CustomConnectionSites.Add(new CustomGeometryConnectionSite
+        {
+            X = "75", Y = "20", Angle = "5400000"
+        });
+        shape.CustomConnectionSites.Add(new CustomGeometryConnectionSite
+        {
+            X = "hc", Y = "b"
+        });
+        shape.CustomConnectionSites.Add(new CustomGeometryConnectionSite
+        {
+            X = "r", Y = "vc"
+        });
+
+        ConnectionSiteHelper.Resolve(shape, 0).Should().Be((2500L, 2200L));
+        ConnectionSiteHelper.Resolve(shape, 1).Should().Be((2000L, 3000L));
+        ConnectionSiteHelper.Resolve(shape, 2).Should().Be((3000L, 2500L));
+    }
+
+    [Fact]
     public void MoveShape_ReroutesAttachedConnectorToCustomGeometryOutline()
     {
         var (_, bus, slide) = MakePresentation();

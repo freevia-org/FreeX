@@ -393,6 +393,10 @@ public sealed class PresentationCommandTests
         path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, 0, 0));
         path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 100, 100));
         shape.CustomGeometry.Add(path);
+        shape.CustomConnectionSites.Add(new CustomGeometryConnectionSite
+        {
+            X = "hc", Y = "t", Angle = "0"
+        });
         p.Slides[0].Shapes.Add(shape);
 
         bus.Execute(new ChangeAutoShapeKindCommand(0, shape.Id, DrawingShapeKind.Diamond));
@@ -402,6 +406,7 @@ public sealed class PresentationCommandTests
         shape.ExtentCyEmu.Should().Be(400);
         shape.PresetGeometryAdjustments.Should().BeEmpty();
         shape.CustomGeometry.Should().BeEmpty();
+        shape.CustomConnectionSites.Should().BeEmpty();
 
         bus.Undo();
 
@@ -409,6 +414,8 @@ public sealed class PresentationCommandTests
         shape.PresetGeometryAdjustments["adj"].Should().Be(24000);
         shape.CustomGeometry.Should().HaveCount(1);
         shape.CustomGeometry[0].Segments.Should().HaveCount(2);
+        shape.CustomConnectionSites.Should().ContainSingle();
+        shape.CustomConnectionSites[0].X.Should().Be("hc");
     }
 
     [Fact]

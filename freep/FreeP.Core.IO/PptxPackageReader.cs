@@ -4836,6 +4836,26 @@ public static class PptxPackageReader
 
     private static void ReadCustGeom(XElement custGeom, SlideShape shape)
     {
+        var cxnLst = custGeom.Element(A + "cxnLst");
+        if (cxnLst is not null)
+        {
+            foreach (var cxnEl in cxnLst.Elements(A + "cxn"))
+            {
+                var pos = cxnEl.Element(A + "pos");
+                var x = pos?.Attribute("x")?.Value;
+                var y = pos?.Attribute("y")?.Value;
+                if (x is null || y is null)
+                    continue;
+
+                shape.CustomConnectionSites.Add(new CustomGeometryConnectionSite
+                {
+                    X = x,
+                    Y = y,
+                    Angle = cxnEl.Attribute("ang")?.Value ?? string.Empty,
+                });
+            }
+        }
+
         var pathLst = custGeom.Element(A + "pathLst");
         if (pathLst is null) return;
 

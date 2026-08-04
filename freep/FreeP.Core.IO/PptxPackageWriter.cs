@@ -3193,8 +3193,9 @@ public static class PptxPackageWriter
 
         // Geometry: custom or preset
         XElement geomEl;
-        if (forcePrst is null && shape.CustomGeometry.Count > 0)
-            geomEl = BuildCustGeomEl(shape.CustomGeometry);
+        if (forcePrst is null &&
+            (shape.CustomGeometry.Count > 0 || shape.CustomConnectionSites.Count > 0))
+            geomEl = BuildCustGeomEl(shape.CustomGeometry, shape.CustomConnectionSites);
         else
             geomEl = new XElement(A + "prstGeom",
                 new XAttribute("prst", forcePrst ?? PptxShapeKindMap.ToPreset(shape.AutoShapeKind)),
@@ -3223,7 +3224,9 @@ public static class PptxPackageWriter
         return avLst;
     }
 
-    private static XElement BuildCustGeomEl(List<CustomGeometryPath> paths)
+    private static XElement BuildCustGeomEl(
+        List<CustomGeometryPath> paths,
+        List<CustomGeometryConnectionSite> connectionSites)
     {
         var pathEls = new List<XElement>();
         foreach (var path in paths)
@@ -3272,11 +3275,22 @@ public static class PptxPackageWriter
             pathEls.Add(pathEl);
         }
 
+        var cxnElements = connectionSites.Select(site =>
+        {
+            var cxn = new XElement(A + "cxn",
+                new XElement(A + "pos",
+                    new XAttribute("x", site.X),
+                    new XAttribute("y", site.Y)));
+            if (!string.IsNullOrWhiteSpace(site.Angle))
+                cxn.SetAttributeValue("ang", site.Angle);
+            return cxn;
+        });
+
         return new XElement(A + "custGeom",
             new XElement(A + "avLst"),
             new XElement(A + "gdLst"),
             new XElement(A + "ahLst"),
-            new XElement(A + "cxnLst"),
+            new XElement(A + "cxnLst", cxnElements),
             new XElement(A + "rect",
                 new XAttribute("l", "0"), new XAttribute("t", "0"),
                 new XAttribute("r", "r"), new XAttribute("b", "b")),
