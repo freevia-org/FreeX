@@ -56,7 +56,7 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
                 _keepFormatting,
                 new TextBlock { Text = TableOfAuthoritiesDialogPlanner.TabLeaderLabel, Margin = new Thickness(0, 0, 0, 4) },
                 _leader,
-                AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 1)),
+                AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)),
             },
         };
         Opened += (_, _) =>

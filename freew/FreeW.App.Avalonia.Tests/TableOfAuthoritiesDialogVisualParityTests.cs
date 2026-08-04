@@ -78,6 +78,29 @@ public sealed class TableOfAuthoritiesDialogVisualParityTests
         }, CancellationToken.None);
     }
 
+    [Theory]
+    [InlineData("initial")]
+    [InlineData("populated")]
+    [InlineData("validation-error")]
+    public async Task Dialog_uses_Wpf_action_row_vertical_geometry_for_each_evidence_state(string state)
+    {
+        await Session.Dispatch(() =>
+        {
+            var options = TableOfAuthoritiesDialogPlanner.BuildEvidenceOptions(state);
+            var dialog = (TableOfAuthoritiesDialog)Activator.CreateInstance(
+                typeof(TableOfAuthoritiesDialog),
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                binder: null,
+                args: [options],
+                culture: null)!;
+            var root = (StackPanel)dialog.Content!;
+            var actionRow = root.Children.OfType<StackPanel>().Single();
+
+            root.Margin.Should().Be(new Thickness(16, 16, 17, 16));
+            actionRow.Margin.Should().Be(new Thickness(0, 12, 0, 0));
+        }, CancellationToken.None);
+    }
+
     private static TableOfAuthoritiesDialog CreateDialog() =>
         (TableOfAuthoritiesDialog)Activator.CreateInstance(
             typeof(TableOfAuthoritiesDialog),
