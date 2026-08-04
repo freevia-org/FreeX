@@ -2368,7 +2368,7 @@ public static class PptxPackageWriter
         int presetId = hasRawPreset ? anim.RawPresetId!.Value : mappedPresetId;
         var subtypeAttr = hasRawPreset && anim.RawPresetSubtype is not null
             ? anim.RawPresetSubtype
-            : anim.Preset is AnimationPreset.Grow or AnimationPreset.Shrink
+            : anim.Preset is AnimationPreset.Grow or AnimationPreset.Shrink or AnimationPreset.GrowWithColor
                 ? "0"
                 : anim.EffectSubtype ?? (anim.Preset == AnimationPreset.Split
                     ? PptxAnimationMap.AnimationDirectionToSubtype(anim.Direction is
@@ -2398,7 +2398,7 @@ public static class PptxPackageWriter
         var childTimingItems = new List<object>();
         if (animEffectEl is not null)
             childTimingItems.Add(animEffectEl);
-        if (anim.Preset is AnimationPreset.Grow or AnimationPreset.Shrink)
+        if (anim.Preset is AnimationPreset.Grow or AnimationPreset.Shrink or AnimationPreset.GrowWithColor)
             childTimingItems.Add(BuildScaleBehaviorEl(anim, ref nodeId));
 
         var setEl = new XElement(P + "set",
