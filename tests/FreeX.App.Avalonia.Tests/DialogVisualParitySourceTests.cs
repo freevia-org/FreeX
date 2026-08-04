@@ -153,6 +153,20 @@ public sealed class DialogVisualParitySourceTests
     }
 
     [Fact]
+    public void InsertHyperlinkDialog_UsesInactiveWpfSelectionForFocusedAddressEditor()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("var inactiveLinkTypeSelection = Brush(246, 246, 246);");
+        source.Should().Contain("new Style(x => x.OfType<ListBoxItem>().Class(\":selected\"))");
+        source.Should().Contain("new Style(x => x.OfType<ListBoxItem>().Class(\":selected\").Class(\":pointerover\"))");
+        source.Should().Contain("linkTypeBox.Styles.Add(linkTypeSelectionStyle);");
+        source.Should().Contain("linkTypeBox.Styles.Add(linkTypePointerSelectionStyle);");
+        source.Should().Contain("targetBox.Focus();");
+        source.Should().Contain("targetBox.SelectAll();");
+    }
+
+    [Fact]
     public void SubtotalDialog_UsesSharedFixtureStateAndLocalizedAccessKeyControls()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
