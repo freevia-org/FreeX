@@ -192,6 +192,8 @@ public static class AvaloniaCompactDialogChrome
             button.IsDefault = true;
         button.HorizontalContentAlignment = HorizontalAlignment.Center;
         button.VerticalContentAlignment = VerticalAlignment.Center;
+        if (button.Content is string content)
+            AvaloniaDialogButtonContent.Apply(button, content);
     }
 
     public static void ApplyTextBox(TextBox textBox, AvaloniaCompactDialogChromeStyle style, bool fixedHeight = true)
@@ -978,12 +980,11 @@ public static class AvaloniaCompactDialogChrome
 
         var button = new Button
         {
-            Content = content,
             IsDefault = isDefault,
             IsCancel = isCancel,
         };
         ApplyButton(button, style, minWidth, isDefault);
-        global::Avalonia.Automation.AutomationProperties.SetName(button, ShellStrings.Current.CreateAutomationName(content));
+        AvaloniaDialogButtonContent.Apply(button, content);
         button.Click += (_, _) => action();
         return button;
     }

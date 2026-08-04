@@ -57,14 +57,11 @@ public static class AvaloniaDialogButtonRowFactory
     {
         var button = new Button
         {
-            Content = content,
             IsDefault = isDefault,
             IsCancel = isCancel,
         };
         AvaloniaCompactDialogChrome.ApplyButton(button, style, buttonWidth, isDefault);
-        global::Avalonia.Automation.AutomationProperties.SetName(
-            button,
-            Free.Shared.Shell.ShellStrings.Current.CreateAutomationName(content));
+        AvaloniaDialogButtonContent.Apply(button, content);
         button.Click += (_, _) => action();
         return button;
     }
