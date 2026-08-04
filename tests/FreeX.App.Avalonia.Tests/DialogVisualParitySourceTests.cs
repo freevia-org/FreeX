@@ -160,7 +160,9 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(");
         source.Should().Contain("ListBoxItemPadding = new Thickness(4, 0)");
         source.Should().Contain("var inactiveLinkTypeSelection = Brush(246, 246, 246);");
-        source.Should().Contain("new[] { \":selected\", \":selected:focus\", \":selected:pointerover\", \":selected:focus:pointerover\" }");
+        source.Should().Contain("selector.Class(\":selected\").Class(\":focus\")");
+        source.Should().Contain("selector.Class(\":selected\").Class(\":pointerover\")");
+        source.Should().Contain("selector.Class(\":selected\").Class(\":focus\").Class(\":pointerover\")");
         source.Should().Contain("new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent)");
         source.Should().Contain("targetBox.Focus();");
         source.Should().Contain("targetBox.SelectAll();");

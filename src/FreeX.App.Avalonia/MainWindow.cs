@@ -16230,9 +16230,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // address editor receives initial focus.  Keep this correction local to the
         // hyperlink dialog while covering the template's focused and hover states.
         var inactiveLinkTypeSelection = Brush(246, 246, 246);
-        foreach (var selector in new[] { ":selected", ":selected:focus", ":selected:pointerover", ":selected:focus:pointerover" })
+        void AddInactiveLinkTypeSelectionStyle(Func<Selector, Selector> select)
         {
-            linkTypeBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>().Class(selector))
+            linkTypeBox.Styles.Add(new Style(x => select(x.OfType<ListBoxItem>()))
             {
                 Setters =
                 {
@@ -16243,6 +16243,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 },
             });
         }
+        AddInactiveLinkTypeSelectionStyle(selector => selector.Class(":selected"));
+        AddInactiveLinkTypeSelectionStyle(selector => selector.Class(":selected").Class(":focus"));
+        AddInactiveLinkTypeSelectionStyle(selector => selector.Class(":selected").Class(":pointerover"));
+        AddInactiveLinkTypeSelectionStyle(selector => selector.Class(":selected").Class(":focus").Class(":pointerover"));
         AutomationProperties.SetName(linkTypeBox, UiText.Get("Hyperlink_LinkTo2"));
         AutomationProperties.SetAutomationId(linkTypeBox, "HyperlinkLinkTypeBox");
 
