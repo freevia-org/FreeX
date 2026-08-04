@@ -987,6 +987,38 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_MediaVolumePane_AppliesSelectedMediaVolume()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var mediaShape = new SlideShape
+            {
+                Id = 723,
+                Name = "Demo video",
+                Kind = SlideShapeKind.Media,
+                Media = new MediaInfo { IsVideo = true, VolumePercent = 80 }
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
+            window.Editor.Select(mediaShape.Id);
+
+            window.ShowMediaCaptionPane();
+            window.MediaVolumePercent.Should().Be(80);
+
+            window.SetMediaVolumePaneInput(25);
+            window.MediaVolumePercent.Should().Be(25);
+            window.ApplyMediaVolumePane().Should().BeTrue();
+
+            mediaShape.Media!.VolumePercent.Should().Be(25);
+            window.IsDirty.Should().BeTrue();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_ApplyProofingCorrection_UsesSharedMutationAndRefreshesPlans()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
