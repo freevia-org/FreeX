@@ -825,6 +825,21 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             FrameBorderColor = ValidateFrameBorderColor(properties.FrameBorderColor),
             FrameBorderWidthEmu = ValidateFrameBorderWidth(properties.FrameBorderWidthEmu),
             FrameBorderDash = ValidateFrameBorderDash(properties.FrameBorderDash),
+            FrameGeometry = ValidateFrameGeometry(properties.FrameGeometry),
+        };
+    }
+
+    private static string? ValidateFrameGeometry(string? value)
+    {
+        if (value is null)
+            return null;
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "rect" => "rect",
+            "roundrect" => "roundRect",
+            "ellipse" => "ellipse",
+            _ => throw new ArgumentException(
+                "Zoom frame geometry must be rect, roundRect, or ellipse.", nameof(value)),
         };
     }
 
@@ -896,6 +911,7 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             SetCrop(zoomProperty, properties);
             ZoomFrameBorderXml.Set(zoomProperty, properties.FrameBorderColor,
                 properties.FrameBorderWidthEmu, properties.FrameBorderDash);
+            ZoomFrameGeometryXml.Set(zoomProperty, properties.FrameGeometry);
         }
         patchedXml = root.ToString(SaveOptions.DisableFormatting);
         return true;
@@ -1279,6 +1295,7 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
         SetCrop(properties, _newValue);
         ZoomFrameBorderXml.Set(properties, _newValue.FrameBorderColor,
             _newValue.FrameBorderWidthEmu, _newValue.FrameBorderDash);
+        ZoomFrameGeometryXml.Set(properties, _newValue.FrameGeometry);
         patchedXml = document.Root!.ToString(SaveOptions.DisableFormatting);
         return true;
     }
@@ -1298,6 +1315,21 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
             FrameBorderColor = ValidateFrameBorderColor(properties.FrameBorderColor),
             FrameBorderWidthEmu = ValidateFrameBorderWidth(properties.FrameBorderWidthEmu),
             FrameBorderDash = ValidateFrameBorderDash(properties.FrameBorderDash),
+            FrameGeometry = ValidateFrameGeometry(properties.FrameGeometry),
+        };
+    }
+
+    private static string? ValidateFrameGeometry(string? value)
+    {
+        if (value is null)
+            return null;
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "rect" => "rect",
+            "roundrect" => "roundRect",
+            "ellipse" => "ellipse",
+            _ => throw new ArgumentException(
+                "Zoom frame geometry must be rect, roundRect, or ellipse.", nameof(value)),
         };
     }
 

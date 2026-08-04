@@ -16,6 +16,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private readonly TextBox _frameBorderColor;
     private readonly TextBox _frameBorderWidth;
     private readonly ComboBox _frameBorderDash;
+    private readonly ComboBox _frameGeometry;
     private readonly TextBox _cropEdges;
     private readonly IReadOnlyList<SummaryZoomTarget> _summaryTargets;
     private readonly IReadOnlyList<ZoomObjectProperties> _summaryTileProperties;
@@ -98,6 +99,14 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         };
         _frameBorderEnabled.Checked += (_, _) => SyncFrameBorderState();
         _frameBorderEnabled.Unchecked += (_, _) => SyncFrameBorderState();
+        _frameGeometry = new ComboBox
+        {
+            ItemsSource = ZoomObjectPropertiesPlanner.FrameGeometryOptions,
+            SelectedItem = ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
+                geometry => string.Equals(geometry, current.FrameGeometry, StringComparison.OrdinalIgnoreCase))
+                ?? "rect",
+            MinWidth = 180,
+        };
         _cropEdges = new TextBox
         {
             Text = ZoomObjectPropertiesPlanner.FormatCropEdges(current),
@@ -140,6 +149,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         AddRow(grid, row++, "Border color:", _frameBorderColor);
         AddRow(grid, row++, "Border width (pt):", _frameBorderWidth);
         AddRow(grid, row++, "Border dash:", _frameBorderDash);
+        AddRow(grid, row++, "Frame shape:", _frameGeometry);
         AddRow(grid, row++, "Preview crop (%):", _cropEdges);
         if (_summaryTile is not null)
         {
@@ -237,6 +247,16 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                 MessageBoxImage.Warning);
             return;
         }
+        if (!ZoomObjectPropertiesPlanner.TryParseFrameGeometry(
+                _frameGeometry.SelectedItem?.ToString(), out var frameGeometry))
+        {
+            MessageBox.Show(this,
+                ZoomObjectPropertiesPlanner.InvalidFrameGeometryMessage,
+                ZoomObjectPropertiesPlanner.DialogTitle,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
         if (!ZoomObjectPropertiesPlanner.TryParseCropEdges(
                 _cropEdges.Text, out var cropLeft, out var cropTop, out var cropRight, out var cropBottom))
         {
@@ -278,7 +298,8 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             cropBottom,
             frameBorderColor,
             frameBorderWidth,
-            frameBorderDash);
+            frameBorderDash,
+            frameGeometry);
         if (_summaryTile is not null && _summaryTile.SelectedIndex >= 0
             && _summaryTile.SelectedIndex < _summaryTargets.Count)
         {
@@ -309,6 +330,9 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _frameBorderDash.SelectedItem = properties.FrameBorderDash ?? OutlineDash.Solid;
         _frameBorderEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderEnabled(properties);
         SyncFrameBorderState();
+        _frameGeometry.SelectedItem = ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
+            geometry => string.Equals(geometry, properties.FrameGeometry, StringComparison.OrdinalIgnoreCase))
+            ?? "rect";
         _cropEdges.Text = ZoomObjectPropertiesPlanner.FormatCropEdges(properties);
         _returnToParent.IsChecked = properties.ReturnToParent ?? true;
         _showBackground.IsChecked = properties.ShowBackground ?? true;

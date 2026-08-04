@@ -19,6 +19,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private readonly TextBox _frameBorderColor;
     private readonly TextBox _frameBorderWidth;
     private readonly ComboBox _frameBorderDash;
+    private readonly ComboBox _frameGeometry;
     private readonly TextBox _cropEdges;
     private readonly IReadOnlyList<SummaryZoomTarget> _summaryTargets;
     private readonly IReadOnlyList<ZoomObjectProperties> _summaryTileProperties;
@@ -89,6 +90,14 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderEnabled(current),
         };
         _frameBorderEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
+        _frameGeometry = new ComboBox
+        {
+            ItemsSource = ZoomObjectPropertiesPlanner.FrameGeometryOptions,
+            SelectedItem = ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
+                geometry => string.Equals(geometry, current.FrameGeometry, StringComparison.OrdinalIgnoreCase))
+                ?? "rect",
+            MinWidth = 180,
+        };
         _cropEdges = new TextBox
         {
             Text = ZoomObjectPropertiesPlanner.FormatCropEdges(current),
@@ -133,6 +142,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             Row("Border color:", _frameBorderColor),
             Row("Border width (pt):", _frameBorderWidth),
             Row("Border dash:", _frameBorderDash),
+            Row("Frame shape:", _frameGeometry),
             Row("Preview crop (%):", _cropEdges),
         };
         if (_summaryTile is not null && _summaryOffset is not null && _summaryScale is not null)
@@ -222,6 +232,15 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                 ZoomObjectPropertiesPlanner.DialogTitle);
             return;
         }
+        if (!ZoomObjectPropertiesPlanner.TryParseFrameGeometry(
+                _frameGeometry.SelectedItem?.ToString(), out var frameGeometry))
+        {
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                this,
+                ZoomObjectPropertiesPlanner.InvalidFrameGeometryMessage,
+                ZoomObjectPropertiesPlanner.DialogTitle);
+            return;
+        }
         if (!ZoomObjectPropertiesPlanner.TryParseCropEdges(
                 _cropEdges.Text, out var cropLeft, out var cropTop, out var cropRight, out var cropBottom))
         {
@@ -261,7 +280,8 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             cropBottom,
             frameBorderColor,
             frameBorderWidth,
-            frameBorderDash);
+            frameBorderDash,
+            frameGeometry);
         if (_summaryTile is not null && _summaryTile.SelectedIndex >= 0
             && _summaryTile.SelectedIndex < _summaryTargets.Count)
         {
@@ -292,6 +312,9 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         _frameBorderDash.SelectedItem = properties.FrameBorderDash ?? OutlineDash.Solid;
         _frameBorderEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderEnabled(properties);
         SyncFrameBorderState();
+        _frameGeometry.SelectedItem = ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
+            geometry => string.Equals(geometry, properties.FrameGeometry, StringComparison.OrdinalIgnoreCase))
+            ?? "rect";
         _cropEdges.Text = ZoomObjectPropertiesPlanner.FormatCropEdges(properties);
         _returnToParent.IsChecked = properties.ReturnToParent ?? true;
         _showBackground.IsChecked = properties.ShowBackground ?? true;
