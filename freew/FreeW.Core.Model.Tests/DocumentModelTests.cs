@@ -58,6 +58,40 @@ public class DocumentModelTests
         paragraph.StyleId.Should().Be("Heading2");
     }
 
+    [Fact]
+    public void DesignCatalogCommand_Restores_defaults_theme_and_affected_styles()
+    {
+        var document = TextDocument.CreateEmpty();
+        var context = new DocContext(document);
+        var bus = new DocumentCommandBus(context);
+        var defaultRun = document.DefaultRun;
+        var defaultParagraph = document.DefaultParagraph;
+        var theme = document.Theme;
+        var styleSnapshots = document.Styles.ToDictionary(
+            entry => entry.Key,
+            entry => (entry.Value.Run, entry.Value.Paragraph));
+
+        bus.Execute(new DesignCatalogCommand(
+            "Elegant Style Set",
+            doc => DocumentStyleSet.Apply(doc, DocumentStyleSet.FindByName("Elegant")!)));
+        document.DefaultRun.FontFamily.Should().Be("Georgia");
+        document.Styles["Heading1"].Run.FontFamily.Should().Be("Cambria");
+
+        bus.Undo();
+        document.DefaultRun.Should().Be(defaultRun);
+        document.DefaultParagraph.Should().Be(defaultParagraph);
+        document.Theme.Should().Be(theme);
+        foreach (var (styleId, snapshot) in styleSnapshots)
+        {
+            document.Styles[styleId].Run.Should().Be(snapshot.Run);
+            document.Styles[styleId].Paragraph.Should().Be(snapshot.Paragraph);
+        }
+
+        bus.Redo();
+        document.DefaultRun.FontFamily.Should().Be("Georgia");
+        document.Styles["Heading1"].Run.FontFamily.Should().Be("Cambria");
+    }
+
     private sealed class DocContext(TextDocument document) : IDocumentCommandContext
     {
         public TextDocument Document { get; } = document;
