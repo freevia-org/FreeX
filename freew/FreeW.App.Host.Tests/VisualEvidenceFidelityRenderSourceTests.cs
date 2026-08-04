@@ -40,6 +40,19 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
+    public void FidelityRender_ComposesOverflowingPlainFootnotesThroughCanonicalFlowReservations()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+
+        source.Should().Contain("TryApplyPlainFootnoteContinuationReservations(");
+        source.Should().Contain("EstimatedHeightDip + trailingReserveDip > contentHeightDip");
+        source.Should().Contain("VerticalAnchor = FigureVerticalAnchor.ContentBottom");
+        source.Should().Contain("usesFragmentedFootnoteFlow ? 0 : footnoteReserveDip");
+        source.Should().Contain("BuildFragmentedFootnotePageMap(");
+        source.Should().Contain("BuildFootnoteContinuationRegion(");
+    }
+
+    [Fact]
     public void FidelityRender_CalibratesTheExactImportedGlowBlueWaveRasterFrame()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));

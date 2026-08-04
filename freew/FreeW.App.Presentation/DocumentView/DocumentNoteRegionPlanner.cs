@@ -156,7 +156,7 @@ public static class DocumentNoteRegionPlanner
             return new DocumentFootnoteContinuationPlan([]);
 
         var lineHeight = NoteTextFontSizePt * PxPerPoint * 1.25;
-        var charsPerLine = ApproximateCharsPerLine(contentWidthDip);
+        var charsPerLine = ApproximateContinuationCharsPerLine(contentWidthDip);
         var states = rows.Select(row => new FootnoteFragmentState(
             row,
             row.Text.ReplaceLineEndings(" ").Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList())).ToList();
@@ -486,6 +486,12 @@ public static class DocumentNoteRegionPlanner
     {
         var usableWidth = Math.Max(80, contentWidthDip - 20);
         return Math.Max(12, (int)Math.Floor(usableWidth / 6.0));
+    }
+
+    private static int ApproximateContinuationCharsPerLine(double contentWidthDip)
+    {
+        var usableWidth = Math.Max(80, contentWidthDip - 20);
+        return Math.Max(12, (int)Math.Floor(usableWidth / 7.4));
     }
 
     private static int WordsThatFit(IReadOnlyList<string> words, int maxCharacters)
