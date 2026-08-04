@@ -4,6 +4,7 @@ public enum ChartTextTarget
 {
     Chart,
     Title,
+    Legend,
 }
 
 /// <summary>Undoable chart-wide default text formatting edited by the chart text dialog.</summary>

@@ -215,6 +215,7 @@ public static class SlideCloner
             PlotAreaOutline = src.PlotAreaOutline,
             LegendManualLayout = CloneChartManualLayout(src.LegendManualLayout),
             LegendOverlay = src.LegendOverlay,
+            LegendTextStyle = CloneChartTextStyle(src.LegendTextStyle),
             VaryColors = src.VaryColors,
             CategoryAxis = CloneChartAxis(src.CategoryAxis),
             ValueAxis    = CloneChartAxis(src.ValueAxis),

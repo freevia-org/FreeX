@@ -173,4 +173,48 @@ public sealed class ChartTextOptionsTests
         bus.Undo();
         chart.TitleStyle.Should().BeNull();
     }
+
+    [Fact]
+    public void SetChartTextOptions_LegendTarget_RoundTripsAndPlansLegendText()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        var chart = new ChartShape { Legend = LegendPosition.Right };
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        chart.Categories.AddRange(["Q1", "Q2"]);
+        chart.Series.Add(series);
+        var shape = new SlideShape { Id = 1, Kind = SlideShapeKind.Chart, Chart = chart };
+        slide.Shapes.Add(shape);
+        presentation.Slides.Add(slide);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetChartTextOptionsCommand(
+            0,
+            shape.Id,
+            new ChartTextOptions(
+                "Calibri", 13, true, true,
+                new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79)),
+                ChartTextTarget.Legend)));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        roundTripped.LegendTextStyle.Should().NotBeNull();
+        roundTripped.LegendTextStyle!.FontSizePt.Should().Be(13);
+        roundTripped.LegendTextStyle.Bold.Should().BeTrue();
+
+        var legendText = ChartRenderPlanner.BuildScenePlan(
+            roundTripped,
+            new ChartPlanRect(0, 0, 320, 220)).LegendItems.Single().Label;
+        legendText.FontFamily.Should().Be("Calibri");
+        legendText.FontSize.Should().Be(13);
+        legendText.IsBold.Should().BeTrue();
+        legendText.IsItalic.Should().BeTrue();
+        legendText.TextColor.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+
+        bus.Undo();
+        chart.LegendTextStyle.Should().BeNull();
+    }
 }
