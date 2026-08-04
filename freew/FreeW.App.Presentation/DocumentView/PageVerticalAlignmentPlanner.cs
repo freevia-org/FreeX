@@ -9,6 +9,34 @@ namespace FreeW.App.Presentation.DocumentView;
 /// </summary>
 public static class PageVerticalAlignmentPlanner
 {
+    public readonly record struct BodyFlowStart(
+        int BlockIndex,
+        int ColumnIndex,
+        double PageSpaceY);
+
+    /// <summary>
+    /// Orders the first rendered occurrence of each body block using Word's reading order:
+    /// columns from left to right, then content from top to bottom within each column.
+    /// A block that continues into a later column still contributes only its earliest start,
+    /// so vertical justification never inserts a gap inside that block merely because it wraps.
+    /// </summary>
+    public static IReadOnlyList<BodyFlowStart> OrderBodyStartsByColumn(
+        IEnumerable<BodyFlowStart> starts)
+    {
+        ArgumentNullException.ThrowIfNull(starts);
+
+        return starts
+            .GroupBy(start => start.BlockIndex)
+            .Select(group => group
+                .OrderBy(start => start.ColumnIndex)
+                .ThenBy(start => start.PageSpaceY)
+                .First())
+            .OrderBy(start => start.ColumnIndex)
+            .ThenBy(start => start.PageSpaceY)
+            .ThenBy(start => start.BlockIndex)
+            .ToArray();
+    }
+
     public static double ResolveBodyOffset(PageVerticalAlignment alignment, double freeSpaceDip)
     {
         var freeSpace = Math.Max(0, freeSpaceDip);

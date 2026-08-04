@@ -257,8 +257,81 @@ public readonly record struct RibbonPopupFocusItem(bool IsFocusable, bool IsEnab
     public bool CanReceiveFocus => IsFocusable && IsEnabled;
 }
 
+public enum RibbonPopupKeyboardKey
+{
+    Escape,
+    Left,
+    Right,
+    Up,
+    Down,
+    Home,
+    End,
+}
+
+public enum RibbonPopupKeyboardAction
+{
+    None,
+    FocusItem,
+    OpenSubmenu,
+    CloseSubmenu,
+    ClosePopup,
+}
+
+public readonly record struct RibbonPopupKeyboardDecision(
+    RibbonPopupKeyboardAction Action,
+    int TargetIndex = -1);
+
 public static class RibbonPopupInteractionPlanner
 {
+    public static RibbonPopupKeyboardDecision PlanKey(
+        RibbonPopupKeyboardKey key,
+        IReadOnlyList<RibbonPopupFocusItem> siblings,
+        int currentIndex,
+        bool hasChildren,
+        bool isNestedSubmenu,
+        RibbonPopupInteractionContract? contract = null)
+    {
+        ArgumentNullException.ThrowIfNull(siblings);
+        contract ??= RibbonPopupInteractionContract.CollapsedGroup;
+
+        if (key == RibbonPopupKeyboardKey.Right &&
+            PlanNavigation(RibbonPopupNavigationKey.Right, hasChildren, contract) == RibbonPopupNavigation.OpenSubmenu)
+        {
+            return new RibbonPopupKeyboardDecision(RibbonPopupKeyboardAction.OpenSubmenu);
+        }
+
+        var dismissal = key switch
+        {
+            RibbonPopupKeyboardKey.Escape => PlanDismissal(
+                RibbonPopupDismissKey.Escape, isNestedSubmenu, contract),
+            RibbonPopupKeyboardKey.Left => PlanDismissal(
+                RibbonPopupDismissKey.Left, isNestedSubmenu, contract),
+            _ => RibbonPopupDismissal.None,
+        };
+        if (dismissal == RibbonPopupDismissal.CloseSubmenu)
+            return new RibbonPopupKeyboardDecision(RibbonPopupKeyboardAction.CloseSubmenu);
+        if (dismissal == RibbonPopupDismissal.ClosePopup)
+            return new RibbonPopupKeyboardDecision(RibbonPopupKeyboardAction.ClosePopup);
+
+        var traverses = isNestedSubmenu
+            ? contract.Submenu.TraverseEnabledItems
+            : contract.TraverseEnabledItems;
+        if (!traverses || currentIndex < 0 || currentIndex >= siblings.Count)
+            return new RibbonPopupKeyboardDecision(RibbonPopupKeyboardAction.None);
+
+        var targetIndex = key switch
+        {
+            RibbonPopupKeyboardKey.Home => FindFirstFocusableItem(siblings),
+            RibbonPopupKeyboardKey.End => FindLastFocusableItem(siblings),
+            RibbonPopupKeyboardKey.Up => FindAdjacentFocusableItem(siblings, currentIndex, -1),
+            RibbonPopupKeyboardKey.Down => FindAdjacentFocusableItem(siblings, currentIndex, 1),
+            _ => -1,
+        };
+        return targetIndex >= 0
+            ? new RibbonPopupKeyboardDecision(RibbonPopupKeyboardAction.FocusItem, targetIndex)
+            : new RibbonPopupKeyboardDecision(RibbonPopupKeyboardAction.None);
+    }
+
     public static RibbonPopupNavigation PlanNavigation(
         RibbonPopupNavigationKey key,
         bool hasChildren,

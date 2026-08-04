@@ -160,6 +160,31 @@ public sealed class PresentationViewZoomPlannerTests
             .Should().BeFalse();
     }
 
+    [Fact]
+    public void Zoom_border_pattern_normalizes_preset_and_colors()
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderPattern(
+                "PCT50", "#4472c4", " ffffff ", enabled: true, out var normalized)
+            .Should().BeTrue();
+
+        normalized.Should().Be(new ZoomFrameBorderPattern("pct50", "4472C4", "FFFFFF"));
+        ZoomObjectPropertiesPlanner.IsFrameBorderEnabled(
+                new ZoomObjectProperties(FrameBorderPattern: normalized))
+            .Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("not-a-pattern", "4472C4", "FFFFFF")]
+    [InlineData("pct50", "GGGGGG", "FFFFFF")]
+    [InlineData("pct50", "4472C4", "12345")]
+    public void Zoom_border_pattern_rejects_invalid_values(
+        string preset, string foreground, string background)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderPattern(
+                preset, foreground, background, enabled: true, out _)
+            .Should().BeFalse();
+    }
+
     [Theory]
     [InlineData("rect", "rect")]
     [InlineData("ROUNDRECT", "roundRect")]

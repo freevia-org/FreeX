@@ -961,9 +961,9 @@ public sealed class SlideCanvas : Control
         alphaScope?.Dispose();
 
         // P3 / Wave 26: draw the picture frame outline (shaped when HasFrameClip).
-        if (pic.Outline is ResolvedOutline.Visible visOutline)
+        if (pic.Outline is not ResolvedOutline.None)
         {
-            var pen = MakePen(visOutline);
+            var pen = MakePen(pic.Outline);
             if (pen is not null)
             {
                 if (pic.HasFrameClip && pic.PictureFrameGeometry == "ellipse")
@@ -3636,6 +3636,27 @@ public sealed class SlideCanvas : Control
             return new Pen(gradBrush, grad.WidthDip)
             {
                 DashStyle = grad.Dash switch
+                {
+                    OutlineDash.Dash           => DashStyle.Dash,
+                    OutlineDash.Dot            => DashStyle.Dot,
+                    OutlineDash.DashDot        => DashStyle.DashDot,
+                    OutlineDash.LongDash       => new DashStyle([8.0, 3.0], 0),
+                    OutlineDash.LongDashDot    => new DashStyle([8.0, 3.0, 1.0, 3.0], 0),
+                    OutlineDash.LongDashDotDot => new DashStyle([8.0, 3.0, 1.0, 3.0, 1.0, 3.0], 0),
+                    OutlineDash.SystemDash     => DashStyle.Dash,
+                    OutlineDash.SystemDot      => DashStyle.Dot,
+                    OutlineDash.SystemDashDot  => DashStyle.DashDot,
+                    _                          => null
+                }
+            };
+        }
+
+        if (outline is ResolvedOutline.Pattern pattern)
+        {
+            IBrush patternBrush = MakePatternBrush(pattern.Fill);
+            return new Pen(patternBrush, pattern.WidthDip)
+            {
+                DashStyle = pattern.Dash switch
                 {
                     OutlineDash.Dash           => DashStyle.Dash,
                     OutlineDash.Dot            => DashStyle.Dot,

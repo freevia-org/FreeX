@@ -148,6 +148,43 @@ public sealed class RibbonCollapsedGroupPresentationPlannerTests
     }
 
     [Fact]
+    public void PopupInteractionPlanner_CentralizesNestedKeyDecisionsAndSkipsDisabledItems()
+    {
+        var items = new[]
+        {
+            new RibbonPopupFocusItem(IsFocusable: true, IsEnabled: false),
+            new RibbonPopupFocusItem(IsFocusable: true, IsEnabled: true),
+            new RibbonPopupFocusItem(IsFocusable: true, IsEnabled: true),
+        };
+        var contract = RibbonPopupInteractionContract.CollapsedGroup;
+
+        RibbonPopupInteractionPlanner.PlanKey(
+                RibbonPopupKeyboardKey.Down,
+                items,
+                currentIndex: 1,
+                hasChildren: false,
+                isNestedSubmenu: false,
+                contract)
+            .Should().Be(new RibbonPopupKeyboardDecision(RibbonPopupKeyboardAction.FocusItem, 2));
+        RibbonPopupInteractionPlanner.PlanKey(
+                RibbonPopupKeyboardKey.Right,
+                items,
+                currentIndex: 1,
+                hasChildren: true,
+                isNestedSubmenu: false,
+                contract)
+            .Should().Be(new RibbonPopupKeyboardDecision(RibbonPopupKeyboardAction.OpenSubmenu));
+        RibbonPopupInteractionPlanner.PlanKey(
+                RibbonPopupKeyboardKey.Left,
+                items,
+                currentIndex: 0,
+                hasChildren: false,
+                isNestedSubmenu: true,
+                contract)
+            .Should().Be(new RibbonPopupKeyboardDecision(RibbonPopupKeyboardAction.CloseSubmenu));
+    }
+
+    [Fact]
     public void PopupChrome_UsesOneSharedRendererNeutralMetricSet()
     {
         var chrome = RibbonVisualMetrics.PopupChrome;

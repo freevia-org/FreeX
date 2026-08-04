@@ -809,6 +809,9 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
     private static ZoomObjectProperties Validate(ZoomObjectProperties properties)
     {
         ArgumentNullException.ThrowIfNull(properties);
+        if (properties.FrameBorderGradient is not null && properties.FrameBorderPattern is not null)
+            throw new ArgumentException(
+                "A Zoom frame border cannot use both gradient and pattern fills.", nameof(properties));
         if (properties.ImageType is not null
             && !string.Equals(properties.ImageType, "preview", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(properties.ImageType, "cover", StringComparison.OrdinalIgnoreCase))
@@ -827,6 +830,7 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             FrameBorderDash = ValidateFrameBorderDash(properties.FrameBorderDash),
             FrameGeometry = ValidateFrameGeometry(properties.FrameGeometry),
             FrameBorderGradient = ValidateFrameBorderGradient(properties.FrameBorderGradient),
+            FrameBorderPattern = ValidateFrameBorderPattern(properties.FrameBorderPattern),
         };
     }
 
@@ -853,6 +857,33 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
         {
             StartColor = NormalizeColor(value.StartColor, nameof(value.StartColor)),
             EndColor = NormalizeColor(value.EndColor, nameof(value.EndColor)),
+        };
+    }
+
+    private static ZoomFrameBorderPattern? ValidateFrameBorderPattern(
+        ZoomFrameBorderPattern? value)
+    {
+        if (value is null)
+            return null;
+
+        var preset = ZoomFrameBorderPatternCatalog.Normalize(value.Preset)
+            ?? throw new ArgumentException(
+                "Zoom frame border pattern preset is not supported.", nameof(value));
+
+        static string NormalizeColor(string color, string parameterName)
+        {
+            var normalized = color.Trim().TrimStart('#');
+            if (normalized.Length != 6 || !normalized.All(Uri.IsHexDigit))
+                throw new ArgumentException(
+                    "Zoom frame pattern colors must be six-digit RGB values.", parameterName);
+            return normalized.ToUpperInvariant();
+        }
+
+        return value with
+        {
+            Preset = preset,
+            ForegroundColor = NormalizeColor(value.ForegroundColor, nameof(value.ForegroundColor)),
+            BackgroundColor = NormalizeColor(value.BackgroundColor, nameof(value.BackgroundColor)),
         };
     }
 
@@ -938,7 +969,8 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             SetCrop(zoomProperty, properties);
             ZoomFrameBorderXml.Set(zoomProperty, properties.FrameBorderColor,
                 properties.FrameBorderWidthEmu, properties.FrameBorderDash,
-                properties.FrameBorderGradient);
+                properties.FrameBorderGradient,
+                properties.FrameBorderPattern);
             ZoomFrameGeometryXml.Set(zoomProperty, properties.FrameGeometry);
         }
         patchedXml = root.ToString(SaveOptions.DisableFormatting);
@@ -1323,7 +1355,8 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
         SetCrop(properties, _newValue);
         ZoomFrameBorderXml.Set(properties, _newValue.FrameBorderColor,
             _newValue.FrameBorderWidthEmu, _newValue.FrameBorderDash,
-            _newValue.FrameBorderGradient);
+            _newValue.FrameBorderGradient,
+            _newValue.FrameBorderPattern);
         ZoomFrameGeometryXml.Set(properties, _newValue.FrameGeometry);
         patchedXml = document.Root!.ToString(SaveOptions.DisableFormatting);
         return true;
@@ -1332,6 +1365,9 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
     private static ZoomObjectProperties Validate(ZoomObjectProperties properties)
     {
         ArgumentNullException.ThrowIfNull(properties);
+        if (properties.FrameBorderGradient is not null && properties.FrameBorderPattern is not null)
+            throw new ArgumentException(
+                "A Zoom frame border cannot use both gradient and pattern fills.", nameof(properties));
         if (properties.ImageType is not null
             && !string.Equals(properties.ImageType, "preview", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(properties.ImageType, "cover", StringComparison.OrdinalIgnoreCase))
@@ -1346,6 +1382,7 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
             FrameBorderDash = ValidateFrameBorderDash(properties.FrameBorderDash),
             FrameGeometry = ValidateFrameGeometry(properties.FrameGeometry),
             FrameBorderGradient = ValidateFrameBorderGradient(properties.FrameBorderGradient),
+            FrameBorderPattern = ValidateFrameBorderPattern(properties.FrameBorderPattern),
         };
     }
 
@@ -1372,6 +1409,33 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
         {
             StartColor = NormalizeColor(value.StartColor, nameof(value.StartColor)),
             EndColor = NormalizeColor(value.EndColor, nameof(value.EndColor)),
+        };
+    }
+
+    private static ZoomFrameBorderPattern? ValidateFrameBorderPattern(
+        ZoomFrameBorderPattern? value)
+    {
+        if (value is null)
+            return null;
+
+        var preset = ZoomFrameBorderPatternCatalog.Normalize(value.Preset)
+            ?? throw new ArgumentException(
+                "Zoom frame border pattern preset is not supported.", nameof(value));
+
+        static string NormalizeColor(string color, string parameterName)
+        {
+            var normalized = color.Trim().TrimStart('#');
+            if (normalized.Length != 6 || !normalized.All(Uri.IsHexDigit))
+                throw new ArgumentException(
+                    "Zoom frame pattern colors must be six-digit RGB values.", parameterName);
+            return normalized.ToUpperInvariant();
+        }
+
+        return value with
+        {
+            Preset = preset,
+            ForegroundColor = NormalizeColor(value.ForegroundColor, nameof(value.ForegroundColor)),
+            BackgroundColor = NormalizeColor(value.BackgroundColor, nameof(value.BackgroundColor)),
         };
     }
 

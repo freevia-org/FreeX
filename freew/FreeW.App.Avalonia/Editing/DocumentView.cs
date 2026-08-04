@@ -129,7 +129,7 @@ public sealed class DocumentView : Control
     // Border: bool = table-level outer border; CellBorderPlan: per-edge override planned from the model.
     private readonly List<(Rect Rect, IBrush? Fill, bool Border, TableCellBorderVisualPlan? CellBorderPlan)> _rects = new();
     private readonly List<(Rect Rect, string? ShadingHex, ParagraphBorder? Border)> _paragraphDecorations = new();
-    private readonly List<(Rect Rect, AvaloniaRenderedImage? Image, InlineImage Model, int ReflectionPreset)> _images = new();
+    private readonly List<(Rect Rect, AvaloniaRenderedImage? Image, InlineImage Model, int ReflectionPreset, int BlockIndex)> _images = new();
     // Floating images collected during layout; rendered separately from inline images with z-order.
     // BehindText=true → drawn before body text (behind); BehindText=false → drawn after (in front).
     // AV-FLSEL: BlockIndex/RunIndex added so hit-test can locate the model object.
@@ -2974,6 +2974,18 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _floatingGroups.Select(g => (g.Rect, g.BehindText, g.ZOrder, g.Children.Count)).ToList();
+        }
+    }
+
+    /// <summary>Snapshot rectangles for floating-object owner-column alignment tests.</summary>
+    internal IReadOnlyList<(int BlockIndex, int RunIndex, Rect Rect)> FloatingSnapshotRectsForTest
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingSnapshots
+                .Select(snapshot => (snapshot.BlockIndex, snapshot.RunIndex, ToAvaloniaRect(snapshot.Rect)))
+                .ToList();
         }
     }
 
@@ -6783,10 +6795,7 @@ public sealed class DocumentView : Control
         _bodyPageVerticalOffsets.Clear();
         _bodyPageVerticalJustifiedGaps.Clear();
         if (_viewMode != DocumentViewMode.PrintLayout
-            || _doc.Page.VerticalAlignment == PageVerticalAlignment.Top
-            // The current post-layout shift is page-space Y based. Keep multi-column justified
-            // pages on the existing top-flow path until the column-aware boundary model exists.
-            || (_doc.Page.VerticalAlignment == PageVerticalAlignment.Justified && _colCount > 1))
+            || _doc.Page.VerticalAlignment == PageVerticalAlignment.Top)
         {
             return;
         }
@@ -6795,61 +6804,102 @@ public sealed class DocumentView : Control
         var bodyBottoms = new double[pageCount];
         var hasBody = new bool[pageCount];
         var bodyBlockStarts = Enumerable.Range(0, pageCount)
-            .Select(_ => new Dictionary<int, double>())
+            .Select(_ => new Dictionary<int, PageVerticalAlignmentPlanner.BodyFlowStart>())
             .ToArray();
 
-        void Include(double y, double height)
+        void Include(double x, double y, double height)
         {
             var page = Math.Clamp(PageIndexFromPageSpaceY(y), 0, pageCount - 1);
             bodyBottoms[page] = Math.Max(bodyBottoms[page], y + Math.Max(0, height));
             hasBody[page] = true;
         }
 
-        void IncludeBlockStart(int block, double y)
+        void IncludeBlockStart(int block, double x, double y)
         {
+            if (block < 0)
+                return;
+
             var page = Math.Clamp(PageIndexFromPageSpaceY(y), 0, pageCount - 1);
+            var candidate = new PageVerticalAlignmentPlanner.BodyFlowStart(
+                block,
+                ColumnIndexFor(x),
+                y);
             if (!bodyBlockStarts[page].TryGetValue(block, out var existing)
-                || y < existing)
+                || candidate.ColumnIndex < existing.ColumnIndex
+                || (candidate.ColumnIndex == existing.ColumnIndex
+                    && candidate.PageSpaceY < existing.PageSpaceY))
             {
-                bodyBlockStarts[page][block] = y;
+                bodyBlockStarts[page][block] = candidate;
             }
         }
 
         foreach (var placed in _placed)
         {
-            IncludeBlockStart(placed.Block, placed.Y);
+            IncludeBlockStart(placed.Block, placed.X, placed.Y);
             if (placed.Sentinel)
                 continue;
-            Include(placed.Y, placed.LineHeight);
+            Include(placed.X, placed.Y, placed.LineHeight);
         }
         foreach (var image in _images)
-            Include(image.Rect.Y, image.Rect.Height);
+        {
+            IncludeBlockStart(image.BlockIndex, image.Rect.X, image.Rect.Y);
+            Include(image.Rect.X, image.Rect.Y, image.Rect.Height);
+        }
         foreach (var (rect, _, _, _) in _rects)
-            Include(rect.Y, rect.Height);
+            Include(rect.X, rect.Y, rect.Height);
         foreach (var (rect, _, _) in _paragraphDecorations)
-            Include(rect.Y, rect.Height);
-        foreach (var (rect, _, _, _, _, _, _, _) in _floatingImages)
-            Include(rect.Y, rect.Height);
+            Include(rect.X, rect.Y, rect.Height);
+        foreach (var (rect, _, _, _, _, _, blockIndex, _) in _floatingImages)
+        {
+            Include(rect.X, rect.Y, rect.Height);
+        }
+        foreach (var cell in _cellHits)
+        {
+            IncludeBlockStart(cell.Block, cell.Rect.X, cell.Rect.Y);
+            Include(cell.Rect.X, cell.Rect.Y, cell.Rect.Height);
+        }
         foreach (var shape in _floatingShapes)
-            Include(shape.Rect.Y, shape.Rect.Height);
+        {
+            Include(shape.Rect.X, shape.Rect.Y, shape.Rect.Height);
+        }
         foreach (var chart in _floatingCharts)
-            Include(chart.Rect.Y, chart.Rect.Height);
+        {
+            Include(chart.Rect.X, chart.Rect.Y, chart.Rect.Height);
+        }
         foreach (var wordArt in _floatingWordArts)
-            Include(wordArt.Rect.Y, wordArt.Rect.Height);
+        {
+            Include(wordArt.Rect.X, wordArt.Rect.Y, wordArt.Rect.Height);
+        }
         foreach (var smartArt in _floatingSmartArts)
-            Include(smartArt.Rect.Y, smartArt.Rect.Height);
+        {
+            Include(smartArt.Rect.X, smartArt.Rect.Y, smartArt.Rect.Height);
+        }
         foreach (var group in _floatingGroups)
-            Include(group.Rect.Y, group.Rect.Height);
+        {
+            Include(group.Rect.X, group.Rect.Y, group.Rect.Height);
+        }
         foreach (var shape in _inlineShapes)
-            Include(shape.Rect.Y, shape.Rect.Height);
+        {
+            IncludeBlockStart(shape.BlockIndex, shape.Rect.X, shape.Rect.Y);
+            Include(shape.Rect.X, shape.Rect.Y, shape.Rect.Height);
+        }
         foreach (var chart in _inlineCharts)
-            Include(chart.Rect.Y, chart.Rect.Height);
+        {
+            IncludeBlockStart(chart.BlockIndex, chart.Rect.X, chart.Rect.Y);
+            Include(chart.Rect.X, chart.Rect.Y, chart.Rect.Height);
+        }
         foreach (var wordArt in _inlineWordArts)
-            Include(wordArt.Rect.Y, wordArt.Rect.Height);
+        {
+            IncludeBlockStart(wordArt.BlockIndex, wordArt.Rect.X, wordArt.Rect.Y);
+            Include(wordArt.Rect.X, wordArt.Rect.Y, wordArt.Rect.Height);
+        }
         foreach (var smartArt in _inlineSmartArts)
-            Include(smartArt.Rect.Y, smartArt.Rect.Height);
+        {
+            IncludeBlockStart(smartArt.BlockIndex, smartArt.Rect.X, smartArt.Rect.Y);
+            Include(smartArt.Rect.X, smartArt.Rect.Y, smartArt.Rect.Height);
+        }
 
-        var justifiedBoundariesByPage = new double[pageCount][];
+        var justifiedBoundariesByPage = new PageVerticalAlignmentPlanner.BodyFlowStart[pageCount][];
         for (var page = 0; page < pageCount; page++)
         {
             var pageTop = _surfacePlan.PageTopDip(page);
@@ -6864,7 +6914,8 @@ public sealed class DocumentView : Control
             var freeSpace = Math.Max(0, availableTextHeight - usedHeight);
             if (_doc.Page.VerticalAlignment == PageVerticalAlignment.Justified)
             {
-                var starts = bodyBlockStarts[page].Values.OrderBy(value => value).ToArray();
+                var starts = PageVerticalAlignmentPlanner.OrderBodyStartsByColumn(
+                    bodyBlockStarts[page].Values);
                 justifiedBoundariesByPage[page] = starts.Skip(1).ToArray();
                 _bodyPageVerticalJustifiedGaps.Add(PageVerticalAlignmentPlanner.ResolveJustifiedParagraphGap(
                     _doc.Page.VerticalAlignment,
@@ -6880,44 +6931,66 @@ public sealed class DocumentView : Control
             }
         }
 
-        double OffsetFor(double y)
+        double OffsetForFlow(int page, int column, double flowY)
         {
             if (_doc.Page.VerticalAlignment == PageVerticalAlignment.Justified)
             {
-                var page = Math.Clamp(PageIndexFromPageSpaceY(y), 0, _bodyPageVerticalJustifiedGaps.Count - 1);
+                page = Math.Clamp(page, 0, _bodyPageVerticalJustifiedGaps.Count - 1);
                 var boundaries = justifiedBoundariesByPage[page];
-                var boundariesPassed = boundaries.Count(boundary => y >= boundary - 0.01);
+                var boundariesPassed = boundaries.Count(boundary =>
+                    boundary.ColumnIndex < column
+                    || (boundary.ColumnIndex == column && flowY >= boundary.PageSpaceY - 0.01));
                 return boundariesPassed * _bodyPageVerticalJustifiedGaps[page];
             }
 
-            var offsetPage = Math.Clamp(PageIndexFromPageSpaceY(y), 0, _bodyPageVerticalOffsets.Count - 1);
+            var offsetPage = Math.Clamp(page, 0, _bodyPageVerticalOffsets.Count - 1);
             return _bodyPageVerticalOffsets[offsetPage];
         }
 
+        double OffsetFor(double x, double y) =>
+            OffsetForFlow(
+                PageIndexFromPageSpaceY(y),
+                ColumnIndexFor(x),
+                y);
+
+        double OffsetForOwnedObject(int block, double x, double y)
+        {
+            var page = Math.Clamp(PageIndexFromPageSpaceY(y), 0, pageCount - 1);
+            if (block >= 0
+                && bodyBlockStarts[page].TryGetValue(block, out var owner))
+            {
+                return OffsetForFlow(page, owner.ColumnIndex, owner.PageSpaceY);
+            }
+
+            return OffsetFor(x, y);
+        }
+
         var shiftedPlaced = _placed
-            .Select(placed => placed with { Y = placed.Y + OffsetFor(placed.Y) })
+            .Select(placed => placed with { Y = placed.Y + OffsetFor(placed.X, placed.Y) })
             .ToList();
         _placed.Clear();
         _placed.AddRange(shiftedPlaced);
-        ShiftBodyTuples(OffsetFor);
-        ShiftBodyObjects(OffsetFor);
+        ShiftBodyTuples(OffsetFor, OffsetForOwnedObject);
+        ShiftBodyObjects(OffsetForOwnedObject);
     }
 
-    private void ShiftBodyTuples(Func<double, double> offsetFor)
+    private void ShiftBodyTuples(
+        Func<double, double, double> offsetFor,
+        Func<int, double, double, double> offsetForOwnedObject)
     {
-        static Rect ShiftRect(Rect rect, Func<double, double> offset) =>
-            new(rect.X, rect.Y + offset(rect.Y), rect.Width, rect.Height);
+        static Rect ShiftRect(Rect rect, Func<double, double, double> offset) =>
+            new(rect.X, rect.Y + offset(rect.X, rect.Y), rect.Width, rect.Height);
 
         for (var i = 0; i < _markers.Count; i++)
         {
             var marker = _markers[i];
-            _markers[i] = (marker.X, marker.Y + offsetFor(marker.Y), marker.Text, marker.Fmt);
+            _markers[i] = (marker.X, marker.Y + offsetFor(marker.X, marker.Y), marker.Text, marker.Fmt);
         }
 
         for (var i = 0; i < _tabLeaderSpans.Count; i++)
         {
             var span = _tabLeaderSpans[i];
-            _tabLeaderSpans[i] = (span.X1, span.X2, span.Y + offsetFor(span.Y), span.LineHeight,
+            _tabLeaderSpans[i] = (span.X1, span.X2, span.Y + offsetFor(span.X1, span.Y), span.LineHeight,
                 span.Leader, span.Fmt);
         }
 
@@ -6938,14 +7011,14 @@ public sealed class DocumentView : Control
         for (var i = 0; i < _images.Count; i++)
         {
             var item = _images[i];
-            _images[i] = (ShiftRect(item.Rect, offsetFor), item.Image,
-                item.Model, item.ReflectionPreset);
+            _images[i] = (ShiftRect(item.Rect, (x, y) => offsetForOwnedObject(item.BlockIndex, x, y)), item.Image,
+                item.Model, item.ReflectionPreset, item.BlockIndex);
         }
 
         for (var i = 0; i < _floatingImages.Count; i++)
         {
             var item = _floatingImages[i];
-            _floatingImages[i] = (ShiftRect(item.Rect, offsetFor), item.Image,
+            _floatingImages[i] = (ShiftRect(item.Rect, (x, y) => offsetForOwnedObject(item.BlockIndex, x, y)), item.Image,
                 item.Model, item.ReflectionPreset, item.BehindText, item.ZOrder, item.BlockIndex,
                 item.RunIndex);
         }
@@ -6953,14 +7026,14 @@ public sealed class DocumentView : Control
         for (var i = 0; i < _cellHits.Count; i++)
         {
             var item = _cellHits[i];
-            _cellHits[i] = (ShiftRect(item.Rect, offsetFor), item.Block,
+            _cellHits[i] = (ShiftRect(item.Rect, (x, y) => offsetForOwnedObject(item.Block, x, y)), item.Block,
                 item.Row, item.Col);
         }
 
         for (var i = 0; i < _shapeTextCaretStops.Count; i++)
         {
             var stop = _shapeTextCaretStops[i];
-            var offset = offsetFor(stop.Y);
+            var offset = offsetForOwnedObject(stop.BlockIndex, stop.X, stop.Y);
             _shapeTextCaretStops[i] = stop with
             {
                 Y = stop.Y + offset,
@@ -6969,76 +7042,95 @@ public sealed class DocumentView : Control
         }
     }
 
-    private void ShiftBodyObjects(Func<double, double> offsetFor)
+    private void ShiftBodyObjects(Func<int, double, double, double> offsetForOwnedObject)
     {
-        static Rect ShiftRect(Rect rect, Func<double, double> offset) =>
-            new(rect.X, rect.Y + offset(rect.Y), rect.Width, rect.Height);
+        static Rect ShiftRectBy(Rect rect, double offset) =>
+            new(rect.X, rect.Y + offset, rect.Width, rect.Height);
 
-        static DocumentFloatRect ShiftPlannerRect(DocumentFloatRect rect, Func<double, double> offset) =>
-            rect with { YDip = rect.YDip + offset(rect.YDip) };
+        static DocumentFloatRect ShiftPlannerRectBy(DocumentFloatRect rect, double offset) =>
+            rect with { YDip = rect.YDip + offset };
 
-        void ShiftShape(FloatingShapeData shape)
+        void ShiftShape(FloatingShapeData shape, double offset)
         {
-            shape.Rect = ShiftRect(shape.Rect, offsetFor);
+            shape.Rect = ShiftRectBy(shape.Rect, offset);
         }
 
-        void ShiftChart(FloatingChartData chart) => chart.Rect = ShiftRect(chart.Rect, offsetFor);
-        void ShiftWordArt(FloatingWordArtData wordArt) => wordArt.Rect = ShiftRect(wordArt.Rect, offsetFor);
-        void ShiftSmartArt(FloatingSmartArtData smartArt) => smartArt.Rect = ShiftRect(smartArt.Rect, offsetFor);
+        void ShiftChart(FloatingChartData chart, double offset) => chart.Rect = ShiftRectBy(chart.Rect, offset);
+        void ShiftWordArt(FloatingWordArtData wordArt, double offset) => wordArt.Rect = ShiftRectBy(wordArt.Rect, offset);
+        void ShiftSmartArt(FloatingSmartArtData smartArt, double offset) => smartArt.Rect = ShiftRectBy(smartArt.Rect, offset);
 
-        void ShiftGroup(FloatingGroupData group)
+        void ShiftGroup(FloatingGroupData group, double? inheritedOffset = null)
         {
-            group.Rect = ShiftRect(group.Rect, offsetFor);
+            var offset = inheritedOffset
+                ?? offsetForOwnedObject(group.BlockIndex, group.Rect.X, group.Rect.Y);
+            group.Rect = ShiftRectBy(group.Rect, offset);
             foreach (var child in group.Children)
             {
-                child.Rect = ShiftRect(child.Rect, offsetFor);
-                if (child.Shape is not null) ShiftShape(child.Shape);
-                if (child.Chart is not null) ShiftChart(child.Chart);
-                if (child.WordArt is not null) ShiftWordArt(child.WordArt);
-                if (child.SmartArt is not null) ShiftSmartArt(child.SmartArt);
-                if (child.Group is not null) ShiftGroup(child.Group);
+                child.Rect = ShiftRectBy(child.Rect, offset);
+                if (child.Shape is not null) ShiftShape(child.Shape, offset);
+                if (child.Chart is not null) ShiftChart(child.Chart, offset);
+                if (child.WordArt is not null) ShiftWordArt(child.WordArt, offset);
+                if (child.SmartArt is not null) ShiftSmartArt(child.SmartArt, offset);
+                if (child.Group is not null) ShiftGroup(child.Group, offset);
             }
         }
 
-        foreach (var shape in _floatingShapes) ShiftShape(shape);
-        foreach (var chart in _floatingCharts) ShiftChart(chart);
-        foreach (var wordArt in _floatingWordArts) ShiftWordArt(wordArt);
-        foreach (var smartArt in _floatingSmartArts) ShiftSmartArt(smartArt);
+        foreach (var shape in _floatingShapes)
+            ShiftShape(shape, offsetForOwnedObject(shape.BlockIndex, shape.Rect.X, shape.Rect.Y));
+        foreach (var chart in _floatingCharts)
+            ShiftChart(chart, offsetForOwnedObject(chart.BlockIndex, chart.Rect.X, chart.Rect.Y));
+        foreach (var wordArt in _floatingWordArts)
+            ShiftWordArt(wordArt, offsetForOwnedObject(wordArt.BlockIndex, wordArt.Rect.X, wordArt.Rect.Y));
+        foreach (var smartArt in _floatingSmartArts)
+            ShiftSmartArt(smartArt, offsetForOwnedObject(smartArt.BlockIndex, smartArt.Rect.X, smartArt.Rect.Y));
         foreach (var group in _floatingGroups) ShiftGroup(group);
-        foreach (var shape in _inlineShapes) ShiftShape(shape);
-        foreach (var chart in _inlineCharts) ShiftChart(chart);
-        foreach (var wordArt in _inlineWordArts) ShiftWordArt(wordArt);
-        foreach (var smartArt in _inlineSmartArts) ShiftSmartArt(smartArt);
+        foreach (var shape in _inlineShapes)
+            ShiftShape(shape, offsetForOwnedObject(shape.BlockIndex, shape.Rect.X, shape.Rect.Y));
+        foreach (var chart in _inlineCharts)
+            ShiftChart(chart, offsetForOwnedObject(chart.BlockIndex, chart.Rect.X, chart.Rect.Y));
+        foreach (var wordArt in _inlineWordArts)
+            ShiftWordArt(wordArt, offsetForOwnedObject(wordArt.BlockIndex, wordArt.Rect.X, wordArt.Rect.Y));
+        foreach (var smartArt in _inlineSmartArts)
+            ShiftSmartArt(smartArt, offsetForOwnedObject(smartArt.BlockIndex, smartArt.Rect.X, smartArt.Rect.Y));
 
         for (var i = 0; i < _floatingSnapshots.Count; i++)
         {
             var snapshot = _floatingSnapshots[i];
-            _floatingSnapshots[i] = snapshot with { Rect = ShiftPlannerRect(snapshot.Rect, offsetFor) };
+            var offset = offsetForOwnedObject(snapshot.BlockIndex, snapshot.Rect.XDip, snapshot.Rect.YDip);
+            _floatingSnapshots[i] = snapshot with { Rect = ShiftPlannerRectBy(snapshot.Rect, offset) };
         }
 
         for (var i = 0; i < _wrapExclusions.Count; i++)
         {
             var zone = _wrapExclusions[i];
-            _wrapExclusions[i] = zone with { Rect = ShiftPlannerRect(zone.Rect, offsetFor) };
+            var offset = offsetForOwnedObject(zone.BlockIndex, zone.Rect.XDip, zone.Rect.YDip);
+            _wrapExclusions[i] = zone with { Rect = ShiftPlannerRectBy(zone.Rect, offset) };
         }
 
         for (var i = 0; i < _dropCapLayoutPlans.Count; i++)
         {
             var plan = _dropCapLayoutPlans[i];
+            var offset = offsetForOwnedObject(plan.BlockIndex, plan.CapBox.XDip, plan.CapBox.YDip);
             _dropCapLayoutPlans[i] = plan with
             {
-                CapBox = ShiftPlannerRect(plan.CapBox, offsetFor),
-                TextReservation = ShiftPlannerRect(plan.TextReservation, offsetFor)
+                CapBox = ShiftPlannerRectBy(plan.CapBox, offset),
+                TextReservation = ShiftPlannerRectBy(plan.TextReservation, offset)
             };
         }
 
         if (_selectedFloating is { } selected)
-            _selectedFloating = selected with { Rect = ShiftRect(selected.Rect, offsetFor) };
+        {
+            var offset = offsetForOwnedObject(selected.BlockIndex, selected.Rect.X, selected.Rect.Y);
+            _selectedFloating = selected with { Rect = ShiftRectBy(selected.Rect, offset) };
+        }
         if (_selectedFloatingGroupChild is { } selectedChild)
+        {
+            var offset = offsetForOwnedObject(selectedChild.BlockIndex, selectedChild.Rect.X, selectedChild.Rect.Y);
             _selectedFloatingGroupChild = selectedChild with
             {
-                Rect = ShiftRect(selectedChild.Rect, offsetFor)
+                Rect = ShiftRectBy(selectedChild.Rect, offset)
             };
+        }
     }
 
     /// <summary>
@@ -9606,7 +9698,8 @@ public sealed class DocumentView : Control
             var imgPageSpaceY = ContentYToPageSpaceY(imgContentY);
             // AV-COL-NONTXT AG2: shift X to the column band that this image's content-Y falls in.
             var x = ColumnLeftFor(imgContentY) + AlignmentOffset(alignment, textWidth, width);
-            _images.Add((new Rect(x, imgPageSpaceY, width, height), DecodeRenderedImage(image), image, image.ReflectionPreset));
+            _images.Add((new Rect(x, imgPageSpaceY, width, height), DecodeRenderedImage(image), image,
+                image.ReflectionPreset, blockIndex));
             _layoutContentY = imgContentY + height + ReflectionExtraHeight(image, height) + gap;
         }
     }
@@ -9704,7 +9797,8 @@ public sealed class DocumentView : Control
                 var contentY = ReserveContentY(height);
                 var pageSpaceY = ContentYToPageSpaceY(contentY);
                 var x = ColumnLeftFor(contentY) + AlignmentOffset(alignment, textWidth, width);
-                _images.Add((new Rect(x, pageSpaceY, width, height), DecodeRenderedImage(image), image, image.ReflectionPreset));
+                _images.Add((new Rect(x, pageSpaceY, width, height), DecodeRenderedImage(image), image,
+                    image.ReflectionPreset, blockIndex));
                 _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
                     RunFormatting.Default, '\0', Sentinel: false));
                 _layoutContentY = contentY + height + ReflectionExtraHeight(image, height) + gap;
@@ -11349,7 +11443,7 @@ public sealed class DocumentView : Control
             DrawFloatingObjectSnapshot(context, snapshot);
 
         // Inline images (non-floating).
-        foreach (var (rect, bitmap, model, reflectionPreset) in _images)
+        foreach (var (rect, bitmap, model, reflectionPreset, _) in _images)
             DrawFloatingImage(context, rect, bitmap, model, reflectionPreset);
 
         // FO4: inline drawing objects rendered in the text flow using the same FO3 helpers.

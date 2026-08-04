@@ -123,7 +123,18 @@ public sealed class PrintPreviewPaginationContext
         return true;
     }
 
-    public PageContentLayout? BuildPage(int pageIndex)
+    public PageContentLayout? BuildPage(int pageIndex) =>
+        BuildPage(pageIndex, overridePageNumber: null, overrideTotalPages: null);
+
+    /// <summary>
+    /// Builds a page while allowing a workbook-level preview to supply the running page number and
+    /// grand total. The default overload above preserves the existing single-sheet/multi-area
+    /// semantics; workbook callers use these overrides exactly like WPF's RenderWorkbook path.
+    /// </summary>
+    public PageContentLayout? BuildPage(
+        int pageIndex,
+        int? overridePageNumber,
+        int? overrideTotalPages)
     {
         if (pageIndex < 0)
             return null;
@@ -133,8 +144,8 @@ public sealed class PrintPreviewPaginationContext
         // export's WorkbookPdfContentBuilder.ResolveEffectiveSheetPageNumber/-TotalPages -- NOT
         // reset per area the way the local `remaining` index below (which only resolves which
         // plan/page to render) would otherwise imply.
-        var globalPageNumber = (_sheet.FirstPageNumber ?? 1) + pageIndex;
-        var totalPages = PageCount;
+        var globalPageNumber = overridePageNumber ?? ((_sheet.FirstPageNumber ?? 1) + pageIndex);
+        var totalPages = overrideTotalPages ?? PageCount;
 
         var remaining = pageIndex;
         foreach (var plan in _plans)
