@@ -214,6 +214,9 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("box.FooterSubEditor is not null");
         source.Should().Contain("var headerDistance = thisPageSettings.HeaderDistancePt > 0");
         source.Should().Contain("var footerDistance = thisPageSettings.FooterDistancePt > 0");
+        source.Split("FooterTopDip(thisPixH, footerDistance, footerH)", StringSplitOptions.None)
+            .Should().HaveCount(3, "normal and generated-page footer paths must share the calibrated origin");
+        source.Should().Contain("pageHeightDip - footerDistanceDip - footerHeightDip + 3;");
         source.Should().Contain("flow.PagePadding = new Thickness(");
         project.Should().Contain("FreeW.App.Presentation");
         project.Should().Contain("PackageReference Include=\"SkiaSharp\"");
