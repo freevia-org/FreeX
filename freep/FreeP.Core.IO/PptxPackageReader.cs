@@ -1742,7 +1742,8 @@ public static class PptxPackageReader
             ReadZoomFrameBorderDash(properties),
             ReadZoomFrameGeometry(properties),
             ReadZoomFrameBorderGradient(properties),
-            ReadZoomFrameBorderPattern(properties));
+            ReadZoomFrameBorderPattern(properties),
+            ReadZoomFrameBorderNoFill(properties));
         return value.IsEmpty ? null : value;
     }
 
@@ -1861,6 +1862,18 @@ public static class PptxPackageReader
             && foreground is not null
             && background is not null
             ? new ZoomFrameBorderPattern(preset, foreground, background)
+            : null;
+    }
+
+    private static bool? ReadZoomFrameBorderNoFill(XElement properties)
+    {
+        var line = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
+        return line?.Elements().Any(element =>
+            string.Equals(element.Name.LocalName, "noFill", StringComparison.OrdinalIgnoreCase)) == true
+            ? true
             : null;
     }
 

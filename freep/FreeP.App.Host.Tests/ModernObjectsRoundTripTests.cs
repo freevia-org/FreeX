@@ -565,6 +565,40 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void ZoomFrameBorder_NoFillIsUndoableAndRoundTripsNativeState()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var zoom = session.InsertSlideZoom("slide-2");
+        session.SetZoomObjectProperties(
+                zoom.Id,
+                new ZoomObjectProperties(
+                    FrameBorderWidthEmu: 25400,
+                    FrameBorderDash: OutlineDash.Dot,
+                    FrameBorderNoFill: true))
+            .Should().BeTrue();
+
+        var line = XElement.Parse(zoom.PreservedObject!.RawXml)
+            .Descendants().Single(element => element.Name.LocalName == "ln");
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        line.Element(drawing + "noFill").Should().NotBeNull();
+        line.Elements().Where(element => element.Name.LocalName is "solidFill" or "gradFill" or "pattFill")
+            .Should().BeEmpty();
+        zoom.PreservedObject.ZoomProperties!.FrameBorderNoFill.Should().BeTrue();
+
+        session.Undo();
+        zoom.PreservedObject.RawXml.Should().NotContain("noFill");
+        session.Redo();
+
+        var reopened = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
+            .PreservedObject!.ZoomProperties!.FrameBorderNoFill.Should().BeTrue();
+    }
+
+    [Fact]
     public void ZoomFrameGeometry_IsUndoableAndRoundTripsNativePreset()
     {
         var presentation = new Presentation();

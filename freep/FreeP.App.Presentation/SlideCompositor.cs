@@ -726,6 +726,10 @@ public static class SlideCompositor
             string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase));
         var line = shapeProperties?.Elements().FirstOrDefault(element =>
             string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
+        var nativeNoFill = line?.Elements().Any(element =>
+            string.Equals(element.Name.LocalName, "noFill", StringComparison.OrdinalIgnoreCase)) == true;
+        if (nativeNoFill || (line is null && fallback?.FrameBorderNoFill == true))
+            return ResolvedOutline.None.Instance;
         var solidFill = line?.Elements().FirstOrDefault(element =>
             string.Equals(element.Name.LocalName, "solidFill", StringComparison.OrdinalIgnoreCase));
         var widthEmu = line?.Attribute("w") is { Value: var widthText }
