@@ -23,6 +23,43 @@ public static class PrintCommentSummaryPlanner
     public const int MaxOverlayLines = 3;
     public const string Ellipsis = "\u2026";
 
+    /// <summary>
+    /// Returns only notes/threaded comments whose row and column are printed together by at least one
+    /// configured print area. This is the shared source-selection rule used by WPF and the Avalonia
+    /// Entire Workbook preview for the "Comments: At end of sheet" appendix.
+    /// </summary>
+    public static (IReadOnlyDictionary<CellAddress, string> Comments, IReadOnlyDictionary<CellAddress, ThreadedComment> ThreadedComments)
+        FilterToPrintedCells(Sheet sheet, WorksheetPrintRenderPlan printPlan)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        ArgumentNullException.ThrowIfNull(printPlan);
+
+        if (sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0)
+            return (sheet.Comments, sheet.ThreadedComments);
+
+        var areaCellSets = printPlan.AreaPlans
+            .Select(area => (
+                Rows: new HashSet<uint>(area.Pages.SelectMany(page => page.Rows)),
+                Columns: new HashSet<uint>(area.Pages.SelectMany(page => page.Columns))))
+            .ToList();
+
+        bool IsPrinted(CellAddress address) =>
+            areaCellSets.Any(area => area.Rows.Contains(address.Row) && area.Columns.Contains(address.Col));
+
+        var comments = sheet.Comments.Count == 0
+            ? sheet.Comments
+            : sheet.Comments
+                .Where(pair => IsPrinted(pair.Key))
+                .ToDictionary(pair => pair.Key, pair => pair.Value);
+        var threadedComments = sheet.ThreadedComments.Count == 0
+            ? sheet.ThreadedComments
+            : sheet.ThreadedComments
+                .Where(pair => IsPrinted(pair.Key))
+                .ToDictionary(pair => pair.Key, pair => pair.Value);
+
+        return (comments, threadedComments);
+    }
+
     public static IReadOnlyList<PrintCommentSummaryPagePlan> BuildPages(
         IReadOnlyDictionary<CellAddress, string> comments,
         IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments,

@@ -11,6 +11,7 @@ using FreeX.App.Avalonia.Charts;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.Text;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
@@ -260,21 +261,40 @@ public sealed partial class MainWindow
         // stale layout for a setting the user just changed (R118-print-preview-settings-rail-wiring).
         void RepaginateAndRender()
         {
-            if (parityPages is null &&
-                AvaloniaPrintPreviewPaginationContext.TryCreate(
-                    _session.Workbook,
-                    _session.ActiveSheet,
-                    PrintPreviewTextMeasurer,
-                    currentSettings.PrintWhat == PrintWhat.Selection
-                        ? _session.SelectedRange
-                        : null,
-                    out var updatedContext,
-                    ResolveWorkbookDirectoryForHeaderFooter(),
-                    currentSettings.PrintWhat == PrintWhat.Selection || currentSettings.IgnorePrintArea))
+            if (parityPages is null)
             {
-                context = updatedContext;
-                pageCount = updatedContext.PageCount;
-                navigator = PrintPreviewPageNavigator.Create(pageCount).JumpTo(navigator.CurrentIndex);
+                var ignorePrintArea = currentSettings.PrintWhat is PrintWhat.Selection || currentSettings.IgnorePrintArea;
+                AvaloniaPrintPreviewPaginationContext updatedContext;
+                var created = currentSettings.PrintWhat == PrintWhat.EntireWorkbook
+                    ? AvaloniaPrintPreviewPaginationContext.TryCreateWorkbook(
+                        _session.Workbook,
+                        PrintPreviewTextMeasurer,
+                        out updatedContext,
+                        ResolveWorkbookDirectoryForHeaderFooter(),
+                        currentSettings.IgnorePrintArea)
+                    : AvaloniaPrintPreviewPaginationContext.TryCreate(
+                        _session.Workbook,
+                        _session.ActiveSheet,
+                        PrintPreviewTextMeasurer,
+                        currentSettings.PrintWhat == PrintWhat.Selection
+                            ? _session.SelectedRange
+                            : null,
+                        out updatedContext,
+                        ResolveWorkbookDirectoryForHeaderFooter(),
+                        ignorePrintArea);
+
+                if (created)
+                {
+                    context = updatedContext;
+                    pageCount = updatedContext.PageCount;
+                    navigator = PrintPreviewPageNavigator.Create(pageCount).JumpTo(navigator.CurrentIndex);
+                }
+                else
+                {
+                    context = AvaloniaPrintPreviewPaginationContext.Empty();
+                    pageCount = 0;
+                    navigator = PrintPreviewPageNavigator.Create(0);
+                }
             }
 
             Render();
@@ -316,7 +336,22 @@ public sealed partial class MainWindow
         exportButton.Click += async (_, _) =>
         {
             dialog.Close();
-            await ExportActiveSheetPdfAsync();
+            switch (currentSettings.PrintWhat)
+            {
+                case PrintWhat.EntireWorkbook:
+                    await ExportWorkbookPdfAsync(
+                        WorkbookExportPrintScope.VisibleWorkbook,
+                        WorkbookExportPrintOutputKind.Pdf);
+                    break;
+                case PrintWhat.Selection:
+                    await ExportWorkbookPdfAsync(
+                        WorkbookExportPrintScope.SelectedRange,
+                        WorkbookExportPrintOutputKind.Pdf);
+                    break;
+                default:
+                    await ExportActiveSheetPdfAsync();
+                    break;
+            }
         };
         dialog.KeyDown += (_, e) =>
         {
@@ -633,14 +668,9 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
 
-        // "Print Entire Workbook" stays disabled on the live rail too: the Avalonia preview context
-        // only ever paginates the one active sheet passed to it (there is no multi-sheet workbook
-        // pagination context yet), so selecting this choice could update the setting but could never
-        // re-paginate the preview to show it -- the same looks-functional-does-nothing gap this fix
-        // removes everywhere else (R118-print-preview-settings-rail-wiring; leftOpen follow-up).
-        var printWhatOptions = interaction is null
-            ? plan.Settings.PrintWhatOptions
-            : DisableUnsupportedPrintWhatScopes(plan.Settings.PrintWhatOptions);
+        // Entire Workbook is backed by the shared workbook page stream, so changing this choice
+        // repaginates the live preview instead of merely changing a disabled-looking option.
+        var printWhatOptions = plan.Settings.PrintWhatOptions;
         var printWhatBox = CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, printWhatOptions, plan.Settings.PrintWhatSelectedIndex);
         AutomationProperties.SetAutomationId(printWhatBox, "PrintPreviewSettingsPrintWhatBox");
         if (interaction is not null)
@@ -830,12 +860,6 @@ public sealed partial class MainWindow
         row.Children.Add(toBox);
         return row;
     }
-
-    private static IReadOnlyList<PrintPreviewChoice<PrintWhat>> DisableUnsupportedPrintWhatScopes(
-        IReadOnlyList<PrintPreviewChoice<PrintWhat>> options) =>
-        options
-            .Select(option => option.Value == PrintWhat.EntireWorkbook ? option with { IsEnabled = false } : option)
-            .ToArray();
 
     private static TextBlock CreateSettingsSection(string text) =>
         new()
@@ -1229,11 +1253,14 @@ public sealed partial class MainWindow
         BuildPreviewPageViewCore(context.BuildPage(pageIndex));
 
     internal static Control BuildPreviewPageView(AvaloniaPrintPreviewPaginationContext context, int pageIndex) =>
-        BuildPreviewPageViewCore(context.BuildPage(pageIndex));
+        BuildPreviewPageViewCore(context.BuildPainting(pageIndex));
 
     private static Control BuildPreviewPageViewCore(PageContentLayout? layout)
+        => BuildPreviewPageViewCore(layout is null ? null : PrintPreviewInstructionBuilder.Build(layout));
+
+    private static Control BuildPreviewPageViewCore(PrintPreviewPagePainting? painting)
     {
-        if (layout is null)
+        if (painting is null)
         {
             return new TextBlock
             {
@@ -1244,7 +1271,6 @@ public sealed partial class MainWindow
             };
         }
 
-        var painting = PrintPreviewInstructionBuilder.Build(layout);
         var canvas = new Canvas
         {
             Width = painting.PageBounds.Width,

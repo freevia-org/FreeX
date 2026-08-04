@@ -11,7 +11,9 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 internal sealed class AvaloniaPrintPreviewPaginationContext
 {
+    private readonly bool _isEmpty;
     private readonly PrintPreviewPaginationContext? _sheetContext;
+    private readonly PrintPreviewWorkbookPaginationContext? _workbookContext;
     private readonly Workbook? _workbook;
     private readonly Sheet? _sheet;
     private readonly PagePaginationResult? _selectionPlan;
@@ -21,6 +23,18 @@ internal sealed class AvaloniaPrintPreviewPaginationContext
     private AvaloniaPrintPreviewPaginationContext(PrintPreviewPaginationContext sheetContext)
     {
         _sheetContext = sheetContext;
+        _workbookDirectory = "";
+    }
+
+    private AvaloniaPrintPreviewPaginationContext(PrintPreviewWorkbookPaginationContext workbookContext)
+    {
+        _workbookContext = workbookContext;
+        _workbookDirectory = "";
+    }
+
+    private AvaloniaPrintPreviewPaginationContext(bool isEmpty)
+    {
+        _isEmpty = isEmpty;
         _workbookDirectory = "";
     }
 
@@ -38,11 +52,20 @@ internal sealed class AvaloniaPrintPreviewPaginationContext
         _workbookDirectory = workbookDirectory;
     }
 
-    public int PageCount => _sheetContext?.PageCount ?? _selectionPlan!.PageCount;
+    public int PageCount =>
+        _isEmpty
+            ? 0
+            : _workbookContext?.PageCount ?? _sheetContext?.PageCount ?? _selectionPlan!.PageCount;
 
     internal static AvaloniaPrintPreviewPaginationContext FromSheetContext(
         PrintPreviewPaginationContext sheetContext) =>
         new(sheetContext ?? throw new ArgumentNullException(nameof(sheetContext)));
+
+    internal static AvaloniaPrintPreviewPaginationContext FromWorkbookContext(
+        PrintPreviewWorkbookPaginationContext workbookContext) =>
+        new(workbookContext ?? throw new ArgumentNullException(nameof(workbookContext)));
+
+    internal static AvaloniaPrintPreviewPaginationContext Empty() => new(isEmpty: true);
 
     internal static bool TryCreate(
         Workbook workbook,
@@ -115,8 +138,36 @@ internal sealed class AvaloniaPrintPreviewPaginationContext
         return true;
     }
 
+    internal static bool TryCreateWorkbook(
+        Workbook workbook,
+        ITextMeasurer textMeasurer,
+        out AvaloniaPrintPreviewPaginationContext context,
+        string workbookDirectory = "",
+        bool ignorePrintArea = false)
+    {
+        if (!PrintPreviewWorkbookPaginationContext.TryCreate(
+                workbook,
+                textMeasurer,
+                out var workbookContext,
+                workbookDirectory,
+                ignorePrintArea))
+        {
+            context = null!;
+            return false;
+        }
+
+        context = FromWorkbookContext(workbookContext);
+        return true;
+    }
+
     public PageContentLayout? BuildPage(int pageIndex)
     {
+        if (_isEmpty)
+            return null;
+
+        if (_workbookContext is not null)
+            return _workbookContext.BuildPage(pageIndex);
+
         if (_sheetContext is not null)
             return _sheetContext.BuildPage(pageIndex);
 
@@ -132,5 +183,17 @@ internal sealed class AvaloniaPrintPreviewPaginationContext
             workbookDirectory: _workbookDirectory,
             overridePageNumber: (_sheet!.FirstPageNumber ?? 1) + pageIndex,
             overrideTotalPages: _selectionPlan.PageCount);
+    }
+
+    public PrintPreviewPagePainting? BuildPainting(int pageIndex)
+    {
+        if (_isEmpty)
+            return null;
+
+        if (_workbookContext is not null)
+            return _workbookContext.BuildPainting(pageIndex);
+
+        var layout = BuildPage(pageIndex);
+        return layout is null ? null : PrintPreviewInstructionBuilder.Build(layout);
     }
 }

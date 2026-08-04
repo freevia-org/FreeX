@@ -64,7 +64,7 @@ public static partial class PrintRenderer
         IReadOnlyList<PrintCommentSummaryPagePlan> commentSummaryPages;
         if (sheet.PrintComments == WorksheetPrintComments.AtEnd)
         {
-            var (printedComments, printedThreadedComments) = FilterCommentsToPrintedCells(sheet, printPlan);
+            var (printedComments, printedThreadedComments) = PrintCommentSummaryPlanner.FilterToPrintedCells(sheet, printPlan);
             commentSummaryPages = PrintCommentSummaryPlanner.BuildPages(printedComments, printedThreadedComments, pageH, marginTop);
         }
         else
@@ -297,7 +297,7 @@ public static partial class PrintRenderer
         if (sheet.PrintComments != WorksheetPrintComments.AtEnd)
             return printPlan.GridPageCount;
 
-        var (printedComments, printedThreadedComments) = FilterCommentsToPrintedCells(sheet, printPlan);
+        var (printedComments, printedThreadedComments) = PrintCommentSummaryPlanner.FilterToPrintedCells(sheet, printPlan);
         var commentSummaryPageCount = PrintCommentSummaryPlanner.BuildPages(
             printedComments, printedThreadedComments, printPlan.Metrics.PageHeight, printPlan.Metrics.MarginTop).Count;
         return printPlan.GridPageCount + commentSummaryPageCount;
@@ -378,32 +378,6 @@ public static partial class PrintRenderer
     /// of the SAME configured print area (areas are evaluated independently so a row from one disjoint
     /// print area can never combine with a column from another to falsely mark a cell as printed).
     /// </summary>
-    private static (IReadOnlyDictionary<CellAddress, string> Comments, IReadOnlyDictionary<CellAddress, ThreadedComment> ThreadedComments) FilterCommentsToPrintedCells(
-        Sheet sheet,
-        WorksheetPrintRenderPlan printPlan)
-    {
-        if (sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0)
-            return (sheet.Comments, sheet.ThreadedComments);
-
-        var areaCellSets = printPlan.AreaPlans
-            .Select(area => (
-                Rows: new HashSet<uint>(area.Pages.SelectMany(p => p.Rows)),
-                Columns: new HashSet<uint>(area.Pages.SelectMany(p => p.Columns))))
-            .ToList();
-
-        bool IsPrinted(CellAddress address) =>
-            areaCellSets.Any(area => area.Rows.Contains(address.Row) && area.Columns.Contains(address.Col));
-
-        var comments = sheet.Comments.Count == 0
-            ? sheet.Comments
-            : sheet.Comments.Where(pair => IsPrinted(pair.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
-        var threadedComments = sheet.ThreadedComments.Count == 0
-            ? sheet.ThreadedComments
-            : sheet.ThreadedComments.Where(pair => IsPrinted(pair.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
-
-        return (comments, threadedComments);
-    }
-
     private sealed record PdfLinkTarget(
         string Target,
         HyperlinkTargetKind TargetKind,
