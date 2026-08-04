@@ -1199,6 +1199,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.smartart.relationship1-import-ellipses",
             "freep.smartart.grid-matrix-import-cells",
             "freep.smartart.increasing-circle-process-import-growth",
+            "freep.smartart.vertical-arrow-list-import-slots",
             "freep.smartart.basic-process",
             "freep.smartart.basic-timeline",
             "freep.smartart.step-down-process",
