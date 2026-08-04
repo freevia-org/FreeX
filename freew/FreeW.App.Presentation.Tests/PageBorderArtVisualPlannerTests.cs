@@ -356,24 +356,20 @@ public sealed class PageBorderArtVisualPlannerTests
         PageBorderArtVisualPlanner.TryBuildVineFrame(47, 3, 816, 1056, 32, out var plan)
             .Should().BeTrue();
 
-        plan.Fills.Should().Equal(
+        plan.Fills.Take(4).Should().Equal(
             new PageBorderArtFillRectangle(32, 32, 752, 32, 0, 0, 0),
             new PageBorderArtFillRectangle(32, 992, 752, 32, 0, 0, 0),
             new PageBorderArtFillRectangle(32, 32, 32, 992, 0, 0, 0),
             new PageBorderArtFillRectangle(752, 32, 32, 992, 0, 0, 0));
-        plan.Polygons.Should().HaveCount(284);
-        plan.Polygons[0].Points.Take(4).Should().Equal(
-            new PageBorderArtPoint(64, 56),
-            new PageBorderArtPoint(71, 56),
-            new PageBorderArtPoint(77, 53),
-            new PageBorderArtPoint(83, 47));
-        plan.Polygons[0].Red.Should().Be(0xFF);
-        plan.Polygons[264].Points.Should().Equal(
+        plan.Fills.Should().HaveCount(3370);
+        plan.Fills[4].Should().Be(new PageBorderArtFillRectangle(90, 36, 10, 1, 0xFF, 0xFF, 0xFF));
+        plan.Polygons.Should().HaveCount(20);
+        plan.Polygons[0].Points.Should().Equal(
             new PageBorderArtPoint(48, 48),
             new PageBorderArtPoint(43, 42),
             new PageBorderArtPoint(48, 34),
             new PageBorderArtPoint(53, 42));
-        plan.Polygons[268].Red.Should().Be(0xB2);
+        plan.Polygons[4].Red.Should().Be(0xB2);
     }
 
     [Fact]
