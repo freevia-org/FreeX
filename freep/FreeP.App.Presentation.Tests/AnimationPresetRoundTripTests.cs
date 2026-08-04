@@ -351,6 +351,31 @@ public sealed class AnimationPresetRoundTripTests
             .Should().Be(AnimationScaleBehavior.Format(1.5));
     }
 
+    [Fact]
+    public void PulseScaleSurvivesReadWriteAsAnAuthoredAmount()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 8, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 8,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Pulse,
+            ScaleBehavior = AnimationScaleBehavior.FromTo(1.5),
+        });
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(stream.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+
+        animation.Preset.Should().Be(AnimationPreset.Pulse);
+        animation.Direction.Should().BeNull();
+        animation.EffectSubtype.Should().BeNull();
+        animation.ScaleBehavior!.ToX.Should().Be(AnimationScaleBehavior.Format(1.5));
+        AnimationAmountSemantics.ResolveScale(animation.Preset, animation.ScaleBehavior).Should().Be(1.5);
+    }
+
     [Theory]
     [InlineData("100000", "150000", null, 1.5)] // from_to
     [InlineData("80000", null, "30000", 1.1)]   // from_by
