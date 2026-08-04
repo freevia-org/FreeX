@@ -258,7 +258,13 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
             ContentType: "text/vtt",
             Status: PresentationMediaTranscriptTrackStatus.Available,
             StatusMessage: string.Empty,
-            Cues: [new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Hello from the video")]);
+            Cues:
+            [
+                new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Hello from the video")
+                {
+                    Spans = [new("Hello from the video", ForegroundColorHex: "FFCC00", BackgroundColorHex: "000000")]
+                }
+            ]);
 
         controller.EnterSlide(slide, 960, 720, 960, 720, [track]);
         var session = factory.Backend.Sessions[0];
@@ -266,6 +272,13 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
         controller.RefreshCaptionsForTest();
         controller.CaptionTextForTest(42).Should().Be("Hello from the video");
         overlay.Children.OfType<Border>().Should().Contain(border => border.IsVisible);
+        var captionText = overlay.Children.OfType<Border>().Single().Child
+            .Should().BeOfType<TextBlock>().Subject;
+        var captionRun = captionText.Inlines!.OfType<global::Avalonia.Controls.Documents.Run>().Single();
+        captionRun.Foreground.Should().BeOfType<global::Avalonia.Media.SolidColorBrush>()
+            .Which.Color.Should().Be(global::Avalonia.Media.Color.FromRgb(0xFF, 0xCC, 0x00));
+        captionRun.Background.Should().BeOfType<global::Avalonia.Media.SolidColorBrush>()
+            .Which.Color.Should().Be(global::Avalonia.Media.Colors.Black);
 
         session.Seek(TimeSpan.FromSeconds(2));
         controller.RefreshCaptionsForTest();

@@ -313,6 +313,61 @@ public sealed class MailingsTabTests
         text.Should().Contain("Grace Hopper", "and for record 2");
     }
 
+    [Theory]
+    [InlineData(MailMergeOutputMode.Letters, 2)]
+    [InlineData(MailMergeOutputMode.Directory, 1)]
+    public void BuildFinishedMerge_selects_scope_applies_rules_and_preserves_template_session(
+        MailMergeOutputMode mode,
+        int expectedSectionCount)
+    {
+        var skip = MergeRuleEvaluator.BuildSkipRecordIfInstruction(
+            "City", MergeConditionOperator.Equal, "Arlington");
+        var template = ViewWith(new Paragraph(
+            $"{Wrap(skip)}{MailMerge.FieldOpen}GreetingLine{MailMerge.FieldClose} | " +
+            $"{MailMerge.FieldOpen}AddressBlock{MailMerge.FieldClose}"));
+        var engine = new MailMergeEngine(template, Callbacks());
+        engine.LoadRecipientsCsv(
+            "FirstName,LastName,City\n" +
+            "Ada,Lovelace,London\n" +
+            "Grace,Hopper,New York\n" +
+            "Katherine,Johnson,Arlington\n" +
+            "Dorothy,Vaughan,Hampton");
+        engine.Session.Mode = mode;
+        engine.TogglePreview();
+        engine.NextRecord();
+
+        var visiblePreview = template.Document;
+        var stashedTemplate = engine.Session.Template;
+        var recipients = engine.Session.Data;
+        var mapping = engine.Session.Mapping;
+        var plan = MailMergeFinishPlanner.Plan(
+            MailMergeFinishDestination.Printer,
+            MailMergeRecipientScope.FromTo,
+            recordCount: 4,
+            currentIndex: 1,
+            fromRecordText: "2",
+            toRecordText: "4");
+
+        var result = engine.BuildFinishedMerge(plan);
+
+        result.Should().NotBeNull();
+        result!.MergedRecordCount.Should().Be(2);
+        result.SkippedRecordCount.Should().Be(1);
+        var text = PlainText(result.Document);
+        text.Should().Contain("Grace Hopper");
+        text.Should().Contain("Dorothy Vaughan");
+        text.Should().NotContain("Ada Lovelace", "record 1 is outside the selected range");
+        text.Should().NotContain("Katherine Johnson", "the selected record is skipped by its merge rule");
+        result.Document.Sections.Should().HaveCount(expectedSectionCount);
+
+        template.Document.Should().BeSameAs(visiblePreview);
+        engine.Session.Template.Should().BeSameAs(stashedTemplate);
+        engine.Session.Data.Should().BeSameAs(recipients);
+        engine.Session.Mapping.Should().BeSameAs(mapping);
+        engine.Session.CurrentIndex.Should().Be(1);
+        engine.Session.Mode.Should().Be(mode);
+    }
+
     [Fact]
     public void FinishMerge_without_recipients_is_noop_and_emits_info()
     {

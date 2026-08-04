@@ -349,7 +349,8 @@ public sealed class MainWindow : Window
             onArrangeAll: ArrangeAllWindows,
             onToggleThesaurus: ToggleThesaurusPane,
             onToggleBalloons: ToggleBalloons,
-            onOpenMailMergeErrorReport: OpenMailMergeErrorReport);
+            onOpenMailMergeErrorReport: OpenMailMergeErrorReport,
+            onPrintMailMergeDocument: PrintMailMergeDocument);
         _file = new FileCommands(this, editor, UpdateTitle, _options, messageService: _messageService);
         editor.TextChanged += (_, _) =>
         {
@@ -3020,13 +3021,22 @@ public sealed class MainWindow : Window
             _editor.Redo();
     }
 
-    private void Print()
+    private void Print() => PrintDocument(_editor, "FreeW Document");
+
+    private void PrintMailMergeDocument(TextDocument document)
+    {
+        var printEditor = new DocumentView();
+        printEditor.LoadModel(document);
+        PrintDocument(printEditor, "FreeW Mail Merge");
+    }
+
+    private void PrintDocument(DocumentView editor, string description)
     {
         var dialog = new PrintDialog();
 
         // Print at the model's page size (points -> DIP), not just the printer's printable area, so
         // margins and page breaks match what the user sees in Print Preview.
-        var page = _editor.Model.Page;
+        var page = editor.Model.Page;
         var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
         dialog.PrintTicket.PageMediaSize = new System.Printing.PageMediaSize(pageWidth, pageHeight);
 
@@ -3035,8 +3045,8 @@ public sealed class MainWindow : Window
 
         // Build a fresh, page-settings-aware paginator (display-only clone of the editor content),
         // breaking the flow into pages at the model's geometry and overlaying any header/footer.
-        var paginator = PrintLayout.BuildPaginator(_editor);
-        dialog.PrintDocument(paginator, "FreeW Document");
+        var paginator = PrintLayout.BuildPaginator(editor);
+        dialog.PrintDocument(paginator, description);
     }
 
     private void OpenPrintPreview()

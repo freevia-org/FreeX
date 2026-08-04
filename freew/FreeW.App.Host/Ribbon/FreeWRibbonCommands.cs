@@ -200,7 +200,8 @@ internal static class FreeWRibbonCommands
         Action? onToggleThesaurus = null,
         Action? onToggleBalloons = null,
         Func<bool, string, string?>? askHeaderFooterText = null,
-        Action<TextDocument>? onOpenMailMergeErrorReport = null)
+        Action<TextDocument>? onOpenMailMergeErrorReport = null,
+        Action<TextDocument>? onPrintMailMergeDocument = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -1949,7 +1950,10 @@ internal static class FreeWRibbonCommands
             editor,
             mergeSession,
             openReportDocument: onOpenMailMergeErrorReport));
-        registry.Register("freew.merge-finish", new FinishMergeCommand(editor, mergeSession));
+        registry.Register("freew.merge-finish", new FinishMergeCommand(
+            editor,
+            mergeSession,
+            printDocument: onPrintMailMergeDocument));
         registry.Register("freew.merge-email", new EmailMergeCommand(editor, mergeSession));
         // Filter & Sort: refines the active session's MergeData (include/exclude rows, sort column/direction)
         // without touching the merge template. No-ops gracefully when there is no active session or data.
@@ -6939,7 +6943,11 @@ internal static class FreeWRibbonCommands
         private readonly Action<Window?, string> _showInfo = showInfo ??
             ((owner, message) => DialogMessageHelper.ShowInfo(owner, message, "Mail Merge"));
         private readonly Action<RibbonCommandContext> _completeMerge = completeMerge ??
-            (context => new FinishMergeCommand(editor, session).Execute(context));
+            (context => new FinishMergeCommand(
+                editor,
+                session,
+                ask: (_, recordCount, _) => MailMergeFinishPlanner.PlanNewDocumentAllRecords(recordCount))
+                .Execute(context));
 
         public void Execute(RibbonCommandContext context)
         {
@@ -7080,16 +7088,32 @@ internal static class FreeWRibbonCommands
     // When the template contains Fill-in or Ask rule instructions, the user is prompted once per unique
     // Fill-in prompt / Ask bookmark before iterating records; all answers are stored in MergeState so
     // the evaluator can resolve them without further prompts.
-    private sealed class FinishMergeCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    internal sealed class FinishMergeCommand(
+        DocumentView editor,
+        MailMergeSession session,
+        Action<TextDocument>? printDocument = null,
+        Func<Window?, int, int, MailMergeFinishPlan?>? ask = null,
+        Action<Window?, string>? showInfo = null) : IRibbonCommand
     {
+        private readonly Func<Window?, int, int, MailMergeFinishPlan?> _ask = ask ?? MailMergeFinishDialog.Ask;
+        private readonly Action<Window?, string> _showInfo = showInfo ??
+            ((owner, message) => DialogMessageHelper.ShowInfo(owner, message, "Mail Merge"));
+
         public void Execute(RibbonCommandContext context)
         {
+            var owner = Window.GetWindow(editor);
             if (session.Data is not { Count: > 0 } data)
             {
-                DialogMessageHelper.ShowInfo(
-                    Window.GetWindow(editor),
-                    "Select recipients first (Mailings > Select Recipients), then Finish & Merge.",
-                    "Mail Merge");
+                _showInfo(owner, "Select recipients first (Mailings > Select Recipients), then Finish & Merge.");
+                return;
+            }
+
+            var finishPlan = _ask(owner, data.Count, session.CurrentIndex);
+            if (finishPlan is not { Success: true })
+                return;
+            if (finishPlan.Destination == MailMergeFinishDestination.Printer && printDocument is null)
+            {
+                _showInfo(owner, "Printing is not available in this window.");
                 return;
             }
 
@@ -7108,17 +7132,7 @@ internal static class FreeWRibbonCommands
             // Collect Fill-in and Ask prompts from the template body so we can ask the user once
             // before the merge run starts (matching Word's behaviour).
             var mergeState = new MergeState();
-            var owner = Window.GetWindow(editor);
             CollectFillInAndAskAnswers(template, mergeState, owner);
-            var finishPlan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(data.Count);
-            if (!finishPlan.Success)
-            {
-                DialogMessageHelper.ShowInfo(
-                    Window.GetWindow(editor),
-                    "Select recipients first (Mailings > Select Recipients), then Finish & Merge.",
-                    "Mail Merge");
-                return;
-            }
 
             // Augment every row with the composed «AddressBlock» and «GreetingLine» values so composite
             // placeholders in the template resolve correctly across every record.
@@ -7133,6 +7147,13 @@ internal static class FreeWRibbonCommands
             var skipped = mergeState.SkippedIndices.Count;
             var combined = MailMerge.CombineMergedRecords(merged, session.Mode);
 
+            if (finishPlan.Destination == MailMergeFinishDestination.Printer)
+            {
+                printDocument!(combined);
+                editor.Focus();
+                return;
+            }
+
             editor.LoadModel(combined);
             session.Template = null;
             session.CurrentIndex = 0;
@@ -7140,7 +7161,7 @@ internal static class FreeWRibbonCommands
             var msg = skipped > 0
                 ? $"Merged {merged.Count} record(s) into a single document ({skipped} skipped)."
                 : $"Merged {merged.Count} record(s) into a single document.";
-            DialogMessageHelper.ShowInfo(Window.GetWindow(editor), msg, "Mail Merge");
+            _showInfo(owner, msg);
             editor.Focus();
         }
 
@@ -7197,6 +7218,156 @@ internal static class FreeWRibbonCommands
                     }
                 }
             }
+        }
+    }
+
+    private static class MailMergeFinishDialog
+    {
+        public static MailMergeFinishPlan? Ask(Window? owner, int recordCount, int currentIndex)
+        {
+            var dialogPlan = MailMergeFinishPlanner.CreateDialogPlan(recordCount, currentIndex);
+            MailMergeFinishPlan? result = null;
+            var dialog = new Window
+            {
+                Title = "Merge",
+                Owner = owner,
+                Width = 440,
+                Height = 320,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = owner is null
+                    ? WindowStartupLocation.CenterScreen
+                    : WindowStartupLocation.CenterOwner,
+                ShowInTaskbar = false
+            };
+
+            var destination = new System.Windows.Controls.ComboBox
+            {
+                Margin = new Thickness(0, 4, 0, 12)
+            };
+            foreach (var choice in dialogPlan.Destinations)
+            {
+                destination.Items.Add(new System.Windows.Controls.ComboBoxItem
+                {
+                    Content = choice.IsSupported ? choice.Label : $"{choice.Label} (not available)",
+                    Tag = choice
+                });
+            }
+            destination.SelectedIndex = dialogPlan.DestinationIndex;
+
+            var scope = new System.Windows.Controls.ComboBox
+            {
+                Margin = new Thickness(0, 4, 0, 12)
+            };
+            foreach (var choice in dialogPlan.Scopes)
+            {
+                scope.Items.Add(new System.Windows.Controls.ComboBoxItem
+                {
+                    Content = choice.Label,
+                    Tag = choice
+                });
+            }
+            scope.SelectedIndex = dialogPlan.ScopeIndex;
+
+            var from = new System.Windows.Controls.TextBox
+            {
+                Text = dialogPlan.FromRecordText,
+                Width = 72,
+                Margin = new Thickness(8, 0, 16, 0)
+            };
+            var to = new System.Windows.Controls.TextBox
+            {
+                Text = dialogPlan.ToRecordText,
+                Width = 72,
+                Margin = new Thickness(8, 0, 0, 0)
+            };
+            var range = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                Margin = new Thickness(0, 0, 0, 16)
+            };
+            range.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = "From",
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            range.Children.Add(from);
+            range.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = "To",
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            range.Children.Add(to);
+
+            var ok = new System.Windows.Controls.Button
+            {
+                Content = "OK",
+                IsDefault = true,
+                MinWidth = 72,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            var cancel = new System.Windows.Controls.Button
+            {
+                Content = "Cancel",
+                IsCancel = true,
+                MinWidth = 72
+            };
+
+            MailMergeFinishPlan CurrentPlan()
+            {
+                var destinationChoice = (MailMergeFinishDestinationChoice)
+                    ((System.Windows.Controls.ComboBoxItem)destination.SelectedItem).Tag;
+                var scopeChoice = (MailMergeFinishScopeChoice)
+                    ((System.Windows.Controls.ComboBoxItem)scope.SelectedItem).Tag;
+                return MailMergeFinishPlanner.Plan(
+                    destinationChoice.Destination,
+                    scopeChoice.Scope,
+                    recordCount,
+                    currentIndex,
+                    from.Text,
+                    to.Text);
+            }
+
+            void Refresh()
+            {
+                var scopeChoice = (MailMergeFinishScopeChoice)
+                    ((System.Windows.Controls.ComboBoxItem)scope.SelectedItem).Tag;
+                range.IsEnabled = scopeChoice.Scope == MailMergeRecipientScope.FromTo;
+                ok.IsEnabled = CurrentPlan().Success;
+            }
+
+            destination.SelectionChanged += (_, _) => Refresh();
+            scope.SelectionChanged += (_, _) => Refresh();
+            from.TextChanged += (_, _) => Refresh();
+            to.TextChanged += (_, _) => Refresh();
+            ok.Click += (_, _) =>
+            {
+                var plan = CurrentPlan();
+                if (!plan.Success)
+                    return;
+                result = plan;
+                dialog.DialogResult = true;
+            };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Merge to" });
+            panel.Children.Add(destination);
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Records to merge" });
+            panel.Children.Add(scope);
+            panel.Children.Add(range);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            Refresh();
+            destination.Focus();
+            return dialog.ShowDialog() == true ? result : null;
         }
     }
 

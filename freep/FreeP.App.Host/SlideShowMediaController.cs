@@ -460,8 +460,27 @@ public sealed class SlideShowMediaController
             {
                 FontWeight = span.Bold ? FontWeights.Bold : FontWeights.Normal,
                 FontStyle = span.Italic ? FontStyles.Italic : FontStyles.Normal,
-                TextDecorations = span.Underline ? TextDecorations.Underline : null
+                TextDecorations = span.Underline ? TextDecorations.Underline : null,
+                Foreground = CaptionBrush(span.ForegroundColorHex),
+                Background = CaptionBrush(span.BackgroundColorHex)
             });
+        }
+    }
+
+    private static Brush? CaptionBrush(string? colorHex)
+    {
+        if (string.IsNullOrWhiteSpace(colorHex))
+        {
+            return null;
+        }
+
+        try
+        {
+            return new SolidColorBrush((Color)ColorConverter.ConvertFromString("#" + colorHex)!);
+        }
+        catch (FormatException)
+        {
+            return null;
         }
     }
 
