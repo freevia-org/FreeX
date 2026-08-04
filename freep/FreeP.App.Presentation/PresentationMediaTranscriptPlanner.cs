@@ -40,11 +40,21 @@ public sealed record PresentationMediaCaptionPlacement(
     double Height,
     double RotationDegrees = 0);
 
+public sealed record PresentationMediaTranscriptCueSpan(
+    string Text,
+    bool Bold = false,
+    bool Italic = false,
+    bool Underline = false);
+
 public sealed record PresentationMediaTranscriptCueDescriptor(
     TimeSpan StartTime,
     TimeSpan EndTime,
     string Text)
 {
+    public IReadOnlyList<PresentationMediaTranscriptCueSpan> Spans { get; init; } = [];
+
+    public string? WebVttMarkup { get; init; }
+
     public double? PositionPercent { get; init; }
 
     public double? LinePercent { get; init; }
@@ -844,7 +854,7 @@ public static class PresentationMediaTranscriptPlanner
             AppendWebVttSettings(builder, cue);
             builder
                 .Append("\r\n")
-                .Append(EscapeWebVttText(cue.Text))
+                .Append(cue.WebVttMarkup ?? EscapeWebVttText(cue.Text))
                 .Append("\r\n\r\n");
         }
 
@@ -1211,7 +1221,8 @@ public static class PresentationMediaTranscriptPlanner
                 continue;
             }
 
-            var cueText = BuildCueText(block.Skip(timingIndex + 1));
+            var cueLines = block.Skip(timingIndex + 1).ToArray();
+            var cueText = BuildCueText(cueLines);
             if (cueText.Length == 0)
             {
                 continue;
@@ -1219,6 +1230,8 @@ public static class PresentationMediaTranscriptPlanner
 
             cues.Add(new PresentationMediaTranscriptCueDescriptor(start, end, cueText)
             {
+                Spans = ParseWebVttSpans(cueLines),
+                WebVttMarkup = string.Join(" ", cueLines),
                 PositionPercent = positionPercent,
                 LinePercent = linePercent,
                 LineNumber = lineNumber,
@@ -1639,6 +1652,55 @@ public static class PresentationMediaTranscriptPlanner
     {
         var text = string.Join(" ", lines.Select(StripCueMarkup).Where(line => line.Length > 0));
         return CollapseWhitespace(text);
+    }
+
+    private static IReadOnlyList<PresentationMediaTranscriptCueSpan> ParseWebVttSpans(
+        IEnumerable<string> lines)
+    {
+        var markup = string.Join(" ", lines);
+        var spans = new List<PresentationMediaTranscriptCueSpan>();
+        var bold = 0;
+        var italic = 0;
+        var underline = 0;
+
+        foreach (Match match in Regex.Matches(
+                     markup,
+                     "(?<tag><(?<close>/)?(?<name>b|i|u|c(?:\\.[^ >]+)*|v(?:\\.[^ >]+)*|lang(?:\\.[^ >]+)*)(?: [^>]*)?>)|(?<text>[^<]+)",
+                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            if (match.Groups["tag"].Success)
+            {
+                var name = match.Groups["name"].Value.Split('.')[0].ToLowerInvariant();
+                var delta = match.Groups["close"].Success ? -1 : 1;
+                switch (name)
+                {
+                    case "b": bold = Math.Max(0, bold + delta); break;
+                    case "i": italic = Math.Max(0, italic + delta); break;
+                    case "u": underline = Math.Max(0, underline + delta); break;
+                }
+
+                continue;
+            }
+
+            var text = WhitespacePattern.Replace(WebUtility.HtmlDecode(match.Value), " ");
+            if (text.Length > 0)
+            {
+                spans.Add(new PresentationMediaTranscriptCueSpan(
+                    text,
+                    bold > 0,
+                    italic > 0,
+                    underline > 0));
+            }
+        }
+
+        if (spans.Count == 0)
+        {
+            return [];
+        }
+
+        spans[0] = spans[0] with { Text = spans[0].Text.TrimStart() };
+        spans[^1] = spans[^1] with { Text = spans[^1].Text.TrimEnd() };
+        return spans.Where(span => span.Text.Length > 0).ToArray();
     }
 
     private static string StripCueMarkup(string line)
