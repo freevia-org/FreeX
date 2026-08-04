@@ -551,6 +551,9 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
     private bool                _oldRegenerateWorkbookOnSave;
     private ChartType            _oldChartType;
     private ScatterStyle         _oldScatterStyle;
+    private bool                 _oldIsChartEx;
+    private string?              _oldPreservedChartExXml;
+    private string?              _oldChartExLayoutId;
 
     /// <summary>
     /// Nullable-aware constructor — gaps (null entries) in <paramref name="values"/> are
@@ -629,12 +632,24 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
         _oldRegenerateWorkbookOnSave = chart.RegenerateWorkbookOnSave;
         _oldChartType = chart.ChartType;
         _oldScatterStyle = chart.ScatterStyle;
+        _oldIsChartEx = chart.IsChartEx;
+        _oldPreservedChartExXml = chart.PreservedChartExXml;
+        _oldChartExLayoutId = chart.ChartExLayoutId;
 
         // Apply new state.
         ApplyForward(chart, _newCategories, _newSeriesNames, _newValues);
         if (_newChartType.HasValue)
         {
             ApplyChartTypeTransition(chart, _oldChartType, _newChartType.Value);
+            if (_newChartType.Value != _oldChartType && chart.IsChartEx)
+            {
+                // A type change is an explicit request for a modeled classic chart.
+                // Do not keep emitting the old native ChartEx family after the model
+                // has changed type; undo restores the source-native payload below.
+                chart.IsChartEx = false;
+                chart.PreservedChartExXml = null;
+                chart.ChartExLayoutId = null;
+            }
             chart.ChartType = _newChartType.Value;
         }
         ApplyCoordinatePayload(
@@ -658,6 +673,9 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
         chart.RegenerateWorkbookOnSave = _oldRegenerateWorkbookOnSave;
         chart.ChartType = _oldChartType;
         chart.ScatterStyle = _oldScatterStyle;
+        chart.IsChartEx = _oldIsChartEx;
+        chart.PreservedChartExXml = _oldPreservedChartExXml;
+        chart.ChartExLayoutId = _oldChartExLayoutId;
     }
 
     // ── Forward apply: produce the new data, keeping existing series when possible ─
