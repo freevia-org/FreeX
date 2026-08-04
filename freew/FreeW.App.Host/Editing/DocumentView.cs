@@ -9177,6 +9177,8 @@ public sealed class DocumentView : RichTextBox
         var repeatHeader = stashed?.RepeatHeaderRow ?? false;
         var tableStyleId = stashedTag?.TableStyleId;
         var tableBorders = stashedTag?.Borders;
+        var floatingPosition = stashedTag?.FloatingPosition;
+        var floatingTableAllowsOverlap = stashedTag?.FloatingTableAllowsOverlap;
 
         // Preserve column widths (column-level in WPF) so the docx tblGrid round-trips through edit.
         foreach (var column in wpfTable.Columns)
@@ -9307,6 +9309,8 @@ public sealed class DocumentView : RichTextBox
         // WpfTableTag by BuildTable and must be written back so CommitToModel preserves the style.
         table.TableStyleId = tableStyleId;
         table.Borders = tableBorders;
+        table.FloatingPosition = floatingPosition;
+        table.FloatingTableAllowsOverlap = floatingTableAllowsOverlap;
         return table;
     }
 
@@ -9476,13 +9480,16 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Carried on a rendered <see cref="WpfTable"/>'s Tag so <see cref="ReadTable"/> can recover values
     /// that the WPF FlowDocument table cannot express: the <see cref="TableFormatting"/> toggles, explicit
-    /// <see cref="TableBorders"/>, and the <see cref="TableStyleId"/> (the named catalog style). They are stashed on <see cref="BuildTable"/>
-    /// and recovered on commit so they survive the view→model round-trip unmodified.
+    /// <see cref="TableBorders"/>, the <see cref="TableStyleId"/> (the named catalog style), and authored
+    /// floating-table placement. They are stashed on <see cref="BuildTable"/> and recovered on commit so
+    /// they survive the view→model round-trip unmodified.
     /// </summary>
     private sealed record WpfTableTag(
         TableFormatting Formatting,
         string? TableStyleId,
         TableBorders? Borders,
+        TableFloatingPosition? FloatingPosition,
+        bool? FloatingTableAllowsOverlap,
         int SourceBlockIndex = -1,
         int SegmentIndex = 0,
         int SegmentCount = 1,
@@ -9593,6 +9600,8 @@ public sealed class DocumentView : RichTextBox
                 table.Formatting,
                 table.TableStyleId,
                 table.Borders,
+                table.FloatingPosition,
+                table.FloatingTableAllowsOverlap,
                 sourceBlockIndex,
                 segmentIndex,
                 segmentCount,
