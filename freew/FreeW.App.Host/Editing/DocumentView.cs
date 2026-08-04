@@ -8692,6 +8692,10 @@ public sealed class DocumentView : RichTextBox
                     FlushPendingSegment();
                     ReadList(target, wpfList, document);
                     break;
+                case WpfParagraph wpfParagraph when TryReadFloatingTable(wpfParagraph, document, out var floatingTable):
+                    FlushPendingSegment();
+                    target.Add(floatingTable);
+                    break;
                 case WpfParagraph wpfParagraph:
                     FlushPendingSegment();
                     target.Add(ReadParagraph(wpfParagraph, document));
@@ -8733,6 +8737,26 @@ public sealed class DocumentView : RichTextBox
         }
 
         FlushPendingSegment();
+    }
+
+    private static bool TryReadFloatingTable(
+        WpfParagraph paragraph,
+        TextDocument document,
+        out ModelTable table)
+    {
+        var renderedTable = paragraph.Inlines
+            .OfType<Figure>()
+            .Where(figure => figure.Tag is WpfFloatingTableFigureTag)
+            .SelectMany(figure => figure.Blocks.OfType<WpfTable>())
+            .SingleOrDefault();
+        if (renderedTable is null)
+        {
+            table = null!;
+            return false;
+        }
+
+        table = ReadTable(renderedTable, document);
+        return true;
     }
 
     // Reconstruct the full model from the committed visible blocks plus the blocks that Render hid for
@@ -9545,6 +9569,8 @@ public sealed class DocumentView : RichTextBox
 
     private sealed record WpfTableRowTag(int SourceRowIndex, bool IsRepeatedHeader);
 
+    private sealed record WpfFloatingTableFigureTag(int SourceBlockIndex);
+
     private static IReadOnlyList<System.Windows.Documents.Block> BuildTableBlocks(
         ModelTable table,
         TextDocument document,
@@ -9582,7 +9608,72 @@ public sealed class DocumentView : RichTextBox
             return blocks;
         }
 
+        if (tableLayoutPlan.FloatingPosition is not null)
+        {
+            return [BuildFloatingTableBlock(
+                table,
+                document,
+                sourceBlockIndex,
+                leadingContentHeightDip,
+                tableLayoutPlan)];
+        }
+
         return [BuildTable(table, document, sourceBlockIndex, tableLayoutPlan)];
+    }
+
+    private static WpfParagraph BuildFloatingTableBlock(
+        ModelTable table,
+        TextDocument document,
+        int sourceBlockIndex,
+        double anchorContentYDip,
+        DocumentTableLayoutPlan tableLayoutPlan)
+    {
+        var metrics = DocumentViewLayoutPlanner.BuildPageMetrics(document.Page);
+        var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            document.Page,
+            DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: metrics.PageWidthDip + 48);
+        var contentWidth = document.Page.ColumnCount > 1
+            ? DocumentViewLayoutPlanner.BuildColumnPlan(
+                document.Page,
+                metrics.ContentWidthDip,
+                usePageColumns: true).WidthDip
+            : metrics.ContentWidthDip;
+        var measuredWidth = ResolveContentAutoFitColumnWidths(table, document)?.Sum();
+        var tableWidth = ResolveTableWidthDip(table, measuredWidth);
+        if (tableWidth <= 0)
+            tableWidth = contentWidth;
+        var tableHeight = tableLayoutPlan.Pagination.Rows.Sum(row => row.EstimatedHeightDip);
+        var placement = DocumentViewLayoutPlanner.BuildFloatingTablePlacement(
+            surface,
+            anchorContentYDip,
+            columnCount: 1,
+            tableWidth,
+            tableHeight,
+            tableLayoutPlan.FloatingPosition!,
+            surface.ContentLeftDip,
+            contentWidth);
+
+        var renderedTable = BuildTable(table, document, sourceBlockIndex, tableLayoutPlan);
+        renderedTable.Margin = new Thickness(0);
+        var figure = new Figure(renderedTable)
+        {
+            Width = new FigureLength(tableWidth, FigureUnitType.Pixel),
+            HorizontalAnchor = FigureHorizontalAnchor.PageLeft,
+            VerticalAnchor = FigureVerticalAnchor.PageTop,
+            HorizontalOffset = placement.XDip - surface.PageLeftDip,
+            VerticalOffset = placement.YDip - surface.PageTopDip(placement.AnchorPageIndex),
+            WrapDirection = WrapDirection.Both,
+            CanDelayPlacement = false,
+            Margin = new Thickness(0),
+            Tag = new WpfFloatingTableFigureTag(sourceBlockIndex),
+        };
+        var wrapper = new WpfParagraph(figure)
+        {
+            Margin = new Thickness(0),
+            Padding = new Thickness(0),
+        };
+        return wrapper;
     }
 
     private static bool ShouldRenderPlannedTablePages(ModelTable table, DocumentTablePaginationPlan paginationPlan) =>
@@ -10000,13 +10091,7 @@ public sealed class DocumentView : RichTextBox
         DocumentTableLayoutPlan? tableLayoutPlan = null)
     {
         var indent = Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint;
-        var widthDip = measuredWidthDip is > 0
-            ? measuredWidthDip.Value
-            : table.PreferredWidthPt is > 0
-                ? table.PreferredWidthPt.Value * PxPerPoint
-                : table.ColumnWidthsPt.Count > 0
-                    ? table.ColumnWidthsPt.Where(width => width > 0).Sum() * PxPerPoint
-                    : 0;
+        var widthDip = ResolveTableWidthDip(table, measuredWidthDip);
         if (widthDip <= 0)
             return new Thickness(indent, 0, 0, 0);
 
@@ -10040,6 +10125,15 @@ public sealed class DocumentView : RichTextBox
         var left = placement.XDip - surface.ContentLeftDip;
         return new Thickness(left, 0, contentWidth - widthDip - left, 0);
     }
+
+    private static double ResolveTableWidthDip(ModelTable table, double? measuredWidthDip = null) =>
+        measuredWidthDip is > 0
+            ? measuredWidthDip.Value
+            : table.PreferredWidthPt is > 0
+                ? table.PreferredWidthPt.Value * PxPerPoint
+                : table.ColumnWidthsPt.Count > 0
+                    ? table.ColumnWidthsPt.Where(width => width > 0).Sum() * PxPerPoint
+                    : 0;
 
     private static IReadOnlyList<double>? ResolveContentAutoFitColumnWidths(
         ModelTable table,
@@ -15205,8 +15299,7 @@ public sealed class DocumentView : RichTextBox
         int paragraphIndex,
         int textOffset)
     {
-        var table = Document.Blocks
-            .OfType<WpfTable>()
+        var table = EnumerateRenderedTables(Document.Blocks)
             .FirstOrDefault(candidate => candidate.Tag is WpfTableTag { SourceBlockIndex: var source }
                 && source == tableBlockIndex);
         var row = table?.RowGroups
@@ -15222,6 +15315,34 @@ public sealed class DocumentView : RichTextBox
 
         CaretPosition = TextPointerAtParagraphOffset(paragraphs[paragraphIndex], textOffset);
         Focus();
+    }
+
+    private static IEnumerable<WpfTable> EnumerateRenderedTables(BlockCollection blocks)
+    {
+        foreach (var block in blocks)
+        {
+            if (block is WpfTable table)
+            {
+                yield return table;
+                continue;
+            }
+
+            if (block is System.Windows.Documents.Section section)
+            {
+                foreach (var nested in EnumerateRenderedTables(section.Blocks))
+                    yield return nested;
+                continue;
+            }
+
+            if (block is not WpfParagraph paragraph)
+                continue;
+
+            foreach (var figure in paragraph.Inlines.OfType<Figure>())
+            {
+                foreach (var nested in EnumerateRenderedTables(figure.Blocks))
+                    yield return nested;
+            }
+        }
     }
 
     /// <summary>

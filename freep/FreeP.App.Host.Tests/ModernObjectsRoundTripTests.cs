@@ -492,6 +492,36 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void ZoomFrameGeometry_IsUndoableAndRoundTripsNativePreset()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var zoom = session.InsertSlideZoom("slide-2");
+        session.SetZoomObjectProperties(
+                zoom.Id,
+                new ZoomObjectProperties(FrameGeometry: "ellipse"))
+            .Should().BeTrue();
+
+        XElement.Parse(zoom.PreservedObject!.RawXml)
+            .Descendants().Single(element => element.Name.LocalName == "prstGeom")
+            .Attribute("prst")!.Value.Should().Be("ellipse");
+        zoom.PreservedObject.ZoomProperties!.FrameGeometry.Should().Be("ellipse");
+
+        session.Undo();
+        XElement.Parse(zoom.PreservedObject.RawXml)
+            .Descendants().Single(element => element.Name.LocalName == "prstGeom")
+            .Attribute("prst")!.Value.Should().Be("rect");
+        session.Redo();
+
+        var reopened = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
+            .PreservedObject!.ZoomProperties!.FrameGeometry.Should().Be("ellipse");
+    }
+
+    [Fact]
     public void ZoomFrameBorder_ClearPreservesUnsupportedNativeLineFill()
     {
         var presentation = new Presentation();
