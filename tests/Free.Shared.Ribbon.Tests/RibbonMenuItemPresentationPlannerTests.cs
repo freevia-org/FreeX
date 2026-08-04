@@ -43,4 +43,23 @@ public sealed class RibbonMenuItemPresentationPlannerTests
             item.InputGesture.Should().Be(KeyGesture.Parse("Ctrl+S"));
         }, CancellationToken.None);
     }
+
+    [Fact]
+    public async Task AvaloniaContextMenu_LeavesEmptyAndInvalidShortcutsUnwired()
+    {
+        await Session.Dispatch(() =>
+        {
+            var menu = AvaloniaContextMenuRenderer.BuildContextMenu(
+                new RibbonMenu(
+                [
+                    new RibbonMenuItem("Empty", InputGesture: ""),
+                    new RibbonMenuItem("Invalid", InputGesture: "NotARealGesture"),
+                ]),
+                _ => { });
+
+            var items = menu.Items.OfType<MenuItem>().ToArray();
+            items[0].InputGesture.Should().BeNull();
+            items[1].InputGesture.Should().BeNull();
+        }, CancellationToken.None);
+    }
 }

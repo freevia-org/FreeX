@@ -206,15 +206,26 @@ internal static class RibbonWpfPopupAdapter
                 var states = siblings
                     .Select(candidate => new RibbonPopupFocusItem(candidate.Focusable, candidate.IsEnabled))
                     .ToArray();
-                var targetIndex = args.Key switch
+                var key = args.Key switch
                 {
-                    Key.Home => RibbonPopupInteractionPlanner.FindFirstFocusableItem(states),
-                    Key.End => RibbonPopupInteractionPlanner.FindLastFocusableItem(states),
-                    Key.Up => RibbonPopupInteractionPlanner.FindAdjacentFocusableItem(states, currentIndex, -1),
-                    Key.Down => RibbonPopupInteractionPlanner.FindAdjacentFocusableItem(states, currentIndex, 1),
-                    _ => -1,
+                    Key.Home => RibbonPopupKeyboardKey.Home,
+                    Key.End => RibbonPopupKeyboardKey.End,
+                    Key.Up => RibbonPopupKeyboardKey.Up,
+                    Key.Down => RibbonPopupKeyboardKey.Down,
+                    _ => (RibbonPopupKeyboardKey?)null,
                 };
-                if (targetIndex >= 0 && siblings[targetIndex].Focus())
+                if (key is null)
+                    return;
+                var decision = RibbonPopupInteractionPlanner.PlanKey(
+                    key.Value,
+                    states,
+                    currentIndex,
+                    children.Length > 0,
+                    parent is not null,
+                    contract);
+                if (decision.Action == RibbonPopupKeyboardAction.FocusItem &&
+                    decision.TargetIndex >= 0 &&
+                    siblings[decision.TargetIndex].Focus())
                     args.Handled = true;
             }),
             handledEventsToo: true);

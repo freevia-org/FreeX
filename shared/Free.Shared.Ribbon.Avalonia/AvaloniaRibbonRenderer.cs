@@ -2651,47 +2651,19 @@ public static class AvaloniaRibbonRenderer
             return;
 
         var children = currentItem.Items.OfType<MenuItem>().ToArray();
-        if (args.Key == Key.Right &&
-            RibbonPopupInteractionPlanner.PlanNavigation(
-                RibbonPopupNavigationKey.Right, children.Length > 0, contract) == RibbonPopupNavigation.OpenSubmenu)
+        var key = args.Key switch
         {
-            currentItem.IsSubMenuOpen = true;
-            FocusFirstEnabledChild(currentItem, children, contract);
-            args.Handled = true;
-            return;
-        }
-
-        var dismissal = args.Key switch
-        {
-            Key.Escape => RibbonPopupInteractionPlanner.PlanDismissal(
-                RibbonPopupDismissKey.Escape, parent is not null, contract),
-            Key.Left => RibbonPopupInteractionPlanner.PlanDismissal(
-                RibbonPopupDismissKey.Left, parent is not null, contract),
-            _ => RibbonPopupDismissal.None,
+            Key.Escape => RibbonPopupKeyboardKey.Escape,
+            Key.Left => RibbonPopupKeyboardKey.Left,
+            Key.Right => RibbonPopupKeyboardKey.Right,
+            Key.Up => RibbonPopupKeyboardKey.Up,
+            Key.Down => RibbonPopupKeyboardKey.Down,
+            Key.Home => RibbonPopupKeyboardKey.Home,
+            Key.End => RibbonPopupKeyboardKey.End,
+            _ => (RibbonPopupKeyboardKey?)null,
         };
-        if (dismissal == RibbonPopupDismissal.CloseSubmenu && parent is not null)
-        {
-            parent.IsSubMenuOpen = false;
-            if (contract.Submenu.RestoreFocusToParentOnClose)
-            {
-                parent.Focusable = true;
-                parent.IsSelected = true;
-                TopLevel.GetTopLevel(parent)?.FocusManager?.Focus(parent, NavigationMethod.Tab);
-            }
-            args.Handled = true;
-            return;
-        }
 
-        if (dismissal == RibbonPopupDismissal.ClosePopup)
-        {
-            flyout.Hide();
-            args.Handled = true;
-            return;
-        }
-
-        if (parent is not null && !contract.Submenu.TraverseEnabledItems ||
-            parent is null && !contract.TraverseEnabledItems ||
-            args.Key is not (Key.Up or Key.Down or Key.Home or Key.End))
+        if (key is null)
             return;
 
         var currentIndex = -1;
@@ -2703,24 +2675,42 @@ public static class AvaloniaRibbonRenderer
                 break;
             }
         }
-        if (currentIndex < 0)
-            return;
 
         var states = siblings
             .Select(item => new RibbonPopupFocusItem(item.Focusable, item.IsEnabled))
             .ToArray();
-        var targetIndex = args.Key switch
+        var decision = RibbonPopupInteractionPlanner.PlanKey(
+            key.Value,
+            states,
+            currentIndex,
+            children.Length > 0,
+            parent is not null,
+            contract);
+        switch (decision.Action)
         {
-            Key.Home => RibbonPopupInteractionPlanner.FindFirstFocusableItem(states),
-            Key.End => RibbonPopupInteractionPlanner.FindLastFocusableItem(states),
-            Key.Up => RibbonPopupInteractionPlanner.FindAdjacentFocusableItem(states, currentIndex, -1),
-            Key.Down => RibbonPopupInteractionPlanner.FindAdjacentFocusableItem(states, currentIndex, 1),
-            _ => -1,
-        };
-        if (targetIndex >= 0)
-        {
-            siblings[targetIndex].Focus(NavigationMethod.Directional);
-            args.Handled = true;
+            case RibbonPopupKeyboardAction.OpenSubmenu:
+                currentItem.IsSubMenuOpen = true;
+                FocusFirstEnabledChild(currentItem, children, contract);
+                args.Handled = true;
+                return;
+            case RibbonPopupKeyboardAction.CloseSubmenu when parent is not null:
+                parent.IsSubMenuOpen = false;
+                if (contract.Submenu.RestoreFocusToParentOnClose)
+                {
+                    parent.Focusable = true;
+                    parent.IsSelected = true;
+                    TopLevel.GetTopLevel(parent)?.FocusManager?.Focus(parent, NavigationMethod.Tab);
+                }
+                args.Handled = true;
+                return;
+            case RibbonPopupKeyboardAction.ClosePopup:
+                flyout.Hide();
+                args.Handled = true;
+                return;
+            case RibbonPopupKeyboardAction.FocusItem when decision.TargetIndex >= 0:
+                siblings[decision.TargetIndex].Focus(NavigationMethod.Directional);
+                args.Handled = true;
+                return;
         }
     }
 
