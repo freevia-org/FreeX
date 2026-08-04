@@ -5350,6 +5350,40 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Media_volume_pane_applies_selected_media_volume()
+    {
+        var volume = -1;
+        var dirty = false;
+        var applied = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var mediaShape = new SlideShape
+            {
+                Id = 725,
+                Name = "Demo video",
+                Kind = SlideShapeKind.Media,
+                Media = new MediaInfo { IsVideo = true, VolumePercent = 80 }
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
+            window.Editor.Select(mediaShape.Id);
+
+            window.ShowMediaCaptionPane();
+            window.MediaVolumePercent.Should().Be(80);
+            window.SetMediaVolumePaneInput(25);
+            applied = window.ApplyMediaVolumePane();
+            volume = mediaShape.Media!.VolumePercent;
+            dirty = window.IsDirty;
+        });
+
+        if (!ran) return;
+        applied.Should().BeTrue();
+        volume.Should().Be(25);
+        dirty.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Review_comment_add_edit_routes_through_shared_mutation_plan()
     {
         SlideComment? addedComment = null;

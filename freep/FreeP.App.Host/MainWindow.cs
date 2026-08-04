@@ -175,6 +175,9 @@ public sealed partial class MainWindow : Window
     private TextBox _mediaCaptionSourceBox = null!;
     private TextBlock _mediaCaptionTranscriptText = null!;
     private TextBox _mediaCaptionTranscriptBox = null!;
+    private TextBlock _mediaVolumeText = null!;
+    private Slider _mediaVolumeSlider = null!;
+    private Button _mediaVolumeApplyButton = null!;
     private Button _mediaCaptionCreateButton = null!;
     private Button _mediaCaptionReplaceButton = null!;
     private Button _mediaCaptionDeleteButton = null!;
@@ -343,6 +346,8 @@ public sealed partial class MainWindow : Window
     internal bool IsMediaCaptionReplaceEnabled => _mediaCaptionReplaceButton?.IsEnabled == true;
     internal bool IsMediaCaptionDeleteEnabled => _mediaCaptionDeleteButton?.IsEnabled == true;
     internal string MediaCaptionPaneTranscriptText => _mediaCaptionTranscriptBox?.Text ?? string.Empty;
+    internal int MediaVolumePercent => _mediaVolumeSlider is null ? 80 : (int)Math.Round(_mediaVolumeSlider.Value);
+    internal bool IsMediaVolumeApplyEnabled => _mediaVolumeApplyButton?.IsEnabled == true;
     internal string? ReadingOrderMoveEarlierDisabledReason =>
         LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
             action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)?.DisabledReason;
@@ -1245,6 +1250,19 @@ public sealed partial class MainWindow : Window
         _mediaCaptionSourceBox = BuildMediaCaptionPaneTextBox(singleLine: true);
         _mediaCaptionTranscriptText = BuildMediaCaptionPaneLabel();
         _mediaCaptionTranscriptBox = BuildMediaCaptionPaneTextBox(singleLine: false);
+        _mediaVolumeText = BuildMediaCaptionPaneLabel();
+        _mediaVolumeText.Text = "Playback volume";
+        _mediaVolumeSlider = new Slider
+        {
+            Minimum = 0,
+            Maximum = 100,
+            TickFrequency = 10,
+            IsSnapToTickEnabled = true,
+            Margin = new Thickness(12, 0, 12, 4),
+        };
+        _mediaVolumeApplyButton = BuildMediaCaptionPaneButton();
+        _mediaVolumeApplyButton.Content = "Apply volume";
+        _mediaVolumeApplyButton.Click += (_, _) => ApplyMediaVolumePane();
         _mediaCaptionCreateButton = BuildMediaCaptionPaneButton();
         _mediaCaptionReplaceButton = BuildMediaCaptionPaneButton();
         _mediaCaptionDeleteButton = BuildMediaCaptionPaneButton();
@@ -1267,6 +1285,7 @@ public sealed partial class MainWindow : Window
         buttons.Children.Add(_mediaCaptionCreateButton);
         buttons.Children.Add(_mediaCaptionReplaceButton);
         buttons.Children.Add(_mediaCaptionDeleteButton);
+        buttons.Children.Add(_mediaVolumeApplyButton);
         buttons.Children.Add(_mediaCaptionCloseButton);
 
         var panel = new StackPanel { Orientation = Orientation.Vertical };
@@ -1281,6 +1300,8 @@ public sealed partial class MainWindow : Window
         panel.Children.Add(_mediaCaptionSourceBox);
         panel.Children.Add(_mediaCaptionTranscriptText);
         panel.Children.Add(_mediaCaptionTranscriptBox);
+        panel.Children.Add(_mediaVolumeText);
+        panel.Children.Add(_mediaVolumeSlider);
         panel.Children.Add(buttons);
 
         return new Border
@@ -3429,6 +3450,22 @@ public sealed partial class MainWindow : Window
         RefreshVisibleMediaCaptionPaneFromFields();
     }
 
+    internal void SetMediaVolumePaneInput(int volumePercent)
+    {
+        if (!IsMediaCaptionPaneVisible)
+            ShowMediaCaptionPane();
+
+        _mediaCaptionPaneRefreshing = true;
+        try
+        {
+            _mediaVolumeSlider.Value = Math.Clamp(volumePercent, 0, 100);
+        }
+        finally
+        {
+            _mediaCaptionPaneRefreshing = false;
+        }
+    }
+
     internal PresentationMediaCaptionTrackMutationResult ApplyMediaCaptionPane(
         PresentationMediaCaptionAuthoringIntentKind intent)
     {
@@ -3461,6 +3498,20 @@ public sealed partial class MainWindow : Window
 
         RefreshVisibleMediaCaptionPaneFromFields();
         return LastMediaCaptionTrackMutationResult;
+    }
+
+    internal bool ApplyMediaVolumePane()
+    {
+        var changed = Editor.SetSelectedMediaVolume(MediaVolumePercent);
+        if (changed)
+        {
+            _file.MarkDirty();
+            RefreshReviewWorkflowPlans();
+            UpdateTitle();
+            RefreshVisibleMediaCaptionPaneFromFields();
+        }
+
+        return changed;
     }
 
     private void RefreshMediaCaptionAuthoringPlans(
@@ -3511,6 +3562,12 @@ public sealed partial class MainWindow : Window
             RenderMediaCaptionField(_mediaCaptionLanguageText, _mediaCaptionLanguageBox, plan.Language);
             RenderMediaCaptionField(_mediaCaptionSourceText, _mediaCaptionSourceBox, plan.Source);
             RenderMediaCaptionField(_mediaCaptionTranscriptText, _mediaCaptionTranscriptBox, plan.TranscriptText);
+            var selectedMedia = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
+                Editor.CurrentSlide,
+                Editor.SelectedShapeIds)?.Media;
+            _mediaVolumeSlider.Value = selectedMedia?.VolumePercent ?? 80;
+            _mediaVolumeSlider.IsEnabled = selectedMedia is not null;
+            _mediaVolumeApplyButton.IsEnabled = selectedMedia is not null;
             ApplyMediaCaptionButtonPlan(
                 _mediaCaptionCreateButton,
                 GetMediaCaptionPaneAction(plan, PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCreateCommandId));
