@@ -283,6 +283,7 @@ public static class SlideCloner
             var sc = new ChartSeries
             {
                 Name              = s.Name,
+                ChartExLayoutId  = s.ChartExLayoutId,
                 FillColor         = s.FillColor,
                 Fill              = s.Fill,
                 LineStyle         = CloneChartLineStyle(s.LineStyle),

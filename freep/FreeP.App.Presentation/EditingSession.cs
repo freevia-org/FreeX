@@ -3793,6 +3793,21 @@ public sealed class EditingSession
             seriesIndex, name));
     }
 
+    /// <summary>
+    /// Changes one native ChartEx series layout identifier while preserving the
+    /// source ChartEx family payload. The operation is undoable and is a no-op for
+    /// classic charts or protected chart formatting.
+    /// </summary>
+    public void SetChartExSeriesLayout(int seriesIndex, string layoutId)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0 ||
+            !CanEditSelectedChartFormatting)
+            return;
+
+        Bus.Execute(new SetChartExSeriesLayoutCommand(
+            _currentSlideIndex, _selectedShapeIds[0], seriesIndex, layoutId));
+    }
+
     /// <summary>Appends a new series to the selected chart. Undoable.</summary>
     public void AddChartSeries(string name = "New Series")
     {
