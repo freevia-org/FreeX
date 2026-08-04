@@ -560,7 +560,7 @@ public sealed class SlideShowWindow : Window
 #if FREEP_WINDOWS_CAPTURE
         return new WindowsRecordingCaptureBackend(
             windowsMetadata,
-            new WindowsRecordingDeviceCatalog(),
+            new WindowsNativeRecordingDeviceCatalog(),
             new WindowsNativeRecordingCaptureEngine(windowsMetadata.AdapterName));
 #else
         return new WindowsRecordingCaptureBackend(windowsMetadata);

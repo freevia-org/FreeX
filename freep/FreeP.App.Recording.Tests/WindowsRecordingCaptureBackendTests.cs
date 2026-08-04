@@ -387,8 +387,10 @@ public sealed class WindowsRecordingCaptureBackendTests
         avaloniaSource.Should().Contain("new WindowsNativeRecordingCaptureEngine(");
         avaloniaSource.Should().Contain("new WindowsNativeRecordingCaptureEngine(windowsMetadata.AdapterName)");
         avaloniaSource.Should().NotContain("new WindowsNativeRecordingCaptureEngine(metadata.AdapterName)");
+        avaloniaSource.Should().Contain("new WindowsNativeRecordingDeviceCatalog()");
         wpfSource.Should().NotContain("LinuxNarrationCaptureBackend");
         wpfSource.Should().Contain("new WindowsHostRecordingCaptureEngine(");
+        wpfSource.Should().Contain("new WindowsNativeRecordingDeviceCatalog()");
 
         Read(root, "freep", "FreeP.App.Host", "FreeP.App.Host.csproj")
             .Should().Contain("FreeP.App.Recording\\FreeP.App.Recording.csproj");
@@ -401,6 +403,16 @@ public sealed class WindowsRecordingCaptureBackendTests
         Read(root, "freep", "FreeP.App.Recording.Windows", "FreeP.App.Recording.Windows.csproj")
             .Should().Contain("FrameworkReference Include=\"Microsoft.Windows.SDK.NET.Ref\"");
         AssertNoHostLocalRecordingSources(root, "FreeP.App.Avalonia");
+    }
+
+    [Fact]
+    public void NativeCameraEngine_DoesNotSilentlySelectAnotherCameraWhenRequestedIdentityIsGone()
+    {
+        var source = Read(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep", "FreeP.App.Recording.Windows", "WindowsNativeRecordingCaptureEngine.cs");
+
+        source.Should().Contain("The requested camera '{requestedDevice.DisplayName}' is no longer available.");
+        source.Should().NotContain("?? devices.FirstOrDefault();");
     }
 
     private static (Presentation Presentation, PresentationRecordingMediaArtifact CameraArtifact)
