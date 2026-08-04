@@ -21940,6 +21940,42 @@ public sealed class DocumentView : Control
         return true;
     }
 
+    /// <summary>
+    /// Insert the body of another document after the caret's current body block.
+    /// This is the model-backed Avalonia equivalent of WPF's Text from File command:
+    /// source blocks are deep-cloned, missing styles and preserved package parts are
+    /// transferred through <see cref="DocumentMerge"/>, and the whole insertion is one
+    /// undoable action.
+    /// </summary>
+    public void InsertDocument(TextDocument source)
+    {
+        if (source is null || IsEditingLocked || source.Blocks.Count == 0)
+            return;
+
+        var clones = DocumentMerge.CloneBlocksForInsertion(_doc, source);
+        if (clones.Count == 0)
+            return;
+
+        foreach (var (id, style) in source.Styles)
+            _doc.Styles.TryAdd(id, style);
+
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        _bus.BeginUndoGroup();
+        try
+        {
+            for (var index = 0; index < clones.Count; index++)
+                _bus.Execute(new InsertBlockCommand(insertAt + index, clones[index]));
+            _bus.CommitUndoGroup("Insert Text from File");
+        }
+        catch
+        {
+            _bus.AbortUndoGroup();
+            throw;
+        }
+
+        Focus();
+    }
+
     private bool PasteNormalizedText(string? clipboardText, string undoLabel)
     {
         if (IsEditingLocked)

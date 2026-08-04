@@ -3875,9 +3875,9 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// AV-INSERT2: Insert Text from File — opens a file picker for a .docx/.txt, loads it (reusing the open
-    /// adapters for .docx; a plain reader for .txt), and inserts the document's plain text at the caret as a
-    /// Quick-Part-style multi-paragraph insert. Wired to <c>freew.text-from-file</c> (Insert → Text).
+    /// AV-INSERT2: Insert Text from File opens a file picker for a .docx/.txt. DOCX files are loaded through
+    /// the open adapters and inserted as cloned document blocks; .txt files retain the plain-text quick-part
+    /// insertion path. Wired to <c>freew.text-from-file</c> (Insert -> Text).
     /// </summary>
     private async Task InsertTextFromFileAsync()
     {
@@ -3892,11 +3892,11 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            string text;
             var ext = Path.GetExtension(path);
             if (string.Equals(ext, ".txt", StringComparison.OrdinalIgnoreCase))
             {
-                text = await File.ReadAllTextAsync(path);
+                var text = await File.ReadAllTextAsync(path);
+                _editor.InsertQuickPartText(text);
             }
             else
             {
@@ -3908,10 +3908,9 @@ public sealed partial class MainWindow : Window
                 }
                 using var stream = File.OpenRead(path);
                 var document = adapter.Load(stream);
-                text = document.PlainText;
+                _editor.InsertDocument(document);
             }
 
-            _editor.InsertQuickPartText(text);
             _editor.Focus();
         }
         catch (Exception ex)

@@ -532,6 +532,48 @@ public sealed class InsertDepth2Tests
     }
 
     [Fact]
+    public void Insert_document_preserves_rich_body_blocks_and_undoes_as_one_action()
+    {
+        var view = MakeView("Target");
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+        var rich = new Paragraph();
+        rich.Runs.Add(new Run("Styled", new RunFormatting { Bold = true }));
+        source.Blocks.Add(rich);
+        source.Blocks.Add(Table.Create(2, 2));
+
+        view.InsertDocument(source);
+
+        view.Document.Blocks.Should().HaveCount(3);
+        ((Paragraph)view.Document.Blocks[1]).Runs.Single().Formatting.Bold.Should().BeTrue();
+        view.Document.Blocks[2].Should().BeOfType<Table>();
+        view.Document.Blocks[2].Should().NotBeSameAs(source.Blocks[1]);
+
+        view.Undo();
+
+        view.Document.Blocks.Should().ContainSingle();
+        view.Document.Blocks[0].Should().BeOfType<Paragraph>();
+        view.Document.Blocks[0].Should().NotBeSameAs(source.Blocks[0]);
+    }
+
+    [Fact]
+    public void Insert_file_command_callback_consumes_rich_document_instead_of_plain_text()
+    {
+        var view = MakeView("");
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+        source.Blocks.Add(new Paragraph("Imported"));
+        source.Blocks.Add(Table.Create(1, 1));
+        var registry = FreeWRibbon.BuildRegistry(view,
+            Callbacks(textFromFile: () => view.InsertDocument(source)));
+
+        Exec(registry, "freew.insert-file");
+
+        view.Document.Blocks.Should().Contain(block => block is Table);
+        view.Document.PlainText.Should().Contain("Imported");
+    }
+
+    [Fact]
     public void Wordart_command_inserts_undoable_model_run()
     {
         var view = MakeView("");
