@@ -278,9 +278,44 @@ public sealed class ViewTabDepthTests
         afterSideToSide.Should().Be(FreeWViewDepthMode.SideToSidePreview);
         multipleActiveAfterSideToSide.Should().BeFalse();
         sideToSideActive.Should().BeTrue();
-        sideToSideLimitation.Should().Contain("Cross-page clipboard/undo");
+        sideToSideLimitation.Should().Contain("horizontal page-grid layout");
+        sideToSideLimitation.Should().NotContain("Cross-page clipboard/undo");
         sideToSideEditorEditable.Should().BeTrue();
         liveAfterSecondToggle.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task MainWindow_side_to_side_keeps_cross_page_selection_and_undo_on_live_editor()
+    {
+        string selectedBeforeEdit = string.Empty;
+        string selectedAfterNavigation = string.Empty;
+        string textAfterUndo = string.Empty;
+        bool canUndoAfterEdit = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.LoadDocument(MakeMultiPageDoc());
+            window.ToggleSideToSide();
+
+            window.Editor.SetSelectionRangePublic(0, 0, 2, 8);
+            selectedBeforeEdit = window.Editor.SelectedText;
+            window.Editor.InsertText("replacement");
+            canUndoAfterEdit = window.Editor.CanUndo;
+
+            window.NavigateSideToSideNextPairForTests();
+            selectedAfterNavigation = window.Editor.SelectedText;
+
+            window.Editor.Undo();
+            textAfterUndo = window.Editor.PlainText;
+        });
+
+        if (!ran) return;
+        selectedBeforeEdit.Should().NotBeEmpty();
+        selectedAfterNavigation.Should().BeEmpty();
+        canUndoAfterEdit.Should().BeTrue();
+        textAfterUndo.Should().Contain("navigation paragraph 1");
+        textAfterUndo.Should().Contain("navigation paragraph 3");
     }
 
     [Fact]
