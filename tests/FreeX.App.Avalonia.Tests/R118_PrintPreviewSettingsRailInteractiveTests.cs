@@ -132,6 +132,44 @@ public sealed class R118_PrintPreviewSettingsRailInteractiveTests
         }, CancellationToken.None);
     }
 
+    [Theory]
+    [InlineData(PrintPreviewSettingsPanelPlanner.CustomMarginsOptionIndex)]
+    [InlineData(PrintPreviewSettingsPanelPlanner.CustomScalingOptionIndex)]
+    public async Task SelectingCustomPrintOptionInSettingsRail_OpensPageSetupDialog(int optionIndex)
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                window.Show();
+                SeedPrintableCell(window);
+
+                var preview = await OpenPrintPreviewDialogAsync(window);
+                var controlAutomationId = optionIndex == PrintPreviewSettingsPanelPlanner.CustomMarginsOptionIndex
+                    ? "PrintPreviewSettingsMarginsBox"
+                    : "PrintPreviewSettingsScalingBox";
+                var optionBox = FindComboBox(preview, controlAutomationId);
+
+                optionBox.SelectedIndex = optionIndex;
+                await DrainInputAsync();
+                await DrainInputAsync();
+
+                window.OwnedWindows.Should().Contain(w =>
+                    AutomationProperties.GetAutomationId(w) == PageSetupDialogPlanner.DialogAutomationId,
+                    "the WPF print-preview rail opens the real Page Setup workflow for custom print options");
+            }
+            finally
+            {
+                foreach (var owned in window.OwnedWindows.ToList())
+                    owned.Close();
+                window.Close();
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
     private static void SeedPrintableCell(MainWindow window)
     {
         var sheet = window.Session.ActiveSheet;

@@ -537,6 +537,14 @@ public sealed partial class MainWindow
         Action<PrintPreviewSettings> SetSettings,
         Action Repaginate);
 
+    private async Task ShowPrintPreviewPageSetupAsync(
+        PageLayoutPageSetupOpenSource source,
+        Action repaginate)
+    {
+        await ShowPageSetupDialogAsync(source);
+        repaginate();
+    }
+
     private ScrollViewer CreatePrintPreviewSettingsRail(
         PrintPreviewSettingsRailPlan plan,
         PrintPreviewSettingsRailInteraction? interaction)
@@ -565,12 +573,16 @@ public sealed partial class MainWindow
                     break;
 
                 case PrintPreviewSettingsPanelActionKind.OpenCustomMargins:
+                    if (interaction is not null)
+                        _ = ShowPrintPreviewPageSetupAsync(
+                            PageLayoutPageSetupOpenSource.CustomMargins,
+                            interaction.Repaginate);
+                    break;
                 case PrintPreviewSettingsPanelActionKind.OpenPageSetup:
-                    // "Custom Margins..."/"Custom Scaling Options..." would normally open a nested
-                    // Page Setup dialog from within this already-modal Print Preview window; that
-                    // nested-dialog flow isn't wired up on the Avalonia shell yet, so the placeholder
-                    // pick is simply reverted by the caller's ResetSelection handling below rather
-                    // than silently pretending a dialog opened.
+                    if (interaction is not null)
+                        _ = ShowPrintPreviewPageSetupAsync(
+                            PageLayoutPageSetupOpenSource.ScaleToFit,
+                            interaction.Repaginate);
                     break;
             }
         }
