@@ -317,12 +317,17 @@ internal static class FreeWRibbonCommands
         // paragraph formatting; the editor stamps it onto the user's next mouse selection and disarms.
         registry.Register("freew.format-painter", new FormatPainterCommand(editor));
 
-        registry.Register("freew.font-family", new SelectionValueCommand(editor,
+        var fontFamily = new SelectionValueCommand(editor,
             (selection, value) => selection.ApplyPropertyValue(TextElement.FontFamilyProperty, new FontFamily(value)),
             value => editor.TrySetSelectedRunFormatting(
                 formatting => string.Equals(formatting.FontFamily, value, StringComparison.OrdinalIgnoreCase),
-                formatting => formatting with { FontFamily = value })));
-        registry.Register("freew.font-size", new SelectionValueCommand(editor, (selection, value) =>
+                formatting => formatting with { FontFamily = value }),
+            () => editor.CurrentRunFormatting.FontFamily ?? string.Empty);
+        registry.Register("freew.font-family", fontFamily);
+        stateful.Add(("freew.font-family", fontFamily));
+        stateStore.SetState("freew.font-family", fontFamily.GetState());
+
+        var fontSize = new SelectionValueCommand(editor, (selection, value) =>
         {
             if (double.TryParse(value, out var points))
                 selection.ApplyPropertyValue(TextElement.FontSizeProperty, points * 96.0 / 72.0);
@@ -333,7 +338,11 @@ internal static class FreeWRibbonCommands
             return editor.TrySetSelectedRunFormatting(
                 formatting => formatting.FontSizePt is { } size && Math.Abs(size - points) < 0.0001,
                 formatting => formatting with { FontSizePt = points });
-        }));
+        }, () => (editor.CurrentRunFormatting.FontSizePt ?? 11).ToString(
+            "0.##", System.Globalization.CultureInfo.InvariantCulture));
+        registry.Register("freew.font-size", fontSize);
+        stateful.Add(("freew.font-size", fontSize));
+        stateStore.SetState("freew.font-size", fontSize.GetState());
 
         // Insert tab — Pages: prepend a cover page, insert a blank page, or drop a horizontal rule / page break at the caret.
         // Each mutates the model through the view's undo/redo bus and re-renders.
@@ -1565,7 +1574,10 @@ internal static class FreeWRibbonCommands
 
         // Home > Paragraph: set line spacing (a multiplier on the default font size) over the selection,
         // and toggle Add/Remove Space Before/After. All route through the view's undo/redo bus.
-        registry.Register("freew.line-spacing", new LineSpacingCommand(editor));
+        var lineSpacing = new LineSpacingCommand(editor);
+        registry.Register("freew.line-spacing", lineSpacing);
+        stateful.Add(("freew.line-spacing", lineSpacing));
+        stateStore.SetState("freew.line-spacing", lineSpacing.GetState());
         registry.Register("freew.space-before-toggle", new ActionRibbonCommand(() => editor.ToggleSpaceBefore()));
         registry.Register("freew.space-after-toggle", new ActionRibbonCommand(() => editor.ToggleSpaceAfter()));
 
@@ -2163,7 +2175,7 @@ internal static class FreeWRibbonCommands
 
     // Home > Paragraph > Line Spacing: parse the chosen multiplier (e.g. "1.5") and apply it to every
     // paragraph spanned by the selection. The view routes the change through its undo/redo bus.
-    private sealed class LineSpacingCommand(DocumentView editor) : IRibbonCommand
+    private sealed class LineSpacingCommand(DocumentView editor) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
@@ -2175,6 +2187,10 @@ internal static class FreeWRibbonCommands
                 editor.SetLineSpacing(multiplier);
             }
         }
+
+        public RibbonCommandState GetState() =>
+            new(Value: editor.CurrentParagraphFormatting.LineSpacing.ToString(
+                "0.##", System.Globalization.CultureInfo.InvariantCulture));
     }
 
     // Layout > Paragraph > Indent Left / Indent Right: numeric combo boxes (points) that display the
@@ -9001,7 +9017,8 @@ internal static class FreeWRibbonCommands
     private sealed class SelectionValueCommand(
         DocumentView editor,
         Action<TextSelection, string> apply,
-        Func<string, bool>? tryModelApply = null) : IRibbonCommand
+        Func<string, bool>? tryModelApply = null,
+        Func<string>? getValue = null) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
@@ -9013,6 +9030,9 @@ internal static class FreeWRibbonCommands
                 apply(editor.Selection, value);
             }
         }
+
+        public RibbonCommandState GetState() =>
+            new(Value: getValue?.Invoke());
     }
 
     private sealed class RoutedEditCommand(DocumentView editor, RoutedCommand command) : IRibbonCommand

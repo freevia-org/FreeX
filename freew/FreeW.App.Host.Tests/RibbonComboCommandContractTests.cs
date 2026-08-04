@@ -9,7 +9,12 @@ public sealed class RibbonComboCommandContractTests
     public void TextAndParagraphCombos_ConsumeSharedSelectedValueContract()
     {
         var view = BuildView();
-        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        var stateStore = new RibbonStateStore();
+        var registry = FreeWRibbonCommands.Build(view, stateStore);
+
+        stateStore.GetState("freew.font-family").Value.Should().Be("Calibri");
+        stateStore.GetState("freew.font-size").Value.Should().Be("11");
+        stateStore.GetState("freew.line-spacing").Value.Should().Be("1.15");
 
         Execute(view, registry, "freew.font-family", "Arial");
         Execute(view, registry, "freew.font-size", "16");
@@ -17,9 +22,12 @@ public sealed class RibbonComboCommandContractTests
         var run = ((Paragraph)view.Model.Blocks[0]).Runs.Single();
         run.Formatting.FontFamily.Should().Be("Arial");
         run.Formatting.FontSizePt.Should().Be(16);
+        stateStore.GetState("freew.font-family").Value.Should().Be("Arial");
+        stateStore.GetState("freew.font-size").Value.Should().Be("16");
 
         Execute(view, registry, "freew.line-spacing", "1.5");
         ((Paragraph)view.Model.Blocks[0]).Formatting.LineSpacing.Should().Be(1.5);
+        stateStore.GetState("freew.line-spacing").Value.Should().Be("1.5");
 
         Execute(view, registry, "freew.style", "Heading 1");
         ((Paragraph)view.Model.Blocks[0]).StyleId.Should().Be("Heading1");
