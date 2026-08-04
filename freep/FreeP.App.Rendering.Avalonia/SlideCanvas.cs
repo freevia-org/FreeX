@@ -352,13 +352,25 @@ public sealed class SlideCanvas : Control
         if (shape.Geometry.Contours.Count == 0 && shape.Text is null
             && (shape.ElbowRouteDip is null || shape.ElbowRouteDip.Count < 2)) return;
 
-        var bounds = shape.BoundsDip;
-        var renderTransform = ShapeTransformPlanner.PlanShapeRenderTransform(shape);
+        var sourceBounds = shape.BoundsDip;
+        var bounds = ResolveShapeAutoFitBounds(shape);
+        bool grewForShapeAutoFit = bounds.Height > sourceBounds.Height + 0.5;
+        var renderTransform = grewForShapeAutoFit
+            ? ShapeAffineTransform.Identity
+            : ShapeTransformPlanner.PlanShapeRenderTransform(shape);
         bool hasTransform = !renderTransform.IsIdentity;
 
         IDisposable? transformScope = null;
         if (hasTransform)
             transformScope = dc.PushTransform(ToAvaloniaMatrix(renderTransform));
+
+        IDisposable? autoFitGeometryScope = null;
+        if (grewForShapeAutoFit && sourceBounds.Height > 0.001)
+        {
+            double scaleY = bounds.Height / sourceBounds.Height;
+            autoFitGeometryScope = dc.PushTransform(new Matrix(
+                1, 0, 0, scaleY, 0, bounds.Y - scaleY * sourceBounds.Y));
+        }
 
         if (shape.Effects is not null)
             RenderShapeEffects(dc, shape);
@@ -412,10 +424,42 @@ public sealed class SlideCanvas : Control
                 RenderImportedShapeMaterial(dc, materialPlan, geometry);
         }
 
+        autoFitGeometryScope?.Dispose();
+
         if (!suppressText && shape.Text is not null)
             RenderText(dc, shape.Text, bounds);
 
         transformScope?.Dispose();
+    }
+
+    private static LayoutRect ResolveShapeAutoFitBounds(DrawOp.Shape shape)
+    {
+        var text = shape.Text;
+        var bounds = shape.BoundsDip;
+        if (text is null || text.AutoFitKind != TextAutoFitKind.Shape || text.ColumnCount > 1
+            || text.VerticalType != TextVerticalType.Horizontal
+            || Math.Abs(shape.RotationDeg) > 0.001 || shape.FlipH || shape.FlipV)
+            return bounds;
+
+        var area = TextLayoutPlanner.GetTextArea(text, bounds);
+        var measures = new List<TextParagraphMeasure>();
+        for (int i = 0; i < text.Paragraphs.Count; i++)
+        {
+            var paragraph = text.Paragraphs[i];
+            if (paragraph.Runs.Count == 0) continue;
+            var formatted = BuildFormattedText(
+                paragraph,
+                area.Width,
+                text.Wrap,
+                text.AutoFitKind);
+            measures.Add(TextLayoutPlanner.CreateParagraphMeasure(
+                i,
+                formatted.Height,
+                paragraph.SpaceBeforePt,
+                paragraph.SpaceAfterPt));
+        }
+
+        return TextLayoutPlanner.PlanShapeAutoFitBounds(text, bounds, measures);
     }
 
     private static void RenderShapeEffects(DrawingContext dc, DrawOp.Shape shape)

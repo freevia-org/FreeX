@@ -331,6 +331,38 @@ public static class TextLayoutPlanner
             lineSpacingReduction);
     }
 
+    /// <summary>
+    /// Resolves the rendered bounds for DrawingML <c>a:spAutoFit</c>. Unlike
+    /// <c>a:normAutofit</c>, the text keeps its authored metrics and the shape grows
+    /// to contain the measured paragraphs. Multi-column text remains on the existing
+    /// route because its fragment allocation needs a separate geometry contract.
+    /// </summary>
+    public static LayoutRect PlanShapeAutoFitBounds(
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        IReadOnlyList<TextParagraphMeasure> paragraphs)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(paragraphs);
+
+        if (text.AutoFitKind != TextAutoFitKind.Shape || text.ColumnCount > 1)
+            return bounds;
+
+        double requiredHeight = text.InsetTopDip + text.InsetBottomDip +
+            paragraphs.Sum(paragraph => paragraph.TotalHeightDip);
+        if (requiredHeight <= bounds.Height + 0.5)
+            return bounds;
+
+        double delta = requiredHeight - bounds.Height;
+        double y = text.Anchor switch
+        {
+            VerticalAnchor.Middle => bounds.Y - delta / 2.0,
+            VerticalAnchor.Bottom => bounds.Y - delta,
+            _ => bounds.Y
+        };
+        return new LayoutRect(bounds.X, y, bounds.Width, requiredHeight);
+    }
+
     public static ResolvedTextLayout ApplyAutoFitPlan(
         ResolvedTextLayout text,
         TextAutoFitOverflowPlan plan)
