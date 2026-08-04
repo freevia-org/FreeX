@@ -167,6 +167,7 @@ public sealed record SmartArtDialogInitialState(
 public static class SmartArtDialogPlanner
 {
     public const string EmptyNodesValidationMessage = "Enter at least one node text.";
+    public const string NodeTextLabel = "Diagram text (one item per node - use Add/Remove to manage):";
     public static readonly IReadOnlyList<string> DefaultNodeTexts = ["First", "Second", "Third"];
 
     public static SmartArtDialogInitialState BuildInitialState(SmartArt? seed) =>
