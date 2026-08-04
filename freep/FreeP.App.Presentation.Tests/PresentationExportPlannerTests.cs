@@ -1220,7 +1220,8 @@ public sealed class PresentationExportPlannerTests
         var request = new PresentationPrintRequest(
             PresentationPrintLayoutKind.Handouts,
             new PresentationSlideRangeRequest(PresentationSlideRangeKind.CustomRange, StartSlideNumber: 2, EndSlideNumber: 4),
-            HandoutSlidesPerPage: 3);
+            HandoutSlidesPerPage: 3,
+            FrameSlides: true);
 
         var plan = PresentationHandoutPdfExporter.BuildRenderPlan(
             BuildHandoutDeck(5),
@@ -1248,7 +1249,8 @@ public sealed class PresentationExportPlannerTests
             new PresentationSlideRangeRequest(
                 PresentationSlideRangeKind.SelectedSlides,
                 SelectedSlideNumbers: [8, 1, 4, 4, 2, 9, 7]),
-            HandoutSlidesPerPage: 6);
+            HandoutSlidesPerPage: 6,
+            FrameSlides: true);
 
         var plan = PresentationHandoutPdfExporter.BuildRenderPlan(
             BuildHandoutDeck(8),
@@ -1263,6 +1265,22 @@ public sealed class PresentationExportPlannerTests
             .Contain(["Slide 1", "Slide 2", "Slide 4", "Slide 7", "Slide 8"])
             .And
             .NotContain("Slide 3");
+    }
+
+    [Fact]
+    public void HandoutPdfRenderPlan_WithoutFrameSlides_OmitsSlideBorders()
+    {
+        var request = new PresentationPrintRequest(
+            PresentationPrintLayoutKind.Handouts,
+            HandoutSlidesPerPage: 2,
+            FrameSlides: false);
+
+        var plan = PresentationHandoutPdfExporter.BuildRenderPlan(
+            BuildHandoutDeck(2),
+            new PresentationHandoutPdfExportRequest(request));
+
+        plan.Pages.Should().ContainSingle();
+        plan.Pages[0].Ops.OfType<PdfStrokeRect>().Should().BeEmpty();
     }
 
     [Fact]
