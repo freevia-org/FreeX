@@ -234,19 +234,15 @@ internal static class PptxChartReader
         var chart = chartSpace?.Element(Cx + "chart");
         var region = chart?.Element(Cx + "plotArea")?.Element(Cx + "plotAreaRegion");
         var seriesEl = region?.Element(Cx + "series");
-        if (chartSpace is null || seriesEl is null)
+        if (chartSpace is null || chart is null || region is null || seriesEl is null)
             return null;
 
-        var data = chartSpace.Element(Cx + "chartData")?.Element(Cx + "data");
-        var categories = data?.Element(Cx + "strDim")?.Element(Cx + "lvl")?.Elements(Cx + "pt")
+        var dataElements = chartSpace.Element(Cx + "chartData")?.Elements(Cx + "data").ToList() ?? [];
+        var categoryData = FindChartExCategoryData(dataElements);
+        var categoryLevel = categoryData?.Element(Cx + "strDim")?.Element(Cx + "lvl");
+        var categories = categoryLevel?.Elements(Cx + "pt")
             .OrderBy(point => ParseInt(point.Attribute("idx")?.Value))
             .Select(point => point.Value)
-            .ToArray() ?? [];
-        var values = data?.Element(Cx + "numDim")?.Element(Cx + "lvl")?.Elements(Cx + "pt")
-            .OrderBy(point => ParseInt(point.Attribute("idx")?.Value))
-            .Select(point => double.TryParse(point.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
-                ? (double?)value
-                : null)
             .ToArray() ?? [];
 
         var shape = new ChartShape
@@ -264,17 +260,98 @@ internal static class PptxChartReader
                 .Distinct()
                 .OrderBy(index => index)
                 .ToList(),
-            Title = chart!.Element(Cx + "title") is null ? null : string.Empty,
+            Title = chart.Element(Cx + "title") is null ? null : string.Empty,
         };
         shape.Categories.AddRange(categories);
 
-        var series = new ChartSeries
+        foreach (var seriesElement in region.Elements(Cx + "series"))
         {
-            Name = seriesEl.Element(Cx + "tx")?.Element(Cx + "txData")?.Element(Cx + "v")?.Value ?? string.Empty,
-        };
-        series.Values.AddRange(values);
-        shape.Series.Add(series);
+            var series = new ChartSeries
+            {
+                Name = seriesElement.Element(Cx + "tx")?.Element(Cx + "txData")?.Element(Cx + "v")?.Value ?? string.Empty,
+            };
+            var seriesData = FindChartExSeriesData(dataElements, seriesElement);
+            var valueLevel = FindChartExValueDataLevel(seriesData);
+            if (valueLevel is not null)
+            {
+                series.Values.AddRange(ReadChartExValues(valueLevel));
+            }
+
+            shape.Series.Add(series);
+        }
+
         return shape;
+    }
+
+    private static XElement? FindChartExCategoryData(IReadOnlyList<XElement> dataElements)
+    {
+        var stringData = dataElements
+            .Where(data => data.Element(Cx + "strDim") is not null)
+            .ToList();
+        if (stringData.Count == 1)
+            return stringData[0];
+
+        var categoryData = stringData
+            .Where(data => string.Equals(
+                data.Element(Cx + "strDim")?.Attribute("type")?.Value,
+                "cat",
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        return categoryData.Count == 1 ? categoryData[0] : null;
+    }
+
+    private static XElement? FindChartExSeriesData(
+        IReadOnlyList<XElement> dataElements,
+        XElement series)
+    {
+        var dataId = series.Element(Cx + "dataId")?.Attribute("val")?.Value;
+        if (int.TryParse(dataId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
+            return dataElements.FirstOrDefault(data => ParseInt(data.Attribute("id")?.Value) == id);
+
+        return dataElements.Count == 1 ? dataElements[0] : null;
+    }
+
+    private static XElement? FindChartExValueDataLevel(XElement? data)
+    {
+        if (data is null)
+            return null;
+
+        var numericDimensions = data.Elements(Cx + "numDim").ToList();
+        if (numericDimensions.Count == 1)
+            return numericDimensions[0].Element(Cx + "lvl");
+
+        var valueDimension = numericDimensions
+            .Where(dimension => string.Equals(
+                dimension.Attribute("type")?.Value,
+                "val",
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        return valueDimension.Count == 1 ? valueDimension[0].Element(Cx + "lvl") : null;
+    }
+
+    private static IReadOnlyList<double?> ReadChartExValues(XElement level)
+    {
+        var points = level.Elements(Cx + "pt")
+            .Select(point =>
+            {
+                var index = ParseInt(point.Attribute("idx")?.Value);
+                var value = double.TryParse(
+                    point.Value,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var parsed)
+                    ? (double?)parsed
+                    : null;
+                return (Index: index, Value: value);
+            })
+            .ToList();
+        var pointCount = ParseInt(level.Attribute("ptCount")?.Value);
+        var count = Math.Max(pointCount, points.Count == 0 ? 0 : points.Max(point => point.Index) + 1);
+        var values = Enumerable.Repeat<double?>(null, count).ToArray();
+        foreach (var point in points.Where(point => point.Index >= 0 && point.Index < values.Length))
+            values[point.Index] = point.Value;
+
+        return values;
     }
 
     private static bool IsChartTypeElement(XElement element) => element.Name.LocalName is

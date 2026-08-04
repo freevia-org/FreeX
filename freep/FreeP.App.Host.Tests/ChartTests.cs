@@ -1954,6 +1954,106 @@ public sealed class ChartTests : IDisposable
         written.Descendants(cxNs + "layoutPr").Should().BeEmpty();
     }
 
+    [Fact]
+    public void Edit_NativeMultiSeriesChartEx_UpdatesReferencedDataWithoutChangingFamilyPayload()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XElement(cxNs + "chartData",
+                    new XElement(cxNs + "data",
+                        new XAttribute("id", 0),
+                        new XElement(cxNs + "strDim",
+                            new XAttribute("type", "cat"),
+                            new XElement(cxNs + "lvl",
+                                new XAttribute("ptCount", 2),
+                                new XElement(cxNs + "pt", new XAttribute("idx", 0), "A"),
+                                new XElement(cxNs + "pt", new XAttribute("idx", 1), "B")))),
+                    new XElement(cxNs + "data",
+                        new XAttribute("id", 1),
+                        new XElement(cxNs + "numDim",
+                            new XAttribute("type", "val"),
+                            new XElement(cxNs + "lvl",
+                                new XAttribute("ptCount", 2),
+                                new XElement(cxNs + "pt", new XAttribute("idx", 0), "10"),
+                                new XElement(cxNs + "pt", new XAttribute("idx", 1), "20")))),
+                    new XElement(cxNs + "data",
+                        new XAttribute("id", 2),
+                        new XElement(cxNs + "numDim",
+                            new XAttribute("type", "val"),
+                            new XElement(cxNs + "lvl",
+                                new XAttribute("ptCount", 2),
+                                new XElement(cxNs + "pt", new XAttribute("idx", 0), "30"),
+                                new XElement(cxNs + "pt", new XAttribute("idx", 1), "40"))))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData", new XElement(cxNs + "v", "First"))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 1)),
+                                new XElement(cxNs + "histogramExtension",
+                                    new XAttribute("binCount", 4))),
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData", new XElement(cxNs + "v", "Second"))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 2)),
+                                new XElement(cxNs + "histogramExtension",
+                                    new XAttribute("binCount", 6))))))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting),
+            RegenerateWorkbookOnSave = true,
+            Categories = { "First", "Second", "Third" }
+        };
+        var first = new ChartSeries { Name = "Edited first" };
+        first.Values.AddRange(new double?[] { 12.5, null, 31 });
+        var second = new ChartSeries { Name = "Edited second" };
+        second.Values.AddRange(new double?[] { 42, 51, 63 });
+        chart.Series.Add(first);
+        chart.Series.Add(second);
+
+        var path = WriteToPptx(BuildPresWithChart(chart));
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var written = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+            var dataById = written.Descendants(cxNs + "data")
+                .ToDictionary(data => (int)data.Attribute("id")!);
+            dataById[0].Descendants(cxNs + "strDim").Single().Element(cxNs + "lvl")!
+                .Elements(cxNs + "pt").Select(point => point.Value)
+                .Should().Equal("First", "Second", "Third");
+            dataById[1].Descendants(cxNs + "numDim").Single().Element(cxNs + "lvl")!
+                .Elements(cxNs + "pt").Select(point => point.Value)
+                .Should().Equal("12.5", "31");
+            dataById[2].Descendants(cxNs + "numDim").Single().Element(cxNs + "lvl")!
+                .Elements(cxNs + "pt").Select(point => point.Value)
+                .Should().Equal("42", "51", "63");
+            written.Descendants(cxNs + "series").Select(series =>
+                    series.Element(cxNs + "tx")!.Element(cxNs + "txData")!.Element(cxNs + "v")!.Value)
+                .Should().Equal("Edited first", "Edited second");
+            written.Descendants(cxNs + "histogramExtension")
+                .Select(extension => (int)extension.Attribute("binCount")!)
+                .Should().Equal(4, 6);
+        }
+
+        var roundTripped = PptxPackageReader.Read(path).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        roundTripped.IsChartEx.Should().BeTrue();
+        roundTripped.Series.Should().HaveCount(2);
+        roundTripped.Categories.Should().Equal("First", "Second", "Third");
+        roundTripped.Series[0].Name.Should().Be("Edited first");
+        roundTripped.Series[0].Values.Should().Equal(12.5, null, 31);
+        roundTripped.Series[1].Name.Should().Be("Edited second");
+        roundTripped.Series[1].Values.Should().Equal(42, 51, 63);
+    }
+
     [Theory]
     [InlineData(ChartType.Surface, "surfaceChart")]
     [InlineData(ChartType.Surface3D, "surface3DChart")]

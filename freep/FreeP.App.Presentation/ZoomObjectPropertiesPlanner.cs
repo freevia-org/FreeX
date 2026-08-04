@@ -10,6 +10,14 @@ public static class ZoomObjectPropertiesPlanner
     public const string CommandId = "freep.zoom.format";
     public const string DialogTitle = "Zoom Format";
     public const int DefaultTransitionDurationMs = 1000;
+    public const string InvalidTransitionDurationMessage =
+        "Transition duration must be a positive whole number of milliseconds.";
+    public const string InvalidFrameBorderColorMessage =
+        "Border color must be a six-digit RGB value.";
+    public const string InvalidCropEdgesMessage =
+        "Crop edges must be four percentages: left, top, right, bottom.";
+    public const string InvalidSummaryTileLayoutMessage =
+        "Summary tile position and scale must each be two percentages.";
 
     public sealed record SummaryZoomTileLayoutEdit(
         string SectionId,

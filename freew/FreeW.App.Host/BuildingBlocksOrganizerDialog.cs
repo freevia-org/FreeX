@@ -24,11 +24,15 @@ internal sealed class BuildingBlocksOrganizerDialog : Free.Shared.Ribbon.Wpf.Dia
 {
     private readonly DocumentView _editor;
     private readonly QuickPartLibrary _library;
-    private readonly ListBox _list = new() { MinWidth = 300, MinHeight = 240 };
+    private readonly ListBox _list = new()
+    {
+        MinWidth = BuildingBlocksOrganizerPlanner.ListMinWidth,
+        MinHeight = BuildingBlocksOrganizerPlanner.ListMinHeight
+    };
     private readonly TextBox _preview = new()
     {
-        MinWidth = 300,
-        MinHeight = 240,
+        MinWidth = BuildingBlocksOrganizerPlanner.PreviewMinWidth,
+        MinHeight = BuildingBlocksOrganizerPlanner.PreviewMinHeight,
         IsReadOnly = true,
         TextWrapping = TextWrapping.Wrap,
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -45,14 +49,14 @@ internal sealed class BuildingBlocksOrganizerDialog : Free.Shared.Ribbon.Wpf.Dia
         _library = library;
         Owner = owner;
         Title = "Building Blocks Organizer";
-        Width = 660;
+        Width = BuildingBlocksOrganizerPlanner.Width;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
         var panel = new StackPanel { Margin = new Thickness(14) };
-        panel.Children.Add(new TextBlock { Text = "Building blocks:", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        panel.Children.Add(new TextBlock { Text = BuildingBlocksOrganizerPlanner.ListLabel, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
 
         _list.SelectionChanged += (_, _) => OnSelectionChanged();
         _list.MouseDoubleClick += (_, _) => Insert();
@@ -60,7 +64,7 @@ internal sealed class BuildingBlocksOrganizerDialog : Free.Shared.Ribbon.Wpf.Dia
         // Two side-by-side columns: the block list on the left, a read-only preview on the right.
         var columns = new Grid();
         columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(BuildingBlocksOrganizerPlanner.ColumnGap) });
         columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         var leftColumn = new StackPanel();
@@ -70,7 +74,7 @@ internal sealed class BuildingBlocksOrganizerDialog : Free.Shared.Ribbon.Wpf.Dia
 
         var rightColumn = new StackPanel();
         Grid.SetColumn(rightColumn, 2);
-        rightColumn.Children.Add(new TextBlock { Text = "Preview:", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        rightColumn.Children.Add(new TextBlock { Text = BuildingBlocksOrganizerPlanner.PreviewLabel, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
         rightColumn.Children.Add(_preview);
         columns.Children.Add(rightColumn);
 
@@ -103,23 +107,17 @@ internal sealed class BuildingBlocksOrganizerDialog : Free.Shared.Ribbon.Wpf.Dia
     public static void Show(Window? owner, DocumentView editor, QuickPartLibrary library) =>
         new BuildingBlocksOrganizerDialog(owner, editor, library).ShowDialog();
 
-    // A list entry wrapping a saved building block; shown by name + gallery/category in the list box.
-    private readonly record struct Item(QuickPart Part)
-    {
-        public override string ToString() => $"{Part.Name}  ({Part.Gallery} / {Part.Category})";
-    }
-
     private void RefreshList()
     {
-        var selectedName = (_list.SelectedItem as Item?)?.Part.Name;
+        var selectedName = (_list.SelectedItem as BuildingBlockListItem)?.Part.Name;
 
         _list.Items.Clear();
         foreach (var part in _library.Snippets)
-            _list.Items.Add(new Item(part));
+            _list.Items.Add(new BuildingBlockListItem(part));
 
         if (_list.Items.Count == 0)
         {
-            _status.Text = "No building blocks saved yet. Select some text and choose Save Selection to Quick Parts first.";
+            _status.Text = BuildingBlocksOrganizerPlanner.EmptyStatus;
         }
         else
         {
@@ -129,7 +127,7 @@ internal sealed class BuildingBlocksOrganizerDialog : Free.Shared.Ribbon.Wpf.Dia
             {
                 for (var i = 0; i < _list.Items.Count; i++)
                 {
-                    if (_list.Items[i] is Item item && string.Equals(item.Part.Name, selectedName, StringComparison.OrdinalIgnoreCase))
+                    if (_list.Items[i] is BuildingBlockListItem item && string.Equals(item.Part.Name, selectedName, StringComparison.OrdinalIgnoreCase))
                     {
                         restored = i;
                         break;
@@ -144,16 +142,13 @@ internal sealed class BuildingBlocksOrganizerDialog : Free.Shared.Ribbon.Wpf.Dia
 
     private void OnSelectionChanged()
     {
-        var hasSelection = _list.SelectedItem is Item;
+        var hasSelection = _list.SelectedItem is BuildingBlockListItem;
         _insertButton.IsEnabled = hasSelection;
         _deleteButton.IsEnabled = hasSelection;
 
-        if (_list.SelectedItem is Item item)
+        if (_list.SelectedItem is BuildingBlockListItem item)
         {
-            var part = item.Part;
-            _preview.Text = string.IsNullOrEmpty(part.Description)
-                ? part.Text
-                : $"{part.Description}\n\n{part.Text}";
+            _preview.Text = BuildingBlocksOrganizerPlanner.FormatPreview(item.Part);
         }
         else
         {
@@ -163,7 +158,7 @@ internal sealed class BuildingBlocksOrganizerDialog : Free.Shared.Ribbon.Wpf.Dia
 
     private void Insert()
     {
-        if (_list.SelectedItem is not Item item)
+        if (_list.SelectedItem is not BuildingBlockListItem item)
             return;
 
         // Insert through the editor's normal edit path so it is reversible, then close.
@@ -174,12 +169,12 @@ internal sealed class BuildingBlocksOrganizerDialog : Free.Shared.Ribbon.Wpf.Dia
 
     private void Delete()
     {
-        if (_list.SelectedItem is not Item item)
+        if (_list.SelectedItem is not BuildingBlockListItem item)
             return;
 
         _library.Remove(item.Part.Name);
         RefreshList();
-        _status.Text = $"Removed \"{item.Part.Name}\".";
+        _status.Text = BuildingBlocksOrganizerPlanner.FormatRemovedStatus(item.Part.Name);
     }
 
     private static Button MakeButton(string content, RoutedEventHandler onClick)

@@ -184,41 +184,82 @@ internal sealed record BuildingBlockAction(BuildingBlockActionKind Kind, string 
 internal sealed class BuildingBlocksOrganizerDialog : FreeWDialogWindow
 {
     private readonly QuickPartLibrary _library;
-    private readonly ListBox _blocks = new() { MinWidth = 260, MinHeight = 220 };
+    private readonly ListBox _blocks = new()
+    {
+        MinWidth = BuildingBlocksOrganizerPlanner.ListMinWidth,
+        MinHeight = BuildingBlocksOrganizerPlanner.ListMinHeight,
+    };
     private readonly TextBox _preview = new()
     {
-        MinWidth = 280,
-        MinHeight = 220,
+        MinWidth = BuildingBlocksOrganizerPlanner.PreviewMinWidth,
+        MinHeight = BuildingBlocksOrganizerPlanner.PreviewMinHeight,
         IsReadOnly = true,
         AcceptsReturn = true,
         TextWrapping = TextWrapping.Wrap,
     };
+    private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 8, 0, 0) };
+    private readonly Button _insertButton;
+    private readonly Button _deleteButton;
 
-    private BuildingBlocksOrganizerDialog(QuickPartLibrary library)
+    internal BuildingBlocksOrganizerDialog(QuickPartLibrary library)
     {
         _library = library;
         Title = "Building Blocks Organizer";
-        Width = 620;
-        Height = 390;
+        Width = BuildingBlocksOrganizerPlanner.Width;
+        SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        CanResize = true;
+        CanResize = false;
         ShowInTaskbar = false;
 
         _blocks.SelectionChanged += (_, _) => RefreshPreview();
         _blocks.DoubleTapped += (_, _) => Insert();
 
-        var content = new Grid { ColumnDefinitions = new ColumnDefinitions("260,12,*") };
+        var content = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions($"{BuildingBlocksOrganizerPlanner.ListMinWidth},{BuildingBlocksOrganizerPlanner.ColumnGap},*"),
+        };
         Grid.SetColumn(_blocks, 0);
         Grid.SetColumn(_preview, 2);
         content.Children.Add(_blocks);
         content.Children.Add(_preview);
 
         var panel = QuickPartNameDialog.DialogPanel();
+        panel.Margin = new Thickness(14);
+        panel.Spacing = 0;
+        var labels = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions($"{BuildingBlocksOrganizerPlanner.ListMinWidth},{BuildingBlocksOrganizerPlanner.ColumnGap},*"),
+            Margin = new Thickness(0, 0, 0, 4),
+        };
+        var listLabel = new TextBlock
+        {
+            Text = BuildingBlocksOrganizerPlanner.ListLabel,
+            FontWeight = FontWeight.SemiBold,
+        };
+        var previewLabel = new TextBlock
+        {
+            Text = BuildingBlocksOrganizerPlanner.PreviewLabel,
+            FontWeight = FontWeight.SemiBold,
+        };
+        Grid.SetColumn(listLabel, 0);
+        Grid.SetColumn(previewLabel, 2);
+        labels.Children.Add(listLabel);
+        labels.Children.Add(previewLabel);
+        panel.Children.Add(labels);
         panel.Children.Add(content);
-        panel.Children.Add(QuickPartNameDialog.ButtonRow(
-            QuickPartNameDialog.Button("Insert", Insert, isDefault: true),
-            QuickPartNameDialog.Button("Delete", Delete),
-            QuickPartNameDialog.Button("Close", () => Close(null), isCancel: true)));
+        _insertButton = QuickPartNameDialog.Button("Insert", Insert, isDefault: true);
+        _deleteButton = QuickPartNameDialog.Button("Delete", Delete);
+        var closeButton = QuickPartNameDialog.Button("Close", () => Close(null), isCancel: true);
+        foreach (var button in new[] { _insertButton, _deleteButton, closeButton })
+        {
+            button.MinWidth = 84;
+            button.Margin = new Thickness(6, 0, 0, 0);
+            button.Padding = new Thickness(6, 3);
+        }
+        var buttons = QuickPartNameDialog.ButtonRow(_insertButton, _deleteButton, closeButton);
+        buttons.Margin = new Thickness(0, 10, 0, 0);
+        panel.Children.Add(buttons);
+        panel.Children.Add(_status);
         Content = panel;
         RefreshBlocks();
         Opened += (_, _) => _blocks.Focus();
@@ -228,32 +269,33 @@ internal sealed class BuildingBlocksOrganizerDialog : FreeWDialogWindow
     public static Task<BuildingBlockAction?> ShowAsync(Window owner, QuickPartLibrary library) =>
         new BuildingBlocksOrganizerDialog(library).ShowDialog<BuildingBlockAction?>(owner);
 
-    private string? SelectedName => _blocks.SelectedItem as string;
+    private BuildingBlockListItem? SelectedItem => _blocks.SelectedItem as BuildingBlockListItem;
 
     private void RefreshBlocks()
     {
-        _blocks.ItemsSource = _library.Names.ToArray();
+        _blocks.ItemsSource = _library.Snippets.Select(part => new BuildingBlockListItem(part)).ToArray();
         _blocks.SelectedIndex = _blocks.ItemCount > 0 ? 0 : -1;
+        _status.Text = _blocks.ItemCount == 0 ? BuildingBlocksOrganizerPlanner.EmptyStatus : string.Empty;
+        _insertButton.IsEnabled = _blocks.ItemCount > 0;
+        _deleteButton.IsEnabled = _blocks.ItemCount > 0;
         RefreshPreview();
     }
 
-    private void RefreshPreview() => _preview.Text =
-        SelectedName is { } name && _library.Get(name) is { } part
-            ? $"{part.Name}\n{part.Gallery} | {part.Category}\n\n{part.Text}"
-            : "No Quick Parts saved.";
+    private void RefreshPreview() => _preview.Text = BuildingBlocksOrganizerPlanner.FormatPreview(SelectedItem?.Part);
 
     private void Insert()
     {
-        if (SelectedName is { } name)
-            Close(new BuildingBlockAction(BuildingBlockActionKind.Insert, name));
+        if (SelectedItem is { } item)
+            Close(new BuildingBlockAction(BuildingBlockActionKind.Insert, item.Part.Name));
     }
 
     private void Delete()
     {
-        if (SelectedName is not { } name)
+        if (SelectedItem is not { } item)
             return;
-        _library.Remove(name);
+        _library.Remove(item.Part.Name);
         RefreshBlocks();
+        _status.Text = BuildingBlocksOrganizerPlanner.FormatRemovedStatus(item.Part.Name);
     }
 }
 

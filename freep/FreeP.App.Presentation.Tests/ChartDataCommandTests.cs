@@ -570,6 +570,43 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void ReplaceChartData_MultiSeriesNativeChartExEdit_PreservesFamilyAndUndoRestoresData()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.IsChartEx = true;
+        chart.ChartExLayoutId = "histogram";
+        chart.PreservedChartExXml = "<cx:chartSpace xmlns:cx=\"http://schemas.microsoft.com/office/drawing/2014/chartex\" />";
+
+        bus.Execute(new ReplaceChartDataCommand(
+            0,
+            id,
+            new[] { "A", "B", "C" },
+            new[] { "Edited sales", "Edited budget" },
+            new IEnumerable<double?>[]
+            {
+                new double?[] { 11, null, 33 },
+                new double?[] { 44, 55, 66 },
+            }));
+
+        chart.IsChartEx.Should().BeTrue();
+        chart.ChartExLayoutId.Should().Be("histogram");
+        chart.Series.Should().HaveCount(2);
+        chart.Series[0].Values.Should().Equal(11, null, 33);
+        chart.Series[1].Values.Should().Equal(44, 55, 66);
+
+        bus.Undo();
+
+        chart.IsChartEx.Should().BeTrue();
+        chart.ChartExLayoutId.Should().Be("histogram");
+        chart.Series.Should().HaveCount(2);
+        chart.Series[0].Name.Should().Be("Sales");
+        chart.Series[0].Values.Should().Equal(100, 200, 150);
+        chart.Series[1].Name.Should().Be("Budget");
+        chart.Series[1].Values.Should().Equal(120, 180, 160);
+    }
+
+    [Fact]
     public void ReplaceChartData_ToScatter_CreatesCoordinatesAndUndoRestoresThem()
     {
         var (p, bus, id) = MakeChartPresentation();

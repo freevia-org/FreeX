@@ -16220,6 +16220,29 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Width = HyperlinkDialogPlanner.LinkTypeColumnWidth,
             Height = HyperlinkDialogPlanner.LinkTypeListHeight,
         };
+        // WPF keeps the selected link type in its inactive selection state because the
+        // address editor receives initial focus.  Avalonia Fluent otherwise paints the
+        // selected row with the active blue accent, so keep this host-template correction
+        // local to the hyperlink dialog instead of changing list selection globally.
+        var inactiveLinkTypeSelection = Brush(246, 246, 246);
+        var linkTypeSelectionStyle = new Style(x => x.OfType<ListBoxItem>().Class(":selected"))
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, inactiveLinkTypeSelection),
+                new Setter(TemplatedControl.ForegroundProperty, HeaderForeground),
+            },
+        };
+        var linkTypePointerSelectionStyle = new Style(x => x.OfType<ListBoxItem>().Class(":selected").Class(":pointerover"))
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, inactiveLinkTypeSelection),
+                new Setter(TemplatedControl.ForegroundProperty, HeaderForeground),
+            },
+        };
+        linkTypeBox.Styles.Add(linkTypeSelectionStyle);
+        linkTypeBox.Styles.Add(linkTypePointerSelectionStyle);
         AutomationProperties.SetName(linkTypeBox, UiText.Get("Hyperlink_LinkTo2"));
         AutomationProperties.SetAutomationId(linkTypeBox, "HyperlinkLinkTypeBox");
 
