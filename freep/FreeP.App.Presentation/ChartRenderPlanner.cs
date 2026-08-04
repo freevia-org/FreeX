@@ -2703,6 +2703,7 @@ public static partial class ChartRenderPlanner
         bool importedLineMarkerLegend = UsesImportedTextMetrics(chart) &&
             chart.ChartType == ChartType.LineMarkers;
         bool importedStyle2ColumnBarLegend = UsesImportedStyle2ColumnBarLegend(chart);
+        var legendTextStyle = chart.LegendTextStyle;
         double legendLineHeight = importedCombo
             ? ImportedComboLegendLineHeight
             : importedPieLegend
@@ -2826,19 +2827,20 @@ public static partial class ChartRenderPlanner
                                     : 0.0),
                             textWidth,
                             legendLineHeight),
-                    IsBold: false,
-                    FontSize: ResolveTextFontSize(chart, 7.0),
+                    IsBold: legendTextStyle?.Bold ?? false,
+                    FontSize: legendTextStyle?.FontSizePt is > 0
+                        ? legendTextStyle.FontSizePt.Value
+                        : ResolveTextFontSize(chart, 7.0),
                     Alignment: ChartPlanTextAlignment.Left)
                     {
-                        FontFamily = importedPieLegend
-                            ? ImportedPieLegendFontFamily
-                            : null,
+                        FontFamily = legendTextStyle?.FontFamily
+                            ?? (importedPieLegend ? ImportedPieLegendFontFamily : null),
+                        IsItalic = legendTextStyle?.Italic ?? false,
                         HorizontalScale = importedPieLegend
                             ? ImportedPieLegendTextScaleX
                             : 1.0,
-                        TextColor = importedPieLegend
-                            ? new SrgbColor(0x00, 0x00, 0x00)
-                            : null
+                        TextColor = legendTextStyle?.Color?.Resolved
+                            ?? (importedPieLegend ? new SrgbColor(0x00, 0x00, 0x00) : null)
                     },
                 fillPlans is not null
                     ? frame.IsPie

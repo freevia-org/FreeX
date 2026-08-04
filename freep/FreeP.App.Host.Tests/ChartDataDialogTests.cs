@@ -678,6 +678,21 @@ public sealed class ChartDataDialogTests : IDisposable
         options.FontSizePt.Should().Be(15);
     }
 
+    [StaFact]
+    public void ChartTextOptionsDialog_CanTargetChartLegend()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.Legend = LegendPosition.Right;
+        sess.SelectedChart.LegendTextStyle = new ChartTextStyle { FontFamily = "Aptos", FontSizePt = 12 };
+
+        var dialog = new ChartTextOptionsDialog(sess, ChartTextTarget.Legend);
+        var options = dialog.BuildCommitPlanForTests();
+
+        options.Target.Should().Be(ChartTextTarget.Legend);
+        options.FontFamily.Should().Be("Aptos");
+        options.FontSizePt.Should().Be(12);
+    }
+
     [Fact]
     public void Chart3DAndTextOptions_AreReachableThroughHostSourceRoutes()
     {

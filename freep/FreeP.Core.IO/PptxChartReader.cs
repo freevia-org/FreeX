@@ -208,6 +208,7 @@ internal static class PptxChartReader
             shape.LegendManualLayout = ReadManualLayout(legendEl.Element(C + "layout"));
             shape.LegendOverlay = ParseNullableBoolAttr(
                 legendEl.Element(C + "overlay")?.Attribute("val")?.Value);
+            shape.LegendTextStyle = ReadChartTextStyle(legendEl.Element(C + "txPr"), scheme);
         }
 
         return shape;

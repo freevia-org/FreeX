@@ -38,7 +38,12 @@ public sealed class SetChartTextOptionsCommand : IPresentationCommand
 
     private static ChartTextOptions ReadOptions(ChartShape chart, ChartTextTarget target)
     {
-        var style = target == ChartTextTarget.Title ? chart.TitleStyle : chart.TextStyle;
+        var style = target switch
+        {
+            ChartTextTarget.Title => chart.TitleStyle,
+            ChartTextTarget.Legend => chart.LegendTextStyle,
+            _ => chart.TextStyle,
+        };
         return style is null or { IsImplicitDefault: true }
             ? new ChartTextOptions(null, null, null, null, null, target)
             : new ChartTextOptions(style.FontFamily, style.FontSizePt, style.Bold, style.Italic, style.Color, target);
@@ -46,10 +51,18 @@ public sealed class SetChartTextOptionsCommand : IPresentationCommand
 
     private static void SetStyle(ChartShape chart, ChartTextTarget target, ChartTextStyle? style)
     {
-        if (target == ChartTextTarget.Title)
-            chart.TitleStyle = style;
-        else
-            chart.TextStyle = style;
+        switch (target)
+        {
+            case ChartTextTarget.Title:
+                chart.TitleStyle = style;
+                break;
+            case ChartTextTarget.Legend:
+                chart.LegendTextStyle = style;
+                break;
+            default:
+                chart.TextStyle = style;
+                break;
+        }
     }
 
     private static ChartTextStyle? BuildStyle(ChartTextOptions options) =>
