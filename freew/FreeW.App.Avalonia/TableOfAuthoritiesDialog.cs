@@ -10,7 +10,8 @@ namespace FreeW.App.Avalonia;
 
 internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle Chrome = AvaloniaCompactDialogChrome.WindowsStyle;
+    private static readonly AvaloniaCompactDialogChromeStyle Chrome =
+        AvaloniaCompactDialogChrome.WindowsStyle with { ComboBoxHeight = 22 };
     private readonly IReadOnlyList<TableOfAuthoritiesCategoryChoice> _categories;
     private readonly IReadOnlyList<TableOfAuthoritiesTabLeaderChoice> _leaders;
     private readonly ComboBox _category;
@@ -24,7 +25,7 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
         _categories = TableOfAuthoritiesDialogPlanner.BuildCategoryChoices();
         _leaders = TableOfAuthoritiesDialogPlanner.BuildTabLeaderChoices();
         Title = TableOfAuthoritiesDialogPlanner.Title;
-        Width = 390;
+        Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -32,10 +33,12 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
 
         _category = Combo(_categories.Select(choice => choice.Label),
             TableOfAuthoritiesDialogPlanner.SelectCategoryIndex(_categories, state.CategoryFilter));
-        _passim = new CheckBox { Content = TableOfAuthoritiesDialogPlanner.UsePassimLabel, IsChecked = state.UsePassim, Margin = new Thickness(0, 6, 0, 0) };
-        _keepFormatting = new CheckBox { Content = TableOfAuthoritiesDialogPlanner.KeepOriginalFormattingLabel, IsChecked = state.KeepOriginalFormatting, Margin = new Thickness(0, 6, 0, 0) };
+        _category.Margin = new Thickness(0, 0, 0, 8);
+        _passim = CheckBox(TableOfAuthoritiesDialogPlanner.UsePassimLabel, state.UsePassim, new Thickness(0, 0, 0, 6));
+        _keepFormatting = CheckBox(TableOfAuthoritiesDialogPlanner.KeepOriginalFormattingLabel, state.KeepOriginalFormatting, new Thickness(0, 0, 0, 8));
         _leader = Combo(_leaders.Select(choice => choice.Label),
             TableOfAuthoritiesDialogPlanner.SelectTabLeaderIndex(_leaders, state.TabLeader));
+        _leader.Margin = new Thickness(0, 0, 0, 8);
 
         var ok = Button("OK", true, false, Accept);
         var cancel = Button("Cancel", false, true, () => Close(null));
@@ -44,14 +47,27 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
             Margin = new Thickness(16),
             Children =
             {
-                new TextBlock { Text = TableOfAuthoritiesDialogPlanner.CategoryLabel, Margin = new Thickness(0, 0, 0, 3) },
+                new TextBlock { Text = TableOfAuthoritiesDialogPlanner.CategoryLabel, Margin = new Thickness(0, 0, 0, 4) },
                 _category,
                 _passim,
                 _keepFormatting,
-                new TextBlock { Text = TableOfAuthoritiesDialogPlanner.TabLeaderLabel, Margin = new Thickness(0, 10, 0, 3) },
+                new TextBlock { Text = TableOfAuthoritiesDialogPlanner.TabLeaderLabel, Margin = new Thickness(0, 0, 0, 4) },
                 _leader,
                 AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)),
             },
+        };
+        Opened += (_, _) =>
+        {
+            AvaloniaCompactDialogChrome.ApplyComboBox(_category, Chrome);
+            AvaloniaCompactDialogChrome.ApplyComboBox(_leader, Chrome);
+            // WPF's dialog resource keeps neutral buttons white with a small radius. The shared
+            // Avalonia chrome owns the common metrics; this local pass preserves that authority
+            // without changing the defaults used by unrelated dialogs.
+            foreach (var button in new[] { ok, cancel })
+            {
+                button.Background = Brushes.White;
+                button.CornerRadius = new CornerRadius(3);
+            }
         };
         Opened += (_, _) => _category.Focus();
         KeyDown += (_, args) =>
@@ -81,10 +97,19 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
         return combo;
     }
 
+    private static CheckBox CheckBox(string content, bool isChecked, Thickness margin)
+    {
+        var checkBox = new CheckBox { Content = content, IsChecked = isChecked, Margin = margin };
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, Chrome);
+        return checkBox;
+    }
+
     private static Button Button(string text, bool isDefault, bool isCancel, Action click)
     {
         var button = new Button { Content = text, IsDefault = isDefault, IsCancel = isCancel };
-        AvaloniaCompactDialogChrome.ApplyButton(button, Chrome, 72, isDefault);
+        AvaloniaCompactDialogChrome.ApplyButton(button, Chrome, 80, isDefault);
+        button.Background = Brushes.White;
+        button.CornerRadius = new CornerRadius(3);
         button.Click += (_, _) => click();
         return button;
     }
