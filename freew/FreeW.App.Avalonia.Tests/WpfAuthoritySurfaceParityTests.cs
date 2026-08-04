@@ -209,6 +209,16 @@ public sealed class WpfAuthoritySurfaceParityTests
         await Session.Dispatch(() =>
         {
             var (editor, table) = CreateTableEditor();
+            table.FloatingPosition = new TableFloatingPosition(
+                HorizontalAnchor: TableHorizontalAnchor.Page,
+                VerticalAnchor: TableVerticalAnchor.Margin,
+                HorizontalAlignment: TableHorizontalPositionAlignment.Outside,
+                VerticalOffsetPt: -18,
+                LeftFromTextPt: 3,
+                RightFromTextPt: 4,
+                TopFromTextPt: 5,
+                BottomFromTextPt: 6);
+            table.FloatingTableAllowsOverlap = false;
             var row = table.Rows[2];
             var cell = row.Cells[0];
             var dialog = new TablePropertiesDialog(
@@ -225,13 +235,24 @@ public sealed class WpfAuthoritySurfaceParityTests
             dialog.GetLogicalDescendants().OfType<CheckBox>().Single(checkBox =>
                     AutomationProperties.GetAutomationId(checkBox) == "TablePropertiesCellFitTextCheckBox")
                 .IsChecked.Should().BeFalse();
+            dialog.GetLogicalDescendants().OfType<ComboBox>().Single(comboBox =>
+                    AutomationProperties.GetAutomationId(comboBox) == "TablePropertiesHorizontalAnchorBox")
+                .SelectedIndex.Should().Be(2);
+            dialog.GetLogicalDescendants().OfType<ComboBox>().Single(comboBox =>
+                    AutomationProperties.GetAutomationId(comboBox) == "TablePropertiesHorizontalModeBox")
+                .SelectedIndex.Should().Be(5);
+            TextBox(dialog, "TablePropertiesHorizontalOffsetBox").IsEnabled.Should().BeFalse();
+            TextBox(dialog, "TablePropertiesVerticalOffsetBox").IsEnabled.Should().BeTrue();
             AssertDefaultCancelButtons(dialog);
 
             TextBox(dialog, "TablePropertiesIndentBox").Text = "-1";
             dialog.AcceptForTest().Should().BeNull();
             dialog.ValidationForTest.IsVisible.Should().BeTrue();
             TextBox(dialog, "TablePropertiesIndentBox").Text = "0";
-            dialog.AcceptForTest().Should().NotBeNull();
+            var accepted = dialog.AcceptForTest();
+            accepted.Should().NotBeNull();
+            accepted!.FloatingPosition.Should().Be(table.FloatingPosition);
+            accepted.FloatingTableAllowsOverlap.Should().BeFalse();
 
             var values = new TablePropertiesValues(
                 PreferredWidthPt: 300,
@@ -249,7 +270,9 @@ public sealed class WpfAuthoritySurfaceParityTests
                 CellVerticalAlignment: TableCellVerticalAlignment.Center,
                 CellMargins: new TableCellMargins(3, 5, 3, 5),
                 CellWrapText: false,
-                CellFitText: true);
+                CellFitText: true,
+                FloatingTableAllowsOverlap: false,
+                FloatingPosition: table.FloatingPosition);
             MainWindow.ApplyTablePropertiesResult(editor, values);
             table.PreferredWidthPt.Should().Be(300);
             cell.WidthPt.Should().Be(144);

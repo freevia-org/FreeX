@@ -24,7 +24,8 @@ public sealed record TablePropertiesValues(
     TableCellMargins? CellMargins,
     bool CellWrapText,
     bool CellFitText,
-    bool? FloatingTableAllowsOverlap = null);
+    bool? FloatingTableAllowsOverlap = null,
+    TableFloatingPosition? FloatingPosition = null);
 
 /// <summary>
 /// The model objects under the caret that seed the Table Properties dialog.
@@ -60,6 +61,16 @@ public sealed record TablePropertiesDialogInitialState(
     string CellMarginRightText,
     bool CellWrapText,
     bool CellFitText,
+    int FloatingHorizontalAnchorIndex,
+    int FloatingHorizontalModeIndex,
+    string FloatingHorizontalOffsetText,
+    int FloatingVerticalAnchorIndex,
+    int FloatingVerticalModeIndex,
+    string FloatingVerticalOffsetText,
+    string FloatingDistanceTopText,
+    string FloatingDistanceLeftText,
+    string FloatingDistanceBottomText,
+    string FloatingDistanceRightText,
     bool? FloatingTableAllowsOverlap);
 
 public sealed record TablePropertiesDialogInput(
@@ -91,18 +102,48 @@ public sealed record TablePropertiesDialogInput(
     string? CellMarginRightText,
     bool CellWrapText,
     bool CellFitText,
+    int FloatingHorizontalAnchorIndex = -1,
+    int FloatingHorizontalModeIndex = -1,
+    string? FloatingHorizontalOffsetText = null,
+    int FloatingVerticalAnchorIndex = -1,
+    int FloatingVerticalModeIndex = -1,
+    string? FloatingVerticalOffsetText = null,
+    string? FloatingDistanceTopText = null,
+    string? FloatingDistanceLeftText = null,
+    string? FloatingDistanceBottomText = null,
+    string? FloatingDistanceRightText = null,
     bool? FloatingTableAllowsOverlap = null);
 
 public static class TablePropertiesDialogPlanner
 {
     public const string ValidationMessage =
-        "Enter non-negative measurements (in points) for every checked field.";
+        "Enter valid point measurements; sizes and text distances cannot be negative.";
 
     public static readonly IReadOnlyList<string> AlignmentNames = ["Left", "Center", "Right"];
     public static readonly IReadOnlyList<TableAlignment> AlignmentValues =
         [TableAlignment.Left, TableAlignment.Center, TableAlignment.Right];
 
     public static readonly IReadOnlyList<string> WrappingNames = ["None", "Around"];
+
+    public static readonly IReadOnlyList<string> FloatingHorizontalAnchorNames = ["Text", "Margin", "Page"];
+    public static readonly IReadOnlyList<TableHorizontalAnchor> FloatingHorizontalAnchorValues =
+        [TableHorizontalAnchor.Text, TableHorizontalAnchor.Margin, TableHorizontalAnchor.Page];
+    public static readonly IReadOnlyList<string> FloatingHorizontalModeNames =
+        ["Position", "Left", "Center", "Right", "Inside", "Outside"];
+    public static readonly IReadOnlyList<TableHorizontalPositionAlignment?> FloatingHorizontalModeValues =
+        [null, TableHorizontalPositionAlignment.Left, TableHorizontalPositionAlignment.Center,
+            TableHorizontalPositionAlignment.Right, TableHorizontalPositionAlignment.Inside,
+            TableHorizontalPositionAlignment.Outside];
+
+    public static readonly IReadOnlyList<string> FloatingVerticalAnchorNames = ["Text", "Margin", "Page"];
+    public static readonly IReadOnlyList<TableVerticalAnchor> FloatingVerticalAnchorValues =
+        [TableVerticalAnchor.Text, TableVerticalAnchor.Margin, TableVerticalAnchor.Page];
+    public static readonly IReadOnlyList<string> FloatingVerticalModeNames =
+        ["Position", "Inline", "Top", "Center", "Bottom", "Inside", "Outside"];
+    public static readonly IReadOnlyList<TableVerticalPositionAlignment?> FloatingVerticalModeValues =
+        [null, TableVerticalPositionAlignment.Inline, TableVerticalPositionAlignment.Top,
+            TableVerticalPositionAlignment.Center, TableVerticalPositionAlignment.Bottom,
+            TableVerticalPositionAlignment.Inside, TableVerticalPositionAlignment.Outside];
 
     public static readonly IReadOnlyList<string> RowRuleNames = ["At least", "Exactly"];
     public static readonly IReadOnlyList<TableRowHeightRule> RowRuleValues =
@@ -127,6 +168,7 @@ public static class TablePropertiesDialogPlanner
             ? TableRowHeightRule.Exact
             : TableRowHeightRule.AtLeast;
         var cellMargins = cell?.Margins ?? defaults;
+        var floating = table.FloatingPosition ?? TableFloatingPosition.WordCompatibleDefault;
 
         return new TablePropertiesDialogInitialState(
             PreferredWidthText: FormatPoints(table.PreferredWidthPt ?? 0, culture),
@@ -159,6 +201,24 @@ public static class TablePropertiesDialogPlanner
             CellMarginRightText: FormatPoints(cellMargins.RightPt, culture),
             CellWrapText: cell?.WrapText ?? true,
             CellFitText: cell?.FitText ?? false,
+            FloatingHorizontalAnchorIndex: Math.Max(0, DialogOptionPolicy.IndexOf(
+                FloatingHorizontalAnchorValues,
+                floating.HorizontalAnchor ?? TableHorizontalAnchor.Text)),
+            FloatingHorizontalModeIndex: Math.Max(0, DialogOptionPolicy.IndexOf(
+                FloatingHorizontalModeValues,
+                floating.HorizontalAlignment)),
+            FloatingHorizontalOffsetText: FormatPoints(floating.HorizontalOffsetPt ?? 0, culture),
+            FloatingVerticalAnchorIndex: Math.Max(0, DialogOptionPolicy.IndexOf(
+                FloatingVerticalAnchorValues,
+                floating.VerticalAnchor ?? TableVerticalAnchor.Text)),
+            FloatingVerticalModeIndex: Math.Max(0, DialogOptionPolicy.IndexOf(
+                FloatingVerticalModeValues,
+                floating.VerticalAlignment)),
+            FloatingVerticalOffsetText: FormatPoints(floating.VerticalOffsetPt ?? 0, culture),
+            FloatingDistanceTopText: FormatPoints(floating.TopFromTextPt ?? 0, culture),
+            FloatingDistanceLeftText: FormatPoints(floating.LeftFromTextPt ?? 0, culture),
+            FloatingDistanceBottomText: FormatPoints(floating.BottomFromTextPt ?? 0, culture),
+            FloatingDistanceRightText: FormatPoints(floating.RightFromTextPt ?? 0, culture),
             FloatingTableAllowsOverlap: table.FloatingTableAllowsOverlap);
     }
 
@@ -193,6 +253,55 @@ public static class TablePropertiesDialogPlanner
             return false;
         }
 
+        TableFloatingPosition? floatingPosition = null;
+        var hasFloatingPositionInput = input.FloatingHorizontalAnchorIndex >= 0
+            && input.FloatingHorizontalModeIndex >= 0
+            && input.FloatingVerticalAnchorIndex >= 0
+            && input.FloatingVerticalModeIndex >= 0;
+        if (input.WrappingIndex == 1 && hasFloatingPositionInput)
+        {
+            var horizontalUsesOffset = input.FloatingHorizontalModeIndex == 0;
+            var verticalUsesOffset = input.FloatingVerticalModeIndex == 0;
+            if (!TryParseOptionalSignedPoints(
+                    horizontalUsesOffset,
+                    input.FloatingHorizontalOffsetText,
+                    culture,
+                    out var horizontalOffset)
+                || !TryParseOptionalSignedPoints(
+                    verticalUsesOffset,
+                    input.FloatingVerticalOffsetText,
+                    culture,
+                    out var verticalOffset)
+                || !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.FloatingDistanceTopText, culture, out var distanceTop)
+                || !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.FloatingDistanceLeftText, culture, out var distanceLeft)
+                || !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.FloatingDistanceBottomText, culture, out var distanceBottom)
+                || !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.FloatingDistanceRightText, culture, out var distanceRight))
+            {
+                errorMessage = ValidationMessage;
+                return false;
+            }
+
+            floatingPosition = new TableFloatingPosition(
+                HorizontalAnchor: DialogOptionPolicy.ValueAtOrDefault(
+                    FloatingHorizontalAnchorValues,
+                    input.FloatingHorizontalAnchorIndex),
+                VerticalAnchor: DialogOptionPolicy.ValueAtOrDefault(
+                    FloatingVerticalAnchorValues,
+                    input.FloatingVerticalAnchorIndex),
+                HorizontalOffsetPt: horizontalOffset,
+                VerticalOffsetPt: verticalOffset,
+                HorizontalAlignment: DialogOptionPolicy.ValueAtOrDefault(
+                    FloatingHorizontalModeValues,
+                    input.FloatingHorizontalModeIndex),
+                VerticalAlignment: DialogOptionPolicy.ValueAtOrDefault(
+                    FloatingVerticalModeValues,
+                    input.FloatingVerticalModeIndex),
+                LeftFromTextPt: distanceLeft,
+                RightFromTextPt: distanceRight,
+                TopFromTextPt: distanceTop,
+                BottomFromTextPt: distanceBottom);
+        }
+
         result = new TablePropertiesValues(
             PreferredWidthPt: preferredWidth,
             Alignment: DialogOptionPolicy.ValueAtOrDefault(AlignmentValues, input.AlignmentIndex),
@@ -214,7 +323,8 @@ public static class TablePropertiesDialogPlanner
             CellMargins: input.CellMarginsSameAsTable ? null : new TableCellMargins(cmTop, cmLeft, cmBottom, cmRight),
             CellWrapText: input.CellWrapText,
             CellFitText: input.CellFitText,
-            FloatingTableAllowsOverlap: input.FloatingTableAllowsOverlap);
+            FloatingTableAllowsOverlap: input.FloatingTableAllowsOverlap,
+            FloatingPosition: floatingPosition);
         return true;
     }
 
@@ -230,7 +340,11 @@ public static class TablePropertiesDialogPlanner
         table.IndentFromLeftPt = values.IndentFromLeftPt;
         table.TextWrapping = values.TextWrapping;
         if (values.TextWrapping)
+        {
+            if (values.FloatingPosition is not null)
+                table.FloatingPosition = values.FloatingPosition;
             table.FloatingTableAllowsOverlap = values.FloatingTableAllowsOverlap;
+        }
         table.DefaultCellMargins = values.DefaultCellMargins;
         table.CellSpacingPt = values.CellSpacingPt;
         TableLayoutOperations.UpdateFormatting(
@@ -263,4 +377,24 @@ public static class TablePropertiesDialogPlanner
 
     public static string FormatPoints(double value, CultureInfo culture)
         => DialogNumericTextPolicy.FormatPoints(value, culture);
+
+    private static bool TryParseOptionalSignedPoints(
+        bool enabled,
+        string? text,
+        CultureInfo culture,
+        out double? value)
+    {
+        value = null;
+        if (!enabled)
+            return true;
+
+        if (!double.TryParse(text?.Trim(), NumberStyles.Float | NumberStyles.AllowThousands, culture, out var parsed)
+            || !double.IsFinite(parsed))
+        {
+            return false;
+        }
+
+        value = parsed;
+        return true;
+    }
 }

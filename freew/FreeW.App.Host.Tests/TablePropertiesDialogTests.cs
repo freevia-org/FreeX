@@ -46,6 +46,15 @@ public sealed class TablePropertiesDialogTests
         table.IndentFromLeftPt = 12;
         table.TextWrapping = true;
         table.FloatingTableAllowsOverlap = false;
+        table.FloatingPosition = new TableFloatingPosition(
+            HorizontalAnchor: TableHorizontalAnchor.Page,
+            VerticalAnchor: TableVerticalAnchor.Margin,
+            HorizontalAlignment: TableHorizontalPositionAlignment.Outside,
+            VerticalOffsetPt: -18,
+            LeftFromTextPt: 3,
+            RightFromTextPt: 4,
+            TopFromTextPt: 5,
+            BottomFromTextPt: 6);
         table.CellSpacingPt = 2;
         table.Formatting = table.Formatting with { RepeatHeaderRow = true };
         var row = table.Rows[0];
@@ -67,6 +76,7 @@ public sealed class TablePropertiesDialogTests
         Assert.Equal(TableAlignment.Right, result.Alignment);
         Assert.True(result.TextWrapping);
         Assert.False(result.FloatingTableAllowsOverlap);
+        Assert.Equal(table.FloatingPosition, result.FloatingPosition);
         Assert.Equal(12, result.IndentFromLeftPt);
         Assert.Equal(2, result.CellSpacingPt);
         Assert.True(result.RepeatHeaderRow);

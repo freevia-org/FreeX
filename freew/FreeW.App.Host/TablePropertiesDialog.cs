@@ -19,6 +19,16 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
     private readonly ComboBox _alignment;
     private readonly ComboBox _wrapping;
     private readonly CheckBox _allowFloatingOverlap;
+    private readonly ComboBox _floatingHorizontalAnchor;
+    private readonly ComboBox _floatingHorizontalMode;
+    private readonly TextBox _floatingHorizontalOffset;
+    private readonly ComboBox _floatingVerticalAnchor;
+    private readonly ComboBox _floatingVerticalMode;
+    private readonly TextBox _floatingVerticalOffset;
+    private readonly TextBox _floatingDistanceTop;
+    private readonly TextBox _floatingDistanceLeft;
+    private readonly TextBox _floatingDistanceBottom;
+    private readonly TextBox _floatingDistanceRight;
     private readonly TextBox _indent;
     private readonly TextBox _cellMarginTop;
     private readonly TextBox _cellMarginLeft;
@@ -72,9 +82,38 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
             IsChecked = state.FloatingTableAllowsOverlap,
             Margin = new Thickness(0, 4, 0, 4)
         };
-        _allowFloatingOverlap.IsEnabled = state.WrappingIndex == 1;
-        _wrapping.SelectionChanged += (_, _) => _allowFloatingOverlap.IsEnabled = _wrapping.SelectedIndex == 1;
         AutomationProperties.SetAutomationId(_allowFloatingOverlap, "TablePropertiesAllowOverlapCheckBox");
+        _floatingHorizontalAnchor = Combo(
+            TablePropertiesDialogPlanner.FloatingHorizontalAnchorNames,
+            state.FloatingHorizontalAnchorIndex);
+        _floatingHorizontalMode = Combo(
+            TablePropertiesDialogPlanner.FloatingHorizontalModeNames,
+            state.FloatingHorizontalModeIndex);
+        _floatingHorizontalOffset = NumberBox(state.FloatingHorizontalOffsetText);
+        _floatingVerticalAnchor = Combo(
+            TablePropertiesDialogPlanner.FloatingVerticalAnchorNames,
+            state.FloatingVerticalAnchorIndex);
+        _floatingVerticalMode = Combo(
+            TablePropertiesDialogPlanner.FloatingVerticalModeNames,
+            state.FloatingVerticalModeIndex);
+        _floatingVerticalOffset = NumberBox(state.FloatingVerticalOffsetText);
+        _floatingDistanceTop = NumberBox(state.FloatingDistanceTopText);
+        _floatingDistanceLeft = NumberBox(state.FloatingDistanceLeftText);
+        _floatingDistanceBottom = NumberBox(state.FloatingDistanceBottomText);
+        _floatingDistanceRight = NumberBox(state.FloatingDistanceRightText);
+        AutomationProperties.SetAutomationId(_floatingHorizontalAnchor, "TablePropertiesHorizontalAnchorBox");
+        AutomationProperties.SetAutomationId(_floatingHorizontalMode, "TablePropertiesHorizontalModeBox");
+        AutomationProperties.SetAutomationId(_floatingHorizontalOffset, "TablePropertiesHorizontalOffsetBox");
+        AutomationProperties.SetAutomationId(_floatingVerticalAnchor, "TablePropertiesVerticalAnchorBox");
+        AutomationProperties.SetAutomationId(_floatingVerticalMode, "TablePropertiesVerticalModeBox");
+        AutomationProperties.SetAutomationId(_floatingVerticalOffset, "TablePropertiesVerticalOffsetBox");
+        AutomationProperties.SetAutomationId(_floatingDistanceTop, "TablePropertiesDistanceTopBox");
+        AutomationProperties.SetAutomationId(_floatingDistanceLeft, "TablePropertiesDistanceLeftBox");
+        AutomationProperties.SetAutomationId(_floatingDistanceBottom, "TablePropertiesDistanceBottomBox");
+        AutomationProperties.SetAutomationId(_floatingDistanceRight, "TablePropertiesDistanceRightBox");
+        _wrapping.SelectionChanged += (_, _) => UpdateFloatingPositionControls();
+        _floatingHorizontalMode.SelectionChanged += (_, _) => UpdateFloatingPositionControls();
+        _floatingVerticalMode.SelectionChanged += (_, _) => UpdateFloatingPositionControls();
         _indent = NumberBox(state.IndentText);
         _cellMarginTop = NumberBox(state.DefaultCellMarginTopText);
         _cellMarginLeft = NumberBox(state.DefaultCellMarginLeftText);
@@ -199,13 +238,59 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
         var stack = new StackPanel { Margin = new Thickness(14) };
         stack.Children.Add(grid);
-        stack.Children.Add(_allowFloatingOverlap);
+        stack.Children.Add(BuildFloatingPositioningPanel());
         stack.Children.Add(_cellWrapText);
         stack.Children.Add(_cellFitText);
         stack.Children.Add(_cellMarginsOn);
         stack.Children.Add(marginsHeader);
         stack.Children.Add(marginsGrid);
         return stack;
+    }
+
+    private UIElement BuildFloatingPositioningPanel()
+    {
+        var positionGrid = TwoColumnGrid(6);
+        AddRow(positionGrid, 0, "Horizontal relative to:", _floatingHorizontalAnchor);
+        AddRow(positionGrid, 1, "Horizontal alignment:", _floatingHorizontalMode);
+        AddRow(positionGrid, 2, "Horizontal position (pt):", _floatingHorizontalOffset);
+        AddRow(positionGrid, 3, "Vertical relative to:", _floatingVerticalAnchor);
+        AddRow(positionGrid, 4, "Vertical alignment:", _floatingVerticalMode);
+        AddRow(positionGrid, 5, "Vertical position (pt):", _floatingVerticalOffset);
+
+        var distanceGrid = TwoColumnGrid(4);
+        AddRow(distanceGrid, 0, "Top:", _floatingDistanceTop);
+        AddRow(distanceGrid, 1, "Left:", _floatingDistanceLeft);
+        AddRow(distanceGrid, 2, "Bottom:", _floatingDistanceBottom);
+        AddRow(distanceGrid, 3, "Right:", _floatingDistanceRight);
+
+        var stack = new StackPanel { Margin = new Thickness(8) };
+        stack.Children.Add(positionGrid);
+        stack.Children.Add(new TextBlock
+        {
+            Text = "Distance from surrounding text (pt):",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 8, 0, 4)
+        });
+        stack.Children.Add(distanceGrid);
+        stack.Children.Add(_allowFloatingOverlap);
+        UpdateFloatingPositionControls();
+        return new Expander { Header = "Positioning", IsExpanded = true, Content = stack };
+    }
+
+    private void UpdateFloatingPositionControls()
+    {
+        var enabled = _wrapping.SelectedIndex == 1;
+        _allowFloatingOverlap.IsEnabled = enabled;
+        _floatingHorizontalAnchor.IsEnabled = enabled;
+        _floatingHorizontalMode.IsEnabled = enabled;
+        _floatingHorizontalOffset.IsEnabled = enabled && _floatingHorizontalMode.SelectedIndex == 0;
+        _floatingVerticalAnchor.IsEnabled = enabled;
+        _floatingVerticalMode.IsEnabled = enabled;
+        _floatingVerticalOffset.IsEnabled = enabled && _floatingVerticalMode.SelectedIndex == 0;
+        _floatingDistanceTop.IsEnabled = enabled;
+        _floatingDistanceLeft.IsEnabled = enabled;
+        _floatingDistanceBottom.IsEnabled = enabled;
+        _floatingDistanceRight.IsEnabled = enabled;
     }
 
     private static Grid TwoColumnGrid(int rows)
@@ -293,6 +378,16 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
             CellMarginRightText: _cmRight.Text,
             CellWrapText: _cellWrapText.IsChecked == true,
             CellFitText: _cellFitText.IsChecked == true,
+            FloatingHorizontalAnchorIndex: _floatingHorizontalAnchor.SelectedIndex,
+            FloatingHorizontalModeIndex: _floatingHorizontalMode.SelectedIndex,
+            FloatingHorizontalOffsetText: _floatingHorizontalOffset.Text,
+            FloatingVerticalAnchorIndex: _floatingVerticalAnchor.SelectedIndex,
+            FloatingVerticalModeIndex: _floatingVerticalMode.SelectedIndex,
+            FloatingVerticalOffsetText: _floatingVerticalOffset.Text,
+            FloatingDistanceTopText: _floatingDistanceTop.Text,
+            FloatingDistanceLeftText: _floatingDistanceLeft.Text,
+            FloatingDistanceBottomText: _floatingDistanceBottom.Text,
+            FloatingDistanceRightText: _floatingDistanceRight.Text,
             FloatingTableAllowsOverlap: _allowFloatingOverlap.IsChecked);
 
         if (!TablePropertiesDialogPlanner.TryBuildResult(

@@ -13,6 +13,15 @@ public sealed class TablePropertiesDialogPlannerTests
         table.Alignment = TableAlignment.Right;
         table.TextWrapping = true;
         table.FloatingTableAllowsOverlap = false;
+        table.FloatingPosition = new TableFloatingPosition(
+            HorizontalAnchor: TableHorizontalAnchor.Page,
+            VerticalAnchor: TableVerticalAnchor.Margin,
+            HorizontalAlignment: TableHorizontalPositionAlignment.Outside,
+            VerticalOffsetPt: -18,
+            LeftFromTextPt: 3,
+            RightFromTextPt: 4,
+            TopFromTextPt: 5,
+            BottomFromTextPt: 6);
         table.IndentFromLeftPt = 12;
         table.CellSpacingPt = 2;
         table.Formatting = table.Formatting with { RepeatHeaderRow = true };
@@ -36,6 +45,12 @@ public sealed class TablePropertiesDialogPlannerTests
         state.AlignmentIndex.Should().Be(2);
         state.WrappingIndex.Should().Be(1);
         state.FloatingTableAllowsOverlap.Should().BeFalse();
+        state.FloatingHorizontalAnchorIndex.Should().Be(2);
+        state.FloatingHorizontalModeIndex.Should().Be(5);
+        state.FloatingVerticalAnchorIndex.Should().Be(1);
+        state.FloatingVerticalModeIndex.Should().Be(0);
+        state.FloatingVerticalOffsetText.Should().Be("-18");
+        state.FloatingDistanceLeftText.Should().Be("3");
         state.IndentText.Should().Be("12");
         state.CellSpacingOn.Should().BeTrue();
         state.RowHeightText.Should().Be("36");
@@ -63,6 +78,16 @@ public sealed class TablePropertiesDialogPlannerTests
             CellWrapText = false,
             CellFitText = true,
             FloatingTableAllowsOverlap = false,
+            FloatingHorizontalAnchorIndex = 2,
+            FloatingHorizontalModeIndex = 5,
+            FloatingHorizontalOffsetText = "ignored",
+            FloatingVerticalAnchorIndex = 1,
+            FloatingVerticalModeIndex = 0,
+            FloatingVerticalOffsetText = "-18",
+            FloatingDistanceTopText = "5",
+            FloatingDistanceLeftText = "3",
+            FloatingDistanceBottomText = "6",
+            FloatingDistanceRightText = "4",
         };
 
         TablePropertiesDialogPlanner.TryBuildResult(
@@ -78,6 +103,15 @@ public sealed class TablePropertiesDialogPlannerTests
         result.Alignment.Should().Be(TableAlignment.Center);
         result.TextWrapping.Should().BeTrue();
         result.FloatingTableAllowsOverlap.Should().BeFalse();
+        result.FloatingPosition.Should().Be(new TableFloatingPosition(
+            HorizontalAnchor: TableHorizontalAnchor.Page,
+            VerticalAnchor: TableVerticalAnchor.Margin,
+            VerticalOffsetPt: -18,
+            HorizontalAlignment: TableHorizontalPositionAlignment.Outside,
+            LeftFromTextPt: 3,
+            RightFromTextPt: 4,
+            TopFromTextPt: 5,
+            BottomFromTextPt: 6));
         result.IndentFromLeftPt.Should().Be(12);
         result.DefaultCellMargins!.LeftPt.Should().Be(6);
         result.CellSpacingPt.Should().Be(2);
@@ -144,6 +178,42 @@ public sealed class TablePropertiesDialogPlannerTests
     }
 
     [Fact]
+    public void TryBuildResult_AllowsSignedPositionButRejectsNegativeTextDistance()
+    {
+        var signedPosition = ValidInput() with
+        {
+            WrappingIndex = 1,
+            FloatingHorizontalAnchorIndex = 0,
+            FloatingHorizontalModeIndex = 0,
+            FloatingHorizontalOffsetText = "-12.5",
+            FloatingVerticalAnchorIndex = 0,
+            FloatingVerticalModeIndex = 0,
+            FloatingVerticalOffsetText = "18.25",
+            FloatingDistanceTopText = "0",
+            FloatingDistanceLeftText = "3",
+            FloatingDistanceBottomText = "0",
+            FloatingDistanceRightText = "4",
+        };
+
+        TablePropertiesDialogPlanner.TryBuildResult(
+                signedPosition,
+                CultureInfo.InvariantCulture,
+                out var result,
+                out _)
+            .Should().BeTrue();
+        result!.FloatingPosition!.HorizontalOffsetPt.Should().Be(-12.5);
+        result.FloatingPosition.VerticalOffsetPt.Should().Be(18.25);
+
+        TablePropertiesDialogPlanner.TryBuildResult(
+                signedPosition with { FloatingDistanceLeftText = "-1" },
+                CultureInfo.InvariantCulture,
+                out _,
+                out var error)
+            .Should().BeFalse();
+        error.Should().Be(TablePropertiesDialogPlanner.ValidationMessage);
+    }
+
+    [Fact]
     public void ApplyValues_AppliesTableRowColumnAndCellFields()
     {
         var table = Table.Create(2, 2);
@@ -166,7 +236,12 @@ public sealed class TablePropertiesDialogPlannerTests
             CellMargins: new TableCellMargins(2, 8, 2, 8),
             CellWrapText: false,
             CellFitText: true,
-            FloatingTableAllowsOverlap: false);
+            FloatingTableAllowsOverlap: false,
+            FloatingPosition: new TableFloatingPosition(
+                HorizontalAnchor: TableHorizontalAnchor.Page,
+                VerticalAnchor: TableVerticalAnchor.Margin,
+                HorizontalAlignment: TableHorizontalPositionAlignment.Right,
+                VerticalOffsetPt: -9));
 
         TablePropertiesDialogPlanner.ApplyValues(new ModelTableContext(table, row, cell), values);
 
@@ -174,6 +249,7 @@ public sealed class TablePropertiesDialogPlannerTests
         table.Alignment.Should().Be(TableAlignment.Right);
         table.TextWrapping.Should().BeTrue();
         table.FloatingTableAllowsOverlap.Should().BeFalse();
+        table.FloatingPosition.Should().Be(values.FloatingPosition);
         table.IndentFromLeftPt.Should().Be(12);
         table.DefaultCellMargins.Should().Be(new TableCellMargins(0, 6, 0, 6));
         table.CellSpacingPt.Should().Be(2);
