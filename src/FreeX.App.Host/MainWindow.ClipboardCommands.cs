@@ -384,13 +384,15 @@ public partial class MainWindow
     private static void SetClipboardDataWithRetry(DataObject data, string text)
     {
         const int attempts = 20;
+        var requiresImage = data.GetDataPresent(System.Windows.DataFormats.Bitmap);
         for (var attempt = 1; attempt <= attempts; attempt++)
         {
             try
             {
                 System.Windows.Clipboard.SetDataObject(data, copy: true);
                 System.Windows.Clipboard.Flush();
-                if (System.Windows.Clipboard.GetText() == text)
+                if (System.Windows.Clipboard.GetText() == text
+                    && (!requiresImage || System.Windows.Clipboard.GetImage() is not null))
                     return;
             }
             catch (ExternalException) when (attempt < attempts)
