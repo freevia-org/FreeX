@@ -2584,7 +2584,8 @@ internal static class FreeWAvaloniaRibbonCommands
     /// <summary>
     /// AV-DESIGN: Registers the Design-tab commands — Themes / Colors / Fonts / Paragraph-Spacing galleries
     /// (document-wide style mutations), Page Color, Page Borders, and Watermark. Each gallery dropdown's
-    /// top-level id is a no-op opener; the per-item ids resolve to a model-backed, undoable
+    /// top-level dropdown ids either consume the selected combo value or act as menu openers; the
+    /// per-item ids resolve to a model-backed, undoable
     /// <see cref="DocumentView"/> Design method. Page Borders + Custom Watermark route through the optional
     /// <see cref="RibbonHostCallbacks"/> dialog launchers and safely no-op when the shell did not supply one
     /// (so the registry-completeness guard passes and parallel waves / tests keep compiling).
@@ -2593,7 +2594,11 @@ internal static class FreeWAvaloniaRibbonCommands
         RibbonCommandRegistry r, DocumentView editor, RibbonHostCallbacks callbacks)
     {
         // ── Themes ───────────────────────────────────────────────────────────
-        r.Register("freew.theme", new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.theme", new ValueRibbonCommand(value =>
+        {
+            if (!string.IsNullOrWhiteSpace(value) && DocumentTheme.FindByName(value) is { } theme)
+                editor.ApplyTheme(theme);
+        }));
         foreach (var theme in DocumentTheme.Catalog)
         {
             var t = theme;

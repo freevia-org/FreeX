@@ -366,6 +366,24 @@ public sealed class DesignTabTests
     }
 
     [Fact]
+    public void Theme_combo_applies_selected_value_and_rejects_unknown_values()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc());
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.theme", RibbonCommandContext.ForSelectedValue("Berlin"));
+        view.Document.Theme.Name.Should().Be("Berlin");
+
+        view.Undo();
+        view.Document.Theme.Name.Should().Be("Office");
+
+        Execute(registry, "freew.theme", RibbonCommandContext.ForSelectedValue("Missing Theme"));
+        Execute(registry, "freew.theme", RibbonCommandContext.Empty);
+        view.Document.Theme.Name.Should().Be("Office");
+    }
+
+    [Fact]
     public void Page_color_subcommand_sets_background_via_registry()
     {
         var view = new DocumentView();
