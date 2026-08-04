@@ -116,6 +116,7 @@ public sealed record AnimationPaneTimelineItemPlan(
     public int? RepeatCount { get; init; }
     public bool RepeatIndefinitely { get; init; }
     public bool AutoReverse { get; init; }
+    public uint? TriggerShapeId { get; init; }
 }
 
 public sealed record AnimationPaneWorkflowViewPlan(
@@ -468,6 +469,7 @@ public static class AnimationPanePlanner
                 RepeatCount = animation.RepeatCount,
                 RepeatIndefinitely = animation.RepeatIndefinitely,
                 AutoReverse = animation.AutoReverse,
+                TriggerShapeId = animation.TriggerShapeId,
             });
         }
 
@@ -605,9 +607,15 @@ public static class AnimationPanePlanner
                 "Select an animation row to play from it");
         }
 
-        var anchorStartMs = timelinePlan.Items[startIndex].StartMs;
-        var segments = timelinePlan.Items
-            .Skip(startIndex)
+        var startItem = timelinePlan.Items[startIndex];
+        var playbackItems = commandKind == AnimationPanePlaybackControlKind.PlayFromSelected
+            && startItem.TriggerShapeId is uint triggerShapeId
+            ? timelinePlan.Items
+                .Where(item => item.TriggerShapeId == triggerShapeId && item.Index >= startIndex)
+                .ToArray()
+            : timelinePlan.Items.Skip(startIndex).ToArray();
+        var anchorStartMs = startItem.StartMs;
+        var segments = playbackItems
             .Select(item =>
             {
                 var relativeStartMs = Math.Max(0, item.StartMs - anchorStartMs);
