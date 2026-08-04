@@ -1651,7 +1651,10 @@ internal static class FreeWRibbonCommands
 
         // Home > Styles: the styles dropdown. Picking an entry sets the selected paragraph(s)' StyleId
         // (reversible via the bus), then re-renders so the style's run/paragraph formatting resolves.
-        registry.Register("freew.style", new ApplyParagraphStyleCommand(editor));
+        var paragraphStyle = new ApplyParagraphStyleCommand(editor);
+        registry.Register("freew.style", paragraphStyle);
+        stateful.Add(("freew.style", paragraphStyle));
+        stateStore.SetState("freew.style", paragraphStyle.GetState());
 
         // Home > Styles: New Style opens a dialog capturing name + formatting + based-on, creates a custom
         // DocumentStyle via the pure StyleManager and applies it to the selection. Manage Styles lets the
@@ -2426,7 +2429,7 @@ internal static class FreeWRibbonCommands
     // Home > Styles: apply a real paragraph style. The styles dropdown's value is a display name
     // (e.g. "Heading 1"); this maps it to the matching style id in the model's catalog and sets the
     // selected paragraph(s)' StyleId through the view's undo/redo bus (re-rendered to resolve formatting).
-    private sealed class ApplyParagraphStyleCommand(DocumentView editor) : IRibbonCommand
+    private sealed class ApplyParagraphStyleCommand(DocumentView editor) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
@@ -2440,6 +2443,9 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             editor.SetParagraphStyle(styleId);
         }
+
+        public RibbonCommandState GetState() =>
+            new(Value: editor.CurrentParagraphStyleName);
 
         // Match the chosen combo entry to a style in the document by id first, then by display name
         // (case-insensitive, ignoring spaces) so "Heading 1" resolves to the "Heading1" style id.

@@ -3752,6 +3752,25 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
+    /// <summary>
+    /// Display name of the paragraph style at the caret without committing pending text. Used by passive
+    /// ribbon-state refreshes, where reading state must not mutate the document or its undo history.
+    /// </summary>
+    public string CurrentParagraphStyleName
+    {
+        get
+        {
+            var index = SelectedModelParagraphIndices().FirstOrDefault(-1);
+            var styleId = index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph paragraph
+                ? paragraph.StyleId
+                : null;
+            styleId = string.IsNullOrWhiteSpace(styleId) ? "Normal" : styleId;
+            return _model.Styles.TryGetValue(styleId, out var style) && !string.IsNullOrWhiteSpace(style.Name)
+                ? style.Name
+                : styleId;
+        }
+    }
+
     /// <summary>Home &gt; Styles &gt; New Style: create a paragraph style and apply it to the selection.</summary>
     public DocumentStyle? CreateParagraphStyleAndApply(
         string name,

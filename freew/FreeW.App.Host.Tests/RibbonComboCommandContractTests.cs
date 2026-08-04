@@ -15,6 +15,7 @@ public sealed class RibbonComboCommandContractTests
         stateStore.GetState("freew.font-family").Value.Should().Be("Calibri");
         stateStore.GetState("freew.font-size").Value.Should().Be("11");
         stateStore.GetState("freew.line-spacing").Value.Should().Be("1.15");
+        stateStore.GetState("freew.style").Value.Should().Be("Normal");
 
         Execute(view, registry, "freew.font-family", "Arial");
         Execute(view, registry, "freew.font-size", "16");
@@ -31,6 +32,13 @@ public sealed class RibbonComboCommandContractTests
 
         Execute(view, registry, "freew.style", "Heading 1");
         ((Paragraph)view.Model.Blocks[0]).StyleId.Should().Be("Heading1");
+        stateStore.GetState("freew.style").Value.Should().Be("Heading 1");
+
+        var titleDocument = TextDocument.CreateEmpty();
+        titleDocument.Blocks.Clear();
+        titleDocument.Blocks.Add(new Paragraph("Loaded title") { StyleId = "Title" });
+        view.LoadModel(titleDocument);
+        stateStore.GetState("freew.style").Value.Should().Be("Title");
     }
 
     [StaFact]
