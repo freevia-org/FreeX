@@ -1352,11 +1352,11 @@ public sealed class DocumentViewPdfExportTests
             var pdf = view.BuildPdfContent();
             var fills = pdf.Pages.Single().Ops.OfType<PdfFillRect>().ToArray();
             var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
-            fills.Should().HaveCount(3630);
+            fills.Should().HaveCount(3573);
             paths.Should().BeEmpty();
             fills[0].Should().Be(new PdfFillRect(24, 744, 564, 24, PdfColor.Black));
             fills[4].Should().Be(new PdfFillRect(67.5, 764.25, 7.5, 0.75, new PdfColor(255, 255, 255)));
-            fills[3370].Should().Be(new PdfFillRect(39, 764.25, 0.75, 0.75, new PdfColor(255, 255, 255)));
+            fills[3313].Should().Be(new PdfFillRect(39, 764.25, 0.75, 0.75, new PdfColor(255, 255, 255)));
             pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
 
             using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());

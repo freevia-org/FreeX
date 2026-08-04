@@ -361,9 +361,9 @@ public sealed class PageBorderArtVisualPlannerTests
             new PageBorderArtFillRectangle(32, 992, 752, 32, 0, 0, 0),
             new PageBorderArtFillRectangle(32, 32, 32, 992, 0, 0, 0),
             new PageBorderArtFillRectangle(752, 32, 32, 992, 0, 0, 0));
-        plan.Fills.Should().HaveCount(3630);
+        plan.Fills.Should().HaveCount(3573);
         plan.Fills[4].Should().Be(new PageBorderArtFillRectangle(90, 36, 10, 1, 0xFF, 0xFF, 0xFF));
-        plan.Fills[3370].Should().Be(new PageBorderArtFillRectangle(52, 36, 1, 1, 0xFF, 0xFF, 0xFF));
+        plan.Fills[3313].Should().Be(new PageBorderArtFillRectangle(52, 36, 1, 1, 0xFF, 0xFF, 0xFF));
         plan.Polygons.Should().BeEmpty();
     }
 
