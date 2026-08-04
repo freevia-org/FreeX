@@ -59,6 +59,7 @@ public sealed partial class MainWindow : Window
     private readonly IPlatformPrintService _printService;
     private readonly Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> _showPrintSelectionDialog;
     private readonly Action<IInputElement?> _restorePrintOwnerFocus;
+    private readonly Action<DocumentView, string> _savePrintPdf;
     private readonly Func<IStorageProvider, AvaloniaFilePickerSaveRequest, Task<(bool Canceled, string? LocalPath)>> _pickExportPath;
     private readonly Func<bool, string, Task<string?>>? _askHeaderFooterText;
     private readonly IScreenClipService _screenClipService;
@@ -180,7 +181,8 @@ public sealed partial class MainWindow : Window
         Func<IStorageProvider, AvaloniaFilePickerSaveRequest, Task<(bool Canceled, string? LocalPath)>>? pickExportPath = null,
         Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
         Func<string, Exception, Task>? showFileCommandErrorAsync = null,
-        Func<bool, string, Task<string?>>? askHeaderFooterText = null)
+        Func<bool, string, Task<string?>>? askHeaderFooterText = null,
+        Action<DocumentView, string>? savePrintPdf = null)
     {
         _optionsStore = optionsStore;
         _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
@@ -189,6 +191,7 @@ public sealed partial class MainWindow : Window
             ((owner, discovery, cancellationToken) =>
                 CupsPrintDialog.ShowAsync(owner, discovery, cancellationToken: cancellationToken));
         _restorePrintOwnerFocus = restorePrintOwnerFocus ?? RestorePrintOwnerFocus;
+        _savePrintPdf = savePrintPdf ?? ((view, path) => FreeWAvaloniaPdfExport.Save(view, path));
         _pickExportPath = pickExportPath ?? PickExportPathAsync;
         _askHeaderFooterText = askHeaderFooterText;
         _options = options ?? _optionsStore.Load();
@@ -429,6 +432,8 @@ public sealed partial class MainWindow : Window
     internal string SectionStatusForTests => _sectionStatus.Text ?? string.Empty;
     internal string CountsStatusForTests => _status.Text ?? string.Empty;
     internal string PrintStatusForTests => _status.Text ?? string.Empty;
+    internal MailMergeEngine MailMergeForTests => _mailMerge!;
+    internal Task ExecuteFinishMergePlanForTests(MailMergeFinishPlan plan) => ExecuteFinishMergePlanAsync(plan);
     internal string DataFolderStatusForTests => _dataFolderStatus.Text ?? string.Empty;
     internal Slider ZoomSliderForTests => _zoomSlider;
     internal string ZoomLabelForTests => _zoomLabel.Text ?? string.Empty;
@@ -2180,9 +2185,25 @@ public sealed partial class MainWindow : Window
         }
         var plan = await MailMergeDialogs.AskFinishMergeAsync(
             this, data.Count, _mailMerge.Session.CurrentIndex);
-        if (plan is { Success: true, Destination: MailMergeFinishDestination.NewDocument })
-            _mailMerge.FinishMerge(plan);
+        if (plan is not null)
+            await ExecuteFinishMergePlanAsync(plan);
         _editor.Focus();
+    }
+
+    private async Task ExecuteFinishMergePlanAsync(MailMergeFinishPlan plan)
+    {
+        if (_mailMerge is null || !plan.Success)
+            return;
+
+        if (plan.Destination == MailMergeFinishDestination.NewDocument)
+        {
+            _mailMerge.FinishMerge(plan);
+            return;
+        }
+
+        if (plan.Destination == MailMergeFinishDestination.Printer &&
+            _mailMerge.BuildFinishedMerge(plan) is { } result)
+            await PrintAsync(result.Document);
     }
 
     // AV-MAIL: Mailings > Insert Merge Field. Pick / type a field name (seeded with the loaded recipient
@@ -3302,7 +3323,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal async Task PrintAsync()
+    internal Task PrintAsync() => PrintAsync(document: null);
+
+    internal async Task PrintAsync(TextDocument? document)
     {
         var priorFocus = FocusManager?.GetFocusedElement();
         using var cancellation = new CancellationTokenSource();
@@ -3329,7 +3352,14 @@ public sealed partial class MainWindow : Window
             var tempPath = Path.Combine(Path.GetTempPath(), $"FreeW-print-{Guid.NewGuid():N}.pdf");
             try
             {
-                FreeWAvaloniaPdfExport.Save(_editor, tempPath);
+                var printView = _editor;
+                if (document is not null)
+                {
+                    printView = new DocumentView();
+                    printView.LoadDocument(document);
+                }
+
+                _savePrintPdf(printView, tempPath);
                 var submission = await _printService.SubmitAsync(tempPath, selection, cancellation.Token);
                 _status.Text = FormatPrintSubmissionStatus(submission);
             }

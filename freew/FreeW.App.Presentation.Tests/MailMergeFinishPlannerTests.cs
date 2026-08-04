@@ -15,7 +15,7 @@ public sealed class MailMergeFinishPlannerTests
         choices.Single(choice => choice.Destination == MailMergeFinishDestination.NewDocument)
             .IsSupported.Should().BeTrue();
         choices.Single(choice => choice.Destination == MailMergeFinishDestination.Printer)
-            .IsSupported.Should().BeFalse();
+            .IsSupported.Should().BeTrue();
         choices.Single(choice => choice.Destination == MailMergeFinishDestination.Email)
             .IsSupported.Should().BeFalse();
     }
@@ -59,6 +59,30 @@ public sealed class MailMergeFinishPlannerTests
 
         plan.Success.Should().BeTrue();
         plan.RowIndexes.Should().Equal(1, 2, 3);
+    }
+
+    [Theory]
+    [InlineData(MailMergeRecipientScope.All, 0, null, null, 0, 1, 2, 3)]
+    [InlineData(MailMergeRecipientScope.CurrentRecord, 2, null, null, 2)]
+    [InlineData(MailMergeRecipientScope.FromTo, 0, "2", "3", 1, 2)]
+    public void Plan_Printer_SupportsEveryRecipientScope(
+        MailMergeRecipientScope scope,
+        int currentIndex,
+        string? fromRecord,
+        string? toRecord,
+        params int[] expectedIndexes)
+    {
+        var plan = MailMergeFinishPlanner.Plan(
+            MailMergeFinishDestination.Printer,
+            scope,
+            recordCount: 4,
+            currentIndex,
+            fromRecord,
+            toRecord);
+
+        plan.Success.Should().BeTrue();
+        plan.Destination.Should().Be(MailMergeFinishDestination.Printer);
+        plan.RowIndexes.Should().Equal(expectedIndexes);
     }
 
     [Theory]
