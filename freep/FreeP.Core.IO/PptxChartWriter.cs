@@ -185,29 +185,97 @@ internal static class PptxChartWriter
     private static void UpdateChartExData(XDocument document, ChartShape chart)
     {
         XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
-        var data = document.Descendants(cx + "chartData")
+        var dataElements = document.Descendants(cx + "chartData")
             .Elements(cx + "data")
-            .SingleOrDefault();
+            .ToList();
         var series = document.Descendants(cx + "plotAreaRegion")
             .Elements(cx + "series")
             .ToList();
-        var categoryLevel = data?.Element(cx + "strDim")?.Element(cx + "lvl");
-        var valueLevel = data?.Element(cx + "numDim")?.Element(cx + "lvl");
 
-        if (data is null || series.Count != 1 || categoryLevel is null || valueLevel is null ||
-            chart.Series.Count != 1)
+        if (series.Count == 0 || series.Count != chart.Series.Count)
             return;
 
-        ReplaceChartExPoints(categoryLevel, chart.Categories, static value => value);
-        ReplaceChartExPoints(
-            valueLevel,
-            chart.Series[0].Values,
-            value => value?.ToString("G", CultureInfo.InvariantCulture));
+        var categoryData = FindChartExCategoryData(dataElements, cx);
+        var categoryLevel = categoryData?.Element(cx + "strDim")?.Element(cx + "lvl");
+        if (categoryLevel is null)
+            return;
 
-        var valueElement = series[0].Element(cx + "tx")?.Element(cx + "txData")?.Element(cx + "v");
-        if (valueElement is not null)
-            valueElement.Value = chart.Series[0].Name ?? string.Empty;
+        var dataById = dataElements
+            .Select(data => (Data: data, Id: TryParseChartExId(data.Attribute("id")?.Value)))
+            .ToList();
+        if (dataById.Any(item => item.Id is null) || dataById.Select(item => item.Id!.Value).Distinct().Count() != dataById.Count)
+            return;
+
+        var seriesValues = new List<XElement>(series.Count);
+        foreach (var seriesElement in series)
+        {
+            var dataId = TryParseChartExId(seriesElement.Element(cx + "dataId")?.Attribute("val")?.Value);
+            if (dataId is null)
+                return;
+
+            var referencedData = dataById
+                .FirstOrDefault(item => item.Id == dataId)
+                .Data;
+            if (referencedData is null)
+                return;
+
+            var valueLevel = FindChartExValueDataLevel(referencedData, cx);
+            if (valueLevel is null)
+                return;
+
+            seriesValues.Add(valueLevel);
+        }
+
+        ReplaceChartExPoints(categoryLevel, chart.Categories, static value => value);
+        for (var index = 0; index < series.Count; index++)
+        {
+            ReplaceChartExPoints(
+                seriesValues[index],
+                chart.Series[index].Values,
+                value => value?.ToString("G", CultureInfo.InvariantCulture));
+
+            var valueElement = series[index].Element(cx + "tx")?.Element(cx + "txData")?.Element(cx + "v");
+            if (valueElement is not null)
+                valueElement.Value = chart.Series[index].Name ?? string.Empty;
+        }
     }
+
+    private static XElement? FindChartExCategoryData(
+        IReadOnlyList<XElement> dataElements,
+        XNamespace cx)
+    {
+        var stringData = dataElements
+            .Where(data => data.Element(cx + "strDim") is not null)
+            .ToList();
+        if (stringData.Count == 1)
+            return stringData[0];
+
+        var categoryData = stringData
+            .Where(data => string.Equals(
+                data.Element(cx + "strDim")?.Attribute("type")?.Value,
+                "cat",
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        return categoryData.Count == 1 ? categoryData[0] : null;
+    }
+
+    private static XElement? FindChartExValueDataLevel(XElement data, XNamespace cx)
+    {
+        var numericDimensions = data.Elements(cx + "numDim").ToList();
+        if (numericDimensions.Count == 1)
+            return numericDimensions[0].Element(cx + "lvl");
+
+        var valueDimension = numericDimensions
+            .Where(dimension => string.Equals(
+                dimension.Attribute("type")?.Value,
+                "val",
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        return valueDimension.Count == 1 ? valueDimension[0].Element(cx + "lvl") : null;
+    }
+
+    private static int? TryParseChartExId(string? value) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id : null;
 
     private static void ReplaceChartExPoints<T>(
         XElement level,
