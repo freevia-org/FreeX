@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Free.Shared.Shell;
@@ -60,6 +61,54 @@ public sealed class BackstageVisualContractTests
             layout.ColumnDefinitions[0].Width.Value.Should().Be(BackstageVisualContract.Frame.RailWidth);
             bottomNav.Margin.Should().Be(ToThickness(BackstageVisualContract.Frame.BottomNavigationMargin));
             scroll.Padding.Should().Be(ToThickness(BackstageVisualContract.Frame.ContentPadding));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Avalonia_backstage_navigation_uses_contract_hit_targets_and_preserves_selection_behavior()
+    {
+        await Session.Dispatch(() =>
+        {
+            var frame = new AvaloniaBackstageFrame(
+                new AvaloniaBackstageAccent(Colors.Black, Colors.Gray, Colors.Blue, Colors.White),
+                [
+                    SisterBackstageEntryPlan<Control>.Pane(
+                        "Info",
+                        BackstageIconKind.Info,
+                        () => new Border()),
+                    SisterBackstageEntryPlan<Control>.Pane(
+                        "Options",
+                        BackstageIconKind.View,
+                        () => new Border(),
+                        dockBottom: true),
+                ]);
+
+            var layout = Assert.IsType<Grid>(frame.Content);
+            var rail = Assert.IsType<DockPanel>(layout.Children[0]);
+            var back = Assert.IsType<Button>(rail.Children[0]);
+            var backIcon = Assert.IsType<TextBlock>(back.Content);
+            var topScroll = Assert.IsType<ScrollViewer>(rail.Children[2]);
+            var topNav = Assert.IsType<StackPanel>(topScroll.Content);
+            var nav = Assert.IsType<Button>(topNav.Children.Single());
+            var row = Assert.IsType<StackPanel>(nav.Content);
+            var icon = Assert.IsType<TextBlock>(row.Children[0]);
+            var label = Assert.IsType<TextBlock>(row.Children[1]);
+
+            back.Padding.Should().Be(ToThickness(BackstageVisualContract.Frame.BackButtonPadding));
+            back.FontSize.Should().Be(BackstageVisualContract.Frame.BackButtonFontSize);
+            backIcon.Width.Should().Be(BackstageVisualContract.Frame.BackButtonIconSize);
+            backIcon.Height.Should().Be(BackstageVisualContract.Frame.BackButtonIconSize);
+            icon.Width.Should().Be(BackstageVisualContract.Frame.NavigationIconSize);
+            icon.Height.Should().Be(BackstageVisualContract.Frame.NavigationIconSize);
+            row.Spacing.Should().Be(BackstageVisualContract.Frame.NavigationIconLabelGap);
+            nav.Padding.Should().Be(ToThickness(BackstageVisualContract.Frame.NavigationButtonPadding));
+            label.FontSize.Should().Be(BackstageVisualContract.Frame.NavigationFontSize);
+
+            frame.Show("Info");
+            frame.CurrentPaneLabel.Should().Be("Info");
+            nav.Background.Should().BeOfType<SolidColorBrush>().Which.Color.Should().Be(Colors.Blue);
+            frame.HandleKey(Key.Escape).Should().BeTrue();
+            frame.IsOpen.Should().BeFalse();
         }, CancellationToken.None);
     }
 
