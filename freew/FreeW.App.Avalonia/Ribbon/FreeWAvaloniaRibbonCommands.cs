@@ -228,6 +228,16 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Styles (AV-STYLES) ────────────────────────────────────────────────
         // Existing quick-style buttons — now routed through the model-backed, undoable ApplyNamedStyle
         // so the paragraph picks up the real built-in style (seeded if absent) instead of just a font tweak.
+        r.Register("freew.style", new ValueRibbonCommand(value =>
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return;
+
+            var descriptor = BuiltInStyles.Gallery.FirstOrDefault(style =>
+                string.Equals(style.Name, value, StringComparison.OrdinalIgnoreCase));
+            if (descriptor is not null)
+                editor.ApplyNamedStyle(descriptor.Id);
+        }));
         r.Register("freew.style-normal",   new ActionRibbonCommand(() => editor.ApplyNamedStyle("Normal")));
         r.Register("freew.style-heading1", new ActionRibbonCommand(() => editor.ApplyNamedStyle("Heading1")));
         r.Register("freew.style-heading2", new ActionRibbonCommand(() => editor.ApplyNamedStyle("Heading2")));

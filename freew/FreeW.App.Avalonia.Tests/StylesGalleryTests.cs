@@ -120,9 +120,40 @@ public sealed class StylesGalleryTests
                 .Should().BeTrue($"gallery style command '{id}' must be registered");
         }
         registry.TryGet(new RibbonCommandId("freew.style-clear"), out _).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.style"), out _).Should().BeTrue();
         registry.TryGet(new RibbonCommandId("freew.styles-gallery"), out _).Should().BeTrue();
         registry.TryGet(new RibbonCommandId("freew.new-style"), out _).Should().BeTrue();
         registry.TryGet(new RibbonCommandId("freew.manage-styles"), out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Style_combo_applies_display_name_undoably_and_rejects_unknown_values()
+    {
+        string? appliedStyleId = null;
+        string? undoneStyleId = "not-observed";
+        string? afterUnknownStyleId = "not-observed";
+        var ran = await OnUiThread(() =>
+        {
+            var (view, doc) = MakeBodyDoc("Heading text");
+            view.MoveCaretToBlock(0, 0);
+            var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+            registry.TryGet(new RibbonCommandId("freew.style"), out var command).Should().BeTrue();
+
+            command!.Execute(RibbonCommandContext.ForSelectedValue("Heading 1"));
+            appliedStyleId = ((Paragraph)doc.Blocks[0]).StyleId;
+
+            view.Undo();
+            undoneStyleId = ((Paragraph)doc.Blocks[0]).StyleId;
+
+            command.Execute(RibbonCommandContext.ForSelectedValue("Missing Style"));
+            command.Execute(RibbonCommandContext.Empty);
+            afterUnknownStyleId = ((Paragraph)doc.Blocks[0]).StyleId;
+        });
+        if (!ran) return;
+
+        appliedStyleId.Should().Be("Heading1");
+        undoneStyleId.Should().BeNull();
+        afterUnknownStyleId.Should().BeNull();
     }
 
     [Fact]
