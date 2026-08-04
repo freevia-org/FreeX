@@ -2891,7 +2891,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Data Table failed.\");");
         source.Should().Contain("RefreshShell($\"Created {FormatDataTableMode(plan)} Data Table for {tableRange}\");");
 
-        source.Should().Contain("private async Task<DataTablePlan?> ShowDataTableInputDialogAsync()");
+        source.Should().Contain("private async Task<DataTablePlan?> ShowDataTableInputDialogAsync(");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"DataTableCompactDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(rowInputBox, \"DataTableRowInputCellBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(columnInputBox, \"DataTableColumnInputCellBox\");");
@@ -2908,7 +2908,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private static string FormatDataTableMode(DataTablePlan plan)");
         source.Should().Contain("private static string FormatDataTablePlanError(DataTablePlanResult result)");
         source.Should().Contain("private static void FocusDataTableErrorField(");
-        source.Should().Contain("private static StackPanel CreateDataTableField(string label, Control control)");
+        source.Should().Contain("private static void AddDataTableReferenceRow(");
+        source.Should().Contain("CreateDialogRangePickerButton(");
+        source.Should().Contain("BuildDialogRangePickerRow(input, picker)");
+        source.Should().Contain("AttachDialogRangePicker(dialog, rowInputPicker, rowInputBox, \"range.data-table.row-input-cell\");");
+        source.Should().Contain("AttachDialogRangePicker(dialog, columnInputPicker, columnInputBox, \"range.data-table.column-input-cell\");");
 
         sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteDataTablePlan(DataTablePlan plan)");
         sessionSource.Should().Contain("plan.CreateCommand()");
@@ -2917,11 +2921,11 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("public IWorkbookCommand CreateCommand()");
         parityCaptureSource.Should().Contain("(\"dialog.DataTable\", () => ShowDataTableParityDialogAsync()),");
         parityCaptureSource.Should().Contain("private Task ShowDataTableParityDialogAsync()");
-        parityCaptureSource.Should().Contain("async () => { await ShowDataTableInputDialogAsync(); }");
+        parityCaptureSource.Should().Contain("async () => { await ShowDataTableInputDialogAsync(\"E2\", \"F2\"); }");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowDataTableDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
-        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowDataValidationDialogAsync()", handlerIndex, StringComparison.Ordinal);
+        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowForecastSheetDialogAsync()", handlerIndex, StringComparison.Ordinal);
         nextMethodIndex.Should().BeGreaterThan(handlerIndex);
         var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
 
