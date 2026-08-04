@@ -1319,6 +1319,12 @@ public static class PptxPackageReader
     private const string DrawingChartUri =
         "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
+    private const string DrawingChartExUri =
+        "http://schemas.microsoft.com/office/drawing/2014/chartex";
+
+    private const string ChartExRelType =
+        "http://schemas.microsoft.com/office/2014/relationships/chartEx";
+
     private const string DrawingDiagramUri =
         "http://schemas.openxmlformats.org/drawingml/2006/diagram";
 
@@ -1459,6 +1465,42 @@ public static class PptxPackageReader
                 ExtentCyEmu = extCy,
                 Hyperlink = ResolveHlinkClick(cNvPr?.Element(A + "hlinkClick"), slideRels, allSlides, slideDir, slidePartPathToId),
                 Chart = chartShape
+            };
+        }
+
+        // Current PowerPoint waterfall charts use the ChartEx part family.
+        if (string.Equals(uri, DrawingChartExUri, StringComparison.OrdinalIgnoreCase))
+        {
+            var chartRelId = graphicData.Elements()
+                .FirstOrDefault(element => element.Name.LocalName == "chart")?
+                .Attribute(R + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(chartRelId)) return null;
+
+            var partRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
+            var chartTarget = partRels
+                .FirstOrDefault(r => r.Id == chartRelId && r.Type == ChartExRelType).Target;
+            if (string.IsNullOrWhiteSpace(chartTarget)) return null;
+
+            var chartPath = ResolveRelativeZipPath(GetDirectoryName(partPath), chartTarget);
+            var chartShape = PptxChartReader.ReadChartExPart(archive, chartPath, scheme);
+            if (chartShape is null) return null;
+            chartShape.SourcePartPath = chartPath;
+
+            return new SlideShape
+            {
+                Id = ParseUint(cNvPr?.Attribute("id")?.Value),
+                Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+                AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
+                AlternativeText = ReadAlternativeText(cNvPr),
+                IsDecorative = ReadDecorative(cNvPr),
+                IsHidden = ReadHidden(cNvPr),
+                Kind = SlideShapeKind.Chart,
+                OffsetXEmu = offX,
+                OffsetYEmu = offY,
+                ExtentCxEmu = extCx,
+                ExtentCyEmu = extCy,
+                Hyperlink = ResolveHlinkClick(cNvPr?.Element(A + "hlinkClick"), slideRels, allSlides, slideDir, slidePartPathToId),
+                Chart = chartShape,
             };
         }
 

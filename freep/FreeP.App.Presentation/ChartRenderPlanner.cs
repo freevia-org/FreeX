@@ -4291,23 +4291,23 @@ public static partial class ChartRenderPlanner
         int categoryCount = Math.Max(1, chart.Categories.Count);
         var spacing = ResolveBarClusterSpacing(chart, plot.Width / categoryCount, 1, stacked: false);
         var result = new List<ChartRectPrimitive>(categoryCount);
-        double cumulative = 0;
+        var values = Enumerable.Range(0, categoryCount)
+            .Select(index => index < series.Values.Count ? series.Values[index] ?? 0 : 0)
+            .ToArray();
+        var waterfallBars = WaterfallBarPlanner.Compute(values, chart.WaterfallTotalPointIndices);
         for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
         {
-            double value = categoryIndex < series.Values.Count
-                ? series.Values[categoryIndex] ?? 0
-                : 0;
             int renderCategoryIndex = ResolveCategoryRenderIndex(chart.CategoryAxis, categoryIndex, categoryCount);
             var slot = ResolveBarClusterSlot(plot.X, renderCategoryIndex, spacing);
-            double next = cumulative + value;
+            var bar = waterfallBars[categoryIndex];
             double startY = MapCartesianValueToY(
-                cumulative,
+                bar.Bottom,
                 minimum,
                 range,
                 plot,
                 chart.ValueAxis.ReverseOrder);
             double endY = MapCartesianValueToY(
-                next,
+                bar.Top,
                 minimum,
                 range,
                 plot,
@@ -4329,9 +4329,8 @@ public static partial class ChartRenderPlanner
                     RectSeriesFillAlpha,
                     fillPlans,
                     varyByPoint: true,
-                    negativeValue: value < 0),
+                    negativeValue: bar.Kind == WaterfallBarKind.Decrease),
                 Stroke: null));
-            cumulative = next;
         }
 
         return result;
@@ -4354,19 +4353,22 @@ public static partial class ChartRenderPlanner
         var spacing = ResolveBarClusterSpacing(chart, plot.Width / categoryCount, 1, stacked: false);
         var stroke = new ChartStrokePlan(new SrgbColor(0x7F, 0x7F, 0x7F), Alpha: 255, Thickness: 1.0);
         var result = new List<ChartLineSegmentPrimitive>(categoryCount - 1);
-        double cumulative = 0;
+        var values = Enumerable.Range(0, categoryCount)
+            .Select(index => index < chart.Series[0].Values.Count ? chart.Series[0].Values[index] ?? 0 : 0)
+            .ToArray();
+        var waterfallBars = WaterfallBarPlanner.Compute(values, chart.WaterfallTotalPointIndices);
         ChartPlanPoint? previousEnd = null;
 
         for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
         {
-            double value = categoryIndex < chart.Series[0].Values.Count
-                ? chart.Series[0].Values[categoryIndex] ?? 0
-                : 0;
             int renderCategoryIndex = ResolveCategoryRenderIndex(chart.CategoryAxis, categoryIndex, categoryCount);
             var slot = ResolveBarClusterSlot(plot.X, renderCategoryIndex, spacing);
-            double next = cumulative + value;
-            double startY = MapCartesianValueToY(cumulative, minimum, range, plot, chart.ValueAxis.ReverseOrder);
-            double endY = MapCartesianValueToY(next, minimum, range, plot, chart.ValueAxis.ReverseOrder);
+            var bar = waterfallBars[categoryIndex];
+            var currentStartValue = categoryIndex == 0
+                ? 0
+                : waterfallBars[categoryIndex - 1].CumulativeAfter;
+            double startY = MapCartesianValueToY(currentStartValue, minimum, range, plot, chart.ValueAxis.ReverseOrder);
+            double endY = MapCartesianValueToY(bar.CumulativeAfter, minimum, range, plot, chart.ValueAxis.ReverseOrder);
             var currentEnd = new ChartPlanPoint(slot.ClusterStart + slot.ClusterSize, endY);
             if (previousEnd is { } prior)
             {
@@ -4380,7 +4382,6 @@ public static partial class ChartRenderPlanner
             }
 
             previousEnd = currentEnd;
-            cumulative = next;
         }
 
         return result;
@@ -7843,12 +7844,11 @@ public static partial class ChartRenderPlanner
         if (series is null)
             return;
 
-        double cumulative = 0;
-        for (int index = 0; index < series.Values.Count; index++)
+        var values = series.Values.Select(value => value ?? 0).ToArray();
+        foreach (var bar in WaterfallBarPlanner.Compute(values, chart.WaterfallTotalPointIndices))
         {
-            cumulative += series.Values[index] ?? 0;
-            dataMin = Math.Min(dataMin, cumulative);
-            dataMax = Math.Max(dataMax, cumulative);
+            dataMin = Math.Min(dataMin, Math.Min(bar.Bottom, bar.Top));
+            dataMax = Math.Max(dataMax, Math.Max(bar.Bottom, bar.Top));
         }
     }
 

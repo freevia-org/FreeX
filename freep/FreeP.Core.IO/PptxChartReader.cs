@@ -14,6 +14,7 @@ internal static class PptxChartReader
 {
     private static readonly XNamespace C = "http://schemas.openxmlformats.org/drawingml/2006/chart";
     private static readonly XNamespace A = PptxColorReader.A;
+    private static readonly XNamespace Cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
 
     // Default accent color cycle (theme slots accent1..6).
     private static readonly ThemeColorSlot[] AccentSlots =
@@ -211,6 +212,67 @@ internal static class PptxChartReader
             shape.LegendTextStyle = ReadChartTextStyle(legendEl.Element(C + "txPr"), scheme);
         }
 
+        return shape;
+    }
+
+    /// <summary>
+    /// Reads the compact ChartEx payload used by current PowerPoint waterfall charts.
+    /// ChartEx stores values in chartData and marks total points with
+    /// cx:series/cx:layoutPr/cx:subtotals/cx:idx.
+    /// </summary>
+    internal static ChartShape? ReadChartExPart(
+        ZipArchive archive, string chartPath, PresentationColorScheme scheme)
+    {
+        var entry = archive.GetEntry(chartPath);
+        if (entry is null) return null;
+
+        XDocument doc;
+        try { doc = OpcXml.LoadXml(entry); }
+        catch { return null; }
+
+        var chartSpace = doc.Root;
+        var chart = chartSpace?.Element(Cx + "chart");
+        var region = chart?.Element(Cx + "plotArea")?.Element(Cx + "plotAreaRegion");
+        var seriesEl = region?.Element(Cx + "series");
+        if (chartSpace is null || seriesEl is null)
+            return null;
+
+        var data = chartSpace.Element(Cx + "chartData")?.Element(Cx + "data");
+        var categories = data?.Element(Cx + "strDim")?.Element(Cx + "lvl")?.Elements(Cx + "pt")
+            .OrderBy(point => ParseInt(point.Attribute("idx")?.Value))
+            .Select(point => point.Value)
+            .ToArray() ?? [];
+        var values = data?.Element(Cx + "numDim")?.Element(Cx + "lvl")?.Elements(Cx + "pt")
+            .OrderBy(point => ParseInt(point.Attribute("idx")?.Value))
+            .Select(point => double.TryParse(point.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+                ? (double?)value
+                : null)
+            .ToArray() ?? [];
+
+        var shape = new ChartShape
+        {
+            ChartType = string.Equals(seriesEl.Attribute("layoutId")?.Value, "waterfall", StringComparison.OrdinalIgnoreCase)
+                ? ChartType.Waterfall
+                : ChartType.ColumnClustered,
+            ShowWaterfallConnectorLines = ParseNullableBoolAttr(
+                seriesEl.Element(Cx + "layoutPr")?.Element(Cx + "visibility")?.Attribute("connectorLines")?.Value) ?? true,
+            WaterfallTotalPointIndices = seriesEl.Element(Cx + "layoutPr")?.Element(Cx + "subtotals")?
+                .Elements(Cx + "idx")
+                .Select(element => ParseInt(element.Attribute("val")?.Value))
+                .Where(index => index >= 0)
+                .Distinct()
+                .OrderBy(index => index)
+                .ToList(),
+            Title = chart!.Element(Cx + "title") is null ? null : string.Empty,
+        };
+        shape.Categories.AddRange(categories);
+
+        var series = new ChartSeries
+        {
+            Name = seriesEl.Element(Cx + "tx")?.Element(Cx + "txData")?.Element(Cx + "v")?.Value ?? string.Empty,
+        };
+        series.Values.AddRange(values);
+        shape.Series.Add(series);
         return shape;
     }
 
@@ -498,7 +560,23 @@ internal static class PptxChartReader
         shape.ShowWaterfallConnectorLines = ParseNullableBoolElement(
             el.Element(C + "showConnectorLines")) ?? true;
         shape.BarGapWidthPercent = ParseNullableInt(el.Element(C + "gapWidth")?.Attribute("val")?.Value);
+        shape.WaterfallTotalPointIndices = ReadWaterfallTotalIndices(el);
         ReadSeriesFromChart(el, shape, scheme, idxMap);
+    }
+
+    private static List<int>? ReadWaterfallTotalIndices(XElement waterfall)
+    {
+        var ext = waterfall.Ancestors(C + "chartSpace").FirstOrDefault()?.Element(C + "extLst")
+            ?.Descendants().FirstOrDefault(element => element.Name.LocalName == "waterfallTotals");
+        if (ext is null)
+            return null;
+
+        return ext.Elements().Where(element => element.Name.LocalName == "idx")
+            .Select(element => int.TryParse(element.Attribute("val")?.Value, out var index) ? index : -1)
+            .Where(index => index >= 0)
+            .Distinct()
+            .OrderBy(index => index)
+            .ToList();
     }
 
     private static void ReadSurfaceChart(XElement el, ChartShape shape, PresentationColorScheme scheme,

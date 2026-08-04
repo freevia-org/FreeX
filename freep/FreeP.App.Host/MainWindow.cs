@@ -733,9 +733,23 @@ public sealed partial class MainWindow : Window
         switch (hit.Kind)
         {
             case ChartSubtargetKind.Point:
+            {
+                var waterfall = Editor.CurrentSlide?.Shapes
+                    .FirstOrDefault(shape => shape.Id == hit.ShapeId)?.Chart;
+                if (waterfall?.ChartType == ChartType.Waterfall && hit.PointIndex >= 0)
+                {
+                    var isTotal = waterfall.WaterfallTotalPointIndices?.Contains(hit.PointIndex) == true;
+                    Add(isTotal ? "Clear Total" : "Set as Total", () =>
+                    {
+                        Editor.Select(hit.ShapeId);
+                        Editor.SetWaterfallPointTotal(hit.PointIndex, !isTotal);
+                    });
+                    menu.Items.Add(new Separator());
+                }
                 Add("Format Data Point...", () => OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex));
                 Add("Format Data Series...", () => OpenChartSeriesOptionsDialog(hit.SeriesIndex));
                 break;
+            }
             case ChartSubtargetKind.DataLabel:
                 Add("Format Data Label...", () => OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex));
                 Add("Format Data Series...", () => OpenChartSeriesOptionsDialog(hit.SeriesIndex));

@@ -690,6 +690,12 @@ public sealed class ChartShape
     /// <summary>Whether a waterfall chart draws the authored <c>c:showConnectorLines</c>.</summary>
     public bool ShowWaterfallConnectorLines { get; set; } = true;
 
+    /// <summary>
+    /// Zero-based waterfall points authored as totals. Null means no explicit totals;
+    /// an empty list is distinct and means every point is an increment.
+    /// </summary>
+    public List<int>? WaterfallTotalPointIndices { get; set; }
+
     /// <summary>Authored <c>c:upDownBars/c:gapWidth</c> percentage, when present.</summary>
     public int? UpDownBarGapWidthPercent { get; set; }
 

@@ -1728,6 +1728,7 @@ public sealed class ChartTests : IDisposable
         series.Values.AddRange(new double?[] { 100, -30, 20 });
         chart.Series.Add(series);
         chart.ShowWaterfallConnectorLines = false;
+        chart.WaterfallTotalPointIndices = [0, 2];
         var path = WriteToPptx(BuildPresWithChart(chart));
 
         using (var archive = ZipFile.OpenRead(path))
@@ -1736,6 +1737,9 @@ public sealed class ChartTests : IDisposable
             chartDoc.Descendants(ChartNs + "waterfallChart").Should().ContainSingle();
             chartDoc.Descendants(ChartNs + "showConnectorLines").Single()
                 .Attribute("val")!.Value.Should().Be("0");
+            chartDoc.Descendants(XNamespace.Get("http://freex.dev/freep/2026/presentation") + "idx")
+                .Select(element => (int)element.Attribute("val")!)
+                .Should().Equal(0, 2);
             chartDoc.Descendants(ChartNs + "catAx").Should().ContainSingle();
         }
 
@@ -1743,6 +1747,7 @@ public sealed class ChartTests : IDisposable
             .First(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
         rt.ChartType.Should().Be(ChartType.Waterfall);
         rt.ShowWaterfallConnectorLines.Should().BeFalse();
+        rt.WaterfallTotalPointIndices.Should().Equal(0, 2);
         rt.Categories.Should().Equal("Start", "Reduction", "Growth");
         rt.Series.Should().ContainSingle();
         rt.Series[0].Values.Should().Equal(100, -30, 20);
