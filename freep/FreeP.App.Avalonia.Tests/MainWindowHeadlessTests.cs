@@ -2520,6 +2520,7 @@ public sealed class MainWindowHeadlessTests
         var foundSeries = false;
         var foundPoint = false;
         var foundLayout = false;
+        var foundChartExSeriesLayout = false;
         var foundDataTable = false;
         var found3DView = false;
         var foundTextOptions = false;
@@ -2536,6 +2537,7 @@ public sealed class MainWindowHeadlessTests
             foundSeries = registry.TryGet(ChartSeriesOptionsPlanner.CommandId, out _);
             foundPoint = registry.TryGet(ChartPointOptionsPlanner.CommandId, out _);
             foundLayout = registry.TryGet(ChartLayoutOptionsPlanner.CommandId, out _);
+            foundChartExSeriesLayout = registry.TryGet(ChartExSeriesLayoutPlanner.CommandId, out _);
             foundDataTable = registry.TryGet(ChartDataTableOptionsPlanner.CommandId, out _);
             found3DView = registry.TryGet(Chart3DViewOptionsPlanner.CommandId, out _);
             foundTextOptions = registry.TryGet(ChartTextOptionsPlanner.CommandId, out _);
@@ -2551,6 +2553,7 @@ public sealed class MainWindowHeadlessTests
         foundSeries.Should().BeTrue("the Avalonia chart-series command must be registered");
         foundPoint.Should().BeTrue("the Avalonia chart-point command must be registered");
         foundLayout.Should().BeTrue("the Avalonia chart-layout command must be registered");
+        foundChartExSeriesLayout.Should().BeTrue("the Avalonia ChartEx series-layout command must be registered");
         foundDataTable.Should().BeTrue("the Avalonia chart-data-table command must be registered");
         found3DView.Should().BeTrue("the Avalonia chart-3-D-view command must be registered");
         foundTextOptions.Should().BeTrue("the Avalonia chart-text command must be registered");
