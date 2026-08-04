@@ -453,6 +453,83 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task InlineTableCellEditor_UsesSharedRichPlanAndEscapeCancelsWithoutLosingRuns()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var table = new TableShape();
+            table.ColumnWidthsEmu.Add(457200);
+            table.Rows.Add(new TableRow
+            {
+                HeightEmu = 228600,
+                Cells =
+                {
+                    new TableCell
+                    {
+                        TextBody = new TextBody
+                        {
+                            Paragraphs =
+                            {
+                                new Paragraph
+                                {
+                                    Runs =
+                                    {
+                                        new Run { Text = "Rich", Bold = true, FontFamily = "Consolas" },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+
+            var editor = MakeInlineTableEditor(table, 100, 50);
+            var window = Show(editor, 100, 50);
+            try
+            {
+                var point = new Point(10, 10);
+                window.MouseMove(point, RawInputModifiers.None);
+                window.MouseDown(point, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                window.MouseUp(point, MouseButton.Left, RawInputModifiers.None);
+                window.MouseDown(point, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                window.MouseUp(point, MouseButton.Left, RawInputModifiers.None);
+                await DrainInputAsync();
+
+                var cellEditor = editor.Children.OfType<AvaloniaRichTextEditor>().Single();
+                cellEditor.CurrentPlan().HasRichFormatting.Should().BeTrue();
+                cellEditor.Selection.Should().Be(new InCanvasEditorTextSelection(0, 4));
+                cellEditor.Text = "Discarded";
+                Press(window, Key.Escape, PhysicalKey.Escape, RawInputModifiers.None);
+                await DrainInputAsync();
+
+                var canceled = editor.EditedBody.Paragraphs.Single().Runs.Single().InlineTable!.Table;
+                PlainText(canceled.Rows[0].Cells[0].TextBody).Should().Be("Rich");
+                canceled.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Bold.Should().BeTrue();
+
+                window.MouseDown(point, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                window.MouseUp(point, MouseButton.Left, RawInputModifiers.None);
+                window.MouseDown(point, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                window.MouseUp(point, MouseButton.Left, RawInputModifiers.None);
+                await DrainInputAsync();
+                cellEditor = editor.Children.OfType<AvaloniaRichTextEditor>().Single();
+                cellEditor.ToggleTextFormat(TableCellTextFormatKind.Italic).Should().BeTrue();
+                Press(window, Key.Tab, PhysicalKey.Tab, RawInputModifiers.None);
+                await DrainInputAsync();
+
+                var committed = editor.EditedBody.Paragraphs.Single().Runs.Single().InlineTable!.Table;
+                var run = committed.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs.Single();
+                run.Bold.Should().BeTrue();
+                run.Italic.Should().BeTrue();
+                run.FontFamily.Should().Be("Consolas");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task InlineTableCellEditor_CompactGridSpanTabUsesSourceCell()
     {
         await Session.Dispatch(async () =>
