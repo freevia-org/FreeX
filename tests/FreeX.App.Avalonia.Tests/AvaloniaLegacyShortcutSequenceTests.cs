@@ -63,6 +63,45 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AltEditPasteSpecialSequence_RoutesToExistingWorkflow(bool standaloneAlt)
+    {
+        await Run(async (window, _) =>
+        {
+            var invocations = 0;
+            window.PasteSpecialWorkflowOverrideForTest = () =>
+            {
+                invocations++;
+                return Task.CompletedTask;
+            };
+
+            if (standaloneAlt)
+            {
+                await PressHandled(window, Key.LeftAlt);
+                window.RibbonKeyTipsVisibleForTest.Should().BeTrue();
+                await PressHandled(window, Key.E);
+            }
+            else
+            {
+                await PressHandled(window, Key.E, KeyModifiers.Alt);
+            }
+
+            window.LegacyEditPasteSpecialSequenceStateForTest.Should().Be(
+                MainWindow.LegacyEditPasteSpecialSequenceState.AwaitingPasteSpecialKey);
+            invocations.Should().Be(0);
+
+            await PressHandled(window, Key.S);
+
+            window.LegacyEditPasteSpecialSequenceStateForTest.Should().Be(
+                MainWindow.LegacyEditPasteSpecialSequenceState.None);
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
+            window.RibbonKeyTipsVisibleForTest.Should().BeFalse();
+            invocations.Should().Be(1);
+        });
+    }
+
     [Fact]
     public async Task EscapeAndInvalidContinuation_ResetWithoutChangingFilter()
     {

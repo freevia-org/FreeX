@@ -17,11 +17,20 @@ public sealed partial class MainWindow
         AwaitingSecondFilterKey,
     }
 
+    internal enum LegacyEditPasteSpecialSequenceState
+    {
+        None,
+        AwaitingPasteSpecialKey,
+    }
+
     private LegacyDataFilterSequenceState _legacyDataFilterSequenceState;
+    private LegacyEditPasteSpecialSequenceState _legacyEditPasteSpecialSequenceState;
     private string _ribbonKeyTipInput = "";
 
     internal LegacyDataFilterSequenceState LegacyDataFilterSequenceStateForTest =>
         _legacyDataFilterSequenceState;
+    internal LegacyEditPasteSpecialSequenceState LegacyEditPasteSpecialSequenceStateForTest =>
+        _legacyEditPasteSpecialSequenceState;
     internal string RibbonKeyTipInputForTest => _ribbonKeyTipInput;
 
     internal static IReadOnlySet<string> InteractiveValidationLegacyDataFilterInteractionIds { get; } =
@@ -38,6 +47,9 @@ public sealed partial class MainWindow
     /// </summary>
     private bool TryHandleLegacyDataFilterSequence(KeyEventArgs args)
     {
+        if (TryHandleLegacyEditPasteSpecialSequence(args))
+            return true;
+
         if (TryHandleCataloguedRibbonKeyTipSequence(args))
             return true;
 
@@ -111,6 +123,63 @@ public sealed partial class MainWindow
         _inlineCellEditor is null &&
         !IsTextEditingEventSource(args);
 
+    private bool TryHandleLegacyEditPasteSpecialSequence(KeyEventArgs args)
+    {
+        var sequenceActive = _legacyEditPasteSpecialSequenceState !=
+            LegacyEditPasteSpecialSequenceState.None;
+        var startsSequence = args.Key == Key.E &&
+            (args.KeyModifiers == KeyModifiers.Alt ||
+             _ribbonKeyTipsVisible && args.KeyModifiers == KeyModifiers.None);
+
+        if (!CanHandleLegacyDataFilterSequence(args))
+        {
+            if (sequenceActive)
+                ResetLegacyEditPasteSpecialSequence();
+            return sequenceActive;
+        }
+
+        if (!sequenceActive)
+        {
+            if (!startsSequence)
+                return false;
+
+            // WPF preserves Excel's legacy Edit > Paste Special access-key route even though
+            // the current ribbon has no visible Edit tab.
+            SetRibbonKeyTipsVisible(false);
+            _ribbonKeyTipInput = "E";
+            _legacyEditPasteSpecialSequenceState =
+                LegacyEditPasteSpecialSequenceState.AwaitingPasteSpecialKey;
+            args.Handled = true;
+            return true;
+        }
+
+        if (args.Key == Key.Escape && args.KeyModifiers == KeyModifiers.None)
+        {
+            ResetLegacyEditPasteSpecialSequence();
+            args.Handled = true;
+            return true;
+        }
+
+        if (args.KeyModifiers is not (KeyModifiers.None or KeyModifiers.Alt))
+        {
+            ResetLegacyEditPasteSpecialSequence();
+            return false;
+        }
+
+        if (args.Key == Key.S)
+        {
+            ResetLegacyEditPasteSpecialSequence();
+            _ = ShowPasteSpecialDialogAsync();
+            args.Handled = true;
+            return true;
+        }
+
+        // Match WPF: an invalid continuation is consumed and exits the legacy keytip scope.
+        ResetLegacyEditPasteSpecialSequence();
+        args.Handled = true;
+        return true;
+    }
+
     private bool IsLegacyDataFilterSequenceStart(KeyEventArgs args) =>
         args.Key == Key.D &&
         (args.KeyModifiers == KeyModifiers.Alt ||
@@ -119,6 +188,12 @@ public sealed partial class MainWindow
     private void ResetLegacyDataFilterSequence()
     {
         _legacyDataFilterSequenceState = LegacyDataFilterSequenceState.None;
+        ResetRibbonKeyTipSequence();
+    }
+
+    private void ResetLegacyEditPasteSpecialSequence()
+    {
+        _legacyEditPasteSpecialSequenceState = LegacyEditPasteSpecialSequenceState.None;
         ResetRibbonKeyTipSequence();
     }
 

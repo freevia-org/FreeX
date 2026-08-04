@@ -218,6 +218,12 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task ShowPasteSpecialDialogAsync()
     {
+        if (PasteSpecialWorkflowOverrideForTest is { } workflowOverride)
+        {
+            await workflowOverride();
+            return;
+        }
+
         if (_isOpening || _isSaving)
             return;
 
@@ -266,6 +272,8 @@ public sealed partial class MainWindow
                 return;
         }
     }
+
+    internal Func<Task>? PasteSpecialWorkflowOverrideForTest { get; set; }
 
     /// <summary>
     /// Which existing execution method a content-kind radio in the ribbon's Paste Special dialog routes
