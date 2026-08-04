@@ -266,13 +266,13 @@ static void RenderDocumentComposite(
 
     var contentWidthDip = Math.Max(1, pageWDip - marginLeft - marginRight);
     var contentHeightDip = Math.Max(1, pageHDip - marginTop - marginBottom);
-    var usesFragmentedFootnoteFlow = TryApplyPlainFootnoteContinuationReservations(
+    var usesFragmentedFootnoteFlow = FootnoteContinuationFlowComposer.TryApply(
         flow,
         doc,
         contentWidthDip,
         contentHeightDip,
         FootnoteTrailingReserveDip,
-        out var fragmentedFootnotePlans);
+        out var fragmentedFootnoteComposition);
 
     // Footnotes consume space from the body frame in Word.  The composite used to paginate body
     // content at the full printable height and paint notes over the result, which let extra body
@@ -472,7 +472,9 @@ static void RenderDocumentComposite(
         : new Dictionary<int, IReadOnlyList<int>>();
     var hasPaginatorFootnoteOwnership = footnoteIdsByPaginatorPage.Count > 0;
     var fragmentedFootnotePageByPaginatorPage = usesFragmentedFootnoteFlow
-        ? BuildFragmentedFootnotePageMap(footnoteIdsByPaginatorPage, fragmentedFootnotePlans)
+        ? FootnoteContinuationFlowComposer.BuildPageMap(
+            footnoteIdsByPaginatorPage,
+            fragmentedFootnoteComposition.ContinuationById)
         : new Dictionary<int, DocumentFootnoteContinuationPagePlan>();
 
     // ═══ LAYER 4: Floating objects ════════════════════════════════════════════════════════════════
@@ -2495,167 +2497,6 @@ static Rect DeflatePageBorderFrame(Rect frame, double amount) =>
     new(frame.X + amount, frame.Y + amount,
         Math.Max(0, frame.Width - 2 * amount),
         Math.Max(0, frame.Height - 2 * amount));
-
-static bool TryApplyPlainFootnoteContinuationReservations(
-    FlowDocument flow,
-    TextDocument document,
-    double contentWidthDip,
-    double contentHeightDip,
-    double trailingReserveDip,
-    out Dictionary<int, DocumentFootnoteContinuationPlan> continuationById)
-{
-    continuationById = [];
-    if (document.Footnotes.Count == 0
-        || document.Page.ColumnCount != 1
-        || document.Sections.Count > 1
-        || document.Blocks.Any(block => block is not FreeW.Core.Model.Paragraph))
-    {
-        return false;
-    }
-
-    var references = document.Blocks
-        .Select((block, index) => (Paragraph: (FreeW.Core.Model.Paragraph)block, Index: index))
-        .Select(pair => (
-            pair.Index,
-            Ids: pair.Paragraph.Runs
-                .Where(run => run.FootnoteId is not null)
-                .Select(run => run.FootnoteId!.Value)
-                .Distinct()
-                .ToList()))
-        .Where(pair => pair.Ids.Count > 0)
-        .ToList();
-    if (references.Count == 0 || references.Any(reference => reference.Ids.Count != 1))
-        return false;
-
-    var overflowReferences = references.Where(reference =>
-            DocumentNoteRegionPlanner.BuildFootnoteRegion(
-                document,
-                reference.Ids,
-                pageNumber: 1,
-                contentWidthDip).EstimatedHeightDip + trailingReserveDip > contentHeightDip)
-        .ToList();
-    if (overflowReferences.Count != 1
-        || references.Any(reference => reference.Index < overflowReferences[0].Index))
-        return false;
-
-    foreach (var reference in references)
-    {
-        // Estimate only content through the reference paragraph. The shared helper includes the
-        // legacy detached-note reserve, which is removed here because the Figure supplies the real
-        // page-local reservation.
-        var leadingHeightDip = Math.Max(
-            0,
-            DocumentViewLayoutPlanner.EstimateLeadingContentHeightDip(document, reference.Index + 1) - 80);
-        var continuationLineHeightDip = DocumentNoteRegionPlanner.NoteTextFontSizePt
-            * (96.0 / 72.0)
-            * 1.25;
-        var firstAvailableHeightDip = Math.Clamp(
-            contentHeightDip - leadingHeightDip % contentHeightDip - trailingReserveDip
-                + continuationLineHeightDip,
-            48,
-            Math.Max(48, contentHeightDip - trailingReserveDip));
-        var plan = DocumentNoteRegionPlanner.BuildFootnoteContinuation(
-            document,
-            reference.Ids,
-            firstPageNumber: 1,
-            contentWidthDip,
-            firstAvailableHeightDip,
-            Math.Max(48, contentHeightDip - trailingReserveDip));
-        if (plan.Pages.Count == 0)
-            return false;
-        continuationById[reference.Ids[0]] = plan;
-    }
-
-    var flowBlocks = flow.Blocks.ToList();
-    if (flowBlocks.Count != document.Blocks.Count
-        || references.Any(reference => flowBlocks[reference.Index] is not System.Windows.Documents.Paragraph))
-    {
-        continuationById.Clear();
-        return false;
-    }
-
-    foreach (var reference in references.OrderByDescending(reference => reference.Index))
-    {
-        var plan = continuationById[reference.Ids[0]];
-        System.Windows.Documents.Block insertionPoint = flowBlocks[reference.Index];
-        var firstReserve = BuildFootnoteBottomReserve(
-            contentWidthDip,
-            plan.Pages[0].EstimatedHeightDip + trailingReserveDip,
-            breakPageBefore: false);
-        flow.Blocks.InsertAfter(insertionPoint, firstReserve);
-        insertionPoint = firstReserve;
-
-        for (var pageIndex = 1; pageIndex < plan.Pages.Count - 1; pageIndex++)
-        {
-            var continuationOnlyPage = new BlockUIContainer(new Border
-            {
-                Width = contentWidthDip,
-                Height = Math.Max(1, contentHeightDip - 1),
-                Background = Brushes.Transparent
-            })
-            {
-                BreakPageBefore = true,
-                Margin = new Thickness(0)
-            };
-            flow.Blocks.InsertAfter(insertionPoint, continuationOnlyPage);
-            insertionPoint = continuationOnlyPage;
-        }
-
-        if (plan.Pages.Count > 1)
-        {
-            var finalReserve = BuildFootnoteBottomReserve(
-                contentWidthDip,
-                plan.Pages[^1].EstimatedHeightDip + trailingReserveDip,
-                breakPageBefore: true);
-            flow.Blocks.InsertAfter(insertionPoint, finalReserve);
-        }
-    }
-
-    return true;
-}
-
-static System.Windows.Documents.Paragraph BuildFootnoteBottomReserve(
-    double contentWidthDip,
-    double heightDip,
-    bool breakPageBefore)
-{
-    var figure = new Figure(new System.Windows.Documents.Paragraph())
-    {
-        Width = new FigureLength(contentWidthDip, FigureUnitType.Pixel),
-        Height = new FigureLength(Math.Max(1, heightDip), FigureUnitType.Pixel),
-        HorizontalAnchor = FigureHorizontalAnchor.ContentLeft,
-        VerticalAnchor = FigureVerticalAnchor.ContentBottom,
-        WrapDirection = WrapDirection.Both,
-        CanDelayPlacement = false,
-        Margin = new Thickness(0)
-    };
-    return new System.Windows.Documents.Paragraph(figure)
-    {
-        BreakPageBefore = breakPageBefore,
-        FontSize = 1,
-        LineHeight = 1,
-        Margin = new Thickness(0),
-        Padding = new Thickness(0)
-    };
-}
-
-static Dictionary<int, DocumentFootnoteContinuationPagePlan> BuildFragmentedFootnotePageMap(
-    IReadOnlyDictionary<int, IReadOnlyList<int>> footnoteIdsByPaginatorPage,
-    IReadOnlyDictionary<int, DocumentFootnoteContinuationPlan> continuationById)
-{
-    var result = new Dictionary<int, DocumentFootnoteContinuationPagePlan>();
-    foreach (var (pageIndex, footnoteIds) in footnoteIdsByPaginatorPage.OrderBy(pair => pair.Key))
-    {
-        foreach (var footnoteId in footnoteIds)
-        {
-            if (!continuationById.TryGetValue(footnoteId, out var continuation))
-                continue;
-            for (var fragmentIndex = 0; fragmentIndex < continuation.Pages.Count; fragmentIndex++)
-                result.TryAdd(pageIndex + fragmentIndex, continuation.Pages[fragmentIndex]);
-        }
-    }
-    return result;
-}
 
 /// <summary>
 /// Renders the footnote or endnote region for a page as a bitmap, using the same visual layout as
