@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Free.Shared.Drawing;
@@ -409,7 +410,7 @@ public sealed class SlideShowMediaController
             var cue = PresentationMediaTranscriptPlanner.FindActiveCue(
                 slot.CaptionTrack,
                 testPlaybackPosition ?? slot.Element!.Position);
-            slot.CaptionText.Text = cue?.Text ?? string.Empty;
+            ApplyCaptionText(slot.CaptionText, cue);
             if (cue is not null
                 && _activeSlide is { } activeSlide
                 && ShapeTreeLookup.Find(activeSlide, slot.ShapeId) is { Media: not null } shape)
@@ -420,6 +421,34 @@ public sealed class SlideShowMediaController
             slot.CaptionHost.Visibility = cue is null
                 ? Visibility.Collapsed
                 : Visibility.Visible;
+        }
+    }
+
+    private static void ApplyCaptionText(
+        TextBlock text,
+        PresentationMediaTranscriptCueDescriptor? cue)
+    {
+        text.Inlines.Clear();
+        if (cue is null)
+        {
+            text.Text = string.Empty;
+            return;
+        }
+
+        if (cue.Spans.Count == 0)
+        {
+            text.Text = cue.Text;
+            return;
+        }
+
+        foreach (var span in cue.Spans)
+        {
+            text.Inlines.Add(new System.Windows.Documents.Run(span.Text)
+            {
+                FontWeight = span.Bold ? FontWeights.Bold : FontWeights.Normal,
+                FontStyle = span.Italic ? FontStyles.Italic : FontStyles.Normal,
+                TextDecorations = span.Underline ? TextDecorations.Underline : null
+            });
         }
     }
 

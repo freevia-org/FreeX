@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -384,7 +385,7 @@ internal sealed class AvaloniaSlideShowMediaController
             var cue = PresentationMediaTranscriptPlanner.FindActiveCue(
                 slot.CaptionTrack,
                 slot.Session.Position);
-            slot.CaptionText.Text = cue?.Text ?? string.Empty;
+            ApplyCaptionText(slot.CaptionText, cue);
             if (cue is not null
                 && _activeSlide is { } activeSlide
                 && ShapeTreeLookup.Find(activeSlide, slot.ShapeId) is { Media: not null } shape)
@@ -398,6 +399,36 @@ internal sealed class AvaloniaSlideShowMediaController
                 ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue);
             }
             slot.CaptionHost.IsVisible = cue is not null;
+        }
+    }
+
+    private static void ApplyCaptionText(
+        TextBlock text,
+        PresentationMediaTranscriptCueDescriptor? cue)
+    {
+        text.Inlines?.Clear();
+        if (cue is null)
+        {
+            text.Text = string.Empty;
+            return;
+        }
+
+        if (cue.Spans.Count == 0)
+        {
+            text.Text = cue.Text;
+            return;
+        }
+
+        text.Text = null;
+        foreach (var span in cue.Spans)
+        {
+            text.Inlines?.Add(new global::Avalonia.Controls.Documents.Run
+            {
+                Text = span.Text,
+                FontWeight = span.Bold ? FontWeight.Bold : FontWeight.Normal,
+                FontStyle = span.Italic ? FontStyle.Italic : FontStyle.Normal,
+                TextDecorations = span.Underline ? TextDecorations.Underline : null
+            });
         }
     }
 

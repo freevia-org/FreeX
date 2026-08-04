@@ -2053,6 +2053,50 @@ public sealed class SlideShowMediaControllerTests
     }
 
     [StaFact]
+    public void ActiveWebVttCue_RendersBasicInlineEmphasis()
+    {
+        var overlay = new System.Windows.Controls.Canvas();
+        var ctrl = new SlideShowMediaController(overlay, new FakeFileWriter());
+        var slide = SlideWithMedia(MakeMediaShape());
+        var track = new PresentationMediaTranscriptTrackDescriptor(
+            SlideIndex: 0,
+            ShapeId: 1,
+            ShapeName: "Video1",
+            TrackIndex: 0,
+            Label: "English",
+            Language: "en-US",
+            Source: "captions.vtt",
+            ContentType: "text/vtt",
+            Status: PresentationMediaTranscriptTrackStatus.Available,
+            StatusMessage: string.Empty,
+            Cues:
+            [
+                new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Styled")
+                {
+                    Spans =
+                    [
+                        new("Bold", Bold: true),
+                        new(" italic", Italic: true),
+                        new(" underline", Underline: true)
+                    ]
+                }
+            ]);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720, [track]);
+        ctrl.RefreshCaptionsForTest(TimeSpan.FromMilliseconds(500));
+
+        var text = overlay.Children.OfType<System.Windows.Controls.Border>().Single().Child
+            .Should().BeOfType<System.Windows.Controls.TextBlock>().Subject;
+        var runs = text.Inlines.OfType<System.Windows.Documents.Run>().ToArray();
+        runs.Should().HaveCount(3);
+        runs[0].FontWeight.Should().Be(System.Windows.FontWeights.Bold);
+        runs[1].FontStyle.Should().Be(System.Windows.FontStyles.Italic);
+        runs[2].TextDecorations.Should().ContainSingle()
+            .Which.Should().Be(System.Windows.TextDecorations.Underline[0]);
+        ctrl.Teardown();
+    }
+
+    [StaFact]
     public void ActiveWebVttCue_UsesAuthoredCaptionPlacement()
     {
         var overlay = new System.Windows.Controls.Canvas();
