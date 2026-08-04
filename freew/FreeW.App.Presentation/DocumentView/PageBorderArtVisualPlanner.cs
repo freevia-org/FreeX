@@ -372,10 +372,19 @@ public static class PageBorderArtVisualPlanner
             return false;
         }
 
-        var polygons = new List<PageBorderArtPolygon>();
+        var fills = new List<PageBorderArtFillRectangle>();
         foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
-            AddPaintedEgg(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
-        plan = new PageBorderArtFilledShapePlan([], polygons);
+            AddMaterialMask(
+                fills,
+                PageBorderArtSpriteMasks.PaintedEggMask,
+                placement.Xdip,
+                placement.Ydip,
+                placement.SizeDip,
+                horizontal: true,
+                transparentMaterial: 3,
+                shade1: 0x55,
+                shade2: 0xAA);
+        plan = new PageBorderArtFilledShapePlan(fills, []);
         return true;
     }
 
@@ -656,10 +665,10 @@ public static class PageBorderArtVisualPlanner
         AddWeavingRibbonRail(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonBottomRail], horizontalStart, horizontalLength, frameHeight - inset - size, size, horizontal: true);
         AddWeavingRibbonRail(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonLeftRail], verticalStart, verticalLength, inset, size, horizontal: false);
         AddWeavingRibbonRail(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonRightRail], verticalStart, verticalLength, frameWidth - inset - size, size, horizontal: false);
-        AddWeavingRibbonMask(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonTopLeftCorner], inset, inset, size, horizontal: true);
-        AddWeavingRibbonMask(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonTopRightCorner], frameWidth - inset - size, inset, size, horizontal: true);
-        AddWeavingRibbonMask(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonBottomLeftCorner], inset, frameHeight - inset - size, size, horizontal: true);
-        AddWeavingRibbonMask(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonBottomRightCorner], frameWidth - inset - size, frameHeight - inset - size, size, horizontal: true);
+        AddMaterialMask(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonTopLeftCorner], inset, inset, size, horizontal: true);
+        AddMaterialMask(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonTopRightCorner], frameWidth - inset - size, inset, size, horizontal: true);
+        AddMaterialMask(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonBottomLeftCorner], inset, frameHeight - inset - size, size, horizontal: true);
+        AddMaterialMask(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonBottomRightCorner], frameWidth - inset - size, frameHeight - inset - size, size, horizontal: true);
         plan = new PageBorderArtFilledShapePlan(fills, polygons);
         return true;
     }
@@ -1224,46 +1233,6 @@ public static class PageBorderArtVisualPlanner
             0x50));
     }
 
-    private static void AddPaintedEgg(
-        List<PageBorderArtPolygon> polygons,
-        double x,
-        double y,
-        double size)
-    {
-        var scale = size / 32.0;
-        PageBorderArtPoint Point(double px, double py) => new(x + px * scale, y + py * scale);
-        void Add(byte red, byte green, byte blue, params (double X, double Y)[] points) =>
-            polygons.Add(new PageBorderArtPolygon(
-                points.Select(point => Point(point.X, point.Y)).ToList(), red, green, blue));
-        void AddPatch(params (double X, double Y)[] points)
-        {
-            const double scaleFromCenter = 0.70;
-            var centerX = points.Average(point => point.X);
-            var centerY = points.Average(point => point.Y);
-            Add(0, 0, 0, points
-                .Select(point => (
-                    centerX + (point.X - centerX) * scaleFromCenter,
-                    centerY + (point.Y - centerY) * scaleFromCenter))
-                .ToArray());
-        }
-
-        Add(0, 0, 0,
-            (6, 24), (14, 26), (22, 25), (28, 23), (32, 26), (29, 30), (22, 30),
-            (13, 30), (7, 29));
-        Add(0, 0, 0,
-            (11, 0), (18, 0), (24, 2), (28, 8), (29, 15), (26, 22), (21, 27),
-            (14, 29), (7, 26), (1, 21), (0, 14), (3, 8), (7, 3));
-        Add(0xFF, 0xFF, 0xFF,
-            (12, 2), (18, 0), (24, 4), (28, 9), (28, 15), (25, 21), (19, 25),
-            (13, 27), (7, 24), (3, 19), (2, 14), (5, 8), (8, 4));
-        AddPatch((10, 4), (15, 1), (19, 4), (18, 9), (13, 8));
-        AddPatch((18, 1), (23, 3), (26, 8), (23, 10), (19, 7));
-        AddPatch((5, 12), (9, 9), (12, 10), (10, 15), (6, 16));
-        AddPatch((14, 12), (18, 10), (21, 13), (18, 17), (14, 16));
-        AddPatch((21, 17), (25, 16), (26, 21), (23, 24), (20, 22));
-        AddPatch((3, 18), (8, 18), (12, 22), (10, 26), (6, 24));
-    }
-
     private static void AddCandyCorn(
         List<PageBorderArtPolygon> polygons,
         double x,
@@ -1441,7 +1410,7 @@ public static class PageBorderArtVisualPlanner
         for (var index = 0; index < count; index++)
         {
             var along = alongStart + index * step;
-            AddWeavingRibbonMask(
+            AddMaterialMask(
                 fills,
                 mask,
                 horizontal ? along : acrossStart,
@@ -1451,28 +1420,37 @@ public static class PageBorderArtVisualPlanner
         }
     }
 
-    private static void AddWeavingRibbonMask(
+    private static void AddMaterialMask(
         List<PageBorderArtFillRectangle> fills,
         IReadOnlyList<byte> mask,
         double x,
         double y,
         double size,
-        bool horizontal)
+        bool horizontal,
+        byte transparentMaterial = 0,
+        byte shade1 = 0xC0,
+        byte shade2 = 0xFF)
     {
         var scale = size / PageBorderArtSpriteMasks.MaskSize;
         for (var row = 0; row < PageBorderArtSpriteMasks.MaskSize; row++)
         {
             var runStart = -1;
-            byte material = 0;
+            var material = transparentMaterial;
             for (var column = 0; column <= PageBorderArtSpriteMasks.MaskSize; column++)
             {
                 var next = column < PageBorderArtSpriteMasks.MaskSize
                     ? mask[row * PageBorderArtSpriteMasks.MaskSize + column]
-                    : (byte)0;
+                    : transparentMaterial;
                 if (next != material && runStart >= 0)
                 {
                     var runLength = column - runStart;
-                    var shade = material == 1 ? (byte)0xC0 : (byte)0xFF;
+                    var shade = material switch
+                    {
+                        0 => (byte)0x00,
+                        1 => shade1,
+                        2 => shade2,
+                        _ => (byte)0xFF,
+                    };
                     fills.Add(horizontal
                         ? new PageBorderArtFillRectangle(
                             x + runStart * scale,
@@ -1491,7 +1469,7 @@ public static class PageBorderArtVisualPlanner
                 if (next != material)
                 {
                     material = next;
-                    if (material != 0)
+                    if (material != transparentMaterial)
                         runStart = column;
                 }
             }

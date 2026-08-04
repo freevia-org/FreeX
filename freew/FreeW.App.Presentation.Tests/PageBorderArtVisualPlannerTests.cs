@@ -103,30 +103,17 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
-    public void PaintedEggs_UsesWordCadenceAndOrderedMottledEggGeometry()
+    public void PaintedEggs_UsesWordCadenceAndMeasuredMaterialMask()
     {
         PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(66, 3, 816, 1056, 32, out var plan)
             .Should().BeTrue();
 
-        plan.Fills.Should().BeEmpty();
-        plan.Polygons.Should().HaveCount(918);
-        plan.Polygons[0].Points[0].Should().Be(new PageBorderArtPoint(38, 56));
-        plan.Polygons[0].Points.Skip(6).Take(2).Should().Equal(
-            new PageBorderArtPoint(54, 62),
-            new PageBorderArtPoint(45, 62));
-        plan.Polygons[1].Points.Take(3).Should().Equal(
-            new PageBorderArtPoint(43, 32),
-            new PageBorderArtPoint(50, 32),
-            new PageBorderArtPoint(56, 34));
-        plan.Polygons[2].Should().Match<PageBorderArtPolygon>(polygon =>
-            polygon.Red == 0xFF && polygon.Green == 0xFF && polygon.Blue == 0xFF);
-        plan.Polygons[2].Points.Skip(2).Take(4).Should().Equal(
-            new PageBorderArtPoint(56, 36),
-            new PageBorderArtPoint(60, 41),
-            new PageBorderArtPoint(60, 47),
-            new PageBorderArtPoint(57, 53));
-        plan.Polygons[3].Points[0].Should().Be(new PageBorderArtPoint(43.5, 36.36));
-        plan.Polygons[207].Points[0].Should().Be(new PageBorderArtPoint(38, 1016));
+        plan.Polygons.Should().BeEmpty();
+        plan.Fills.Should().HaveCount(23562);
+        plan.Fills[0].Should().Be(new PageBorderArtFillRectangle(44, 32, 1, 1, 0x55, 0x55, 0x55));
+        plan.Fills.Should().Contain(fill => fill.Red == 0 && fill.Green == 0 && fill.Blue == 0);
+        plan.Fills.Should().Contain(fill => fill.Red == 0xAA && fill.Green == 0xAA && fill.Blue == 0xAA);
+        plan.Fills.Should().NotContain(fill => fill.Red == 0xFF && fill.Green == 0xFF && fill.Blue == 0xFF);
     }
 
     [Fact]
