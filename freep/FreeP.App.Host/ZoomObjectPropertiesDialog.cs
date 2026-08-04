@@ -139,7 +139,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         }
 
         var grid = new Grid { Margin = new Thickness(14) };
-        for (var i = 0; i < 9 + (_summaryTargets.Count > 0 ? 4 : 0); i++)
+        for (var i = 0; i < 12 + (_summaryTargets.Count > 0 ? 4 : 0); i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
