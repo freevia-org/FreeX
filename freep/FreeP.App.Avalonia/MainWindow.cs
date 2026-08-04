@@ -3287,11 +3287,7 @@ public sealed partial class MainWindow : Window
         r.Register(SmartArtAuthoringPlanner.BirdsEyeSceneQuickStyleCommandId,
             new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.BirdsEyeScene)));
         r.Register(SmartArtAuthoringPlanner.ConvertToShapesCommandId,
-            new ActionRibbonCommand(() =>
-            {
-                if (Editor.SelectedShapeIds.Count == 1)
-                    Editor.ConvertSmartArtToShapes(Editor.SelectedShapeIds[0]);
-            }));
+            new ActionRibbonCommand(ConvertSelectedSmartArtToShapes));
         r.Register(
             SmartArtEditingPlanner.OpenTextPaneCommandId,
             new ActionRibbonCommand(() => ShowSmartArtTextPane()));
@@ -8107,6 +8103,17 @@ public sealed partial class MainWindow : Window
         return shape?.Kind == SlideShapeKind.SmartArt && shape.SmartArt is not null
             ? shape
             : null;
+    }
+
+    private void ConvertSelectedSmartArtToShapes()
+    {
+        if (Editor.SelectedShapeIds.Count != 1 ||
+            !Editor.ConvertSmartArtToShapes(Editor.SelectedShapeIds[0]))
+            return;
+
+        _fileWorkflow.MarkDirty();
+        RefreshCanvas();
+        UpdateStatus();
     }
 
     private PresentationTheme ResolveCurrentSlideTheme()
