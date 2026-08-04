@@ -430,15 +430,27 @@ public sealed class SlideCanvas : FrameworkElement
         if (shape.Geometry.Contours.Count == 0 && shape.Text is null
             && (shape.ElbowRouteDip is null || shape.ElbowRouteDip.Count < 2)) return;
 
-        var bounds = shape.BoundsDip;
+        var sourceBounds = shape.BoundsDip;
+        var bounds = ResolveShapeAutoFitBounds(shape);
+        bool grewForShapeAutoFit = bounds.Height > sourceBounds.Height + 0.5;
         var materialPlan = ShapeMaterialRenderPlanner.Plan(shape);
         var shapeGeometry = GetShapeRenderGeometry(shape, materialPlan);
-        var renderTransform = ShapeTransformPlanner.PlanShapeRenderTransform(shape);
+        var renderTransform = grewForShapeAutoFit
+            ? ShapeAffineTransform.Identity
+            : ShapeTransformPlanner.PlanShapeRenderTransform(shape);
         bool hasTransform = !renderTransform.IsIdentity;
+        bool hasAutoFitGeometryScale = grewForShapeAutoFit && sourceBounds.Height > 0.001;
 
         if (hasTransform)
         {
             dc.PushTransform(ToWpfTransform(renderTransform));
+        }
+
+        if (hasAutoFitGeometryScale)
+        {
+            double scaleY = bounds.Height / sourceBounds.Height;
+            dc.PushTransform(new MatrixTransform(new Matrix(
+                1, 0, 0, scaleY, 0, bounds.Y - scaleY * sourceBounds.Y)));
         }
 
         // Effects: draw before the shape (painter's algorithm — shadow behind shape)
@@ -481,12 +493,45 @@ public sealed class SlideCanvas : FrameworkElement
         if (materialPlan.Kind is ImportedShapeMaterialKind.RelaxedInset or ImportedShapeMaterialKind.Angle)
             RenderImportedShapeMaterial(dc, materialPlan, shapeGeometry);
 
+        if (hasAutoFitGeometryScale)
+            dc.Pop();
+
         // Draw text overlay
         if (!suppressText && shape.Text is not null)
             RenderText(dc, shape.Text, bounds);
 
         if (hasTransform)
             dc.Pop();
+    }
+
+    private static LayoutRect ResolveShapeAutoFitBounds(DrawOp.Shape shape)
+    {
+        var text = shape.Text;
+        var bounds = shape.BoundsDip;
+        if (text is null || text.AutoFitKind != TextAutoFitKind.Shape || text.ColumnCount > 1
+            || text.VerticalType != TextVerticalType.Horizontal
+            || Math.Abs(shape.RotationDeg) > 0.001 || shape.FlipH || shape.FlipV)
+            return bounds;
+
+        var area = TextLayoutPlanner.GetTextArea(text, bounds);
+        var measures = new List<TextParagraphMeasure>();
+        for (int i = 0; i < text.Paragraphs.Count; i++)
+        {
+            var paragraph = text.Paragraphs[i];
+            if (paragraph.Runs.Count == 0) continue;
+            var formatted = BuildFormattedText(
+                paragraph,
+                area.Width,
+                text.Wrap,
+                useIdealMetrics: false);
+            measures.Add(TextLayoutPlanner.CreateParagraphMeasure(
+                i,
+                formatted.Height,
+                paragraph.SpaceBeforePt,
+                paragraph.SpaceAfterPt));
+        }
+
+        return TextLayoutPlanner.PlanShapeAutoFitBounds(text, bounds, measures);
     }
 
     private static void RenderShapeEffects(DrawingContext dc, DrawOp.Shape shape, Geometry shapeGeometry)
