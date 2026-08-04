@@ -71,7 +71,8 @@ public sealed class SmartArtTests : IDisposable
         bool includeNodeOuterShadow = false,
         bool cycle2NodeAndArrowCache = false,
         bool relationship1NodeAndEllipseCache = false,
-        long? relationship1HorizontalStepEmu = null)
+        long? relationship1HorizontalStepEmu = null,
+        bool verticalArrowListNodeCache = false)
     {
         var path = Path.Combine(_tempDir, $"smartart_{Guid.NewGuid():N}.pptx");
 
@@ -128,12 +129,22 @@ public sealed class SmartArtTests : IDisposable
                     new XElement(dspNs + "cNvSpPr")),
                 new XElement(dspNs + "spPr",
                     new XElement(aNs + "xfrm",
-                        new XElement(aNs + "off", new XAttribute("x", relationship1NodeAndEllipseCache
-                            ? 1_522_800L + nodeIndex * (relationship1HorizontalStepEmu ?? 1_392_000L)
-                            : (idx - 1) * 914400L), new XAttribute("y", relationship1NodeAndEllipseCache ? 1_672_400L : 457200L)),
-                        new XElement(aNs + "ext", new XAttribute("cx", relationship1NodeAndEllipseCache ? 2_400_000L : 914400L), new XAttribute("cy", relationship1NodeAndEllipseCache ? 2_400_000L : 457200L))),
+                        new XElement(aNs + "off", new XAttribute("x", verticalArrowListNodeCache
+                            ? 329_184L
+                            : relationship1NodeAndEllipseCache
+                                ? 1_522_800L + nodeIndex * (relationship1HorizontalStepEmu ?? 1_392_000L)
+                                : (idx - 1) * 914400L), new XAttribute("y", verticalArrowListNodeCache
+                            ? 229_792L + nodeIndex * 1_344_642L
+                            : relationship1NodeAndEllipseCache ? 1_672_400L : 457200L)),
+                        new XElement(aNs + "ext", new XAttribute("cx", verticalArrowListNodeCache
+                            ? 7_571_232L
+                            : relationship1NodeAndEllipseCache ? 2_400_000L : 914400L), new XAttribute("cy", verticalArrowListNodeCache
+                            ? 1_251_289L
+                            : relationship1NodeAndEllipseCache ? 2_400_000L : 457200L))),
                     new XElement(aNs + "prstGeom",
-                        new XAttribute("prst", cycle2NodeAndArrowCache || relationship1NodeAndEllipseCache ? "ellipse" : "rect"),
+                        new XAttribute("prst", verticalArrowListNodeCache
+                            ? "downArrow"
+                            : cycle2NodeAndArrowCache || relationship1NodeAndEllipseCache ? "ellipse" : "rect"),
                         new XElement(aNs + "avLst")),
                     new XElement(aNs + "solidFill",
                         new XElement(aNs + "srgbClr", new XAttribute("val", "4472C4"))),
@@ -902,6 +913,199 @@ public sealed class SmartArtTests : IDisposable
         smartArt.Data.IsLiveLayoutSupported.Should().BeFalse(
             "the richer PowerPoint background/chord/rectangle cache is outside the seven-shape grammar");
         smartArt.FallbackShapes.Should().HaveCount(12);
+    }
+
+    [Fact]
+    public void ReaderWriter_ImportedVerticalArrowList_AdmitsOnlyTheAuditedFourSlotCache()
+    {
+        var corpusPath = FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx");
+        var presentation = PptxPackageReader.Read(corpusPath);
+        var slide = presentation.Slides.Single(candidate => candidate.Shapes.Any(shape =>
+            shape.Kind == SlideShapeKind.SmartArt
+            && shape.SmartArt?.Data?.LayoutUniqueId.EndsWith("/verticalArrowList", StringComparison.OrdinalIgnoreCase) == true));
+        var smartArt = slide.Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
+        smartArt.Data.LayoutUniqueId.Should().EndWith("/verticalArrowList");
+        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue();
+        smartArt.Data.Nodes.Select(node => node.Text)
+            .Should().Equal("Collect", "Shape", "Review", "Share");
+        smartArt.FallbackShapes.Should().HaveCount(4);
+        smartArt.FallbackShapes.Should().OnlyContain(shape =>
+            shape.Kind == SlideShapeKind.AutoShape
+            && shape.AutoShapeKind == DrawingShapeKind.DownArrow
+            && shape.Effects == null);
+        smartArt.FallbackShapes.Select(shape => shape.OffsetXEmu)
+            .Should().OnlyContain(value => value == 329_184L);
+        smartArt.FallbackShapes.Select(shape => shape.OffsetYEmu)
+            .Should().Equal(229_792L, 1_574_434L, 2_919_076L, 4_263_718L);
+
+        var liveShapes = SlideCompositor.Compose(presentation, slide)
+            .OfType<DrawOp.Shape>()
+            .Where(shape => shape.Text is not null)
+            .ToArray();
+        liveShapes.Select(shape => shape.Text!.Paragraphs.First().Runs.First().Text)
+            .Where(text => text is "Collect" or "Shape" or "Review" or "Share")
+            .Should().Equal("Collect", "Shape", "Review", "Share");
+
+        var reopened = PptxPackageReader.Read(WriteToPptx(presentation));
+        var reopenedSmartArt = reopened.Slides.SelectMany(candidate => candidate.Shapes)
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt
+                && shape.SmartArt?.Data?.LayoutUniqueId.EndsWith("/verticalArrowList", StringComparison.OrdinalIgnoreCase) == true)
+            .SmartArt!;
+        reopenedSmartArt.Data!.IsLiveLayoutSupported.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Reader_VerticalArrowList_WithNonArrowRole_PreservesCachedFallback()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Collect", "Shape", "Review", "Share"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList");
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "a rectangular imported role is outside the proven vertical-arrow cache grammar");
+        smartArt.FallbackShapes.Should().HaveCount(4);
+        smartArt.FallbackShapes.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Rectangle);
+    }
+
+    [Fact]
+    public void Reader_VerticalArrowList_WithAlteredSlotGeometry_PreservesCachedFallback()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Collect", "Shape", "Review", "Share"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList",
+            verticalArrowListNodeCache: true);
+        var dspNs = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var aNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        RewriteSmartArtDrawing(pptxPath, document =>
+        {
+            document.Descendants(dspNs + "sp").First()
+                .Element(dspNs + "spPr")!
+                .Element(aNs + "xfrm")!
+                .Element(aNs + "off")!
+                .SetAttributeValue("x", "329185");
+        });
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "one slot moved outside the exact vertical-arrow geometry contract");
+        smartArt.FallbackShapes.Should().HaveCount(4);
+        smartArt.FallbackShapes.Select(shape => shape.OffsetXEmu)
+            .Should().Equal(329185L, 329184L, 329184L, 329184L);
+    }
+
+    [Fact]
+    public void Reader_VerticalArrowList_WithReorderedCacheText_PreservesCachedFallback()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Collect", "Shape", "Review", "Share"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList",
+            verticalArrowListNodeCache: true);
+        var dspNs = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var aNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        RewriteSmartArtDrawing(pptxPath, document =>
+        {
+            var texts = document.Descendants(dspNs + "sp")
+                .SelectMany(shape => shape.Descendants(aNs + "t"))
+                .ToList();
+            (texts[0].Value, texts[1].Value) = (texts[1].Value, texts[0].Value);
+        });
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "cache text order no longer matches the SmartArt node order");
+        smartArt.FallbackShapes.Should().HaveCount(4);
+        smartArt.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Equal("Shape", "Collect", "Review", "Share");
+    }
+
+    [Fact]
+    public void Reader_VerticalArrowList_WithPictureRole_PreservesCachedFallback()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Collect", "Shape", "Review", "Share"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList",
+            verticalArrowListNodeCache: true);
+        var dspNs = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var aNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        RewriteSmartArtDrawing(pptxPath, document =>
+        {
+            var shape = document.Descendants(dspNs + "sp").First();
+            var nonVisualShape = shape.Element(dspNs + "nvSpPr")!;
+            var picture = new XElement(
+                dspNs + "pic",
+                new XElement(
+                    dspNs + "nvPicPr",
+                    new XElement(
+                        dspNs + "cNvPr",
+                        nonVisualShape.Element(dspNs + "cNvPr")!.Attributes()),
+                    new XElement(dspNs + "cNvPicPr")),
+                new XElement(
+                    dspNs + "blipFill",
+                    new XElement(aNs + "stretch", new XElement(aNs + "fillRect"))),
+                new XElement(shape.Element(dspNs + "spPr")!));
+            shape.ReplaceWith(picture);
+        });
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "a picture role is outside the autoshape-only vertical-arrow grammar");
+        smartArt.FallbackShapes.Should().HaveCount(4);
+        smartArt.FallbackShapes.Count(shape => shape.Kind == SlideShapeKind.Picture)
+            .Should().Be(1);
+        smartArt.FallbackShapes.Skip(1).Should().OnlyContain(shape =>
+            shape.Kind == SlideShapeKind.AutoShape
+            && shape.AutoShapeKind == DrawingShapeKind.DownArrow);
+    }
+
+    [Fact]
+    public void Reader_VerticalArrowList_WithEffectExtraRoleOrDuplicateText_PreservesCachedFallback()
+    {
+        var cases = new[]
+        {
+            (Name: "effect", Path: MakeSmartArtPptx(
+                ["Collect", "Shape", "Review", "Share"],
+                layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList",
+                includeNodeOuterShadow: true,
+                verticalArrowListNodeCache: true)),
+            (Name: "extra-role", Path: MakeSmartArtPptx(
+                ["Collect", "Shape", "Review", "Share"],
+                layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList",
+                groupedListUnmodeledRole: true,
+                verticalArrowListNodeCache: true)),
+            (Name: "duplicate-text", Path: MakeSmartArtPptx(
+                ["Collect", "Shape", "Review", "Collect"],
+                layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList",
+                verticalArrowListNodeCache: true))
+        };
+
+        foreach (var testCase in cases)
+        {
+            var smartArt = PptxPackageReader.Read(testCase.Path).Slides[0].Shapes
+                .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+                .SmartArt!;
+
+            smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(testCase.Name);
+            smartArt.FallbackShapes.Should().NotBeEmpty(testCase.Name);
+        }
     }
 
     [Fact]
@@ -6160,6 +6364,22 @@ public sealed class SmartArtTests : IDisposable
     private static void RewriteDefaultDrawing(string path, Action<XDocument> mutate)
     {
         const string drawingPath = "ppt/diagrams/drawing4.xml";
+        using var archive = ZipFile.Open(path, ZipArchiveMode.Update);
+        var source = archive.GetEntry(drawingPath)!;
+        XDocument document;
+        using (var stream = source.Open())
+            document = XDocument.Load(stream);
+
+        mutate(document);
+        source.Delete();
+        var replacement = archive.CreateEntry(drawingPath);
+        using var writer = new StreamWriter(replacement.Open(), new UTF8Encoding(false));
+        document.Save(writer, SaveOptions.DisableFormatting);
+    }
+
+    private static void RewriteSmartArtDrawing(string path, Action<XDocument> mutate)
+    {
+        const string drawingPath = "ppt/diagrams/drawing1.xml";
         using var archive = ZipFile.Open(path, ZipArchiveMode.Update);
         var source = archive.GetEntry(drawingPath)!;
         XDocument document;

@@ -5816,4 +5816,25 @@ public sealed class SmartArtLayoutTests
         ops.Should().HaveCount(2,
             "BI2: empty live layout must fall through to cached-drawing fallback (1 bg + 1 fallback)");
     }
+
+    [Fact]
+    public void VerticalArrowList_UsesTheSharedFourSlotDownArrowPlan()
+    {
+        var data = MakeData(SmartArtFamily.List, "Collect", "Shape", "Review", "Share");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList";
+        data.IsLiveLayoutSupported = true;
+
+        var shapes = SmartArtLayoutEngine.Layout(data, 0, 0, 8_229_600, 5_744_800, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        shapes!.Should().HaveCount(4);
+        shapes.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.DownArrow);
+        shapes.Select(shape => shape.OffsetXEmu).Should().OnlyContain(value => value == 329_184L);
+        shapes.Select(shape => shape.OffsetYEmu)
+            .Should().Equal(229_792L, 1_574_434L, 2_919_076L, 4_263_718L);
+        shapes.Select(shape => shape.ExtentCxEmu).Should().OnlyContain(value => value == 7_571_232L);
+        shapes.Select(shape => shape.ExtentCyEmu).Should().OnlyContain(value => value == 1_251_289L);
+        shapes.Select(shape => shape.TextBody!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Collect", "Shape", "Review", "Share");
+    }
 }

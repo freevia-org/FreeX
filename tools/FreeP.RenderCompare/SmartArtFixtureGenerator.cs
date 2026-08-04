@@ -12,7 +12,7 @@ namespace FreeP.RenderCompare;
 /// <summary>
 /// Theme 17: Generates 15-smartart-grouped-list.pptx programmatically (pure XML, no COM required).
 ///
-/// Creates a 6-slide deck:
+/// Creates a 10-slide deck:
 ///   Slide 1 — Process:   Plan → Design → Build → Test → Deploy
 ///   Slide 2 — Hierarchy: CEO with VP Sales / VP Engineering / VP Marketing children
 ///   Slide 3 — Hierarchy3: CEO with the same reports, template leaves, and an orthogonal cached drawing
@@ -20,6 +20,7 @@ namespace FreeP.RenderCompare;
 ///   Slide 5 — List:      Requirement 1 through 4
 ///   Slide 7 — Relationship1: Audience / Need / Offer overlapping ellipses
 ///   Slide 9 — Increasing Circle Process: four growing ellipse nodes and line roles
+///   Slide 10 — Vertical Arrow List: four ordered down-arrow node slots
 ///
 /// Each slide has a real dgm:dataModel (ptLst + parOf cxnLst) and a layout1.xml with
 /// the correct uniqueId so the FreeP live layout engine classifies and renders it.
@@ -136,6 +137,14 @@ internal static class SmartArtFixtureGenerator
                 Nodes     = [("inc1","Phase A"), ("inc2","Phase B"), ("inc3","Phase C"), ("inc4","Phase D")],
                 Connections = [("inc1","inc2"), ("inc2","inc3"), ("inc3","inc4")],
                 HasIncreasingCircleProcessCachedDrawing = true
+            },
+            new SlideSpec
+            {
+                Title     = "SmartArt Live - Vertical Arrow List",
+                LayoutUid = "urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList",
+                Nodes     = [("va1","Collect"), ("va2","Shape"), ("va3","Review"), ("va4","Share")],
+                Connections = [],
+                HasVerticalArrowListCachedDrawing = true
             }
         };
 
@@ -661,6 +670,9 @@ internal static class SmartArtFixtureGenerator
         if (spec.HasIncreasingCircleProcessCachedDrawing)
             return BuildIncreasingCircleProcessDrawingXml(spec);
 
+        if (spec.HasVerticalArrowListCachedDrawing)
+            return BuildVerticalArrowListDrawingXml(spec);
+
         if (!spec.HasHierarchy3CachedDrawing)
             return BuildEmptyDrawing();
 
@@ -895,6 +907,29 @@ internal static class SmartArtFixtureGenerator
                 new XElement(Dsp + "spTree", elements)));
     }
 
+    private static XDocument BuildVerticalArrowListDrawingXml(SlideSpec spec)
+    {
+        const long padX = 329_184;
+        const long padY = 229_792;
+        const long gapY = 93_353;
+        const long boxWidth = 7_571_232;
+        const long boxHeight = 1_251_289;
+
+        var elements = spec.Nodes.Select((node, index) => BuildDspShape(
+            (uint)(110 + index),
+            $"VerticalArrowList node {index + 1}",
+            node.text,
+            "downArrow",
+            (padX, padY + index * (boxHeight + gapY), boxWidth, boxHeight)));
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(Dsp + "drawing",
+                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XElement(Dsp + "spTree", elements)));
+    }
+
     private static XElement BuildDspShape(
         uint id,
         string name,
@@ -1062,5 +1097,6 @@ internal static class SmartArtFixtureGenerator
         public bool HasBasicRelationshipCachedDrawing { get; init; }
         public bool HasGridMatrixCachedDrawing { get; init; }
         public bool HasIncreasingCircleProcessCachedDrawing { get; init; }
+        public bool HasVerticalArrowListCachedDrawing { get; init; }
     }
 }

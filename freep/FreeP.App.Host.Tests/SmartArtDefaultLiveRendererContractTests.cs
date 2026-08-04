@@ -99,4 +99,20 @@ public sealed class SmartArtDefaultLiveRendererContractTests
         source.Should().NotContain("SmartArtLayoutEngine.Layout(",
             "increasingCircleProcess geometry must remain renderer-neutral");
     }
+
+    [Fact]
+    public void WpfVerticalArrowListRendering_ConsumesTheSharedLivePlan()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "SlideCanvas.cs"));
+
+        source.Should().Contain("SlideCompositor.Compose(");
+        source.Should().NotContain("LayoutVerticalArrowList(");
+        source.Should().NotContain("SmartArtLayoutEngine.Layout(",
+            "verticalArrowList geometry must remain renderer-neutral");
+    }
 }

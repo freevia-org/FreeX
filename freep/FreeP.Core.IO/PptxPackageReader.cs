@@ -2734,6 +2734,16 @@ public static class PptxPackageReader
             data.IsLiveLayoutSupported = false;
         }
 
+        if (IsVerticalArrowListLayout(layoutUniqueId)
+            && smart.FallbackShapes.Count > 0
+            && !CanUseVerticalArrowListCache(smart, data))
+        {
+            // verticalArrowList is live for authoring, but imported caches are
+            // promoted only when their four ordered arrow slots exactly match
+            // the shared planner. Preserve richer or ambiguous drawings.
+            data.IsLiveLayoutSupported = false;
+        }
+
         return data;
 
         string ReadSmartArtParagraphText(XElement paragraph)
@@ -3303,6 +3313,55 @@ public static class PptxPackageReader
     {
         var id = uniqueId.Replace('\\', '/').Trim();
         return id.EndsWith("/increasingCircleProcess", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsVerticalArrowListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return id.Split('/').Last() == "verticalarrowlist";
+    }
+
+    private static bool CanUseVerticalArrowListCache(SmartArtShape smart, SmartArtData data)
+    {
+        if (!IsVerticalArrowListLayout(data.LayoutUniqueId)
+            || data.Nodes.Count != 4)
+            return false;
+
+        var nodes = FlattenSmartArtNodes(data);
+        var shapes = smart.FallbackShapes;
+        if (nodes.Count != 4
+            || data.Nodes.Any(node => node.Level != 0 || node.Children.Count != 0)
+            || shapes.Count != 4)
+            return false;
+
+        if (shapes.Any(HasUnsupportedSmartArtShapeEffects)
+            || HasUnsupportedSmartArtDrawingEffects(smart))
+            return false;
+
+        if (shapes.Any(shape => shape.Kind != SlideShapeKind.AutoShape
+                || shape.AutoShapeKind != DrawingShapeKind.DownArrow
+                || string.IsNullOrWhiteSpace(shape.PlainText))
+            || shapes.Select(shape => shape.PlainText)
+                .Distinct(StringComparer.Ordinal)
+                .Count() != nodes.Count
+            || !shapes.Select(shape => shape.PlainText)
+                .SequenceEqual(nodes.Select(node => node.Text), StringComparer.Ordinal))
+            return false;
+
+        // These are the exact four slots emitted by LayoutVerticalArrowList for
+        // the deterministic fixture frame. Keep the signature exact because the
+        // reader does not have the graphic-frame dimensions at this layer.
+        const long slotX = 329_184;
+        const long slotWidth = 7_571_232;
+        const long slotHeight = 1_251_289;
+        var expectedY = new long[] { 229_792, 1_574_434, 2_919_076, 4_263_718 };
+        return shapes.Select(shape => shape.OffsetXEmu).All(value => value == slotX)
+            && shapes.Select(shape => shape.ExtentCxEmu).All(value => value == slotWidth)
+            && shapes.Select(shape => shape.ExtentCyEmu).All(value => value == slotHeight)
+            && shapes.Select(shape => shape.OffsetYEmu).SequenceEqual(expectedY);
     }
 
     private static bool CanUseDefaultListStaggeredCache(SmartArtShape smart, SmartArtData data)

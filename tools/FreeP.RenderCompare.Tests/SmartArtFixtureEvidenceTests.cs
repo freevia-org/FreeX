@@ -125,6 +125,40 @@ public sealed class SmartArtFixtureEvidenceTests
             .Should().HaveCount(4);
     }
 
+    [Fact]
+    public void VerticalArrowListFixtureContainsTheAuditedFourSlotGrammar()
+    {
+        var root = FindRepositoryRoot();
+        var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
+
+        using var archive = ZipFile.OpenRead(path);
+        var layout = ReadXml(archive, "ppt/diagrams/layout10.xml");
+        var drawing = ReadXml(archive, "ppt/diagrams/drawing10.xml");
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/verticalArrowList");
+        var shapes = drawing.Descendants(dsp + "sp").ToList();
+        shapes.Should().HaveCount(4);
+        shapes.Select(shape => (string?)shape.Descendants(a + "prstGeom")
+                .Single().Attribute("prst"))
+            .Should().OnlyContain(value => value == "downArrow");
+        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("x")!.Value))
+            .Should().OnlyContain(value => value == 329_184L);
+        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("y")!.Value))
+            .Should().Equal(229_792L, 1_574_434L, 2_919_076L, 4_263_718L);
+        shapes.Select(shape => shape.Descendants(a + "ext").Single().Attributes()
+                .Where(attribute => attribute.Name.LocalName is "cx" or "cy")
+                .Select(attribute => long.Parse(attribute.Value)))
+            .Should().OnlyContain(extent => extent.SequenceEqual(new long[] { 7_571_232L, 1_251_289L }));
+        drawing.Descendants(a + "t").Select(element => element.Value)
+            .Should().Equal("Collect", "Shape", "Review", "Share");
+        ReadXml(archive, "ppt/diagrams/data10.xml")
+            .Descendants(dgm + "pt")
+            .Should().HaveCount(4);
+    }
+
     private static XDocument ReadXml(ZipArchive archive, string path)
     {
         var entry = archive.GetEntry(path);
