@@ -31,6 +31,7 @@ public sealed class AboutDialogParityTests
                 .Single(textBox => AutomationProperties.GetAutomationId(textBox) == "AboutFreeXText");
             text.IsReadOnly.Should().BeTrue();
             text.FontSize.Should().Be(AboutDialogMetrics.AvaloniaTextFontSize);
+            AboutDialogMetrics.AvaloniaTextLineHeight.Should().Be(16.75);
             text.Padding.Should().Be(new Thickness(
                 AboutDialogMetrics.AvaloniaTextPaddingLeft,
                 AboutDialogMetrics.AvaloniaTextPaddingTop,
