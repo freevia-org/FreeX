@@ -379,6 +379,58 @@ public sealed class SlideObjectInsertionPlannerTests
     }
 
     [Fact]
+    public void ApplyCommand_TitledMatrixUsesFlatTitleAndBodyComponentsAndRoundTripsItsLiveCells()
+    {
+        var editor = MakeSession();
+        var added = SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.SmartArtLayoutCommandId(SmartArtLayoutPreset.TitledMatrix));
+
+        added.Should().NotBeNull();
+        var authored = added!.SmartArt!;
+        authored.Data!.Nodes.Should().HaveCount(3);
+        authored.Data.Nodes.Should().OnlyContain(node => node.Level == 0 && node.Children.Count == 0);
+        var diagram = System.Xml.Linq.XDocument.Parse(
+            System.Text.Encoding.UTF8.GetString(authored.Parts["ppt/diagrams/data1.xml"].Bytes));
+        var diagramNamespace = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        diagram.Descendants(diagramNamespace + "cxn").Should().BeEmpty(
+            "Titled Matrix authors its title and body cells as flat siblings");
+
+        var live = SmartArtLayoutEngine.Layout(
+            authored.Data,
+            added.OffsetXEmu,
+            added.OffsetYEmu,
+            added.ExtentCxEmu,
+            added.ExtentCyEmu,
+            editor.Presentation.Theme!);
+        live.Should().HaveCount(3, "Titled Matrix emits one title band and one body cell per remaining authored component");
+        live!.Select(shape => shape.PlainText)
+            .Should().Equal("Step 1", "Step 2", "Step 3");
+
+        using var package = new MemoryStream();
+        PptxPackageWriter.Write(editor.Presentation, package);
+        package.Position = 0;
+        var reopened = PptxPackageReader.Read(package);
+        var reread = reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.SmartArt);
+        var rereadSmartArt = reread.SmartArt!;
+
+        rereadSmartArt.Data!.LayoutUniqueId.Should().Contain("/layout/titledMatrix");
+        rereadSmartArt.Data.Nodes.Should().HaveCount(3);
+        rereadSmartArt.Data.Nodes.Should().OnlyContain(node => node.Level == 0 && node.Children.Count == 0);
+        var rereadLive = SmartArtLayoutEngine.Layout(
+            rereadSmartArt.Data,
+            reread.OffsetXEmu,
+            reread.OffsetYEmu,
+            reread.ExtentCxEmu,
+            reread.ExtentCyEmu,
+            reopened.Theme!);
+        rereadLive.Should().HaveCount(3);
+        rereadLive!.Select(shape => shape.PlainText)
+            .Should().Equal("Step 1", "Step 2", "Step 3");
+    }
+
+    [Fact]
     public void ApplyCommand_InsertsPictureCaptionListWithOneImagePerNode()
     {
         var editor = MakeSession();
