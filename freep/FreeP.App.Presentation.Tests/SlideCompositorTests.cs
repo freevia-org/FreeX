@@ -404,6 +404,76 @@ public sealed class SlideCompositorTests
         outline.Color.Should().Be(expected);
     }
 
+    [Fact]
+    public void Compose_ZoomFrameBorder_ResolvesNativeTwoStopGradient()
+    {
+        var presentation = PresentationModel.CreateEmpty();
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+        var zoom = SlideZoomInsertionPlanner.CreateShape(presentation, 0, "slide-2");
+        presentation.Slides[0].Shapes.Add(zoom);
+        SummaryZoomPreviewPlanner.AttachPreviewImage(
+            presentation, zoom, targetSlideIndex: 1, _ => new byte[] { 1, 2, 3 })
+            .Should().BeTrue();
+
+        var raw = XElement.Parse(zoom.PreservedObject!.RawXml);
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var line = raw.Descendants().Single(element => element.Name.LocalName == "spPr")
+            .Element(drawing + "ln") ?? new XElement(drawing + "ln");
+        if (line.Parent is null)
+            raw.Descendants().Single(element => element.Name.LocalName == "spPr").Add(line);
+        line.Add(new XElement(drawing + "gradFill",
+            new XElement(drawing + "gsLst",
+                new XElement(drawing + "gs", new XAttribute("pos", 0),
+                    new XElement(drawing + "srgbClr", new XAttribute("val", "4472C4"))),
+                new XElement(drawing + "gs", new XAttribute("pos", 100000),
+                    new XElement(drawing + "srgbClr", new XAttribute("val", "FFFFFF")))),
+            new XElement(drawing + "lin", new XAttribute("ang", 8100000))));
+        zoom.PreservedObject.RawXml = raw.ToString(SaveOptions.DisableFormatting);
+
+        var picture = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Picture>().Single();
+        var outline = picture.Outline.Should().BeOfType<ResolvedOutline.Gradient>().Subject;
+        outline.WidthDip.Should().BeApproximately(1, 0.00001);
+        outline.Fill.AngleDegrees.Should().BeApproximately(135, 0.00001);
+        outline.Fill.Stops.Select(stop => stop.Color).Should().Equal(
+            new SrgbColor(0x44, 0x72, 0xC4),
+            new SrgbColor(0xFF, 0xFF, 0xFF));
+    }
+
+    [Fact]
+    public void Compose_ZoomFrameBorder_ResolvesNativePatternFill()
+    {
+        var presentation = PresentationModel.CreateEmpty();
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+        var zoom = SlideZoomInsertionPlanner.CreateShape(presentation, 0, "slide-2");
+        presentation.Slides[0].Shapes.Add(zoom);
+        SummaryZoomPreviewPlanner.AttachPreviewImage(
+            presentation, zoom, targetSlideIndex: 1, _ => new byte[] { 1, 2, 3 })
+            .Should().BeTrue();
+
+        var raw = XElement.Parse(zoom.PreservedObject!.RawXml);
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var line = raw.Descendants().Single(element => element.Name.LocalName == "spPr")
+            .Element(drawing + "ln") ?? new XElement(drawing + "ln");
+        if (line.Parent is null)
+            raw.Descendants().Single(element => element.Name.LocalName == "spPr").Add(line);
+        line.Add(new XElement(drawing + "pattFill",
+            new XAttribute("prst", "pct50"),
+            new XElement(drawing + "fgClr",
+                new XElement(drawing + "srgbClr", new XAttribute("val", "4472C4"))),
+            new XElement(drawing + "bgClr",
+                new XElement(drawing + "srgbClr", new XAttribute("val", "FFFFFF")))));
+        zoom.PreservedObject.RawXml = raw.ToString(SaveOptions.DisableFormatting);
+
+        var picture = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Picture>().Single();
+        var outline = picture.Outline.Should().BeOfType<ResolvedOutline.Pattern>().Subject;
+        outline.Fill.Preset.Should().Be("pct50");
+        outline.Fill.ForegroundColor.Should().Be(new SrgbColor(0x44, 0x72, 0xC4));
+        outline.Fill.BackgroundColor.Should().Be(SrgbColor.White);
+        outline.WidthDip.Should().BeApproximately(1, 0.00001);
+    }
+
     private static TextBody BodyWithText(string text)
     {
         var body = new TextBody();

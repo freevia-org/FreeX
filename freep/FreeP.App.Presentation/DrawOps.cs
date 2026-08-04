@@ -409,6 +409,21 @@ public abstract class ResolvedOutline
             Dash = dash;
         }
     }
+
+    /// <summary>Resolved pattern outline whose stroke uses a tiled pattern brush.</summary>
+    public sealed class Pattern : ResolvedOutline
+    {
+        public double WidthDip { get; }
+        public OutlineDash Dash { get; }
+        public ResolvedFill.PatternFill Fill { get; }
+
+        public Pattern(ResolvedFill.PatternFill fill, double widthDip, OutlineDash dash)
+        {
+            Fill = fill ?? throw new ArgumentNullException(nameof(fill));
+            WidthDip = widthDip;
+            Dash = dash;
+        }
+    }
 }
 
 // ─── Resolved shape effects ───────────────────────────────────────────────────────────────────────────────────────

@@ -492,6 +492,79 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void ZoomFrameBorder_GradientIsUndoableAndRoundTripsNativeStops()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var zoom = session.InsertSlideZoom("slide-2");
+        var gradient = new ZoomFrameBorderGradient("4472C4", "FFFFFF", 8_130_000);
+        session.SetZoomObjectProperties(
+                zoom.Id,
+                new ZoomObjectProperties(
+                    FrameBorderWidthEmu: 25400,
+                    FrameBorderGradient: gradient))
+            .Should().BeTrue();
+
+        var line = XElement.Parse(zoom.PreservedObject!.RawXml)
+            .Descendants().Single(element => element.Name.LocalName == "ln");
+        line.Element(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "gradFill")
+            .Should().NotBeNull();
+        line.Descendants().Where(element => element.Name.LocalName == "srgbClr")
+            .Select(element => element.Attribute("val")!.Value)
+            .Should().Equal("4472C4", "FFFFFF");
+        zoom.PreservedObject.ZoomProperties!.FrameBorderGradient.Should().Be(gradient);
+
+        session.Undo();
+        zoom.PreservedObject.RawXml.Should().NotContain("4472C4");
+        session.Redo();
+
+        var reopened = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
+            .PreservedObject!.ZoomProperties!.FrameBorderGradient.Should().Be(gradient);
+    }
+
+    [Fact]
+    public void ZoomFrameBorder_PatternIsUndoableAndRoundTripsNativeColors()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var zoom = session.InsertSlideZoom("slide-2");
+        var pattern = new ZoomFrameBorderPattern("pct50", "F2F2F2", "FFFFFF");
+        session.SetZoomObjectProperties(
+                zoom.Id,
+                new ZoomObjectProperties(
+                    FrameBorderWidthEmu: 25400,
+                    FrameBorderDash: OutlineDash.Dot,
+                    FrameBorderPattern: pattern))
+            .Should().BeTrue();
+
+        var line = XElement.Parse(zoom.PreservedObject!.RawXml)
+            .Descendants().Single(element => element.Name.LocalName == "ln");
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var patternXml = line.Element(drawing + "pattFill");
+        patternXml.Should().NotBeNull();
+        patternXml!.Attribute("prst")!.Value.Should().Be("pct50");
+        patternXml.Descendants().Where(element => element.Name.LocalName == "srgbClr")
+            .Select(element => element.Attribute("val")!.Value)
+            .Should().Equal("F2F2F2", "FFFFFF");
+        zoom.PreservedObject.ZoomProperties!.FrameBorderPattern.Should().Be(pattern);
+
+        session.Undo();
+        zoom.PreservedObject.RawXml.Should().NotContain("F2F2F2");
+        session.Redo();
+
+        var reopened = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
+            .PreservedObject!.ZoomProperties!.FrameBorderPattern.Should().Be(pattern);
+    }
+
+    [Fact]
     public void ZoomFrameGeometry_IsUndoableAndRoundTripsNativePreset()
     {
         var presentation = new Presentation();
@@ -534,7 +607,7 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
         var shapeProperties = raw.Descendants().Single(element => element.Name.LocalName == "spPr");
         shapeProperties.Add(new XElement(drawing + "ln",
-            new XElement(drawing + "gradFill")));
+            new XElement(drawing + "pattFill")));
         zoom.PreservedObject.RawXml = raw.ToString(SaveOptions.DisableFormatting);
 
         session.SetZoomObjectProperties(
@@ -543,7 +616,7 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
             .Should()
             .BeTrue();
 
-        zoom.PreservedObject.RawXml.Should().Contain("gradFill");
+        zoom.PreservedObject.RawXml.Should().Contain("pattFill");
     }
 
     [Fact]
