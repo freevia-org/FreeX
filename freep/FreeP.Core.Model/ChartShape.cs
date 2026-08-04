@@ -456,6 +456,14 @@ public sealed class ChartSeries
     /// <summary>Series name (from c:tx cache).</summary>
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Native ChartEx series layout identifier from <c>cx:series/@layoutId</c>.
+    /// This is package metadata rather than a classic chart type; it is retained so
+    /// a native ChartEx series can be edited without flattening its family payload.
+    /// </summary>
+    [JsonIgnore]
+    public string? ChartExLayoutId { get; set; }
+
     /// <summary>Default series fill color. Null means use the theme accent cycle.</summary>
     public ThemeAwareColor? FillColor { get; set; }
 

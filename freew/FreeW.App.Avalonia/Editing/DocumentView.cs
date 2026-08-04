@@ -21020,6 +21020,9 @@ public sealed class DocumentView : Control
                 }
                 else if (run.ComplexField is { } complexField)
                 {
+                    if (complexField.SimpleField?.IsLocked == true)
+                        continue;
+
                     var resolved = ComplexFieldEngine.CanRecompute(complexField)
                         ? ComplexFieldEngine.Recompute(_doc, b, r)
                         : ResolveComplexField(complexField, run.Text);

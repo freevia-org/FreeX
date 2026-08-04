@@ -7,8 +7,8 @@ using FreeW.Core.Model;
 namespace FreeW.Core.IO.Tests;
 
 /// <summary>
-/// Round-trip coverage for the generic <em>complex</em> Word field (Insert &gt; Quick Parts &gt; Field) —
-/// the <c>w:fldChar</c> begin / <c>w:instrText</c> / separate / result / end run sequence carried by
+/// Round-trip coverage for generic Word fields (Insert &gt; Quick Parts &gt; Field), including the complex
+/// <c>w:fldChar</c> sequence and unmodelled <c>w:fldSimple</c> storage carried by
 /// <see cref="Run.ComplexField"/>. The instruction is preserved verbatim so any field code (PAGE,
 /// NUMPAGES, DATE with a \@ picture, FILENAME, AUTHOR, or an unmodelled one) survives a save+reload, and
 /// the cached result rides along on the run text.
@@ -126,6 +126,96 @@ public class ComplexFieldRoundTripTests
         run.ComplexField!.Instruction.Should().Be(" MERGEFIELD FirstName \\* MERGEFORMAT ");
         run.ComplexField.Keyword.Should().Be("MERGEFIELD");
         run.Text.Should().Be("John");
+    }
+
+    [Fact]
+    public void UnmodelledSimpleField_PreservesInstructionFlagsCachedTextAndStorageForm()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph());
+        using var sourceStream = new MemoryStream();
+        DocxWriter.Write(doc, sourceStream);
+
+        using var authoredStream = new MemoryStream();
+        using (var source = new ZipArchive(new MemoryStream(sourceStream.ToArray()), ZipArchiveMode.Read))
+        using (var authored = new ZipArchive(authoredStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in source.Entries)
+            {
+                var copy = authored.CreateEntry(entry.FullName);
+                using var input = entry.Open();
+                using var output = copy.Open();
+                if (entry.FullName != "word/document.xml")
+                {
+                    input.CopyTo(output);
+                    continue;
+                }
+
+                var document = new XElement(W + "document",
+                    new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+                    new XElement(W + "body",
+                        new XElement(W + "p",
+                            new XElement(W + "hyperlink",
+                                new XAttribute(W + "anchor", "Target"),
+                                new XElement(W + "fldSimple",
+                                    new XAttribute(W + "instr", " DOCPROPERTY \"Company\" "),
+                                    new XAttribute(W + "fldLock", "1"),
+                                    new XAttribute(W + "dirty", "true"),
+                                    new XElement(W + "r",
+                                        new XElement(W + "rPr", new XElement(W + "b")),
+                                        new XElement(W + "t", "Contoso")))),
+                            new XElement(W + "sdt",
+                                new XElement(W + "sdtPr",
+                                    new XElement(W + "tag", new XAttribute(W + "val", "SimpleFieldControl"))),
+                                new XElement(W + "sdtContent",
+                                    new XElement(W + "fldSimple",
+                                        new XAttribute(W + "instr", " CUSTOMEMPTY "),
+                                        new XAttribute(W + "fldLock", "0"),
+                                        new XAttribute(W + "dirty", "false"),
+                                        new XElement(W + "r", new XElement(W + "t", string.Empty))))))));
+                new XDocument(document).Save(output);
+            }
+        }
+
+        authoredStream.Position = 0;
+        var loaded = DocxReader.Read(authoredStream);
+        var runs = loaded.Blocks.OfType<Paragraph>().Single().Runs;
+
+        runs.Should().HaveCount(2);
+        runs[0].Text.Should().Be("Contoso");
+        runs[0].Formatting.Bold.Should().BeTrue();
+        runs[0].ComplexField.Should().Be(new ComplexField(
+            " DOCPROPERTY \"Company\" ",
+            SimpleField: new SimpleFieldMetadata(IsLocked: true, IsDirty: true)));
+        runs[0].HyperlinkAnchor.Should().Be("Target");
+        runs[1].Text.Should().BeEmpty();
+        runs[1].ComplexField.Should().Be(new ComplexField(
+            " CUSTOMEMPTY ",
+            SimpleField: new SimpleFieldMetadata()));
+        runs[1].Control!.Tag.Should().Be("SimpleFieldControl");
+
+        var savedFields = DocumentXml(loaded).Descendants(W + "fldSimple").ToList();
+        savedFields.Should().HaveCount(2);
+        savedFields[0].Attribute(W + "instr")!.Value.Should().Be(" DOCPROPERTY \"Company\" ");
+        savedFields[0].Attribute(W + "fldLock")!.Value.Should().Be("1");
+        savedFields[0].Attribute(W + "dirty")!.Value.Should().Be("1");
+        savedFields[0].Descendants(W + "t").Single().Value.Should().Be("Contoso");
+        savedFields[0].Ancestors(W + "hyperlink").Single().Attribute(W + "anchor")!.Value.Should().Be("Target");
+        savedFields[1].Attribute(W + "instr")!.Value.Should().Be(" CUSTOMEMPTY ");
+        savedFields[1].Attribute(W + "fldLock").Should().BeNull();
+        savedFields[1].Attribute(W + "dirty").Should().BeNull();
+        savedFields[1].Ancestors(W + "sdt").Should().ContainSingle();
+        DocumentXml(loaded).Descendants(W + "fldChar").Should().BeEmpty();
+
+        var reopened = RoundTrip(loaded).Blocks.OfType<Paragraph>().Single().Runs;
+        reopened.Select(run => run.ComplexField!.Instruction).Should().Equal(
+            " DOCPROPERTY \"Company\" ",
+            " CUSTOMEMPTY ");
+        reopened[0].ComplexField!.SimpleField.Should().Be(new SimpleFieldMetadata(true, true));
+        reopened[0].HyperlinkAnchor.Should().Be("Target");
+        reopened[1].ComplexField!.SimpleField.Should().Be(new SimpleFieldMetadata());
+        reopened[1].Control!.Tag.Should().Be("SimpleFieldControl");
     }
 
     [Fact]

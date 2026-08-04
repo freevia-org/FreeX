@@ -232,6 +232,51 @@ public sealed class SetChartSeriesNameCommand : IPresentationCommand
 // ── Add / remove series ───────────────────────────────────────────────────────
 
 /// <summary>
+/// Changes one native ChartEx series layout identifier without downgrading the
+/// preserved ChartEx payload to a classic chart.
+/// </summary>
+public sealed class SetChartExSeriesLayoutCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _seriesIndex;
+    private readonly string _newLayoutId;
+    private string? _oldLayoutId;
+
+    public SetChartExSeriesLayoutCommand(int slideIndex, uint shapeId, int seriesIndex, string layoutId)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _seriesIndex = seriesIndex;
+        _newLayoutId = layoutId?.Trim() ?? string.Empty;
+    }
+
+    public string Label => "Set ChartEx Series Layout";
+
+    public void Apply(Presentation p)
+    {
+        var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);
+        if (chart is null || !chart.IsChartEx || string.IsNullOrWhiteSpace(chart.PreservedChartExXml) ||
+            _seriesIndex < 0 || _seriesIndex >= chart.Series.Count || string.IsNullOrWhiteSpace(_newLayoutId))
+            return;
+
+        _oldLayoutId = chart.Series[_seriesIndex].ChartExLayoutId;
+        chart.Series[_seriesIndex].ChartExLayoutId = _newLayoutId;
+        ChartHelper.MarkWorkbookDirty(chart);
+    }
+
+    public void Revert(Presentation p)
+    {
+        var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);
+        if (chart is null || !chart.IsChartEx || _seriesIndex < 0 || _seriesIndex >= chart.Series.Count)
+            return;
+
+        chart.Series[_seriesIndex].ChartExLayoutId = _oldLayoutId;
+        ChartHelper.MarkWorkbookDirty(chart);
+    }
+}
+
+/// <summary>
 /// Appends a new series to the chart.  The new series gets one <c>0.0</c> value per
 /// existing category so the value matrix stays rectangular.
 /// Revert removes the series by reference.

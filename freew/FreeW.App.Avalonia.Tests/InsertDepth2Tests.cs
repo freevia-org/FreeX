@@ -589,7 +589,11 @@ public sealed class InsertDepth2Tests
         var doc = MakeDoc("");
         var paragraph = (Paragraph)doc.Blocks[0];
         paragraph.Runs.Clear();
-        paragraph.Runs.Add(new Run("Ada") { ComplexField = new ComplexField(" AUTHOR ") });
+        var metadata = new SimpleFieldMetadata(IsLocked: true, IsDirty: true);
+        paragraph.Runs.Add(new Run("Ada")
+        {
+            ComplexField = new ComplexField(" AUTHOR ", SimpleField: metadata)
+        });
         var view = new DocumentView();
         view.LoadDocument(doc);
         var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
@@ -601,7 +605,9 @@ public sealed class InsertDepth2Tests
         field!.ShowCode.Should().BeTrue();
 
         Exec(registry, "freew.toggle-field-codes");
-        ((Paragraph)view.Document.Blocks[0]).Runs.Single().ComplexField!.ShowCode.Should().BeFalse();
+        var restored = ((Paragraph)view.Document.Blocks[0]).Runs.Single().ComplexField!;
+        restored.ShowCode.Should().BeFalse();
+        restored.SimpleField.Should().Be(metadata);
     }
 
     // ── Equation ───────────────────────────────────────────────────────────────

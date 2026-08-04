@@ -269,6 +269,7 @@ internal static class PptxChartReader
             var series = new ChartSeries
             {
                 Name = seriesElement.Element(Cx + "tx")?.Element(Cx + "txData")?.Element(Cx + "v")?.Value ?? string.Empty,
+                ChartExLayoutId = seriesElement.Attribute("layoutId")?.Value,
             };
             var seriesData = FindChartExSeriesData(dataElements, seriesElement);
             var valueLevel = FindChartExValueDataLevel(seriesData);

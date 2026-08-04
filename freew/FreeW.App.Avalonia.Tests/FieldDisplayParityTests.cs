@@ -7,6 +7,28 @@ namespace FreeW.App.Avalonia.Tests;
 public sealed class FieldDisplayParityTests
 {
     [Fact]
+    public void UpdateFields_DoesNotRecomputeLockedImportedSimpleField()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Chapter Two") { StyleId = "Heading1" });
+        var field = new Run("Locked chapter")
+        {
+            ComplexField = new ComplexField(
+                " STYLEREF 1 ",
+                SimpleField: new SimpleFieldMetadata(IsLocked: true, IsDirty: true))
+        };
+        document.Blocks.Add(new Paragraph { Runs = { field } });
+
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.UpdateFields();
+
+        field.Text.Should().Be("Locked chapter");
+        field.ComplexField!.SimpleField.Should().Be(new SimpleFieldMetadata(true, true));
+    }
+
+    [Fact]
     public void UpdateFields_DistinguishesDateAndTimeForSimpleAndComplexFields()
     {
         var simpleDate = new Run("stale simple date") { FieldKind = RunFieldKind.Date };

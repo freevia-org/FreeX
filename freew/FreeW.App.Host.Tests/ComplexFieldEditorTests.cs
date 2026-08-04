@@ -110,6 +110,42 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void ImportedSimpleField_RendersTogglesAndCommitsWithoutLosingStorageMetadata()
+    {
+        var metadata = new SimpleFieldMetadata(IsLocked: true, IsDirty: true);
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Contoso")
+                {
+                    ComplexField = new ComplexField(
+                        " DOCPROPERTY \"Company\" ",
+                        SimpleField: metadata)
+                }
+            }
+        });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.ToggleFieldCodes();
+        string.Concat(view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+                .SelectMany(p => p.Inlines.OfType<System.Windows.Documents.Run>())
+                .Select(run => run.Text))
+            .Should().Contain("{ DOCPROPERTY \"Company\" }");
+
+        view.ToggleFieldCodes();
+        view.CommitToModel();
+
+        var field = FieldRun(view)!;
+        field.Text.Should().Be("Contoso");
+        field.ComplexField!.Instruction.Should().Be(" DOCPROPERTY \"Company\" ");
+        field.ComplexField.SimpleField.Should().Be(metadata);
+    }
+
+    [StaFact]
     public void UpdateFields_RecomputesDateResult()
     {
         var view = ViewWithBody();
@@ -147,6 +183,35 @@ public sealed class ComplexFieldEditorTests
         view.CommitToModel();
 
         FieldRun(view)!.Text.Should().Be("Chapter Two");
+    }
+
+    [StaFact]
+    public void UpdateFields_DoesNotRecomputeLockedImportedSimpleField()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chapter Two") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Locked chapter")
+                {
+                    ComplexField = new ComplexField(
+                        " STYLEREF 1 ",
+                        SimpleField: new SimpleFieldMetadata(IsLocked: true, IsDirty: true))
+                }
+            }
+        });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        var field = FieldRun(view)!;
+        field.Text.Should().Be("Locked chapter");
+        field.ComplexField!.SimpleField.Should().Be(new SimpleFieldMetadata(true, true));
     }
 
     [StaFact]

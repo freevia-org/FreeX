@@ -12689,6 +12689,9 @@ public sealed class DocumentView : RichTextBox
                 }
                 else if (r.ComplexField is { } cf)
                 {
+                    if (cf.SimpleField?.IsLocked == true)
+                        continue;
+
                     // REF/PAGEREF/SEQ re-evaluate against current bookmarks/sequences; the rest reuse the
                     // live DATE/AUTHOR/… resolver (PAGE/NUMPAGES keep their cached value here).
                     var resolved = ComplexFieldEngine.CanRecompute(cf)
