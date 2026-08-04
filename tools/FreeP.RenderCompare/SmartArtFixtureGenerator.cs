@@ -4,6 +4,8 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Xml.Linq;
 
@@ -206,7 +208,15 @@ internal static class SmartArtFixtureGenerator
                     new XElement(P + "sldMasterId", new XAttribute("id", 2147483648u), new XAttribute(R + "id", "rIdMaster1"))),
                 new XElement(P + "sldIdLst", sldIds),
                 new XElement(P + "sldSz", new XAttribute("cx", 9144000), new XAttribute("cy", 6858000)),
-                new XElement(P + "notesSz", new XAttribute("cx", 6858000), new XAttribute("cy", 9144000)))));
+                new XElement(P + "notesSz", new XAttribute("cx", 6858000), new XAttribute("cy", 9144000)),
+                new XElement(P + "defaultTextStyle",
+                    new XElement(A + "defPPr",
+                        new XElement(A + "defRPr", new XAttribute("lang", "en-US"))),
+                    new XElement(A + "lvl1pPr",
+                        new XAttribute("marL", "0"),
+                        new XAttribute("algn", "l"),
+                        new XAttribute("defTabSz", "914400"),
+                        new XElement(A + "defRPr", new XAttribute("sz", "1800")))))));
 
         var presRels = slides.Select((_, i) => ($"rIdSlide{i+1}", SlideRelType, $"slides/slide{i+1}.xml"))
             .Prepend(("rIdMaster1", MasterRelType, "slideMasters/slideMaster1.xml"))
@@ -242,7 +252,8 @@ internal static class SmartArtFixtureGenerator
                 ("rIdDm1", DmRelType,     $"../diagrams/data{si}.xml"),
                 ("rIdLo1", LoRelType,     $"../diagrams/layout{si}.xml"),
                 ("rIdQs1", QsRelType,     $"../diagrams/quickStyle{si}.xml"),
-                ("rIdCs1", CsRelType,     $"../diagrams/colors{si}.xml")));
+                ("rIdCs1", CsRelType,     $"../diagrams/colors{si}.xml"),
+                ("rIdDraw1", DgmDrawRelType, $"../diagrams/drawing{si}.xml")));
 
             // data#.xml (ptLst + cxnLst)
             WriteXml($"ppt/diagrams/data{si}.xml",  BuildDataXml(spec));
@@ -251,9 +262,6 @@ internal static class SmartArtFixtureGenerator
             WriteXml($"ppt/diagrams/colors{si}.xml",     MakeSimpleDoc(Dgm + "colorsDef"));
             WriteXml($"ppt/diagrams/drawing{si}.xml",    BuildDrawingXml(spec));
 
-            // data rels (points to drawing for dsp:drawing lookup)
-            WriteXml($"ppt/diagrams/_rels/data{si}.xml.rels", MakeRels(
-                ("rIdDraw1", DgmDrawRelType, $"drawing{si}.xml")));
         }
         }
 
@@ -322,6 +330,9 @@ internal static class SmartArtFixtureGenerator
 
     private static bool UsePowerPointGenerator()
     {
+        if (string.Equals(Environment.GetEnvironmentVariable("FREEP_FORCE_XML_SMARTART"), "1", StringComparison.Ordinal))
+            return false;
+
         try
         {
             return Type.GetTypeFromProgID("PowerPoint.Application", throwOnError: false) is not null;
@@ -614,28 +625,57 @@ internal static class SmartArtFixtureGenerator
 
     private static XDocument BuildDataXml(SlideSpec spec)
     {
-        var ptElems = spec.Nodes.Select(n =>
+        var modelIds = spec.Nodes.ToDictionary(node => node.id, node => SmartArtModelId(node.id));
+        var documentId = SmartArtModelId($"doc:{spec.LayoutUid}");
+        var ptElems = new[]
+        {
             new XElement(Dgm + "pt",
-                new XAttribute("modelId", n.id),
-                new XAttribute("type", "node"),
+                new XAttribute("modelId", documentId),
+                new XAttribute("type", "doc"),
+                new XElement(Dgm + "prSet",
+                    new XAttribute("loTypeId", spec.LayoutUid),
+                    new XAttribute("loCatId", "list"),
+                    new XAttribute("qsTypeId", "urn:microsoft.com/office/officeart/2005/8/quickstyle/simple1"),
+                    new XAttribute("qsCatId", "simple"),
+                    new XAttribute("csTypeId", "urn:microsoft.com/office/officeart/2005/8/colors/accent1_2"),
+                    new XAttribute("csCatId", "accent1"),
+                    new XAttribute("phldr", "1")),
+                new XElement(Dgm + "spPr"),
                 new XElement(Dgm + "t",
+                    new XElement(A + "bodyPr"),
+                    new XElement(A + "lstStyle"),
+                    new XElement(A + "p", new XElement(A + "endParaRPr", new XAttribute("lang", "en-US")))))
+        }.Concat(spec.Nodes.Select(n =>
+            new XElement(Dgm + "pt",
+                new XAttribute("modelId", modelIds[n.id]),
+                new XElement(Dgm + "prSet", new XAttribute("phldrT", "[Text]")),
+                new XElement(Dgm + "spPr"),
+                new XElement(Dgm + "t",
+                    new XElement(A + "bodyPr"),
+                    new XElement(A + "lstStyle"),
                     new XElement(A + "p",
                         new XElement(A + "r",
                             new XElement(A + "rPr", new XAttribute("lang","en-US")),
-                            new XElement(A + "t", n.text)))))).ToArray();
+                            new XElement(A + "t", n.text)))))).ToArray());
 
-        var cxnElems = spec.Connections.Select(c =>
+        var cxnElems = spec.Connections.Select((c, index) =>
             new XElement(Dgm + "cxn",
+                new XAttribute("modelId", SmartArtModelId($"cxn:{index}:{c.src}:{c.dst}")),
                 new XAttribute("type", "parOf"),
-                new XAttribute("srcId", c.src),
-                new XAttribute("destId", c.dst))).ToArray();
+                new XAttribute("srcId", modelIds[c.src]),
+                new XAttribute("destId", modelIds[c.dst]),
+                new XAttribute("srcOrd", index),
+                new XAttribute("destOrd", index))).ToArray();
 
         return new XDocument(new XDeclaration("1.0","UTF-8","yes"),
             new XElement(Dgm + "dataModel",
                 new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
                 new XElement(Dgm + "ptLst", ptElems),
-                new XElement(Dgm + "cxnLst", cxnElems)));
+                new XElement(Dgm + "cxnLst", cxnElems),
+                new XElement(Dgm + "bg"),
+                new XElement(Dgm + "whole"),
+                new XElement(Dgm + "extLst")));
     }
 
     // ── layout1.xml builder ───────────────────────────────────────────────────
@@ -645,17 +685,45 @@ internal static class SmartArtFixtureGenerator
         return new XDocument(new XDeclaration("1.0","UTF-8","yes"),
             new XElement(Dgm + "layoutDef",
                 new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
-                new XAttribute("uniqueId", uniqueId)));
+                new XAttribute("uniqueId", uniqueId),
+                new XElement(Dgm + "title", new XAttribute("val", "FreeP SmartArt")),
+                new XElement(Dgm + "desc", new XAttribute("val", "Deterministic FreeP SmartArt fixture")),
+                new XElement(Dgm + "catLst"),
+                new XElement(Dgm + "sampData"),
+                new XElement(Dgm + "styleData"),
+                new XElement(Dgm + "clrData"),
+                new XElement(Dgm + "layoutNode",
+                    new XAttribute("name", "root"),
+                    new XElement(Dgm + "varLst"),
+                    new XElement(Dgm + "alg", new XAttribute("type", "lin")),
+                    new XElement(Dgm + "shape",
+                        new XAttribute("type", "rect"),
+                        new XElement(Dgm + "adjLst")),
+                    new XElement(Dgm + "presOf"),
+                    new XElement(Dgm + "constrLst"),
+                    new XElement(Dgm + "ruleLst"))));
     }
 
     // ── Empty dsp:drawing ──────────────────────────────────────────────────────
 
     private static XDocument BuildEmptyDrawing()
     {
-        return new XDocument(new XDeclaration("1.0","UTF-8","yes"),
+        return BuildDrawingDocument(Array.Empty<XElement>());
+    }
+
+    private static XDocument BuildDrawingDocument(IEnumerable<XElement> elements)
+    {
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(Dsp + "drawing",
                 new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
-                new XElement(Dsp + "spTree")));
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XElement(Dsp + "spTree",
+                    new XElement(Dsp + "nvGrpSpPr",
+                        new XElement(Dsp + "cNvPr", new XAttribute("id", "0"), new XAttribute("name", "")),
+                        new XElement(Dsp + "cNvGrpSpPr")),
+                    new XElement(Dsp + "grpSpPr"),
+                    elements)));
     }
 
     private static XDocument BuildDrawingXml(SlideSpec spec)
@@ -726,12 +794,7 @@ internal static class SmartArtFixtureGenerator
                 preset: "roundRect",
                 bounds));
 
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(Dsp + "drawing",
-                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-                new XElement(Dsp + "spTree", nodeShapes.Concat(templateShapes).Concat(connectorShapes))));
+        return BuildDrawingDocument(nodeShapes.Concat(templateShapes).Concat(connectorShapes));
     }
 
     private static XDocument BuildGroupedListDrawingXml(SlideSpec spec)
@@ -783,12 +846,7 @@ internal static class SmartArtFixtureGenerator
             }
         }
 
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(Dsp + "drawing",
-                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-                new XElement(Dsp + "spTree", elements)));
+        return BuildDrawingDocument(elements);
     }
 
     private static XDocument BuildProcess1DrawingXml(SlideSpec spec)
@@ -825,12 +883,7 @@ internal static class SmartArtFixtureGenerator
             }
         }
 
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(Dsp + "drawing",
-                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-                new XElement(Dsp + "spTree", elements)));
+        return BuildDrawingDocument(elements);
     }
 
     private static XDocument BuildBasicRelationshipDrawingXml(SlideSpec spec)
@@ -847,12 +900,7 @@ internal static class SmartArtFixtureGenerator
             "ellipse",
             (left + index * step, top, diameter, diameter)));
 
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(Dsp + "drawing",
-                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-            new XElement(Dsp + "spTree", elements)));
+        return BuildDrawingDocument(elements);
     }
 
     private static XDocument BuildGridMatrixDrawingXml(SlideSpec spec)
@@ -881,12 +929,7 @@ internal static class SmartArtFixtureGenerator
             "rect",
             (positions[index].Item1, positions[index].Item2, cellSize, cellSize)));
 
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(Dsp + "drawing",
-                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-                new XElement(Dsp + "spTree", elements)));
+        return BuildDrawingDocument(elements);
     }
 
     private static XDocument BuildIncreasingCircleProcessDrawingXml(SlideSpec spec)
@@ -949,12 +992,7 @@ internal static class SmartArtFixtureGenerator
                 (fromX, Math.Min(fromY, toY), toX - fromX, Math.Abs(toY - fromY))));
         }
 
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(Dsp + "drawing",
-                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-                new XElement(Dsp + "spTree", elements)));
+        return BuildDrawingDocument(elements);
     }
 
     private static XDocument BuildVerticalArrowListDrawingXml(SlideSpec spec)
@@ -972,12 +1010,7 @@ internal static class SmartArtFixtureGenerator
             "downArrow",
             (padX, padY + index * (boxHeight + gapY), boxWidth, boxHeight)));
 
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(Dsp + "drawing",
-                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-                new XElement(Dsp + "spTree", elements)));
+        return BuildDrawingDocument(elements);
     }
 
     private static XDocument BuildList1DrawingXml(SlideSpec spec)
@@ -995,12 +1028,7 @@ internal static class SmartArtFixtureGenerator
             "roundRect",
             (boxX, boxY[index], boxWidth, boxHeight)));
 
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(Dsp + "drawing",
-                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-                new XElement(Dsp + "spTree", elements)));
+        return BuildDrawingDocument(elements);
     }
 
     private static XElement BuildDspShape(
@@ -1037,8 +1065,7 @@ internal static class SmartArtFixtureGenerator
         {
             new XElement(Dsp + "nvSpPr",
                 new XElement(Dsp + "cNvPr", new XAttribute("id", id), new XAttribute("name", name)),
-                new XElement(Dsp + "cNvSpPr"),
-                new XElement(Dsp + "nvPr")),
+                new XElement(Dsp + "cNvSpPr")),
             new XElement(Dsp + "spPr", shapeProperties)
         };
         if (!string.IsNullOrEmpty(text))
@@ -1052,7 +1079,15 @@ internal static class SmartArtFixtureGenerator
                         new XElement(A + "t", text)))));
         }
 
-        return new XElement(Dsp + "sp", elements);
+        return new XElement(Dsp + "sp",
+            new XAttribute("modelId", SmartArtModelId($"shape:{id}:{name}")),
+            elements);
+    }
+
+    private static string SmartArtModelId(string value)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        return new Guid(bytes.AsSpan(0, 16)).ToString("B").ToUpperInvariant();
     }
 
     // ── Theme with accent colors ──────────────────────────────────────────────
@@ -1080,10 +1115,36 @@ internal static class SmartArtFixtureGenerator
                         new XElement(A + "folHlink", new XElement(A + "srgbClr", new XAttribute("val","954F72")))),
                     new XElement(A + "fontScheme", new XAttribute("name","Office"),
                         new XElement(A + "majorFont",
-                            new XElement(A + "latin", new XAttribute("typeface","Calibri Light"))),
+                            new XElement(A + "latin", new XAttribute("typeface","Calibri Light")),
+                            new XElement(A + "ea", new XAttribute("typeface", "")),
+                            new XElement(A + "cs", new XAttribute("typeface", ""))),
                         new XElement(A + "minorFont",
-                            new XElement(A + "latin", new XAttribute("typeface","Calibri")))),
-                    new XElement(A + "fmtScheme", new XAttribute("name","Office")))));
+                            new XElement(A + "latin", new XAttribute("typeface","Calibri")),
+                            new XElement(A + "ea", new XAttribute("typeface", "")),
+                            new XElement(A + "cs", new XAttribute("typeface", "")))),
+                    new XElement(A + "fmtScheme", new XAttribute("name","Office"),
+                        new XElement(A + "fillStyleLst",
+                            new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
+                            new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
+                            new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr")))),
+                        new XElement(A + "lnStyleLst",
+                            new XElement(A + "ln", new XAttribute("w", "12700"),
+                                new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
+                                new XElement(A + "prstDash", new XAttribute("val", "solid"))),
+                            new XElement(A + "ln", new XAttribute("w", "19050"),
+                                new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
+                                new XElement(A + "prstDash", new XAttribute("val", "solid"))),
+                            new XElement(A + "ln", new XAttribute("w", "25400"),
+                                new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
+                                new XElement(A + "prstDash", new XAttribute("val", "solid")))),
+                        new XElement(A + "effectStyleLst",
+                            new XElement(A + "effectStyle", new XElement(A + "effectLst")),
+                            new XElement(A + "effectStyle", new XElement(A + "effectLst")),
+                            new XElement(A + "effectStyle", new XElement(A + "effectLst"))),
+                        new XElement(A + "bgFillStyleLst",
+                            new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
+                            new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
+                            new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))))))));
     }
 
     // ── Minimal slide master ───────────────────────────────────────────────────
@@ -1113,39 +1174,83 @@ internal static class SmartArtFixtureGenerator
                     new XAttribute("accent1","accent1"), new XAttribute("accent2","accent2"),
                     new XAttribute("accent3","accent3"), new XAttribute("accent4","accent4"),
                     new XAttribute("accent5","accent5"), new XAttribute("accent6","accent6"),
-                    new XAttribute("hlink","hlink"), new XAttribute("folHlink","folHlink"))));
+                    new XAttribute("hlink","hlink"), new XAttribute("folHlink","folHlink")),
+                new XElement(P + "sldLayoutIdLst",
+                    new XElement(P + "sldLayoutId",
+                        new XAttribute("id", "2147483649"),
+                        new XAttribute(R + "id", "rId2"))),
+                new XElement(P + "txStyles",
+                    new XElement(P + "titleStyle",
+                        new XElement(A + "lvl1pPr", new XElement(A + "defRPr"))),
+                    new XElement(P + "bodyStyle",
+                        new XElement(A + "lvl1pPr", new XElement(A + "defRPr"))),
+                    new XElement(P + "otherStyle",
+                        new XElement(A + "lvl1pPr", new XElement(A + "defRPr"))))));
     }
 
     // ── Minimal slide layout ───────────────────────────────────────────────────
 
     private static XDocument BuildMinimalLayout()
     {
+        var spTree = new XElement(P + "spTree",
+            new XElement(P + "nvGrpSpPr",
+                new XElement(P + "cNvPr", new XAttribute("id", "1"), new XAttribute("name", "")),
+                new XElement(P + "cNvGrpSpPr"),
+                new XElement(P + "nvPr")),
+            new XElement(P + "grpSpPr",
+                new XElement(A + "xfrm",
+                    new XElement(A + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                    new XElement(A + "ext", new XAttribute("cx", "0"), new XAttribute("cy", "0")),
+                    new XElement(A + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                    new XElement(A + "chExt", new XAttribute("cx", "0"), new XAttribute("cy", "0")))));
+
         return new XDocument(new XDeclaration("1.0","UTF-8","yes"),
             new XElement(P + "sldLayout",
                 new XAttribute(XNamespace.Xmlns + "p", P.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
                 new XAttribute("type","blank"),
-                new XElement(P + "cSld",
-                    new XElement(P + "spTree",
-                        new XElement(P + "nvGrpSpPr",
-                            new XElement(P + "cNvPr", new XAttribute("id","1"), new XAttribute("name","")),
-                            new XElement(P + "cNvGrpSpPr"),
-                            new XElement(P + "nvPr")),
-                        new XElement(P + "grpSpPr",
-                            new XElement(A + "xfrm",
-                                new XElement(A + "off", new XAttribute("x","0"), new XAttribute("y","0")),
-                                new XElement(A + "ext", new XAttribute("cx","0"), new XAttribute("cy","0")),
-                                new XElement(A + "chOff", new XAttribute("x","0"), new XAttribute("y","0")),
-                                new XElement(A + "chExt", new XAttribute("cx","0"), new XAttribute("cy","0"))))))));
+                new XAttribute("showMasterSp", "1"),
+                new XAttribute("showMasterPhAnim", "1"),
+                new XElement(P + "cSld", spTree),
+                new XElement(P + "clrMapOvr",
+                    new XElement(A + "masterClrMapping"))));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static XDocument MakeSimpleDoc(XName rootElement) =>
-        new(new XDeclaration("1.0","UTF-8","yes"),
+    private static XDocument MakeSimpleDoc(XName rootElement)
+    {
+        var children = rootElement == Dgm + "styleDef"
+            ? new object[]
+            {
+                new XElement(Dgm + "title", new XAttribute("val", "FreeP SmartArt")),
+                new XElement(Dgm + "desc", new XAttribute("val", "Deterministic FreeP SmartArt style")),
+                new XElement(Dgm + "catLst"),
+                new XElement(Dgm + "scene3d",
+                    new XElement(A + "camera", new XAttribute("prst", "orthographicFront")),
+                    new XElement(A + "lightRig", new XAttribute("rig", "threePt"), new XAttribute("dir", "t"))),
+                new XElement(Dgm + "styleLbl",
+                    new XAttribute("name", "node0"),
+                    new XElement(Dgm + "scene3d",
+                        new XElement(A + "camera", new XAttribute("prst", "orthographicFront")),
+                        new XElement(A + "lightRig", new XAttribute("rig", "threePt"), new XAttribute("dir", "t"))),
+                    new XElement(Dgm + "sp3d"),
+                    new XElement(Dgm + "txPr"),
+                    new XElement(Dgm + "style",
+                        new XElement(A + "lnRef", new XAttribute("idx", "2")),
+                        new XElement(A + "fillRef", new XAttribute("idx", "1")),
+                        new XElement(A + "effectRef", new XAttribute("idx", "0")),
+                        new XElement(A + "fontRef", new XAttribute("idx", "minor"))))
+            }
+            : Array.Empty<object>();
+
+        return new XDocument(new XDeclaration("1.0","UTF-8","yes"),
             new XElement(rootElement,
-                new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName)));
+                new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                children));
+    }
 
     private static XDocument MakeRels(params (string id, string type, string target)[] rels)
     {

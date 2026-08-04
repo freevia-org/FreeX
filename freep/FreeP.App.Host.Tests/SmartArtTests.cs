@@ -1236,10 +1236,18 @@ public sealed class SmartArtTests : IDisposable
         RewriteList1Data(pptxPath, document =>
         {
             var dgmNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+            var nodeIds = document.Descendants(dgmNs + "pt")
+                .Where(point => (string?)point.Attribute("type") != "doc")
+                .Select(point => (string)point.Attribute("modelId")!)
+                .Take(2)
+                .ToArray();
             document.Root!.Element(dgmNs + "cxnLst")!.Add(new XElement(dgmNs + "cxn",
+                new XAttribute("modelId", "{00000000-0000-0000-0000-000000000138}"),
                 new XAttribute("type", "parOf"),
-                new XAttribute("srcId", "i1"),
-                new XAttribute("destId", "i2")));
+                new XAttribute("srcId", nodeIds[0]),
+                new XAttribute("destId", nodeIds[1]),
+                new XAttribute("srcOrd", "0"),
+                new XAttribute("destOrd", "0")));
         });
 
         var smartArt = PptxPackageReader.Read(pptxPath).Slides[4].Shapes

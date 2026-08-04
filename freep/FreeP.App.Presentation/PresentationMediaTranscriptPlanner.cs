@@ -159,8 +159,8 @@ public static class PresentationMediaTranscriptPlanner
     public const string AmbiguousCaptionContentMessage = "Caption authoring accepts either typed cues or transcript text, not both.";
     public const string EmptyCaptionContentMessage = "Caption authoring requires at least one valid cue.";
     public const string InvalidCaptionCueTimingMessage = "Caption cues must have non-negative, increasing, non-overlapping time ranges.";
-    public const string InvalidCaptionSourceMessage = "Internal caption track source must be a relative .vtt package path or file name.";
-    public const string CaptionAuthoringReadyMessage = "Author internal WebVTT caption tracks for the selected media.";
+    public const string InvalidCaptionSourceMessage = "Internal caption track source must be a relative .vtt, .srt, .ttml, or .dfxp package path or file name.";
+    public const string CaptionAuthoringReadyMessage = "Author internal WebVTT, SRT, TTML, or DFXP caption tracks for the selected media.";
     public const string CaptionAuthoringExternalTrackMessage = "External caption tracks can be inspected but not replaced or deleted.";
 
     private enum CaptionTrackFormat
@@ -560,10 +560,8 @@ public static class PresentationMediaTranscriptPlanner
             return false;
         }
 
-        var source = NormalizeCaptionSource(
-            descriptor.Source,
-            existingTrack?.Source,
-            trackIndex);
+        var format = ResolveAuthoringFormat(descriptor.Source, existingTrack);
+        var source = NormalizeCaptionSource(descriptor.Source, existingTrack?.Source, trackIndex, format);
         if (source is null)
         {
             errorMessage = InvalidCaptionSourceMessage;
@@ -572,9 +570,10 @@ public static class PresentationMediaTranscriptPlanner
 
         track = new MediaCaptionTrackInfo
         {
+            RelationshipId = existingTrack?.RelationshipId ?? string.Empty,
             Source = source,
-            Bytes = BuildWebVttBytes(cues),
-            ContentType = "text/vtt",
+            Bytes = BuildCaptionBytes(cues, format),
+            ContentType = GetCaptionContentType(source, format),
             Language = NormalizeText(descriptor.Language) ?? NormalizeText(existingTrack?.Language) ?? string.Empty,
             Label = NormalizeText(descriptor.Label) ?? NormalizeText(existingTrack?.Label) ?? InferTrackLabel(source, trackIndex),
             IsExternal = false
@@ -651,7 +650,9 @@ public static class PresentationMediaTranscriptPlanner
             {
                 Source = normalizedText.TrimStart().StartsWith("WEBVTT", StringComparison.OrdinalIgnoreCase)
                     ? "captions.vtt"
-                    : "captions.srt"
+                    : normalizedText.IndexOf("<tt", StringComparison.OrdinalIgnoreCase) >= 0
+                        ? "captions.ttml"
+                        : "captions.srt"
             },
             normalizedText);
 
@@ -659,6 +660,7 @@ public static class PresentationMediaTranscriptPlanner
         {
             CaptionTrackFormat.WebVtt => ParseWebVtt(normalizedText),
             CaptionTrackFormat.Srt => ParseSrt(normalizedText),
+            CaptionTrackFormat.Ttml => ParseTtml(normalizedText),
             _ => []
         };
     }
@@ -699,6 +701,67 @@ public static class PresentationMediaTranscriptPlanner
         return Encoding.UTF8.GetBytes(builder.ToString());
     }
 
+    private static byte[] BuildCaptionBytes(
+        IReadOnlyList<PresentationMediaTranscriptCueDescriptor> cues,
+        CaptionTrackFormat format)
+        => format switch
+        {
+            CaptionTrackFormat.WebVtt => BuildWebVttBytes(cues),
+            CaptionTrackFormat.Srt => BuildSrtBytes(cues),
+            CaptionTrackFormat.Ttml => BuildTtmlBytes(cues),
+            _ => BuildWebVttBytes(cues)
+        };
+
+    private static byte[] BuildSrtBytes(IReadOnlyList<PresentationMediaTranscriptCueDescriptor> cues)
+    {
+        var builder = new StringBuilder();
+        for (var index = 0; index < cues.Count; index++)
+        {
+            var cue = cues[index];
+            builder
+                .Append(index + 1)
+                .Append("\r\n")
+                .Append(FormatSrtTimestamp(cue.StartTime))
+                .Append(" --> ")
+                .Append(FormatSrtTimestamp(cue.EndTime))
+                .Append("\r\n")
+                .Append(cue.Text)
+                .Append("\r\n\r\n");
+        }
+
+        return Encoding.UTF8.GetBytes(builder.ToString());
+    }
+
+    private static string FormatSrtTimestamp(TimeSpan value)
+        => string.Create(
+            CultureInfo.InvariantCulture,
+            $"{(long)value.TotalHours:00}:{value.Minutes:00}:{value.Seconds:00},{value.Milliseconds:000}");
+
+    private static byte[] BuildTtmlBytes(IReadOnlyList<PresentationMediaTranscriptCueDescriptor> cues)
+    {
+        XNamespace ttml = "http://www.w3.org/ns/ttml";
+        var document = new XDocument(
+            new XDeclaration("1.0", "utf-8", null),
+            new XElement(
+                ttml + "tt",
+                new XElement(
+                    ttml + "body",
+                    new XElement(
+                        ttml + "div",
+                        cues.Select(cue => new XElement(
+                            ttml + "p",
+                            new XAttribute("begin", FormatTtmlTimestamp(cue.StartTime)),
+                            new XAttribute("end", FormatTtmlTimestamp(cue.EndTime)),
+                            cue.Text))))));
+
+        return Encoding.UTF8.GetBytes(document.ToString(SaveOptions.DisableFormatting));
+    }
+
+    private static string FormatTtmlTimestamp(TimeSpan value)
+        => string.Create(
+            CultureInfo.InvariantCulture,
+            $"{(long)value.TotalHours:00}:{value.Minutes:00}:{value.Seconds:00}.{value.Milliseconds:000}");
+
     private static string FormatWebVttTimestamp(TimeSpan value)
     {
         var hours = (long)value.TotalHours;
@@ -716,37 +779,97 @@ public static class PresentationMediaTranscriptPlanner
     private static string? NormalizeCaptionSource(
         string? requestedSource,
         string? existingSource,
-        int trackIndex)
+        int trackIndex,
+        CaptionTrackFormat format)
     {
         if (NormalizeText(requestedSource) is { } requested)
         {
-            return NormalizeInternalWebVttSource(requested);
+            return NormalizeInternalCaptionSource(requested);
         }
 
         if (NormalizeText(existingSource) is { } existing
-            && NormalizeInternalWebVttSource(existing) is { } reusable)
+            && NormalizeInternalCaptionSource(existing) is { } reusable)
         {
             return reusable;
         }
 
-        var source = $"ppt/media/authored-captions{trackIndex + 1}.vtt";
-        return NormalizeInternalWebVttSource(source);
+        var extension = format switch
+        {
+            CaptionTrackFormat.Srt => "srt",
+            CaptionTrackFormat.Ttml => "ttml",
+            _ => "vtt"
+        };
+        var source = $"ppt/media/authored-captions{trackIndex + 1}.{extension}";
+        return NormalizeInternalCaptionSource(source);
     }
 
-    private static string? NormalizeInternalWebVttSource(string source)
+    private static string? NormalizeInternalCaptionSource(string source)
     {
         source = source.Replace('\\', '/');
 
         if (Uri.TryCreate(source, UriKind.Absolute, out _)
             || source.StartsWith("/", StringComparison.Ordinal)
             || source.Split('/').Any(part => part is ".." or ".")
-            || !source.EndsWith(".vtt", StringComparison.OrdinalIgnoreCase))
+            || !HasExtension(source, ".vtt")
+                && !HasExtension(source, ".srt")
+                && !HasExtension(source, ".ttml")
+                && !HasExtension(source, ".dfxp"))
         {
             return null;
         }
 
         return source;
     }
+
+    private static CaptionTrackFormat ResolveAuthoringFormat(
+        string? requestedSource,
+        MediaCaptionTrackInfo? existingTrack)
+    {
+        if (NormalizeText(requestedSource) is { } requested)
+        {
+            return GetCaptionFormatFromSource(requested) ?? CaptionTrackFormat.Unsupported;
+        }
+
+        if (existingTrack is { IsExternal: false, Bytes.Length: > 0 })
+        {
+            var existingFormat = DetectFormat(existingTrack, DecodeUtf8(existingTrack.Bytes));
+            if (existingFormat != CaptionTrackFormat.Unsupported)
+            {
+                return existingFormat;
+            }
+        }
+
+        return GetCaptionFormatFromSource(existingTrack?.Source) ?? CaptionTrackFormat.WebVtt;
+    }
+
+    private static CaptionTrackFormat? GetCaptionFormatFromSource(string? source)
+    {
+        if (HasExtension(source, ".vtt"))
+        {
+            return CaptionTrackFormat.WebVtt;
+        }
+
+        if (HasExtension(source, ".srt"))
+        {
+            return CaptionTrackFormat.Srt;
+        }
+
+        if (HasExtension(source, ".ttml") || HasExtension(source, ".dfxp"))
+        {
+            return CaptionTrackFormat.Ttml;
+        }
+
+        return null;
+    }
+
+    private static string GetCaptionContentType(string source, CaptionTrackFormat format)
+        => format switch
+        {
+            CaptionTrackFormat.Srt => "application/x-subrip",
+            CaptionTrackFormat.Ttml when HasExtension(source, ".dfxp") => "application/ttaf+xml",
+            CaptionTrackFormat.Ttml => "application/ttml+xml",
+            _ => "text/vtt"
+        };
 
     private static bool TryGetCaptionTrack(MediaInfo media, int trackIndex, out MediaCaptionTrackInfo track)
     {

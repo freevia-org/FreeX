@@ -21,6 +21,7 @@ public sealed class PptxRepairCorpusValidityTests
     [Theory]
     [InlineData("10-motionpath.pptx")]
     [InlineData("14-smartart-live.pptx")]
+    [InlineData("15-smartart-grouped-list.pptx")]
     [InlineData("21-comments-notes.pptx")]
     public void RepairDialogCorpusDecks_OpenAndValidateWithoutSchemaErrors(string deckName)
     {
