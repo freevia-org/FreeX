@@ -35,7 +35,7 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
             return;
 
         var capability = WpfVideoEncoderCapabilityDetector.Detect();
-        var devices = new WindowsRecordingDeviceCatalog().EnumerateDevices();
+        var devices = new WindowsNativeRecordingDeviceCatalog().EnumerateDevices();
 
         capability.ExecutablePath.Should().Be(WindowsNativeVideoExportAdapter.ExecutablePath);
         capability.CanCaptureNarration.Should().Be(devices.Any(device =>
