@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Free.Shared.Shell;
+using FreeX.App.Services;
 using FreeX.App.Avalonia;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -19,13 +20,17 @@ public sealed class AboutDialogParityTests
         await Session.Dispatch(() =>
         {
             var dialog = new AboutDialog();
+            var presentation = FreeXAboutDialogPresentation.Create(
+                typeof(AboutDialog).Assembly,
+                "Avalonia");
 
-            dialog.Title.Should().Be("About FreeX");
+            dialog.Title.Should().Be(presentation.WindowTitle);
             dialog.Width.Should().Be(AboutDialogMetrics.Width);
             dialog.Height.Should().Be(AboutDialogMetrics.Height);
             dialog.MinWidth.Should().Be(AboutDialogMetrics.MinWidth);
             dialog.MinHeight.Should().Be(AboutDialogMetrics.MinHeight);
             AutomationProperties.GetAutomationId(dialog).Should().Be("AboutFreeXDialog");
+            AutomationProperties.GetName(dialog).Should().Be(presentation.WindowTitle);
 
             var text = dialog.GetLogicalDescendants().OfType<TextBox>()
                 .Single(textBox => AutomationProperties.GetAutomationId(textBox) == "AboutFreeXText");
@@ -38,8 +43,8 @@ public sealed class AboutDialogParityTests
                 AboutDialogMetrics.AvaloniaTextPaddingRight,
                 AboutDialogMetrics.TextPadding));
             text.LineHeight.Should().Be(AboutDialogMetrics.AvaloniaTextLineHeight);
+            text.Text.Should().Be(presentation.AboutText);
             text.Text.Should().Contain("A free spreadsheet app for XLSX editing");
-            text.Text.Should().Contain("Built with .NET 10, Avalonia, ClosedXML.");
             text.Text.Should().Contain("Help > Legal Notices");
 
             var buttons = dialog.GetLogicalDescendants().OfType<Button>().ToArray();
@@ -47,6 +52,7 @@ public sealed class AboutDialogParityTests
             buttons.Should().ContainSingle(button => button.IsCancel);
             AutomationProperties.GetAutomationId(buttons.Single())
                 .Should().Be("AboutFreeXOkButton");
+            AutomationProperties.GetName(buttons.Single()).Should().Be("OK");
         }, CancellationToken.None);
     }
 }

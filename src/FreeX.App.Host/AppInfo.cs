@@ -22,12 +22,11 @@ public static class AppInfo
     public const string ProjectLicenseNotice = AppHelpInfo.ProjectLicenseNotice;
     public const string PrivacyNotice = AppHelpInfo.PrivacyNotice;
     public const string CompatibilityNotice = AppHelpInfo.CompatibilityNotice;
-    public const string ThirdPartyRuntimeNotice =
-        "Third-party runtime notices: Runtime dependencies remain governed by their own licenses. The publishable app dependency set is covered by MIT, Apache-2.0, and BSD-3-Clause style licenses. Runtime packages: ClosedXML, ClosedXML.Parser, DocumentFormat.OpenXml, DocumentFormat.OpenXml.Framework, ExcelDataReader, ExcelNumberFormat, Microsoft.Extensions.DependencyInjection, Microsoft.Extensions.DependencyInjection.Abstractions, Microsoft.Extensions.Logging, Microsoft.Extensions.Logging.Abstractions, Microsoft.Extensions.Options, Microsoft.Extensions.Primitives, OxyPlot.Core, OxyPlot.Wpf, OxyPlot.Wpf.Shared, PDFsharp-WPF, RBush.Signed, Sentry, Serilog, Serilog.Extensions.Logging, Serilog.Sinks.Console, Serilog.Sinks.File, SharpVectors.Wpf, SixLabors.Fonts, and System.IO.Packaging. No package-provided NOTICE files were found in the restored runtime packages.";
+    public const string ThirdPartyRuntimeNotice = AppHelpInfo.ThirdPartyRuntimeNotice;
     public const string SourceNotice = AppHelpInfo.SourceNotice;
 
     public static string AboutText { get; } =
-        $"FreeX\n{VersionText}\n\nA free spreadsheet app for XLSX editing with open-only legacy XLS/XLSB import.\n\nBuilt with .NET 10, WPF, ClosedXML, OxyPlot.\n\n{TrademarkNotice}\n\n{CompatibilityNotice}\n\n{ProjectLicenseNotice}\n\n{PrivacyNotice}\n\n{ThirdPartyRuntimeNotice}\n\n{SourceNotice}";
+        FreeXAboutDialogPresentation.Create(typeof(AppInfo).Assembly, "WPF").AboutText;
 
     internal static string FormatVersionText(string? informationalVersion) =>
         AppHelpInfo.FormatVersionText(informationalVersion);

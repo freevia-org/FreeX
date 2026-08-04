@@ -1007,10 +1007,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("await dialog.ShowDialog(this);");
         var aboutSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "AboutDialog.cs"));
         aboutSource.Should().Contain("AvaloniaAboutDialog");
-        aboutSource.Should().Contain("AppHelpInfo.BuildAboutText(");
-        aboutSource.Should().Contain("dialogAutomationId: \"AboutFreeXDialog\"");
-        aboutSource.Should().Contain("textAutomationId: \"AboutFreeXText\"");
-        aboutSource.Should().Contain("okAutomationId: \"AboutFreeXOkButton\"");
+        aboutSource.Should().Contain("FreeXAboutDialogPresentation.Create");
+        aboutSource.Should().Contain("typeof(AboutDialog).Assembly");
+        aboutSource.Should().Contain("\"Avalonia\"");
         source.Should().Contain("private async Task ShowLegalNoticesDialogAsync()");
         source.Should().Contain("var dialog = new LegalNoticesDialog();");
         legalNoticesAdapterSource.Should().Contain("internal sealed class LegalNoticesDialog : AvaloniaLegalNoticesDialog");
