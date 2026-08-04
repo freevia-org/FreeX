@@ -1753,6 +1753,86 @@ public sealed class ChartTests : IDisposable
         rt.Series[0].Values.Should().Equal(100, -30, 20);
     }
 
+    [Fact]
+    public void RoundTrip_NativeChartExWaterfall_EmitsPowerPointCompatiblePackageParts()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Waterfall,
+            IsChartEx = true,
+            Categories = { "Start", "Reduction", "Growth" },
+            ShowWaterfallConnectorLines = false,
+            WaterfallTotalPointIndices = [0, 2]
+        };
+        var series = new ChartSeries { Name = "Value" };
+        series.Values.AddRange(new double?[] { 100, -30, 20 });
+        chart.Series.Add(series);
+
+        var path = WriteToPptx(BuildPresWithChart(chart));
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        const string chartExRelType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
+        const string chartExContentType = "application/vnd.ms-office.chartex+xml";
+        XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace relationshipsNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace mcNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+        XNamespace cxNs = chartExUri;
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var contentTypes = XDocument.Load(archive.GetEntry("[Content_Types].xml")!.Open());
+            contentTypes.Descendants(contentTypesNs + "Override")
+                .Should().Contain(element =>
+                    element.Attribute("PartName") != null &&
+                    element.Attribute("PartName")!.Value == "/ppt/charts/chartEx1.xml" &&
+                    element.Attribute("ContentType") != null &&
+                    element.Attribute("ContentType")!.Value == chartExContentType);
+
+            var slide = XDocument.Load(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+            var alternateContent = slide.Descendants(mcNs + "AlternateContent").Should().ContainSingle().Subject;
+            alternateContent.Element(mcNs + "Choice")!.Attribute("Requires")!.Value.Should().Be("cx1");
+            alternateContent.Descendants(DrawingNs + "graphicData")
+                .Single().Attribute("uri")!.Value.Should().Be(chartExUri);
+            alternateContent.Descendants(cxNs + "chart").Should().ContainSingle();
+
+            var rels = XDocument.Load(archive.GetEntry("ppt/slides/_rels/slide1.xml.rels")!.Open());
+            rels.Descendants(relationshipsNs + "Relationship")
+                .Should().Contain(element =>
+                    element.Attribute("Type") != null &&
+                    element.Attribute("Type")!.Value == chartExRelType &&
+                    element.Attribute("Target") != null &&
+                    element.Attribute("Target")!.Value == "../charts/chartEx1.xml");
+
+            var chartEx = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+            chartEx.Descendants(cxNs + "series").Single()
+                .Element(cxNs + "layoutPr")!.Element(cxNs + "visibility")!
+                .Attribute("connectorLines")!.Value.Should().Be("0");
+            chartEx.Descendants(cxNs + "subtotals").Single().Elements(cxNs + "idx")
+                .Select(element => (int)element.Attribute("val")!)
+                .Should().Equal(0, 2);
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        rt.IsChartEx.Should().BeTrue();
+        rt.ChartType.Should().Be(ChartType.Waterfall);
+        rt.ShowWaterfallConnectorLines.Should().BeFalse();
+        rt.WaterfallTotalPointIndices.Should().Equal(0, 2);
+        rt.Categories.Should().Equal("Start", "Reduction", "Growth");
+        rt.Series.Should().ContainSingle();
+        rt.Series[0].Values.Should().Equal(100, -30, 20);
+
+        rt.ShowWaterfallConnectorLines = true;
+        rt.WaterfallTotalPointIndices = [1];
+        var editedPath = WriteToPptx(BuildPresWithChart(rt));
+        using var editedArchive = ZipFile.OpenRead(editedPath);
+        var editedChartEx = XDocument.Load(editedArchive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        editedChartEx.Descendants(cxNs + "visibility").Single()
+            .Attribute("connectorLines")!.Value.Should().Be("1");
+        editedChartEx.Descendants(cxNs + "subtotals").Single().Elements(cxNs + "idx")
+            .Select(element => (int)element.Attribute("val")!)
+            .Should().Equal(1);
+    }
+
     [Theory]
     [InlineData(ChartType.Surface, "surfaceChart")]
     [InlineData(ChartType.Surface3D, "surface3DChart")]

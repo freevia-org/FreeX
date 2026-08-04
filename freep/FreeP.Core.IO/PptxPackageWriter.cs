@@ -56,6 +56,7 @@ public static class PptxPackageWriter
     private const string ViewPropsRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/viewProps";
     private const string TableStylesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
     private const string ChartRelType       = PptxChartWriter.ChartRelType;
+    private const string ChartExRelType     = PptxChartWriter.ChartExRelType;
     private const string NotesSlideRelType  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
     private const string NotesMasterRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster";
     private const string HyperlinkRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
@@ -93,6 +94,7 @@ public static class PptxPackageWriter
         ViewPropsRelType,
         TableStylesRelType,
         ChartRelType,
+        ChartExRelType,
         NotesSlideRelType,
         NotesMasterRelType,
         HyperlinkRelType,
@@ -162,6 +164,7 @@ public static class PptxPackageWriter
     private const string TableStylesCT   = "application/vnd.openxmlformats-officedocument.presentationml.tableStyles+xml";
     private const string RelsCT          = OpcMediaTypes.RelationshipsContentType;
     private const string ChartCT         = PptxChartWriter.ChartCT;
+    private const string ChartExCT       = PptxChartWriter.ChartExCT;
     private const string NotesSlideCT    = "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml";
     private const string NotesMasterCT   = "application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml";
     private const string CommentsCT      = "application/vnd.openxmlformats-officedocument.presentationml.comments+xml";
@@ -391,8 +394,9 @@ public static class PptxPackageWriter
 
         // --- 1. [Content_Types].xml ---
         var preservedChartWorkbookPaths = FindPreservedChartWorkbookPaths(packageSnapshot, presentation);
+        var preservedChartExPaths = FindPreservedChartExSidecarPaths(packageSnapshot, presentation);
         var preservedContentTypeWriterOwnedPaths = new HashSet<string>(
-            preservedChartWorkbookPaths,
+            preservedChartWorkbookPaths.Concat(preservedChartExPaths),
             StringComparer.OrdinalIgnoreCase);
         foreach (var mediaPath in FindPreservedMediaPackagePaths(packageSnapshot, presentation))
         {
@@ -575,7 +579,7 @@ public static class PptxPackageWriter
             foreach (var (_, mediaRelId, _) in mediaRelIds)      usedRelIds.Add(mediaRelId);
             foreach (var (_, mediaFileRelId, _, _) in mediaFileRelIds) usedRelIds.Add(mediaFileRelId);
             foreach (var (_, fillBlipRelId, _) in fillBlipRelIds) usedRelIds.Add(fillBlipRelId);
-            foreach (var (_, chartRelId, _) in chartRelIds)       usedRelIds.Add(chartRelId);
+            foreach (var (_, chartRelId, _, _) in chartRelIds)       usedRelIds.Add(chartRelId);
 
             var captionTrackRels = WriteSlideMediaCaptionTracks(archive, slide, si + 1, usedRelIds, packageSnapshot, writtenCaptionPaths);
             var captionTracksByShape = captionTrackRels
@@ -602,7 +606,7 @@ public static class PptxPackageWriter
             // Combined shapeId→relId map for shape element building (picture shapes + charts + OLE)
             var mediaById = new Dictionary<uint, string>();
             foreach (var (id, relId, _) in mediaRelIds)  mediaById[id] = relId;
-            foreach (var (id, relId, _) in chartRelIds)  mediaById[id] = relId;
+            foreach (var (id, relId, _, _) in chartRelIds)  mediaById[id] = relId;
             // Media file rel IDs use synthetic key: shape.Id | 0x80000000
             foreach (var (id, relId, _, _) in mediaFileRelIds)  mediaById[id | 0x80000000u] = relId;
             // OLE embedded rel IDs keyed by shape.Id (used in BuildOleGraphicFrameEl)
@@ -653,8 +657,8 @@ public static class PptxPackageWriter
                 slideRels.Add(relationship.RelationshipId, CaptionRelType, target, isExternal);
             foreach (var (_, fillBlipRelId, fillBlipPath) in fillBlipRelIds)
                 slideRels.Add(fillBlipRelId, ImageRelType, $"../media/{fillBlipPath.Split('/').Last()}");
-            foreach (var (_, chartRelId, chartPath) in chartRelIds)
-                slideRels.Add(chartRelId, ChartRelType, $"../charts/{chartPath.Split('/').Last()}");
+            foreach (var (_, chartRelId, chartPath, chartRelType) in chartRelIds)
+                slideRels.Add(chartRelId, chartRelType, $"../charts/{chartPath.Split('/').Last()}");
             // SmartArt diagram part rels (dm/lo/qs/cs each get their own rel entry in slide rels)
             foreach (var (relId, relType, target) in smartArtSlideRels)
                 slideRels.Add(relId, relType, target);
@@ -780,7 +784,10 @@ public static class PptxPackageWriter
             WriteEntry(archive, RecordingMediaArtifactsPath, BuildRecordingMediaArtifactsXml(presentation));
         }
 
-        CopyPreservedPackageEntries(archive, packageSnapshot, preservedChartWorkbookPaths);
+        CopyPreservedPackageEntries(
+            archive,
+            packageSnapshot,
+            preservedChartWorkbookPaths.Concat(preservedChartExPaths).ToHashSet(StringComparer.OrdinalIgnoreCase));
     }
 
     // ── [Content_Types].xml ───────────────────────────────────────────────────────
@@ -933,7 +940,10 @@ public static class PptxPackageWriter
             {
                 if (shape.Kind == SlideShapeKind.Chart && shape.Chart is not null)
                 {
-                    overrides.Add(Override(CT, $"/ppt/charts/chart{chartGlobalIdx}.xml", ChartCT));
+                    overrides.Add(Override(
+                        CT,
+                        "/" + PptxChartWriter.GetWrittenChartPath(shape.Chart, chartGlobalIdx),
+                        shape.Chart.IsChartEx ? ChartExCT : ChartCT));
                     if (shape.Chart.RegenerateWorkbookOnSave)
                     {
                         overrides.Add(Override(
@@ -3466,6 +3476,8 @@ public static class PptxPackageWriter
     // ── Chart / graphicFrame elements ─────────────────────────────────────────────
 
     private const string DrawingChartUri = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private const string DrawingChartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+    private static readonly XNamespace CxChart = DrawingChartExUri;
     private static readonly XNamespace CChartNs =
         "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
@@ -3489,7 +3501,7 @@ public static class PptxPackageWriter
                 new XAttribute("cx", shape.ExtentCxEmu),
                 new XAttribute("cy", shape.ExtentCyEmu)));
 
-        return new XElement(P + "graphicFrame",
+        var frame = new XElement(P + "graphicFrame",
             new XElement(P + "nvGraphicFramePr",
                 CnvPrWithHlink(shape, hlinkRelIds, allSlides),
                 new XElement(P + "cNvGraphicFramePr",
@@ -3499,11 +3511,23 @@ public static class PptxPackageWriter
             xfrm,
             new XElement(A + "graphic",
                 new XElement(A + "graphicData",
-                    new XAttribute("uri", DrawingChartUri),
-                    new XElement(CChartNs + "chart",
-                        // Declare the c: prefix so PowerPoint sees <c:chart .../>
-                        new XAttribute(XNamespace.Xmlns + "c", DrawingChartUri),
+                    new XAttribute("uri", shape.Chart?.IsChartEx == true ? DrawingChartExUri : DrawingChartUri),
+                    new XElement(shape.Chart?.IsChartEx == true ? CxChart + "chart" : CChartNs + "chart",
+                        // Declare the chart prefix so PowerPoint sees the correct chart family.
+                        new XAttribute(XNamespace.Xmlns + (shape.Chart?.IsChartEx == true ? "cx" : "c"),
+                            shape.Chart?.IsChartEx == true ? DrawingChartExUri : DrawingChartUri),
                         new XAttribute(R + "id", chartRelId)))));
+
+        if (shape.Chart?.IsChartEx != true)
+            return frame;
+
+        return new XElement(MC + "AlternateContent",
+            new XAttribute(XNamespace.Xmlns + "cx1", DrawingChartExUri),
+            new XElement(MC + "Choice",
+                new XAttribute("Requires", "cx1"),
+                frame),
+            new XElement(MC + "Fallback",
+                BuildSpEl(shape, PresentationColorScheme.CreateDefault())));
     }
 
     // ── SmartArt / graphicFrame elements ──────────────────────────────────────────
@@ -4943,22 +4967,25 @@ public static class PptxPackageWriter
     /// <paramref name="globalChartIndex"/> so chart file names are unique across slides.
     /// Returns (shapeName, relId, chartPartPath) tuples for wiring into slide rels.
     /// </summary>
-    private static List<(uint shapeId, string relId, string chartPath)> WriteSlideCharts(
+    private static List<(uint shapeId, string relId, string chartPath, string chartRelType)> WriteSlideCharts(
         ZipArchive archive,
         Slide slide,
         ref int globalChartIndex,
         PptxPackageSnapshot? packageSnapshot)
     {
-        var result = new List<(uint, string, string)>();
+        var result = new List<(uint, string, string, string)>();
 
         foreach (var shape in AllShapes(slide.Shapes))
         {
             if (shape.Kind != SlideShapeKind.Chart || shape.Chart is null)
                 continue;
 
-            var chartPath = PptxChartWriter.WriteChartPart(archive, shape.Chart, globalChartIndex, packageSnapshot);
+            var chartPath = shape.Chart.IsChartEx
+                ? PptxChartWriter.WriteChartExPart(archive, shape.Chart, globalChartIndex, packageSnapshot)
+                : PptxChartWriter.WriteChartPart(archive, shape.Chart, globalChartIndex, packageSnapshot);
             var relId = $"rIdChart{globalChartIndex}";
-            result.Add((shape.Id, relId, chartPath));
+            var chartRelType = shape.Chart.IsChartEx ? ChartExRelType : ChartRelType;
+            result.Add((shape.Id, relId, chartPath, chartRelType));
             globalChartIndex++;
         }
 
@@ -5862,6 +5889,45 @@ public static class PptxPackageWriter
                                 }
                             }
                         }
+                    }
+                }
+
+                chartIndex++;
+            }
+        }
+
+        return paths;
+    }
+
+    private static HashSet<string> FindPreservedChartExSidecarPaths(
+        PptxPackageSnapshot? packageSnapshot,
+        Presentation presentation)
+    {
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (packageSnapshot is null)
+            return paths;
+
+        var chartIndex = 1;
+        foreach (var slide in presentation.Slides)
+        {
+            foreach (var shape in AllShapes(slide.Shapes))
+            {
+                if (shape.Kind != SlideShapeKind.Chart || shape.Chart is not { IsChartEx: true } chart)
+                    continue;
+
+                var chartPath = SourceChartPath(chart, chartIndex);
+                var relsPath = GetRelationshipPartPath(chartPath);
+                if (packageSnapshot.TryGetEntry(relsPath, out var relsBytes) &&
+                    OpcXml.TryLoadXml(relsBytes) is { } relsXml)
+                {
+                    foreach (var relationship in OpcRelationships.Load(relsXml))
+                    {
+                        if (relationship.IsExternal || string.IsNullOrWhiteSpace(relationship.Target))
+                            continue;
+
+                        var targetPath = ResolveRelativeZipPath(GetDirectoryName(chartPath), relationship.Target);
+                        if (packageSnapshot.TryGetEntry(targetPath, out var sidecarBytes) && sidecarBytes.Length > 0)
+                            paths.Add(ToZipEntryPath(targetPath));
                     }
                 }
 

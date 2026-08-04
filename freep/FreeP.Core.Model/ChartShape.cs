@@ -894,6 +894,14 @@ public sealed class ChartShape
     [JsonIgnore]
     public string? SourcePartPath { get; set; }
 
+    /// <summary>True when the chart is authored in PowerPoint's native ChartEx part family.</summary>
+    [JsonIgnore]
+    public bool IsChartEx { get; set; }
+
+    /// <summary>Verbatim native cx:chartSpace payload retained for ChartEx save-back.</summary>
+    [JsonIgnore]
+    public string? PreservedChartExXml { get; set; }
+
     /// <summary>
     /// Authored <c>c:date1904</c> chart-space flag. Null means the source omitted the token
     /// and the workbook/application date system remains authoritative.

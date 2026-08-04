@@ -1485,6 +1485,10 @@ public static class PptxPackageReader
             var chartShape = PptxChartReader.ReadChartExPart(archive, chartPath, scheme);
             if (chartShape is null) return null;
             chartShape.SourcePartPath = chartPath;
+            chartShape.IsChartEx = true;
+            chartShape.PreservedChartExXml = archive.GetEntry(chartPath) is { } chartEntry
+                ? ReadEntryText(chartEntry)
+                : null;
 
             return new SlideShape
             {
@@ -7018,5 +7022,12 @@ public static class PptxPackageReader
             return ms.ToArray();
         }
         catch { return null; }
+    }
+
+    private static string ReadEntryText(ZipArchiveEntry entry)
+    {
+        using var stream = entry.Open();
+        using var reader = new StreamReader(stream, detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
     }
 }

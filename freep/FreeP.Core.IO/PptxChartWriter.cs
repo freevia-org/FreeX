@@ -23,8 +23,11 @@ internal static class PptxChartWriter
 
     internal const string ChartRelType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+    internal const string ChartExRelType =
+        "http://schemas.microsoft.com/office/2014/relationships/chartEx";
     internal const string ChartCT =
         "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
+    internal const string ChartExCT = "application/vnd.ms-office.chartex+xml";
     internal const string ChartWorkbookCT =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private const string PackageRelType =
@@ -71,6 +74,129 @@ internal static class PptxChartWriter
 
         return chartPath;
     }
+
+    internal static string WriteChartExPart(
+        ZipArchive archive,
+        ChartShape chart,
+        int chartIndex,
+        PptxPackageSnapshot? packageSnapshot = null)
+    {
+        var chartPath = $"ppt/charts/chartEx{chartIndex}.xml";
+        var chartDoc = BuildChartExDoc(chart);
+        WriteEntry(archive, chartPath, chartDoc);
+
+        // ChartEx sidecars (style/color/workbook) are retained by the package writer;
+        // their relative targets remain valid when the part keeps the charts directory.
+        var sourcePath = PptxPackageWriter.SourceChartPath(chart, chartIndex);
+        var sourceRelsPath = OpcPathHelper.GetRelationshipPartPath(sourcePath);
+        var destinationRelsPath = OpcPathHelper.GetRelationshipPartPath(chartPath);
+        if (packageSnapshot?.TryGetEntry(sourceRelsPath, out var relBytes) == true)
+        {
+            var relEntry = archive.CreateEntry(destinationRelsPath, CompressionLevel.Optimal);
+            using var stream = relEntry.Open();
+            stream.Write(relBytes, 0, relBytes.Length);
+        }
+
+        return chartPath;
+    }
+
+    internal static string GetWrittenChartPath(ChartShape chart, int chartIndex) =>
+        chart.IsChartEx ? $"ppt/charts/chartEx{chartIndex}.xml" : $"ppt/charts/chart{chartIndex}.xml";
+
+    private static XDocument BuildChartExDoc(ChartShape chart)
+    {
+        if (!string.IsNullOrWhiteSpace(chart.PreservedChartExXml))
+        {
+            try
+            {
+                var preserved = XDocument.Parse(chart.PreservedChartExXml, LoadOptions.PreserveWhitespace);
+                UpdateChartExSemantics(preserved, chart);
+                return preserved;
+            }
+            catch (XmlException)
+            {
+                // Fall through to a minimal valid ChartEx payload.
+            }
+        }
+
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var values = chart.Series.FirstOrDefault()?.Values ?? [];
+        var data = new XElement(cx + "data",
+            new XAttribute("id", 0),
+            new XElement(cx + "strDim",
+                new XAttribute("type", "cat"),
+                new XElement(cx + "lvl",
+                    new XAttribute("ptCount", chart.Categories.Count),
+                    chart.Categories.Select((category, index) =>
+                        new XElement(cx + "pt", new XAttribute("idx", index), category)))),
+            new XElement(cx + "numDim",
+                new XAttribute("type", "val"),
+                new XElement(cx + "lvl",
+                    new XAttribute("ptCount", values.Count),
+                    new XAttribute("formatCode", "General"),
+                    values.Select((value, index) =>
+                        new XElement(cx + "pt", new XAttribute("idx", index),
+                            (value ?? 0).ToString("G", CultureInfo.InvariantCulture))))));
+
+        var series = new XElement(cx + "series",
+            new XAttribute("layoutId", "waterfall"),
+            new XAttribute("uniqueId", Guid.NewGuid().ToString("B")),
+            new XElement(cx + "tx",
+                new XElement(cx + "txData",
+                    new XElement(cx + "v", chart.Series.FirstOrDefault()?.Name ?? string.Empty))),
+            new XElement(cx + "dataId", new XAttribute("val", 0)),
+            BuildChartExLayoutPr(chart, cx));
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(cx + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", cx.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                new XElement(cx + "chartData", data),
+                new XElement(cx + "chart",
+                    new XElement(cx + "plotArea",
+                        new XElement(cx + "plotAreaRegion", series)))));
+    }
+
+    private static void UpdateChartExSemantics(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var series = document.Descendants(cx + "series").FirstOrDefault();
+        if (series is null)
+            return;
+
+        var layoutPr = series.Element(cx + "layoutPr");
+        if (layoutPr is null)
+        {
+            layoutPr = new XElement(cx + "layoutPr");
+            series.Add(layoutPr);
+        }
+
+        var visibility = layoutPr.Element(cx + "visibility");
+        if (visibility is null)
+        {
+            visibility = new XElement(cx + "visibility");
+            layoutPr.AddFirst(visibility);
+        }
+        visibility.SetAttributeValue("connectorLines", chart.ShowWaterfallConnectorLines ? "1" : "0");
+
+        layoutPr.Element(cx + "subtotals")?.Remove();
+        if (chart.WaterfallTotalPointIndices is { Count: > 0 } totals)
+            layoutPr.Add(new XElement(cx + "subtotals",
+                totals.Distinct().OrderBy(index => index)
+                    .Select(index => new XElement(cx + "idx", new XAttribute("val", index)))));
+    }
+
+    private static XElement BuildChartExLayoutPr(ChartShape chart, XNamespace cx) =>
+        new XElement(cx + "layoutPr",
+            new XElement(cx + "visibility",
+                new XAttribute("connectorLines", chart.ShowWaterfallConnectorLines ? "1" : "0")),
+            chart.WaterfallTotalPointIndices is { Count: > 0 } totals
+                ? new XElement(cx + "subtotals",
+                    totals.Distinct().OrderBy(index => index)
+                        .Select(index => new XElement(cx + "idx", new XAttribute("val", index))))
+                : null);
 
     internal static string GetRegeneratedWorkbookPath(int chartIndex) =>
         $"ppt/embeddings/chartWorkbook{chartIndex}.xlsx";
