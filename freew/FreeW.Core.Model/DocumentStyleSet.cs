@@ -26,6 +26,26 @@ public sealed record DocumentStyleSet(string Name, string BodyFont, string Headi
     public static DocumentStyleSet? FindByName(string name) =>
         Catalog.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Identifies the catalog set that owns the document's current body font, Heading 1 font, and
+    /// Heading 1 accent. These are the three set-specific values written by <see cref="Apply"/> and are
+    /// sufficient to distinguish every current catalog entry without introducing shadow package state.
+    /// </summary>
+    public static DocumentStyleSet? FindMatching(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        if (!document.Styles.TryGetValue("Heading1", out var heading1))
+            return null;
+
+        var bodyFont = document.DefaultRun.FontFamily;
+        var headingFont = heading1.Run.FontFamily ?? bodyFont;
+        var accent = heading1.Run.ColorHex;
+        return Catalog.FirstOrDefault(styleSet =>
+            string.Equals(styleSet.BodyFont, bodyFont, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(styleSet.HeadingFont, headingFont, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(styleSet.AccentColorHex, accent, StringComparison.OrdinalIgnoreCase));
+    }
+
     public static void Apply(TextDocument doc, DocumentStyleSet styleSet)
     {
         ArgumentNullException.ThrowIfNull(doc);
