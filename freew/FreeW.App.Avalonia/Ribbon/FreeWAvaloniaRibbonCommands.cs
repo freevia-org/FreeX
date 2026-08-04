@@ -934,6 +934,21 @@ internal static class FreeWAvaloniaRibbonCommands
         public RibbonCommandState GetState() => new(Value: editor.Document.Theme.Name);
     }
 
+    private sealed class StyleSetCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!string.IsNullOrWhiteSpace(context.SelectedValue)
+                && DocumentStyleSet.FindByName(context.SelectedValue) is { } styleSet)
+            {
+                editor.ApplyStyleSet(styleSet);
+            }
+        }
+
+        public RibbonCommandState GetState() =>
+            new(Value: DocumentStyleSet.FindMatching(editor.Document)?.Name);
+    }
+
     private sealed class TrackChangesToggleCommand(DocumentView editor) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -2712,11 +2727,7 @@ internal static class FreeWAvaloniaRibbonCommands
         }
 
         // ── Page Color swatches (+ No Color) ─────────────────────────────────
-        r.Register("freew.style-set", new ValueRibbonCommand(value =>
-        {
-            if (!string.IsNullOrWhiteSpace(value) && DocumentStyleSet.FindByName(value) is { } styleSet)
-                editor.ApplyStyleSet(styleSet);
-        }));
+        r.Register("freew.style-set", new StyleSetCommand(editor));
         r.Register("freew.reset-style-set", new ActionRibbonCommand(() => editor.ApplyStyleSet(DocumentStyleSet.Default)));
 
         r.Register("freew.page-color", new ActionRibbonCommand(() => { /* dropdown opener */ }));
