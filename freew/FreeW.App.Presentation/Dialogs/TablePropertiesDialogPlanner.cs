@@ -23,7 +23,8 @@ public sealed record TablePropertiesValues(
     TableCellVerticalAlignment CellVerticalAlignment,
     TableCellMargins? CellMargins,
     bool CellWrapText,
-    bool CellFitText);
+    bool CellFitText,
+    bool? FloatingTableAllowsOverlap = null);
 
 /// <summary>
 /// The model objects under the caret that seed the Table Properties dialog.
@@ -58,7 +59,8 @@ public sealed record TablePropertiesDialogInitialState(
     string CellMarginBottomText,
     string CellMarginRightText,
     bool CellWrapText,
-    bool CellFitText);
+    bool CellFitText,
+    bool? FloatingTableAllowsOverlap);
 
 public sealed record TablePropertiesDialogInput(
     bool PreferredWidthOn,
@@ -88,7 +90,8 @@ public sealed record TablePropertiesDialogInput(
     string? CellMarginBottomText,
     string? CellMarginRightText,
     bool CellWrapText,
-    bool CellFitText);
+    bool CellFitText,
+    bool? FloatingTableAllowsOverlap = null);
 
 public static class TablePropertiesDialogPlanner
 {
@@ -155,7 +158,8 @@ public static class TablePropertiesDialogPlanner
             CellMarginBottomText: FormatPoints(cellMargins.BottomPt, culture),
             CellMarginRightText: FormatPoints(cellMargins.RightPt, culture),
             CellWrapText: cell?.WrapText ?? true,
-            CellFitText: cell?.FitText ?? false);
+            CellFitText: cell?.FitText ?? false,
+            FloatingTableAllowsOverlap: table.FloatingTableAllowsOverlap);
     }
 
     public static bool TryBuildResult(
@@ -209,7 +213,8 @@ public static class TablePropertiesDialogPlanner
                 input.CellVerticalAlignmentIndex),
             CellMargins: input.CellMarginsSameAsTable ? null : new TableCellMargins(cmTop, cmLeft, cmBottom, cmRight),
             CellWrapText: input.CellWrapText,
-            CellFitText: input.CellFitText);
+            CellFitText: input.CellFitText,
+            FloatingTableAllowsOverlap: input.FloatingTableAllowsOverlap);
         return true;
     }
 
@@ -224,6 +229,8 @@ public static class TablePropertiesDialogPlanner
         table.Alignment = values.Alignment;
         table.IndentFromLeftPt = values.IndentFromLeftPt;
         table.TextWrapping = values.TextWrapping;
+        if (values.TextWrapping)
+            table.FloatingTableAllowsOverlap = values.FloatingTableAllowsOverlap;
         table.DefaultCellMargins = values.DefaultCellMargins;
         table.CellSpacingPt = values.CellSpacingPt;
         TableLayoutOperations.UpdateFormatting(

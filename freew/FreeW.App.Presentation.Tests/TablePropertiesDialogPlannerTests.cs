@@ -12,6 +12,7 @@ public sealed class TablePropertiesDialogPlannerTests
         table.PreferredWidthPt = 300;
         table.Alignment = TableAlignment.Right;
         table.TextWrapping = true;
+        table.FloatingTableAllowsOverlap = false;
         table.IndentFromLeftPt = 12;
         table.CellSpacingPt = 2;
         table.Formatting = table.Formatting with { RepeatHeaderRow = true };
@@ -34,6 +35,7 @@ public sealed class TablePropertiesDialogPlannerTests
         state.PreferredWidthOn.Should().BeTrue();
         state.AlignmentIndex.Should().Be(2);
         state.WrappingIndex.Should().Be(1);
+        state.FloatingTableAllowsOverlap.Should().BeFalse();
         state.IndentText.Should().Be("12");
         state.CellSpacingOn.Should().BeTrue();
         state.RowHeightText.Should().Be("36");
@@ -60,6 +62,7 @@ public sealed class TablePropertiesDialogPlannerTests
             CellMarginsSameAsTable = false,
             CellWrapText = false,
             CellFitText = true,
+            FloatingTableAllowsOverlap = false,
         };
 
         TablePropertiesDialogPlanner.TryBuildResult(
@@ -74,6 +77,7 @@ public sealed class TablePropertiesDialogPlannerTests
         result!.PreferredWidthPt.Should().Be(300);
         result.Alignment.Should().Be(TableAlignment.Center);
         result.TextWrapping.Should().BeTrue();
+        result.FloatingTableAllowsOverlap.Should().BeFalse();
         result.IndentFromLeftPt.Should().Be(12);
         result.DefaultCellMargins!.LeftPt.Should().Be(6);
         result.CellSpacingPt.Should().Be(2);
@@ -161,13 +165,15 @@ public sealed class TablePropertiesDialogPlannerTests
             CellVerticalAlignment: TableCellVerticalAlignment.Center,
             CellMargins: new TableCellMargins(2, 8, 2, 8),
             CellWrapText: false,
-            CellFitText: true);
+            CellFitText: true,
+            FloatingTableAllowsOverlap: false);
 
         TablePropertiesDialogPlanner.ApplyValues(new ModelTableContext(table, row, cell), values);
 
         table.PreferredWidthPt.Should().Be(300);
         table.Alignment.Should().Be(TableAlignment.Right);
         table.TextWrapping.Should().BeTrue();
+        table.FloatingTableAllowsOverlap.Should().BeFalse();
         table.IndentFromLeftPt.Should().Be(12);
         table.DefaultCellMargins.Should().Be(new TableCellMargins(0, 6, 0, 6));
         table.CellSpacingPt.Should().Be(2);

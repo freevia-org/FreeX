@@ -198,6 +198,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
     private readonly TextBox _preferredWidth;
     private readonly ComboBox _alignment;
     private readonly ComboBox _wrapping;
+    private readonly CheckBox _allowFloatingOverlap;
     private readonly TextBox _indent;
     private readonly TextBox _cellMarginTop;
     private readonly TextBox _cellMarginLeft;
@@ -250,6 +251,17 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         _preferredWidthOn = Check("Preferred width (pt):", state.PreferredWidthOn, "TablePropertiesPreferredWidthCheckBox");
         _alignment = Combo(TablePropertiesDialogPlanner.AlignmentNames, state.AlignmentIndex, "TablePropertiesAlignmentBox");
         _wrapping = Combo(TablePropertiesDialogPlanner.WrappingNames, state.WrappingIndex, "TablePropertiesWrappingBox");
+        _allowFloatingOverlap = new CheckBox
+        {
+            Content = "Allow overlap",
+            IsThreeState = true,
+            IsChecked = state.FloatingTableAllowsOverlap,
+            Margin = new Thickness(4, 4, 8, 4),
+            IsEnabled = state.WrappingIndex == 1,
+        };
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_allowFloatingOverlap, DialogChromeStyle);
+        AutomationProperties.SetAutomationId(_allowFloatingOverlap, "TablePropertiesAllowOverlapCheckBox");
+        _wrapping.SelectionChanged += (_, _) => _allowFloatingOverlap.IsEnabled = _wrapping.SelectedIndex == 1;
         _indent = NumberBox(state.IndentText, "TablePropertiesIndentBox");
         _cellMarginTop = NumberBox(state.DefaultCellMarginTopText, "TablePropertiesDefaultMarginTopBox");
         _cellMarginLeft = NumberBox(state.DefaultCellMarginLeftText, "TablePropertiesDefaultMarginLeftBox");
@@ -349,6 +361,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
 
         return Stack(
             grid,
+            _allowFloatingOverlap,
             Header("Default cell margins (pt):"),
             margins,
             spacing);
@@ -424,7 +437,8 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
             _cmBottom.Text,
             _cmRight.Text,
             _cellWrapText.IsChecked == true,
-            _cellFitText.IsChecked == true);
+            _cellFitText.IsChecked == true,
+            _allowFloatingOverlap.IsChecked);
 
         if (!TablePropertiesDialogPlanner.TryBuildResult(
                 input,

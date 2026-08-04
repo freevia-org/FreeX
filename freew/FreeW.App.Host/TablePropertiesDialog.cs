@@ -18,6 +18,7 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
     private readonly TextBox _preferredWidth;
     private readonly ComboBox _alignment;
     private readonly ComboBox _wrapping;
+    private readonly CheckBox _allowFloatingOverlap;
     private readonly TextBox _indent;
     private readonly TextBox _cellMarginTop;
     private readonly TextBox _cellMarginLeft;
@@ -64,6 +65,16 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _preferredWidthOn = Check("Preferred width (pt):", state.PreferredWidthOn);
         _alignment = Combo(TablePropertiesDialogPlanner.AlignmentNames, state.AlignmentIndex);
         _wrapping = Combo(TablePropertiesDialogPlanner.WrappingNames, state.WrappingIndex);
+        _allowFloatingOverlap = new CheckBox
+        {
+            Content = "Allow overlap",
+            IsThreeState = true,
+            IsChecked = state.FloatingTableAllowsOverlap,
+            Margin = new Thickness(0, 4, 0, 4)
+        };
+        _allowFloatingOverlap.IsEnabled = state.WrappingIndex == 1;
+        _wrapping.SelectionChanged += (_, _) => _allowFloatingOverlap.IsEnabled = _wrapping.SelectedIndex == 1;
+        AutomationProperties.SetAutomationId(_allowFloatingOverlap, "TablePropertiesAllowOverlapCheckBox");
         _indent = NumberBox(state.IndentText);
         _cellMarginTop = NumberBox(state.DefaultCellMarginTopText);
         _cellMarginLeft = NumberBox(state.DefaultCellMarginLeftText);
@@ -188,6 +199,7 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
         var stack = new StackPanel { Margin = new Thickness(14) };
         stack.Children.Add(grid);
+        stack.Children.Add(_allowFloatingOverlap);
         stack.Children.Add(_cellWrapText);
         stack.Children.Add(_cellFitText);
         stack.Children.Add(_cellMarginsOn);
@@ -280,7 +292,8 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
             CellMarginBottomText: _cmBottom.Text,
             CellMarginRightText: _cmRight.Text,
             CellWrapText: _cellWrapText.IsChecked == true,
-            CellFitText: _cellFitText.IsChecked == true);
+            CellFitText: _cellFitText.IsChecked == true,
+            FloatingTableAllowsOverlap: _allowFloatingOverlap.IsChecked);
 
         if (!TablePropertiesDialogPlanner.TryBuildResult(
                 input,
