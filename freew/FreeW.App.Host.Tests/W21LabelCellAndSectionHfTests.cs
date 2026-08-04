@@ -1,4 +1,3 @@
-#if DEBUG
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -324,4 +323,3 @@ public sealed class W21LabelCellAndSectionHfTests
         return (doc, new DocumentCommandBus(new Context(doc)));
     }
 }
-#endif
