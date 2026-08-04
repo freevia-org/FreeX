@@ -228,6 +228,7 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Styles (AV-STYLES) ────────────────────────────────────────────────
         // Existing quick-style buttons — now routed through the model-backed, undoable ApplyNamedStyle
         // so the paragraph picks up the real built-in style (seeded if absent) instead of just a font tweak.
+        r.Register("freew.style", new ParagraphStyleCommand(editor));
         r.Register("freew.style-normal",   new ActionRibbonCommand(() => editor.ApplyNamedStyle("Normal")));
         r.Register("freew.style-heading1", new ActionRibbonCommand(() => editor.ApplyNamedStyle("Heading1")));
         r.Register("freew.style-heading2", new ActionRibbonCommand(() => editor.ApplyNamedStyle("Heading2")));
@@ -851,6 +852,35 @@ internal static class FreeWAvaloniaRibbonCommands
         {
             var paragraph = editor.GetCaretFormatting().Paragraph;
             return new(Value: current(paragraph).ToString("0.##", CultureInfo.InvariantCulture));
+        }
+    }
+
+    private sealed class ParagraphStyleCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (string.IsNullOrWhiteSpace(context.SelectedValue))
+                return;
+
+            var descriptor = BuiltInStyles.Gallery.FirstOrDefault(style =>
+                style.Type == StyleType.Paragraph
+                && string.Equals(style.Name, context.SelectedValue, StringComparison.OrdinalIgnoreCase));
+            if (descriptor is not null)
+                editor.ApplyNamedStyle(descriptor.Id);
+        }
+
+        public RibbonCommandState GetState()
+        {
+            var styleId = editor.CurrentParagraphStyleId;
+            if (string.IsNullOrWhiteSpace(styleId))
+                return new(Value: "Normal");
+
+            if (BuiltInStyles.Find(styleId) is { } builtIn)
+                return new(Value: builtIn.Name);
+
+            return editor.Document.Styles.TryGetValue(styleId, out var style)
+                ? new RibbonCommandState(Value: style.Name)
+                : new RibbonCommandState(Value: styleId);
         }
     }
 
@@ -2584,7 +2614,8 @@ internal static class FreeWAvaloniaRibbonCommands
     /// <summary>
     /// AV-DESIGN: Registers the Design-tab commands — Themes / Colors / Fonts / Paragraph-Spacing galleries
     /// (document-wide style mutations), Page Color, Page Borders, and Watermark. Each gallery dropdown's
-    /// top-level id is a no-op opener; the per-item ids resolve to a model-backed, undoable
+    /// top-level dropdown ids either consume the selected combo value or act as menu openers; the
+    /// per-item ids resolve to a model-backed, undoable
     /// <see cref="DocumentView"/> Design method. Page Borders + Custom Watermark route through the optional
     /// <see cref="RibbonHostCallbacks"/> dialog launchers and safely no-op when the shell did not supply one
     /// (so the registry-completeness guard passes and parallel waves / tests keep compiling).
@@ -2593,7 +2624,11 @@ internal static class FreeWAvaloniaRibbonCommands
         RibbonCommandRegistry r, DocumentView editor, RibbonHostCallbacks callbacks)
     {
         // ── Themes ───────────────────────────────────────────────────────────
-        r.Register("freew.theme", new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.theme", new ValueRibbonCommand(value =>
+        {
+            if (!string.IsNullOrWhiteSpace(value) && DocumentTheme.FindByName(value) is { } theme)
+                editor.ApplyTheme(theme);
+        }));
         foreach (var theme in DocumentTheme.Catalog)
         {
             var t = theme;

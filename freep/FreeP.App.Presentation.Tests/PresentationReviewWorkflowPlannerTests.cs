@@ -3504,6 +3504,44 @@ public sealed class PresentationReviewWorkflowPlannerTests
         slide.Shapes.Single(shape => shape.Id == 4).Text.Should().Be("Revenue rose again");
     }
 
+    [Theory]
+    [InlineData("alot", "a lot")]
+    [InlineData("becuase", "because")]
+    [InlineData("begining", "beginning")]
+    [InlineData("definately", "definitely")]
+    [InlineData("enviroment", "environment")]
+    [InlineData("maintainance", "maintenance")]
+    [InlineData("occassion", "occasion")]
+    [InlineData("seperate", "separate")]
+    [InlineData("thier", "their")]
+    [InlineData("tommorow", "tomorrow")]
+    [InlineData("untill", "until")]
+    [InlineData("wich", "which")]
+    public void BuiltInProofingLexicon_FindsAndCorrectsCommonMisspelling(
+        string misspelling,
+        string correction)
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Title = $"Plan {misspelling}";
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var issue = execution.Issues.Should().ContainSingle().Subject;
+        issue.Text.Should().Be(misspelling);
+
+        var pane = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution);
+        pane.SelectedRow!.SuggestedReplacement.Should().Be(correction);
+
+        var mutation = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            presentation,
+            issue.Scope,
+            issue.Start,
+            issue.Length,
+            correction);
+
+        mutation.ShouldApply.Should().BeTrue();
+        presentation.Slides[0].Title.Should().Be($"Plan {correction}");
+    }
+
     [Fact]
     public void BuildProofingPanePlan_FlagsSentenceStartCapitalizationWithSingleLetterCorrection()
     {

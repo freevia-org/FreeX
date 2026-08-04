@@ -782,7 +782,7 @@ static void RenderDocumentComposite(
             var headerTop = reserveTableHeaderFrame
                 ? thisMarginTop
                 : Math.Max(0, headerDistance - 1);
-            var footerTop = thisPixH - footerDistance - footerH + 7;
+            var footerTop = FooterTopDip(thisPixH, footerDistance, footerH);
 
             if (box.HeaderSubEditor is not null && box.HeaderSlotName is { } hSlotName)
             {
@@ -890,7 +890,7 @@ static void RenderDocumentComposite(
             var headerTop = reserveTableHeaderFrame
                 ? thisMarginTop
                 : Math.Max(0, headerDistance - 1);
-            var footerTop = thisPixH - footerDistance - footerH + 7;
+            var footerTop = FooterTopDip(thisPixH, footerDistance, footerH);
 
             if (slots.Header is { IsEmpty: false } headerSlot)
             {
@@ -2634,6 +2634,9 @@ static HeaderFooter? ResolveHfSlotByName(SectionHeadersFooters hf, string slotNa
 
 static bool HeaderSlotContainsInlineImage(HeaderFooter slot) =>
     slot.Paragraphs.Any(paragraph => paragraph.Runs.Any(run => run.Image is not null));
+
+static double FooterTopDip(double pageHeightDip, double footerDistanceDip, double footerHeightDip) =>
+    pageHeightDip - footerDistanceDip - footerHeightDip + 3;
 
 /// <summary>
 /// Renders a <see cref="HeaderFooter"/> slot's content to a <see cref="DocumentPage"/> via the

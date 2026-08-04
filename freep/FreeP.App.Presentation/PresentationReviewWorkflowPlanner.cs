@@ -3635,11 +3635,23 @@ public static class PresentationReviewWorkflowPlanner
     private static readonly IReadOnlyDictionary<string, string> BuiltInProofingCorrections =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
+            ["alot"] = "a lot",
+            ["becuase"] = "because",
+            ["begining"] = "beginning",
+            ["definately"] = "definitely",
+            ["enviroment"] = "environment",
             ["eror"] = "error",
+            ["maintainance"] = "maintenance",
+            ["occassion"] = "occasion",
             ["teh"] = "the",
             ["recieve"] = "receive",
             ["adress"] = "address",
             ["occured"] = "occurred",
+            ["seperate"] = "separate",
+            ["thier"] = "their",
+            ["tommorow"] = "tomorrow",
+            ["untill"] = "until",
+            ["wich"] = "which",
         };
 
     private static readonly IReadOnlySet<string> ProofingSingularSubjects =
