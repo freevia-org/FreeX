@@ -88,6 +88,22 @@ public sealed class ParagraphDialogVisualParityTests
     }
 
     [Fact]
+    public async Task Line_and_page_breaks_tab_uses_Wpf_section_spacing()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new ParagraphDialog(ParagraphFormatting.Default);
+            var tabs = Field<TabControl>(dialog, "_tabs");
+            var panel = (StackPanel)((TabItem)tabs.Items[1]!).Content!;
+
+            panel.Children.OfType<TextBlock>().Select(text => text.Margin.Bottom)
+                .Should().Equal(8, 8);
+            panel.Children.OfType<CheckBox>().Select(check => check.Margin.Bottom)
+                .Should().Equal(6, 6, 6, 6, 6, 6);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Paragraph_uses_Wpf_authority_control_chrome_without_changing_shared_defaults()
     {
         await Session.Dispatch(() =>
