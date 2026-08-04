@@ -85,7 +85,7 @@ public sealed class LegalNoticesDialogVisualParityTests
                 text.Focusable.Should().BeTrue();
                 text.AcceptsReturn.Should().BeTrue();
                 text.AcceptsTab.Should().BeTrue();
-                text.Margin.Should().Be(new Thickness(2, 0, 1, 0));
+                text.Margin.Should().Be(new Thickness(2, 0, 2, 0));
                 text.Padding.Left.Should().Be(LegalNoticesDialogMetrics.TextPadding + 4);
                 text.Padding.Top.Should().BeGreaterThanOrEqualTo(LegalNoticesDialogMetrics.TextPadding);
                 text.Padding.Right.Should().Be(LegalNoticesDialogMetrics.TextPadding);
@@ -112,6 +112,29 @@ public sealed class LegalNoticesDialogVisualParityTests
             close.IsDefault.Should().BeTrue();
             close.IsCancel.Should().BeTrue();
             dialog.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Legal_notices_uses_a_local_right_margin_override_without_changing_shared_document_chrome()
+    {
+        await Session.Dispatch(() =>
+        {
+            var sharedDefault = new TextBox();
+            AvaloniaCompactDialogChrome.ApplyAvaloniaReadOnlyDocumentTemplatePadding(
+                sharedDefault,
+                LegalNoticesDialogMetrics.TextPadding);
+            sharedDefault.Margin.Should().Be(new Thickness(2, 0, 1, 0));
+
+            var dialog = new LegalNoticesDialog(
+                [("Legal Notices", "legal text")]);
+            var text = dialog.GetLogicalDescendants().OfType<TextBox>().Single();
+
+            AvaloniaCompactDialogChrome.ApplyAvaloniaReadOnlyDocumentTemplatePadding(
+                text,
+                LegalNoticesDialogMetrics.TextPadding,
+                rightMargin: 2);
+            text.Margin.Should().Be(new Thickness(2, 0, 2, 0));
         }, CancellationToken.None);
     }
 

@@ -130,6 +130,7 @@ public sealed class FreeWHelpInfoTests
             text.HorizontalScrollBarVisibility == ScrollBarVisibility.Disabled &&
             text.FontSize == LegalNoticesDialogMetrics.TextFontSize &&
             text.Padding == new Thickness(LegalNoticesDialogMetrics.TextPadding) &&
+            text.Margin == new Thickness(0) &&
             text.MinHeight == LegalNoticesDialogMetrics.TextMinHeight);
         textBoxes.Select(text => text.FontFamily.Source)
             .Should()

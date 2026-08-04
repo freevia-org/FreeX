@@ -285,7 +285,8 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
     {
         AvaloniaCompactDialogChrome.ApplyAvaloniaReadOnlyDocumentTemplatePadding(
             textBox,
-            LegalNoticesDialogMetrics.TextPadding);
+            LegalNoticesDialogMetrics.TextPadding,
+            rightMargin: 2);
         // Avalonia's Consolas metrics are fractionally narrower than WPF's at the shared
         // 12px size. Compensate the glyph width without imposing a line box absent in WPF.
         textBox.FontSize = TextFontSizeCompensation;

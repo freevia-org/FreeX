@@ -262,7 +262,10 @@ public static class AvaloniaCompactDialogChrome
     /// The resulting Avalonia <see cref="Thickness"/> is host-specific, not a shared WPF metric:
     /// Avalonia's TextBox template contributes a four-pixel leading content inset for this surface family.
     /// </summary>
-    public static void ApplyAvaloniaReadOnlyDocumentTemplatePadding(TextBox textBox, double sharedPadding)
+    public static void ApplyAvaloniaReadOnlyDocumentTemplatePadding(
+        TextBox textBox,
+        double sharedPadding,
+        double rightMargin = 1)
     {
         ArgumentNullException.ThrowIfNull(textBox);
 
@@ -271,7 +274,7 @@ public static class AvaloniaCompactDialogChrome
             sharedPadding,
             sharedPadding,
             sharedPadding);
-        textBox.Margin = new Thickness(2, 0, 1, 0);
+        textBox.Margin = new Thickness(2, 0, rightMargin, 0);
         // WPF's multiline read-only document host keeps its content pinned to the
         // top edge. The shared compact chrome defaults single-line inputs to center
         // alignment, so restore the document template's vertical behavior here.
