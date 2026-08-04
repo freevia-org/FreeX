@@ -3542,6 +3542,49 @@ public sealed class PresentationReviewWorkflowPlannerTests
         presentation.Slides[0].Title.Should().Be($"Plan {correction}");
     }
 
+    [Theory]
+    [InlineData("could of", "could have")]
+    [InlineData("its a", "it's a")]
+    [InlineData("their are", "there are")]
+    [InlineData("your welcome", "you're welcome")]
+    [InlineData("YOUR WELCOME", "YOU'RE WELCOME")]
+    public void BuiltInProofingGrammar_FindsAndCorrectsUnambiguousPhrase(
+        string phrase,
+        string correction)
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Title = $"Plan {phrase} today";
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var issue = execution.Issues.Should().ContainSingle().Subject;
+        issue.Text.Should().Be(phrase);
+        issue.Message.Should().Be(PresentationReviewWorkflowPlanner.ProofingGrammarConfusionMessage);
+
+        var pane = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution);
+        pane.SelectedRow!.SuggestedReplacement.Should().Be(correction);
+
+        var mutation = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            presentation,
+            issue.Scope,
+            issue.Start,
+            issue.Length,
+            pane.SelectedRow.SuggestedReplacement);
+
+        mutation.ShouldApply.Should().BeTrue();
+        presentation.Slides[0].Title.Should().Be($"Plan {correction} today");
+    }
+
+    [Fact]
+    public void BuiltInProofingGrammar_UsesBoundariesAndSkipsAmbiguousFragments()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Title = "Your welcomes its asterisk their area could offer";
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+
+        execution.Issues.Should().BeEmpty();
+    }
+
     [Fact]
     public void BuildProofingPanePlan_FlagsSentenceStartCapitalizationWithSingleLetterCorrection()
     {
