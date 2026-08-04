@@ -10,21 +10,28 @@ internal sealed class SummaryZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     internal IReadOnlyList<string> SelectedTargetSectionIds { get; private set; } = Array.Empty<string>();
 
-    internal SummaryZoomDialog(IReadOnlyList<(string Id, string DisplayName)> options)
+    internal SummaryZoomDialog(
+        IReadOnlyList<(string Id, string DisplayName)> options,
+        string? title = null,
+        IReadOnlyCollection<string>? selectedTargetIds = null)
     {
         ArgumentNullException.ThrowIfNull(options);
-        Title = SummaryZoomInsertionPlanner.DialogTitle;
+        Title = title ?? SummaryZoomInsertionPlanner.DialogTitle;
         Width = 460;
         Height = 360;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
+        var items = options.Select(option => new TargetOption(option.Id, option.DisplayName)).ToArray();
         _targetList = new ListBox
         {
-            ItemsSource = options.Select(option => new TargetOption(option.Id, option.DisplayName)).ToArray(),
+            ItemsSource = items,
             SelectionMode = SelectionMode.Extended,
             MinHeight = 180,
         };
+        foreach (var item in items)
+            if (selectedTargetIds?.Contains(item.Id, StringComparer.OrdinalIgnoreCase) == true)
+                _targetList.SelectedItems.Add(item);
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });

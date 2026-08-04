@@ -244,6 +244,8 @@ internal static class FreePRibbonText
     public static string InsertSummaryZoomKeyTip => Get("Ribbon_Command_InsertSummaryZoom_KeyTip");
     public static string ChangeZoomTargetLabel => Get("Ribbon_Command_ChangeZoomTarget_Label");
     public static string ChangeZoomTargetKeyTip => Get("Ribbon_Command_ChangeZoomTarget_KeyTip");
+    public static string EditSummaryZoomTargetsLabel => Get("Ribbon_Command_EditSummaryZoomTargets_Label");
+    public static string EditSummaryZoomTargetsKeyTip => Get("Ribbon_Command_EditSummaryZoomTargets_KeyTip");
     public static string FormatZoomLabel => Get("Ribbon_Command_FormatZoom_Label");
     public static string FormatZoomKeyTip => Get("Ribbon_Command_FormatZoom_KeyTip");
     public static string SetZoomCoverImageLabel => Get("Ribbon_Command_SetZoomCoverImage_Label");

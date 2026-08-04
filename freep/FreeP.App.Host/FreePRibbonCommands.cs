@@ -83,6 +83,7 @@ internal static class FreePRibbonCommands
         Action?             onInsertSectionZoom = null,
         Action?             onInsertSummaryZoom = null,
         Action?             onEditZoomTarget = null,
+        Action?             onEditSummaryZoomTargets = null,
         // Wave 12B: Find & Replace dialog launchers.
         Action?             onFind             = null,
         Action?             onFindReplace      = null,
@@ -170,6 +171,9 @@ internal static class FreePRibbonCommands
         registry.Register(
             ZoomTargetPlanner.CommandId,
             new ActionRibbonCommand(() => onEditZoomTarget?.Invoke()));
+        registry.Register(
+            SummaryZoomTargetPlanner.CommandId,
+            new ActionRibbonCommand(() => onEditSummaryZoomTargets?.Invoke()));
         registry.Register(
             ZoomObjectPropertiesPlanner.CommandId,
             new ActionRibbonCommand(() => onFormatZoom?.Invoke()));
