@@ -445,6 +445,67 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void ZoomFrameBorder_IsUndoableAndRoundTripsNativeSolidColor()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var zoom = session.InsertSlideZoom("slide-2");
+        var insertedZoomProperties = XElement.Parse(zoom.PreservedObject!.RawXml)
+            .Descendants().Single(element => element.Name.LocalName == "zmPr");
+        insertedZoomProperties.Elements().Select(element => element.Name.LocalName)
+            .Should().Equal("blipFill", "spPr");
+        insertedZoomProperties.Elements().Single(element => element.Name.LocalName == "spPr")
+            .Parent.Should().BeSameAs(insertedZoomProperties);
+        session.SetZoomObjectProperties(
+                zoom.Id,
+                new ZoomObjectProperties(FrameBorderColor: "4472C4"))
+            .Should()
+            .BeTrue();
+
+        var lineColor = XElement.Parse(zoom.PreservedObject!.RawXml)
+            .Descendants().Single(element => element.Name.LocalName == "ln")
+            .Descendants().Single(element => element.Name.LocalName == "srgbClr");
+        lineColor.Attribute("val")!.Value.Should().Be("4472C4");
+        zoom.PreservedObject.ZoomProperties!.FrameBorderColor.Should().Be("4472C4");
+
+        session.Undo();
+        zoom.PreservedObject.RawXml.Should().NotContain("4472C4");
+        session.Redo();
+
+        var reopened = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
+            .PreservedObject!.ZoomProperties!.FrameBorderColor.Should().Be("4472C4");
+    }
+
+    [Fact]
+    public void ZoomFrameBorder_ClearPreservesUnsupportedNativeLineFill()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var zoom = session.InsertSlideZoom("slide-2");
+        var raw = XElement.Parse(zoom.PreservedObject!.RawXml);
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var shapeProperties = raw.Descendants().Single(element => element.Name.LocalName == "spPr");
+        shapeProperties.Add(new XElement(drawing + "ln",
+            new XElement(drawing + "gradFill")));
+        zoom.PreservedObject.RawXml = raw.ToString(SaveOptions.DisableFormatting);
+
+        session.SetZoomObjectProperties(
+                zoom.Id,
+                new ZoomObjectProperties(FrameBorderColor: string.Empty))
+            .Should()
+            .BeTrue();
+
+        zoom.PreservedObject.RawXml.Should().Contain("gradFill");
+    }
+
+    [Fact]
     public void SummaryZoomTileLayout_IsUndoableAndRoundTripsNativeFactors()
     {
         var presentation = new Presentation();

@@ -47,7 +47,7 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         // ── Node list + editing ──────────────────────────────────────────────────────────────────
         panel.Children.Add(new TextBlock
         {
-            Text = "Diagram text  (one item per node — use Add/Remove to manage):",
+            Text = SmartArtDialogPlanner.NodeTextLabel,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 4)
         });

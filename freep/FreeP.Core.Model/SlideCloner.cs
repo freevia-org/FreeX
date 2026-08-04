@@ -208,6 +208,7 @@ public static class SlideCloner
             ShowDropLines = src.ShowDropLines,
             ShowUpDownBars = src.ShowUpDownBars,
             ShowWaterfallConnectorLines = src.ShowWaterfallConnectorLines,
+            WaterfallTotalPointIndices = src.WaterfallTotalPointIndices?.ToList(),
             UpDownBarGapWidthPercent = src.UpDownBarGapWidthPercent,
             UpBarFill = src.UpBarFill,
             DownBarFill = src.DownBarFill,

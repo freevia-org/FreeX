@@ -589,6 +589,7 @@ public static class SlideCompositor
                 .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr",
                     StringComparison.OrdinalIgnoreCase));
             var crop = ResolveZoomCrop(properties, info.ZoomProperties);
+            var outline = ResolveZoomFrameOutline(properties, info.ZoomProperties);
             var relId = properties?.Descendants()
                 .SelectMany(element => element.Attributes())
                 .FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, "embed",
@@ -598,7 +599,7 @@ public static class SlideCompositor
                 || !info.Parts.TryGetValue(relation.TargetPath, out var bytes)
                 || bytes.Length == 0)
             {
-                AddSummaryZoomPlaceholder(shape.Id, tileBounds, rotationDeg, tileOps);
+                AddSummaryZoomPlaceholder(shape.Id, tileBounds, rotationDeg, outline, tileOps);
                 continue;
             }
 
@@ -615,7 +616,7 @@ public static class SlideCompositor
                 CropTop = crop.Top,
                 CropRight = crop.Right,
                 CropBottom = crop.Bottom,
-                Outline = ResolvedOutline.None.Instance,
+                Outline = outline,
             });
             composed = true;
         }
@@ -650,6 +651,7 @@ public static class SlideCompositor
             .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr",
                 StringComparison.OrdinalIgnoreCase));
         var crop = ResolveZoomCrop(properties, info.ZoomProperties);
+        var outline = ResolveZoomFrameOutline(properties, info.ZoomProperties);
         var relId = properties?.Descendants()
             .SelectMany(element => element.Attributes())
             .FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, "embed",
@@ -675,7 +677,7 @@ public static class SlideCompositor
             CropTop = crop.Top,
             CropRight = crop.Right,
             CropBottom = crop.Bottom,
-            Outline = ResolvedOutline.None.Instance,
+            Outline = outline,
         });
         return true;
     }
@@ -706,10 +708,40 @@ public static class SlideCompositor
             ? Math.Clamp(value.Value / 100000d, 0, 1)
             : 0;
 
+    private static ResolvedOutline ResolveZoomFrameOutline(
+        XElement? properties,
+        ZoomObjectProperties? fallback)
+    {
+        var shapeProperties = properties?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase));
+        var line = shapeProperties?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
+        var solidFill = line?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "solidFill", StringComparison.OrdinalIgnoreCase));
+        var color = solidFill?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value
+            ?? fallback?.FrameBorderColor;
+        if (color is null)
+            return ResolvedOutline.None.Instance;
+
+        var normalized = color.Trim().TrimStart('#');
+        if (normalized.Length != 6
+            || !int.TryParse(normalized, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
+            return ResolvedOutline.None.Instance;
+
+        return new ResolvedOutline.Visible(
+            new SrgbColor((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb),
+            PointsToDip(0.75),
+            OutlineDash.Solid,
+            255);
+    }
+
     private static void AddSummaryZoomPlaceholder(
         uint shapeId,
         LayoutRect boundsDip,
         double rotationDeg,
+        ResolvedOutline outline,
         List<DrawOp> ops)
     {
         ops.Add(new DrawOp.Shape
@@ -717,7 +749,7 @@ public static class SlideCompositor
             ShapeId = shapeId,
             Geometry = ShapeGeometryBuilder.Build(DrawingShapeKind.Rectangle, boundsDip),
             Fill = new ResolvedFill.Solid(new SrgbColor(0xCC, 0xCC, 0xCC)),
-            Outline = ResolvedOutline.None.Instance,
+            Outline = outline,
             BoundsDip = boundsDip,
             RotationDeg = rotationDeg,
         });
@@ -763,7 +795,9 @@ public static class SlideCompositor
                 ContentType = pic.ContentType,
                 DestDip     = boundsDip,
                 RotationDeg = anchor.RotationDeg,
-                Outline     = ResolvedOutline.None.Instance,
+                Outline     = shape.Kind == SlideShapeKind.Zoom
+                    ? ResolveZoomFrameOutline(null, shape.PreservedObject?.ZoomProperties)
+                    : ResolvedOutline.None.Instance,
             });
         }
         else
@@ -773,7 +807,9 @@ public static class SlideCompositor
             {
                 Geometry    = ShapeGeometryBuilder.Build(DrawingShapeKind.Rectangle, boundsDip),
                 Fill        = new ResolvedFill.Solid(new SrgbColor(0xCC, 0xCC, 0xCC)),
-                Outline     = ResolvedOutline.None.Instance,
+                Outline     = shape.Kind == SlideShapeKind.Zoom
+                    ? ResolveZoomFrameOutline(null, shape.PreservedObject?.ZoomProperties)
+                    : ResolvedOutline.None.Instance,
                 BoundsDip   = boundsDip,
                 RotationDeg = anchor.RotationDeg,
             });

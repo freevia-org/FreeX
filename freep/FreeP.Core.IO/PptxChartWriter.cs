@@ -113,6 +113,7 @@ internal static class PptxChartWriter
                 BuildShowDataLabelsOverMaximumEl(chart)),
             BuildChartShapePropertiesEl(chart.ChartAreaFill, chart.ChartAreaOutline),
             BuildChartTextPropertiesEl(chart.TextStyle),
+            BuildWaterfallTotalsExtension(chart),
             TryParsePreservedChartSpaceExtensions(chart.PreservedChartSpaceExtensionsXml));
 
         return new XDocument(
@@ -476,6 +477,20 @@ internal static class PptxChartWriter
             chart.BarGapWidthPercent is { } gapWidth
                 ? new XElement(C + "gapWidth", new XAttribute("val", Math.Clamp(gapWidth, 0, 500)))
                 : null);
+
+    private static XElement? BuildWaterfallTotalsExtension(ChartShape chart)
+    {
+        if (chart.ChartType != ChartType.Waterfall || chart.WaterfallTotalPointIndices is not { } totals)
+            return null;
+
+        XNamespace freep = "http://freex.dev/freep/2026/presentation";
+        return new XElement(C + "extLst",
+            new XElement(C + "ext",
+                new XAttribute("uri", "{B8A4E8F4-6B9E-4A4B-9F7D-0D3F9C9C6A11}"),
+                new XElement(freep + "waterfallTotals",
+                    totals.Distinct().OrderBy(index => index)
+                        .Select(index => new XElement(freep + "idx", new XAttribute("val", index))))));
+    }
 
     private static XElement BuildSeriesLinesEl(ChartShape chart)
     {

@@ -65,8 +65,23 @@ public static class ZoomObjectPropertiesPlanner
             ReadNullableInt(properties.Descendants().FirstOrDefault(element => element.Name.LocalName == "srcRect")?.Attribute("l")?.Value),
             ReadNullableInt(properties.Descendants().FirstOrDefault(element => element.Name.LocalName == "srcRect")?.Attribute("t")?.Value),
             ReadNullableInt(properties.Descendants().FirstOrDefault(element => element.Name.LocalName == "srcRect")?.Attribute("r")?.Value),
-            ReadNullableInt(properties.Descendants().FirstOrDefault(element => element.Name.LocalName == "srcRect")?.Attribute("b")?.Value));
+            ReadNullableInt(properties.Descendants().FirstOrDefault(element => element.Name.LocalName == "srcRect")?.Attribute("b")?.Value),
+            ReadFrameBorderColor(properties));
         return value.IsEmpty ? fallback : value;
+    }
+
+    private static string? ReadFrameBorderColor(XElement properties)
+    {
+        var shapeProperties = properties.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase));
+        var line = shapeProperties?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
+        var solidFill = line?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "solidFill", StringComparison.OrdinalIgnoreCase));
+        var color = solidFill?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value;
+        return TryNormalizeFrameBorderColor(color, out var normalized) ? normalized : null;
     }
 
     private static bool? ReadNullableBoolean(string? value) =>
@@ -91,6 +106,38 @@ public static class ZoomObjectPropertiesPlanner
 
     public static bool IsTransitionEnabled(ZoomObjectProperties properties) =>
         !string.IsNullOrWhiteSpace(properties.TransitionDuration);
+
+    public static bool IsFrameBorderEnabled(ZoomObjectProperties properties) =>
+        TryNormalizeFrameBorderColor(properties.FrameBorderColor, out _);
+
+    /// <summary>Normalizes the supported solid Zoom border color; an unchecked border is an explicit clear.</summary>
+    public static bool TryParseFrameBorderColor(
+        string? text,
+        bool enabled,
+        out string? normalized)
+    {
+        normalized = null;
+        if (!enabled)
+        {
+            normalized = string.Empty;
+            return true;
+        }
+
+        return TryNormalizeFrameBorderColor(text, out normalized);
+    }
+
+    private static bool TryNormalizeFrameBorderColor(string? text, out string? normalized)
+    {
+        normalized = null;
+        var value = text?.Trim().TrimStart('#');
+        if (value is null or { Length: 0 })
+            return false;
+        if (value.Length != 6 || !value.All(Uri.IsHexDigit))
+            return false;
+
+        normalized = value.ToUpperInvariant();
+        return true;
+    }
 
     /// <summary>
     /// Normalizes the Zoom transition control used by both desktop dialogs. An unchecked

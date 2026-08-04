@@ -125,6 +125,13 @@ public sealed class ChartMediaDialogPlannerTests
     }
 
     [Fact]
+    public void SmartArtPlannerOwnsTheSharedNodeTextLabel()
+    {
+        SmartArtDialogPlanner.NodeTextLabel.Should()
+            .Be("Diagram text (one item per node - use Add/Remove to manage):");
+    }
+
+    [Fact]
     public void IconPickerPlannerFiltersByCategoryAndSearch()
     {
         var entries = new[]

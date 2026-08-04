@@ -350,7 +350,7 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
             {
                 new TextBlock { Text = "Layout:", Margin = new Thickness(0, 0, 0, 4) },
                 _kind,
-                new TextBlock { Text = "Diagram text:", Margin = new Thickness(0, 10, 0, 4) },
+                new TextBlock { Text = SmartArtDialogPlanner.NodeTextLabel, Margin = new Thickness(0, 10, 0, 4) },
                 _nodes,
                 _edit,
                 actions,

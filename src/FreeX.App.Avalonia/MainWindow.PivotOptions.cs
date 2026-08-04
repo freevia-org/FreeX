@@ -21,6 +21,13 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    // Avalonia's Display-tab checkbox template measured a 20px row pitch and a 5px earlier first row
+    // than the retained WPF authority. Fresh 2026-08-04 Docker/Xvfb bounds after this compensation are
+    // approximately 130, 151, 172... versus WPF's 130, 151, 172...; keep these values host-specific.
+    private const int AvaloniaDisplayOptionSpacingCompensation = 7;
+    private const int AvaloniaDisplayOptionTopInsetCompensation = 3;
+    private const int AvaloniaDisplayOptionBottomInsetCompensation = 8;
+
     // ── Shared pivot-dialog chrome helpers ───────────────────────────────────
     // Defined here (in the first pivot partial) so all sibling pivot partials can call them.
 
@@ -277,7 +284,15 @@ public sealed partial class MainWindow
         totalsTab.Children.Add(MakeSectionGroupBox(UiText.Get("PivotTableOptions_FiltersAndSubtotalsGroup"), subtotalsSection));
 
         // ── Tab: Display ───────────────────────────────────────────────────────
-        var displaySection = new StackPanel { Spacing = 6 };
+        var displaySection = new StackPanel
+        {
+            Spacing = AvaloniaDisplayOptionSpacingCompensation,
+            Margin = new Thickness(
+                0,
+                AvaloniaDisplayOptionTopInsetCompensation,
+                0,
+                AvaloniaDisplayOptionBottomInsetCompensation),
+        };
         var styleNames = PivotStyleGalleryPlanner.GetStyleNames(values.StyleName);
         var styleBox = OptionComboBox(
             styleNames.Select(name => (string?)name).ToArray(),

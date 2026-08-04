@@ -14,8 +14,10 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private readonly CheckBox _returnToParent;
     private readonly CheckBox _showBackground;
     private readonly CheckBox _transitionEnabled;
+    private readonly CheckBox _frameBorderEnabled;
     private readonly ComboBox _imageType;
     private readonly TextBox _transitionDuration;
+    private readonly TextBox _frameBorderColor;
     private readonly TextBox _cropEdges;
     private readonly TextBlock _validation;
     private readonly IReadOnlyList<SummaryZoomTarget> _summaryTargets;
@@ -63,6 +65,18 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             IsChecked = ZoomObjectPropertiesPlanner.IsTransitionEnabled(current),
         };
         _transitionEnabled.IsCheckedChanged += (_, _) => SyncTransitionState();
+        _frameBorderColor = new TextBox
+        {
+            Text = current.FrameBorderColor ?? string.Empty,
+            MinWidth = 180,
+            PlaceholderText = "six-digit RGB value",
+        };
+        _frameBorderEnabled = new CheckBox
+        {
+            Content = "Use Zoom border",
+            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderEnabled(current),
+        };
+        _frameBorderEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
         _cropEdges = new TextBox
         {
             Text = ZoomObjectPropertiesPlanner.FormatCropEdges(current),
@@ -108,6 +122,8 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             Row("Image source:", _imageType),
             _transitionEnabled,
             Row("Transition duration:", _transitionDuration),
+            _frameBorderEnabled,
+            Row("Border color:", _frameBorderColor),
             Row("Preview crop (%):", _cropEdges),
         };
         if (_summaryTile is not null && _summaryOffset is not null && _summaryScale is not null)
@@ -135,6 +151,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             content.Children.Add(child);
         Content = content;
         SyncTransitionState();
+        SyncFrameBorderState();
         LoadSummaryTileFields();
     }
 
@@ -157,6 +174,14 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                 out var transitionDuration))
         {
             _validation.Text = "Transition duration must be a positive whole number of milliseconds.";
+            return;
+        }
+        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderColor(
+                _frameBorderColor.Text,
+                _frameBorderEnabled.IsChecked == true,
+                out var frameBorderColor))
+        {
+            _validation.Text = "Border color must be a six-digit RGB value.";
             return;
         }
         if (!ZoomObjectPropertiesPlanner.TryParseCropEdges(
@@ -190,7 +215,8 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             cropLeft,
             cropTop,
             cropRight,
-            cropBottom);
+            cropBottom,
+            frameBorderColor);
         if (_summaryTile is not null && _summaryTile.SelectedIndex >= 0
             && _summaryTile.SelectedIndex < _summaryTargets.Count)
         {
@@ -216,6 +242,9 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         _transitionDuration.Text = properties.TransitionDuration ?? string.Empty;
         _transitionEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsTransitionEnabled(properties);
         SyncTransitionState();
+        _frameBorderColor.Text = properties.FrameBorderColor ?? string.Empty;
+        _frameBorderEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderEnabled(properties);
+        SyncFrameBorderState();
         _cropEdges.Text = ZoomObjectPropertiesPlanner.FormatCropEdges(properties);
         _returnToParent.IsChecked = properties.ReturnToParent ?? true;
         _showBackground.IsChecked = properties.ShowBackground ?? true;
@@ -227,6 +256,9 @@ internal sealed class ZoomObjectPropertiesDialog : Window
 
     private void SyncTransitionState() =>
         _transitionDuration.IsEnabled = _transitionEnabled.IsChecked == true;
+
+    private void SyncFrameBorderState() =>
+        _frameBorderColor.IsEnabled = _frameBorderEnabled.IsChecked == true;
 
     private static Button MakeButton(string label, bool isDefault, Action action)
     {
