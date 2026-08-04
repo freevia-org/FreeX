@@ -121,6 +121,52 @@ public sealed class PresentationMediaTranscriptPlannerTests
     }
 
     [Fact]
+    public void WebVttCueSettings_AreParsedAndPlacedWithoutAffectingDefaultCues()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 46,
+            Name = "Positioned video",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        Source = "ppt/media/positioned.vtt",
+                        ContentType = "text/vtt",
+                        Bytes = Encoding.UTF8.GetBytes("""
+                            WEBVTT
+
+                            00:00.000 --> 00:02.000 position:25% line:30% size:50% align:start
+                            Positioned
+
+                            00:02.000 --> 00:04.000
+                            Default
+                            """)
+                    }
+                }
+            }
+        });
+
+        var cues = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation)
+            .Tracks.Should().ContainSingle().Subject.Cues;
+
+        cues[0].PositionPercent.Should().Be(25);
+        cues[0].LinePercent.Should().Be(30);
+        cues[0].SizePercent.Should().Be(50);
+        cues[0].Alignment.Should().Be(PresentationMediaTranscriptCueAlignment.Start);
+        cues[1].PositionPercent.Should().BeNull();
+        cues[1].SizePercent.Should().BeNull();
+
+        var placement = PresentationMediaTranscriptPlanner.ComputeCaptionPlacement(
+            cues[0], 800, 400, 80);
+        placement.Should().Be(new PresentationMediaCaptionPlacement(200, 120, 400, 80));
+    }
+
+    [Fact]
     public void BuildTranscriptPlan_ParsesTtmlClockAndUnitTiming()
     {
         var presentation = Presentation.CreateEmpty();
