@@ -1738,7 +1738,8 @@ public static class PptxPackageReader
             ParseNullableInt(properties.Descendants().FirstOrDefault(element =>
                 element.Name.LocalName == "srcRect")?.Attribute("b")?.Value),
             ReadZoomFrameBorderColor(properties),
-            ReadZoomFrameBorderWidth(properties));
+            ReadZoomFrameBorderWidth(properties),
+            ReadZoomFrameBorderDash(properties));
         return value.IsEmpty ? null : value;
     }
 
@@ -1771,6 +1772,33 @@ public static class PptxPackageReader
         return int.TryParse(line?.Attribute("w")?.Value, out var width) && width > 0
             ? width
             : null;
+    }
+
+    private static OutlineDash? ReadZoomFrameBorderDash(XElement properties)
+    {
+        var line = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
+        var token = line?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "prstDash", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value;
+        return string.IsNullOrWhiteSpace(token)
+            ? null
+            : token.Trim().ToLowerInvariant() switch
+            {
+                "solid" => OutlineDash.Solid,
+                "dash" => OutlineDash.Dash,
+                "dot" => OutlineDash.Dot,
+                "dashdot" => OutlineDash.DashDot,
+                "lgdash" => OutlineDash.LongDash,
+                "lgdashdot" => OutlineDash.LongDashDot,
+                "lgdashdotdot" => OutlineDash.LongDashDotDot,
+                "sysdash" => OutlineDash.SystemDash,
+                "sysdot" => OutlineDash.SystemDot,
+                "sysdashdot" => OutlineDash.SystemDashDot,
+                _ => null,
+            };
     }
 
     private static IEnumerable<SummaryZoomTarget> ReadSummaryZoomTargets(XElement graphicFrame)

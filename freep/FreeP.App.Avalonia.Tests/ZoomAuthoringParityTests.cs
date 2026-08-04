@@ -19,6 +19,7 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("Use Zoom border");
         source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderColor(");
         source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderWidth(");
+        source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderDash(");
         source.Should().Contain("_frameBorderColor.IsEnabled");
     }
 
@@ -45,6 +46,7 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidTransitionDurationMessage");
         source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderColorMessage");
         source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderWidthMessage");
+        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderDashMessage");
         source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidCropEdgesMessage");
         source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidSummaryTileLayoutMessage");
         source.Should().Contain("AvaloniaUserMessageDialog.ShowWarningAsync(");
