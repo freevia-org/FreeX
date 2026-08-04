@@ -3975,6 +3975,7 @@ public static class DocxWriter
         {
             if (index < text.Length
                 && text[index] != Hyphenator.SoftHyphen
+                && text[index] != Hyphenator.NoBreakHyphen
                 && text[index] != '\n')
                 continue;
 
@@ -3985,9 +3986,12 @@ public static class DocxWriter
                     SanitizeXmlText(text[start..index]));
 
             if (index < text.Length)
-                yield return text[index] == Hyphenator.SoftHyphen
-                    ? new XElement(W + "softHyphen")
-                    : new XElement(W + "br");
+                yield return text[index] switch
+                {
+                    Hyphenator.SoftHyphen => new XElement(W + "softHyphen"),
+                    Hyphenator.NoBreakHyphen => new XElement(W + "noBreakHyphen"),
+                    _ => new XElement(W + "br"),
+                };
             start = index + 1;
         }
     }

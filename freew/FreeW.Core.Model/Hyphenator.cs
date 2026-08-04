@@ -25,6 +25,9 @@ public static class Hyphenator
     /// <summary>The Unicode SOFT HYPHEN (U+00AD): a zero-width break opportunity rendered only at line ends.</summary>
     public const char SoftHyphen = '­';
 
+    /// <summary>The Unicode NON-BREAKING HYPHEN (U+2011): a visible hyphen that cannot end a line.</summary>
+    public const char NoBreakHyphen = '‑';
+
     // A word must have at least this many letters before it is worth hyphenating, and a break must always
     // leave at least MinEdge letters on each side. These mirror Word's defaults (it does not hyphenate very
     // short words and keeps a two-letter minimum fragment).

@@ -3761,6 +3761,8 @@ public static class DocxReader
                 text.Append(child.Value);
             else if (child.Name == W + "softHyphen")
                 text.Append(Hyphenator.SoftHyphen);
+            else if (child.Name == W + "noBreakHyphen")
+                text.Append(Hyphenator.NoBreakHyphen);
             else if (child.Name == W + "tab")
                 text.Append('\t');
             else if (child.Name == W + "cr")
