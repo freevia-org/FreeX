@@ -280,6 +280,10 @@ public sealed partial class MainWindow : Window
     private TextBlock _mediaVolumeText = null!;
     private Slider _mediaVolumeSlider = null!;
     private Button _mediaVolumeApplyButton = null!;
+    private TextBlock _mediaStartModeText = null!;
+    private ComboBox _mediaStartModeBox = null!;
+    private CheckBox _mediaLoopCheckBox = null!;
+    private Button _mediaPlaybackApplyButton = null!;
     private Button _mediaCaptionCreateButton = null!;
     private Button _mediaCaptionReplaceButton = null!;
     private Button _mediaCaptionDeleteButton = null!;
@@ -622,6 +626,10 @@ public sealed partial class MainWindow : Window
     internal string MediaCaptionPaneTranscriptText => _mediaCaptionTranscriptBox?.Text ?? string.Empty;
     internal int MediaVolumePercent => _mediaVolumeSlider is null ? 80 : (int)Math.Round(_mediaVolumeSlider.Value);
     internal bool IsMediaVolumeApplyEnabled => _mediaVolumeApplyButton?.IsEnabled == true;
+    internal MediaPlaybackStartMode MediaPlaybackStartMode => _mediaStartModeBox?.SelectedIndex == 1
+        ? MediaPlaybackStartMode.Automatically
+        : MediaPlaybackStartMode.InClickSequence;
+    internal bool MediaLoop => _mediaLoopCheckBox?.IsChecked == true;
     internal string? ReadingOrderMoveEarlierDisabledReason =>
         LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
             action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)?.DisabledReason;
@@ -1658,6 +1666,22 @@ public sealed partial class MainWindow : Window
         _mediaVolumeApplyButton = BuildMediaCaptionPaneButton();
         _mediaVolumeApplyButton.Content = "Apply volume";
         _mediaVolumeApplyButton.Click += (_, _) => ApplyMediaVolumePane();
+        _mediaStartModeText = BuildMediaCaptionPaneLabel();
+        _mediaStartModeText.Text = "Playback start";
+        _mediaStartModeBox = new ComboBox
+        {
+            Margin = new Thickness(12, 0, 12, 4),
+            MinHeight = 28,
+            ItemsSource = new object[] { "On click", "Automatically" },
+        };
+        _mediaLoopCheckBox = new CheckBox
+        {
+            Content = "Loop until stopped",
+            Margin = new Thickness(12, 2, 12, 4),
+        };
+        _mediaPlaybackApplyButton = BuildMediaCaptionPaneButton();
+        _mediaPlaybackApplyButton.Content = "Apply playback";
+        _mediaPlaybackApplyButton.Click += (_, _) => ApplyMediaPlaybackPane();
         _mediaCaptionCreateButton = BuildMediaCaptionPaneButton();
         _mediaCaptionReplaceButton = BuildMediaCaptionPaneButton();
         _mediaCaptionDeleteButton = BuildMediaCaptionPaneButton();
@@ -1695,6 +1719,9 @@ public sealed partial class MainWindow : Window
                     _mediaCaptionSourceBox,
                     _mediaCaptionTranscriptText,
                     _mediaCaptionTranscriptBox,
+                    _mediaStartModeText,
+                    _mediaStartModeBox,
+                    _mediaLoopCheckBox,
                     _mediaVolumeText,
                     _mediaVolumeSlider,
                     new WrapPanel
@@ -1707,6 +1734,7 @@ public sealed partial class MainWindow : Window
                             _mediaCaptionReplaceButton,
                             _mediaCaptionDeleteButton,
                             _mediaVolumeApplyButton,
+                            _mediaPlaybackApplyButton,
                             _mediaCaptionCloseButton,
                         },
                     },
@@ -8131,6 +8159,22 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    internal void SetMediaPlaybackPaneInput(MediaPlaybackStartMode startMode, bool loop)
+    {
+        ShowMediaCaptionPane();
+
+        _mediaCaptionPaneRefreshing = true;
+        try
+        {
+            _mediaStartModeBox.SelectedIndex = startMode == MediaPlaybackStartMode.Automatically ? 1 : 0;
+            _mediaLoopCheckBox.IsChecked = loop;
+        }
+        finally
+        {
+            _mediaCaptionPaneRefreshing = false;
+        }
+    }
+
     internal PresentationMediaCaptionTrackMutationResult ApplyMediaCaptionPane(
         PresentationMediaCaptionAuthoringIntentKind intent)
     {
@@ -8168,6 +8212,20 @@ public sealed partial class MainWindow : Window
     internal bool ApplyMediaVolumePane()
     {
         var changed = Editor.SetSelectedMediaVolume(MediaVolumePercent);
+        if (changed)
+        {
+            _fileWorkflow.MarkDirty();
+            RefreshReviewWorkflowPlans();
+            UpdateStatus();
+            RefreshVisibleMediaCaptionPaneFromFields();
+        }
+
+        return changed;
+    }
+
+    internal bool ApplyMediaPlaybackPane()
+    {
+        var changed = Editor.SetSelectedMediaPlaybackOptions(MediaPlaybackStartMode, MediaLoop);
         if (changed)
         {
             _fileWorkflow.MarkDirty();
@@ -8230,6 +8288,12 @@ public sealed partial class MainWindow : Window
             var selectedMedia = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
                 Editor.CurrentSlide,
                 Editor.SelectedShapeIds)?.Media;
+            var selectedStartMode = selectedMedia?.PlaybackStartMode ?? MediaPlaybackStartMode.InClickSequence;
+            _mediaStartModeBox.SelectedIndex = selectedStartMode == MediaPlaybackStartMode.Automatically ? 1 : 0;
+            _mediaLoopCheckBox.IsChecked = selectedMedia?.Loop ?? false;
+            _mediaStartModeBox.IsEnabled = selectedMedia is not null;
+            _mediaLoopCheckBox.IsEnabled = selectedMedia is not null;
+            _mediaPlaybackApplyButton.IsEnabled = selectedMedia is not null;
             _mediaVolumeSlider.Value = selectedMedia?.VolumePercent ?? 80;
             _mediaVolumeSlider.IsEnabled = selectedMedia is not null;
             _mediaVolumeApplyButton.IsEnabled = selectedMedia is not null;

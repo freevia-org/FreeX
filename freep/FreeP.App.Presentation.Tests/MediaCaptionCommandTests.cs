@@ -158,4 +158,34 @@ public sealed class MediaCaptionCommandTests
         editor.Redo();
         mediaShape.Media.VolumePercent.Should().Be(25);
     }
+
+    [Fact]
+    public void EditingSessionSelectedMediaPlaybackOptions_UsesUndoBus()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var mediaShape = new SlideShape
+        {
+            Id = 53,
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                PlaybackStartMode = MediaPlaybackStartMode.InClickSequence,
+                Loop = false,
+            }
+        };
+        presentation.Slides[0].Shapes.Add(mediaShape);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        editor.Select(mediaShape.Id);
+
+        editor.SetSelectedMediaPlaybackOptions(MediaPlaybackStartMode.Automatically, true).Should().BeTrue();
+        mediaShape.Media.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
+        mediaShape.Media.Loop.Should().BeTrue();
+        editor.Undo();
+        mediaShape.Media.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.InClickSequence);
+        mediaShape.Media.Loop.Should().BeFalse();
+        editor.Redo();
+        mediaShape.Media.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
+        mediaShape.Media.Loop.Should().BeTrue();
+    }
 }
