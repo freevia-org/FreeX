@@ -110,6 +110,8 @@ public sealed class PresentationMediaTranscriptPlannerTests
             "Next quarter stays on plan.");
         webVtt.Cues[0].StartTime.Should().Be(TimeSpan.Zero);
         webVtt.Cues[0].EndTime.Should().Be(TimeSpan.FromMilliseconds(1500));
+        webVtt.Cues[0].Spans.Should().ContainSingle(span => span.Text == "Revenue & margin grew" && !span.Bold && !span.Italic);
+        webVtt.Cues[1].Spans.Should().Contain(span => span.Text == "Next quarter" && span.Italic);
         webVtt.Cues[1].TimeRangeText.Should().Be("0:02.000 - 0:03.250");
 
         var srt = plan.Tracks[1];
@@ -119,6 +121,7 @@ public sealed class PresentationMediaTranscriptPlannerTests
             "Linea uno linea dos");
         srt.Cues[0].StartTime.Should().Be(TimeSpan.FromSeconds(4));
         srt.Cues[0].EndTime.Should().Be(TimeSpan.FromMilliseconds(5250));
+        srt.Cues[0].Spans.Should().BeEmpty("SRT remains plain-text until its own styling contract is added");
     }
 
     [Fact]
