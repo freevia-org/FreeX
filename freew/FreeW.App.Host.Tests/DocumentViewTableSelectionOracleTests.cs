@@ -1,3 +1,5 @@
+using Free.Shared.Ribbon;
+using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 using WpfParagraph = System.Windows.Documents.Paragraph;
@@ -137,6 +139,83 @@ public sealed class DocumentViewTableSelectionOracleTests
             .Equal("Z\nQ", string.Empty, string.Empty);
     }
 
+    [StaFact]
+    public void SelectTable_selects_every_rendered_cell_without_mutating_the_model()
+    {
+        var view = Load(SelectionTableDocument());
+        var rows = RenderedTable(view).RowGroups[0].Rows;
+        view.CaretPosition = rows[1].Cells[1].Blocks.FirstBlock!.ContentStart;
+
+        view.SelectTable();
+
+        view.Selection.Text.Should().ContainAll("A", "B", "C", "D", "E", "F");
+        view.Model.Blocks.OfType<Table>().Single().Rows.SelectMany(row => row.Cells)
+            .Select(cell => cell.PlainText).Should().Equal("A", "B", "C", "D", "E", "F");
+    }
+
+    [StaFact]
+    public void SelectTableRow_selects_only_the_caret_row()
+    {
+        var view = Load(SelectionTableDocument());
+        var rows = RenderedTable(view).RowGroups[0].Rows;
+        view.CaretPosition = rows[1].Cells[1].Blocks.FirstBlock!.ContentStart;
+
+        view.SelectTableRow();
+
+        view.Selection.Text.Should().ContainAll("D", "E", "F");
+        view.Selection.Text.Should().NotContainAny("A", "B", "C");
+    }
+
+    [StaFact]
+    public void SelectTableColumn_selects_only_the_caret_column()
+    {
+        var view = Load(SelectionTableDocument());
+        var rows = RenderedTable(view).RowGroups[0].Rows;
+        view.CaretPosition = rows[0].Cells[1].Blocks.FirstBlock!.ContentStart;
+
+        view.SelectTableColumn();
+
+        view.Selection.Text.Should().ContainAll("B", "E");
+        view.Selection.Text.Should().NotContainAny("A", "C", "D", "F");
+    }
+
+    [StaFact]
+    public void SelectTableCell_selects_only_the_caret_cell()
+    {
+        var view = Load(SelectionTableDocument());
+        var rows = RenderedTable(view).RowGroups[0].Rows;
+        view.CaretPosition = rows[1].Cells[1].Blocks.FirstBlock!.ContentStart;
+
+        view.SelectTableCell();
+
+        view.Selection.Text.Should().Contain("E");
+        view.Selection.Text.Should().NotContainAny("A", "B", "C", "D", "F");
+    }
+
+    [StaTheory]
+    [InlineData("freew.table-select-table", "ABCDEF", "")]
+    [InlineData("freew.table-select-row", "DEF", "ABC")]
+    [InlineData("freew.table-select-col", "BE", "ACDF")]
+    [InlineData("freew.table-select-cell", "E", "ABCDF")]
+    public void Table_selection_ribbon_commands_execute_the_native_selection_route(
+        string commandId,
+        string included,
+        string excluded)
+    {
+        var view = Load(SelectionTableDocument());
+        var rows = RenderedTable(view).RowGroups[0].Rows;
+        view.CaretPosition = rows[1].Cells[1].Blocks.FirstBlock!.ContentStart;
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(commandId, out var command).Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        foreach (var character in included)
+            view.Selection.Text.Should().Contain(character.ToString());
+        foreach (var character in excluded)
+            view.Selection.Text.Should().NotContain(character.ToString());
+    }
+
     private static DocumentView Load(TextDocument document)
     {
         var view = new DocumentView();
@@ -149,6 +228,22 @@ public sealed class DocumentViewTableSelectionOracleTests
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
         document.Blocks.Add(Table.Create(rows, columns));
+        return document;
+    }
+
+    private static TextDocument SelectionTableDocument()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = Table.Create(2, 3);
+        var labels = new[] { "A", "B", "C", "D", "E", "F" };
+        var labelIndex = 0;
+        foreach (var row in table.Rows)
+        {
+            for (var column = 0; column < row.Cells.Count; column++)
+                row.Cells[column] = new TableCell(labels[labelIndex++]);
+        }
+        document.Blocks.Add(table);
         return document;
     }
 

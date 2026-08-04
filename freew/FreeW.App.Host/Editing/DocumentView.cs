@@ -1823,19 +1823,17 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Extend the selection to span the entire table containing the caret (navigates caret to first cell).
+    /// Extend the selection to span the entire table containing the caret.
     /// No-op outside a table or when the table has no rows.
     /// </summary>
     public void SelectTable()
     {
-        CommitToModel();
-        var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+        if (!TryGetCaretRenderedTableCell(out var group, out _, out _))
             return;
-        if (table.Rows.Count == 0)
+        var rows = group.Rows.Where(row => !IsRepeatedHeaderRenderRow(row)).ToList();
+        if (rows.Count == 0 || rows[0].Cells.Count == 0 || rows[^1].Cells.Count == 0)
             return;
-        // Move caret to start of first cell — full WPF cross-cell selection is not supported
-        Focus();
+        SelectRenderedCellRange(rows[0].Cells[0], rows[^1].Cells[^1]);
     }
 
     /// <summary>
@@ -1843,13 +1841,11 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SelectTableRow()
     {
-        CommitToModel();
-        var (blockIndex, rowIndex, _) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+        if (!TryGetCaretRenderedTableCell(out _, out var row, out _))
             return;
-        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+        if (row.Cells.Count == 0)
             return;
-        Focus();
+        SelectRenderedCellRange(row.Cells[0], row.Cells[^1]);
     }
 
     /// <summary>
@@ -1857,13 +1853,21 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SelectTableColumn()
     {
-        CommitToModel();
-        var (blockIndex, _, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+        if (!TryGetCaretRenderedTableCell(out var group, out var caretRow, out var caretCell))
             return;
-        if (columnIndex < 0)
+        var gridColumn = RenderedGridColumnOf(caretRow, caretCell);
+        if (gridColumn < 0)
             return;
-        Focus();
+        var rows = group.Rows.Where(row => !IsRepeatedHeaderRenderRow(row)).ToList();
+        var firstCell = rows
+            .Select(row => RenderedCellAtGridColumn(row, gridColumn))
+            .FirstOrDefault(cell => cell is not null);
+        var lastCell = rows
+            .Select(row => RenderedCellAtGridColumn(row, gridColumn))
+            .LastOrDefault(cell => cell is not null);
+        if (firstCell is null || lastCell is null)
+            return;
+        SelectRenderedCellRange(firstCell, lastCell);
     }
 
     /// <summary>
@@ -1871,16 +1875,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SelectTableCell()
     {
-        CommitToModel();
-        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+        if (!TryGetCaretRenderedTableCell(out _, out _, out var cell))
             return;
-        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
-            return;
-        var cells = table.Rows[rowIndex].Cells;
-        if (columnIndex < 0 || columnIndex >= cells.Count)
-            return;
-        Focus();
+        SelectRenderedCellRange(cell, cell);
     }
 
     /// <summary>
@@ -4974,6 +4971,68 @@ public sealed class DocumentView : RichTextBox
     // Locate the model block/row/column of the table containing the caret; blockIndex is -1 if not in a table.
     private (int BlockIndex, int RowIndex, int ColumnIndex) CaretTableLocation() =>
         TableLocationOf(CaretPosition?.Parent as TextElement);
+
+    private bool TryGetCaretRenderedTableCell(
+        out TableRowGroup group,
+        out WpfTableRow row,
+        out WpfTableCell cell)
+    {
+        TextElement? element = CaretPosition?.Parent as TextElement;
+        while (element is not null && element is not WpfTableCell)
+            element = element.Parent as TextElement;
+
+        if (element is WpfTableCell resolvedCell
+            && resolvedCell.Parent is WpfTableRow resolvedRow
+            && resolvedRow.Parent is TableRowGroup resolvedGroup
+            && resolvedGroup.Parent is WpfTable)
+        {
+            group = resolvedGroup;
+            row = resolvedRow;
+            cell = resolvedCell;
+            return true;
+        }
+
+        group = null!;
+        row = null!;
+        cell = null!;
+        return false;
+    }
+
+    private void SelectRenderedCellRange(WpfTableCell firstCell, WpfTableCell lastCell)
+    {
+        var firstBlock = firstCell.Blocks.FirstBlock;
+        var lastBlock = lastCell.Blocks.LastBlock;
+        if (firstBlock is null || lastBlock is null)
+            return;
+
+        Focus();
+        Selection.Select(firstBlock.ContentStart, lastBlock.ContentEnd);
+    }
+
+    private static int RenderedGridColumnOf(WpfTableRow row, WpfTableCell target)
+    {
+        var gridColumn = 0;
+        foreach (var cell in row.Cells)
+        {
+            if (ReferenceEquals(cell, target))
+                return gridColumn;
+            gridColumn += Math.Max(1, cell.ColumnSpan);
+        }
+        return -1;
+    }
+
+    private static WpfTableCell? RenderedCellAtGridColumn(WpfTableRow row, int gridColumn)
+    {
+        var cellStart = 0;
+        foreach (var cell in row.Cells)
+        {
+            var cellEnd = cellStart + Math.Max(1, cell.ColumnSpan);
+            if (gridColumn >= cellStart && gridColumn < cellEnd)
+                return cell;
+            cellStart = cellEnd;
+        }
+        return null;
+    }
 
     // Resolve a text element (typically a selection endpoint or the caret) to the model block/row/column
     // of its hosting table cell. blockIndex is -1 if the element is not inside a table.
