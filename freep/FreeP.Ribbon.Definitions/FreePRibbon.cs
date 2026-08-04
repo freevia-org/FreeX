@@ -557,6 +557,7 @@ public static class FreePRibbon
             group.Medium(ChartSeriesOptionsPlanner.CommandId, FreePRibbonText.ChartSeriesOptionsLabel, RibbonCommandIconKind.Effects, FreePRibbonText.ChartSeriesOptionsKeyTip);
             group.Medium(ChartPointOptionsPlanner.CommandId, FreePRibbonText.ChartPointOptionsLabel, RibbonCommandIconKind.Effects, FreePRibbonText.ChartPointOptionsKeyTip);
             group.Medium(ChartLayoutOptionsPlanner.CommandId, FreePRibbonText.ChartLayoutOptionsLabel, RibbonCommandIconKind.ChartTitle, FreePRibbonText.ChartLayoutOptionsKeyTip);
+            group.Medium(ChartExSeriesLayoutPlanner.CommandId, FreePRibbonText.ChartExSeriesLayoutLabel, RibbonCommandIconKind.ChartTitle, FreePRibbonText.ChartExSeriesLayoutKeyTip);
             group.Medium(ChartDataTableOptionsPlanner.CommandId, FreePRibbonText.ChartDataTableOptionsLabel, RibbonCommandIconKind.ChartColumn, FreePRibbonText.ChartDataTableOptionsKeyTip);
             group.Medium(ChartBubbleOptionsPlanner.CommandId, FreePRibbonText.ChartBubbleOptionsLabel, RibbonCommandIconKind.ChartPie, FreePRibbonText.ChartBubbleOptionsKeyTip);
             group.Medium(ChartPieOptionsPlanner.CommandId, FreePRibbonText.ChartPieOptionsLabel, RibbonCommandIconKind.ChartPie, FreePRibbonText.ChartPieOptionsKeyTip);

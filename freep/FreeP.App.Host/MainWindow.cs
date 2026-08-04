@@ -465,6 +465,7 @@ public sealed partial class MainWindow : Window
             onEditChartSeriesOptions: () => OpenChartSeriesOptionsDialog(),
             onEditChartPointOptions: () => OpenChartPointOptionsDialog(),
             onEditChartLayoutOptions: () => OpenChartLayoutOptionsDialog(),
+            onEditChartExSeriesLayout: () => OpenChartExSeriesLayoutDialog(),
             onEditChartDataTableOptions: () => OpenChartDataTableOptionsDialog(),
             onEditChartBubbleOptions: () => OpenChartBubbleOptionsDialog(),
             onEditChartPieOptions: () => OpenChartPieOptionsDialog(),
@@ -4508,6 +4509,17 @@ public sealed partial class MainWindow : Window
         if (!Editor.CanEditSelectedChartFormatting) return;
 
         var dialog = new ChartLayoutOptionsDialog(Editor);
+        if (IsVisible)
+            dialog.Owner = this;
+        dialog.ShowDialog();
+    }
+
+    internal void OpenChartExSeriesLayoutDialog()
+    {
+        if (!Editor.CanEditSelectedChartFormatting
+            || !ChartExSeriesLayoutPlanner.CanEdit(Editor.SelectedChart)) return;
+
+        var dialog = new ChartExSeriesLayoutDialog(Editor);
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();

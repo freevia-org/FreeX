@@ -2933,6 +2933,7 @@ public sealed partial class MainWindow : Window
             ChartPointOptionsPlanner.CommandId,
             new ActionRibbonCommand(() => OpenChartPointOptionsDialog()));
         r.Register(ChartLayoutOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartLayoutOptionsDialog));
+        r.Register(ChartExSeriesLayoutPlanner.CommandId, new ActionRibbonCommand(OpenChartExSeriesLayoutDialog));
         r.Register(ChartDataTableOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDataTableOptionsDialog));
         r.Register(ChartBubbleOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartBubbleOptionsDialog));
         r.Register(ChartPieOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartPieOptionsDialog));
@@ -4057,6 +4058,22 @@ public sealed partial class MainWindow : Window
             return;
 
         var dialog = new ChartLayoutOptionsDialog(Editor);
+        if (IsVisible)
+        {
+            _ = dialog.ShowDialog<bool?>(this);
+            return;
+        }
+
+        dialog.Show();
+    }
+
+    internal void OpenChartExSeriesLayoutDialog()
+    {
+        if (!Editor.CanEditSelectedChartFormatting
+            || !ChartExSeriesLayoutPlanner.CanEdit(Editor.SelectedChart))
+            return;
+
+        var dialog = new ChartExSeriesLayoutDialog(Editor);
         if (IsVisible)
         {
             _ = dialog.ShowDialog<bool?>(this);
