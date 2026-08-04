@@ -195,9 +195,8 @@ public sealed class HomeDialogDepthTests
         view.ApplyListStartOverrides(level0StartAt: 3, level1StartAt: null);
 
         view.Model.Blocks.OfType<Paragraph>().First().Formatting.ListStartOverride.Should().Be(3);
-        // Note: applying start-at across a multi-paragraph selection that ends inside a WPF List, and
-        // per-level start-at for NESTED levels, depend on list-paragraph selection mapping / multilevel
-        // round-trip that have known limitations today; the single-item level-0 start applies reliably.
+        // The complete definition path below separately covers multi-paragraph selection, level clamping,
+        // number-format replacement, and atomic undo.
     }
 
     [StaFact]
@@ -211,6 +210,43 @@ public sealed class HomeDialogDepthTests
 
         var para = view.Model.Blocks.OfType<Paragraph>().First();
         para.Formatting.ListStartOverride.Should().BeNull("plain paragraphs are not multilevel lists");
+    }
+
+    [StaFact]
+    public void ApplyMultiLevelListDefinition_HonorsLevelCountAndUndoesAtomically()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("One")
+        {
+            Formatting = ParagraphFormatting.Default with { ListLevel = 0 }
+        });
+        doc.Blocks.Add(new Paragraph("Deep")
+        {
+            Formatting = ParagraphFormatting.Default with { ListLevel = 4 }
+        });
+        var view = ViewWith(doc);
+        SelectAllParagraphs(view);
+        var formats = MultiLevelListFormat.DecimalNumberFormats.ToArray();
+        formats[0] = ListNumberFormat.UpperRoman;
+        formats[1] = ListNumberFormat.LowerLetter;
+
+        view.ApplyMultiLevelListDefinition(new MultilevelListDefinition(3, 4, 7, formats));
+
+        var applied = view.Model.Blocks.OfType<Paragraph>().ToList();
+        applied[0].Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        applied[0].Formatting.ListStartOverride.Should().Be(4);
+        applied[1].Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        applied[1].Formatting.ListLevel.Should().Be(2, "the dialog's three-level definition caps deeper items");
+        view.Model.MultiLevelList.NumberFormats.Take(2)
+            .Should().Equal(ListNumberFormat.UpperRoman, ListNumberFormat.LowerLetter);
+
+        view.Undo();
+
+        var restored = view.Model.Blocks.OfType<Paragraph>().ToList();
+        restored.Should().OnlyContain(paragraph => paragraph.Formatting.ListKind == ListKind.None);
+        restored[1].Formatting.ListLevel.Should().Be(4);
+        view.Model.MultiLevelList.NumberFormats[0].Should().Be(ListNumberFormat.Decimal);
     }
 
     // ── 5. StyleDialogSortOrder enum exists and BuildRows can be tested ─────

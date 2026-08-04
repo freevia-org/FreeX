@@ -2353,6 +2353,26 @@ public sealed class EditingSession
         return true;
     }
 
+    /// <summary>Sets the selected media's authored start mode and loop policy through the shared undo bus.</summary>
+    public bool SetSelectedMediaPlaybackOptions(MediaPlaybackStartMode startMode, bool loop)
+    {
+        var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
+            CurrentSlide,
+            SelectedShapeIds);
+        var media = mediaShape?.Media;
+        if (mediaShape is null || media is null)
+            return false;
+
+        Bus.Execute(new SetMediaPlaybackOptionsCommand(
+            CurrentSlideIndex,
+            mediaShape.Id,
+            media.PlaybackStartMode,
+            media.Loop,
+            startMode,
+            loop));
+        return true;
+    }
+
     /// <summary>
     /// Runs a custom-show authoring mutation against a staged snapshot and commits the resulting
     /// collection through the shared undo bus. The planner remains responsible for validation and

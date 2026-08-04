@@ -78,27 +78,6 @@ internal sealed class RemoveBookmarkCommand(string name) : IDocumentCommand
     }
 }
 
-internal sealed class SetMultiLevelNumberFormatsCommand(IReadOnlyList<ListNumberFormat> formats) : IDocumentCommand
-{
-    private ListNumberFormat[]? _previous;
-
-    public string Label => "Define Multilevel List";
-
-    public void Apply(IDocumentCommandContext context)
-    {
-        _previous = [.. context.Document.MultiLevelList.NumberFormats];
-        context.Document.MultiLevelList.SetNumberFormats(formats);
-    }
-
-    public void Revert(IDocumentCommandContext context)
-    {
-        if (_previous is null)
-            return;
-        context.Document.MultiLevelList.SetNumberFormats(_previous);
-        _previous = null;
-    }
-}
-
 /// <summary>
 /// AV-REF: Assign a bookmark name to the body paragraph at <paramref name="paragraphIndex"/> (snapshotting
 /// the prior <see cref="Paragraph.BookmarkNames"/> for undo). Used to auto-anchor a cross-reference target

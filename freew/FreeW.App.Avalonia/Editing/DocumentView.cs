@@ -19079,19 +19079,9 @@ public sealed class DocumentView : Control
             foreach (var index in indices)
             {
                 var paragraph = (Paragraph)_doc.Blocks[index];
-                var level = Math.Clamp(paragraph.Formatting.ListLevel, 0, definition.Levels - 1);
-                var startAt = level switch
-                {
-                    0 => definition.Level0StartAt,
-                    1 => definition.Level1StartAt,
-                    _ => paragraph.Formatting.ListStartOverride,
-                };
-                _bus.Execute(new SetParagraphFormattingCommand(index, paragraph.Formatting with
-                {
-                    ListKind = ListKind.MultiLevel,
-                    ListLevel = level,
-                    ListStartOverride = startAt,
-                }));
+                _bus.Execute(new SetParagraphFormattingCommand(
+                    index,
+                    MultilevelListDialogPlanner.ApplyDefinition(paragraph.Formatting, definition)));
             }
             _bus.Execute(new SetMultiLevelNumberFormatsCommand(definition.NumberFormats));
             _bus.CommitUndoGroup("Define Multilevel List");

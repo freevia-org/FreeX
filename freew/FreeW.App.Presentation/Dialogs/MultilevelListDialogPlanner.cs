@@ -105,6 +105,28 @@ public static class MultilevelListDialogPlanner
         return true;
     }
 
+    public static ParagraphFormatting ApplyDefinition(
+        ParagraphFormatting formatting,
+        MultilevelListDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        var maximumLevel = Math.Clamp(definition.Levels, 1, MultiLevelListFormat.LevelCount) - 1;
+        var level = Math.Clamp(formatting.ListLevel, 0, maximumLevel);
+        var startAt = level switch
+        {
+            0 => definition.Level0StartAt,
+            1 => definition.Level1StartAt,
+            _ => formatting.ListStartOverride,
+        };
+
+        return formatting with
+        {
+            ListKind = ListKind.MultiLevel,
+            ListLevel = level,
+            ListStartOverride = startAt,
+        };
+    }
+
     private static bool TryParseStartAt(string? text, CultureInfo culture, out int? value)
     {
         var trimmed = (text ?? string.Empty).Trim();
