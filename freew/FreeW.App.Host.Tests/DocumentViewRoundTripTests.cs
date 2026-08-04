@@ -1838,6 +1838,12 @@ public sealed class DocumentViewRoundTripTests
         pagination.Pages[2].SourceRowIndexes.Should().Equal(7, 8);
         sections.Should().HaveCount(3);
         sections.Select(section => section.BreakPageBefore).Should().Equal(false, true, true);
+        var spacingDip = sourceTable.CellSpacingPt!.Value * (96.0 / 72.0);
+        sections.Should().OnlyContain(section =>
+            Math.Abs(section.Padding.Top - spacingDip / 2) < 0.01
+            && section.Padding.Left == 0
+            && section.Padding.Right == 0
+            && section.Padding.Bottom == 0);
 
         var pageRows = tables
             .Select(table => table.RowGroups.SelectMany(group => group.Rows).ToList())
@@ -1851,7 +1857,6 @@ public sealed class DocumentViewRoundTripTests
         var spacedCell = tables[1].RowGroups[0].Rows[1].Cells[0];
         spacedCell.Background.Should().BeNull(
             "paginated tables reserve the authored cell-spacing gutter outside the inner surface");
-        var spacingDip = sourceTable.CellSpacingPt.Value * (96.0 / 72.0);
         var spacedRow = tables[1].RowGroups[0].Rows[1];
         var firstSurface = SpacedCellSurface(spacedRow.Cells[0]);
         var internalSurface = SpacedCellSurface(spacedRow.Cells[1]);

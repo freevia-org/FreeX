@@ -9589,10 +9589,14 @@ public sealed class DocumentView : RichTextBox
             var blocks = new List<System.Windows.Documents.Block>();
             foreach (var (page, segmentIndex) in paginationPlan.Pages.Select((page, index) => (page, index)))
             {
+                var segmentTopRegistrationDip = table.CellSpacingPt is > 0
+                    ? table.CellSpacingPt.Value * PxPerPoint / 2
+                    : 0;
                 var section = new System.Windows.Documents.Section
                 {
                     BreakPageBefore = segmentIndex > 0,
-                    Margin = new Thickness(0)
+                    Margin = new Thickness(0),
+                    Padding = new Thickness(0, segmentTopRegistrationDip, 0, 0)
                 };
                 section.Blocks.Add(BuildTable(
                     table,
