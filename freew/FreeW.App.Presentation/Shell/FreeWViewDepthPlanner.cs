@@ -120,7 +120,7 @@ public static class FreeWViewDepthPlanner
             PagesAcross: 2,
             Layout: DocumentViewDepthLayoutPlanner.Build(mode),
             StatusText: "Side to Side view active: editable two-page horizontal-flow view with pair navigation.",
-            Limitation: "Cross-page clipboard/undo and Avalonia page-grid layout remain deferred."),
+            Limitation: "Avalonia's horizontal page-grid layout remains deferred; cross-page clipboard and undo use the live document editor."),
         _ => new FreeWViewDepthPlan(
             FreeWViewDepthMode.LiveEditor,
             FreeWViewDepthSurfaceKind.LiveEditor,
