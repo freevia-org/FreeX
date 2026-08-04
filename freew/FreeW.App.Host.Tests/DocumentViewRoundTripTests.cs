@@ -1541,7 +1541,7 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
-    public void FloatingTableHorizontalOffset_UsesTheSharedPlacementContract()
+    public void FloatingTablePlacement_UsesTheSharedPlacementContractAndSurvivesCommit()
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
@@ -1562,12 +1562,43 @@ public sealed class DocumentViewRoundTripTests
         var view = new DocumentView();
         view.LoadModel(doc);
         var rendered = RenderedTables(view.Document);
+        var figure = RenderedFloatingTableFigures(view.Document).Should().ContainSingle().Subject;
+        var tablePlan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(
+            floating,
+            page: doc.Page,
+            firstPageLeadingContentHeightDip: DocumentViewLayoutPlanner.EstimateLeadingContentHeightDip(doc, 1));
+        var metrics = DocumentViewLayoutPlanner.BuildPageMetrics(doc.Page);
+        var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            doc.Page,
+            DocumentViewLayoutKind.PrintLayout,
+            metrics.PageWidthDip + 48);
+        var expectedPlacement = DocumentViewLayoutPlanner.BuildFloatingTablePlacement(
+            surface,
+            DocumentViewLayoutPlanner.EstimateLeadingContentHeightDip(doc, 1),
+            1,
+            160,
+            tablePlan.Pagination.Rows.Sum(row => row.EstimatedHeightDip),
+            tablePlan.FloatingPosition!,
+            surface.ContentLeftDip,
+            metrics.ContentWidthDip);
 
         rendered.Should().HaveCount(2);
         rendered[0].Margin.Left.Should().Be(0);
-        rendered[1].Margin.Left.Should().BeApproximately(48, 0.01);
-        rendered[1].Margin.Top.Should().Be(0,
-            "vertical placement remains retained until WPF has a true floating block container");
+        rendered[1].Margin.Should().Be(new Thickness(0));
+        figure.Width.Value.Should().BeApproximately(160, 0.01);
+        figure.HorizontalAnchor.Should().Be(FigureHorizontalAnchor.PageLeft);
+        figure.VerticalAnchor.Should().Be(FigureVerticalAnchor.PageTop);
+        figure.HorizontalOffset.Should().BeApproximately(
+            expectedPlacement.XDip - surface.PageLeftDip,
+            0.01);
+        figure.VerticalOffset.Should().BeApproximately(
+            expectedPlacement.YDip - surface.PageTopDip(expectedPlacement.AnchorPageIndex),
+            0.01);
+        figure.WrapDirection.Should().Be(WrapDirection.Both);
+
+        view.CommitToModel();
+        var committed = view.Model.Blocks.OfType<Table>().Last();
+        committed.FloatingPosition.Should().Be(floating.FloatingPosition);
     }
 
     [StaFact]
@@ -1880,14 +1911,22 @@ public sealed class DocumentViewRoundTripTests
 
     private static List<System.Windows.Documents.Table> RenderedTables(FlowDocument document)
     {
-        static IEnumerable<System.Windows.Documents.Block> FlattenSections(BlockCollection blocks)
+        static IEnumerable<System.Windows.Documents.Block> FlattenBlocks(BlockCollection blocks)
         {
             foreach (var block in blocks)
             {
                 if (block is System.Windows.Documents.Section section)
                 {
-                    foreach (var nested in FlattenSections(section.Blocks))
+                    foreach (var nested in FlattenBlocks(section.Blocks))
                         yield return nested;
+                }
+                else if (block is System.Windows.Documents.Paragraph paragraph)
+                {
+                    foreach (var figure in paragraph.Inlines.OfType<Figure>())
+                    {
+                        foreach (var nested in FlattenBlocks(figure.Blocks))
+                            yield return nested;
+                    }
                 }
                 else
                 {
@@ -1896,10 +1935,17 @@ public sealed class DocumentViewRoundTripTests
             }
         }
 
-        return FlattenSections(document.Blocks)
+        return FlattenBlocks(document.Blocks)
             .OfType<System.Windows.Documents.Table>()
             .ToList();
     }
+
+    private static List<Figure> RenderedFloatingTableFigures(FlowDocument document) =>
+        document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .SelectMany(paragraph => paragraph.Inlines.OfType<Figure>())
+            .Where(figure => figure.Blocks.OfType<System.Windows.Documents.Table>().Any())
+            .ToList();
 
     private static List<System.Windows.Documents.Section> RenderedTableSections(FlowDocument document) =>
         document.Blocks
