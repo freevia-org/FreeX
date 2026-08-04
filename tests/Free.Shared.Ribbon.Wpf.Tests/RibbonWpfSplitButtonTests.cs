@@ -391,6 +391,26 @@ public sealed class RibbonWpfSplitButtonTests
     }
 
     [Fact]
+    public void DropdownMenu_RendersNeutralInputGestureInShortcutColumn()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("save", new RecordingCommand());
+            var root = BuildRibbon(registry, new RibbonMenu(new[]
+            {
+                new RibbonMenuItem("Save", "save", InputGesture: "Ctrl+S"),
+            }));
+            Layout(root, 420, 130);
+
+            var dropdown = FindButton(root, "paste.Dropdown");
+            var item = dropdown.ContextMenu!.Items.OfType<MenuItem>().Single();
+
+            item.InputGestureText.Should().Be("Ctrl+S");
+        });
+    }
+
+    [Fact]
     public void CollapsedGroup_ComboBoxProjectionMatchesAvaloniaEnablementAndExecutes()
     {
         var executions = new RecordingCommand();

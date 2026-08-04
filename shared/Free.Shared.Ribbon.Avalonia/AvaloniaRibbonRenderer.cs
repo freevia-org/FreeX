@@ -2204,9 +2204,11 @@ public static class AvaloniaRibbonRenderer
         if (item.Kind == RibbonMenuItemKind.Separator)
             return new Separator();
 
+        var presentation = RibbonMenuItemPresentationPlanner.Plan(item);
+
         var menuItem = new MenuItem
         {
-            Header = item.Header,
+            Header = presentation.Header,
             InputGesture = null,
             Tag = item.CommandId?.Value,
             IsEnabled = item.IsEnabled,
@@ -2216,10 +2218,10 @@ public static class AvaloniaRibbonRenderer
             menuItem.ToggleType = MenuItemToggleType.CheckBox;
             menuItem.IsChecked = isChecked;
         }
-        RegisterMenuKeyTip(menuItem, item.KeyTip);
+        RegisterMenuKeyTip(menuItem, presentation.KeyTip);
 
-        if (!string.IsNullOrEmpty(item.InputGesture))
-            menuItem.InputGesture = TryParseGesture(item.InputGesture);
+        if (!string.IsNullOrEmpty(presentation.InputGestureText))
+            menuItem.InputGesture = TryParseGesture(presentation.InputGestureText);
 
         if (item.Children.Count > 0)
         {

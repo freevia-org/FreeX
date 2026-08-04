@@ -876,17 +876,19 @@ public static class RibbonWpfRenderer
             return;
         }
 
+        var presentation = RibbonMenuItemPresentationPlanner.Plan(item);
+
         var menuItem = new MenuItem
         {
-            Header = item.Header,
-            InputGestureText = item.InputGesture ?? string.Empty,
+            Header = presentation.Header,
+            InputGestureText = presentation.InputGestureText,
             IsEnabled = item.IsEnabled,
             IsCheckable = item.IsChecked.HasValue,
             IsChecked = item.IsChecked ?? false,
         };
         // Keytip navigation only enters a menu whose items carry keytips, so propagate them.
-        if (!string.IsNullOrEmpty(item.KeyTip))
-            RibbonTooltip.SetKeyTip(menuItem, item.KeyTip);
+        if (!string.IsNullOrEmpty(presentation.KeyTip))
+            RibbonTooltip.SetKeyTip(menuItem, presentation.KeyTip);
 
         if (item.Children.Count > 0)
         {

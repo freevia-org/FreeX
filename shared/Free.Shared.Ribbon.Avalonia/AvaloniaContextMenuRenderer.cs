@@ -51,9 +51,12 @@ public static class AvaloniaContextMenuRenderer
         if (item.Kind == RibbonMenuItemKind.Separator)
             return new Separator();
 
+        var presentation = RibbonMenuItemPresentationPlanner.Plan(item);
+
         var menuItem = new MenuItem
         {
-            Header = item.Header,
+            Header = presentation.Header,
+            InputGesture = TryParseGesture(presentation.InputGestureText),
             Tag = item.CommandId?.Value,
             IsEnabled = item.IsEnabled,
         };
@@ -74,5 +77,20 @@ public static class AvaloniaContextMenuRenderer
         }
 
         return menuItem;
+    }
+
+    private static KeyGesture? TryParseGesture(string gesture)
+    {
+        if (string.IsNullOrWhiteSpace(gesture))
+            return null;
+
+        try
+        {
+            return KeyGesture.Parse(gesture);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 }
