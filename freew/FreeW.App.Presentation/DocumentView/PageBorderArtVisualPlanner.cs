@@ -330,10 +330,19 @@ public static class PageBorderArtVisualPlanner
             return false;
         }
 
-        var polygons = new List<PageBorderArtPolygon>();
+        var fills = new List<PageBorderArtFillRectangle>();
         foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
-            AddCakeSlice(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
-        plan = new PageBorderArtFilledShapePlan([], polygons);
+            AddMaterialMask(
+                fills,
+                PageBorderArtSpriteMasks.CakeSliceMask,
+                placement.Xdip,
+                placement.Ydip,
+                placement.SizeDip,
+                horizontal: true,
+                transparentMaterial: 3,
+                material1: (0xFF, 0xEE, 0xCA),
+                material2: (0xFF, 0x99, 0xC2));
+        plan = new PageBorderArtFilledShapePlan(fills, []);
         return true;
     }
 
@@ -382,8 +391,8 @@ public static class PageBorderArtVisualPlanner
                 placement.SizeDip,
                 horizontal: true,
                 transparentMaterial: 3,
-                shade1: 0x55,
-                shade2: 0xAA);
+                material1: (0x55, 0x55, 0x55),
+                material2: (0xAA, 0xAA, 0xAA));
         plan = new PageBorderArtFilledShapePlan(fills, []);
         return true;
     }
@@ -1180,38 +1189,6 @@ public static class PageBorderArtVisualPlanner
         Add(0xBF, 0x40, 0, (19, 16), (21, 16), (20, 28), (18, 28));
     }
 
-    private static void AddCakeSlice(
-        List<PageBorderArtPolygon> polygons,
-        double x,
-        double y,
-        double size)
-    {
-        var scale = size / 32.0;
-        PageBorderArtPoint Point(double px, double py) => new(x + px * scale, y + py * scale);
-        void Add(byte red, byte green, byte blue, params (double X, double Y)[] points) =>
-            polygons.Add(new PageBorderArtPolygon(
-                points.Select(point => Point(point.X, point.Y)).ToList(),
-                red,
-                green,
-                blue));
-
-        Add(0, 0, 0,
-            (7, 4), (12, 2), (17, 4), (22, 0), (26, 2), (27, 5), (31, 9), (31, 15),
-            (29, 18), (29, 24), (26, 26), (25, 32), (20, 31), (17, 29), (11, 28),
-            (6, 25), (2, 24), (1, 20), (3, 16), (3, 12), (5, 8));
-        Add(0xFF, 0xEE, 0xCA,
-            (5, 10), (9, 7), (17, 9), (22, 10), (27, 15), (26, 18), (23, 20),
-            (17, 18), (11, 16), (6, 14));
-        Add(0xFF, 0x99, 0xC2,
-            (8, 6), (13, 5), (19, 7), (22, 4), (25, 5), (26, 8), (29, 10), (29, 14),
-            (27, 16), (24, 13), (20, 10), (14, 9), (9, 9));
-        Add(0, 0, 0,
-            (9, 14), (15, 15), (21, 18), (25, 20), (25, 22), (21, 21), (15, 18), (9, 16));
-        Add(0xFF, 0xEE, 0xCA,
-            (4, 19), (8, 17), (14, 20), (22, 23), (26, 25), (25, 28), (21, 29),
-            (16, 27), (10, 26), (4, 23));
-    }
-
     private static void AddBirdInFlight(
         List<PageBorderArtPolygon> polygons,
         double x,
@@ -1428,9 +1405,11 @@ public static class PageBorderArtVisualPlanner
         double size,
         bool horizontal,
         byte transparentMaterial = 0,
-        byte shade1 = 0xC0,
-        byte shade2 = 0xFF)
+        (byte Red, byte Green, byte Blue)? material1 = null,
+        (byte Red, byte Green, byte Blue)? material2 = null)
     {
+        var color1 = material1 ?? (0xC0, 0xC0, 0xC0);
+        var color2 = material2 ?? (0xFF, 0xFF, 0xFF);
         var scale = size / PageBorderArtSpriteMasks.MaskSize;
         for (var row = 0; row < PageBorderArtSpriteMasks.MaskSize; row++)
         {
@@ -1444,12 +1423,12 @@ public static class PageBorderArtVisualPlanner
                 if (next != material && runStart >= 0)
                 {
                     var runLength = column - runStart;
-                    var shade = material switch
+                    var color = material switch
                     {
-                        0 => (byte)0x00,
-                        1 => shade1,
-                        2 => shade2,
-                        _ => (byte)0xFF,
+                        0 => ((byte)0x00, (byte)0x00, (byte)0x00),
+                        1 => color1,
+                        2 => color2,
+                        _ => ((byte)0xFF, (byte)0xFF, (byte)0xFF),
                     };
                     fills.Add(horizontal
                         ? new PageBorderArtFillRectangle(
@@ -1457,13 +1436,13 @@ public static class PageBorderArtVisualPlanner
                             y + row * scale,
                             runLength * scale,
                             scale,
-                            shade, shade, shade)
+                            color.Item1, color.Item2, color.Item3)
                         : new PageBorderArtFillRectangle(
                             x + row * scale,
                             y + runStart * scale,
                             scale,
                             runLength * scale,
-                            shade, shade, shade));
+                            color.Item1, color.Item2, color.Item3));
                     runStart = -1;
                 }
                 if (next != material)
