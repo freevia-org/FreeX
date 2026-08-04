@@ -20,7 +20,8 @@ public readonly record struct ChartSubtargetHit(
     uint ShapeId,
     ChartSubtargetKind Kind,
     int SeriesIndex = -1,
-    int PointIndex = -1);
+    int PointIndex = -1,
+    ChartAxisKind? AxisKind = null);
 
 /// <summary>Resolves chart context-menu targets from the shared planned scene.</summary>
 public static class ChartSubtargetHitTester
@@ -73,9 +74,19 @@ public static class ChartSubtargetHitTester
         {
             if (Contains(axisTitle.Label.Bounds, point))
             {
-                hit = new ChartSubtargetHit(shape.Id, ChartSubtargetKind.AxisTitle);
+                hit = new ChartSubtargetHit(shape.Id, ChartSubtargetKind.AxisTitle, AxisKind: axisTitle.AxisKind);
                 return true;
             }
+        }
+
+        if (scene.SecondaryAxis.Title is { } secondaryAxisTitle &&
+            Contains(secondaryAxisTitle.Label.Bounds, point))
+        {
+            hit = new ChartSubtargetHit(
+                shape.Id,
+                ChartSubtargetKind.AxisTitle,
+                AxisKind: ChartAxisKind.SecondaryValue);
+            return true;
         }
 
         foreach (var legend in scene.LegendItems)
