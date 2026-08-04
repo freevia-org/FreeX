@@ -1029,6 +1029,62 @@ public sealed class SetMediaCaptionTracksCommand : IPresentationCommand
     }
 }
 
+/// <summary>Changes one media object's authored playback volume as one undoable edit.</summary>
+public sealed class SetMediaVolumeCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _before;
+    private readonly int _after;
+
+    public SetMediaVolumeCommand(int slideIndex, uint shapeId, int before, int after)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _before = Math.Clamp(before, 0, 100);
+        _after = Math.Clamp(after, 0, 100);
+    }
+
+    public string Label => "Set Media Volume";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var media = FindMedia(presentation);
+        return media is not null && media.VolumePercent != _after;
+    }
+
+    public void Apply(Presentation presentation) => SetVolume(FindMedia(presentation), _after);
+
+    public void Revert(Presentation presentation) => SetVolume(FindMedia(presentation), _before);
+
+    private MediaInfo? FindMedia(Presentation presentation)
+    {
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return null;
+
+        return FindMedia(presentation.Slides[_slideIndex].Shapes);
+    }
+
+    private MediaInfo? FindMedia(IEnumerable<SlideShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == _shapeId && shape.Kind == SlideShapeKind.Media)
+                return shape.Media;
+            if (shape.Children.Count > 0 && FindMedia(shape.Children) is { } child)
+                return child;
+        }
+
+        return null;
+    }
+
+    private static void SetVolume(MediaInfo? media, int value)
+    {
+        if (media is not null)
+            media.VolumePercent = Math.Clamp(value, 0, 100);
+    }
+}
+
 /// <summary>Edits one native Summary Zoom tile's supported format properties.</summary>
 public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
 {

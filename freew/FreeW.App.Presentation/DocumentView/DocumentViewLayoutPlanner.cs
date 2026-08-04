@@ -790,6 +790,74 @@ public static class DocumentViewLayoutPlanner
             table.FloatingTableAllowsOverlap);
     }
 
+    public static DocumentFloatingObjectPlacementPlan BuildFloatingTablePlacement(
+        DocumentViewSurfacePlan surface,
+        double anchorContentYDip,
+        int columnCount,
+        double tableWidthDip,
+        double tableHeightDip,
+        DocumentTableFloatingPositionPlan position,
+        double? textAnchorLeftDip = null,
+        double? textAnchorWidthDip = null)
+    {
+        ArgumentNullException.ThrowIfNull(surface);
+        ArgumentNullException.ThrowIfNull(position);
+
+        var safeTableWidth = Math.Max(0, tableWidthDip);
+        var safeTableHeight = Math.Max(0, tableHeightDip);
+        var anchorPageIndex = surface.IsPrintLayout && surface.TextAreaHeightDip > 0
+            ? Math.Max(0, (int)(anchorContentYDip / surface.TextAreaHeightDip) / Math.Max(1, columnCount))
+            : 0;
+        var pageTop = surface.IsPrintLayout ? surface.PageTopDip(anchorPageIndex) : 0;
+        var paragraphY = surface.ContentYToPageSpaceY(anchorContentYDip, columnCount);
+        var textLeft = textAnchorLeftDip ?? surface.ContentLeftDip;
+        var textWidth = Math.Max(0, textAnchorWidthDip ?? surface.ContentWidthDip);
+
+        var (horizontalLeft, horizontalWidth) = position.HorizontalAnchor switch
+        {
+            TableHorizontalAnchor.Page => (surface.PageLeftDip, surface.PageWidthDip),
+            TableHorizontalAnchor.Margin => (surface.ContentLeftDip, surface.ContentWidthDip),
+            _ => (textLeft, textWidth)
+        };
+        var x = position.HorizontalAlignment switch
+        {
+            TableHorizontalPositionAlignment.Center => horizontalLeft + (horizontalWidth - safeTableWidth) / 2,
+            TableHorizontalPositionAlignment.Right => horizontalLeft + horizontalWidth - safeTableWidth,
+            TableHorizontalPositionAlignment.Inside => anchorPageIndex % 2 == 0
+                ? horizontalLeft
+                : horizontalLeft + horizontalWidth - safeTableWidth,
+            TableHorizontalPositionAlignment.Outside => anchorPageIndex % 2 == 0
+                ? horizontalLeft + horizontalWidth - safeTableWidth
+                : horizontalLeft,
+            TableHorizontalPositionAlignment.Left => horizontalLeft,
+            _ => horizontalLeft + (position.HorizontalOffsetDip ?? 0)
+        };
+
+        var (verticalTop, verticalHeight) = position.VerticalAnchor switch
+        {
+            TableVerticalAnchor.Page => (pageTop, surface.PageHeightDip),
+            TableVerticalAnchor.Margin => (
+                pageTop + surface.MarginTopDip,
+                Math.Max(0, surface.PageHeightDip - surface.MarginTopDip - surface.MarginBottomDip)),
+            _ => (paragraphY, 0)
+        };
+        var y = position.VerticalAlignment switch
+        {
+            TableVerticalPositionAlignment.Center => verticalTop + (verticalHeight - safeTableHeight) / 2,
+            TableVerticalPositionAlignment.Bottom => verticalTop + verticalHeight - safeTableHeight,
+            TableVerticalPositionAlignment.Inside => anchorPageIndex % 2 == 0
+                ? verticalTop
+                : verticalTop + verticalHeight - safeTableHeight,
+            TableVerticalPositionAlignment.Outside => anchorPageIndex % 2 == 0
+                ? verticalTop + verticalHeight - safeTableHeight
+                : verticalTop,
+            TableVerticalPositionAlignment.Top or TableVerticalPositionAlignment.Inline => verticalTop,
+            _ => verticalTop + (position.VerticalOffsetDip ?? 0)
+        };
+
+        return new DocumentFloatingObjectPlacementPlan(RoundDip(x), RoundDip(y), anchorPageIndex);
+    }
+
     public static DocumentTableCellEffectiveFillPlan BuildTableCellEffectiveFillPlan(
         Table table,
         int rowIndex,

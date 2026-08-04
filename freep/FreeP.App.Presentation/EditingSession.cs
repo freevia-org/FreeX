@@ -2304,6 +2304,7 @@ public sealed class EditingSession
         var staged = new MediaInfo
         {
             IsVideo = media.IsVideo,
+            VolumePercent = media.VolumePercent,
             PlaybackStartMode = media.PlaybackStartMode,
             Loop = media.Loop,
             Bytes = media.Bytes.ToArray(),
@@ -2332,6 +2333,24 @@ public sealed class EditingSession
                 media.CaptionTracks[result.TrackIndex]);
 
         return result;
+    }
+
+    /// <summary>Sets the selected media's authored volume through the shared undo bus.</summary>
+    public bool SetSelectedMediaVolume(int volumePercent)
+    {
+        var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
+            CurrentSlide,
+            SelectedShapeIds);
+        var media = mediaShape?.Media;
+        if (mediaShape is null || media is null)
+            return false;
+
+        Bus.Execute(new SetMediaVolumeCommand(
+            CurrentSlideIndex,
+            mediaShape.Id,
+            media.VolumePercent,
+            Math.Clamp(volumePercent, 0, 100)));
+        return true;
     }
 
     /// <summary>

@@ -295,6 +295,75 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildFloatingTablePlacement_ResolvesPageAndMarginAlignment()
+    {
+        var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            new PageSettings(),
+            DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: 816);
+        var position = new DocumentTableFloatingPositionPlan(
+            TableHorizontalAnchor.Page,
+            TableVerticalAnchor.Margin,
+            HorizontalOffsetDip: -20,
+            VerticalOffsetDip: 30,
+            TableHorizontalPositionAlignment.Outside,
+            TableVerticalPositionAlignment.Bottom,
+            LeftFromTextDip: 4,
+            RightFromTextDip: 5,
+            TopFromTextDip: 6,
+            BottomFromTextDip: 7,
+            AllowsOverlap: false);
+
+        var placement = DocumentViewLayoutPlanner.BuildFloatingTablePlacement(
+            surface,
+            anchorContentYDip: 0,
+            columnCount: 1,
+            tableWidthDip: 240,
+            tableHeightDip: 120,
+            position);
+
+        placement.XDip.Should().BeApproximately(surface.PageLeftDip + surface.PageWidthDip - 240, 0.001);
+        placement.YDip.Should().BeApproximately(
+            surface.PageTopDip(0) + surface.PageHeightDip - surface.MarginBottomDip - 120,
+            0.001);
+        placement.AnchorPageIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void BuildFloatingTablePlacement_UsesTextBandAndSignedOffsets()
+    {
+        var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            new PageSettings(),
+            DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: 816);
+        var position = new DocumentTableFloatingPositionPlan(
+            TableHorizontalAnchor.Text,
+            TableVerticalAnchor.Text,
+            HorizontalOffsetDip: -16,
+            VerticalOffsetDip: 24,
+            HorizontalAlignment: null,
+            VerticalAlignment: null,
+            LeftFromTextDip: null,
+            RightFromTextDip: null,
+            TopFromTextDip: null,
+            BottomFromTextDip: null,
+            AllowsOverlap: null);
+
+        var placement = DocumentViewLayoutPlanner.BuildFloatingTablePlacement(
+            surface,
+            anchorContentYDip: 200,
+            columnCount: 1,
+            tableWidthDip: 180,
+            tableHeightDip: 80,
+            position,
+            textAnchorLeftDip: 300,
+            textAnchorWidthDip: 240);
+
+        placement.XDip.Should().BeApproximately(284, 0.001);
+        placement.YDip.Should().BeApproximately(surface.ContentYToPageSpaceY(200, 1) + 24, 0.001);
+    }
+
+    [Fact]
     public void BuildTablePaginationPlan_RepeatsHeaderAndKeepsRowsTogetherAcrossPages()
     {
         var document = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();

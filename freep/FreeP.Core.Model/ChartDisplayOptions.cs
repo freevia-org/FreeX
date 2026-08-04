@@ -33,4 +33,5 @@ public sealed record ChartDisplayOptions(
     bool? RoundedCorners = null,
     bool? ShowWaterfallConnectorLines = null,
     bool? ShowDropLines = null,
-    bool? ShowUpDownBars = null);
+    bool? ShowUpDownBars = null,
+    bool? ShowSeriesLines = null);

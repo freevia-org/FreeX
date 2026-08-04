@@ -198,6 +198,17 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
     private readonly TextBox _preferredWidth;
     private readonly ComboBox _alignment;
     private readonly ComboBox _wrapping;
+    private readonly CheckBox _allowFloatingOverlap;
+    private readonly ComboBox _floatingHorizontalAnchor;
+    private readonly ComboBox _floatingHorizontalMode;
+    private readonly TextBox _floatingHorizontalOffset;
+    private readonly ComboBox _floatingVerticalAnchor;
+    private readonly ComboBox _floatingVerticalMode;
+    private readonly TextBox _floatingVerticalOffset;
+    private readonly TextBox _floatingDistanceTop;
+    private readonly TextBox _floatingDistanceLeft;
+    private readonly TextBox _floatingDistanceBottom;
+    private readonly TextBox _floatingDistanceRight;
     private readonly TextBox _indent;
     private readonly TextBox _cellMarginTop;
     private readonly TextBox _cellMarginLeft;
@@ -250,6 +261,41 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         _preferredWidthOn = Check("Preferred width (pt):", state.PreferredWidthOn, "TablePropertiesPreferredWidthCheckBox");
         _alignment = Combo(TablePropertiesDialogPlanner.AlignmentNames, state.AlignmentIndex, "TablePropertiesAlignmentBox");
         _wrapping = Combo(TablePropertiesDialogPlanner.WrappingNames, state.WrappingIndex, "TablePropertiesWrappingBox");
+        _allowFloatingOverlap = new CheckBox
+        {
+            Content = "Allow overlap",
+            IsThreeState = true,
+            IsChecked = state.FloatingTableAllowsOverlap,
+            Margin = new Thickness(4, 4, 8, 4),
+            IsEnabled = state.WrappingIndex == 1,
+        };
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_allowFloatingOverlap, DialogChromeStyle);
+        AutomationProperties.SetAutomationId(_allowFloatingOverlap, "TablePropertiesAllowOverlapCheckBox");
+        _floatingHorizontalAnchor = Combo(
+            TablePropertiesDialogPlanner.FloatingHorizontalAnchorNames,
+            state.FloatingHorizontalAnchorIndex,
+            "TablePropertiesHorizontalAnchorBox");
+        _floatingHorizontalMode = Combo(
+            TablePropertiesDialogPlanner.FloatingHorizontalModeNames,
+            state.FloatingHorizontalModeIndex,
+            "TablePropertiesHorizontalModeBox");
+        _floatingHorizontalOffset = NumberBox(state.FloatingHorizontalOffsetText, "TablePropertiesHorizontalOffsetBox");
+        _floatingVerticalAnchor = Combo(
+            TablePropertiesDialogPlanner.FloatingVerticalAnchorNames,
+            state.FloatingVerticalAnchorIndex,
+            "TablePropertiesVerticalAnchorBox");
+        _floatingVerticalMode = Combo(
+            TablePropertiesDialogPlanner.FloatingVerticalModeNames,
+            state.FloatingVerticalModeIndex,
+            "TablePropertiesVerticalModeBox");
+        _floatingVerticalOffset = NumberBox(state.FloatingVerticalOffsetText, "TablePropertiesVerticalOffsetBox");
+        _floatingDistanceTop = NumberBox(state.FloatingDistanceTopText, "TablePropertiesDistanceTopBox");
+        _floatingDistanceLeft = NumberBox(state.FloatingDistanceLeftText, "TablePropertiesDistanceLeftBox");
+        _floatingDistanceBottom = NumberBox(state.FloatingDistanceBottomText, "TablePropertiesDistanceBottomBox");
+        _floatingDistanceRight = NumberBox(state.FloatingDistanceRightText, "TablePropertiesDistanceRightBox");
+        _wrapping.SelectionChanged += (_, _) => UpdateFloatingPositionControls();
+        _floatingHorizontalMode.SelectionChanged += (_, _) => UpdateFloatingPositionControls();
+        _floatingVerticalMode.SelectionChanged += (_, _) => UpdateFloatingPositionControls();
         _indent = NumberBox(state.IndentText, "TablePropertiesIndentBox");
         _cellMarginTop = NumberBox(state.DefaultCellMarginTopText, "TablePropertiesDefaultMarginTopBox");
         _cellMarginLeft = NumberBox(state.DefaultCellMarginLeftText, "TablePropertiesDefaultMarginLeftBox");
@@ -349,9 +395,51 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
 
         return Stack(
             grid,
+            BuildFloatingPositioningPanel(),
             Header("Default cell margins (pt):"),
             margins,
             spacing);
+    }
+
+    private Control BuildFloatingPositioningPanel()
+    {
+        var position = TwoColumnGrid(6, 160);
+        AddRow(position, 0, "Horizontal relative to:", _floatingHorizontalAnchor);
+        AddRow(position, 1, "Horizontal alignment:", _floatingHorizontalMode);
+        AddRow(position, 2, "Horizontal position (pt):", _floatingHorizontalOffset);
+        AddRow(position, 3, "Vertical relative to:", _floatingVerticalAnchor);
+        AddRow(position, 4, "Vertical alignment:", _floatingVerticalMode);
+        AddRow(position, 5, "Vertical position (pt):", _floatingVerticalOffset);
+
+        var distances = TwoColumnGrid(4, 54);
+        AddRow(distances, 0, "Top:", _floatingDistanceTop);
+        AddRow(distances, 1, "Left:", _floatingDistanceLeft);
+        AddRow(distances, 2, "Bottom:", _floatingDistanceBottom);
+        AddRow(distances, 3, "Right:", _floatingDistanceRight);
+
+        var stack = new StackPanel { Margin = new Thickness(8) };
+        stack.Children.Add(position);
+        stack.Children.Add(Header("Distance from surrounding text (pt):"));
+        stack.Children.Add(distances);
+        stack.Children.Add(_allowFloatingOverlap);
+        UpdateFloatingPositionControls();
+        return new Expander { Header = "Positioning", IsExpanded = true, Content = stack };
+    }
+
+    private void UpdateFloatingPositionControls()
+    {
+        var enabled = _wrapping.SelectedIndex == 1;
+        _allowFloatingOverlap.IsEnabled = enabled;
+        _floatingHorizontalAnchor.IsEnabled = enabled;
+        _floatingHorizontalMode.IsEnabled = enabled;
+        _floatingHorizontalOffset.IsEnabled = enabled && _floatingHorizontalMode.SelectedIndex == 0;
+        _floatingVerticalAnchor.IsEnabled = enabled;
+        _floatingVerticalMode.IsEnabled = enabled;
+        _floatingVerticalOffset.IsEnabled = enabled && _floatingVerticalMode.SelectedIndex == 0;
+        _floatingDistanceTop.IsEnabled = enabled;
+        _floatingDistanceLeft.IsEnabled = enabled;
+        _floatingDistanceBottom.IsEnabled = enabled;
+        _floatingDistanceRight.IsEnabled = enabled;
     }
 
     private static TabItem TabPage(string header, string automationId, Control content)
@@ -424,7 +512,18 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
             _cmBottom.Text,
             _cmRight.Text,
             _cellWrapText.IsChecked == true,
-            _cellFitText.IsChecked == true);
+            _cellFitText.IsChecked == true,
+            _floatingHorizontalAnchor.SelectedIndex,
+            _floatingHorizontalMode.SelectedIndex,
+            _floatingHorizontalOffset.Text,
+            _floatingVerticalAnchor.SelectedIndex,
+            _floatingVerticalMode.SelectedIndex,
+            _floatingVerticalOffset.Text,
+            _floatingDistanceTop.Text,
+            _floatingDistanceLeft.Text,
+            _floatingDistanceBottom.Text,
+            _floatingDistanceRight.Text,
+            _allowFloatingOverlap.IsChecked);
 
         if (!TablePropertiesDialogPlanner.TryBuildResult(
                 input,

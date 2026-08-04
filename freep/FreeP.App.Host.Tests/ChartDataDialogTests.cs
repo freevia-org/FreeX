@@ -191,6 +191,19 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [StaFact]
+    public void ChartDisplayOptionsDialog_SeriesLinesUsesSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.ChartType = ChartType.ColumnStacked;
+        sess.SelectedChart.SeriesLinesSpecified = true;
+
+        var dialog = new ChartDisplayOptionsDialog(sess);
+        dialog.SetSeriesLinesForTests(false);
+
+        dialog.BuildCommitPlanForTests().ShowSeriesLines.Should().BeFalse();
+    }
+
+    [StaFact]
     public void ChartAxisOptionsDialog_ConstructsAndUsesSharedPlanner()
     {
         var (sess, _) = MakeSession();

@@ -60,6 +60,44 @@ public sealed class DocumentViewTableEditTests
         return (view, idx, tbl);
     }
 
+    [Fact]
+    public async Task Floating_table_offsets_move_the_complete_cell_surface()
+    {
+        Rect inlineRect = default;
+        Rect floatingRect = default;
+        var ran = await OnUiThread(() =>
+        {
+            static Rect RenderFirstCell(TableFloatingPosition? position)
+            {
+                var document = TextDocument.CreateEmpty();
+                document.Blocks.Clear();
+                var table = Table.Create(1, 1);
+                table.Rows[0].Cells[0] = new TableCell("positioned");
+                table.ColumnWidthsPt.Add(120);
+                table.FloatingPosition = position;
+                document.Blocks.Add(table);
+
+                var view = new DocumentView();
+                view.LoadDocument(document);
+                view.Measure(new Size(816, 2000));
+                return view.TableCellRects.Single().Rect;
+            }
+
+            inlineRect = RenderFirstCell(position: null);
+            floatingRect = RenderFirstCell(new TableFloatingPosition(
+                HorizontalAnchor: TableHorizontalAnchor.Text,
+                VerticalAnchor: TableVerticalAnchor.Text,
+                HorizontalOffsetPt: 36,
+                VerticalOffsetPt: 24));
+        });
+
+        if (!ran) return;
+        floatingRect.Left.Should().BeApproximately(inlineRect.Left + 48, 0.01);
+        floatingRect.Top.Should().BeApproximately(inlineRect.Top + 32, 0.01);
+        floatingRect.Width.Should().BeApproximately(inlineRect.Width, 0.01);
+        floatingRect.Height.Should().BeApproximately(inlineRect.Height, 0.01);
+    }
+
     // ── test 1: PlaceCaretInCell sets _cellCaret ─────────────────────────────────────────────────
 
     [Fact]

@@ -9044,6 +9044,21 @@ public sealed class DocumentView : Control
             rowHeights[pr] = ApplyAuthoredTableRowHeight(prRow, prRowHeight);
         }
 
+        var floatingAnchorContentY = _layoutContentY;
+        var floatingPlacement = tableLayoutPlan.FloatingPosition is { } floatingPosition
+            && tableLayoutPlan.Pagination.Pages.Count == 1
+            ? DocumentViewLayoutPlanner.BuildFloatingTablePlacement(
+                _surfacePlan,
+                floatingAnchorContentY,
+                _colCount,
+                running,
+                rowHeights.Sum(),
+                floatingPosition,
+                ColumnLeftFor(floatingAnchorContentY),
+                textWidth)
+            : null;
+        double? floatingVisualYOffsetDip = null;
+
         // WPF suppresses synthetic table page segments when a vertical merge is present. The
         // shared layout plan already records that eligibility fact, so use it as the cross-platform
         // authority instead of repeating headers across a merge boundary.
@@ -9126,9 +9141,14 @@ public sealed class DocumentView : Control
             // Treat the row as a unit: reserve space on the current page (or push to next).
             var rowContentY = reservedContentY ?? ReserveContentY(rowHeight);
             var rowPageSpaceY = ContentYToPageSpaceY(rowContentY);
+            if (floatingPlacement is not null)
+            {
+                floatingVisualYOffsetDip ??= floatingPlacement.YDip - rowPageSpaceY;
+                rowPageSpaceY += floatingVisualYOffsetDip.Value;
+            }
 
             // AV-COL-NONTXT AG1: use the column band that this row's content-Y falls in.
-            var rowColLeft = ColumnLeftFor(rowContentY);
+            var rowColLeft = floatingPlacement?.XDip ?? ColumnLeftFor(rowContentY);
 
             foreach (var (cellModel, cellIndex, startCol, span, cellParas, paragraphSpacings, markerInsets, fmt) in measured)
             {
@@ -9269,6 +9289,8 @@ public sealed class DocumentView : Control
             RenderTableRow(r);
         }
 
+        if (floatingVisualYOffsetDip is > 0)
+            _layoutContentY += floatingVisualYOffsetDip.Value;
         _layoutContentY += 8;
     }
 

@@ -6204,6 +6204,10 @@ public static class PptxPackageReader
                 continue;
 
             var cTn = mediaNode.Element(P + "cTn");
+            var volumeToken = mediaNode.Attribute("vol")?.Value;
+            if (int.TryParse(volumeToken, NumberStyles.Integer, CultureInfo.InvariantCulture, out var volume))
+                shape.Media.VolumePercent = Math.Clamp((int)Math.Round(volume / 1000d), 0, 100);
+
             var repeatCount = cTn?.Attribute("repeatCount")?.Value;
             shape.Media.Loop = string.Equals(repeatCount, "indefinite", StringComparison.OrdinalIgnoreCase)
                 || (int.TryParse(repeatCount, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
