@@ -2377,7 +2377,7 @@ internal static class FreeWRibbonCommands
     }
 
     // Home > Paragraph > Multilevel List > Define New Multilevel List: opens the definition dialog and
-    // applies the backed subset (ListKind.MultiLevel, optional start override, and modelled number styles).
+    // applies the complete backed definition as one undoable edit.
     private sealed class DefineMultilevelListCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -2387,15 +2387,7 @@ internal static class FreeWRibbonCommands
             if (def is null)
                 return;
             editor.Focus();
-            // Apply multilevel to selection (this sets ListKind.MultiLevel on selected paragraphs).
-            editor.ApplyMultiLevelList();
-            // Apply start-at overrides if requested: Level0StartAt applies to level-0 paragraphs,
-            // Level1StartAt to level-1 paragraphs. Uses per-paragraph conditional transform.
-            if (def.Level0StartAt.HasValue || def.Level1StartAt.HasValue)
-            {
-                editor.ApplyListStartOverrides(def.Level0StartAt, def.Level1StartAt);
-            }
-            editor.ApplyMultiLevelNumberFormats(def.NumberFormats);
+            editor.ApplyMultiLevelListDefinition(def);
         }
     }
 

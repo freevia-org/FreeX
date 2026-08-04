@@ -3499,6 +3499,45 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Applies a complete Define New Multilevel List result as one undoable formatting edit. Selected
+    /// paragraph levels are clamped to the configured level count, matching the Avalonia host.
+    /// </summary>
+    public void ApplyMultiLevelListDefinition(MultilevelListDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
+            return;
+
+        Focus();
+        CommitToModel();
+        var indices = SelectedModelParagraphIndices();
+        if (indices.Count == 0)
+            return;
+
+        _commands.BeginUndoGroup();
+        try
+        {
+            foreach (var index in indices)
+            {
+                if (_model.Blocks[index] is not ModelParagraph paragraph)
+                    continue;
+
+                _commands.Execute(new SetParagraphFormattingCommand(
+                    index,
+                    MultilevelListDialogPlanner.ApplyDefinition(paragraph.Formatting, definition)));
+            }
+
+            _commands.Execute(new SetMultiLevelNumberFormatsCommand(definition.NumberFormats));
+            _commands.CommitUndoGroup("Define Multilevel List");
+        }
+        catch
+        {
+            _commands.AbortUndoGroup();
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Change the outline depth (<see cref="ParagraphFormatting.ListLevel"/>) of every list paragraph
     /// spanned by the selection by <paramref name="delta"/> (e.g. +1 to demote on Tab, -1 to promote on
     /// Shift+Tab), clamped to 0..8. Non-list paragraphs are unaffected. Reversible via the bus.

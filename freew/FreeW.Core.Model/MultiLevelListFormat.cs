@@ -64,6 +64,31 @@ public sealed class MultiLevelListFormat
     ];
 }
 
+/// <summary>Replaces the document's multilevel number formats as one reversible formatting edit.</summary>
+public sealed class SetMultiLevelNumberFormatsCommand(IEnumerable<ListNumberFormat> formats) : IDocumentCommand
+{
+    private readonly ListNumberFormat[] _formats = [.. formats];
+    private ListNumberFormat[]? _previous;
+
+    public string Label => "Define Multilevel List";
+    public DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.BodyFormatting;
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        _previous = [.. context.Document.MultiLevelList.NumberFormats];
+        context.Document.MultiLevelList.SetNumberFormats(_formats);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null)
+            return;
+
+        context.Document.MultiLevelList.SetNumberFormats(_previous);
+        _previous = null;
+    }
+}
+
 /// <summary>
 /// Shared formatter for the accumulated markers rendered by WPF/Avalonia and described by DOCX lvlText.
 /// </summary>

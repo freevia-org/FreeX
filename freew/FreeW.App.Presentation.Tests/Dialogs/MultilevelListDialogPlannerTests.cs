@@ -51,4 +51,31 @@ public sealed class MultilevelListDialogPlannerTests
             out var validation).Should().BeFalse();
         validation!.Field.Should().Be(MultilevelListDialogField.Level1StartAt);
     }
+
+    [Theory]
+    [InlineData(0, 0, 4)]
+    [InlineData(1, 1, 7)]
+    [InlineData(4, 2, null)]
+    public void ApplyDefinition_UsesStartsAndClampsToConfiguredLevels(
+        int sourceLevel,
+        int expectedLevel,
+        int? expectedStart)
+    {
+        var definition = new MultilevelListDefinition(
+            3,
+            Level0StartAt: 4,
+            Level1StartAt: 7,
+            MultiLevelListFormat.DecimalNumberFormats);
+        var source = ParagraphFormatting.Default with
+        {
+            ListLevel = sourceLevel,
+            ListStartOverride = sourceLevel > 1 ? null : 99,
+        };
+
+        var result = MultilevelListDialogPlanner.ApplyDefinition(source, definition);
+
+        result.ListKind.Should().Be(ListKind.MultiLevel);
+        result.ListLevel.Should().Be(expectedLevel);
+        result.ListStartOverride.Should().Be(expectedStart);
+    }
 }
