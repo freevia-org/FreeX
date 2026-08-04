@@ -18,8 +18,8 @@ public static class CustomXmlDataBindingResolver
         "http://schemas.openxmlformats.org/officeDocument/2006/customXml";
 
     /// <summary>
-    /// Refreshes successfully resolved textual content controls and leaves every unresolved control unchanged.
-    /// Returns the number of distinct controls whose display text was updated.
+    /// Refreshes successfully resolved text, list, checkbox, and supported Gregorian date controls while
+    /// leaving every unresolved control unchanged. Returns the number of distinct controls that were updated.
     /// </summary>
     public static int RefreshBoundTextControls(TextDocument document)
     {
@@ -39,7 +39,7 @@ public static class CustomXmlDataBindingResolver
 
     /// <summary>
     /// Backward-compatible entry point for callers that used the original plain-text-only refresh API.
-    /// List and combo controls are now refreshed by the same Word XML-mapping pass.
+    /// List, combo, checkbox, and supported Gregorian date controls now use the same Word XML-mapping pass.
     /// </summary>
     public static int RefreshBoundPlainTextControls(TextDocument document) =>
         RefreshBoundTextControls(document);
@@ -95,6 +95,19 @@ public static class CustomXmlDataBindingResolver
             return true;
         }
 
+        if (control.Kind == ContentControlKind.DatePicker
+            && TryResolveDateBinding(control, value, out var updatedDateControl, out var displayText))
+        {
+            runs[start].Text = displayText;
+            for (var index = start; index < end; index++)
+            {
+                runs[index].Control = updatedDateControl;
+                if (index > start)
+                    runs[index].Text = string.Empty;
+            }
+            return true;
+        }
+
         if (control.Kind != ContentControlKind.CheckBox || !TryParseXmlBoolean(value, out var isChecked))
             return false;
 
@@ -121,6 +134,80 @@ public static class CustomXmlDataBindingResolver
 
         return control.Items.FirstOrDefault(item => string.Equals(item.Value, value, StringComparison.Ordinal))
             ?.DisplayText ?? value;
+    }
+
+    private static bool TryResolveDateBinding(
+        ContentControl control,
+        string value,
+        out ContentControl updated,
+        out string displayText)
+    {
+        updated = control;
+        displayText = string.Empty;
+        var metadata = control.DateMetadata;
+        if (metadata?.Calendar is { Length: > 0 } calendar
+            && !string.Equals(calendar, "gregorian", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var storage = metadata?.StoreMappedDataAs;
+        DateTimeOffset date;
+        string fullDate;
+        if (string.Equals(storage, "date", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!DateOnly.TryParseExact(
+                    value.Trim(),
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var dateOnly))
+            {
+                return false;
+            }
+
+            date = new DateTimeOffset(dateOnly.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+            fullDate = $"{dateOnly:yyyy-MM-dd}T00:00:00Z";
+        }
+        else if (string.Equals(storage, "dateTime", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                date = XmlConvert.ToDateTimeOffset(value.Trim());
+                fullDate = XmlConvert.ToString(date);
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
+        }
+        else
+        {
+            return false;
+        }
+
+        CultureInfo culture;
+        try
+        {
+            culture = metadata?.LanguageId is { Length: > 0 } languageId
+                ? CultureInfo.GetCultureInfo(languageId)
+                : CultureInfo.InvariantCulture;
+            displayText = date.ToString(control.DateFormat ?? ContentControl.DefaultDateFormat, culture);
+        }
+        catch (CultureNotFoundException)
+        {
+            return false;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        updated = control with
+        {
+            DateMetadata = (metadata ?? new ContentControlDateMetadata()) with { FullDate = fullDate }
+        };
+        return true;
     }
 
     private static bool TryParseXmlBoolean(string value, out bool result)
