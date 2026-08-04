@@ -2,7 +2,7 @@ using System.Xml.Linq;
 
 namespace FreeP.Core.Model;
 
-/// <summary>Mutates supported outline color/width/dash/gradient/pattern inside native Zoom <c>zmPr/spPr</c>.</summary>
+/// <summary>Mutates supported outline color/width/dash/fill states inside native Zoom <c>zmPr/spPr</c>.</summary>
 internal static class ZoomFrameBorderXml
 {
     private static readonly XNamespace Drawing =
@@ -14,10 +14,14 @@ internal static class ZoomFrameBorderXml
         int? widthEmu,
         OutlineDash? dash,
         ZoomFrameBorderGradient? gradient = null,
-        ZoomFrameBorderPattern? pattern = null)
+        ZoomFrameBorderPattern? pattern = null,
+        bool? noFill = null)
     {
+        if (noFill == false)
+            noFill = null;
+
         // Null means the model did not understand the native line; preserve it verbatim.
-        if (color is null && widthEmu is null && dash is null && gradient is null && pattern is null)
+        if (color is null && widthEmu is null && dash is null && gradient is null && pattern is null && noFill is null)
             return;
 
         var shapeProperties = zoomProperties.Elements().FirstOrDefault(element =>
@@ -26,7 +30,7 @@ internal static class ZoomFrameBorderXml
             return;
 
         var line = shapeProperties.Elements(Drawing + "ln").FirstOrDefault();
-        if (line is null && (widthEmu is not null || dash is not null || gradient is not null))
+        if (line is null && (widthEmu is not null || dash is not null || gradient is not null || noFill == true))
         {
             line = new XElement(Drawing + "ln");
             shapeProperties.Add(line);
@@ -45,6 +49,18 @@ internal static class ZoomFrameBorderXml
         var solidFill = line?.Elements(Drawing + "solidFill").FirstOrDefault();
         if (gradient is not null && pattern is not null)
             throw new ArgumentException("A Zoom frame border cannot use both gradient and pattern fills.");
+        if (noFill == true && (color is not null || gradient is not null || pattern is not null))
+            throw new ArgumentException("A Zoom frame border cannot combine no-fill with another fill.");
+
+        if (noFill == true)
+        {
+            line ??= new XElement(Drawing + "ln");
+            RemoveAllFills(line);
+            line.AddFirst(new XElement(Drawing + "noFill"));
+            if (line.Parent is null)
+                shapeProperties.Add(line);
+            return;
+        }
 
         if (gradient is not null)
         {
@@ -88,7 +104,8 @@ internal static class ZoomFrameBorderXml
         if (color is { Length: 0 })
         {
             if (solidFill is null
-                && line?.Elements(Drawing + "gradFill").FirstOrDefault() is null)
+                && line?.Elements(Drawing + "gradFill").FirstOrDefault() is null
+                && line?.Elements(Drawing + "noFill").FirstOrDefault() is null)
                 return;
 
             RemoveRecognizedFills(line!, preserveUnsupportedPattern: true);
@@ -131,6 +148,16 @@ internal static class ZoomFrameBorderXml
         return preset is not null
             && colors.Length == 2
             && colors.All(color => color is { Length: 6 } && color.All(Uri.IsHexDigit));
+    }
+
+    private static void RemoveAllFills(XElement line)
+    {
+        foreach (var fill in line.Elements().Where(element =>
+                     element.Name == Drawing + "solidFill"
+                     || element.Name == Drawing + "gradFill"
+                     || element.Name == Drawing + "pattFill"
+                     || element.Name == Drawing + "noFill").ToArray())
+            fill.Remove();
     }
 
     private static string ToDashToken(OutlineDash dash) => dash switch

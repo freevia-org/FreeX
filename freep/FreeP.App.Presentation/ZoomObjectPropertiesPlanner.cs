@@ -89,7 +89,8 @@ public static class ZoomObjectPropertiesPlanner
             ReadFrameBorderDash(properties),
             ReadFrameGeometry(properties),
             ReadFrameBorderGradient(properties),
-            ReadFrameBorderPattern(properties));
+            ReadFrameBorderPattern(properties),
+            ReadFrameBorderNoFill(properties));
         return value.IsEmpty ? fallback : value;
     }
 
@@ -177,6 +178,18 @@ public static class ZoomObjectPropertiesPlanner
             && foreground is not null
             && background is not null
             ? new ZoomFrameBorderPattern(normalizedPreset!, foreground, background)
+            : null;
+    }
+
+    private static bool? ReadFrameBorderNoFill(XElement properties)
+    {
+        var line = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
+        return line?.Elements().Any(element =>
+            string.Equals(element.Name.LocalName, "noFill", StringComparison.OrdinalIgnoreCase)) == true
+            ? true
             : null;
     }
 
@@ -269,7 +282,8 @@ public static class ZoomObjectPropertiesPlanner
     public static bool IsFrameBorderEnabled(ZoomObjectProperties properties) =>
         TryNormalizeFrameBorderColor(properties.FrameBorderColor, out _)
         || properties.FrameBorderGradient is not null
-        || properties.FrameBorderPattern is not null;
+        || properties.FrameBorderPattern is not null
+        || properties.FrameBorderNoFill == true;
 
     public static string FormatFrameBorderWidth(ZoomObjectProperties properties) =>
         properties.FrameBorderWidthEmu is int width
@@ -298,6 +312,9 @@ public static class ZoomObjectPropertiesPlanner
 
     public static bool IsFrameBorderPatternEnabled(ZoomObjectProperties properties) =>
         properties.FrameBorderPattern is not null;
+
+    public static bool IsFrameBorderNoFillEnabled(ZoomObjectProperties properties) =>
+        properties.FrameBorderNoFill == true;
 
     public static string FormatFrameBorderPatternPreset(ZoomObjectProperties properties) =>
         properties.FrameBorderPattern?.Preset ?? FrameBorderPatternOptions[0];

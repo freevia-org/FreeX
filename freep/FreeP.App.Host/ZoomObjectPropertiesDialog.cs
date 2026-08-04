@@ -13,6 +13,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private readonly CheckBox _frameBorderEnabled;
     private readonly CheckBox _frameBorderGradientEnabled;
     private readonly CheckBox _frameBorderPatternEnabled;
+    private readonly CheckBox _frameBorderNoFillEnabled;
     private readonly ComboBox _imageType;
     private readonly TextBox _transitionDuration;
     private readonly TextBox _frameBorderColor;
@@ -168,6 +169,19 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             MinWidth = 180,
             ToolTip = "six-digit RGB value; for example FFFFFF",
         };
+        _frameBorderNoFillEnabled = new CheckBox
+        {
+            Content = "Use no-fill border",
+            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderNoFillEnabled(current),
+        };
+        _frameBorderNoFillEnabled.Checked += (_, _) =>
+        {
+            _frameBorderGradientEnabled.IsChecked = false;
+            _frameBorderPatternEnabled.IsChecked = false;
+            SyncFrameBorderState();
+        };
+        _frameBorderGradientEnabled.Checked += (_, _) => _frameBorderNoFillEnabled.IsChecked = false;
+        _frameBorderPatternEnabled.Checked += (_, _) => _frameBorderNoFillEnabled.IsChecked = false;
         _frameGeometry = new ComboBox
         {
             ItemsSource = ZoomObjectPropertiesPlanner.FrameGeometryOptions,
@@ -206,7 +220,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         }
 
         var grid = new Grid { Margin = new Thickness(14) };
-        for (var i = 0; i < 20 + (_summaryTargets.Count > 0 ? 4 : 0); i++)
+        for (var i = 0; i < 21 + (_summaryTargets.Count > 0 ? 4 : 0); i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -235,6 +249,9 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         AddRow(grid, row++, "Pattern preset:", _frameBorderPatternPreset);
         AddRow(grid, row++, "Pattern foreground:", _frameBorderPatternForeground);
         AddRow(grid, row++, "Pattern background:", _frameBorderPatternBackground);
+        Grid.SetRow(_frameBorderNoFillEnabled, row++);
+        Grid.SetColumnSpan(_frameBorderNoFillEnabled, 2);
+        grid.Children.Add(_frameBorderNoFillEnabled);
         AddRow(grid, row++, "Frame shape:", _frameGeometry);
         AddRow(grid, row++, "Preview crop (%):", _cropEdges);
         if (_summaryTile is not null)
@@ -298,11 +315,14 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                 MessageBoxImage.Warning);
             return;
         }
+        var noFillEnabled = _frameBorderEnabled.IsChecked == true
+            && _frameBorderNoFillEnabled.IsChecked == true;
         if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderColor(
                 _frameBorderColor.Text,
                 _frameBorderEnabled.IsChecked == true
                 && _frameBorderGradientEnabled.IsChecked != true
-                && _frameBorderPatternEnabled.IsChecked != true,
+                && _frameBorderPatternEnabled.IsChecked != true
+                && !noFillEnabled,
                 out var frameBorderColor))
         {
             MessageBox.Show(this,
@@ -339,7 +359,8 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             return;
         }
         var gradientEnabled = _frameBorderEnabled.IsChecked == true
-            && _frameBorderGradientEnabled.IsChecked == true;
+            && _frameBorderGradientEnabled.IsChecked == true
+            && !noFillEnabled;
         if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderGradient(
                 _frameBorderGradientStart.Text,
                 _frameBorderGradientEnd.Text,
@@ -357,7 +378,8 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         if (gradientEnabled)
             frameBorderColor = null;
         var patternEnabled = _frameBorderEnabled.IsChecked == true
-            && _frameBorderPatternEnabled.IsChecked == true;
+            && _frameBorderPatternEnabled.IsChecked == true
+            && !noFillEnabled;
         if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderPattern(
                 _frameBorderPatternPreset.SelectedItem?.ToString(),
                 _frameBorderPatternForeground.Text,
@@ -376,6 +398,12 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         {
             frameBorderColor = null;
             frameBorderGradient = null;
+        }
+        if (noFillEnabled)
+        {
+            frameBorderColor = null;
+            frameBorderGradient = null;
+            frameBorderPattern = null;
         }
         if (!ZoomObjectPropertiesPlanner.TryParseFrameGeometry(
                 _frameGeometry.SelectedItem?.ToString(), out var frameGeometry))
@@ -431,7 +459,8 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             frameBorderDash,
             frameGeometry,
             frameBorderGradient,
-            frameBorderPattern);
+            frameBorderPattern,
+            noFillEnabled ? true : null);
         if (_summaryTile is not null && _summaryTile.SelectedIndex >= 0
             && _summaryTile.SelectedIndex < _summaryTargets.Count)
         {
@@ -472,6 +501,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _frameBorderPatternPreset.SelectedItem = ZoomObjectPropertiesPlanner.FormatFrameBorderPatternPreset(properties);
         _frameBorderPatternForeground.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderPatternForeground(properties);
         _frameBorderPatternBackground.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderPatternBackground(properties);
+        _frameBorderNoFillEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderNoFillEnabled(properties);
         SyncFrameBorderState();
         _frameGeometry.SelectedItem = ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
             geometry => string.Equals(geometry, properties.FrameGeometry, StringComparison.OrdinalIgnoreCase))
@@ -491,9 +521,10 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private void SyncFrameBorderState()
     {
         var enabled = _frameBorderEnabled.IsChecked == true;
-        var gradient = enabled && _frameBorderGradientEnabled.IsChecked == true;
-        var pattern = enabled && _frameBorderPatternEnabled.IsChecked == true;
-        _frameBorderColor.IsEnabled = enabled && !gradient && !pattern;
+        var noFill = enabled && _frameBorderNoFillEnabled.IsChecked == true;
+        var gradient = enabled && _frameBorderGradientEnabled.IsChecked == true && !noFill;
+        var pattern = enabled && _frameBorderPatternEnabled.IsChecked == true && !noFill;
+        _frameBorderColor.IsEnabled = enabled && !gradient && !pattern && !noFill;
         _frameBorderWidth.IsEnabled = enabled;
         _frameBorderDash.IsEnabled = enabled;
         _frameBorderGradientEnabled.IsEnabled = enabled;
@@ -504,5 +535,6 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _frameBorderPatternPreset.IsEnabled = pattern;
         _frameBorderPatternForeground.IsEnabled = pattern;
         _frameBorderPatternBackground.IsEnabled = pattern;
+        _frameBorderNoFillEnabled.IsEnabled = enabled;
     }
 }

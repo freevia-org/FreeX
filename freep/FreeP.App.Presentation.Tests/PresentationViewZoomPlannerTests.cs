@@ -173,6 +173,17 @@ public sealed class PresentationViewZoomPlannerTests
             .Should().BeTrue();
     }
 
+    [Fact]
+    public void Zoom_border_no_fill_is_an_explicit_enabled_state()
+    {
+        var properties = new ZoomObjectProperties(FrameBorderNoFill: true);
+
+        ZoomObjectPropertiesPlanner.IsFrameBorderEnabled(properties).Should().BeTrue();
+        ZoomObjectPropertiesPlanner.IsFrameBorderNoFillEnabled(properties).Should().BeTrue();
+        ZoomObjectPropertiesPlanner.IsFrameBorderNoFillEnabled(new ZoomObjectProperties())
+            .Should().BeFalse();
+    }
+
     [Theory]
     [InlineData("not-a-pattern", "4472C4", "FFFFFF")]
     [InlineData("pct50", "GGGGGG", "FFFFFF")]

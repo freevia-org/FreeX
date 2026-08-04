@@ -812,6 +812,12 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
         if (properties.FrameBorderGradient is not null && properties.FrameBorderPattern is not null)
             throw new ArgumentException(
                 "A Zoom frame border cannot use both gradient and pattern fills.", nameof(properties));
+        if (properties.FrameBorderNoFill == true
+            && (properties.FrameBorderColor is not null
+                || properties.FrameBorderGradient is not null
+                || properties.FrameBorderPattern is not null))
+            throw new ArgumentException(
+                "A Zoom frame border cannot combine no-fill with another fill.", nameof(properties));
         if (properties.ImageType is not null
             && !string.Equals(properties.ImageType, "preview", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(properties.ImageType, "cover", StringComparison.OrdinalIgnoreCase))
@@ -831,6 +837,7 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             FrameGeometry = ValidateFrameGeometry(properties.FrameGeometry),
             FrameBorderGradient = ValidateFrameBorderGradient(properties.FrameBorderGradient),
             FrameBorderPattern = ValidateFrameBorderPattern(properties.FrameBorderPattern),
+            FrameBorderNoFill = properties.FrameBorderNoFill == true ? true : null,
         };
     }
 
@@ -967,10 +974,11 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             SetAttribute(zoomProperty, "transitionDur", properties.TransitionDuration);
             SetAttribute(zoomProperty, "showBg", properties.ShowBackground);
             SetCrop(zoomProperty, properties);
-            ZoomFrameBorderXml.Set(zoomProperty, properties.FrameBorderColor,
-                properties.FrameBorderWidthEmu, properties.FrameBorderDash,
-                properties.FrameBorderGradient,
-                properties.FrameBorderPattern);
+        ZoomFrameBorderXml.Set(zoomProperty, properties.FrameBorderColor,
+            properties.FrameBorderWidthEmu, properties.FrameBorderDash,
+            properties.FrameBorderGradient,
+            properties.FrameBorderPattern,
+            properties.FrameBorderNoFill);
             ZoomFrameGeometryXml.Set(zoomProperty, properties.FrameGeometry);
         }
         patchedXml = root.ToString(SaveOptions.DisableFormatting);
@@ -1356,7 +1364,8 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
         ZoomFrameBorderXml.Set(properties, _newValue.FrameBorderColor,
             _newValue.FrameBorderWidthEmu, _newValue.FrameBorderDash,
             _newValue.FrameBorderGradient,
-            _newValue.FrameBorderPattern);
+            _newValue.FrameBorderPattern,
+            _newValue.FrameBorderNoFill);
         ZoomFrameGeometryXml.Set(properties, _newValue.FrameGeometry);
         patchedXml = document.Root!.ToString(SaveOptions.DisableFormatting);
         return true;
@@ -1368,6 +1377,12 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
         if (properties.FrameBorderGradient is not null && properties.FrameBorderPattern is not null)
             throw new ArgumentException(
                 "A Zoom frame border cannot use both gradient and pattern fills.", nameof(properties));
+        if (properties.FrameBorderNoFill == true
+            && (properties.FrameBorderColor is not null
+                || properties.FrameBorderGradient is not null
+                || properties.FrameBorderPattern is not null))
+            throw new ArgumentException(
+                "A Zoom frame border cannot combine no-fill with another fill.", nameof(properties));
         if (properties.ImageType is not null
             && !string.Equals(properties.ImageType, "preview", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(properties.ImageType, "cover", StringComparison.OrdinalIgnoreCase))
@@ -1383,6 +1398,7 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
             FrameGeometry = ValidateFrameGeometry(properties.FrameGeometry),
             FrameBorderGradient = ValidateFrameBorderGradient(properties.FrameBorderGradient),
             FrameBorderPattern = ValidateFrameBorderPattern(properties.FrameBorderPattern),
+            FrameBorderNoFill = properties.FrameBorderNoFill == true ? true : null,
         };
     }
 
