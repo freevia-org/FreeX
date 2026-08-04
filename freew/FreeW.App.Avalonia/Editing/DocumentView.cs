@@ -294,6 +294,7 @@ public sealed class DocumentView : Control
     private readonly HashSet<string> _ignoredProofingWords = new(StringComparer.OrdinalIgnoreCase);
     private double _laidOutWidth = -1;
     private double _contentHeight;
+    private bool _horizontalPageFlowProjected;
     private double _pageLeft;
     private double _pageWidth;
     private double _contentLeft;
@@ -456,6 +457,7 @@ public sealed class DocumentView : Control
         ArgumentNullException.ThrowIfNull(layout);
 
         _viewDepthLayout = layout;
+        _laidOutWidth = -1;
         InvalidateVisual();
     }
 
@@ -776,7 +778,7 @@ public sealed class DocumentView : Control
             foreach (var pc in _placed)
             {
                 if (pc.Block == _caret.Block && pc.Offset == _caret.Offset)
-                    return PageIndexFromPageSpaceY(pc.Y);
+                    return RenderedPageIndexForPoint(pc.X, pc.Y);
             }
             return 0;
         }
@@ -801,6 +803,16 @@ public sealed class DocumentView : Control
 
     /// <summary>Top of the current caret in control coordinates (0 when not resolvable).</summary>
     public double CaretTop => TryGetCaretRect(out var rect) ? rect.Y : 0;
+
+    public double CaretLeft => TryGetCaretRect(out var rect) ? rect.X : 0;
+
+    /// <summary>Headless geometry seam used by the page-flow parity tests.</summary>
+    internal Rect? CaretRectForTest => TryGetCaretRect(out var rect) ? rect : null;
+
+    internal double HorizontalPageExtentForTest =>
+        _surfacePlan.UsesHorizontalPageFlow
+            ? _surfacePlan.ScrollableWidthForPages(_pageCount)
+            : 0;
 
     /// <summary>
     /// Returns the Y coordinate (top edge) of the first placed character in <paramref name="blockIndex"/>,
@@ -1353,8 +1365,10 @@ public sealed class DocumentView : Control
             if (!withinY)
                 continue;
             // Horizontal acceptance: anywhere across the content width of the page that owns this line.
-            var left = _contentLeft - 4;
-            var right = _contentLeft + _contentWidth + 4;
+            var pageIndex = RenderedPageIndexForPoint(item.X, item.Y);
+            var contentLeft = _surfacePlan.RenderedPageLeftDip(pageIndex) + (_contentLeft - _pageLeft);
+            var left = contentLeft - 4;
+            var right = contentLeft + _contentWidth + 4;
             if (point.X < left || point.X > right)
                 continue;
             // Prefer the item whose drawn text X-range is closest to the click (handles tab-split segments
@@ -3390,7 +3404,10 @@ public sealed class DocumentView : Control
     /// </summary>
     public Free.Shared.Pdf.PdfContentDocument BuildPdfContent()
     {
-        if (_viewMode != DocumentViewMode.PrintLayout)
+        // PDF is a page-oriented artifact. Side-to-Side is a presentation projection of the live
+        // editor, so export through a normal print-layout adapter and keep the horizontal strip out
+        // of page-local PDF coordinates.
+        if (_viewMode != DocumentViewMode.PrintLayout || _viewDepthLayout.UsesHorizontalPageFlow)
         {
             var printView = new DocumentView { ViewMode = DocumentViewMode.PrintLayout };
             printView.LoadDocument(_doc);
@@ -6602,11 +6619,15 @@ public sealed class DocumentView : Control
             ? availableSize.Width
             : FallbackWidth;
         Relayout(width);
-        return new Size(width, _contentHeight);
+        var measuredWidth = _surfacePlan.UsesHorizontalPageFlow
+            ? _surfacePlan.ScrollableWidthForPages(_pageCount)
+            : width;
+        return new Size(measuredWidth, _contentHeight);
     }
 
     private void Relayout(double width)
     {
+        _horizontalPageFlowProjected = false;
         _placed.Clear();
         _markers.Clear();
         _rects.Clear();
@@ -6644,6 +6665,11 @@ public sealed class DocumentView : Control
             ToLayoutKind(_viewMode),
             width,
             collapsePageBoundaries: _doc.DoNotDisplayPageBoundaries);
+        _surfacePlan = _surfacePlan with
+        {
+            UsesHorizontalPageFlow = _viewMode == DocumentViewMode.PrintLayout
+                && _viewDepthLayout.UsesHorizontalPageFlow
+        };
 
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
@@ -6788,6 +6814,8 @@ public sealed class DocumentView : Control
             BuildEndnoteItems();
             _contentHeight += _endnoteExtentDip;
         }
+
+        ApplyHorizontalPageFlowTransform();
     }
 
     private void ApplyPageVerticalAlignment()
@@ -6972,6 +7000,240 @@ public sealed class DocumentView : Control
         _placed.AddRange(shiftedPlaced);
         ShiftBodyTuples(OffsetFor, OffsetForOwnedObject);
         ShiftBodyObjects(OffsetForOwnedObject);
+    }
+
+    /// <summary>
+    /// Projects the completed logical page stack into the live Side-to-Side surface. Layout still
+    /// paginates in the ordinary vertical coordinate system so all existing page-break, footnote,
+    /// section, and floating-object rules remain authoritative. At this point every page-owned
+    /// record is complete, which lets the projection move the whole page (including caret stops and
+    /// hit-test surfaces) as one unit.
+    /// </summary>
+    private void ApplyHorizontalPageFlowTransform()
+    {
+        if (!_surfacePlan.UsesHorizontalPageFlow || !_surfacePlan.IsPrintLayout || _pageCount <= 0)
+            return;
+
+        var horizontalStride = _surfacePlan.HorizontalPageStrideDip;
+        var verticalStride = _surfacePlan.PageStrideDip;
+
+        int PageForLegacyY(double y) => Math.Clamp(
+            _surfacePlan.PageIndexFromPageSpaceY(y), 0, Math.Max(0, _pageCount - 1));
+
+        Point Move(double x, double y)
+        {
+            var page = PageForLegacyY(y);
+            return new Point(
+                x + page * horizontalStride,
+                y - page * verticalStride);
+        }
+
+        Rect MoveRect(Rect rect)
+        {
+            var point = Move(rect.X, rect.Y);
+            return new Rect(point.X, point.Y, rect.Width, rect.Height);
+        }
+
+        static DocumentFloatRect MovePlannerRect(DocumentFloatRect rect, Point point) =>
+            rect with { XDip = point.X, YDip = point.Y };
+
+        var placed = _placed
+            .Select(item =>
+            {
+                var point = Move(item.X, item.Y);
+                return item with { X = point.X, Y = point.Y };
+            })
+            .ToList();
+        _placed.Clear();
+        _placed.AddRange(placed);
+
+        for (var i = 0; i < _markers.Count; i++)
+        {
+            var item = _markers[i];
+            var point = Move(item.X, item.Y);
+            _markers[i] = (point.X, point.Y, item.Text, item.Fmt);
+        }
+
+        for (var i = 0; i < _tabLeaderSpans.Count; i++)
+        {
+            var item = _tabLeaderSpans[i];
+            var first = Move(item.X1, item.Y);
+            var second = Move(item.X2, item.Y);
+            _tabLeaderSpans[i] = (first.X, second.X, first.Y, item.LineHeight, item.Leader, item.Fmt);
+        }
+
+        for (var i = 0; i < _rects.Count; i++)
+        {
+            var item = _rects[i];
+            _rects[i] = (MoveRect(item.Rect), item.Fill, item.Border, item.CellBorderPlan);
+        }
+
+        for (var i = 0; i < _paragraphDecorations.Count; i++)
+        {
+            var item = _paragraphDecorations[i];
+            _paragraphDecorations[i] = (MoveRect(item.Rect), item.ShadingHex, item.Border);
+        }
+
+        for (var i = 0; i < _images.Count; i++)
+        {
+            var item = _images[i];
+            _images[i] = (MoveRect(item.Rect), item.Image, item.Model, item.ReflectionPreset, item.BlockIndex);
+        }
+
+        for (var i = 0; i < _floatingImages.Count; i++)
+        {
+            var item = _floatingImages[i];
+            _floatingImages[i] = (MoveRect(item.Rect), item.Image, item.Model, item.ReflectionPreset,
+                item.BehindText, item.ZOrder, item.BlockIndex, item.RunIndex);
+        }
+
+        for (var i = 0; i < _cellHits.Count; i++)
+        {
+            var item = _cellHits[i];
+            _cellHits[i] = (MoveRect(item.Rect), item.Block, item.Row, item.Col);
+        }
+
+        for (var i = 0; i < _shapeTextCaretStops.Count; i++)
+        {
+            var item = _shapeTextCaretStops[i];
+            var point = Move(item.X, item.Y);
+            var center = Move(item.RotationCenterX, item.RotationCenterY);
+            _shapeTextCaretStops[i] = item with
+            {
+                X = point.X,
+                Y = point.Y,
+                RotationCenterX = center.X,
+                RotationCenterY = center.Y
+            };
+        }
+
+        Vector OffsetFor(double x, double y) => Move(x, y) - new Point(x, y);
+
+        void MoveShape(FloatingShapeData shape, Vector? inheritedOffset = null)
+        {
+            var offset = inheritedOffset ?? OffsetFor(shape.Rect.X, shape.Rect.Y);
+            shape.Rect = new Rect(shape.Rect.X + offset.X, shape.Rect.Y + offset.Y,
+                shape.Rect.Width, shape.Rect.Height);
+        }
+
+        void MoveChart(FloatingChartData chart, Vector? inheritedOffset = null)
+        {
+            var offset = inheritedOffset ?? OffsetFor(chart.Rect.X, chart.Rect.Y);
+            chart.Rect = new Rect(chart.Rect.X + offset.X, chart.Rect.Y + offset.Y,
+                chart.Rect.Width, chart.Rect.Height);
+        }
+
+        void MoveWordArt(FloatingWordArtData wordArt, Vector? inheritedOffset = null)
+        {
+            var offset = inheritedOffset ?? OffsetFor(wordArt.Rect.X, wordArt.Rect.Y);
+            wordArt.Rect = new Rect(wordArt.Rect.X + offset.X, wordArt.Rect.Y + offset.Y,
+                wordArt.Rect.Width, wordArt.Rect.Height);
+        }
+
+        void MoveSmartArt(FloatingSmartArtData smartArt, Vector? inheritedOffset = null)
+        {
+            var offset = inheritedOffset ?? OffsetFor(smartArt.Rect.X, smartArt.Rect.Y);
+            smartArt.Rect = new Rect(smartArt.Rect.X + offset.X, smartArt.Rect.Y + offset.Y,
+                smartArt.Rect.Width, smartArt.Rect.Height);
+        }
+
+        void MoveGroup(FloatingGroupData group, Vector? inheritedOffset = null)
+        {
+            var offset = inheritedOffset ??
+                (Move(group.Rect.X, group.Rect.Y) - new Point(group.Rect.X, group.Rect.Y));
+            group.Rect = new Rect(group.Rect.X + offset.X, group.Rect.Y + offset.Y,
+                group.Rect.Width, group.Rect.Height);
+            foreach (var child in group.Children)
+            {
+                if (child.Group is not null)
+                {
+                    MoveGroup(child.Group, offset);
+                    child.Rect = child.Group.Rect;
+                }
+                else
+                {
+                    child.Rect = new Rect(child.Rect.X + offset.X, child.Rect.Y + offset.Y,
+                        child.Rect.Width, child.Rect.Height);
+                    if (child.Shape is not null) MoveShape(child.Shape, offset);
+                    if (child.Chart is not null) MoveChart(child.Chart, offset);
+                    if (child.WordArt is not null) MoveWordArt(child.WordArt, offset);
+                    if (child.SmartArt is not null) MoveSmartArt(child.SmartArt, offset);
+                }
+            }
+        }
+
+        foreach (var shape in _floatingShapes) MoveShape(shape);
+        foreach (var chart in _floatingCharts) MoveChart(chart);
+        foreach (var wordArt in _floatingWordArts) MoveWordArt(wordArt);
+        foreach (var smartArt in _floatingSmartArts) MoveSmartArt(smartArt);
+        foreach (var group in _floatingGroups) MoveGroup(group);
+        foreach (var shape in _inlineShapes) MoveShape(shape);
+        foreach (var chart in _inlineCharts) MoveChart(chart);
+        foreach (var wordArt in _inlineWordArts) MoveWordArt(wordArt);
+        foreach (var smartArt in _inlineSmartArts) MoveSmartArt(smartArt);
+
+        for (var i = 0; i < _floatingSnapshots.Count; i++)
+        {
+            var snapshot = _floatingSnapshots[i];
+            var point = Move(snapshot.Rect.XDip, snapshot.Rect.YDip);
+            _floatingSnapshots[i] = snapshot with { Rect = MovePlannerRect(snapshot.Rect, point) };
+        }
+
+        for (var i = 0; i < _wrapExclusions.Count; i++)
+        {
+            var zone = _wrapExclusions[i];
+            var point = Move(zone.Rect.XDip, zone.Rect.YDip);
+            _wrapExclusions[i] = zone with { Rect = MovePlannerRect(zone.Rect, point) };
+        }
+
+        for (var i = 0; i < _dropCapLayoutPlans.Count; i++)
+        {
+            var plan = _dropCapLayoutPlans[i];
+            var capPoint = Move(plan.CapBox.XDip, plan.CapBox.YDip);
+            var reservationPoint = Move(plan.TextReservation.XDip, plan.TextReservation.YDip);
+            _dropCapLayoutPlans[i] = plan with
+            {
+                CapBox = MovePlannerRect(plan.CapBox, capPoint),
+                TextReservation = MovePlannerRect(plan.TextReservation, reservationPoint)
+            };
+        }
+
+        for (var i = 0; i < _headerFooterItems.Count; i++)
+        {
+            var item = _headerFooterItems[i];
+            var point = Move(item.X, item.Y);
+            item.X = point.X;
+            item.Y = point.Y;
+        }
+
+        for (var i = 0; i < _noteItems.Count; i++)
+        {
+            var item = _noteItems[i];
+            var point = Move(item.X, item.Y);
+            item.X = point.X;
+            item.Y = point.Y;
+        }
+
+        for (var i = 0; i < _noteSeparators.Count; i++)
+        {
+            var item = _noteSeparators[i];
+            var first = Move(item.X1, item.Y);
+            var second = Move(item.X2, item.Y);
+            _noteSeparators[i] = (first.X, second.X, first.Y);
+        }
+
+        if (_selectedFloating is { } selected)
+            _selectedFloating = selected with { Rect = MoveRect(selected.Rect) };
+        if (_selectedFloatingGroupChild is { } selectedChild)
+            _selectedFloatingGroupChild = selectedChild with { Rect = MoveRect(selectedChild.Rect) };
+
+        // A horizontal strip has one page row. Endnotes remain page-owned and therefore move with
+        // their synthetic page, but the control's desired height is now one page tall.
+        _contentHeight = _surfacePlan.DeskPaddingDip
+            + _pageHeightPx
+            + _surfacePlan.MarginBottomDip
+            + Math.Max(0, _endnoteExtentDip);
+        _horizontalPageFlowProjected = true;
     }
 
     private void ShiftBodyTuples(
@@ -7292,7 +7554,7 @@ public sealed class DocumentView : Control
             if (b < 0 || b >= blocks.Count) continue;
             if (blockPageAssignments[b] >= 0) continue;
 
-            var pg = PageIndexFromPageSpaceY(pc.Y);
+            var pg = RenderedPageIndexForPoint(pc.X, pc.Y);
             blockPageAssignments[b] = Math.Clamp(pg, 0, pageCount - 1);
         }
 
@@ -7933,13 +8195,13 @@ public sealed class DocumentView : Control
                     {
                         if (pc.Sentinel || pc.Block != b) continue;
                         if (pc.Offset == offset)
-                            return Math.Clamp(PageIndexFromPageSpaceY(pc.Y), 0, Math.Max(0, _pageCount - 1));
+                            return Math.Clamp(RenderedPageIndexForPoint(pc.X, pc.Y), 0, Math.Max(0, _pageCount - 1));
                     }
                     // Run matched but no placed glyph at that offset — fall back to any glyph on the block.
                     foreach (var pc in _placed)
                     {
                         if (pc.Sentinel || pc.Block != b) continue;
-                        return Math.Clamp(PageIndexFromPageSpaceY(pc.Y), 0, Math.Max(0, _pageCount - 1));
+                        return Math.Clamp(RenderedPageIndexForPoint(pc.X, pc.Y), 0, Math.Max(0, _pageCount - 1));
                     }
                 }
                 offset += run.Text.Length;
@@ -8266,7 +8528,7 @@ public sealed class DocumentView : Control
         separatorY = 0;
         var finalPage = Math.Max(0, _pageCount - 1);
         var finalBodyBottom = _placed
-            .Where(placed => !placed.Sentinel && PageIndexFromPageSpaceY(placed.Y) == finalPage)
+            .Where(placed => !placed.Sentinel && RenderedPageIndexForPoint(placed.X, placed.Y) == finalPage)
             .Select(placed => placed.Y + placed.LineHeight)
             .DefaultIfEmpty(double.NaN)
             .Max();
@@ -11354,7 +11616,11 @@ public sealed class DocumentView : Control
 
     public override void Render(DrawingContext context)
     {
-        if (_laidOutWidth < 0 || Math.Abs(_laidOutWidth - Bounds.Width) > 0.5)
+        // In horizontal page flow Bounds.Width is the scrollable strip width, while the layout pass
+        // was measured against the viewport width. Re-running from Bounds.Width would progressively
+        // recenter the strip as pages are added, so resize invalidation is owned by MeasureOverride.
+        if (_laidOutWidth < 0
+            || (!_surfacePlan.UsesHorizontalPageFlow && Math.Abs(_laidOutWidth - Bounds.Width) > 0.5))
             Relayout(Bounds.Width > 0 ? Bounds.Width : FallbackWidth);
 
         // AV-DESIGN: the page sheet is filled with the document's Page Color (w:background) when set,
@@ -11371,9 +11637,10 @@ public sealed class DocumentView : Control
             // Draw each discrete page rectangle: page-coloured sheet with drop-shadow + chrome border.
             for (var pi = 0; pi < _pageCount; pi++)
             {
-                var pageTop = _surfacePlan.PageTopDip(pi);
-                var pageRect   = new Rect(_pageLeft, pageTop, _pageWidth, _pageHeightPx);
-                var shadowRect = new Rect(_pageLeft + 3, pageTop + 3, _pageWidth, _pageHeightPx);
+                var pageTop = _surfacePlan.RenderedPageTopDip(pi);
+                var pageLeft = _surfacePlan.RenderedPageLeftDip(pi);
+                var pageRect   = new Rect(pageLeft, pageTop, _pageWidth, _pageHeightPx);
+                var shadowRect = new Rect(pageLeft + 3, pageTop + 3, _pageWidth, _pageHeightPx);
                 context.FillRectangle(PageShadowBrush, shadowRect);
                 context.FillRectangle(pageFill, pageRect);
                 context.DrawRectangle(null, PageBorderPen, pageRect);
@@ -11423,13 +11690,15 @@ public sealed class DocumentView : Control
         {
             for (var pi = 0; pi < _pageCount; pi++)
             {
-                var pageTop = _surfacePlan.PageTopDip(pi);
+                var pageTop = _surfacePlan.RenderedPageTopDip(pi);
                 var ruleTop    = pageTop + _marginTopDip;
                 var ruleBottom = pageTop + _pageHeightPx - _marginBottomDip;
                 for (var ci = 0; ci < _colCount - 1; ci++)
                 {
                     // Gap centre X = left edge of next column minus half gap.
-                    var gapCentreX = _contentLeft + (ci + 1) * (_colWidth + _colGap) - _colGap / 2;
+                    var gapCentreX = _surfacePlan.RenderedPageLeftDip(pi)
+                        + (_contentLeft - _pageLeft)
+                        + (ci + 1) * (_colWidth + _colGap) - _colGap / 2;
                     var pixelCenteredX = Math.Floor(gapCentreX) - 0.5;
                     context.DrawLine(ColumnRulePen, new Point(pixelCenteredX, ruleTop), new Point(pixelCenteredX, ruleBottom));
                 }
@@ -11722,8 +11991,8 @@ public sealed class DocumentView : Control
         for (var pageIndex = 0; pageIndex < _pageCount; pageIndex++)
         {
             var pageRect = new Rect(
-                _pageLeft,
-                _surfacePlan.PageTopDip(pageIndex),
+                _surfacePlan.RenderedPageLeftDip(pageIndex),
+                _surfacePlan.RenderedPageTopDip(pageIndex),
                 _pageWidth,
                 _pageHeightPx);
             DrawPageBorder(context, pageRect, pageIndex);
@@ -11761,8 +12030,8 @@ public sealed class DocumentView : Control
                 && _doc.Blocks[placed.Block] is Paragraph)
             .GroupBy(placed => new
             {
-                PageIndex = PageIndexFromPageSpaceY(placed.Y),
-                ColumnIndex = ColumnIndexFor(placed.X),
+                PageIndex = RenderedPageIndexForPoint(placed.X, placed.Y),
+                ColumnIndex = ColumnIndexForRenderedX(placed.X, RenderedPageIndexForPoint(placed.X, placed.Y)),
                 SectionIndex = blockSectionAssignments[placed.Block],
                 Y = Math.Round(placed.Y * 16),
             })
@@ -11802,7 +12071,9 @@ public sealed class DocumentView : Control
                 continue;
 
             var line = sourceLines[index];
-            var columnLeft = _contentLeft + line.ColumnIndex * (_colWidth + _colGap);
+            var pageLeft = _surfacePlan.RenderedPageLeftDip(line.PageIndex);
+            var columnLeft = pageLeft + (_contentLeft - _pageLeft)
+                + line.ColumnIndex * (_colWidth + _colGap);
             results.Add(new LineNumberRenderItem(
                 plan.Number,
                 plan.PageIndex,
@@ -11819,6 +12090,29 @@ public sealed class DocumentView : Control
         _colCount <= 1 || _colWidth <= 0
             ? 0
             : Math.Clamp((int)Math.Floor((x - _contentLeft) / (_colWidth + _colGap)), 0, _colCount - 1);
+
+    private int ColumnIndexForRenderedX(double x, int pageIndex)
+    {
+        if (!_surfacePlan.UsesHorizontalPageFlow)
+            return ColumnIndexFor(x);
+
+        var pageOffset = pageIndex * _surfacePlan.HorizontalPageStrideDip;
+        return ColumnIndexFor(x - pageOffset);
+    }
+
+    private int RenderedPageIndexForPoint(double x, double y)
+    {
+        if (!_surfacePlan.UsesHorizontalPageFlow || !_horizontalPageFlowProjected)
+            return PageIndexFromPageSpaceY(y);
+
+        var relative = x - _surfacePlan.PageLeftDip;
+        if (relative < 0)
+            return 0;
+        return Math.Clamp(
+            (int)(relative / Math.Max(1, _surfacePlan.HorizontalPageStrideDip)),
+            0,
+            Math.Max(0, _pageCount - 1));
+    }
 
     private static readonly IPen HfRegionPen =
         new Pen(new SolidColorBrush(Color.FromArgb(160, 90, 120, 200)), 1, DashStyle.Dash);
@@ -11849,7 +12143,11 @@ public sealed class DocumentView : Control
             return;
 
         var pad = 3.0;
-        var rect = new Rect(_contentLeft - pad, top - pad,
+        var regionItem = _headerFooterItems.First(item => item.Target is { } t && t.Equals(hc.Target));
+        var pageIndex = RenderedPageIndexForPoint(regionItem.X, regionItem.Y);
+        var pageLeft = _surfacePlan.RenderedPageLeftDip(pageIndex);
+        var contentLeft = pageLeft + (_contentLeft - _pageLeft);
+        var rect = new Rect(contentLeft - pad, top - pad,
             _contentWidth + 2 * pad, (bottom - top) + 2 * pad);
         context.DrawRectangle(null, HfRegionPen, rect);
 
@@ -11857,7 +12155,7 @@ public sealed class DocumentView : Control
         var label = IsFooterSlot(hc.Target.Slot) ? "Footer" : "Header";
         var labelFt = Build(label, RunFormatting.Default with { FontSizePt = 8 });
         var labelY = Math.Max(0, top - pad - labelFt.Height);
-        context.DrawText(labelFt, new Point(_contentLeft - pad, labelY));
+        context.DrawText(labelFt, new Point(contentLeft - pad, labelY));
     }
 
     /// <summary>
@@ -13395,12 +13693,6 @@ public sealed class DocumentView : Control
         if (anchors.Count == 0)
             return;
 
-        // Right-margin x: just right of the content column. Available when the page extends past content
-        // (the right page margin). Fall back to the control's right edge in non-paged modes.
-        var pageRight = _pageWidth > 0 ? _pageLeft + _pageWidth : _laidOutWidth;
-        var marginX = _contentLeft + _contentWidth + 6;
-        var hasMargin = pageRight - (_contentLeft + _contentWidth) > 14;
-
         // Track, per (comment id, line top Y), whether we've already drawn a margin marker for that line
         // (one marker per anchor line, not one per glyph).
         var markedLines = new HashSet<(int Id, long Y)>();
@@ -13415,6 +13707,12 @@ public sealed class DocumentView : Control
             context.DrawLine(pen, new Point(rect.X, underlineY), new Point(rect.Right, underlineY));
 
             // Right-margin marker: one per anchor line.
+            var pageIndex = RenderedPageIndexForPoint(rect.X, rect.Y);
+            var pageLeft = _surfacePlan.RenderedPageLeftDip(pageIndex);
+            var pageRight = pageLeft + _pageWidth;
+            var contentRight = pageLeft + (_contentLeft - _pageLeft) + _contentWidth;
+            var marginX = contentRight + 6;
+            var hasMargin = pageRight - contentRight > 14;
             if (!hasMargin)
                 continue;
             var lineKey = (id, (long)Math.Round(rect.Y));
@@ -19387,8 +19685,17 @@ public sealed class DocumentView : Control
             return [];
 
         return DocumentViewLayoutPlanner
-            .BuildGridlines(_surfacePlan, _pageCount, GridlineStepDip)
-            .Select(line => (line.X1, line.Y1, line.X2, line.Y2))
+            .BuildGridlines(_surfacePlan with { UsesHorizontalPageFlow = false }, _pageCount, GridlineStepDip)
+            .Select(line =>
+            {
+                if (!_surfacePlan.UsesHorizontalPageFlow)
+                    return (line.X1, line.Y1, line.X2, line.Y2);
+
+                var page = Math.Clamp(_surfacePlan.PageIndexFromPageSpaceY(line.Y1), 0, _pageCount - 1);
+                var xOffset = page * _surfacePlan.HorizontalPageStrideDip;
+                var yOffset = page * _surfacePlan.PageStrideDip;
+                return (line.X1 + xOffset, line.Y1 - yOffset, line.X2 + xOffset, line.Y2 - yOffset);
+            })
             .ToList();
     }
 
@@ -21114,7 +21421,7 @@ public sealed class DocumentView : Control
         }
 
         pageIndex = Math.Clamp(
-            PageIndexFromPageSpaceY(placed.Y),
+            RenderedPageIndexForPoint(placed.X, placed.Y),
             0,
             Math.Max(0, pageCount - 1));
         return true;
@@ -22986,6 +23293,10 @@ public sealed class DocumentView : Control
         var bestScore = double.MaxValue;
         foreach (var pc in _placed)
         {
+            if (_surfacePlan.UsesHorizontalPageFlow
+                && RenderedPageIndexForPoint(point.X, point.Y)
+                    != RenderedPageIndexForPoint(pc.X, pc.Y))
+                continue;
             var dy = point.Y < pc.Y ? pc.Y - point.Y : point.Y > pc.Y + pc.LineHeight ? point.Y - (pc.Y + pc.LineHeight) : 0;
             var dx = Math.Abs(point.X - pc.X);
             var score = dy * 1000 + dx;

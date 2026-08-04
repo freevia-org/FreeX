@@ -1487,7 +1487,9 @@ public sealed partial class MainWindow : Window
             pageWidthDip,
             pageHeightDip);
         _sideToSidePreviewScrollViewer = _scroller;
-        _sideToSidePairScrollStrideDip = viewport.RequiredPageSpanWidthDip * viewport.Scale;
+        // The live DocumentView owns one page gap per page boundary. Advancing a pair therefore
+        // crosses two page strides (including both gaps), not just the visible pair envelope.
+        _sideToSidePairScrollStrideDip = 2 * (pageWidthDip + plan.Layout.InterPageGapDip) * _zoomScale;
         _workspace.Child = null;
         _workspace.Child = BuildSideToSideNavigationHost(_scroller);
         ApplySideToSideNavigationToScrollViewer(plan);
@@ -1551,7 +1553,7 @@ public sealed partial class MainWindow : Window
                 requestedFirstVisiblePageNumber: 1,
                 totalPages: snapshot.PageCount);
             _sideToSidePreviewScrollViewer = scroller;
-            _sideToSidePairScrollStrideDip = viewport.RequiredPageSpanWidthDip * viewport.Scale;
+            _sideToSidePairScrollStrideDip = 2 * (pageWidthDip + plan.Layout.InterPageGapDip) * viewport.Scale;
             return BuildSideToSideNavigationHost(scroller);
         }
 
@@ -3005,7 +3007,10 @@ public sealed partial class MainWindow : Window
         if (_scroller is null)
             return;
         var target = Math.Max(0, _editor.CaretTop - 40);
-        _scroller.Offset = new Vector(_scroller.Offset.X, target);
+        var horizontal = _viewDepthPlan.IsSideToSideActive
+            ? Math.Max(0, _editor.CaretLeft - 40)
+            : _scroller.Offset.X;
+        _scroller.Offset = new Vector(horizontal, target);
     }
 
     private async Task CopyAsync()

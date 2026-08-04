@@ -201,9 +201,34 @@ public sealed record DocumentViewSurfacePlan(
     double DeskPaddingDip,
     double PageGapDip)
 {
+    /// <summary>
+    /// Keeps the paginator's logical page coordinates vertical while the live editor projects the
+    /// completed page records into a horizontal strip. This is deliberately an opt-in surface mode;
+    /// print preview and the ordinary editor retain the established vertical page stack.
+    /// </summary>
+    public bool UsesHorizontalPageFlow { get; init; }
+
     public bool IsPrintLayout => Kind == DocumentViewLayoutKind.PrintLayout;
 
     public double PageStrideDip => PageHeightDip + PageGapDip;
+
+    public double HorizontalPageStrideDip => PageWidthDip + PageGapDip;
+
+    public double RenderedPageLeftDip(int pageIndex) =>
+        PageLeftDip + (UsesHorizontalPageFlow
+            ? Math.Max(0, pageIndex) * HorizontalPageStrideDip
+            : 0);
+
+    public double RenderedPageTopDip(int pageIndex) =>
+        UsesHorizontalPageFlow ? DeskPaddingDip : PageTopDip(pageIndex);
+
+    public double ScrollableWidthForPages(int pageCount, double trailingExtentDip = 0) =>
+        IsPrintLayout && UsesHorizontalPageFlow
+            ? PageLeftDip
+                + Math.Max(1, pageCount) * HorizontalPageStrideDip
+                + DeskPaddingDip
+                + Math.Max(0, trailingExtentDip)
+            : trailingExtentDip;
 
     public double PageTopDip(int pageIndex) =>
         IsPrintLayout ? DeskPaddingDip + Math.Max(0, pageIndex) * PageStrideDip : 0;

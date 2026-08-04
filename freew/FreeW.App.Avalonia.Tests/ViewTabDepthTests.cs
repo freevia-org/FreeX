@@ -361,6 +361,52 @@ public sealed class ViewTabDepthTests
     }
 
     [Fact]
+    public async Task Side_to_side_projects_later_pages_horizontally_and_routes_hit_and_caret_geometry()
+    {
+        int targetBlock = -1;
+        int targetPage = -1;
+        double desiredWidth = 0;
+        double horizontalExtent = 0;
+        Rect targetRect = default;
+        (int Block, int Offset)? hit = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var document = MakeMultiPageDoc();
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.ApplyViewDepthLayout(FreeWViewDepthPlanner
+                .Build(FreeWViewDepthMode.SideToSidePreview).Layout);
+            view.Measure(new Size(816, double.PositiveInfinity));
+            desiredWidth = view.DesiredSize.Width;
+            horizontalExtent = view.HorizontalPageExtentForTest;
+
+            for (var block = 0; block < document.Blocks.Count; block++)
+            {
+                view.MoveCaretToBlockForTest(block, 0);
+                if (view.CaretPageIndex <= 0 || view.CaretRectForTest is not { } rect)
+                    continue;
+
+                targetBlock = block;
+                targetPage = view.CaretPageIndex;
+                targetRect = rect;
+                hit = view.TestHitTest(new Point(rect.X + 1, rect.Y + rect.Height / 2));
+                break;
+            }
+        });
+
+        if (!ran) return;
+        targetBlock.Should().BeGreaterThanOrEqualTo(0);
+        targetPage.Should().BeGreaterThan(0);
+        horizontalExtent.Should().BeGreaterThan(desiredWidth,
+            "the live editor must expose a horizontally scrollable page strip");
+        targetRect.X.Should().BeGreaterThan(400,
+            "a caret on page 2+ must carry the page's horizontal origin");
+        hit.Should().Be((targetBlock, 0),
+            "a click on a later-page glyph must route to that page's document position");
+    }
+
+    [Fact]
     public async Task AvaloniaDocumentView_records_shared_multiple_pages_layout_state()
     {
         DocumentViewDepthPageFlow? pageFlow = null;
