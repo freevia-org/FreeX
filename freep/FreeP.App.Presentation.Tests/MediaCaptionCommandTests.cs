@@ -49,6 +49,63 @@ public sealed class MediaCaptionCommandTests
     }
 
     [Fact]
+    public void EditingSessionCaptionAuthoring_ReplacesExternalLinkWithInternalTrackAndSupportsUndo()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var mediaShape = new SlideShape
+        {
+            Id = 20,
+            Name = "Video",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        RelationshipId = "rIdExternalCaption",
+                        Source = "https://cdn.example.com/captions.vtt",
+                        Label = "Remote captions",
+                        IsExternal = true
+                    }
+                }
+            }
+        };
+        presentation.Slides[0].Shapes.Add(mediaShape);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        editor.Select(mediaShape.Id);
+
+        var plan = PresentationMediaTranscriptPlanner.BuildCaptionAuthoringMutationPlan(
+            mediaShape.Media,
+            PresentationMediaCaptionAuthoringIntentKind.Replace,
+            0,
+            new PresentationMediaCaptionTrackAuthoringDescriptor(
+                "Local captions",
+                null,
+                "https://cdn.example.com/captions.vtt",
+                "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nLocal cue"));
+
+        var result = editor.ApplyMediaCaptionAuthoring(plan);
+
+        result.Succeeded.Should().BeTrue();
+        mediaShape.Media.CaptionTracks.Should().ContainSingle()
+            .Which.Should().Match<MediaCaptionTrackInfo>(track =>
+                !track.IsExternal &&
+                track.RelationshipId == "rIdExternalCaption" &&
+                track.Source == "ppt/media/authored-captions1.vtt" &&
+                Encoding.UTF8.GetString(track.Bytes).Contains("Local cue", StringComparison.Ordinal));
+
+        editor.Undo();
+        mediaShape.Media.CaptionTracks.Should().ContainSingle()
+            .Which.IsExternal.Should().BeTrue();
+
+        editor.Redo();
+        mediaShape.Media.CaptionTracks.Should().ContainSingle()
+            .Which.IsExternal.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetMediaCaptionTracksCommand_UndoAndRedoRestoreTrackBytesAndMetadata()
     {
         var presentation = Presentation.CreateEmpty();

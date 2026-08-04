@@ -575,6 +575,74 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Media_ReplacingExternalCaptionTrack_EmitsEmbeddedRelationshipAndPart()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Name = "Externally captioned video",
+            Kind = SlideShapeKind.Media,
+            Picture = new ImagePart { Bytes = CreateMinimal1x1Png(), ContentType = "image/png" },
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes = [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70],
+                ContentType = "video/mp4",
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        RelationshipId = "rIdCaptionExternal1",
+                        Source = "https://cdn.example.com/external.vtt",
+                        Language = "en-US",
+                        Label = "Remote captions",
+                        IsExternal = true
+                    }
+                }
+            }
+        });
+        pres.Slides.Add(slide);
+
+        using var source = new MemoryStream();
+        PptxPackageWriter.Write(pres, source);
+        source.Position = 0;
+        var loaded = PptxPackageReader.Read(source);
+        var result = PresentationMediaTranscriptPlanner.ReplaceInternalCaptionTrack(
+            loaded.Slides[0].Shapes[0].Media,
+            0,
+            new PresentationMediaCaptionTrackAuthoringDescriptor(
+                "Local captions",
+                null,
+                "https://cdn.example.com/external.vtt",
+                "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nEmbedded cue"));
+
+        result.Succeeded.Should().BeTrue();
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        saved.Position = 0;
+        using (var zip = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var rels = ReadXml(zip, "ppt/slides/_rels/slide1.xml.rels");
+            var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+            var captionRel = rels.Root!.Elements(relNs + "Relationship")
+                .Single(e => e.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/mediaCaption");
+            captionRel.Attribute("TargetMode").Should().BeNull();
+            captionRel.Attribute("Target")!.Value.Should().Be("../media/slide1_caption1.vtt");
+            ReadText(zip, "ppt/media/slide1_caption1.vtt").Should().Contain("Embedded cue");
+        }
+
+        saved.Position = 0;
+        var reopened = PptxPackageReader.Read(saved);
+        var reopenedTrack = reopened.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle().Subject;
+        reopenedTrack.IsExternal.Should().BeFalse();
+        reopenedTrack.Source.Should().Be("ppt/media/slide1_caption1.vtt");
+        Encoding.UTF8.GetString(reopenedTrack.Bytes).Should().Contain("Embedded cue");
+    }
+
+    [Fact]
     public void Media_PowerPointNativeCaptionPackage_WithMultipleCaptionTracks_PreservesCorpusRelationshipSet()
     {
         var pres = new Presentation();
