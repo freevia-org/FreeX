@@ -31,6 +31,33 @@ public sealed class ChartSubtargetHitTesterTests
     }
 
     [Fact]
+    public void TryHitTest_ResolvesDataLabelWithSeriesAndCategory()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            Categories = { "Q1", "Q2" },
+            DataLabels = new ChartDataLabels { ShowValue = true, Position = DataLabelPosition.OutsideEnd },
+        };
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        chart.Series.Add(series);
+        var (presentation, slide, _) = AddChart(chart, 320, 220);
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 320, 220));
+        var label = scene.DataLabels.First(dataLabel => dataLabel.CategoryIndex == 0);
+
+        ChartSubtargetHitTester.TryHitTest(
+            slide,
+            presentation,
+            40 + label.Bounds.X + label.Bounds.Width / 2,
+            30 + label.Bounds.Y + label.Bounds.Height / 2,
+            out var hit).Should().BeTrue();
+        hit.Kind.Should().Be(ChartSubtargetKind.DataLabel);
+        hit.SeriesIndex.Should().Be(0);
+        hit.PointIndex.Should().Be(0);
+    }
+
+    [Fact]
     public void TryHitTest_PreservesAxisTitleTarget()
     {
         var chart = new ChartShape

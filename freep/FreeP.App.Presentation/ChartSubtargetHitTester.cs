@@ -8,6 +8,7 @@ public enum ChartSubtargetKind
     ChartArea,
     PlotArea,
     Point,
+    DataLabel,
     Series,
     Title,
     Legend,
@@ -57,6 +58,19 @@ public static class ChartSubtargetHitTester
         var scene = ChartRenderPlanner.BuildScenePlan(
             shape.Chart,
             new ChartPlanRect(0, 0, bounds.Width, bounds.Height));
+
+        foreach (var dataLabel in scene.DataLabels)
+        {
+            if (Contains(dataLabel.Bounds, point))
+            {
+                hit = new ChartSubtargetHit(
+                    shape.Id,
+                    ChartSubtargetKind.DataLabel,
+                    dataLabel.SeriesIndex,
+                    dataLabel.CategoryIndex);
+                return true;
+            }
+        }
 
         if (ChartPointHitTester.TryHitTest(slide, presentation, slidePtX, slidePtY, out var pointHit))
         {

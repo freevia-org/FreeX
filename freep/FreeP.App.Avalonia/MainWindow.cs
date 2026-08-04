@@ -2317,6 +2317,10 @@ public sealed partial class MainWindow : Window
                 Add("Format Data Point...", () => OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex));
                 Add("Format Data Series...", () => OpenChartSeriesOptionsDialog(hit.SeriesIndex));
                 break;
+            case ChartSubtargetKind.DataLabel:
+                Add("Format Data Label...", () => OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex));
+                Add("Format Data Series...", () => OpenChartSeriesOptionsDialog(hit.SeriesIndex));
+                break;
             case ChartSubtargetKind.Series:
                 Add("Format Data Series...", () => OpenChartSeriesOptionsDialog(hit.SeriesIndex));
                 break;
