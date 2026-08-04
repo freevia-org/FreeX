@@ -85,6 +85,7 @@ internal static class FreePRibbonCommands
         Action?             onEditZoomTarget = null,
         Action?             onEditSummaryZoomTargets = null,
         Action?             onOpenSmartArtTextPane = null,
+        Action?             onConvertSmartArtToShapes = null,
         // Wave 12B: Find & Replace dialog launchers.
         Action?             onFind             = null,
         Action?             onFindReplace      = null,
@@ -451,11 +452,7 @@ internal static class FreePRibbonCommands
         registry.Register(SmartArtAuthoringPlanner.BirdsEyeSceneQuickStyleCommandId,
             new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.BirdsEyeScene)));
         registry.Register(SmartArtAuthoringPlanner.ConvertToShapesCommandId,
-            new ActionRibbonCommand(() =>
-            {
-                if (editor.SelectedShapeIds.Count == 1)
-                    editor.ConvertSmartArtToShapes(editor.SelectedShapeIds[0]);
-            }));
+            new ActionRibbonCommand(() => onConvertSmartArtToShapes?.Invoke()));
 
         // ── Format toggles (stateful) ────────────────────────────────────────────
         //

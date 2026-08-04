@@ -506,6 +506,7 @@ public sealed partial class MainWindow : Window
             onEditZoomTarget: () => OpenZoomTargetDialog(),
             onEditSummaryZoomTargets: () => OpenSummaryZoomTargetsDialog(),
             onOpenSmartArtTextPane: () => ShowSmartArtTextPane(),
+            onConvertSmartArtToShapes: () => ConvertSelectedSmartArtToShapes(),
             onFormatZoom:       () => OpenZoomObjectPropertiesDialog(),
             onSetZoomCoverImage: () => OpenZoomCoverImagePicker(),
             onResetZoomCoverImage: () => RestoreZoomPreview(),
@@ -3376,6 +3377,17 @@ public sealed partial class MainWindow : Window
         return shape?.Kind == SlideShapeKind.SmartArt && shape.SmartArt is not null
             ? shape
             : null;
+    }
+
+    private void ConvertSelectedSmartArtToShapes()
+    {
+        if (Editor.SelectedShapeIds.Count != 1 ||
+            !Editor.ConvertSmartArtToShapes(Editor.SelectedShapeIds[0]))
+            return;
+
+        _file.MarkDirty();
+        RefreshCanvas();
+        UpdateTitle();
     }
 
     private PresentationTheme ResolveCurrentSlideTheme()
