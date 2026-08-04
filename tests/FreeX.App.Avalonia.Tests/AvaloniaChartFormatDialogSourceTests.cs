@@ -68,7 +68,7 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         // dialog opens and reach ChangeChartSourceCommand on confirm — not be a silent no-op.
         chartTabsSource.Should().Contain("chart.SeriesInRows);");
         chartTabsSource.Should().Contain("bool switchRowColumn = false)");
-        chartTabsSource.Should().Contain("CreateChartCheckBox(UiText.Get(switchField.LabelResourceKey), switchRowColumn)");
+        chartTabsSource.Should().Contain("CreateChartCheckBox(StripDisplayMnemonic(UiText.Get(switchField.LabelResourceKey)), switchRowColumn)");
         chartTabsSource.Should().Contain("switchRowColumnCheck.IsChecked == true));");
         chartTabsSource.Should().Contain("seriesInRows: choice.SwitchRowColumn));");
     }

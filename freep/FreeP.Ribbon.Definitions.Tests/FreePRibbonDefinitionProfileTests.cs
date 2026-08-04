@@ -1200,6 +1200,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.smartart.grid-matrix-import-cells",
             "freep.smartart.increasing-circle-process-import-growth",
             "freep.smartart.vertical-arrow-list-import-slots",
+            "freep.smartart.process1-import-node-connectors",
             "freep.smartart.basic-process",
             "freep.smartart.basic-timeline",
             "freep.smartart.step-down-process",

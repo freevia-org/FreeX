@@ -29,7 +29,7 @@ public sealed class ChartDialogChromeDedupSourceTests
         remainingSource.Should().Contain("CreateChartRadioButton(");
         remainingSource.Should().Contain("CreateChartTextBox(");
         remainingSource.Should().Contain("CreateChartButton(");
-        tabsSource.Should().Contain("CreateChartButton(UiText.Get(addSeriesAction.LabelResourceKey), 100)");
+        tabsSource.Should().Contain("CreateChartButton(UiText.Get(addSeriesAction.LabelResourceKey), 92)");
         tabsSource.Should().Contain("CreateChartTextBox(initialRange, 540, UiText.Get(\"ChartLoc_RangePlaceholder\"))");
         tabsSource.Should().Contain("CreateChartComboBox(260, positionChoices)");
         typeFormatSource.Should().Contain("CreateChartTextBox(current.BarGapWidth.ToString(CultureInfo.InvariantCulture), 260)");
