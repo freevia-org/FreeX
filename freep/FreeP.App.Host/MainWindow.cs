@@ -722,7 +722,10 @@ public sealed partial class MainWindow : Window
 
     private ContextMenu BuildChartContextMenu(ChartSubtargetHit hit)
     {
-        var menu = new ContextMenu();
+        var menu = new ContextMenu
+        {
+            Placement = PlacementMode.MousePoint,
+        };
         void Add(string header, Action action)
         {
             var item = new MenuItem { Header = header };
@@ -787,7 +790,10 @@ public sealed partial class MainWindow : Window
 
     private ContextMenu BuildTableContextMenu(SlideShape shape)
     {
-        var menu = new ContextMenu();
+        var menu = new ContextMenu
+        {
+            Placement = PlacementMode.MousePoint,
+        };
 
         void Add(string header, Action action)
         {

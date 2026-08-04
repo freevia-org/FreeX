@@ -1,4 +1,5 @@
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using FreeP.App.Compositor;
 
@@ -146,7 +147,8 @@ public sealed class KeyboardContextParityTests
 
             var menu = window.BuildTableContextMenuForTests(table.Id);
             menu.Should().NotBeNull();
-            menu!.Items.Cast<object>().Should().HaveCount(12);
+            menu!.Placement.Should().Be(PlacementMode.MousePoint);
+            menu.Items.Cast<object>().Should().HaveCount(12);
             menu.Items.OfType<MenuItem>().Select(item => item.Header).Should().Equal(
                 "Insert Row Above", "Insert Row Below", "Insert Column Left", "Insert Column Right",
                 "Delete Row", "Delete Column", "Column Width", "Merge with Right Cell", "Split Cell");
