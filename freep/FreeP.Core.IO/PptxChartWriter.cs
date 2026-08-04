@@ -110,7 +110,8 @@ internal static class PptxChartWriter
             try
             {
                 var preserved = XDocument.Parse(chart.PreservedChartExXml, LoadOptions.PreserveWhitespace);
-                UpdateChartExSemantics(preserved, chart);
+                if (IsWaterfallChartEx(preserved, chart))
+                    UpdateChartExSemantics(preserved, chart);
                 return preserved;
             }
             catch (XmlException)
@@ -157,6 +158,17 @@ internal static class PptxChartWriter
                 new XElement(cx + "chart",
                     new XElement(cx + "plotArea",
                         new XElement(cx + "plotAreaRegion", series)))));
+    }
+
+    private static bool IsWaterfallChartEx(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var layoutId = document
+            .Descendants(cx + "series")
+            .Select(series => series.Attribute("layoutId")?.Value)
+            .FirstOrDefault();
+        return string.Equals(layoutId, "waterfall", StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(chart.ChartExLayoutId ?? layoutId, "waterfall", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void UpdateChartExSemantics(XDocument document, ChartShape chart)

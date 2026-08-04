@@ -1833,6 +1833,64 @@ public sealed class ChartTests : IDisposable
             .Should().Equal(1);
     }
 
+    [Fact]
+    public void RoundTrip_NonWaterfallChartEx_PreservesNativeLayoutWithoutWaterfallMutation()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XElement(cxNs + "chartData",
+                    new XElement(cxNs + "data",
+                        new XAttribute("id", 0),
+                        new XElement(cxNs + "strDim",
+                            new XElement(cxNs + "lvl",
+                                new XElement(cxNs + "pt", new XAttribute("idx", 0), "A"),
+                                new XElement(cxNs + "pt", new XAttribute("idx", 1), "B"))),
+                        new XElement(cxNs + "numDim",
+                            new XElement(cxNs + "lvl",
+                                new XElement(cxNs + "pt", new XAttribute("idx", 0), "10"),
+                                new XElement(cxNs + "pt", new XAttribute("idx", 1), "20"))))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData", new XElement(cxNs + "v", "Value"))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0))))))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+
+        var cloned = SlideCloner.CloneSlide(BuildPresWithChart(chart).Slides[0]).Shapes.Single().Chart!;
+        cloned.IsChartEx.Should().BeTrue();
+        cloned.ChartExLayoutId.Should().Be("histogram");
+        cloned.PreservedChartExXml.Should().Be(chart.PreservedChartExXml);
+
+        var path = WriteToPptx(BuildPresWithChart(chart));
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartEx = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+            chartEx.Descendants(cxNs + "series").Single()
+                .Attribute("layoutId")!.Value.Should().Be("histogram");
+            chartEx.Descendants(cxNs + "layoutPr").Should().BeEmpty(
+                "non-waterfall ChartEx families must not receive waterfall connector or subtotal metadata");
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        rt.IsChartEx.Should().BeTrue();
+        rt.ChartExLayoutId.Should().Be("histogram");
+        rt.ChartType.Should().Be(ChartType.ColumnClustered);
+        rt.WaterfallTotalPointIndices.Should().BeNull();
+    }
+
     [Theory]
     [InlineData(ChartType.Surface, "surfaceChart")]
     [InlineData(ChartType.Surface3D, "surface3DChart")]

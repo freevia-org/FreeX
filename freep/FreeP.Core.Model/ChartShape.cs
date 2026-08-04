@@ -902,6 +902,10 @@ public sealed class ChartShape
     [JsonIgnore]
     public string? PreservedChartExXml { get; set; }
 
+    /// <summary>Native ChartEx series layout identifier, such as <c>waterfall</c> or <c>histogram</c>.</summary>
+    [JsonIgnore]
+    public string? ChartExLayoutId { get; set; }
+
     /// <summary>
     /// Authored <c>c:date1904</c> chart-space flag. Null means the source omitted the token
     /// and the workbook/application date system remains authoritative.

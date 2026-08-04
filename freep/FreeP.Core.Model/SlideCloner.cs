@@ -263,6 +263,7 @@ public static class SlideCloner
             SourcePartPath = src.SourcePartPath,
             IsChartEx = src.IsChartEx,
             PreservedChartExXml = src.PreservedChartExXml,
+            ChartExLayoutId = src.ChartExLayoutId,
             ChartDate1904 = src.ChartDate1904,
             ChartLanguage = src.ChartLanguage,
             PreservedPivotSourceXml = src.PreservedPivotSourceXml,

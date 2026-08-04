@@ -251,6 +251,7 @@ internal static class PptxChartReader
 
         var shape = new ChartShape
         {
+            ChartExLayoutId = seriesEl.Attribute("layoutId")?.Value,
             ChartType = string.Equals(seriesEl.Attribute("layoutId")?.Value, "waterfall", StringComparison.OrdinalIgnoreCase)
                 ? ChartType.Waterfall
                 : ChartType.ColumnClustered,
