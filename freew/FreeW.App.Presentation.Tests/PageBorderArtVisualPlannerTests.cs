@@ -133,18 +133,17 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
-    public void People_UsesWordCadenceAndOrderedOutlineInteriorGeometry()
+    public void People_UsesWordCadenceAndMeasuredOpaqueInteriorMask()
     {
         PageBorderArtVisualPlanner.TryBuildPeopleFrame(84, 3, 816, 1056, 32, out var plan)
             .Should().BeTrue();
 
-        plan.Fills.Should().BeEmpty();
-        plan.Polygons.Should().HaveCount(408);
-        plan.Polygons[0].Points[0].Should().Be(new PageBorderArtPoint(48, 33));
-        plan.Polygons[0].Red.Should().Be(0);
-        plan.Polygons[1].Red.Should().Be(0xFF);
-        plan.Polygons[2].Points[0].Should().Be(new PageBorderArtPoint(46, 41));
-        plan.Polygons[3].Red.Should().Be(0xFF);
+        plan.Polygons.Should().BeEmpty();
+        plan.Fills.Should().HaveCount(18462);
+        plan.Fills[0].Should().Be(new PageBorderArtFillRectangle(44, 35, 1, 1, 0xEF, 0xEF, 0xEF));
+        plan.Fills.Should().Contain(fill => fill.Red == 0 && fill.Green == 0 && fill.Blue == 0);
+        plan.Fills.Should().Contain(fill => fill.Red == 0x80 && fill.Green == 0x80 && fill.Blue == 0x80);
+        plan.Fills.Should().Contain(fill => fill.Red == 0xFF && fill.Green == 0xFF && fill.Blue == 0xFF);
     }
 
     [Fact]
