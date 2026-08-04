@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Documents;
+using System.Printing;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
 
@@ -50,6 +51,22 @@ public sealed class WpfPresentationPrintServiceTests
         paginator.IsPageCountValid.Should().BeTrue();
         paginator.PageCount.Should().Be(source.Pages.Count);
         paginator.GetPage(0).Should().NotBe(DocumentPage.Missing);
+    }
+
+    [StaFact]
+    public void ApplyPrintTicketOptions_PropagatesSharedCopiesCollationAndColor()
+    {
+        var ticket = WpfPresentationPrintService.ApplyPrintTicketOptions(
+            new PrintTicket(),
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.FullPageSlides,
+                Copies: 3,
+                Collate: false,
+                ColorMode: PresentationPrintColorMode.PureBlackAndWhite));
+
+        ticket.CopyCount.Should().Be(3);
+        ticket.Collation.Should().Be(Collation.Uncollated);
+        ticket.OutputColor.Should().Be(OutputColor.Monochrome);
     }
 
     private static void AssertRasterPageSource(WpfPrintPageSource source)

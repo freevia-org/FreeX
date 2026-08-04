@@ -305,6 +305,9 @@ public sealed class DocumentView : Control
     private double _pageHeightPx;
     // Number of discrete pages after the last layout pass.
     private int _pageCount = 1;
+    // Section page vertical alignment is applied after the body pass, once each page's used height is
+    // known. Header/footer and note bands stay anchored to their page regions.
+    private readonly List<double> _bodyPageVerticalOffsets = new();
     private DocumentViewSurfacePlan _surfacePlan =
         DocumentViewLayoutPlanner.BuildSurfacePlan(new PageSettings(), DocumentViewLayoutKind.PrintLayout, FallbackWidth);
 
@@ -1003,6 +1006,7 @@ public sealed class DocumentView : Control
     public int ParagraphCount => _doc.Blocks.Count(b => b is Paragraph);
     public int PlacedGlyphCount => _placed.Count(p => !p.Sentinel);
     public IReadOnlyList<DocumentDropCapLayoutPlan> DropCapLayoutPlans => _dropCapLayoutPlans;
+    internal IReadOnlyList<double> BodyPageVerticalOffsetsForTest => _bodyPageVerticalOffsets;
     public string PlainText => _doc.PlainText;
 
     /// <summary>
@@ -6754,6 +6758,8 @@ public sealed class DocumentView : Control
             _contentHeight = _layoutContentY + _marginBottomDip;
         }
 
+        ApplyPageVerticalAlignment();
+
         _laidOutWidth = width;
 
         if (_viewMode == DocumentViewMode.PrintLayout)
@@ -6767,6 +6773,225 @@ public sealed class DocumentView : Control
             BuildEndnoteItems();
             _contentHeight += _endnoteExtentDip;
         }
+    }
+
+    private void ApplyPageVerticalAlignment()
+    {
+        _bodyPageVerticalOffsets.Clear();
+        if (_viewMode != DocumentViewMode.PrintLayout
+            || _doc.Page.VerticalAlignment is PageVerticalAlignment.Top or PageVerticalAlignment.Justified)
+        {
+            return;
+        }
+
+        var pageCount = Math.Max(1, _pageCount);
+        var bodyBottoms = new double[pageCount];
+        var hasBody = new bool[pageCount];
+
+        void Include(double y, double height)
+        {
+            var page = Math.Clamp(PageIndexFromPageSpaceY(y), 0, pageCount - 1);
+            bodyBottoms[page] = Math.Max(bodyBottoms[page], y + Math.Max(0, height));
+            hasBody[page] = true;
+        }
+
+        foreach (var placed in _placed.Where(placed => !placed.Sentinel))
+            Include(placed.Y, placed.LineHeight);
+        foreach (var image in _images)
+            Include(image.Rect.Y, image.Rect.Height);
+        foreach (var (rect, _, _, _) in _rects)
+            Include(rect.Y, rect.Height);
+        foreach (var (rect, _, _) in _paragraphDecorations)
+            Include(rect.Y, rect.Height);
+        foreach (var (rect, _, _, _, _, _, _, _) in _floatingImages)
+            Include(rect.Y, rect.Height);
+        foreach (var shape in _floatingShapes)
+            Include(shape.Rect.Y, shape.Rect.Height);
+        foreach (var chart in _floatingCharts)
+            Include(chart.Rect.Y, chart.Rect.Height);
+        foreach (var wordArt in _floatingWordArts)
+            Include(wordArt.Rect.Y, wordArt.Rect.Height);
+        foreach (var smartArt in _floatingSmartArts)
+            Include(smartArt.Rect.Y, smartArt.Rect.Height);
+        foreach (var group in _floatingGroups)
+            Include(group.Rect.Y, group.Rect.Height);
+        foreach (var shape in _inlineShapes)
+            Include(shape.Rect.Y, shape.Rect.Height);
+        foreach (var chart in _inlineCharts)
+            Include(chart.Rect.Y, chart.Rect.Height);
+        foreach (var wordArt in _inlineWordArts)
+            Include(wordArt.Rect.Y, wordArt.Rect.Height);
+        foreach (var smartArt in _inlineSmartArts)
+            Include(smartArt.Rect.Y, smartArt.Rect.Height);
+
+        for (var page = 0; page < pageCount; page++)
+        {
+            var pageTop = _surfacePlan.PageTopDip(page);
+            var logicalBodyPage = LogicalBodyPageForPhysicalPage(page);
+            var footnoteReservation = _footnoteBandHeightByPage.TryGetValue(logicalBodyPage, out var bandHeight)
+                ? bandHeight
+                : 0;
+            var availableTextHeight = Math.Max(0, _surfacePlan.TextAreaHeightDip - footnoteReservation);
+            var usedHeight = hasBody[page]
+                ? Math.Max(0, bodyBottoms[page] - pageTop - _marginTopDip)
+                : 0;
+            var freeSpace = Math.Max(0, availableTextHeight - usedHeight);
+            _bodyPageVerticalOffsets.Add(PageVerticalAlignmentPlanner.ResolveBodyOffset(
+                _doc.Page.VerticalAlignment,
+                freeSpace));
+        }
+
+        double OffsetFor(double y)
+        {
+            var page = Math.Clamp(PageIndexFromPageSpaceY(y), 0, _bodyPageVerticalOffsets.Count - 1);
+            return _bodyPageVerticalOffsets[page];
+        }
+
+        var shiftedPlaced = _placed
+            .Select(placed => placed with { Y = placed.Y + OffsetFor(placed.Y) })
+            .ToList();
+        _placed.Clear();
+        _placed.AddRange(shiftedPlaced);
+        ShiftBodyTuples(OffsetFor);
+        ShiftBodyObjects(OffsetFor);
+    }
+
+    private void ShiftBodyTuples(Func<double, double> offsetFor)
+    {
+        static Rect ShiftRect(Rect rect, Func<double, double> offset) =>
+            new(rect.X, rect.Y + offset(rect.Y), rect.Width, rect.Height);
+
+        for (var i = 0; i < _markers.Count; i++)
+        {
+            var marker = _markers[i];
+            _markers[i] = (marker.X, marker.Y + offsetFor(marker.Y), marker.Text, marker.Fmt);
+        }
+
+        for (var i = 0; i < _tabLeaderSpans.Count; i++)
+        {
+            var span = _tabLeaderSpans[i];
+            _tabLeaderSpans[i] = (span.X1, span.X2, span.Y + offsetFor(span.Y), span.LineHeight,
+                span.Leader, span.Fmt);
+        }
+
+        for (var i = 0; i < _rects.Count; i++)
+        {
+            var item = _rects[i];
+            _rects[i] = (ShiftRect(item.Rect, offsetFor), item.Fill,
+                item.Border, item.CellBorderPlan);
+        }
+
+        for (var i = 0; i < _paragraphDecorations.Count; i++)
+        {
+            var item = _paragraphDecorations[i];
+            _paragraphDecorations[i] = (ShiftRect(item.Rect, offsetFor),
+                item.ShadingHex, item.Border);
+        }
+
+        for (var i = 0; i < _images.Count; i++)
+        {
+            var item = _images[i];
+            _images[i] = (ShiftRect(item.Rect, offsetFor), item.Image,
+                item.Model, item.ReflectionPreset);
+        }
+
+        for (var i = 0; i < _floatingImages.Count; i++)
+        {
+            var item = _floatingImages[i];
+            _floatingImages[i] = (ShiftRect(item.Rect, offsetFor), item.Image,
+                item.Model, item.ReflectionPreset, item.BehindText, item.ZOrder, item.BlockIndex,
+                item.RunIndex);
+        }
+
+        for (var i = 0; i < _cellHits.Count; i++)
+        {
+            var item = _cellHits[i];
+            _cellHits[i] = (ShiftRect(item.Rect, offsetFor), item.Block,
+                item.Row, item.Col);
+        }
+
+        for (var i = 0; i < _shapeTextCaretStops.Count; i++)
+        {
+            var stop = _shapeTextCaretStops[i];
+            var offset = offsetFor(stop.Y);
+            _shapeTextCaretStops[i] = stop with
+            {
+                Y = stop.Y + offset,
+                RotationCenterY = stop.RotationCenterY + offset
+            };
+        }
+    }
+
+    private void ShiftBodyObjects(Func<double, double> offsetFor)
+    {
+        static Rect ShiftRect(Rect rect, Func<double, double> offset) =>
+            new(rect.X, rect.Y + offset(rect.Y), rect.Width, rect.Height);
+
+        static DocumentFloatRect ShiftPlannerRect(DocumentFloatRect rect, Func<double, double> offset) =>
+            rect with { YDip = rect.YDip + offset(rect.YDip) };
+
+        void ShiftShape(FloatingShapeData shape)
+        {
+            shape.Rect = ShiftRect(shape.Rect, offsetFor);
+        }
+
+        void ShiftChart(FloatingChartData chart) => chart.Rect = ShiftRect(chart.Rect, offsetFor);
+        void ShiftWordArt(FloatingWordArtData wordArt) => wordArt.Rect = ShiftRect(wordArt.Rect, offsetFor);
+        void ShiftSmartArt(FloatingSmartArtData smartArt) => smartArt.Rect = ShiftRect(smartArt.Rect, offsetFor);
+
+        void ShiftGroup(FloatingGroupData group)
+        {
+            group.Rect = ShiftRect(group.Rect, offsetFor);
+            foreach (var child in group.Children)
+            {
+                child.Rect = ShiftRect(child.Rect, offsetFor);
+                if (child.Shape is not null) ShiftShape(child.Shape);
+                if (child.Chart is not null) ShiftChart(child.Chart);
+                if (child.WordArt is not null) ShiftWordArt(child.WordArt);
+                if (child.SmartArt is not null) ShiftSmartArt(child.SmartArt);
+                if (child.Group is not null) ShiftGroup(child.Group);
+            }
+        }
+
+        foreach (var shape in _floatingShapes) ShiftShape(shape);
+        foreach (var chart in _floatingCharts) ShiftChart(chart);
+        foreach (var wordArt in _floatingWordArts) ShiftWordArt(wordArt);
+        foreach (var smartArt in _floatingSmartArts) ShiftSmartArt(smartArt);
+        foreach (var group in _floatingGroups) ShiftGroup(group);
+        foreach (var shape in _inlineShapes) ShiftShape(shape);
+        foreach (var chart in _inlineCharts) ShiftChart(chart);
+        foreach (var wordArt in _inlineWordArts) ShiftWordArt(wordArt);
+        foreach (var smartArt in _inlineSmartArts) ShiftSmartArt(smartArt);
+
+        for (var i = 0; i < _floatingSnapshots.Count; i++)
+        {
+            var snapshot = _floatingSnapshots[i];
+            _floatingSnapshots[i] = snapshot with { Rect = ShiftPlannerRect(snapshot.Rect, offsetFor) };
+        }
+
+        for (var i = 0; i < _wrapExclusions.Count; i++)
+        {
+            var zone = _wrapExclusions[i];
+            _wrapExclusions[i] = zone with { Rect = ShiftPlannerRect(zone.Rect, offsetFor) };
+        }
+
+        for (var i = 0; i < _dropCapLayoutPlans.Count; i++)
+        {
+            var plan = _dropCapLayoutPlans[i];
+            _dropCapLayoutPlans[i] = plan with
+            {
+                CapBox = ShiftPlannerRect(plan.CapBox, offsetFor),
+                TextReservation = ShiftPlannerRect(plan.TextReservation, offsetFor)
+            };
+        }
+
+        if (_selectedFloating is { } selected)
+            _selectedFloating = selected with { Rect = ShiftRect(selected.Rect, offsetFor) };
+        if (_selectedFloatingGroupChild is { } selectedChild)
+            _selectedFloatingGroupChild = selectedChild with
+            {
+                Rect = ShiftRect(selectedChild.Rect, offsetFor)
+            };
     }
 
     /// <summary>

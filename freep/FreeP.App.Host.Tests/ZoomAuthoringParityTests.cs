@@ -24,6 +24,10 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameGeometry(");
         source.Should().Contain("Frame shape:");
         source.Should().Contain("_frameBorderColor.IsEnabled");
+        source.Should().Contain("Apply format to all Summary Zoom tiles");
+        source.Should().Contain("ApplySummaryPropertiesToAllTiles");
+        source.Should().Contain("12 + (_summaryTargets.Count > 0 ? 4 : 0)",
+            "the merged frame, Summary Zoom, option, and action controls need distinct grid rows");
     }
 
     [Fact]
@@ -37,6 +41,7 @@ public sealed class ZoomAuthoringParityTests
 
         source.Should().Contain("onFormatZoom:       () => OpenZoomObjectPropertiesDialog()");
         source.Should().Contain("Editor.SetSelectedZoomObjectProperties(dialog.Properties)");
+        source.Should().Contain("dialog.ApplySummaryPropertiesToAllTiles");
     }
 
     [Fact]

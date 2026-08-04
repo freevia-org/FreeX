@@ -23,10 +23,12 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private readonly ComboBox? _summaryTile;
     private readonly TextBox? _summaryOffset;
     private readonly TextBox? _summaryScale;
+    private readonly CheckBox? _applySummaryPropertiesToAllTiles;
 
     internal ZoomObjectProperties Properties { get; private set; }
     internal ZoomObjectPropertiesPlanner.SummaryZoomTileLayoutEdit? SummaryTileLayout { get; private set; }
     internal ZoomObjectPropertiesPlanner.SummaryZoomTilePropertiesEdit? SummaryTileProperties { get; private set; }
+    internal bool ApplySummaryPropertiesToAllTiles => _applySummaryPropertiesToAllTiles?.IsChecked == true;
 
     internal ZoomObjectPropertiesDialog(
         ZoomObjectProperties current,
@@ -128,11 +130,16 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             };
             _summaryOffset = new TextBox { MinWidth = 180 };
             _summaryScale = new TextBox { MinWidth = 180 };
+            _applySummaryPropertiesToAllTiles = new CheckBox
+            {
+                Content = "Apply format to all Summary Zoom tiles",
+                Margin = new Thickness(0, 4, 0, 0),
+            };
             _summaryTile.SelectionChanged += (_, _) => LoadSummaryTileFields();
         }
 
         var grid = new Grid { Margin = new Thickness(14) };
-        for (var i = 0; i < 9 + (_summaryTargets.Count > 0 ? 3 : 0); i++)
+        for (var i = 0; i < 12 + (_summaryTargets.Count > 0 ? 4 : 0); i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -156,6 +163,9 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             AddRow(grid, row++, "Summary tile:", _summaryTile);
             AddRow(grid, row++, "Tile position (%):", _summaryOffset!);
             AddRow(grid, row++, "Tile scale (%):", _summaryScale!);
+            Grid.SetRow(_applySummaryPropertiesToAllTiles!, row++);
+            Grid.SetColumnSpan(_applySummaryPropertiesToAllTiles!, 2);
+            grid.Children.Add(_applySummaryPropertiesToAllTiles);
         }
         Grid.SetRow(_returnToParent, row++);
         Grid.SetColumnSpan(_returnToParent, 2);
@@ -303,9 +313,12 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         if (_summaryTile is not null && _summaryTile.SelectedIndex >= 0
             && _summaryTile.SelectedIndex < _summaryTargets.Count)
         {
-            SummaryTileProperties = new ZoomObjectPropertiesPlanner.SummaryZoomTilePropertiesEdit(
-                _summaryTargets[_summaryTile.SelectedIndex].SectionId,
-                Properties);
+            if (!ApplySummaryPropertiesToAllTiles)
+            {
+                SummaryTileProperties = new ZoomObjectPropertiesPlanner.SummaryZoomTilePropertiesEdit(
+                    _summaryTargets[_summaryTile.SelectedIndex].SectionId,
+                    Properties);
+            }
         }
         DialogResult = true;
     }

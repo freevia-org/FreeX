@@ -1744,10 +1744,15 @@ public static class PptxPackageReader
         return value.IsEmpty ? null : value;
     }
 
-    private static string? ReadZoomFrameGeometry(XElement properties) =>
-        properties.Descendants().FirstOrDefault(element =>
+    private static string? ReadZoomFrameGeometry(XElement properties)
+    {
+        var geometry = properties.Descendants().FirstOrDefault(element =>
                 string.Equals(element.Name.LocalName, "prstGeom", StringComparison.OrdinalIgnoreCase))
             ?.Attribute("prst")?.Value?.Trim();
+        return string.Equals(geometry, "rect", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : geometry;
+    }
 
     private static string? ReadZoomFrameBorderColor(XElement properties)
     {

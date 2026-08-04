@@ -131,7 +131,10 @@ public static class ZoomObjectPropertiesPlanner
         var token = shapeProperties?.Elements().FirstOrDefault(element =>
                 string.Equals(element.Name.LocalName, "prstGeom", StringComparison.OrdinalIgnoreCase))
             ?.Attribute("prst")?.Value;
-        return TryNormalizeFrameGeometry(token, out var normalized) ? normalized : null;
+        return TryNormalizeFrameGeometry(token, out var normalized)
+            && !string.Equals(normalized, "rect", StringComparison.OrdinalIgnoreCase)
+                ? normalized
+                : null;
     }
 
     public static IReadOnlyList<string> FrameGeometryOptions { get; } =
