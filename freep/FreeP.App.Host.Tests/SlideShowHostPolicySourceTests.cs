@@ -315,6 +315,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Bold:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Underline:");
         source.Should().Contain("EmphasisPulseEffect(sb, element, plan);");
+        source.Should().Contain("AddAuthoredColorOverlay(sb, el, plan);");
+        source.Should().Contain("ColorFromHex");
         source.Should().Contain("AnimationKind.Emphasis");
         source.Should().Contain("a.Kind == AnimationKind.Exit");
         source.Should().Contain("|| a.Kind == AnimationKind.Exit");
