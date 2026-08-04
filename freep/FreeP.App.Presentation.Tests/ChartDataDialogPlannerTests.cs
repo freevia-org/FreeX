@@ -448,7 +448,7 @@ public sealed class ChartDataDialogPlannerTests
         commit.Should().Be(new ChartDisplayOptions(
             "Revenue", LegendPosition.Bottom, false, DataLabelPosition.OutsideEnd, false, true,
             true, true, true, true, "0.0%", " | ", 40, 55, ChartDisplayBlanksAs.Span, true, true, true, false,
-            commit.LabelTextStyle, true, 12, true, true, true, true));
+            commit.LabelTextStyle, true, 12, true, true, true, true, null, false, false));
         commit.RoundedCorners.Should().BeTrue();
         commit.LabelTextStyle.Should().NotBeNull();
         commit.LabelTextStyle!.FontFamily.Should().Be("Aptos");
@@ -480,6 +480,32 @@ public sealed class ChartDataDialogPlannerTests
         column.WaterfallConnectorLines.Should().BeNull();
         column.SetWaterfallConnectorLines(false);
         column.BuildCommitPlan().ShowWaterfallConnectorLines.Should().BeNull();
+    }
+
+    [Fact]
+    public void ChartDisplayOptionsPlanner_LineDecorationsAreScopedToLineAndStockCharts()
+    {
+        var line = MakeChart();
+        line.ChartType = ChartType.LineMarkers;
+        line.ShowDropLines = true;
+        line.ShowUpDownBars = false;
+
+        var planner = ChartDisplayOptionsPlanner.FromChart(line);
+        planner.SupportsDropLines.Should().BeTrue();
+        planner.SupportsUpDownBars.Should().BeTrue();
+        planner.DropLines.Should().BeTrue();
+        planner.UpDownBars.Should().BeFalse();
+        planner.SetDropLines(false);
+        planner.SetUpDownBars(true);
+        var commit = planner.BuildCommitPlan();
+        commit.ShowDropLines.Should().BeFalse();
+        commit.ShowUpDownBars.Should().BeTrue();
+
+        var column = ChartDisplayOptionsPlanner.FromChart(MakeChart());
+        column.SupportsDropLines.Should().BeFalse();
+        column.SupportsUpDownBars.Should().BeFalse();
+        column.BuildCommitPlan().ShowDropLines.Should().BeNull();
+        column.BuildCommitPlan().ShowUpDownBars.Should().BeNull();
     }
 
     [Fact]

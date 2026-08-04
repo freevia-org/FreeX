@@ -143,6 +143,19 @@ public sealed record DocumentTablePaginationPlan(
     IReadOnlyList<DocumentTablePaginationRowPlan> Rows,
     IReadOnlyList<DocumentTablePaginationPagePlan> Pages);
 
+public sealed record DocumentTableFloatingPositionPlan(
+    TableHorizontalAnchor? HorizontalAnchor,
+    TableVerticalAnchor? VerticalAnchor,
+    double? HorizontalOffsetDip,
+    double? VerticalOffsetDip,
+    TableHorizontalPositionAlignment? HorizontalAlignment,
+    TableVerticalPositionAlignment? VerticalAlignment,
+    double? LeftFromTextDip,
+    double? RightFromTextDip,
+    double? TopFromTextDip,
+    double? BottomFromTextDip,
+    bool? AllowsOverlap);
+
 public sealed record DocumentTableLayoutPlan(
     int TableIndex,
     int RowCount,
@@ -165,6 +178,7 @@ public sealed record DocumentTableLayoutPlan(
     bool HasPreferredWidths,
     bool HasNamedStyle,
     bool HasFloatingTextWrap,
+    DocumentTableFloatingPositionPlan? FloatingPosition,
     string Alignment,
     string AutoFit,
     string? TableStyleId,
@@ -740,6 +754,7 @@ public static class DocumentViewLayoutPlanner
             hasPreferredWidths,
             !string.IsNullOrWhiteSpace(table.TableStyleId),
             table.TextWrapping,
+            BuildTableFloatingPositionPlan(table),
             table.Alignment.ToString(),
             table.AutoFit.ToString(),
             table.TableStyleId,
@@ -753,6 +768,26 @@ public static class DocumentViewLayoutPlanner
                 page ?? new PageSettings(),
                 tableIndex,
                 firstPageLeadingContentHeightDip));
+    }
+
+    public static DocumentTableFloatingPositionPlan? BuildTableFloatingPositionPlan(Table table)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        if (table.FloatingPosition is not { } position)
+            return null;
+
+        return new DocumentTableFloatingPositionPlan(
+            position.HorizontalAnchor,
+            position.VerticalAnchor,
+            PointsToRoundedDip(position.HorizontalOffsetPt),
+            PointsToRoundedDip(position.VerticalOffsetPt),
+            position.HorizontalAlignment,
+            position.VerticalAlignment,
+            PointsToRoundedDip(position.LeftFromTextPt),
+            PointsToRoundedDip(position.RightFromTextPt),
+            PointsToRoundedDip(position.TopFromTextPt),
+            PointsToRoundedDip(position.BottomFromTextPt),
+            table.FloatingTableAllowsOverlap);
     }
 
     public static DocumentTableCellEffectiveFillPlan BuildTableCellEffectiveFillPlan(
@@ -2641,6 +2676,9 @@ public static class DocumentViewLayoutPlanner
 
     private static double RoundDip(double value) =>
         double.IsFinite(value) ? Math.Round(value, 3, MidpointRounding.AwayFromZero) : 0;
+
+    private static double? PointsToRoundedDip(double? value) =>
+        value is { } points ? RoundDip(PageLayout.PointsToDip(points)) : null;
 
     private static DocumentViewSurfacePlan BuildPrintSurfacePlan(
         PageSettings page,

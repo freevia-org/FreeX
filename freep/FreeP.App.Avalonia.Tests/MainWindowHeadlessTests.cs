@@ -7700,6 +7700,31 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartDisplayOptionsDialog_line_decorations_use_shared_planner()
+    {
+        ChartDisplayOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.LineMarkers);
+            chartShape.Chart!.ShowDropLines = true;
+            chartShape.Chart.ShowUpDownBars = false;
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartDisplayOptionsDialog(window.Editor);
+            dialog.SetDropLinesForTests(false);
+            dialog.SetUpDownBarsForTests(true);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().NotBeNull();
+        options!.ShowDropLines.Should().BeFalse();
+        options.ShowUpDownBars.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task ChartDataTableOptionsDialog_constructs_and_commits_shared_options()
     {
         ChartDataTableOptions? options = null;
