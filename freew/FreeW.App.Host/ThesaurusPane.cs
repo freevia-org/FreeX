@@ -171,8 +171,8 @@ internal sealed class ThesaurusPane
         var display = action.DisplayText;
         var insertBtn = new Button
         {
-            Content = "↵",
-            ToolTip = action.ReplaceToolTip,
+            Content = "Insert",
+            ToolTip = action.InsertToolTip,
             Padding = new Thickness(3, 1, 3, 1),
             Margin = new Thickness(0, 0, 2, 0),
             FontSize = 10,

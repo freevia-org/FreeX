@@ -18814,9 +18814,23 @@ public sealed class DocumentView : Control
     public string? CurrentProofingWord =>
         NormalizeProofingWord(SelectedText) ?? WordAtCaret();
 
-    public bool ReplaceCurrentProofingWord(string replacement)
+    public bool CanReplaceCurrentProofingWord(string replacement)
     {
         if (string.IsNullOrWhiteSpace(replacement) || IsEditingLocked || _hfCaret is not null || _cellCaret is not null)
+            return false;
+
+        if (NormalizedSelection() is { } selection
+            && selection.Start.Block == selection.End.Block
+            && selection.Start.Offset != selection.End.Offset
+            && NormalizeProofingWord(SelectedText) is not null)
+            return true;
+
+        return ProofingWordRangeAtCaret() is not null;
+    }
+
+    public bool ReplaceCurrentProofingWord(string replacement)
+    {
+        if (!CanReplaceCurrentProofingWord(replacement))
             return false;
 
         if (NormalizedSelection() is { } selection
