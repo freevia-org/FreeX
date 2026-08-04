@@ -14,10 +14,13 @@ internal sealed class SectionZoomDialog : Window
 
     internal string? SelectedTargetSectionId { get; private set; }
 
-    internal SectionZoomDialog(IReadOnlyList<(string Id, string DisplayName)> options)
+    internal SectionZoomDialog(
+        IReadOnlyList<(string Id, string DisplayName)> options,
+        string? title = null,
+        string? selectedTargetId = null)
     {
         ArgumentNullException.ThrowIfNull(options);
-        Title = SectionZoomInsertionPlanner.DialogTitle;
+        Title = title ?? SectionZoomInsertionPlanner.DialogTitle;
         Width = 420;
         Height = 160;
         CanResize = false;
@@ -25,7 +28,7 @@ internal sealed class SectionZoomDialog : Window
         AvaloniaCompactDialogChrome.ApplyWindow(this, DialogChromeStyle);
 
         var items = options.Select(option => new TargetOption(option.Id, option.DisplayName)).ToArray();
-        _targetCombo = new ComboBox { ItemsSource = items, SelectedIndex = items.Length == 0 ? -1 : 0, MinWidth = 260 };
+        _targetCombo = new ComboBox { ItemsSource = items, SelectedIndex = FindSelectedIndex(items, selectedTargetId), MinWidth = 260 };
 
         var ok = MakeButton("OK", true, Apply);
         ok.IsEnabled = items.Length > 0;
@@ -61,6 +64,16 @@ internal sealed class SectionZoomDialog : Window
         SelectedTargetSectionId = (_targetCombo.SelectedItem as TargetOption)?.Id;
         if (!string.IsNullOrWhiteSpace(SelectedTargetSectionId))
             Close(true);
+    }
+
+    private static int FindSelectedIndex(IReadOnlyList<TargetOption> options, string? selectedTargetId)
+    {
+        if (options.Count == 0)
+            return -1;
+        for (var index = 0; index < options.Count; index++)
+            if (string.Equals(options[index].Id, selectedTargetId, StringComparison.OrdinalIgnoreCase))
+                return index;
+        return 0;
     }
 
     private static Button MakeButton(string label, bool isDefault, Action action)

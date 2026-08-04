@@ -10,10 +10,13 @@ internal sealed class SlideZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     internal string? SelectedTargetSlideId { get; private set; }
 
-    internal SlideZoomDialog(IReadOnlyList<(string Id, string DisplayName)> options)
+    internal SlideZoomDialog(
+        IReadOnlyList<(string Id, string DisplayName)> options,
+        string? title = null,
+        string? selectedTargetId = null)
     {
         ArgumentNullException.ThrowIfNull(options);
-        Title = SlideZoomInsertionPlanner.DialogTitle;
+        Title = title ?? SlideZoomInsertionPlanner.DialogTitle;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
@@ -23,7 +26,7 @@ internal sealed class SlideZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             ItemsSource = options.Select(option => new TargetOption(option.Id, option.DisplayName)).ToArray(),
             DisplayMemberPath = nameof(TargetOption.DisplayName),
-            SelectedIndex = options.Count == 0 ? -1 : 0,
+            SelectedIndex = FindSelectedIndex(options, selectedTargetId),
             MinWidth = 260,
         };
 
@@ -63,6 +66,18 @@ internal sealed class SlideZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         SelectedTargetSlideId = (_targetCombo.SelectedItem as TargetOption)?.Id;
         if (!string.IsNullOrWhiteSpace(SelectedTargetSlideId))
             DialogResult = true;
+    }
+
+    private static int FindSelectedIndex(
+        IReadOnlyList<(string Id, string DisplayName)> options,
+        string? selectedTargetId)
+    {
+        if (options.Count == 0)
+            return -1;
+        for (var index = 0; index < options.Count; index++)
+            if (string.Equals(options[index].Id, selectedTargetId, StringComparison.OrdinalIgnoreCase))
+                return index;
+        return 0;
     }
 
     private sealed record TargetOption(string Id, string DisplayName);

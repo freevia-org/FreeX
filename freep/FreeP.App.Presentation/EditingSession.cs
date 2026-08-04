@@ -1089,6 +1089,66 @@ public sealed class EditingSession
         return shape;
     }
 
+    /// <summary>Retargets an existing Slide Zoom to another slide. Undoable.</summary>
+    public bool SetSlideZoomTarget(uint shapeId, string targetSlideId)
+    {
+        if (CurrentSlide is null
+            || !SlideZoomInsertionPlanner.TryBuildPlan(
+                Presentation,
+                _currentSlideIndex,
+                targetSlideId,
+                out var plan)
+            || !IsSingleTargetZoom(shapeId))
+            return false;
+
+        Bus.Execute(new SetZoomTargetCommand(
+            _currentSlideIndex,
+            shapeId,
+            ZoomTargetKind.Slide,
+            plan.TargetSlideNumericId,
+            sectionId: null,
+            $"Zoom to {plan.TargetDisplayName}"));
+        return CurrentSlide is { } slide
+            && FindShape(slide.Shapes, shapeId)?.PreservedObject?.ZoomTargetSlideNumericId
+                == plan.TargetSlideNumericId;
+    }
+
+    /// <summary>Retargets an existing Section Zoom to another section. Undoable.</summary>
+    public bool SetSectionZoomTarget(uint shapeId, string targetSectionId)
+    {
+        if (CurrentSlide is null
+            || !SectionZoomInsertionPlanner.TryBuildPlan(Presentation, targetSectionId, out var plan)
+            || !IsSingleTargetZoom(shapeId))
+            return false;
+
+        Bus.Execute(new SetZoomTargetCommand(
+            _currentSlideIndex,
+            shapeId,
+            ZoomTargetKind.Section,
+            slideNumericId: null,
+            plan.TargetSectionId,
+            $"Zoom to {plan.TargetDisplayName}"));
+        return CurrentSlide is { } slide
+            && string.Equals(
+                FindShape(slide.Shapes, shapeId)?.PreservedObject?.ZoomTargetSectionId,
+                plan.TargetSectionId,
+                StringComparison.Ordinal);
+    }
+
+    public bool SetSelectedSlideZoomTarget(string targetSlideId) =>
+        _selectedShapeIds.Count == 1
+        && SetSlideZoomTarget(_selectedShapeIds[0], targetSlideId);
+
+    public bool SetSelectedSectionZoomTarget(string targetSectionId) =>
+        _selectedShapeIds.Count == 1
+        && SetSectionZoomTarget(_selectedShapeIds[0], targetSectionId);
+
+    private bool IsSingleTargetZoom(uint shapeId) =>
+        CurrentSlide is { } slide
+        && FindShape(slide.Shapes, shapeId) is
+            { Kind: SlideShapeKind.Zoom, PreservedObject.ObjectKind: PreservedObjectKind.Zoom } shape
+        && shape.PreservedObject.SummaryZoomTargets.Count == 0;
+
     /// <summary>Deletes all currently selected shapes.</summary>
     public void DeleteSelected()
     {

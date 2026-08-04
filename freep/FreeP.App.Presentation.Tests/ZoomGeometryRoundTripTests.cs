@@ -89,6 +89,30 @@ public sealed class ZoomGeometryRoundTripTests
         reopenedSummary.RotationDeg.Should().Be(summaryZoom.RotationDeg);
     }
 
+    [Fact]
+    public void Retargeted_section_zoom_round_trips_native_section_id()
+    {
+        var presentation = BuildPresentation();
+        var shape = SectionZoomInsertionPlanner.CreateShape(presentation, "{ONE}");
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetZoomTargetCommand(
+            0,
+            shape.Id,
+            ZoomTargetKind.Section,
+            slideNumericId: null,
+            sectionId: "{TARGET}",
+            "Zoom to Target"));
+
+        shape.PreservedObject!.ZoomTargetSectionId.Should().Be("{TARGET}");
+        shape.PreservedObject.RawXml.Should().Contain("sectionId=\"{TARGET}\"");
+        var reopened = PptxPackageReader.Read(new MemoryStream(Write(presentation)));
+        reopened.Slides[0].Shapes
+            .Where(candidate => candidate.Kind == SlideShapeKind.Zoom)
+            .Single().PreservedObject!.ZoomTargetSectionId.Should().Be("{TARGET}");
+    }
+
     private static bool IsTransform(XElement xfrm, SlideShape shape)
     {
         return xfrm.Element(DrawingNamespace + "off")!.Attribute("x")!.Value == shape.OffsetXEmu.ToString()

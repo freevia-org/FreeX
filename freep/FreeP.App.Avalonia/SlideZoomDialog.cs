@@ -14,10 +14,13 @@ internal sealed class SlideZoomDialog : Window
 
     internal string? SelectedTargetSlideId { get; private set; }
 
-    internal SlideZoomDialog(IReadOnlyList<(string Id, string DisplayName)> options)
+    internal SlideZoomDialog(
+        IReadOnlyList<(string Id, string DisplayName)> options,
+        string? title = null,
+        string? selectedTargetId = null)
     {
         ArgumentNullException.ThrowIfNull(options);
-        Title = SlideZoomInsertionPlanner.DialogTitle;
+        Title = title ?? SlideZoomInsertionPlanner.DialogTitle;
         Width = 420;
         Height = 160;
         CanResize = false;
@@ -28,7 +31,7 @@ internal sealed class SlideZoomDialog : Window
         _targetCombo = new ComboBox
         {
             ItemsSource = items,
-            SelectedIndex = items.Length == 0 ? -1 : 0,
+            SelectedIndex = FindSelectedIndex(items, selectedTargetId),
             MinWidth = 260,
         };
 
@@ -67,6 +70,16 @@ internal sealed class SlideZoomDialog : Window
         SelectedTargetSlideId = (_targetCombo.SelectedItem as TargetOption)?.Id;
         if (!string.IsNullOrWhiteSpace(SelectedTargetSlideId))
             Close(true);
+    }
+
+    private static int FindSelectedIndex(IReadOnlyList<TargetOption> options, string? selectedTargetId)
+    {
+        if (options.Count == 0)
+            return -1;
+        for (var index = 0; index < options.Count; index++)
+            if (string.Equals(options[index].Id, selectedTargetId, StringComparison.OrdinalIgnoreCase))
+                return index;
+        return 0;
     }
 
     private static Button MakeButton(string label, bool isDefault, Action action)
