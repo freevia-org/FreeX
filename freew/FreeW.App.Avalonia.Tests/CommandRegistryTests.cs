@@ -330,19 +330,63 @@ public sealed class CommandRegistryTests
     }
 
     [Fact]
+    public void Font_combos_publish_effective_values_apply_undoably_and_reject_invalid_values()
+    {
+        var doc = MakeDoc("Format");
+        doc.DefaultRun = new RunFormatting { FontFamily = "Georgia", FontSizePt = 13 };
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        view.SetSelectionRangePublic(0, 0, 0, 6);
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        registry.TryGet(new RibbonCommandId("freew.font-family"), out var familyCommand).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.font-size"), out var sizeCommand).Should().BeTrue();
+        var familyState = familyCommand.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+        var sizeState = sizeCommand.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+        familyState.GetState().Value.Should().Be("Georgia");
+        sizeState.GetState().Value.Should().Be("13");
+
+        familyCommand!.Execute(RibbonCommandContext.ForSelectedValue("Arial"));
+        sizeCommand!.Execute(RibbonCommandContext.ForSelectedValue("14.5"));
+        familyState.GetState().Value.Should().Be("Arial");
+        sizeState.GetState().Value.Should().Be("14.5");
+
+        familyCommand.Execute(RibbonCommandContext.Empty);
+        sizeCommand.Execute(RibbonCommandContext.ForSelectedValue("0"));
+        sizeCommand.Execute(RibbonCommandContext.ForSelectedValue("Missing"));
+        familyState.GetState().Value.Should().Be("Arial");
+        sizeState.GetState().Value.Should().Be("14.5");
+
+        view.Undo();
+        sizeState.GetState().Value.Should().Be("13");
+        view.Undo();
+        familyState.GetState().Value.Should().Be("Georgia");
+    }
+
+    [Fact]
     public void Line_spacing_combo_and_fixed_aliases_set_multiple_spacing()
     {
         var view = new DocumentView();
         view.LoadDocument(MakeDoc("Spacing"));
         var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        registry.TryGet(new RibbonCommandId("freew.line-spacing"), out var command).Should().BeTrue();
+        var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+        stateful.GetState().Value.Should().Be("1.15");
 
         Execute(registry, "freew.line-spacing", RibbonCommandContext.ForSelectedValue("1.5"));
         var paragraph = (Paragraph)view.Document.Blocks[0];
         paragraph.Formatting.LineRule.Should().Be(LineSpacingRule.Multiple);
         paragraph.Formatting.LineSpacing.Should().Be(1.5);
+        stateful.GetState().Value.Should().Be("1.5");
+
+        Execute(registry, "freew.line-spacing", RibbonCommandContext.ForSelectedValue("0"));
+        Execute(registry, "freew.line-spacing", RibbonCommandContext.ForSelectedValue("Missing"));
+        paragraph.Formatting.LineSpacing.Should().Be(1.5);
+        stateful.GetState().Value.Should().Be("1.5");
 
         Execute(registry, "freew.line-spacing-2");
         paragraph.Formatting.LineSpacing.Should().Be(2.0);
+        stateful.GetState().Value.Should().Be("2");
     }
 
     [Fact]
