@@ -79,7 +79,7 @@ public sealed class DocumentView : RichTextBox
     // TableCell and BlockUIContainer already contribute this much horizontal content inset.
     private const double WpfTableCellContentInsetDip = 6.0;
     // WPF's Calibri line box remains about 1% short after restoring Word's 12-point application fallback.
-    private const double ImportedWordApplicationLineHeightScale = 1.01;
+    private const double ImportedWordApplicationLineHeightScale = 1.00975;
 
     // Matches the shared planner's default page-space gap around wrapped objects.
     private const double FloatingWrapGapDip = 9.0;
