@@ -230,6 +230,10 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("var requiresDedicatedEndnotePage = false;");
         source.Should().Contain("FindLastPaintedRow(finalBodyBitmap) + 16");
         source.Should().Contain("var actualPageCountWithEndnotes = actualPageCount + (requiresDedicatedEndnotePage ? 1 : 0);");
+        source.Should().Contain("const double DedicatedEndnoteOverflowTopAdjustmentDip = 8.0;");
+        source.Should().Contain("marginTop + DedicatedEndnoteOverflowTopAdjustmentDip");
+        source.Split("new System.Windows.Documents.Run(\"\\u200B\")", StringSplitOptions.None)
+            .Should().HaveCount(3, "both note render loops retain line metrics without painting an absent marker");
         source.Should().Contain("[\"endnotePlacement\"] = \"dedicated-overflow-page\"");
         source.Should().NotContain("retaining body-only page until multi-page endnote pagination is available");
     }

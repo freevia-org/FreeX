@@ -699,15 +699,25 @@ internal sealed class PageBox : Border
             FontSize = textSizePx
         };
 
-        // Superscript number
-        tb.Inlines.Add(new System.Windows.Documents.Run(number)
+        if (!string.IsNullOrEmpty(number))
         {
-            BaselineAlignment = BaselineAlignment.Superscript,
-            FontSize = textSizePx * 0.75
-        });
+            tb.Inlines.Add(new System.Windows.Documents.Run(number)
+            {
+                BaselineAlignment = BaselineAlignment.Superscript,
+                FontSize = textSizePx * 0.75
+            });
+            tb.Inlines.Add(new System.Windows.Documents.Run(" "));
+        }
+        else
+        {
+            tb.Inlines.Add(new System.Windows.Documents.Run("\u200B")
+            {
+                BaselineAlignment = BaselineAlignment.Superscript,
+                FontSize = textSizePx * 0.75
+            });
+        }
 
-        // A thin space then the note text
-        tb.Inlines.Add(new System.Windows.Documents.Run(" " + text));
+        tb.Inlines.Add(new System.Windows.Documents.Run(text));
 
         return tb;
     }

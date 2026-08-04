@@ -1980,7 +1980,13 @@ public static class DocxWriter
         {
             var element = new XElement(W + "footnote", new XAttribute(W + "id", footnote.Id));
             foreach (var paragraph in BuildNoteContent(
-                footnote.Content, noteDrawings, hyperlinks, "footnoteRef", preservedNumbering, restartOverrides))
+                footnote.Content,
+                noteDrawings,
+                hyperlinks,
+                "footnoteRef",
+                footnote.HasAutomaticReferenceMark,
+                preservedNumbering,
+                restartOverrides))
                 element.Add(paragraph);
             footnotes.Add(element);
         }
@@ -2033,7 +2039,13 @@ public static class DocxWriter
         {
             var element = new XElement(W + "endnote", new XAttribute(W + "id", endnote.Id));
             foreach (var paragraph in BuildNoteContent(
-                endnote.Content, noteDrawings, hyperlinks, "endnoteRef", preservedNumbering, restartOverrides))
+                endnote.Content,
+                noteDrawings,
+                hyperlinks,
+                "endnoteRef",
+                endnote.HasAutomaticReferenceMark,
+                preservedNumbering,
+                restartOverrides))
                 element.Add(paragraph);
             endnotes.Add(element);
         }
@@ -2046,6 +2058,7 @@ public static class DocxWriter
         RunDrawings drawings,
         IReadOnlyDictionary<string, string> hyperlinks,
         string referenceElementName,
+        bool includeReferenceMark,
         PreservedNumberingPlan? preservedNumbering,
         IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> restartOverrides)
     {
@@ -2053,14 +2066,16 @@ public static class DocxWriter
             ? new List<XElement> { new XElement(W + "p") }
             : content.Select(paragraph => BuildParagraph(paragraph, drawings, hyperlinks, preservedNumbering: preservedNumbering, restartOverrides: restartOverrides)).ToList();
 
-        // Word requires a footnoteRef/endnoteRef marker in the note body to display its automatic number.
-        // Keep it after pPr so the paragraph remains schema-valid and before the authored note text.
-        var referenceRun = new XElement(W + "r", new XElement(W + referenceElementName));
-        var properties = paragraphs[0].Element(W + "pPr");
-        if (properties is null)
-            paragraphs[0].AddFirst(referenceRun);
-        else
-            properties.AddAfterSelf(referenceRun);
+        if (includeReferenceMark)
+        {
+            // Keep the automatic marker after pPr and before the authored note text.
+            var referenceRun = new XElement(W + "r", new XElement(W + referenceElementName));
+            var properties = paragraphs[0].Element(W + "pPr");
+            if (properties is null)
+                paragraphs[0].AddFirst(referenceRun);
+            else
+                properties.AddAfterSelf(referenceRun);
+        }
 
         return paragraphs;
     }

@@ -7788,7 +7788,9 @@ public sealed class DocumentView : Control
             {
                 var id = ids[index];
                 var note2 = _doc.Footnotes[id];
-                var dn = ComputeNoteDisplayNumber(sequenceById[id], opts);
+                var dn = note2.HasAutomaticReferenceMark
+                    ? ComputeNoteDisplayNumber(sequenceById[id], opts)
+                    : string.Empty;
                 var content2 = note2.Content.Count > 0
                     ? note2.Content
                     : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
@@ -7817,7 +7819,9 @@ public sealed class DocumentView : Control
                 var id = ids[index];
                 var note = _doc.Footnotes[id];
                 // DB3: compute display number from NoteNumberingOptions.
-                var displayNum = ComputeNoteDisplayNumber(sequenceById[id], opts);
+                var displayNum = note.HasAutomaticReferenceMark
+                    ? ComputeNoteDisplayNumber(sequenceById[id], opts)
+                    : string.Empty;
 
                 var content = note.Content.Count > 0
                     ? note.Content
@@ -7879,7 +7883,9 @@ public sealed class DocumentView : Control
         {
             var note = _doc.Endnotes[id];
             // DB3: compute display number from EndnoteNumbering options.
-            var displayNum = ComputeNoteDisplayNumber(seqIndex, opts);
+            var displayNum = note.HasAutomaticReferenceMark
+                ? ComputeNoteDisplayNumber(seqIndex, opts)
+                : string.Empty;
             seqIndex++;
             y = LayoutNoteContent(displayNum,
                 note.Content.Count > 0 ? note.Content : new List<Paragraph> { new Paragraph(string.Empty) },
@@ -7921,7 +7927,11 @@ public sealed class DocumentView : Control
             var content = note.Content.Count > 0
                 ? note.Content
                 : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
-            height += MeasureNoteContentHeight(ComputeNoteDisplayNumber(sequence++, options), content, _contentLeft, _contentWidth);
+            var displayNumber = note.HasAutomaticReferenceMark
+                ? ComputeNoteDisplayNumber(sequence, options)
+                : string.Empty;
+            sequence++;
+            height += MeasureNoteContentHeight(displayNumber, content, _contentLeft, _contentWidth);
             height += index == ids.Count - 1 ? EndnoteTrailingPadding : EndnoteInterNoteSpacing;
         }
         return height;
@@ -7941,7 +7951,11 @@ public sealed class DocumentView : Control
             var content = note.Content.Count > 0
                 ? note.Content
                 : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
-            y = LayoutNoteContent(ComputeNoteDisplayNumber(sequence++, options), content, _contentLeft, y, _contentWidth);
+            var displayNumber = note.HasAutomaticReferenceMark
+                ? ComputeNoteDisplayNumber(sequence, options)
+                : string.Empty;
+            sequence++;
+            y = LayoutNoteContent(displayNumber, content, _contentLeft, y, _contentWidth);
             if (index < ids.Count - 1)
                 y += EndnoteInterNoteSpacing;
         }

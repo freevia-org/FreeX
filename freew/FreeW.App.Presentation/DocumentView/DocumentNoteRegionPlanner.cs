@@ -394,7 +394,9 @@ public static class DocumentNoteRegionPlanner
             var sequence = sequenceById.TryGetValue(id, out var resolvedSequence)
                 ? resolvedSequence
                 : Math.Max(1, options.StartAt);
-            var label = ComputeDisplayNumber(sequence, options);
+            var label = HasAutomaticReferenceMark(document, id, isFootnote)
+                ? ComputeDisplayNumber(sequence, options)
+                : string.Empty;
             rows.Add(new DocumentNoteRegionRow(
                 id,
                 sequence,
@@ -405,6 +407,11 @@ public static class DocumentNoteRegionPlanner
 
         return rows;
     }
+
+    private static bool HasAutomaticReferenceMark(TextDocument document, int id, bool isFootnote) =>
+        isFootnote
+            ? document.Footnotes.TryGetValue(id, out var footnote) && footnote.HasAutomaticReferenceMark
+            : document.Endnotes.TryGetValue(id, out var endnote) && endnote.HasAutomaticReferenceMark;
 
     private static string ResolvePlainText(TextDocument document, int id, bool isFootnote)
     {

@@ -791,7 +791,10 @@ public static class DocumentMerge
                 {
                     var mappedId = AllocateId(footnoteId, usedFootnotes, firstId: 1);
                     footnoteIds[footnoteId] = mappedId;
-                    var clone = new Footnote(mappedId);
+                    var clone = new Footnote(mappedId)
+                    {
+                        HasAutomaticReferenceMark = footnote.HasAutomaticReferenceMark
+                    };
                     foreach (var content in footnote.Content)
                     {
                         var paragraph = CloneParagraph(content);
@@ -807,7 +810,10 @@ public static class DocumentMerge
                 {
                     var mappedId = AllocateId(endnoteId, usedEndnotes, firstId: 1);
                     endnoteIds[endnoteId] = mappedId;
-                    var clone = new Endnote(mappedId);
+                    var clone = new Endnote(mappedId)
+                    {
+                        HasAutomaticReferenceMark = endnote.HasAutomaticReferenceMark
+                    };
                     foreach (var content in endnote.Content)
                     {
                         var paragraph = CloneParagraph(content);

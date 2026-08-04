@@ -1076,7 +1076,10 @@ public static class DocxReader
             if (!int.TryParse(element.Attribute(W + "id")?.Value, out var id))
                 continue;
 
-            var footnote = new Footnote(id);
+            var footnote = new Footnote(id)
+            {
+                HasAutomaticReferenceMark = element.Descendants(W + "footnoteRef").Any()
+            };
             foreach (var p in ReadStoryParagraphs(element))
                 footnote.Content.Add(ReadParagraph(
                     p,
@@ -1121,7 +1124,10 @@ public static class DocxReader
             if (!int.TryParse(element.Attribute(W + "id")?.Value, out var id))
                 continue;
 
-            var endnote = new Endnote(id);
+            var endnote = new Endnote(id)
+            {
+                HasAutomaticReferenceMark = element.Descendants(W + "endnoteRef").Any()
+            };
             foreach (var p in ReadStoryParagraphs(element))
                 endnote.Content.Add(ReadParagraph(
                     p,

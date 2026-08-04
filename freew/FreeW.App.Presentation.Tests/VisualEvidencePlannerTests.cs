@@ -505,6 +505,27 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedNoteRegionPlanner_DoesNotInventAnOmittedAutomaticReferenceMark()
+    {
+        var document = new TextDocument();
+        document.Endnotes[1] = new Endnote(1, "Authored endnote text.")
+        {
+            HasAutomaticReferenceMark = false
+        };
+
+        var plan = DocumentNoteRegionPlanner.BuildEndnoteRegion(
+            document,
+            [1],
+            pageNumber: 1,
+            contentWidthDip: 480,
+            isSyntheticPage: true);
+
+        plan.Rows.Should().ContainSingle();
+        plan.Rows[0].Label.Should().BeEmpty();
+        plan.Rows[0].Text.Should().Be("Authored endnote text.");
+    }
+
+    [Fact]
     public void SharedNoteRegionPlanner_FragmentsLongFootnotesWithoutDroppingWords()
     {
         var document = new TextDocument();

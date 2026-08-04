@@ -182,6 +182,7 @@ static void RenderDocumentComposite(
     string? wpfRenderTargetFailure,
     bool reviewMarkup)
 {
+    const double DedicatedEndnoteOverflowTopAdjustmentDip = 8.0;
     // Calibrated against the cached Word page: the WPF note bitmap's measured height differs
     // from the Avalonia overlay, so it needs its own printable-frame reserve.
     const double FootnoteTrailingReserveDip = 15.0;
@@ -1022,7 +1023,9 @@ static void RenderDocumentComposite(
                 ? Colors.White
                 : ParseHexColor(page.BackgroundColorHex, Colors.White);
             dc.DrawRectangle(new SolidColorBrush(pageColor), null, new Rect(0, 0, pixW, pixH));
-            dc.DrawImage(endnoteBitmap, new Rect(0, marginTop, pixW, endnoteBitmap.Height));
+            dc.DrawImage(
+                endnoteBitmap,
+                new Rect(0, marginTop + DedicatedEndnoteOverflowTopAdjustmentDip, pixW, endnoteBitmap.Height));
         }
         endnotePage.Render(endnotePageVisual);
 
@@ -2518,12 +2521,24 @@ static RenderTargetBitmap? RenderNoteRegionPlan(
                 Margin       = new System.Windows.Thickness(marginLeft, 1, marginRight, 1),
                 FontSize     = textSizePx
             };
-            tb.Inlines.Add(new System.Windows.Documents.Run(row.Label)
+            if (!string.IsNullOrEmpty(row.Label))
             {
-                BaselineAlignment = System.Windows.BaselineAlignment.Superscript,
-                FontSize          = notePlan.LabelFontSizePt * (96.0 / 72.0)
-            });
-            tb.Inlines.Add(new System.Windows.Documents.Run(" " + row.Text));
+                tb.Inlines.Add(new System.Windows.Documents.Run(row.Label)
+                {
+                    BaselineAlignment = System.Windows.BaselineAlignment.Superscript,
+                    FontSize          = notePlan.LabelFontSizePt * (96.0 / 72.0)
+                });
+                tb.Inlines.Add(new System.Windows.Documents.Run(" "));
+            }
+            else
+            {
+                tb.Inlines.Add(new System.Windows.Documents.Run("\u200B")
+                {
+                    BaselineAlignment = System.Windows.BaselineAlignment.Superscript,
+                    FontSize          = notePlan.LabelFontSizePt * (96.0 / 72.0)
+                });
+            }
+            tb.Inlines.Add(new System.Windows.Documents.Run(row.Text));
             panel.Children.Add(tb);
             hasContent = true;
         }
@@ -2561,12 +2576,24 @@ static RenderTargetBitmap? RenderNoteRegionPlan(
                 Margin       = new System.Windows.Thickness(marginLeft, 1, marginRight, 1),
                 FontSize     = textSizePx
             };
-            tb.Inlines.Add(new System.Windows.Documents.Run(row.Label)
+            if (!string.IsNullOrEmpty(row.Label))
             {
-                BaselineAlignment = System.Windows.BaselineAlignment.Superscript,
-                FontSize          = notePlan.LabelFontSizePt * (96.0 / 72.0)
-            });
-            tb.Inlines.Add(new System.Windows.Documents.Run(" " + row.Text));
+                tb.Inlines.Add(new System.Windows.Documents.Run(row.Label)
+                {
+                    BaselineAlignment = System.Windows.BaselineAlignment.Superscript,
+                    FontSize          = notePlan.LabelFontSizePt * (96.0 / 72.0)
+                });
+                tb.Inlines.Add(new System.Windows.Documents.Run(" "));
+            }
+            else
+            {
+                tb.Inlines.Add(new System.Windows.Documents.Run("\u200B")
+                {
+                    BaselineAlignment = System.Windows.BaselineAlignment.Superscript,
+                    FontSize          = notePlan.LabelFontSizePt * (96.0 / 72.0)
+                });
+            }
+            tb.Inlines.Add(new System.Windows.Documents.Run(row.Text));
             panel.Children.Add(tb);
             hasContent = true;
         }

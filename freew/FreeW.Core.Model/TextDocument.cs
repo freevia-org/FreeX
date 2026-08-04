@@ -1439,6 +1439,8 @@ public sealed record ContentControl(
 public sealed class Footnote(int id)
 {
     public int Id { get; } = id;
+    /// <summary>Whether the note body contains Word's automatic w:footnoteRef marker.</summary>
+    public bool HasAutomaticReferenceMark { get; set; } = true;
     public List<Paragraph> Content { get; } = [];
 
     public Footnote(int id, string text) : this(id) => Content.Add(new Paragraph(text));
@@ -1454,6 +1456,8 @@ public sealed class Footnote(int id)
 public sealed class Endnote(int id)
 {
     public int Id { get; } = id;
+    /// <summary>Whether the note body contains Word's automatic w:endnoteRef marker.</summary>
+    public bool HasAutomaticReferenceMark { get; set; } = true;
     public List<Paragraph> Content { get; } = [];
 
     public Endnote(int id, string text) : this(id) => Content.Add(new Paragraph(text));

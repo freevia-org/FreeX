@@ -2526,6 +2526,7 @@ public class DocxRoundTripTests
         // The footnote content is recovered intact.
         result.Footnotes.Should().ContainKey(1);
         result.Footnotes[1].PlainText.Should().Be("The footnote text.");
+        result.Footnotes[1].HasAutomaticReferenceMark.Should().BeTrue();
     }
 
     [Fact]
@@ -2602,6 +2603,7 @@ public class DocxRoundTripTests
         // The endnote content is recovered intact.
         result.Endnotes.Should().ContainKey(1);
         result.Endnotes[1].PlainText.Should().Be("The endnote text.");
+        result.Endnotes[1].HasAutomaticReferenceMark.Should().BeTrue();
     }
 
     [Fact]
@@ -2640,6 +2642,52 @@ public class DocxRoundTripTests
         endnotesXml.Should().Contain("An endnote.");
         endnotesXml.Should().Contain("w:id=\"1\"");
         endnotesXml.Should().Contain("endnoteRef");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NoteBody_WithoutAutomaticReferenceMark_RoundTripsItsAbsence(bool endnote)
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("Body"));
+        if (endnote)
+        {
+            document.Endnotes[1] = new Endnote(1, "Authored endnote text.")
+            {
+                HasAutomaticReferenceMark = false
+            };
+        }
+        else
+        {
+            document.Footnotes[1] = new Footnote(1, "Authored footnote text.")
+            {
+                HasAutomaticReferenceMark = false
+            };
+        }
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        var bytes = stream.ToArray();
+        var partName = endnote ? "word/endnotes.xml" : "word/footnotes.xml";
+        var noteElementName = endnote ? "endnote" : "footnote";
+        var referenceElementName = endnote ? "endnoteRef" : "footnoteRef";
+        var word = (XNamespace)"http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+        using (var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read))
+        using (var part = archive.GetEntry(partName)!.Open())
+        {
+            var xml = XDocument.Load(part);
+            var note = xml.Root!.Elements(word + noteElementName)
+                .Single(element => element.Attribute(word + "id")?.Value == "1");
+            note.Descendants(word + referenceElementName).Should().BeEmpty();
+        }
+
+        var reopened = DocxReader.Read(new MemoryStream(bytes));
+        var hasAutomaticReferenceMark = endnote
+            ? reopened.Endnotes[1].HasAutomaticReferenceMark
+            : reopened.Footnotes[1].HasAutomaticReferenceMark;
+        hasAutomaticReferenceMark.Should().BeFalse();
     }
 
     [Theory]

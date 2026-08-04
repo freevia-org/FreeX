@@ -2123,7 +2123,10 @@ public static class MailMerge
 
         foreach (var (id, footnote) in source.Footnotes)
         {
-            var clone = new Footnote(id);
+            var clone = new Footnote(id)
+            {
+                HasAutomaticReferenceMark = footnote.HasAutomaticReferenceMark
+            };
             foreach (var paragraph in footnote.Content)
                 clone.Content.Add((Paragraph)cloneBlock(paragraph));
             target.Footnotes[id] = clone;
@@ -2131,7 +2134,10 @@ public static class MailMerge
 
         foreach (var (id, endnote) in source.Endnotes)
         {
-            var clone = new Endnote(id);
+            var clone = new Endnote(id)
+            {
+                HasAutomaticReferenceMark = endnote.HasAutomaticReferenceMark
+            };
             foreach (var paragraph in endnote.Content)
                 clone.Content.Add((Paragraph)cloneBlock(paragraph));
             target.Endnotes[id] = clone;
