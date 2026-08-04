@@ -104,6 +104,7 @@ public static class PptxPackageWriter
         ModernAuthorsRelType,
         VideoRelType,
         AudioRelType,
+        CaptionRelType,
         OleObjectRelType,
         PackageRelType,
         DiagramDataRelType,

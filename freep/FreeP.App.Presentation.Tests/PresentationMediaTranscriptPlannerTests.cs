@@ -802,7 +802,7 @@ public sealed class PresentationMediaTranscriptPlannerTests
         externalPlan.Message.Should().Be(PresentationMediaTranscriptPlanner.CaptionAuthoringExternalTrackMessage);
         externalPlan.Actions.Single(action =>
                 action.CommandId == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneReplaceCommandId)
-            .DisabledReason.Should().Be(PresentationMediaTranscriptPlanner.ExternalCaptionTrackMessage);
+            .DisabledReason.Should().Be(PresentationMediaTranscriptPlanner.MissingCaptionContentMessage);
         externalPlan.Actions.Single(action =>
                 action.CommandId == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneDeleteCommandId)
             .IsEnabled.Should().BeTrue();
@@ -842,6 +842,44 @@ public sealed class PresentationMediaTranscriptPlannerTests
         missingSelection.Actions.Should().Contain(action =>
             action.CommandId == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCreateCommandId &&
             action.DisabledReason == PresentationMediaTranscriptPlanner.MissingSelectedMediaMessage);
+    }
+
+    [Fact]
+    public void ReplaceCaptionTrack_FromExternalLinkCreatesAnEmbeddedTrackInTheSameSlot()
+    {
+        var media = new MediaInfo
+        {
+            IsVideo = true,
+            CaptionTracks =
+            {
+                new MediaCaptionTrackInfo
+                {
+                    RelationshipId = "rIdExternalCaption",
+                    Source = "https://cdn.example.com/captions.vtt",
+                    Label = "Remote captions",
+                    Language = "en-US",
+                    IsExternal = true
+                }
+            }
+        };
+
+        var result = PresentationMediaTranscriptPlanner.ReplaceInternalCaptionTrack(
+            media,
+            0,
+            new PresentationMediaCaptionTrackAuthoringDescriptor(
+                Label: "Local captions",
+                Language: null,
+                Source: null,
+                TranscriptText: "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nLocal cue"));
+
+        result.Succeeded.Should().BeTrue();
+        var replacement = media.CaptionTracks.Should().ContainSingle().Subject;
+        replacement.RelationshipId.Should().Be("rIdExternalCaption");
+        replacement.Source.Should().Be("ppt/media/authored-captions1.vtt");
+        replacement.IsExternal.Should().BeFalse();
+        replacement.Label.Should().Be("Local captions");
+        replacement.Language.Should().Be("en-US");
+        Encoding.UTF8.GetString(replacement.Bytes).Should().Contain("Local cue");
     }
 
     [Fact]
