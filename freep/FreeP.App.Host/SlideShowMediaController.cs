@@ -552,7 +552,7 @@ public sealed class SlideShowMediaController
 
         try
         {
-            element.Volume = Math.Clamp(volume, 0, 100) / 100d;
+            element.Volume = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(volume) / 100d;
             return true;
         }
         catch (InvalidOperationException)

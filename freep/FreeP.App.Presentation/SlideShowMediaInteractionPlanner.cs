@@ -90,6 +90,12 @@ public static class SlideShowMediaInteractionPlanner
             shapeH * scale);
     }
 
+    /// <summary>
+    /// Keeps the host-independent media volume contract in the shared 0-100 range.
+    /// Native WPF and LibVLC adapters consume different representations of this value.
+    /// </summary>
+    public static int NormalizeVolumePercent(int volume) => Math.Clamp(volume, 0, 100);
+
     private static SlideShowMediaShapePlan BuildShapePlan(
         SlideShape shape,
         double slideDipW,

@@ -2375,6 +2375,22 @@ public sealed class SlideShowMediaControllerTests
     }
 
     [StaFact]
+    public void TrySetVolume_ClampsToSharedZeroToHundredRange()
+    {
+        var overlay = new System.Windows.Controls.Canvas();
+        var ctrl = new SlideShowMediaController(overlay, new TempMediaFileWriter());
+        ctrl.EnterSlide(SlideWithMedia(MakeMediaShape()), 960, 720, 960, 720);
+
+        ctrl.TrySetVolume(1, 150).Should().BeTrue();
+        var element = overlay.Children.OfType<System.Windows.Controls.MediaElement>().Single();
+        element.Volume.Should().BeApproximately(1, 0.0001);
+
+        ctrl.TrySetVolume(1, -25).Should().BeTrue();
+        element.Volume.Should().BeApproximately(0, 0.0001);
+        ctrl.Teardown();
+    }
+
+    [StaFact]
     public void SlideShowWindow_WithMediaShape_ConstructsWithoutThrowing()
     {
         var pres  = Presentation.CreateEmpty();

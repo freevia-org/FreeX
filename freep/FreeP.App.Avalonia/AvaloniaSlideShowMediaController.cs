@@ -248,7 +248,7 @@ internal sealed class AvaloniaSlideShowMediaController
     {
         var slot = _slots.FirstOrDefault(candidate => candidate.ShapeId == shapeId);
         if (slot is null) return false;
-        slot.Session.Volume = volume;
+        slot.Session.Volume = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(volume);
         return true;
     }
 
