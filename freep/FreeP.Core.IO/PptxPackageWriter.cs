@@ -2402,6 +2402,14 @@ public static class PptxPackageWriter
             childTimingItems.Add(animEffectEl);
         if (AnimationAmountSemantics.IsGrowShrink(anim.Preset))
             childTimingItems.Add(BuildScaleBehaviorEl(anim, ref nodeId));
+        if (anim.Preset is AnimationPreset.ColorPulse
+            or AnimationPreset.ChangeColor
+            or AnimationPreset.Shimmer)
+        {
+            var colorBehavior = BuildPreservedColorBehaviorEl(anim, ref nodeId);
+            if (colorBehavior is not null)
+                childTimingItems.Add(colorBehavior);
+        }
 
         var setEl = new XElement(P + "set",
             new XElement(P + "cBhvr",
@@ -2426,6 +2434,24 @@ public static class PptxPackageWriter
                             new XElement(P + "stCondLst",
                                 new XElement(P + "cond", new XAttribute("delay", "0"))),
                             new XElement(P + "childTnLst", childTimingItems))))));
+    }
+
+    private static XElement? BuildPreservedColorBehaviorEl(ShapeAnimation anim, ref uint nodeId)
+    {
+        if (string.IsNullOrWhiteSpace(anim.PreservedColorBehaviorXml))
+            return null;
+
+        try
+        {
+            var colorBehavior = XElement.Parse(anim.PreservedColorBehaviorXml, LoadOptions.PreserveWhitespace);
+            foreach (var timingNode in colorBehavior.Descendants(P + "cTn"))
+                timingNode.SetAttributeValue("id", nodeId++);
+            return colorBehavior;
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
     }
 
     private static XElement BuildScaleBehaviorEl(ShapeAnimation anim, ref uint nodeId)

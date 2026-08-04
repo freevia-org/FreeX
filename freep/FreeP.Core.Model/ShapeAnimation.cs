@@ -63,6 +63,13 @@ public sealed class ShapeAnimation
     public AnimationScaleBehavior? ScaleBehavior { get; set; }
 
     /// <summary>
+    /// Preserves the authored <c>p:animClr</c> behavior for color emphasis effects.
+    /// The current playback model exposes the effect kind but not every color-transition
+    /// option, so the native payload remains authoritative for package round-trip.
+    /// </summary>
+    public string? PreservedColorBehaviorXml { get; set; }
+
+    /// <summary>
     /// Preserves an animation preset that is not represented by the current
     /// <see cref="AnimationPreset"/> enum. Playback still uses the mapped
     /// fallback, but package save can re-emit the authored PowerPoint token.

@@ -707,6 +707,7 @@ public static class SlideCloner
             WheelSpokeCount = a.WheelSpokeCount,
             EffectSubtype = a.EffectSubtype,
             ScaleBehavior = a.ScaleBehavior?.Clone(),
+            PreservedColorBehaviorXml = a.PreservedColorBehaviorXml,
             TriggerShapeId = a.TriggerShapeId,
             RawPresetClass = a.RawPresetClass,
             RawPresetId = a.RawPresetId,
