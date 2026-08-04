@@ -4,6 +4,7 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Automation;
+using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -50,7 +51,9 @@ public sealed class OptionsDialogVisualParityTests
                 grid.ColumnDefinitions[1].Width.IsStar.Should().BeTrue();
                 grid.ColumnDefinitions[1].Width.Value.Should().Be(2);
                 grid.RowDefinitions.Count.Should().Be(3, "the WPF DataGrid has one populated row plus its blank add row");
+                grid.RowDefinitions[0].Height.Should().Be(new GridLength(26), "the WPF DataGrid header is 26px at 96 DPI");
                 dialog.ReplacementEditorsForTest.Should().HaveCount(2);
+                dialog.ReplacementEditorsForTest[0].Replace.BorderBrush.Should().Be(Brushes.Black);
 
                 var buttons = dialog.GetLogicalDescendants()
                     .OfType<Button>()
@@ -281,6 +284,41 @@ public sealed class OptionsDialogVisualParityTests
                 buttons.Select(UserFacingButtonText).Should().Equal(ShellStrings.Current.Ok, ShellStrings.Current.Cancel);
                 buttons[0].IsDefault.Should().BeTrue();
                 buttons[1].IsCancel.Should().BeTrue();
+                buttons[0].BorderBrush.Should().BeAssignableTo<ISolidColorBrush>().Which.Color.Should().Be(Color.FromRgb(200, 200, 200));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Options_general_fields_share_the_Wpf_left_aligned_value_column()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new OptionsDialog(new FreeWOptions());
+            try
+            {
+                dialog.Show();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                Control[] fields =
+                {
+                    GetField<TextBox>(dialog, "_recentFilesCap"),
+                    GetField<ComboBox>(dialog, "_defaultFormat"),
+                    GetField<TextBox>(dialog, "_uiLanguage"),
+                };
+                var general = dialog.GetLogicalDescendants().OfType<TabItem>()
+                    .Single(item => item.Header?.ToString() == "General")
+                    .Content.Should().BeOfType<Grid>().Subject;
+                fields.Select(field => field.HorizontalAlignment)
+                    .Should().OnlyContain(alignment => alignment == HorizontalAlignment.Left);
+                fields.Select(field => field.TranslatePoint(new Point(0, 0), general)!.Value.X)
+                    .Distinct()
+                    .Should().ContainSingle("WPF places all General value controls in one left-aligned column");
             }
             finally
             {
