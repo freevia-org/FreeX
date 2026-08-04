@@ -6327,14 +6327,14 @@ public static class PptxPackageReader
         bool knownPreset = PptxAnimationMap.IsKnownOoxmlPreset(presetClass, presetId);
         if (preset == AnimationPreset.Grow)
             preset = AnimationAmountSemantics.ResolvePreset(preset, scaleBehavior);
-        var direction = preset is AnimationPreset.Grow or AnimationPreset.Shrink
+        var direction = preset is AnimationPreset.Grow or AnimationPreset.Shrink or AnimationPreset.GrowWithColor
             ? null
             : PptxAnimationMap.SubtypeToAnimationDirection(presetSubtype, preset);
         var wheelSpokeCount = preset == AnimationPreset.Wheel
             ? ReadWheelSpokeCount(buildPar, cTn)
             : null;
         var authoredEffectSubtype = direction is null
-            && preset is not (AnimationPreset.Grow or AnimationPreset.Shrink)
+            && preset is not (AnimationPreset.Grow or AnimationPreset.Shrink or AnimationPreset.GrowWithColor)
             && !string.IsNullOrWhiteSpace(presetSubtype)
             && !StringComparer.Ordinal.Equals(presetSubtype, "0")
                 ? presetSubtype
