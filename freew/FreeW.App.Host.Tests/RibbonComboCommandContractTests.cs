@@ -63,6 +63,30 @@ public sealed class RibbonComboCommandContractTests
         view.Model.Page.FooterDistancePt.Should().Be(54);
     }
 
+    [StaFact]
+    public void ThemeCombo_PublishesLoadedAndAppliedDocumentTheme()
+    {
+        var view = BuildView();
+        var stateStore = new RibbonStateStore();
+        var registry = FreeWRibbonCommands.Build(view, stateStore);
+
+        stateStore.GetState("freew.theme").Value.Should().Be("Office");
+
+        Execute(view, registry, "freew.theme", "Berlin");
+        view.Model.Theme.Name.Should().Be("Berlin");
+        stateStore.GetState("freew.theme").Value.Should().Be("Berlin");
+
+        var loaded = TextDocument.CreateEmpty();
+        loaded.Theme = DocumentTheme.FindByName("Ion")!;
+        view.LoadModel(loaded);
+        stateStore.GetState("freew.theme").Value.Should().Be("Ion");
+
+        registry.TryGet("freew.theme", out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.ForSelectedValue("Missing Theme"));
+        view.Model.Theme.Name.Should().Be("Ion");
+        stateStore.GetState("freew.theme").Value.Should().Be("Ion");
+    }
+
     private static DocumentView BuildView()
     {
         var model = TextDocument.CreateEmpty();

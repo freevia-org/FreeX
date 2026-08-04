@@ -1665,7 +1665,10 @@ internal static class FreeWRibbonCommands
         // Design > Document Formatting: Themes apply a full preset, Colors preserve fonts while applying
         // a palette, Style Sets rewrite built-in styles, and Fonts preserve colours while applying a
         // heading/body font pair. All are backed document-wide style changes.
-        registry.Register("freew.theme", new ApplyThemeCommand(editor));
+        var theme = new ApplyThemeCommand(editor);
+        registry.Register("freew.theme", theme);
+        stateful.Add(("freew.theme", theme));
+        stateStore.SetState("freew.theme", theme.GetState());
         registry.Register("freew.style-set", new ApplyStyleSetCommand(editor));
         registry.Register("freew.reset-style-set", new ResetStyleSetCommand(editor));
         registry.Register("freew.theme-colors", new ApplyThemeColorsCommand(editor));
@@ -2544,7 +2547,7 @@ internal static class FreeWRibbonCommands
 
     // Design > Document Formatting: apply a built-in document theme. The selected name may arrive from
     // a combo value, older host context, or a WPF menu item header; all resolve to the same catalog entry.
-    private sealed class ApplyThemeCommand(DocumentView editor) : IRibbonCommand
+    private sealed class ApplyThemeCommand(DocumentView editor) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
@@ -2557,6 +2560,9 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             editor.ApplyTheme(theme);
         }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, Value: editor.Model.Theme.Name);
 
         private static string? LegacyValue(RibbonCommandContext context) =>
             context.Parameters.TryGetValue("value", out var raw) ? raw as string : null;
