@@ -379,6 +379,67 @@ public sealed class SlideObjectInsertionPlannerTests
     }
 
     [Fact]
+    public void ApplyCommand_AccentProcessUsesMainAccentTopologyAndRoundTripsItsLiveRoles()
+    {
+        var editor = MakeSession();
+        var added = SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.SmartArtLayoutCommandId(SmartArtLayoutPreset.AccentProcess));
+
+        added.Should().NotBeNull();
+        var authored = added!.SmartArt!;
+        authored.Data!.LayoutUniqueId.Should().Contain("/layout/accentProcess");
+        authored.Data.Nodes.Should().HaveCount(3);
+        authored.Data.Nodes.Should().OnlyContain(node =>
+            node.ModelId.StartsWith("main-", StringComparison.Ordinal)
+            && node.Level == 0
+            && string.IsNullOrEmpty(node.Text)
+            && node.Children.Count == 1);
+        authored.Data.Nodes.SelectMany(node => node.Children)
+            .Select(node => node.ModelId)
+            .Should().Equal("accent-1", "accent-2", "accent-3");
+
+        var diagram = System.Xml.Linq.XDocument.Parse(
+            System.Text.Encoding.UTF8.GetString(authored.Parts["ppt/diagrams/data1.xml"].Bytes));
+        var diagramNamespace = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        diagram.Descendants(diagramNamespace + "cxn").Should().HaveCount(3);
+
+        var live = SmartArtLayoutEngine.Layout(
+            authored.Data,
+            added.OffsetXEmu,
+            added.OffsetYEmu,
+            added.ExtentCxEmu,
+            added.ExtentCyEmu,
+            editor.Presentation.Theme!);
+        live.Should().HaveCount(8, "Accent Process emits two stage roles and two transitions per authored stage sequence");
+        live!.Where(shape => shape.Name.Contains("_Main_", StringComparison.Ordinal))
+            .Should().HaveCount(3);
+        live.Where(shape => shape.Name.Contains("_Accent_", StringComparison.Ordinal))
+            .Select(shape => shape.PlainText)
+            .Should().Equal("Step 1", "Step 2", "Step 3");
+
+        using var package = new MemoryStream();
+        PptxPackageWriter.Write(editor.Presentation, package);
+        package.Position = 0;
+        var reopened = PptxPackageReader.Read(package);
+        var reread = reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.SmartArt);
+        var rereadSmartArt = reread.SmartArt!;
+
+        rereadSmartArt.Data!.LayoutUniqueId.Should().Contain("/layout/accentProcess");
+        rereadSmartArt.Data.IsLiveLayoutSupported.Should().BeTrue();
+        rereadSmartArt.Data.Nodes.Select(node => node.ModelId)
+            .Should().Equal("main-1", "main-2", "main-3");
+        SmartArtLayoutEngine.Layout(
+            rereadSmartArt.Data,
+            reread.OffsetXEmu,
+            reread.OffsetYEmu,
+            reread.ExtentCxEmu,
+            reread.ExtentCyEmu,
+            reopened.Theme!).Should().HaveCount(8);
+    }
+
+    [Fact]
     public void ApplyCommand_TitledMatrixUsesFlatTitleAndBodyComponentsAndRoundTripsItsLiveCells()
     {
         var editor = MakeSession();

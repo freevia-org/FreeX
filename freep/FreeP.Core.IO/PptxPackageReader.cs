@@ -2829,6 +2829,16 @@ public static class PptxPackageReader
             data.IsLiveLayoutSupported = false;
         }
 
+        if (IsAccentProcessLayout(layoutUniqueId)
+            && (!HasAuthoredAccentProcessTopology(data)
+                || !HasAuthoredAccentProcessCache(smart, data)))
+        {
+            // Accent Process is currently an authored-only live contract. The writer
+            // emits an exact main/accent data topology and cache signature; imported
+            // native caches remain authoritative until their roles are proven.
+            data.IsLiveLayoutSupported = false;
+        }
+
         return data;
 
         string ReadSmartArtParagraphText(XElement paragraph)
@@ -3443,6 +3453,78 @@ public static class PptxPackageReader
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return id.Split('/').Last() == "process1";
+    }
+
+    private static bool IsAccentProcessLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return id.Split('/').Last() == "accentprocess";
+    }
+
+    private static bool HasAuthoredAccentProcessTopology(SmartArtData data)
+    {
+        if (data.Nodes.Count == 0)
+            return false;
+
+        for (var index = 0; index < data.Nodes.Count; index++)
+        {
+            var main = data.Nodes[index];
+            if (main.Level != 0
+                || main.ModelId != $"main-{index + 1}"
+                || !string.IsNullOrEmpty(main.Text)
+                || main.Children.Count != 1)
+                return false;
+
+            var accent = main.Children[0];
+            if (accent.Level != 1
+                || accent.ModelId != $"accent-{index + 1}"
+                || string.IsNullOrWhiteSpace(accent.Text)
+                || accent.Children.Count != 0)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool HasAuthoredAccentProcessCache(SmartArtShape smart, SmartArtData data)
+    {
+        var stages = data.Nodes.Select(node => node.Children[0].Text).ToArray();
+        var shapes = smart.FallbackShapes;
+        if (shapes.Count != (stages.Length * 3) - 1
+            || shapes.Any(HasUnsupportedSmartArtShapeEffects)
+            || HasUnsupportedSmartArtDrawingEffects(smart))
+            return false;
+
+        for (var index = 0; index < stages.Length - 1; index++)
+        {
+            var connector = shapes[index];
+            if (connector.Kind != SlideShapeKind.AutoShape
+                || connector.AutoShapeKind != DrawingShapeKind.Line
+                || connector.Name != $"SmartArt_Conn_{900 + index}"
+                || !string.IsNullOrEmpty(connector.PlainText))
+                return false;
+        }
+
+        var stageShapeOffset = stages.Length - 1;
+        for (var index = 0; index < stages.Length; index++)
+        {
+            var main = shapes[stageShapeOffset + (index * 2)];
+            var accent = shapes[stageShapeOffset + (index * 2) + 1];
+            if (main.Kind != SlideShapeKind.AutoShape
+                || main.AutoShapeKind != DrawingShapeKind.Rectangle
+                || main.Name != $"SmartArt_AccentProcess_Main_{index + 1}"
+                || !string.IsNullOrEmpty(main.PlainText)
+                || accent.Kind != SlideShapeKind.AutoShape
+                || accent.AutoShapeKind != DrawingShapeKind.RoundedRectangle
+                || accent.Name != $"SmartArt_AccentProcess_Accent_{index + 1}"
+                || !string.Equals(accent.PlainText, stages[index], StringComparison.Ordinal))
+                return false;
+        }
+
+        return true;
     }
 
     private static bool CanUseVerticalArrowListCache(SmartArtShape smart, SmartArtData data)

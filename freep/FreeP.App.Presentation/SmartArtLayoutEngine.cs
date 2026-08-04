@@ -79,6 +79,14 @@ public static class SmartArtLayoutEngine
 
         var stylePlan = SmartArtStylePlanner.Build(data.Family, quickStyle, colors, theme, effectiveClrMap);
 
+        if (IsAccentProcessLayout(data.LayoutUniqueId))
+        {
+            var stages = GetAuthoredAccentProcessStages(data);
+            return stages is null
+                ? null
+                : LayoutAccentProcess(stages, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+        }
+
         if (IsDefaultListLayout(data.LayoutUniqueId))
             return LayoutDefaultListStaggered(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -515,6 +523,94 @@ public static class SmartArtLayoutEngine
     /// <summary>
     /// Horizontal row of boxes with arrow connectors between adjacent pairs.
     /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutAccentProcess(
+        IReadOnlyList<SmartArtNode> stages,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        var padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        var padY = Math.Max((long)(fcy * 0.12), 1L);
+        var gap = Math.Max((long)(fcx * GapFrac), 1L);
+        var cellW = Math.Max((fcx - (2 * padX) - ((stages.Count - 1) * gap)) / stages.Count, 1L);
+        var accentY = fy + padY;
+        var accentH = Math.Max((long)(fcy * 0.38), 1L);
+        var bodyXInset = Math.Max((long)(cellW * 0.12), 1L);
+        var bodyY = accentY + (long)(accentH * 0.43);
+        var bodyW = Math.Max(cellW - bodyXInset, 1L);
+        var bodyH = Math.Max(fy + fcy - padY - bodyY, 1L);
+        var bodyStyle = new SmartArtNodeStyle(
+            new ThemeAwareColor(SrgbColor.White),
+            new ThemeAwareColor(SrgbColor.FromRgb(0xB7B7B7)),
+            new ThemeAwareColor(SrgbColor.FromRgb(0x404040)),
+            1.0);
+        var shapes = new List<SlideShape>((stages.Count * 2) + stages.Count - 1);
+        var firstX = fx + padX;
+        uint id = 900;
+
+        for (var index = 0; index < stages.Count - 1; index++)
+        {
+            var currentX = firstX + (index * (cellW + gap));
+            var nextX = currentX + cellW + gap;
+            var centerY = accentY + (accentH / 2);
+            shapes.Add(MakeConnector(id++, currentX + cellW, centerY, nextX, centerY, stylePlan.Connector));
+        }
+
+        for (var index = 0; index < stages.Count; index++)
+        {
+            var stage = stages[index];
+            var x = firstX + (index * (cellW + gap));
+            var accentStyle = stylePlan.GetNodeStyle(index, 0, SmartArtFamily.Process);
+            var main = MakeBox(id++, string.Empty, accentStyle, x, accentY, cellW, accentH,
+                NodeFontSizePt, DrawingShapeKind.Rectangle);
+            main.Name = $"SmartArt_AccentProcess_Main_{index + 1}";
+            shapes.Add(main);
+
+            var accent = MakeBox(id++, stage.Text, bodyStyle, x + bodyXInset, bodyY, bodyW, bodyH,
+                NodeFontSizePt, DrawingShapeKind.RoundedRectangle);
+            accent.Name = $"SmartArt_AccentProcess_Accent_{index + 1}";
+            shapes.Add(accent);
+        }
+
+        return shapes;
+    }
+
+    private static IReadOnlyList<SmartArtNode>? GetAuthoredAccentProcessStages(SmartArtData data)
+    {
+        if (data.Nodes.Count == 0)
+            return null;
+
+        var stages = new List<SmartArtNode>(data.Nodes.Count);
+        for (var index = 0; index < data.Nodes.Count; index++)
+        {
+            var main = data.Nodes[index];
+            if (main.Level != 0
+                || !string.Equals(main.ModelId, $"main-{index + 1}", StringComparison.Ordinal)
+                || !string.IsNullOrEmpty(main.Text)
+                || main.Children.Count != 1)
+                return null;
+
+            var accent = main.Children[0];
+            if (accent.Level != 1
+                || !string.Equals(accent.ModelId, $"accent-{index + 1}", StringComparison.Ordinal)
+                || string.IsNullOrWhiteSpace(accent.Text)
+                || accent.Children.Count != 0)
+                return null;
+
+            stages.Add(accent);
+        }
+
+        return stages;
+    }
+
+    private static bool IsAccentProcessLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "accentprocess", StringComparison.Ordinal);
+    }
+
     private static IReadOnlyList<SlideShape> LayoutProcess(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,

@@ -751,6 +751,11 @@ public static class SmartArtAuthoringPlanner
         EnsureDiagramRelationship(smartArt, "lo", "rIdFreePLayout");
         if (smartArt.Data is { } data)
         {
+            if (preset == SmartArtLayoutPreset.AccentProcess)
+                NormalizeAuthoredAccentProcessTopology(data);
+            else if (TryReadAuthoredAccentProcessLabels(data, out var accentLabels))
+                RestoreStandardSmartArtTopology(data, accentLabels);
+
             data.LayoutUniqueId = layoutId;
             data.Family = family;
             data.IsLiveLayoutSupported = true;
@@ -1208,6 +1213,95 @@ public static class SmartArtAuthoringPlanner
 
     private static SmartArtLayoutApplyResult NotAppliedLayout(string message) =>
         new(false, message, null, null, SmartArtFamily.Unknown);
+
+    private static void NormalizeAuthoredAccentProcessTopology(SmartArtData data)
+    {
+        var labels = new List<string>();
+        foreach (var root in data.Nodes)
+            CollectAccentProcessLabels(root, labels);
+
+        if (labels.Count == 0)
+            return;
+
+        data.Nodes.Clear();
+        for (var index = 0; index < labels.Count; index++)
+        {
+            var main = new SmartArtNode
+            {
+                ModelId = $"main-{index + 1}",
+                Level = 0,
+            };
+            main.Children.Add(new SmartArtNode
+            {
+                ModelId = $"accent-{index + 1}",
+                Text = labels[index],
+                Level = 1,
+            });
+            data.Nodes.Add(main);
+        }
+    }
+
+    private static bool TryReadAuthoredAccentProcessLabels(
+        SmartArtData data,
+        out List<string> labels)
+    {
+        labels = new List<string>(data.Nodes.Count);
+        if (data.Nodes.Count == 0)
+            return false;
+
+        for (var index = 0; index < data.Nodes.Count; index++)
+        {
+            var main = data.Nodes[index];
+            if (main.Level != 0
+                || !string.Equals(main.ModelId, $"main-{index + 1}", StringComparison.Ordinal)
+                || !string.IsNullOrEmpty(main.Text)
+                || main.Children.Count != 1)
+                return false;
+
+            var accent = main.Children[0];
+            if (accent.Level != 1
+                || !string.Equals(accent.ModelId, $"accent-{index + 1}", StringComparison.Ordinal)
+                || string.IsNullOrWhiteSpace(accent.Text)
+                || accent.Children.Count != 0)
+                return false;
+
+            labels.Add(accent.Text);
+        }
+
+        return true;
+    }
+
+    private static void RestoreStandardSmartArtTopology(
+        SmartArtData data,
+        IReadOnlyList<string> labels)
+    {
+        data.Nodes.Clear();
+        var root = new SmartArtNode
+        {
+            ModelId = "1",
+            Text = labels[0],
+            Level = 0,
+        };
+        data.Nodes.Add(root);
+        for (var index = 1; index < labels.Count; index++)
+        {
+            root.Children.Add(new SmartArtNode
+            {
+                ModelId = (index + 1).ToString(CultureInfo.InvariantCulture),
+                Text = labels[index],
+                Level = 1,
+            });
+        }
+    }
+
+    private static void CollectAccentProcessLabels(SmartArtNode node, List<string> labels)
+    {
+        if (!string.IsNullOrWhiteSpace(node.Text))
+            labels.Add(node.Text);
+
+        foreach (var child in node.Children)
+            CollectAccentProcessLabels(child, labels);
+    }
 
     private static SmartArtQuickStyleApplyResult NotAppliedQuickStyle(string message) =>
         new(false, message, null, null);

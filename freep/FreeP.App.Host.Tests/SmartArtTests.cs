@@ -712,6 +712,36 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_SmartArt_ImportedAccentProcessPreservesCachedFallbackAcrossRoundTrip()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Imported A", "Imported B", "Imported C"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/accentProcess");
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartShape = presentation.Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.SmartArt);
+        var smartArt = smartShape.SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "an imported Accent Process cache without the authored main/accent topology stays cached");
+        smartArt.FallbackShapes.Should().HaveCount(3);
+        smartArt.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Equal("Imported A", "Imported B", "Imported C");
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(presentation, saved);
+        var reopened = PptxPackageReader.Read(new MemoryStream(saved.ToArray()));
+        var reopenedSmartArt = reopened.Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        reopenedSmartArt.Data!.LayoutUniqueId.Should().Contain("/layout/accentProcess");
+        reopenedSmartArt.Data.IsLiveLayoutSupported.Should().BeFalse();
+        reopenedSmartArt.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Equal("Imported A", "Imported B", "Imported C");
+    }
+
+    [Fact]
     public void Reader_SmartArt_PreservesNativeDspConnectorFallback()
     {
         var pptxPath = MakeSmartArtPptx(["Node"]);

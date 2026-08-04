@@ -165,6 +165,22 @@ public sealed class SmartArtDefaultLiveRendererContractTests
     }
 
     [Fact]
+    public void WpfAccentProcessRendering_ConsumesTheSharedLivePlan()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "SlideCanvas.cs"));
+
+        source.Should().Contain("SlideCompositor.Compose(");
+        source.Should().NotContain("LayoutAccentProcess(");
+        source.Should().NotContain("SmartArtLayoutEngine.Layout(",
+            "accentProcess geometry must remain renderer-neutral");
+    }
+
+    [Fact]
     public void WpfList1Rendering_ConsumesTheSharedLivePlan()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");

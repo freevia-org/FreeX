@@ -29,6 +29,7 @@ internal static class SmartArtInsertionFactory
         var ids = labels.Select((_, index) => (index + 1).ToString()).ToArray();
         var nodePictures = NormalizePictures(preset, labels.Count, pictures);
         var (layoutId, family) = GetLayoutDefinition(preset);
+        var usesAccentProcessTopology = preset == SmartArtLayoutPreset.AccentProcess;
         var usesFlatComponents = preset is SmartArtLayoutPreset.BasicMatrix
             or SmartArtLayoutPreset.TitledMatrix
             or SmartArtLayoutPreset.GridMatrix;
@@ -42,7 +43,25 @@ internal static class SmartArtInsertionFactory
             },
         };
 
-        if (usesFlatComponents)
+        if (usesAccentProcessTopology)
+        {
+            for (var index = 0; index < labels.Count; index++)
+            {
+                var main = new SmartArtNode
+                {
+                    ModelId = $"main-{index + 1}",
+                    Level = 0,
+                };
+                main.Children.Add(new SmartArtNode
+                {
+                    ModelId = $"accent-{index + 1}",
+                    Text = labels[index],
+                    Level = 1,
+                });
+                smart.Data.Nodes.Add(main);
+            }
+        }
+        else if (usesFlatComponents)
         {
             for (var index = 0; index < labels.Count; index++)
             {
@@ -77,7 +96,9 @@ internal static class SmartArtInsertionFactory
         var drawingPath = $"{prefix}drawing{partIndex}.xml";
 
         AddPart(smart, "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml", dataPath,
-            BuildDataXml(labels, ids, usesFlatComponents));
+            usesAccentProcessTopology
+                ? BuildAccentProcessDataXml(smart.Data)
+                : BuildDataXml(labels, ids, usesFlatComponents));
         AddPart(smart, "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml", layoutPath,
             new XDocument(new XElement(Diagram + "layoutDef",
                 new XAttribute(XNamespace.Xmlns + "dgm", Diagram.NamespaceName),
@@ -351,7 +372,43 @@ internal static class SmartArtInsertionFactory
             new XElement(Diagram + "dataModel",
                 new XAttribute(XNamespace.Xmlns + "dgm", Diagram.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "a", Drawing.NamespaceName),
-                new XElement(Diagram + "ptLst", points), new XElement(Diagram + "cxnLst", connections)));
+            new XElement(Diagram + "ptLst", points), new XElement(Diagram + "cxnLst", connections)));
+    }
+
+    private static XDocument BuildAccentProcessDataXml(SmartArtData data)
+    {
+        var points = new List<XElement>();
+        var connections = new List<XElement>();
+        foreach (var (main, index) in data.Nodes.Select((node, index) => (node, index + 1)))
+        {
+            var accent = main.Children.Single();
+            points.Add(new XElement(Diagram + "pt",
+                new XAttribute("modelId", main.ModelId),
+                new XAttribute("type", "node"),
+                new XElement(Diagram + "t")));
+            points.Add(new XElement(Diagram + "pt",
+                new XAttribute("modelId", accent.ModelId),
+                new XAttribute("type", "node"),
+                new XElement(Diagram + "t",
+                    new XElement(Drawing + "p",
+                        new XElement(Drawing + "r",
+                            new XElement(Drawing + "rPr", new XAttribute("lang", "en-US")),
+                            new XElement(Drawing + "t", accent.Text))))));
+            connections.Add(new XElement(Diagram + "cxn",
+                new XAttribute("modelId", $"conn-{index}"),
+                new XAttribute("type", "parOf"),
+                new XAttribute("srcId", main.ModelId),
+                new XAttribute("destId", accent.ModelId),
+                new XAttribute("srcOrd", 0),
+                new XAttribute("destOrd", 0)));
+        }
+
+        return new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(Diagram + "dataModel",
+                new XAttribute(XNamespace.Xmlns + "dgm", Diagram.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", Drawing.NamespaceName),
+                new XElement(Diagram + "ptLst", points),
+                new XElement(Diagram + "cxnLst", connections)));
     }
 
     private static void AddPart(SmartArtShape smart, string contentType, string path, XDocument document) =>

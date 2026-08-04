@@ -133,6 +133,51 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void ApplyLayoutPreset_FromAuthoredAccentProcessRestoresThreeStandardStages()
+    {
+        var smartArt = new SmartArtShape
+        {
+            Data = new SmartArtData
+            {
+                Family = SmartArtFamily.Process,
+                LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/accentProcess",
+            },
+        };
+        foreach (var (index, text) in new[] { (1, "Plan"), (2, "Build"), (3, "Ship") })
+        {
+            var main = new SmartArtNode
+            {
+                ModelId = $"main-{index}",
+                Level = 0,
+            };
+            main.Children.Add(new SmartArtNode
+            {
+                ModelId = $"accent-{index}",
+                Text = text,
+                Level = 1,
+            });
+            smartArt.Data.Nodes.Add(main);
+        }
+        AddLayoutPart(smartArt);
+
+        SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.BasicProcess)
+            .Applied.Should().BeTrue();
+
+        smartArt.Data.LayoutUniqueId.Should().EndWith("/layout/basicProcess");
+        smartArt.Data.Nodes.Should().ContainSingle();
+        smartArt.Data.Nodes[0].Text.Should().Be("Plan");
+        smartArt.Data.Nodes[0].Children.Select(node => node.Text)
+            .Should().Equal("Build", "Ship");
+        smartArt.Data.Nodes.SelectMany(Flatten)
+            .Select(node => node.Text)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Should().Equal("Plan", "Build", "Ship");
+
+        SmartArtLayoutEngine.Layout(smartArt.Data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
+            .Should().HaveCount(5);
+    }
+
+    [Fact]
     public void ApplyLayoutPreset_CreatesNativeLayoutPartWhenDataPartExists()
     {
         var smartArt = new SmartArtShape
@@ -1968,6 +2013,13 @@ public sealed class SmartArtEditingPlannerTests
         foreach (var (id, text) in nodes)
             data.Nodes.Add(new SmartArtNode { ModelId = id, Text = text, Level = 0 });
         return data;
+    }
+
+    private static IEnumerable<SmartArtNode> Flatten(SmartArtNode node)
+    {
+        yield return node;
+        foreach (var child in node.Children.SelectMany(Flatten))
+            yield return child;
     }
 
     private static void AddLayoutPart(SmartArtShape smartArt) =>
