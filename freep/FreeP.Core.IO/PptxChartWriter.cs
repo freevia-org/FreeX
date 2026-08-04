@@ -368,7 +368,8 @@ internal static class PptxChartWriter
             BuildManualLayoutEl(chart.LegendManualLayout),
             chart.LegendOverlay.HasValue
                 ? new XElement(C + "overlay", new XAttribute("val", BoolValue(chart.LegendOverlay.Value)))
-                : null);
+                : null,
+            BuildChartTextPropertiesEl(chart.LegendTextStyle));
     }
 
     private static XElement? BuildManualLayoutEl(ChartManualLayout? layout)

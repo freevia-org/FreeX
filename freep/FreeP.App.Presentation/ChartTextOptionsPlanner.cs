@@ -54,7 +54,12 @@ public sealed class ChartTextOptionsPlanner
     private ChartTextOptionsPlanner(ChartShape chart, ChartTextTarget target)
     {
         _target = target;
-        var style = target == ChartTextTarget.Title ? chart.TitleStyle : chart.TextStyle;
+        var style = target switch
+        {
+            ChartTextTarget.Title => chart.TitleStyle,
+            ChartTextTarget.Legend => chart.LegendTextStyle,
+            _ => chart.TextStyle,
+        };
         if (style is { IsImplicitDefault: false })
         {
             _fontFamily = style.FontFamily;
@@ -67,7 +72,12 @@ public sealed class ChartTextOptionsPlanner
 
     public static ChartTextOptionsSurfacePlan BuildSurfacePlan(ChartTextTarget target = ChartTextTarget.Chart) => new(
         CommandId,
-        target == ChartTextTarget.Title ? "Chart Title Text Options" : DialogTitle,
+        target switch
+        {
+            ChartTextTarget.Title => "Chart Title Text Options",
+            ChartTextTarget.Legend => "Chart Legend Text Options",
+            _ => DialogTitle,
+        },
         FontFamilyLabel,
         FontSizeLabel,
         BoldLabel,
