@@ -550,6 +550,29 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedNoteRegionPlanner_UsesWordLikeContinuationDensityForLongPageWidth()
+    {
+        var document = new TextDocument();
+        var sourceText = string.Join(" ", Enumerable.Range(1, 700).Select(index => $"continuation{index}"));
+        document.Footnotes[1] = new Footnote(1, sourceText);
+
+        var plan = DocumentNoteRegionPlanner.BuildFootnoteContinuation(
+            document,
+            [1],
+            firstPageNumber: 1,
+            contentWidthDip: 624,
+            firstAvailableHeightDip: 750,
+            continuationAvailableHeightDip: 849);
+
+        plan.Pages.Should().HaveCount(3);
+        string.Join(" ", plan.Pages.SelectMany(page => page.Fragments).Select(fragment => fragment.Text))
+            .Should().Be(sourceText);
+        plan.Pages[0].SeparatorKind.Should().Be(DocumentFootnoteSeparatorKind.Initial);
+        plan.Pages.Skip(1).Should().OnlyContain(page =>
+            page.SeparatorKind == DocumentFootnoteSeparatorKind.Continuation);
+    }
+
+    [Fact]
     public void SharedNoteRegionPlanner_ConvertsContinuationFragmentToRendererPlan()
     {
         var page = new DocumentFootnoteContinuationPagePlan(
