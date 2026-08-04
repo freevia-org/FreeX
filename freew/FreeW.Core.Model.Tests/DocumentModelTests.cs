@@ -92,6 +92,19 @@ public class DocumentModelTests
         document.Styles["Heading1"].Run.FontFamily.Should().Be("Cambria");
     }
 
+    [Fact]
+    public void DocumentStyleSet_FindMatching_tracks_applied_signature_without_shadow_state()
+    {
+        var document = TextDocument.CreateEmpty();
+        DocumentStyleSet.FindMatching(document)?.Name.Should().Be("Office");
+
+        DocumentStyleSet.Apply(document, DocumentStyleSet.FindByName("Elegant")!);
+        DocumentStyleSet.FindMatching(document)?.Name.Should().Be("Elegant");
+
+        document.Styles["Heading1"].Run = document.Styles["Heading1"].Run with { ColorHex = "#123456" };
+        DocumentStyleSet.FindMatching(document).Should().BeNull();
+    }
+
     private sealed class DocContext(TextDocument document) : IDocumentCommandContext
     {
         public TextDocument Document { get; } = document;

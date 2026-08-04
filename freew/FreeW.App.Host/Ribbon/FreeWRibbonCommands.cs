@@ -1669,7 +1669,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.theme", theme);
         stateful.Add(("freew.theme", theme));
         stateStore.SetState("freew.theme", theme.GetState());
-        registry.Register("freew.style-set", new ApplyStyleSetCommand(editor));
+        var styleSet = new ApplyStyleSetCommand(editor);
+        registry.Register("freew.style-set", styleSet);
+        stateful.Add(("freew.style-set", styleSet));
+        stateStore.SetState("freew.style-set", styleSet.GetState());
         registry.Register("freew.reset-style-set", new ResetStyleSetCommand(editor));
         registry.Register("freew.theme-colors", new ApplyThemeColorsCommand(editor));
         registry.Register("freew.customize-colors", new CustomizeColorsCommand(editor));
@@ -2575,7 +2578,7 @@ internal static class FreeWRibbonCommands
                 : null;
     }
 
-    private sealed class ApplyStyleSetCommand(DocumentView editor) : IRibbonCommand
+    private sealed class ApplyStyleSetCommand(DocumentView editor) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
@@ -2588,6 +2591,9 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             editor.ApplyStyleSet(styleSet);
         }
+
+        public RibbonCommandState GetState() =>
+            new(Value: DocumentStyleSet.FindMatching(editor.Model)?.Name);
 
         private static string? LegacyValue(RibbonCommandContext context) =>
             context.Parameters.TryGetValue("value", out var raw) ? raw as string : null;

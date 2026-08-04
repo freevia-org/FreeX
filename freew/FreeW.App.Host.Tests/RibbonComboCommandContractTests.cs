@@ -142,6 +142,30 @@ public sealed class RibbonComboCommandContractTests
         view.Model.Theme.EffectSetName.Should().Be(DocumentTheme.Default.EffectSetName);
     }
 
+    [StaFact]
+    public void StyleSetCombo_publishes_applied_undone_and_loaded_signature()
+    {
+        var view = BuildView();
+        var stateStore = new RibbonStateStore();
+        var registry = FreeWRibbonCommands.Build(view, stateStore);
+        stateStore.GetState("freew.style-set").Value.Should().Be("Office");
+
+        Execute(view, registry, "freew.style-set", "Elegant");
+        stateStore.GetState("freew.style-set").Value.Should().Be("Elegant");
+
+        view.Undo();
+        stateStore.GetState("freew.style-set").Value.Should().Be("Office");
+
+        var loaded = TextDocument.CreateEmpty();
+        DocumentStyleSet.Apply(loaded, DocumentStyleSet.FindByName("Formal")!);
+        view.LoadModel(loaded);
+        stateStore.GetState("freew.style-set").Value.Should().Be("Formal");
+
+        registry.TryGet("freew.style-set", out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.ForSelectedValue("Missing Set"));
+        stateStore.GetState("freew.style-set").Value.Should().Be("Formal");
+    }
+
     private static DocumentView BuildView()
     {
         var model = TextDocument.CreateEmpty();

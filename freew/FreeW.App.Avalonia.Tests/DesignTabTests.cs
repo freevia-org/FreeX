@@ -144,14 +144,26 @@ public sealed class DesignTabTests
         var view = new DocumentView();
         view.LoadDocument(MakeDoc());
         var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        registry.TryGet(new RibbonCommandId("freew.style-set"), out var command).Should().BeTrue();
+        var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+        stateful.GetState().Value.Should().Be("Office");
 
         Execute(registry, "freew.style-set", RibbonCommandContext.ForSelectedValue("Elegant"));
         view.Document.DefaultRun.FontFamily.Should().Be("Georgia");
         view.Document.Styles["Heading1"].Run.FontFamily.Should().Be("Cambria");
+        stateful.GetState().Value.Should().Be("Elegant");
+
+        view.Undo();
+        stateful.GetState().Value.Should().Be("Office");
+
+        command!.Execute(RibbonCommandContext.ForSelectedValue("Missing Set"));
+        command.Execute(RibbonCommandContext.Empty);
+        stateful.GetState().Value.Should().Be("Office");
 
         Execute(registry, "freew.reset-style-set");
         view.Document.DefaultRun.FontFamily.Should().Be(DocumentStyleSet.Default.BodyFont);
         view.Document.Styles["Heading1"].Run.FontFamily.Should().Be(DocumentStyleSet.Default.HeadingFont);
+        stateful.GetState().Value.Should().Be("Office");
     }
 
     [Fact]
