@@ -1003,17 +1003,14 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Apply a document theme (colour/font scheme) to the model's style catalog and re-render so the
-    /// new heading colours/fonts and body face show immediately. This is a document-wide style change
-    /// to the catalog (not the per-paragraph runs), so it is applied directly rather than through the
-    /// undo/redo bus: pending in-progress edits are committed first so the re-render does not drop them,
-    /// then <see cref="DocumentTheme.Apply"/> rewrites the relevant styles and the surface re-renders.
+    /// new heading colours/fonts and body face show immediately. Pending edits are committed first, then
+    /// the shared catalog command snapshots the affected defaults, theme, and styles for one-step Undo.
     /// Used by the Design ribbon's theme dropdown.
     /// </summary>
     public void ApplyTheme(DocumentTheme theme)
     {
         CommitToModel();
-        DocumentTheme.Apply(_model, theme);
-        Render();
+        _commands.Execute(new DesignCatalogCommand("Apply Theme", doc => DocumentTheme.Apply(doc, theme)));
     }
 
     /// <summary>
@@ -1023,8 +1020,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyThemeColors(DocumentTheme theme)
     {
         CommitToModel();
-        DocumentTheme.ApplyColors(_model, theme);
-        Render();
+        _commands.Execute(new DesignCatalogCommand("Theme Colors", doc => DocumentTheme.ApplyColors(doc, theme)));
     }
 
     /// <summary>
@@ -1034,8 +1030,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyStyleSet(DocumentStyleSet styleSet)
     {
         CommitToModel();
-        DocumentStyleSet.Apply(_model, styleSet);
-        Render();
+        _commands.Execute(new DesignCatalogCommand("Style Set", doc => DocumentStyleSet.Apply(doc, styleSet)));
     }
 
     /// <summary>
@@ -1044,8 +1039,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyFontSet(DocumentFontSet fontSet)
     {
         CommitToModel();
-        DocumentFontSet.Apply(_model, fontSet);
-        Render();
+        _commands.Execute(new DesignCatalogCommand("Theme Fonts", doc => DocumentFontSet.Apply(doc, fontSet)));
     }
 
     /// <summary>
@@ -1055,8 +1049,9 @@ public sealed class DocumentView : RichTextBox
     public void ApplyParagraphSpacingSet(DocumentParagraphSpacingSet spacingSet)
     {
         CommitToModel();
-        DocumentParagraphSpacingSet.Apply(_model, spacingSet);
-        Render();
+        _commands.Execute(new DesignCatalogCommand(
+            "Paragraph Spacing",
+            doc => DocumentParagraphSpacingSet.Apply(doc, spacingSet)));
     }
 
     /// <summary>
@@ -1066,8 +1061,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyEffectSet(DocumentEffectSet effectSet)
     {
         CommitToModel();
-        DocumentEffectSet.Apply(_model, effectSet);
-        Render();
+        _commands.Execute(new DesignCatalogCommand("Theme Effects", doc => DocumentEffectSet.Apply(doc, effectSet)));
     }
 
     /// <summary>

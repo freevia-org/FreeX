@@ -812,6 +812,8 @@ public static class PresentationReviewWorkflowPlanner
         "Use the article that matches the next word.";
     public const string ProofingSubjectVerbAgreementMessage =
         "Use the verb form that matches the subject.";
+    public const string ProofingGrammarConfusionMessage =
+        "Check this grammar phrase.";
     public const string SlideTitleMissingSlideMessage =
         "Slide title target slide was not found.";
     public const string SlideTitleEmptyMessage =
@@ -2837,12 +2839,18 @@ public static class PresentationReviewWorkflowPlanner
 
         foreach (var subjectVerbAgreement in ScanSubjectVerbAgreement(scope.Text))
             yield return subjectVerbAgreement;
+
+        foreach (var grammarConfusion in ScanGrammarConfusions(scope.Text))
+            yield return grammarConfusion;
     }
 
     private static string SuggestProofingReplacement(string text)
     {
         if (BuiltInProofingCorrections.TryGetValue(text, out var replacement))
             return MatchReplacementCasing(text, replacement);
+
+        if (BuiltInGrammarCorrections.TryGetValue(text, out replacement))
+            return MatchGrammarCasing(text, replacement);
 
         if (text.Length == 1 && char.IsLower(text[0]))
             return char.ToUpperInvariant(text[0]).ToString();
@@ -2883,6 +2891,34 @@ public static class PresentationReviewWorkflowPlanner
                     length,
                     text.Substring(start, length),
                     ProofingSubjectVerbAgreementMessage);
+            }
+        }
+    }
+
+    private static IEnumerable<PresentationProofingIssueMatch> ScanGrammarConfusions(string text)
+    {
+        foreach (var correction in BuiltInGrammarCorrections)
+        {
+            var start = 0;
+            while (start < text.Length)
+            {
+                var index = text.IndexOf(correction.Key, start, StringComparison.OrdinalIgnoreCase);
+                if (index < 0)
+                    break;
+
+                var end = index + correction.Key.Length;
+                var hasWordBefore = index > 0 && IsProofingWordChar(text[index - 1]);
+                var hasWordAfter = end < text.Length && IsProofingWordChar(text[end]);
+                if (!hasWordBefore && !hasWordAfter)
+                {
+                    yield return new PresentationProofingIssueMatch(
+                        index,
+                        correction.Key.Length,
+                        text.Substring(index, correction.Key.Length),
+                        ProofingGrammarConfusionMessage);
+                }
+
+                start = end;
             }
         }
     }
@@ -3632,6 +3668,14 @@ public static class PresentationReviewWorkflowPlanner
             : replacement;
     }
 
+    private static string MatchGrammarCasing(string source, string replacement)
+    {
+        if (source.Any(char.IsLetter) && source.Where(char.IsLetter).All(char.IsUpper))
+            return replacement.ToUpperInvariant();
+
+        return MatchReplacementCasing(source, replacement);
+    }
+
     private static readonly IReadOnlyDictionary<string, string> BuiltInProofingCorrections =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -3652,6 +3696,25 @@ public static class PresentationReviewWorkflowPlanner
             ["tommorow"] = "tomorrow",
             ["untill"] = "until",
             ["wich"] = "which",
+        };
+
+    private static readonly IReadOnlyDictionary<string, string> BuiltInGrammarCorrections =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["could of"] = "could have",
+            ["might of"] = "might have",
+            ["must of"] = "must have",
+            ["should of"] = "should have",
+            ["would of"] = "would have",
+            ["its a"] = "it's a",
+            ["its been"] = "it's been",
+            ["its not"] = "it's not",
+            ["their are"] = "there are",
+            ["their is"] = "there is",
+            ["your going"] = "you're going",
+            ["your invited"] = "you're invited",
+            ["your right"] = "you're right",
+            ["your welcome"] = "you're welcome",
         };
 
     private static readonly IReadOnlySet<string> ProofingSingularSubjects =

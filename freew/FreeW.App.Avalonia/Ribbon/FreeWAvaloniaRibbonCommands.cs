@@ -116,17 +116,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.format-painter", new FormatPainterCommand(editor));
 
         // ── Font ─────────────────────────────────────────────────────────────
-        r.Register("freew.font-family", new ValueRibbonCommand(value =>
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-                editor.SetSelectionFontFamily(value);
-        }));
-        r.Register("freew.font-size", new ValueRibbonCommand(value =>
-        {
-            if (double.TryParse(value, System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out var pts) && pts > 0)
-                editor.SetSelectionFontSize(pts);
-        }));
+        r.Register("freew.font-family", new FontFamilyCommand(editor));
+        r.Register("freew.font-size", new FontSizeCommand(editor));
         r.Register("freew.bold",            new ActionRibbonCommand(editor.ToggleBold));
         r.Register("freew.italic",           new ActionRibbonCommand(editor.ToggleItalic));
         r.Register("freew.underline",        new ActionRibbonCommand(editor.ToggleUnderline));
@@ -217,7 +208,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.sort", new ActionRibbonCommand(() => ExecuteSortCommand(editor, callbacks)));
         // Line-spacing commands — value = multiplier for Multiple. The fixed ids are compatibility
         // aliases for older Avalonia controls and are no longer used by the Home ribbon profile.
-        r.Register("freew.line-spacing", new ValueRibbonCommand(value => SetLineSpacing(editor, value)));
+        r.Register("freew.line-spacing", new LineSpacingCommand(editor));
         r.Register("freew.line-spacing-1",    new ActionRibbonCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.0)));
         r.Register("freew.line-spacing-115",  new ActionRibbonCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.15)));
         r.Register("freew.line-spacing-15",   new ActionRibbonCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.5)));
@@ -681,7 +672,8 @@ internal static class FreeWAvaloniaRibbonCommands
 
     private static void SetLineSpacing(DocumentView editor, string? value)
     {
-        if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var spacing))
+        if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var spacing)
+            && spacing > 0)
             editor.SetLineSpacing(LineSpacingRule.Multiple, spacing);
     }
 
@@ -834,6 +826,43 @@ internal static class FreeWAvaloniaRibbonCommands
         public RibbonCommandState GetState() => new(IsEnabled: !editor.IsEditingLocked);
     }
 
+    private sealed class FontFamilyCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!string.IsNullOrWhiteSpace(context.SelectedValue))
+                editor.SetSelectionFontFamily(context.SelectedValue);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(Value: editor.GetCaretFormatting().Run.FontFamily ?? "Calibri");
+    }
+
+    private sealed class FontSizeCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (double.TryParse(context.SelectedValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var points)
+                && points > 0)
+            {
+                editor.SetSelectionFontSize(points);
+            }
+        }
+
+        public RibbonCommandState GetState() =>
+            new(Value: (editor.GetCaretFormatting().Run.FontSizePt ?? 11)
+                .ToString("0.##", CultureInfo.InvariantCulture));
+    }
+
+    private sealed class LineSpacingCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) => SetLineSpacing(editor, context.SelectedValue);
+
+        public RibbonCommandState GetState() =>
+            new(Value: editor.GetCaretFormatting().Paragraph.LineSpacing
+                .ToString("0.##", CultureInfo.InvariantCulture));
+    }
+
     private sealed class ParagraphValueCommand(
         DocumentView editor,
         Action<double> apply,
@@ -889,6 +918,20 @@ internal static class FreeWAvaloniaRibbonCommands
         public void Execute(RibbonCommandContext context) => toggle();
 
         public RibbonCommandState GetState() => new(IsChecked: isChecked());
+    }
+
+    private sealed class ThemeCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!string.IsNullOrWhiteSpace(context.SelectedValue)
+                && DocumentTheme.FindByName(context.SelectedValue) is { } theme)
+            {
+                editor.ApplyTheme(theme);
+            }
+        }
+
+        public RibbonCommandState GetState() => new(Value: editor.Document.Theme.Name);
     }
 
     private sealed class TrackChangesToggleCommand(DocumentView editor) : IRibbonStatefulCommand
@@ -2624,11 +2667,7 @@ internal static class FreeWAvaloniaRibbonCommands
         RibbonCommandRegistry r, DocumentView editor, RibbonHostCallbacks callbacks)
     {
         // ── Themes ───────────────────────────────────────────────────────────
-        r.Register("freew.theme", new ValueRibbonCommand(value =>
-        {
-            if (!string.IsNullOrWhiteSpace(value) && DocumentTheme.FindByName(value) is { } theme)
-                editor.ApplyTheme(theme);
-        }));
+        r.Register("freew.theme", new ThemeCommand(editor));
         foreach (var theme in DocumentTheme.Catalog)
         {
             var t = theme;

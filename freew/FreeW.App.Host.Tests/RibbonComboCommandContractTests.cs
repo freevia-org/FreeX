@@ -90,6 +90,10 @@ public sealed class RibbonComboCommandContractTests
         view.Model.Theme.Name.Should().Be("Berlin");
         stateStore.GetState("freew.theme").Value.Should().Be("Berlin");
 
+        view.Undo();
+        view.Model.Theme.Name.Should().Be("Office");
+        stateStore.GetState("freew.theme").Value.Should().Be("Office");
+
         var loaded = TextDocument.CreateEmpty();
         loaded.Theme = DocumentTheme.FindByName("Ion")!;
         view.LoadModel(loaded);
@@ -99,6 +103,43 @@ public sealed class RibbonComboCommandContractTests
         command!.Execute(RibbonCommandContext.ForSelectedValue("Missing Theme"));
         view.Model.Theme.Name.Should().Be("Ion");
         stateStore.GetState("freew.theme").Value.Should().Be("Ion");
+    }
+
+    [StaFact]
+    public void Wpf_design_catalog_changes_are_single_step_undoable()
+    {
+        var view = BuildView();
+
+        view.ApplyTheme(DocumentTheme.FindByName("Berlin")!);
+        view.Model.Theme.Name.Should().Be("Berlin");
+        view.Undo();
+        view.Model.Theme.Name.Should().Be("Office");
+
+        var headingColor = view.Model.Styles["Heading1"].Run.ColorHex;
+        view.ApplyThemeColors(DocumentTheme.FindByName("Ion")!);
+        view.Model.Styles["Heading1"].Run.ColorHex.Should().NotBe(headingColor);
+        view.Undo();
+        view.Model.Styles["Heading1"].Run.ColorHex.Should().Be(headingColor);
+
+        view.ApplyStyleSet(DocumentStyleSet.FindByName("Elegant")!);
+        view.Model.DefaultRun.FontFamily.Should().Be("Georgia");
+        view.Undo();
+        view.Model.DefaultRun.FontFamily.Should().Be("Calibri");
+
+        view.ApplyFontSet(DocumentFontSet.FindByName("Georgia")!);
+        view.Model.DefaultRun.FontFamily.Should().Be("Georgia");
+        view.Undo();
+        view.Model.DefaultRun.FontFamily.Should().Be("Calibri");
+
+        view.ApplyParagraphSpacingSet(DocumentParagraphSpacingSet.FindByName("Double")!);
+        view.Model.DefaultParagraph.LineSpacing.Should().Be(2);
+        view.Undo();
+        view.Model.DefaultParagraph.LineSpacing.Should().Be(1.15);
+
+        view.ApplyEffectSet(DocumentEffectSet.FindByName("Intense")!);
+        view.Model.Theme.EffectSetName.Should().Be("Intense");
+        view.Undo();
+        view.Model.Theme.EffectSetName.Should().Be(DocumentTheme.Default.EffectSetName);
     }
 
     private static DocumentView BuildView()
