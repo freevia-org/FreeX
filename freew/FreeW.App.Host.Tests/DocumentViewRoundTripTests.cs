@@ -1555,7 +1555,12 @@ public sealed class DocumentViewRoundTripTests
             HorizontalAnchor: TableHorizontalAnchor.Text,
             VerticalAnchor: TableVerticalAnchor.Text,
             HorizontalOffsetPt: 36,
-            VerticalOffsetPt: 24);
+            VerticalOffsetPt: 24,
+            LeftFromTextPt: 3,
+            RightFromTextPt: 4,
+            TopFromTextPt: 5,
+            BottomFromTextPt: 6);
+        floating.FloatingTableAllowsOverlap = false;
         doc.Blocks.Add(inline);
         doc.Blocks.Add(floating);
 
@@ -1584,21 +1589,68 @@ public sealed class DocumentViewRoundTripTests
 
         rendered.Should().HaveCount(2);
         rendered[0].Margin.Left.Should().Be(0);
+        view.Document.Blocks.OfType<System.Windows.Documents.Table>()
+            .Should().ContainSingle().Which.Should().BeSameAs(rendered[0]);
         rendered[1].Margin.Should().Be(new Thickness(0));
         figure.Width.Value.Should().BeApproximately(160, 0.01);
         figure.HorizontalAnchor.Should().Be(FigureHorizontalAnchor.PageLeft);
         figure.VerticalAnchor.Should().Be(FigureVerticalAnchor.PageTop);
+        var expectedTextDistance = new Thickness(
+            tablePlan.FloatingPosition!.LeftFromTextDip!.Value,
+            tablePlan.FloatingPosition.TopFromTextDip!.Value,
+            tablePlan.FloatingPosition.RightFromTextDip!.Value,
+            tablePlan.FloatingPosition.BottomFromTextDip!.Value);
+        figure.Margin.Should().Be(expectedTextDistance);
         figure.HorizontalOffset.Should().BeApproximately(
-            expectedPlacement.XDip - surface.PageLeftDip,
+            expectedPlacement.XDip - surface.PageLeftDip - expectedTextDistance.Left,
             0.01);
         figure.VerticalOffset.Should().BeApproximately(
-            expectedPlacement.YDip - surface.PageTopDip(expectedPlacement.AnchorPageIndex),
+            expectedPlacement.YDip - surface.PageTopDip(expectedPlacement.AnchorPageIndex) - expectedTextDistance.Top,
             0.01);
         figure.WrapDirection.Should().Be(WrapDirection.Both);
+        figure.CanDelayPlacement.Should().BeFalse();
 
         view.CommitToModel();
         var committed = view.Model.Blocks.OfType<Table>().Last();
         committed.FloatingPosition.Should().Be(floating.FloatingPosition);
+        committed.FloatingTableAllowsOverlap.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void FloatingTableAllowOverlap_RemainsMetadataWithoutInventingFigureCollisionBehavior()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+
+        foreach (var allowsOverlap in new[] { true, false })
+        {
+            var table = Table.Create(1, 1);
+            table.PreferredWidthPt = 120;
+            table.ColumnWidthsPt.Add(120);
+            table.FloatingPosition = new TableFloatingPosition(
+                HorizontalAnchor: TableHorizontalAnchor.Text,
+                VerticalAnchor: TableVerticalAnchor.Text,
+                LeftFromTextPt: 3,
+                RightFromTextPt: 4,
+                TopFromTextPt: 5,
+                BottomFromTextPt: 6);
+            table.FloatingTableAllowsOverlap = allowsOverlap;
+            doc.Blocks.Add(table);
+        }
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var figures = RenderedFloatingTableFigures(view.Document);
+
+        figures.Should().HaveCount(2);
+        figures.Select(figure => figure.Margin).Distinct().Should().ContainSingle();
+        figures.Should().OnlyContain(figure =>
+            figure.WrapDirection == WrapDirection.Both && !figure.CanDelayPlacement);
+
+        view.CommitToModel();
+        view.Model.Blocks.OfType<Table>()
+            .Select(table => table.FloatingTableAllowsOverlap)
+            .Should().Equal(true, false);
     }
 
     [StaFact]
@@ -1736,6 +1788,35 @@ public sealed class DocumentViewRoundTripTests
         var committedTable = view.Model.Blocks.OfType<Table>().Single();
         committedTable.Rows.Should().HaveCount(modelTable.Rows.Count);
         committedTable.Formatting.RepeatHeaderRow.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void FloatingTableTextDistances_LeavePaginatedTablesOnTheExistingSectionPath()
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument();
+        var sourceTable = doc.Blocks.OfType<Table>().Single();
+        sourceTable.FloatingPosition = new TableFloatingPosition(
+            HorizontalAnchor: TableHorizontalAnchor.Text,
+            VerticalAnchor: TableVerticalAnchor.Text,
+            LeftFromTextPt: 3,
+            RightFromTextPt: 4,
+            TopFromTextPt: 5,
+            BottomFromTextPt: 6);
+        sourceTable.FloatingTableAllowsOverlap = true;
+        var pagination = DocumentViewLayoutPlanner.BuildTableLayoutPlans(doc).Single().Pagination;
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        RenderedFloatingTableFigures(view.Document).Should().BeEmpty();
+        RenderedTableSections(view.Document).Should().HaveCount(pagination.Pages.Count);
+        RenderedTables(view.Document).Should().OnlyContain(table =>
+            table.Margin.Top == 0 && table.Margin.Bottom == 0);
+
+        view.CommitToModel();
+        var committed = view.Model.Blocks.OfType<Table>().Single();
+        committed.FloatingPosition.Should().Be(sourceTable.FloatingPosition);
+        committed.FloatingTableAllowsOverlap.Should().BeTrue();
     }
 
     [StaFact]
