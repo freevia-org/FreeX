@@ -542,7 +542,8 @@ public readonly record struct ChartLegendItemPlan(
 
 public readonly record struct ChartAxisTitlePlan(
     ChartTextPlan Label,
-    ChartAxisTitleOrientation Orientation);
+    ChartAxisTitleOrientation Orientation,
+    ChartAxisKind AxisKind);
 
 /// <summary>
 /// Complete renderer-neutral chart scene. The platform canvases consume this
@@ -1512,16 +1513,21 @@ public static partial class ChartRenderPlanner
                         Height = 56.0
                     }
                     : frame.TitleBounds ?? default,
-                IsBold: !UsesClassicOfficeChartStyle(chart),
-                FontSize: ResolveTitleFontSize(chart, 9.0),
+                IsBold: chart.TitleStyle?.Bold ?? !UsesClassicOfficeChartStyle(chart),
+                FontSize: chart.TitleStyle?.FontSizePt is > 0
+                    ? chart.TitleStyle.FontSizePt.Value
+                    : ResolveTitleFontSize(chart, 9.0),
                 Alignment: ChartPlanTextAlignment.Center)
             {
                 // Classic Office chart titles use Arial; imported titles retain
                 // the renderer's calibrated default typeface.
-                FontFamily = UsesClassicOfficeChartStyle(chart) ? "Arial" : null,
-                TextColor = UsesImportedPieLegendDefaults(chart)
-                    ? new SrgbColor(0x00, 0x00, 0x00)
-                    : null,
+                FontFamily = chart.TitleStyle?.FontFamily
+                    ?? (UsesClassicOfficeChartStyle(chart) ? "Arial" : null),
+                TextColor = chart.TitleStyle?.Color?.Resolved
+                    ?? (UsesImportedPieLegendDefaults(chart)
+                        ? new SrgbColor(0x00, 0x00, 0x00)
+                        : null),
+                IsItalic = chart.TitleStyle?.Italic ?? false,
                 MaxLineCount = wrapsTallSurfaceTitle ? 2 : 1
             }
             : null;
@@ -3715,7 +3721,8 @@ public static partial class ChartRenderPlanner
                             plot.Bottom + CategoryLabelHeight + 2,
                             plot.Width,
                             AxisTitleBand), chart.ValueAxis.TitleStyle),
-                    ChartAxisTitleOrientation.Horizontal));
+                        ChartAxisTitleOrientation.Horizontal,
+                        ChartAxisKind.Value));
             }
             else
             {
@@ -3727,7 +3734,8 @@ public static partial class ChartRenderPlanner
                             plot.Y,
                             AxisTitleBand,
                             plot.Height), chart.ValueAxis.TitleStyle),
-                    ChartAxisTitleOrientation.VerticalCounterclockwise));
+                    ChartAxisTitleOrientation.VerticalCounterclockwise,
+                    ChartAxisKind.Value));
             }
         }
 
@@ -3743,7 +3751,8 @@ public static partial class ChartRenderPlanner
                             plot.Y,
                             AxisTitleBand,
                             plot.Height), chart.CategoryAxis.TitleStyle),
-                    ChartAxisTitleOrientation.VerticalCounterclockwise));
+                    ChartAxisTitleOrientation.VerticalCounterclockwise,
+                    ChartAxisKind.Category));
             }
             else
             {
@@ -3758,7 +3767,8 @@ public static partial class ChartRenderPlanner
                             plot.Bottom + categoryTitleOffset,
                             plot.Width,
                             AxisTitleBand), chart.CategoryAxis.TitleStyle),
-                    ChartAxisTitleOrientation.Horizontal));
+                    ChartAxisTitleOrientation.Horizontal,
+                    ChartAxisKind.Category));
             }
         }
 
@@ -4029,7 +4039,8 @@ public static partial class ChartRenderPlanner
                     IsBold: false,
                     FontSize: AxisTitleFontSize,
                     Alignment: ChartPlanTextAlignment.Center),
-                ChartAxisTitleOrientation.VerticalClockwise);
+                ChartAxisTitleOrientation.VerticalClockwise,
+                ChartAxisKind.SecondaryValue);
         }
 
         return new ChartSecondaryValueAxisPrimitivePlan(

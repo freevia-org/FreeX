@@ -1,0 +1,67 @@
+using Free.Shared.Ribbon;
+using FreeW.App.Host.Editing;
+
+namespace FreeW.App.Host.Tests;
+
+public sealed class RibbonComboCommandContractTests
+{
+    [StaFact]
+    public void TextAndParagraphCombos_ConsumeSharedSelectedValueContract()
+    {
+        var view = BuildView();
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+
+        Execute(view, registry, "freew.font-family", "Arial");
+        Execute(view, registry, "freew.font-size", "16");
+
+        var run = ((Paragraph)view.Model.Blocks[0]).Runs.Single();
+        run.Formatting.FontFamily.Should().Be("Arial");
+        run.Formatting.FontSizePt.Should().Be(16);
+
+        Execute(view, registry, "freew.line-spacing", "1.5");
+        ((Paragraph)view.Model.Blocks[0]).Formatting.LineSpacing.Should().Be(1.5);
+
+        Execute(view, registry, "freew.style", "Heading 1");
+        ((Paragraph)view.Model.Blocks[0]).StyleId.Should().Be("Heading1");
+    }
+
+    [StaFact]
+    public void LayoutAndHeaderFooterCombos_ConsumeSharedSelectedValueContract()
+    {
+        var view = BuildView();
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+
+        Execute(view, registry, "freew.indent-left", "24");
+        Execute(view, registry, "freew.indent-right", "18");
+        Execute(view, registry, "freew.space-before", "6");
+        Execute(view, registry, "freew.space-after", "10");
+        Execute(view, registry, "freew.hf-header-from-top", "36");
+        Execute(view, registry, "freew.hf-footer-from-bottom", "54");
+
+        var formatting = ((Paragraph)view.Model.Blocks[0]).Formatting;
+        formatting.IndentLeftPt.Should().Be(24);
+        formatting.IndentRightPt.Should().Be(18);
+        formatting.SpaceBeforePt.Should().Be(6);
+        formatting.SpaceAfterPt.Should().Be(10);
+        view.Model.Page.HeaderDistancePt.Should().Be(36);
+        view.Model.Page.FooterDistancePt.Should().Be(54);
+    }
+
+    private static DocumentView BuildView()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Blocks.Add(new Paragraph("Combo contract"));
+        var view = new DocumentView();
+        view.LoadModel(model);
+        view.SetSelectionRangeForTest(0, 0, 0, "Combo contract".Length);
+        return view;
+    }
+
+    private static void Execute(DocumentView view, RibbonCommandRegistry registry, string commandId, string value)
+    {
+        view.SetSelectionRangeForTest(0, 0, 0, "Combo contract".Length);
+        registry.TryGet(commandId, out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.ForSelectedValue(value));
+    }
+}

@@ -22,26 +22,34 @@ public sealed class SetChartTextOptionsCommand : IPresentationCommand
         var chart = FindChart(presentation);
         if (chart is null) return;
 
-        _oldOptions ??= ReadOptions(chart);
-        chart.TextStyle = BuildStyle(_newOptions);
+        _oldOptions ??= ReadOptions(chart, _newOptions.Target);
+        SetStyle(chart, _newOptions.Target, BuildStyle(_newOptions));
     }
 
     public void Revert(Presentation presentation)
     {
         var chart = FindChart(presentation);
         if (chart is not null && _oldOptions is not null)
-            chart.TextStyle = BuildStyle(_oldOptions);
+            SetStyle(chart, _newOptions.Target, BuildStyle(_oldOptions));
     }
 
     private ChartShape? FindChart(Presentation presentation) =>
         ShapeHelper.Find(presentation, _slideIndex, _shapeId)?.Chart;
 
-    private static ChartTextOptions ReadOptions(ChartShape chart)
+    private static ChartTextOptions ReadOptions(ChartShape chart, ChartTextTarget target)
     {
-        var style = chart.TextStyle;
+        var style = target == ChartTextTarget.Title ? chart.TitleStyle : chart.TextStyle;
         return style is null or { IsImplicitDefault: true }
-            ? new ChartTextOptions(null, null, null, null, null)
-            : new ChartTextOptions(style.FontFamily, style.FontSizePt, style.Bold, style.Italic, style.Color);
+            ? new ChartTextOptions(null, null, null, null, null, target)
+            : new ChartTextOptions(style.FontFamily, style.FontSizePt, style.Bold, style.Italic, style.Color, target);
+    }
+
+    private static void SetStyle(ChartShape chart, ChartTextTarget target, ChartTextStyle? style)
+    {
+        if (target == ChartTextTarget.Title)
+            chart.TitleStyle = style;
+        else
+            chart.TextStyle = style;
     }
 
     private static ChartTextStyle? BuildStyle(ChartTextOptions options) =>

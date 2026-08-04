@@ -204,6 +204,7 @@ public static class SlideCloner
             StyleId      = src.StyleId,
             Title        = src.Title,
             TitleOverlay = src.TitleOverlay,
+            TitleStyle   = CloneChartTextStyle(src.TitleStyle),
             ChartAreaFill = src.ChartAreaFill,
             ChartAreaOutline = src.ChartAreaOutline,
             HasAutomaticTitle = src.HasAutomaticTitle,

@@ -17,13 +17,13 @@ public sealed class ChartTextOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly ComboBox _italicCombo;
     private readonly TextBox _colorBox;
 
-    public ChartTextOptionsDialog(EditingSession editor)
+    public ChartTextOptionsDialog(EditingSession editor, ChartTextTarget target = ChartTextTarget.Chart)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         var chart = editor.SelectedChart
             ?? throw new InvalidOperationException("No chart is currently selected.");
-        _planner = ChartTextOptionsPlanner.FromChart(chart);
-        var surface = ChartTextOptionsPlanner.BuildSurfacePlan();
+        _planner = ChartTextOptionsPlanner.FromChart(chart, target);
+        var surface = ChartTextOptionsPlanner.BuildSurfacePlan(target);
 
         Title = surface.Title;
         Width = ChartTextOptionsPlanner.DefaultDialogWidth;

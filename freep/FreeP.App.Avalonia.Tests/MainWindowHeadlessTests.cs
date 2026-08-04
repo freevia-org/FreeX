@@ -7807,6 +7807,29 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartTextOptionsDialog_can_target_chart_title()
+    {
+        ChartTextOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            chartShape.Chart!.Title = "Revenue";
+            chartShape.Chart.TitleStyle = new ChartTextStyle { FontFamily = "Aptos", FontSizePt = 15 };
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartTextOptionsDialog(window.Editor, ChartTextTarget.Title);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options!.Target.Should().Be(ChartTextTarget.Title);
+        options.FontFamily.Should().Be("Aptos");
+        options.FontSizePt.Should().Be(15);
+    }
+
+    [Fact]
     public async Task Chart3DViewOptionsDialog_constructs_and_commits_shared_options()
     {
         Chart3DViewOptions? options = null;

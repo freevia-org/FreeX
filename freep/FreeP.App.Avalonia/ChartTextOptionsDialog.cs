@@ -20,13 +20,13 @@ internal sealed class ChartTextOptionsDialog : Window
     private readonly ComboBox _italicCombo;
     private readonly TextBox _colorBox;
 
-    internal ChartTextOptionsDialog(EditingSession editor)
+    internal ChartTextOptionsDialog(EditingSession editor, ChartTextTarget target = ChartTextTarget.Chart)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         var chart = editor.SelectedChart
             ?? throw new InvalidOperationException("No chart is currently selected.");
-        _planner = ChartTextOptionsPlanner.FromChart(chart);
-        var surface = ChartTextOptionsPlanner.BuildSurfacePlan();
+        _planner = ChartTextOptionsPlanner.FromChart(chart, target);
+        var surface = ChartTextOptionsPlanner.BuildSurfacePlan(target);
 
         Title = surface.Title;
         Width = ChartTextOptionsPlanner.DefaultDialogWidth;

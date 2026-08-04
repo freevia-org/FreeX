@@ -238,13 +238,16 @@ internal static class FreeWRibbonCommands
             v => v is TextDecorationCollection d && d.Count > 0,
             () => editor.TryToggleSelectedRunFormatting(f => f.Underline, (f, value) => f with { Underline = value }));
 
-        // Live ribbon state: when the caret/selection moves, recompute the toggle states and push
-        // them into the shared RibbonStateStore, which the toggle buttons observe.
-        editor.SelectionChanged += (_, _) =>
+        // Live ribbon state: when the caret/selection moves or a document render replaces the model,
+        // recompute state and push it into the shared store. The store deduplicates unchanged values.
+        void RefreshStatefulCommands()
         {
             foreach (var (id, command) in stateful)
                 stateStore.SetState(id, command.GetState());
-        };
+        }
+
+        editor.SelectionChanged += (_, _) => RefreshStatefulCommands();
+        editor.LayoutChanged += (_, _) => RefreshStatefulCommands();
 
         // Home > Font: character effects. Superscript/subscript are mutually exclusive baseline
         // offsets; small caps / all caps map to WPF typography. Each is a toggle over the selection.
@@ -1198,8 +1201,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.manage-sources", new ManageSourcesCommand(editor));
         registry.Register("freew.bibliography", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertBibliography(); }));
         // Insert tab — References: select the active citation/bibliography style (APA / MLA / Chicago) used
-        // by the citation + bibliography commands. The combo box delivers its label via the "value" param.
-        registry.Register("freew.citation-style", new CitationStyleCommand(editor));
+        // by the citation + bibliography commands. The combo box delivers its label as SelectedValue.
+        var citationStyle = new CitationStyleCommand(editor, stateStore);
+        registry.Register("freew.citation-style", citationStyle);
+        stateful.Add(("freew.citation-style", citationStyle));
+        stateStore.SetState("freew.citation-style", citationStyle.GetState());
         // Insert tab — References: insert a numbered figure/table caption under the caret's block.
         registry.Register("freew.caption", new InsertCaptionCommand(editor));
         registry.Register("freew.insert-caption.figure", new InsertCaptionLabelCommand(editor, CaptionLabel.Figure));
@@ -2145,13 +2151,23 @@ internal static class FreeWRibbonCommands
         public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: isChecked());
     }
 
+    private static string? ComboValue(RibbonCommandContext context)
+    {
+        if (context.SelectedValue is { Length: > 0 } selectedValue)
+            return selectedValue;
+
+        return context.Parameters.TryGetValue("value", out var legacyRaw)
+            ? legacyRaw as string
+            : null;
+    }
+
     // Home > Paragraph > Line Spacing: parse the chosen multiplier (e.g. "1.5") and apply it to every
     // paragraph spanned by the selection. The view routes the change through its undo/redo bus.
     private sealed class LineSpacingCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            if (ComboValue(context) is not { } value)
                 return;
             if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var multiplier) && multiplier > 0)
             {
@@ -2169,7 +2185,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            if (ComboValue(context) is not { } value)
                 return;
             if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
             {
@@ -2190,7 +2206,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            if (ComboValue(context) is not { } value)
                 return;
             if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
             {
@@ -2214,7 +2230,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            if (ComboValue(context) is not { } value)
                 return;
             if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
             {
@@ -2234,7 +2250,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            if (ComboValue(context) is not { } value)
                 return;
             if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
             {
@@ -2398,7 +2414,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value || value.Length == 0)
+            if (ComboValue(context) is not { Length: > 0 } value)
                 return;
 
             var styleId = ResolveStyleId(editor.Model, value);
@@ -8079,7 +8095,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            if (ComboValue(context) is not { } value)
                 return;
             if (HeaderFooterDialogPlanner.TryParseDistance(value, out var pt))
                 editor.ApplyPageSettings(page => page.HeaderDistancePt = pt);
@@ -8093,7 +8109,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            if (ComboValue(context) is not { } value)
                 return;
             if (HeaderFooterDialogPlanner.TryParseDistance(value, out var pt))
                 editor.ApplyPageSettings(page => page.FooterDistancePt = pt);
@@ -8960,15 +8976,26 @@ internal static class FreeWRibbonCommands
     // DocumentView.ActiveCitationStyle) so it persists and atomically refreshes existing native citations,
     // an existing generated bibliography, and subsequently inserted references. Unrecognised labels leave
     // the current style unchanged.
-    private sealed class CitationStyleCommand(DocumentView editor) : IRibbonCommand
+    private sealed class CitationStyleCommand(DocumentView editor, RibbonStateStore stateStore) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            var value = context.SelectedValue;
+            if (value is null
+                && context.Parameters.TryGetValue("value", out var legacyRaw))
+            {
+                value = legacyRaw as string;
+            }
+
+            if (string.IsNullOrWhiteSpace(value))
                 return;
 
             editor.ApplyCitationStyle(Citations.ParseStyle(value, editor.ActiveCitationStyle));
+            stateStore.SetState("freew.citation-style", GetState());
         }
+
+        public RibbonCommandState GetState() =>
+            new(Value: Citations.StyleName(editor.ActiveCitationStyle));
     }
 
     private sealed class SelectionValueCommand(
@@ -8978,7 +9005,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (context.Parameters.TryGetValue("value", out var raw) && raw is string value && value.Length > 0)
+            if (ComboValue(context) is { Length: > 0 } value)
             {
                 editor.Focus();
                 if (tryModelApply?.Invoke(value) == true)
