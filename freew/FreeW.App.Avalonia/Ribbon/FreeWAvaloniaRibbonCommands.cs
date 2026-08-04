@@ -228,16 +228,7 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Styles (AV-STYLES) ────────────────────────────────────────────────
         // Existing quick-style buttons — now routed through the model-backed, undoable ApplyNamedStyle
         // so the paragraph picks up the real built-in style (seeded if absent) instead of just a font tweak.
-        r.Register("freew.style", new ValueRibbonCommand(value =>
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return;
-
-            var descriptor = BuiltInStyles.Gallery.FirstOrDefault(style =>
-                string.Equals(style.Name, value, StringComparison.OrdinalIgnoreCase));
-            if (descriptor is not null)
-                editor.ApplyNamedStyle(descriptor.Id);
-        }));
+        r.Register("freew.style", new ParagraphStyleCommand(editor));
         r.Register("freew.style-normal",   new ActionRibbonCommand(() => editor.ApplyNamedStyle("Normal")));
         r.Register("freew.style-heading1", new ActionRibbonCommand(() => editor.ApplyNamedStyle("Heading1")));
         r.Register("freew.style-heading2", new ActionRibbonCommand(() => editor.ApplyNamedStyle("Heading2")));
@@ -861,6 +852,35 @@ internal static class FreeWAvaloniaRibbonCommands
         {
             var paragraph = editor.GetCaretFormatting().Paragraph;
             return new(Value: current(paragraph).ToString("0.##", CultureInfo.InvariantCulture));
+        }
+    }
+
+    private sealed class ParagraphStyleCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (string.IsNullOrWhiteSpace(context.SelectedValue))
+                return;
+
+            var descriptor = BuiltInStyles.Gallery.FirstOrDefault(style =>
+                style.Type == StyleType.Paragraph
+                && string.Equals(style.Name, context.SelectedValue, StringComparison.OrdinalIgnoreCase));
+            if (descriptor is not null)
+                editor.ApplyNamedStyle(descriptor.Id);
+        }
+
+        public RibbonCommandState GetState()
+        {
+            var styleId = editor.CurrentParagraphStyleId;
+            if (string.IsNullOrWhiteSpace(styleId))
+                return new(Value: "Normal");
+
+            if (BuiltInStyles.Find(styleId) is { } builtIn)
+                return new(Value: builtIn.Name);
+
+            return editor.Document.Styles.TryGetValue(styleId, out var style)
+                ? new RibbonCommandState(Value: style.Name)
+                : new RibbonCommandState(Value: styleId);
         }
     }
 
