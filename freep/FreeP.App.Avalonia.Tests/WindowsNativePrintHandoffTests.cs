@@ -44,7 +44,7 @@ public sealed class WindowsNativePrintHandoffTests
             return;
 
         var capability = WindowsNativePrintOutput.Detect().Video;
-        var devices = new WindowsRecordingDeviceCatalog().EnumerateDevices();
+        var devices = new WindowsNativeRecordingDeviceCatalog().EnumerateDevices();
 
         capability.CanEncodeMp4.Should().BeTrue();
         capability.ExecutablePath.Should().Be(WindowsNativeVideoExportAdapter.ExecutablePath);

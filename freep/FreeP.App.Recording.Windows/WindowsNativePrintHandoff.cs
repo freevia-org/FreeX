@@ -23,7 +23,7 @@ public static class WindowsNativePrintOutput
         var print = DetectPrint();
         return new LinuxNativeOutputCapabilities(
             print,
-            DetectWindowsVideoCapability(new WindowsRecordingDeviceCatalog()));
+            DetectWindowsVideoCapability(new WindowsNativeRecordingDeviceCatalog()));
     }
 
     /// <summary>

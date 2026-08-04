@@ -246,6 +246,60 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
     }
 
     [Fact]
+    public void Controller_UsesAuthoredWebVttCuePlacement()
+    {
+        var factory = new FakeBackendFactory();
+        var overlay = new Canvas();
+        var controller = new AvaloniaSlideShowMediaController(overlay, factory);
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 42,
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 9144000,
+            ExtentCyEmu = 6858000,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                PlaybackStartMode = MediaPlaybackStartMode.Automatically,
+                Bytes = [1, 2, 3],
+                ContentType = "video/mp4",
+            },
+        });
+        var track = new PresentationMediaTranscriptTrackDescriptor(
+            SlideIndex: 0,
+            ShapeId: 42,
+            ShapeName: "Video",
+            TrackIndex: 0,
+            Label: "English",
+            Language: "en-US",
+            Source: "captions.vtt",
+            ContentType: "text/vtt",
+            Status: PresentationMediaTranscriptTrackStatus.Available,
+            StatusMessage: string.Empty,
+            Cues:
+            [
+                new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Positioned")
+                {
+                    PositionPercent = 25,
+                    LinePercent = 30,
+                    SizePercent = 50,
+                    Alignment = PresentationMediaTranscriptCueAlignment.Start
+                }
+            ]);
+
+        controller.EnterSlide(slide, 960, 720, 960, 720, [track]);
+        factory.Backend.Sessions.Single().Seek(TimeSpan.FromMilliseconds(500));
+        controller.RefreshCaptionsForTest();
+
+        var caption = overlay.Children.OfType<Border>().Single();
+        Canvas.GetLeft(caption).Should().Be(240);
+        Canvas.GetTop(caption).Should().Be(216);
+        caption.Width.Should().Be(480);
+        caption.Height.Should().Be(86);
+    }
+
+    [Fact]
     public void Controller_UpdateLayout_RepositionsCaptionOverlayAfterCanvasResize()
     {
         var factory = new FakeBackendFactory();

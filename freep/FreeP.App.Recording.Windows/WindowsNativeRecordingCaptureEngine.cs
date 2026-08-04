@@ -158,9 +158,10 @@ public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngin
                 string.Equals(candidate.Id, requestedDevice.DeviceId, StringComparison.OrdinalIgnoreCase))
             ?? devices.FirstOrDefault(candidate =>
                 string.Equals(candidate.Name, requestedDevice.DisplayName, StringComparison.OrdinalIgnoreCase))
-            ?? devices.FirstOrDefault();
+            ?? throw new InvalidOperationException(
+                $"The requested camera '{requestedDevice.DisplayName}' is no longer available.");
 
-        return device?.Id ?? requestedDevice.DeviceId;
+        return device.Id;
     }
 
     private static (string DeviceId, int SlideIndex) Key(

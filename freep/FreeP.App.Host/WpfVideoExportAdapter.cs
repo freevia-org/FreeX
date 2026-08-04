@@ -86,7 +86,7 @@ internal static class WpfVideoEncoderCapabilityDetector
     {
         if (OperatingSystem.IsWindows())
         {
-            return DetectWindowsCaptureCapability(new WindowsRecordingDeviceCatalog());
+            return DetectWindowsCaptureCapability(new WindowsNativeRecordingDeviceCatalog());
         }
 
         var executable = FindExecutable("ffmpeg");

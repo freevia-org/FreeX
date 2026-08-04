@@ -35,6 +35,10 @@ internal sealed class AvaloniaSlideShowMediaController
     private IMediaPlaybackSession? _transitionSoundSession;
     private IReadOnlyList<SlideShowMediaShapePlan> _active = Array.Empty<SlideShowMediaShapePlan>();
     private Slide? _activeSlide;
+    private double _slideDipW;
+    private double _slideDipH;
+    private double _canvasW;
+    private double _canvasH;
 
     public AvaloniaSlideShowMediaController(
         Panel overlay,
@@ -61,6 +65,8 @@ internal sealed class AvaloniaSlideShowMediaController
 
     public void SetCanvasBounds(double canvasW, double canvasH)
     {
+        _canvasW = canvasW;
+        _canvasH = canvasH;
         _overlay.Width = Math.Max(1, canvasW);
         _overlay.Height = Math.Max(1, canvasH);
     }
@@ -85,6 +91,8 @@ internal sealed class AvaloniaSlideShowMediaController
         }
 
         SetCanvasBounds(canvasW, canvasH);
+        _slideDipW = slideDipW;
+        _slideDipH = slideDipH;
 
         foreach (var slot in _slots)
         {
@@ -107,13 +115,7 @@ internal sealed class AvaloniaSlideShowMediaController
             }
 
             if (slot.CaptionHost is not null)
-            {
-                var captionHeight = Math.Clamp(bounds.Height * 0.2, 36, 86);
-                slot.CaptionHost.Width = Math.Max(1, bounds.Width);
-                slot.CaptionHost.Height = captionHeight;
-                Canvas.SetLeft(slot.CaptionHost, bounds.X);
-                Canvas.SetTop(slot.CaptionHost, Math.Max(bounds.Y, bounds.Y + bounds.Height - captionHeight));
-            }
+                ApplyCaptionPlacement(slot.CaptionHost, bounds, cue: null);
         }
     }
 
@@ -127,6 +129,8 @@ internal sealed class AvaloniaSlideShowMediaController
     {
         ArgumentNullException.ThrowIfNull(slide);
         SetCanvasBounds(canvasW, canvasH);
+        _slideDipW = slideDipW;
+        _slideDipH = slideDipH;
         TeardownPlayback();
         _activeSlide = slide;
         _active = SlideShowMediaInteractionPlanner.BuildSlidePlan(
@@ -334,10 +338,26 @@ internal sealed class AvaloniaSlideShowMediaController
             IsHitTestVisible = false,
             ZIndex = 10,
         };
-        Canvas.SetLeft(host, bounds.X);
-        Canvas.SetTop(host, Math.Max(bounds.Y, bounds.Y + bounds.Height - height));
+        ApplyCaptionPlacement(host, bounds, cue: null);
         _overlay.Children.Add(host);
         return (host, text);
+    }
+
+    private static void ApplyCaptionPlacement(
+        Border host,
+        LayoutRect bounds,
+        PresentationMediaTranscriptCueDescriptor? cue)
+    {
+        var defaultHeight = Math.Clamp(bounds.Height * 0.2, 36, 86);
+        var placement = PresentationMediaTranscriptPlanner.ComputeCaptionPlacement(
+            cue,
+            bounds.Width,
+            bounds.Height,
+            defaultHeight);
+        host.Width = placement.Width;
+        host.Height = placement.Height;
+        Canvas.SetLeft(host, bounds.X + placement.X);
+        Canvas.SetTop(host, bounds.Y + placement.Y);
     }
 
     private void UpdateCaptions()
@@ -351,6 +371,18 @@ internal sealed class AvaloniaSlideShowMediaController
                 slot.CaptionTrack,
                 slot.Session.Position);
             slot.CaptionText.Text = cue?.Text ?? string.Empty;
+            if (cue is not null
+                && _activeSlide is { } activeSlide
+                && ShapeTreeLookup.Find(activeSlide, slot.ShapeId) is { Media: not null } shape)
+            {
+                var bounds = SlideShowMediaInteractionPlanner.ComputeMediaBounds(
+                    shape,
+                    _slideDipW,
+                    _slideDipH,
+                    _canvasW,
+                    _canvasH);
+                ApplyCaptionPlacement(slot.CaptionHost, bounds, cue);
+            }
             slot.CaptionHost.IsVisible = cue is not null;
         }
     }
