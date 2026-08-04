@@ -2545,10 +2545,11 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.PivotFieldFilter\", () => ShowPivotFieldFilterParityDialogAsync(),");
         parityCaptureSource.Should().Contain("(\"dialog.PivotValueFieldSettings\", () => ShowPivotValueFieldSettingsParityDialogAsync(),");
         parityCaptureSource.Should().Contain("(\"dialog.Options\", () => ShowOptionsDialogAsync(),");
-        // Conditional-format manage seeds example rules so its list renders rows.
+        // Conditional-format manage uses the same deterministic fixture as the WPF capture host.
         parityCaptureSource.Should().Contain("(\"dialog.ConditionalFormatManage\", () => ShowManageConditionalFormatsParityDialogAsync()),");
         parityCaptureSource.Should().Contain("private async Task ShowManageConditionalFormatsParityDialogAsync()");
-        parityCaptureSource.Should().Contain("ConditionalFormatPresetFactory.BuildApplyCommand(preset, sheet.Id, ruleRange, value: \"100\")");
+        parityCaptureSource.Should().Contain("ConditionalFormatManageParityFixture.CreateRange(sheet.Id)");
+        parityCaptureSource.Should().Contain("ConditionalFormatManageParityFixture.CreateRules(sheet.Id)");
         parityCaptureSource.Should().Contain("(\"dialog.AllowEditRanges\", () => ShowAllowEditRangesParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.ProtectSheet\", () => ShowProtectSheetDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.ProtectWorkbook\", () => ShowProtectWorkbookParityDialogAsync()),");

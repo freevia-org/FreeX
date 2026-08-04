@@ -35,6 +35,40 @@ public sealed class SmartArtFixtureEvidenceTests
     }
 
     [Fact]
+    public void List1FixtureContainsTheAuditedFourSlotGrammar()
+    {
+        var root = FindRepositoryRoot();
+        var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
+
+        using var archive = ZipFile.OpenRead(path);
+        var layout = ReadXml(archive, "ppt/diagrams/layout5.xml");
+        var drawing = ReadXml(archive, "ppt/diagrams/drawing5.xml");
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/list1");
+        var shapes = drawing.Descendants(dsp + "sp").ToList();
+        shapes.Should().HaveCount(4);
+        shapes.Select(shape => (string?)shape.Descendants(a + "prstGeom").Single().Attribute("prst"))
+            .Should().OnlyContain(value => value == "roundRect");
+        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("x")!.Value))
+            .Should().OnlyContain(value => value == 329_184L);
+        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("y")!.Value))
+            .Should().Equal(229_792L, 1_587_001L, 2_944_210L, 4_301_419L);
+        shapes.Select(shape => shape.Descendants(a + "ext").Single().Attributes()
+                .Where(attribute => attribute.Name.LocalName is "cx" or "cy")
+                .Select(attribute => long.Parse(attribute.Value)))
+            .Should().OnlyContain(extent => extent.SequenceEqual(new long[] { 7_571_232L, 1_213_589L }));
+        drawing.Descendants(a + "t").Select(element => element.Value)
+            .Should().Equal("Requirement 1", "Requirement 2", "Requirement 3", "Requirement 4");
+        ReadXml(archive, "ppt/diagrams/data5.xml")
+            .Descendants(dgm + "pt")
+            .Where(element => (string?)element.Attribute("type") != "doc")
+            .Should().HaveCount(4);
+    }
+
+    [Fact]
     public void GroupedListFixtureContainsTheAuditedCachedBandGrammar()
     {
         var root = FindRepositoryRoot();

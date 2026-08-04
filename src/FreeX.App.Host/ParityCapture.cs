@@ -12,6 +12,7 @@ using System.Windows.Media.Imaging;
 using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.Consolidate;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
@@ -857,12 +858,11 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.ConditionalFormatNewRule", outDir, () =>
             new NewConditionalFormatRuleDialog("Greater Than", range));
 
+        var conditionalFormatFixtureRange = ConditionalFormatManageParityFixture.CreateRange(sheet.Id);
         CaptureDialog(results, "dialog.ConditionalFormatManage", outDir, () =>
         {
-            // Seed a few example rules over the dialog's range so its rules list shows rows (mirrors the
-            // Avalonia parity wrapper, which seeds DataBar / ColorScale / Greater-Than rules).
-            SeedConditionalFormatRules(sheet, range);
-            return new ManageConditionalFormatsDialog(sheet, range);
+            SeedConditionalFormatRules(sheet);
+            return new ManageConditionalFormatsDialog(sheet, conditionalFormatFixtureRange);
         });
 
         // Page Setup: both shells have the same 4 tabs in the same order (Page/Margins/Header-Footer/Sheet).
@@ -1159,35 +1159,11 @@ internal static class ParityCapture
         return (pivot, cache, headers);
     }
 
-    /// <summary>
-    /// Seeds three example conditional-format rules (DataBar, three-color ColorScale, Greater-Than) over
-    /// <paramref name="range"/> so the Manage Conditional Formats dialog lists rows. Idempotent: clears any
-    /// existing rules first so a re-run keeps the same three.
-    /// </summary>
-    private static void SeedConditionalFormatRules(Sheet sheet, GridRange range)
+    private static void SeedConditionalFormatRules(Sheet sheet)
     {
         sheet.ConditionalFormats.Clear();
-        sheet.ConditionalFormats.Add(new ConditionalFormat
-        {
-            AppliesTo = range,
-            Priority = 1,
-            RuleType = CfRuleType.DataBar,
-        });
-        sheet.ConditionalFormats.Add(new ConditionalFormat
-        {
-            AppliesTo = range,
-            Priority = 2,
-            RuleType = CfRuleType.ColorScale,
-            UseThreeColorScale = true,
-        });
-        sheet.ConditionalFormats.Add(new ConditionalFormat
-        {
-            AppliesTo = range,
-            Priority = 3,
-            RuleType = CfRuleType.CellValue,
-            Operator = CfOperator.GreaterThan,
-            Value1 = "100",
-        });
+        foreach (var rule in ConditionalFormatManageParityFixture.CreateRules(sheet.Id))
+            sheet.ConditionalFormats.Add(rule);
     }
 
     private static void CaptureDialog(

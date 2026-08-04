@@ -1110,6 +1110,154 @@ public sealed class SmartArtTests : IDisposable
             "a missing cached role must retain the remaining cached drawing");
     }
 
+    [Fact]
+    public void Reader_ImportedList1_AdmitsExactFourSlotCacheAndSharedComposition()
+    {
+        var presentation = PptxPackageReader.Read(
+            FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx"));
+        var slide = presentation.Slides.Single(candidate => candidate.Shapes.Any(shape =>
+            shape.Kind == SlideShapeKind.SmartArt
+            && shape.SmartArt?.Data?.LayoutUniqueId.EndsWith("/list1", StringComparison.OrdinalIgnoreCase) == true));
+        var smartArt = slide.Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
+        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue();
+        smartArt.Data.Nodes.Select(node => node.Text)
+            .Should().Equal("Requirement 1", "Requirement 2", "Requirement 3", "Requirement 4");
+        smartArt.FallbackShapes.Should().HaveCount(4);
+        smartArt.FallbackShapes.Should().OnlyContain(shape =>
+            shape.Kind == SlideShapeKind.AutoShape
+            && shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle
+            && shape.Effects == null);
+        smartArt.FallbackShapes.Select(shape => shape.OffsetXEmu)
+            .Should().OnlyContain(value => value == 329_184L);
+        smartArt.FallbackShapes.Select(shape => shape.OffsetYEmu)
+            .Should().Equal(229_792L, 1_587_001L, 2_944_210L, 4_301_419L);
+        smartArt.FallbackShapes.Select(shape => (shape.ExtentCxEmu, shape.ExtentCyEmu))
+            .Should().OnlyContain(value => value.Item1 == 7_571_232L && value.Item2 == 1_213_589L);
+
+        var composed = SlideCompositor.Compose(presentation, slide)
+            .OfType<DrawOp.Shape>()
+            .Where(shape => shape.Text is not null)
+            .Select(shape => shape.Text!.Paragraphs.First().Runs.First().Text)
+            .Where(text => text.StartsWith("Requirement ", StringComparison.Ordinal))
+            .ToArray();
+        composed.Should().Equal("Requirement 1", "Requirement 2", "Requirement 3", "Requirement 4");
+    }
+
+    [Theory]
+    [InlineData("geometry")]
+    [InlineData("text")]
+    [InlineData("order")]
+    [InlineData("missing-role")]
+    [InlineData("effect")]
+    [InlineData("picture")]
+    [InlineData("richer-role")]
+    public void Reader_List1_NearMissesPreserveCachedDrawingFallback(string mutation)
+    {
+        var pptxPath = Path.Combine(_tempDir, $"list1-{mutation}.pptx");
+        File.Copy(FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx"), pptxPath);
+        var aNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var dspNs = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+
+        RewriteList1Drawing(pptxPath, document =>
+        {
+            var shapes = document.Descendants(dspNs + "sp").ToList();
+            switch (mutation)
+            {
+                case "geometry":
+                    shapes[0].Element(dspNs + "spPr")!
+                        .Element(aNs + "xfrm")!
+                        .Element(aNs + "off")!
+                        .SetAttributeValue("x", "329185");
+                    break;
+                case "text":
+                    shapes[2].Descendants(aNs + "t").Single().Value = "Requirement X";
+                    break;
+                case "order":
+                    shapes[0].AddBeforeSelf(shapes[3]);
+                    break;
+                case "missing-role":
+                    shapes[3].Remove();
+                    break;
+                case "effect":
+                    shapes[0].Element(dspNs + "spPr")!.Add(new XElement(aNs + "effectLst",
+                        new XElement(aNs + "outerShdw", new XAttribute("blurRad", "25400"))));
+                    break;
+                case "picture":
+                    document.Root!.Element(dspNs + "spTree")!.Add(new XElement(dspNs + "pic",
+                        new XElement(dspNs + "nvPicPr",
+                            new XElement(dspNs + "cNvPr", new XAttribute("id", "999"), new XAttribute("name", "List1 picture")),
+                            new XElement(dspNs + "cNvPicPr")),
+                        new XElement(dspNs + "blipFill",
+                            new XElement(aNs + "blip", new XAttribute(XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships") + "embed", "rIdMissing"))),
+                        new XElement(dspNs + "spPr")));
+                    break;
+                case "richer-role":
+                    document.Root!.Element(dspNs + "spTree")!.Add(new XElement(dspNs + "sp",
+                        new XElement(dspNs + "nvSpPr",
+                            new XElement(dspNs + "cNvPr", new XAttribute("id", "998"), new XAttribute("name", "List1 extra role"))),
+                        new XElement(dspNs + "spPr",
+                            new XElement(aNs + "xfrm",
+                                new XElement(aNs + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                                new XElement(aNs + "ext", new XAttribute("cx", "1"), new XAttribute("cy", "1"))),
+                            new XElement(aNs + "prstGeom", new XAttribute("prst", "ellipse")))));
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null);
+            }
+        });
+
+        if (mutation == "order")
+        {
+            RewriteList1Data(pptxPath, document =>
+            {
+                var points = document.Descendants(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram") + "pt")
+                    .ToList();
+                points[0].AddBeforeSelf(points[3]);
+            });
+        }
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[4].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(mutation);
+        smartArt.FallbackShapes.Should().NotBeEmpty(mutation);
+    }
+
+    [Fact]
+    public void Reader_List1_MalformedHierarchyPreservesCachedDrawingFallback()
+    {
+        var pptxPath = Path.Combine(_tempDir, "list1-malformed-hierarchy.pptx");
+        File.Copy(FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx"), pptxPath);
+        RewriteList1Data(pptxPath, document =>
+        {
+            var dgmNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+            var nodeIds = document.Descendants(dgmNs + "pt")
+                .Where(point => (string?)point.Attribute("type") != "doc")
+                .Select(point => (string)point.Attribute("modelId")!)
+                .Take(2)
+                .ToArray();
+            document.Root!.Element(dgmNs + "cxnLst")!.Add(new XElement(dgmNs + "cxn",
+                new XAttribute("modelId", "{00000000-0000-0000-0000-000000000138}"),
+                new XAttribute("type", "parOf"),
+                new XAttribute("srcId", nodeIds[0]),
+                new XAttribute("destId", nodeIds[1]),
+                new XAttribute("srcOrd", "0"),
+                new XAttribute("destOrd", "0")));
+        });
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[4].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse("malformed list1 hierarchy");
+        smartArt.FallbackShapes.Should().HaveCount(4);
+    }
+
     private static IEnumerable<SmartArtNode> FlattenNodes(SmartArtNode node)
     {
         yield return node;
@@ -6601,6 +6749,38 @@ public sealed class SmartArtTests : IDisposable
     private static void RewriteSmartArtData(string path, Action<XDocument> mutate)
     {
         const string dataPath = "ppt/diagrams/data1.xml";
+        using var archive = ZipFile.Open(path, ZipArchiveMode.Update);
+        var source = archive.GetEntry(dataPath)!;
+        XDocument document;
+        using (var stream = source.Open())
+            document = XDocument.Load(stream);
+
+        mutate(document);
+        source.Delete();
+        var replacement = archive.CreateEntry(dataPath);
+        using var writer = new StreamWriter(replacement.Open(), new UTF8Encoding(false));
+        document.Save(writer, SaveOptions.DisableFormatting);
+    }
+
+    private static void RewriteList1Drawing(string path, Action<XDocument> mutate)
+    {
+        const string drawingPath = "ppt/diagrams/drawing5.xml";
+        using var archive = ZipFile.Open(path, ZipArchiveMode.Update);
+        var source = archive.GetEntry(drawingPath)!;
+        XDocument document;
+        using (var stream = source.Open())
+            document = XDocument.Load(stream);
+
+        mutate(document);
+        source.Delete();
+        var replacement = archive.CreateEntry(drawingPath);
+        using var writer = new StreamWriter(replacement.Open(), new UTF8Encoding(false));
+        document.Save(writer, SaveOptions.DisableFormatting);
+    }
+
+    private static void RewriteList1Data(string path, Action<XDocument> mutate)
+    {
+        const string dataPath = "ppt/diagrams/data5.xml";
         using var archive = ZipFile.Open(path, ZipArchiveMode.Update);
         var source = archive.GetEntry(dataPath)!;
         XDocument document;

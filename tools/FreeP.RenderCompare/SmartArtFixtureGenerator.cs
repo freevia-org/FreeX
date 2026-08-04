@@ -107,7 +107,8 @@ internal static class SmartArtFixtureGenerator
                 Title     = "SmartArt Live — List",
                 LayoutUid = "urn:microsoft.com/office/officeart/2005/8/layout/list1",
                 Nodes     = [("i1","Requirement 1"), ("i2","Requirement 2"), ("i3","Requirement 3"), ("i4","Requirement 4")],
-                Connections = []
+                Connections = [],
+                HasList1CachedDrawing = true
             },
             new SlideSpec
             {
@@ -745,6 +746,9 @@ internal static class SmartArtFixtureGenerator
         if (spec.HasVerticalArrowListCachedDrawing)
             return BuildVerticalArrowListDrawingXml(spec);
 
+        if (spec.HasList1CachedDrawing)
+            return BuildList1DrawingXml(spec);
+
         if (!spec.HasHierarchy3CachedDrawing)
             return BuildEmptyDrawing();
 
@@ -1009,6 +1013,24 @@ internal static class SmartArtFixtureGenerator
         return BuildDrawingDocument(elements);
     }
 
+    private static XDocument BuildList1DrawingXml(SlideSpec spec)
+    {
+        // These are the exact local coordinates emitted by LayoutList for the
+        // deterministic 8,229,600 x 5,744,800 EMU list frame.
+        const long boxX = 329_184;
+        const long boxWidth = 7_571_232;
+        const long boxHeight = 1_213_589;
+        var boxY = new long[] { 229_792, 1_587_001, 2_944_210, 4_301_419 };
+        var elements = spec.Nodes.Select((node, index) => BuildDspShape(
+            (uint)(120 + index),
+            $"List1 node {index + 1}",
+            node.text,
+            "roundRect",
+            (boxX, boxY[index], boxWidth, boxHeight)));
+
+        return BuildDrawingDocument(elements);
+    }
+
     private static XElement BuildDspShape(
         uint id,
         string name,
@@ -1255,5 +1277,6 @@ internal static class SmartArtFixtureGenerator
         public bool HasGridMatrixCachedDrawing { get; init; }
         public bool HasIncreasingCircleProcessCachedDrawing { get; init; }
         public bool HasVerticalArrowListCachedDrawing { get; init; }
+        public bool HasList1CachedDrawing { get; init; }
     }
 }

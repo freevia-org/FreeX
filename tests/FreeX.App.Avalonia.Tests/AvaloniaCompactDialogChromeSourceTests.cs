@@ -305,12 +305,13 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
 
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
         source.Should().Contain("private static AvaloniaCompactDialogChromeStyle ConditionalFormatDialogChromeStyle => new(FormulaBarFontFamily);");
-        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, ConditionalFormatDialogChromeStyle, width, isDefault);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, style ?? ConditionalFormatDialogChromeStyle, width, isDefault);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(tb, ConditionalFormatDialogChromeStyle);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(cb, ConditionalFormatDialogChromeStyle);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(cb, ConditionalFormatDialogChromeStyle);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(");
-        source.Should().Contain("ConditionalFormatDialogChromeStyle with { ListBoxItemPadding = new Thickness(2, 0) }");
+        source.Should().Contain("var manageDialogChrome = ConditionalFormatDialogChromeStyle with { ButtonHeight = 22 };");
+        source.Should().Contain("manageDialogChrome with { ListBoxItemPadding = new Thickness(2, 0) }");
         source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 10, 0, 0));");
 
         AssertNoLocalButtonChrome(source);

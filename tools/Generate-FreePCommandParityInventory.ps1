@@ -195,7 +195,8 @@ internal static class FreePCommandInventory
                 "docs/parity/freep-media-caption-native-media-sidecar-depth-2026-07-14.md",
                 "docs/parity/freep-media-caption-relid-collision-2026-07-14.md",
                 "docs/parity/freep-media-caption-ttml-sidecar-retention-2026-07-14.md",
-                "docs/parity/freep-media-caption-playback-2026-07-24.md"
+                "docs/parity/freep-media-caption-playback-2026-07-24.md",
+                "docs/parity/freep-media-caption-native-authoring-2026-08-04.md"
             ],
             Verification:
             [
@@ -209,7 +210,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host/SlideShowMediaController.cs",
                 "freep/FreeP.App.Host.Tests/SlideShowTests.cs"
             ],
-            RemainingWork: "Imported embedded media now retains original ppt/media package paths, matching package-snapshot bytes save back to the authored media path, nested caption sidecars keep package entries plus relationship targets after semantic slide edits, colliding native caption relationship ids remap away from writer-owned poster/media ids while retargeting p20media:caption metadata, and the shared planner now resolves TTML/DFXP inherited body/div offsets plus frame/tick clocks before both WPF and Avalonia slideshow playback surface available cues from the active media clock. Broader real-deck PowerPoint-native media/caption baselines, PowerPoint COM baselines, advanced timing/style/accessibility semantics, and real microphone/camera/playback/capture-device behavior remain deferred."),
+            RemainingWork: "Imported embedded media now retains original ppt/media package paths, matching package-snapshot bytes save back to the authored media path, nested caption sidecars keep package entries plus relationship targets after semantic slide edits, colliding native caption relationship ids remap away from writer-owned poster/media ids while retargeting p20media:caption metadata, the shared planner resolves TTML/DFXP inherited body/div offsets plus frame/tick clocks before both WPF and Avalonia slideshow playback surface available cues from the active media clock, and internal caption replacement preserves native VTT/SRT/TTML/DFXP format and relationship identity. Broader real-deck PowerPoint-native media/caption baselines, PowerPoint COM baselines, advanced caption styling/layout/accessibility semantics, and real microphone/camera/playback/capture-device behavior remain deferred."),
         new(
             EvidenceId: "freep.presenter.ink.execution",
             Area: "Presenter ink, laser, and persistence execution",
@@ -1469,6 +1470,28 @@ internal static class FreePCommandInventory
                 "tools/FreeP.RenderCompare/SmartArtFixtureGenerator.cs"
             ],
             RemainingWork: "The deterministic fixture admits only four distinct non-empty flat nodes with four effect-free DownArrow cache shapes in exact shared-planner slot geometry. Richer, malformed, effect-bearing, picture-bearing, reordered, differently spaced, or otherwise unproven verticalArrowList caches remain on cached drawing fallback; exact PowerPoint arrow contours, text fitting, effects, and larger imported variants remain deferred."),
+        new(
+            EvidenceId: "freep.smartart.list1-import-slots",
+            Area: "SmartArt list1 imported four-slot live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume the same shared list1 vertical rounded-box plan through SlideCompositor; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/avalonia-parity-wave138-freep-list1-20260804.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.Core.IO/PptxPackageReader.cs",
+                "freep/FreeP.App.Presentation/SmartArtLayoutEngine.cs",
+                "freep/FreeP.App.Presentation/SlideCompositor.cs",
+                "freep/FreeP.App.Host.Tests/PptxPackageReaderSourceTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtDefaultLiveRendererContractTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SmartArtDefaultLiveRendererContractTests.cs",
+                "tools/FreeP.RenderCompare.Tests/SmartArtFixtureEvidenceTests.cs",
+                "tools/FreeP.RenderCompare/SmartArtFixtureGenerator.cs"
+            ],
+            RemainingWork: "The deterministic list1 fixture admits only four distinct non-empty flat nodes with four effect-free rounded rectangles at the exact shared LayoutList slots. Changed geometry, reordered or mismatched text, malformed hierarchy, missing roles, effects, pictures, richer roles, and other unproven list caches remain on cached drawing fallback; exact PowerPoint spacing, text fitting, effects, and broader list-family import parity remain deferred."),
         new(
             EvidenceId: "freep.smartart.process1-import-node-connectors",
             Area: "SmartArt process1 imported five-stage node-and-connector live layout",

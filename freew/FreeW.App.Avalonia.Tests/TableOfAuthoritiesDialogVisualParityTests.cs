@@ -1,0 +1,92 @@
+using Avalonia;
+using System.Reflection;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.LogicalTree;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
+using FreeW.App.Avalonia;
+
+namespace FreeW.App.Avalonia.Tests;
+
+public sealed class TableOfAuthoritiesDialogVisualParityTests
+{
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+
+    [Fact]
+    public async Task Dialog_uses_Wpf_authority_geometry_and_action_chrome()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = CreateDialog();
+            var category = Field<ComboBox>(dialog, "_category");
+            var passim = Field<CheckBox>(dialog, "_passim");
+            var keepFormatting = Field<CheckBox>(dialog, "_keepFormatting");
+            var leader = Field<ComboBox>(dialog, "_leader");
+            var buttons = dialog.GetLogicalDescendants().OfType<Button>()
+                .Where(button => button is not ToggleButton)
+                .ToArray();
+
+            dialog.Width.Should().Be(380);
+            category.Height.Should().Be(22);
+            category.Margin.Should().Be(new Thickness(0, 0, 0, 8));
+            passim.Height.Should().Be(18);
+            passim.Margin.Should().Be(new Thickness(0, 0, 0, 6));
+            keepFormatting.Height.Should().Be(18);
+            keepFormatting.Margin.Should().Be(new Thickness(0, 0, 0, 8));
+            leader.Height.Should().Be(22);
+            leader.Margin.Should().Be(new Thickness(0, 0, 0, 8));
+            buttons.Select(button => button.Content?.ToString()).Should().Equal("OK", "Cancel");
+            buttons.Should().OnlyContain(button => button.MinWidth == 80 && button.Height == 26);
+            buttons.Should().OnlyContain(button => button.CornerRadius == new CornerRadius(3));
+            buttons.Should().OnlyContain(button => ((ISolidColorBrush)button.Background!).Color == Colors.White);
+            buttons.Single(button => button.IsDefault).IsCancel.Should().BeFalse();
+            buttons.Single(button => button.IsCancel).IsDefault.Should().BeFalse();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Dialog_keeps_shared_planner_state_and_accessible_actions()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = CreateDialog();
+            var passim = Field<CheckBox>(dialog, "_passim");
+            var keepFormatting = Field<CheckBox>(dialog, "_keepFormatting");
+            var category = Field<ComboBox>(dialog, "_category");
+            var leader = Field<ComboBox>(dialog, "_leader");
+            var buttons = dialog.GetLogicalDescendants().OfType<Button>()
+                .Where(button => button is not ToggleButton)
+                .ToArray();
+
+            passim.IsChecked = true;
+            keepFormatting.IsChecked = true;
+            category.SelectedIndex = 2;
+            leader.SelectedIndex = 1;
+
+            Invoke(dialog, "BuildResultForTest").Should().NotBeNull();
+            buttons.Single(button => button.IsDefault).IsDefault.Should().BeTrue();
+            buttons.Single(button => button.IsCancel).IsCancel.Should().BeTrue();
+        }, CancellationToken.None);
+    }
+
+    private static TableOfAuthoritiesDialog CreateDialog() =>
+        (TableOfAuthoritiesDialog)Activator.CreateInstance(
+            typeof(TableOfAuthoritiesDialog),
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            args: [FreeW.Core.Model.ToaOptions.Default],
+            culture: null)!;
+
+    private static T Field<T>(TableOfAuthoritiesDialog dialog, string name) where T : class =>
+        (T)(typeof(TableOfAuthoritiesDialog)
+            .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(dialog)
+            ?? throw new InvalidOperationException($"Missing TableOfAuthoritiesDialog field {name}."));
+
+    private static object? Invoke(TableOfAuthoritiesDialog dialog, string name) =>
+        typeof(TableOfAuthoritiesDialog)
+            .GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(dialog, null);
+}
