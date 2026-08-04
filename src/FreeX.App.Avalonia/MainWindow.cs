@@ -23562,12 +23562,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshShell($"Created {FormatDataTableMode(plan)} Data Table for {tableRange}");
     }
 
-    private async Task<DataTablePlan?> ShowDataTableInputDialogAsync()
+    private async Task<DataTablePlan?> ShowDataTableInputDialogAsync(
+        string? initialRowInputCellText = null,
+        string? initialColumnInputCellText = null)
     {
         DataTablePlan? result = null;
+        var hasInitialDataTableFixture = initialRowInputCellText is not null || initialColumnInputCellText is not null;
+        var dataTableValidationEnabled = !hasInitialDataTableFixture;
+        var dataTableInputWasEdited = false;
         var dialog = new Window
         {
-            Title = "Data Table",
+            Title = UiText.Get("DataTable_Title"),
             Width = 360,
             Height = 210,
             MinWidth = 360,
@@ -23584,21 +23589,30 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var rowInputBox = new TextBox
         {
-            MinWidth = 220,
+            Text = initialRowInputCellText ?? string.Empty,
         };
         ApplyDataToolsTextBoxChrome(rowInputBox);
-        AutomationProperties.SetName(rowInputBox, "Row input cell");
+        AutomationProperties.SetName(rowInputBox, UiText.Get("DataTable_RowInputAutomationName"));
         AutomationProperties.SetAutomationId(rowInputBox, "DataTableRowInputCellBox");
-        AutomationProperties.SetHelpText(rowInputBox, "Cell whose value is substituted from the top row.");
+        AutomationProperties.SetHelpText(rowInputBox, UiText.Get("DataTable_RowInputAutomationHelpText"));
 
         var columnInputBox = new TextBox
         {
-            MinWidth = 220,
+            Text = initialColumnInputCellText ?? string.Empty,
         };
         ApplyDataToolsTextBoxChrome(columnInputBox);
-        AutomationProperties.SetName(columnInputBox, "Column input cell");
+        AutomationProperties.SetName(columnInputBox, UiText.Get("DataTable_ColumnInputAutomationName"));
         AutomationProperties.SetAutomationId(columnInputBox, "DataTableColumnInputCellBox");
-        AutomationProperties.SetHelpText(columnInputBox, "Cell whose value is substituted from the first column.");
+        AutomationProperties.SetHelpText(columnInputBox, UiText.Get("DataTable_ColumnInputAutomationHelpText"));
+
+        // Keep the Avalonia form contract aligned with WPF: labels share each row with the
+        // editable reference and its worksheet-pointing button instead of stacking above it.
+        var rowInputPicker = CreateDialogRangePickerButton(
+            "DataTableRowInputCellPickerButton",
+            UiText.Get("DataTable_RowInputPickerAutomationName"));
+        var columnInputPicker = CreateDialogRangePickerButton(
+            "DataTableColumnInputCellPickerButton",
+            UiText.Get("DataTable_ColumnInputPickerAutomationName"));
 
         var errorText = new TextBlock
         {
@@ -23620,19 +23634,43 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ApplyDataToolsButtonChrome(okButton, 76, isDefault: true);
         AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "DataTableOkButton");
-        AutomationProperties.SetHelpText(okButton, "Create the Data Table.");
+        AutomationProperties.SetHelpText(okButton, UiText.Get("TableLoc_OK"));
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.Get("TableLoc_Cancel"),
             Width = 76,
             MinWidth = 76,
             IsCancel = true,
         };
         ApplyDataToolsButtonChrome(cancelButton, 76);
-        AutomationProperties.SetName(cancelButton, "Cancel");
+        AutomationProperties.SetName(cancelButton, UiText.Get("TableLoc_Cancel"));
         AutomationProperties.SetAutomationId(cancelButton, "DataTableCancelButton");
-        AutomationProperties.SetHelpText(cancelButton, "Close Data Table without creating it.");
+        AutomationProperties.SetHelpText(cancelButton, UiText.Get("TableLoc_Cancel"));
+
+        var fields = new Grid
+        {
+            Margin = new Thickness(0, 0, 0, 10),
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = new GridLength(110) },
+                new ColumnDefinition { Width = GridLength.Star },
+            },
+        };
+        AddDataTableReferenceRow(
+            fields,
+            0,
+            StripDisplayMnemonic(UiText.Get("DataTable_RowInputLabel")),
+            rowInputBox,
+            rowInputPicker);
+        AddDataTableReferenceRow(
+            fields,
+            1,
+            StripDisplayMnemonic(UiText.Get("DataTable_ColumnInputLabel")),
+            columnInputBox,
+            columnInputPicker);
+        AttachDialogRangePicker(dialog, rowInputPicker, rowInputBox, "range.data-table.row-input-cell");
+        AttachDialogRangePicker(dialog, columnInputPicker, columnInputBox, "range.data-table.column-input-cell");
 
         DataTablePlanResult CreatePlan() =>
             DataTablePlanner.CreatePlan(
@@ -23644,6 +23682,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         void RefreshPlanStatus()
         {
+            if (!dataTableValidationEnabled || !dataTableInputWasEdited)
+                return;
+
             var planResult = CreatePlan();
             errorText.Text = planResult.IsReady
                 ? string.Empty
@@ -23668,8 +23709,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         okButton.Click += (_, _) => Accept();
         cancelButton.Click += (_, _) => dialog.Close();
-        rowInputBox.TextChanged += (_, _) => RefreshPlanStatus();
-        columnInputBox.TextChanged += (_, _) => RefreshPlanStatus();
+        void HandleDataTableInputChanged()
+        {
+            if (!dataTableValidationEnabled)
+                return;
+
+            var initialRowText = initialRowInputCellText ?? string.Empty;
+            var initialColumnText = initialColumnInputCellText ?? string.Empty;
+            if (string.Equals(rowInputBox.Text, initialRowText, StringComparison.Ordinal) &&
+                string.Equals(columnInputBox.Text, initialColumnText, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            dataTableInputWasEdited = true;
+            RefreshPlanStatus();
+        }
+
+        rowInputBox.TextChanged += (_, _) => HandleDataTableInputChanged();
+        columnInputBox.TextChanged += (_, _) => HandleDataTableInputChanged();
         dialog.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter)
@@ -23689,35 +23747,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
             Children =
             {
                 okButton,
                 cancelButton,
             },
         };
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
-
-        dialog.Content = new DockPanel
+        dialog.Content = new StackPanel
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(12),
             Children =
             {
+                new StackPanel { Children = { fields, errorText } },
                 buttonRow,
-                new StackPanel
-                {
-                    Spacing = 10,
-                    Children =
-                    {
-                        CreateDataTableField("Row input cell", rowInputBox),
-                        CreateDataTableField("Column input cell", columnInputBox),
-                        errorText,
-                    },
-                },
             },
         };
         dialog.Opened += (_, _) =>
         {
+            if (!hasInitialDataTableFixture)
+                dataTableValidationEnabled = true;
             rowInputBox.Focus();
             rowInputBox.SelectAll();
         };
@@ -23756,16 +23804,31 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         target.SelectAll();
     }
 
-    private static StackPanel CreateDataTableField(string label, Control control) =>
-        new()
+    private static void AddDataTableReferenceRow(
+        Grid fields,
+        int row,
+        string label,
+        TextBox input,
+        Button picker)
+    {
+        fields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var labelBlock = new TextBlock
         {
-            Spacing = 4,
-            Children =
-            {
-                new TextBlock { Text = StripDisplayMnemonic(label), FontSize = 12 },
-                control,
-            },
+            Text = label,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(0, row == 0 ? 0 : 8, 8, 0),
         };
+        var editor = BuildDialogRangePickerRow(input, picker);
+        editor.Margin = new Thickness(0, row == 0 ? 0 : 8, 0, 0);
+        Grid.SetRow(labelBlock, row);
+        Grid.SetColumn(labelBlock, 0);
+        Grid.SetRow(editor, row);
+        Grid.SetColumn(editor, 1);
+        fields.Children.Add(labelBlock);
+        fields.Children.Add(editor);
+    }
 
     private async Task ShowForecastSheetDialogAsync()
     {

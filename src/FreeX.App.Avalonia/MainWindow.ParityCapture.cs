@@ -1479,7 +1479,7 @@ public sealed partial class MainWindow
         ShowWithParitySelectionAsync(
             new CellAddress(_session.ActiveSheet.Id, 1, 1),
             new CellAddress(_session.ActiveSheet.Id, 4, 4),
-            async () => { await ShowDataTableInputDialogAsync(); });
+            async () => { await ShowDataTableInputDialogAsync("E2", "F2"); });
 
     private async Task ShowScenarioManagerParityDialogAsync()
     {
