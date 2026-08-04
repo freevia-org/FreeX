@@ -70,6 +70,26 @@ public sealed class SlideZoomInsertionPlannerTests
     }
 
     [Fact]
+    public void Existing_slide_zoom_can_be_retargeted_and_undone()
+    {
+        var presentation = BuildPresentation();
+        presentation.Slides.Add(new Slide { Id = "slide-3", NumericId = 258, Title = "Slide 3" });
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = session.InsertSlideZoom("slide-2");
+
+        session.SetSlideZoomTarget(shape.Id, "slide-3").Should().BeTrue();
+        shape.PreservedObject!.ZoomTargetSlideNumericId.Should().Be(258);
+        shape.PreservedObject.RawXml.Should().Contain("sldId=\"258\"");
+        shape.AlternativeText.Should().Contain("Slide 3");
+
+        session.Undo();
+        shape.PreservedObject.ZoomTargetSlideNumericId.Should().Be(257);
+        shape.PreservedObject.RawXml.Should().Contain("sldId=\"257\"");
+        session.Redo();
+        shape.PreservedObject.ZoomTargetSlideNumericId.Should().Be(258);
+    }
+
+    [Fact]
     public void Rejects_current_slide_as_zoom_target()
     {
         var presentation = BuildPresentation();

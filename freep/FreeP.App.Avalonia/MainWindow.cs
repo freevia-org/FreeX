@@ -2513,6 +2513,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => _ = OpenSectionZoomDialogAsync()));
         r.Register(SummaryZoomInsertionPlanner.CommandId,
             new ActionRibbonCommand(() => _ = OpenSummaryZoomDialogAsync()));
+        r.Register(ZoomTargetPlanner.CommandId,
+            new ActionRibbonCommand(() => _ = OpenZoomTargetDialogAsync()));
         r.Register(ZoomObjectPropertiesPlanner.CommandId,
             new ActionRibbonCommand(() => _ = OpenZoomObjectPropertiesDialogAsync()));
         r.Register(ZoomCoverImagePlanner.CommandId,
@@ -4286,6 +4288,52 @@ public sealed partial class MainWindow : Window
         {
             var shape = Editor.InsertSummaryZoom(dialog.SelectedTargetSectionIds);
             AttachSummaryZoomPreviews(shape);
+        }
+    }
+
+    internal async void OpenZoomTargetDialog() => await OpenZoomTargetDialogAsync();
+
+    internal async Task OpenZoomTargetDialogAsync()
+    {
+        var selectedShapeId = GetSingleSelectedShapeId();
+        var shape = selectedShapeId is uint id && Editor.CurrentSlide is { } slide
+            ? ShapeTreeLookup.Find(slide, id)
+            : null;
+        var info = shape?.PreservedObject;
+        if (selectedShapeId is not uint zoomShapeId
+            || shape?.Kind != SlideShapeKind.Zoom
+            || info?.ObjectKind != PreservedObjectKind.Zoom
+            || info.SummaryZoomTargets.Count != 0
+            || !IsVisible)
+            return;
+
+        if (info.ZoomTargetSlideNumericId is uint targetNumericId)
+        {
+            var options = SlideZoomInsertionPlanner.BuildTargetOptions(
+                Editor.Presentation.Slides, Editor.CurrentSlideIndex);
+            var currentId = Editor.Presentation.Slides.FirstOrDefault(slide => slide.NumericId == targetNumericId)?.Id;
+            var dialog = new SlideZoomDialog(options, ZoomTargetPlanner.DialogTitle, currentId);
+            var result = await dialog.ShowDialog<bool?>(this);
+            if (result == true && dialog.SelectedTargetSlideId is { Length: > 0 } targetSlideId
+                && Editor.SetSlideZoomTarget(zoomShapeId, targetSlideId))
+            {
+                var targetIndex = Editor.Presentation.Slides.FindIndex(slide =>
+                    string.Equals(slide.Id, targetSlideId, StringComparison.OrdinalIgnoreCase));
+                AttachZoomPreview(shape, targetIndex);
+            }
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(info.ZoomTargetSectionId))
+        {
+            var options = SectionZoomInsertionPlanner.BuildTargetOptions(Editor.Presentation, Editor.CurrentSlideIndex);
+            var dialog = new SectionZoomDialog(options, ZoomTargetPlanner.DialogTitle, info.ZoomTargetSectionId);
+            var result = await dialog.ShowDialog<bool?>(this);
+            if (result == true && dialog.SelectedTargetSectionId is { Length: > 0 } targetSectionId
+                && Editor.SetSectionZoomTarget(zoomShapeId, targetSectionId)
+                && SummaryZoomPreviewPlanner.TryResolveTargetSlideIndex(
+                    Editor.Presentation, targetSectionId, out var targetIndex))
+                AttachZoomPreview(shape, targetIndex);
         }
     }
 
