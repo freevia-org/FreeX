@@ -1882,7 +1882,8 @@ public sealed class SlideShowPlaybackPlannerTests
     [InlineData(AnimationPreset.Shrink, 0.5, 0.5)]
     [InlineData(AnimationPreset.Shrink, 4.0, 4.0)]
     [InlineData(AnimationPreset.Grow, 1.35, 1.35)]
-    public void PlanShapeAnimation_UsesSharedGrowShrinkAmountScale(
+    [InlineData(AnimationPreset.Pulse, 1.5, 1.5)]
+    public void PlanShapeAnimation_UsesSharedAnimationAmountScale(
         AnimationPreset preset,
         double scale,
         double expectedPeakScale)
