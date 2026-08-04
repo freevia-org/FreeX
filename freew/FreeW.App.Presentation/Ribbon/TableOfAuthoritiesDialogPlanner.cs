@@ -30,6 +30,31 @@ public static class TableOfAuthoritiesDialogPlanner
     public static TableOfAuthoritiesDialogState DefaultState { get; } =
         BuildInitialState(ToaOptions.Default);
 
+    /// <summary>
+    /// Deterministic non-default state used by the paired dialog evidence harness. Keeping this
+    /// state in the shared planner prevents WPF and Avalonia from rendering different populated
+    /// examples while exercising the same dialog contract.
+    /// </summary>
+    public static TableOfAuthoritiesDialogState RepresentativePopulatedState { get; } =
+        new(
+            UsePassim: true,
+            KeepOriginalFormatting: true,
+            CategoryFilter: CitationCategory.Statutes,
+            TabLeader: ToaTabLeader.Dashes);
+
+    /// <summary>
+    /// Returns the shared options seed for a dialog evidence state. The validation-error route has
+    /// no invalid input in this dialog (only categorical choices and checkboxes), so it intentionally
+    /// retains the default state rather than inventing an error that the product cannot produce.
+    /// </summary>
+    public static ToaOptions BuildEvidenceOptions(string state)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(state);
+        return BuildOptions(state.Equals("populated", StringComparison.OrdinalIgnoreCase)
+            ? RepresentativePopulatedState
+            : DefaultState);
+    }
+
     public static IReadOnlyList<TableOfAuthoritiesCategoryChoice> BuildCategoryChoices()
     {
         var choices = new List<TableOfAuthoritiesCategoryChoice>

@@ -9,6 +9,7 @@ using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using LinqExpression = System.Linq.Expressions.Expression;
 
@@ -249,6 +250,8 @@ internal static class WpfDialogRouteFactory
         }
         try
         {
+            if (type == typeof(ToaOptions))
+                return TableOfAuthoritiesDialogPlanner.BuildEvidenceOptions(state);
             if (typeof(Window).IsAssignableFrom(type)) return owner;
             if (type == typeof(string)) return state == "populated" ? "Sample text" : string.Empty;
             if (type == typeof(FreeWOptions)) return new FreeWOptions();

@@ -428,6 +428,8 @@ internal static class AvaloniaDialogRouteFactory
         }
         try
         {
+        if (type == typeof(ToaOptions))
+            return TableOfAuthoritiesDialogPlanner.BuildEvidenceOptions(state);
         if (type == typeof(string)) return state == "populated" ? "Sample text" : string.Empty;
         if (type == typeof(FreeWOptions)) return new FreeWOptions();
         if (type == typeof(PageSettings)) return new PageSettings();

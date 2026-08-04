@@ -58,7 +58,26 @@ public sealed class TableOfAuthoritiesDialogPlannerTests
 
         TableOfAuthoritiesDialogPlanner.SelectTabLeaderIndex(
                 [new TableOfAuthoritiesTabLeaderChoice(ToaTabLeader.Dots, "Dots")],
-                ToaTabLeader.Underline)
+            ToaTabLeader.Underline)
             .Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("initial", false, false, null, ToaTabLeader.Dots)]
+    [InlineData("populated", true, true, CitationCategory.Statutes, ToaTabLeader.Dashes)]
+    [InlineData("validation-error", false, false, null, ToaTabLeader.Dots)]
+    public void BuildEvidenceOptions_uses_one_state_contract_for_both_hosts(
+        string state,
+        bool usePassim,
+        bool keepOriginalFormatting,
+        CitationCategory? categoryFilter,
+        ToaTabLeader tabLeader)
+    {
+        var options = TableOfAuthoritiesDialogPlanner.BuildEvidenceOptions(state);
+
+        options.UsePassim.Should().Be(usePassim);
+        options.KeepOriginalFormatting.Should().Be(keepOriginalFormatting);
+        options.CategoryFilter.Should().Be(categoryFilter);
+        options.TabLeader.Should().Be(tabLeader);
     }
 }
