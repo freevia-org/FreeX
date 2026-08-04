@@ -199,6 +199,9 @@ public sealed class MediaInfo
     /// <summary>True = video, false = audio.</summary>
     public bool IsVideo { get; set; }
 
+    /// <summary>Authored playback volume as a percentage from 0 (muted) to 100.</summary>
+    public int VolumePercent { get; set; } = 80;
+
     /// <summary>PowerPoint's authored start behavior; click sequence is the default.</summary>
     public MediaPlaybackStartMode PlaybackStartMode { get; set; } = MediaPlaybackStartMode.InClickSequence;
 

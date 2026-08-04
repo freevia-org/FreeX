@@ -165,6 +165,7 @@ public static class SlideCloner
         var copy = new MediaInfo
         {
             IsVideo = source.IsVideo,
+            VolumePercent = source.VolumePercent,
             PlaybackStartMode = source.PlaybackStartMode,
             Loop = source.Loop,
             Bytes = source.Bytes.ToArray(),
