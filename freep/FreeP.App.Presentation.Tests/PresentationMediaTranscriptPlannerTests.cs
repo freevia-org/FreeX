@@ -112,10 +112,10 @@ public sealed class PresentationMediaTranscriptPlannerTests
 
                             cue-1
                             00:00.000 --> 00:01.500 align:start position:0%
-                            <v Speaker>Revenue &amp; margin grew</v>
+                            <v Speaker><lang en-GB><c.speaker>Revenue &amp; margin grew</c></lang></v>
 
                             00:02.000 --> 00:03.250
-                            <i>Next quarter</i> stays on plan.
+                            <v.Speaker><lang.en-GB><c.speaker><i>Next quarter</i></c></lang></v> stays on plan.
                             """)
                     },
                     new MediaCaptionTrackInfo
@@ -164,7 +164,12 @@ public sealed class PresentationMediaTranscriptPlannerTests
         webVtt.Cues[0].StartTime.Should().Be(TimeSpan.Zero);
         webVtt.Cues[0].EndTime.Should().Be(TimeSpan.FromMilliseconds(1500));
         webVtt.Cues[0].Spans.Should().ContainSingle(span => span.Text == "Revenue & margin grew" && !span.Bold && !span.Italic);
+        webVtt.Cues[0].Spans[0].Voice.Should().Be("Speaker");
+        webVtt.Cues[0].Spans[0].Language.Should().Be("en-GB");
+        webVtt.Cues[0].Spans[0].Classes.Should().Equal("speaker");
         webVtt.Cues[1].Spans.Should().Contain(span => span.Text == "Next quarter" && span.Italic);
+        webVtt.Cues[1].Spans.First(span => span.Text == "Next quarter").Voice.Should().Be("Speaker");
+        webVtt.Cues[1].Spans.First(span => span.Text == "Next quarter").Language.Should().Be("en-GB");
         webVtt.Cues[1].TimeRangeText.Should().Be("0:02.000 - 0:03.250");
 
         var srt = plan.Tracks[1];
