@@ -190,13 +190,19 @@ public sealed class TablePropertiesDialogPlannerTests
         document.Blocks.Clear();
         var table = Table.Create(2, 2);
         table.ColumnWidthsPt.AddRange([90, 110]);
+        var floatingPosition = new TableFloatingPosition(
+            HorizontalAnchor: TableHorizontalAnchor.Page,
+            VerticalAnchor: TableVerticalAnchor.Margin,
+            HorizontalOffsetPt: -12);
+        table.FloatingPosition = floatingPosition;
+        table.FloatingTableAllowsOverlap = false;
         document.Blocks.Add(table);
         var row = table.Rows[0];
         var cell = row.Cells[1];
         var values = new TablePropertiesValues(
             PreferredWidthPt: 300,
             Alignment: TableAlignment.Right,
-            TextWrapping: true,
+            TextWrapping: false,
             IndentFromLeftPt: 12,
             DefaultCellMargins: new TableCellMargins(0, 6, 0, 6),
             CellSpacingPt: 2,
@@ -213,6 +219,8 @@ public sealed class TablePropertiesDialogPlannerTests
         var bus = new DocumentCommandBus(new CommandContext(document));
 
         bus.Execute(new ApplyTablePropertiesCommand(0, 0, 1, values));
+        table.FloatingPosition.Should().BeNull();
+        table.FloatingTableAllowsOverlap.Should().BeNull();
         cell.WidthPt.Should().Be(140);
         cell.WrapText.Should().BeFalse();
         cell.FitText.Should().BeTrue();
@@ -221,7 +229,8 @@ public sealed class TablePropertiesDialogPlannerTests
         bus.Undo().Should().BeTrue();
         table.PreferredWidthPt.Should().BeNull();
         table.Alignment.Should().Be(TableAlignment.Left);
-        table.TextWrapping.Should().BeFalse();
+        table.FloatingPosition.Should().Be(floatingPosition);
+        table.FloatingTableAllowsOverlap.Should().BeFalse();
         table.ColumnWidthsPt.Should().Equal(90, 110);
         table.Rows.SelectMany(candidate => candidate.Cells).Should().OnlyContain(candidate => candidate.WidthPt == null);
         row.HeightPt.Should().BeNull();
@@ -233,6 +242,8 @@ public sealed class TablePropertiesDialogPlannerTests
 
         bus.Redo().Should().BeTrue();
         table.PreferredWidthPt.Should().Be(300);
+        table.FloatingPosition.Should().BeNull();
+        table.FloatingTableAllowsOverlap.Should().BeNull();
         cell.WidthPt.Should().Be(140);
         cell.WrapText.Should().BeFalse();
         cell.FitText.Should().BeTrue();

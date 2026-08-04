@@ -816,7 +816,16 @@ public static class DocumentCompare
             BlockContentControl = source.BlockContentControl,
             BlockCustomXml = source.BlockCustomXml,
             Formatting = source.Formatting,
-            Borders = source.Borders
+            TableStyleId = source.TableStyleId,
+            Borders = source.Borders,
+            PreferredWidthPt = source.PreferredWidthPt,
+            Alignment = source.Alignment,
+            IndentFromLeftPt = source.IndentFromLeftPt,
+            FloatingPosition = source.FloatingPosition,
+            FloatingTableAllowsOverlap = source.FloatingTableAllowsOverlap,
+            DefaultCellMargins = source.DefaultCellMargins,
+            CellSpacingPt = source.CellSpacingPt,
+            AutoFit = source.AutoFit
         };
         clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
         foreach (var row in source.Rows)

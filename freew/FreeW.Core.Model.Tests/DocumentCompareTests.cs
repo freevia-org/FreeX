@@ -48,6 +48,37 @@ public class DocumentCompareTests
     }
 
     [Fact]
+    public void InsertedFloatingTable_PreservesCompleteTableShell()
+    {
+        var original = new TextDocument();
+        var revised = new TextDocument();
+        var table = Table.Create(1, 1);
+        table.TableStyleId = "TableGrid";
+        table.PreferredWidthPt = 240;
+        table.Alignment = TableAlignment.Right;
+        table.IndentFromLeftPt = 12;
+        table.FloatingPosition = new TableFloatingPosition(
+            HorizontalAnchor: TableHorizontalAnchor.Page,
+            VerticalAnchor: TableVerticalAnchor.Margin,
+            HorizontalAlignment: TableHorizontalPositionAlignment.Outside,
+            VerticalOffsetPt: 18);
+        table.FloatingTableAllowsOverlap = false;
+        table.CellSpacingPt = 2;
+        revised.Blocks.Add(table);
+
+        var cloned = DocumentCompare.Compare(original, revised, Author, DateXml)
+            .Blocks.OfType<Table>().Single();
+
+        cloned.TableStyleId.Should().Be("TableGrid");
+        cloned.PreferredWidthPt.Should().Be(240);
+        cloned.Alignment.Should().Be(TableAlignment.Right);
+        cloned.IndentFromLeftPt.Should().Be(12);
+        cloned.FloatingPosition.Should().Be(table.FloatingPosition);
+        cloned.FloatingTableAllowsOverlap.Should().BeFalse();
+        cloned.CellSpacingPt.Should().Be(2);
+    }
+
+    [Fact]
     public void IdenticalDocuments_PreserveSharedBlockContentControlRegion()
     {
         var control = BlockContentControl.BibliographyRegion();

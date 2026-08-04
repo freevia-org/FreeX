@@ -193,7 +193,8 @@ public static class TableLayoutOperations
             PreferredWidthPt = source.PreferredWidthPt,
             Alignment = source.Alignment,
             IndentFromLeftPt = source.IndentFromLeftPt,
-            TextWrapping = source.TextWrapping,
+            FloatingPosition = source.FloatingPosition,
+            FloatingTableAllowsOverlap = source.FloatingTableAllowsOverlap,
             DefaultCellMargins = source.DefaultCellMargins,
             CellSpacingPt = source.CellSpacingPt,
             AutoFit = source.AutoFit

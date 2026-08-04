@@ -77,7 +77,8 @@ public sealed class ApplyTablePropertiesCommand(
         double? PreferredWidthPt,
         TableAlignment Alignment,
         double? IndentFromLeftPt,
-        bool TextWrapping,
+        TableFloatingPosition? FloatingPosition,
+        bool? FloatingTableAllowsOverlap,
         TableCellMargins? DefaultCellMargins,
         double? CellSpacingPt,
         TableFormatting Formatting,
@@ -89,7 +90,8 @@ public sealed class ApplyTablePropertiesCommand(
             table.PreferredWidthPt,
             table.Alignment,
             table.IndentFromLeftPt,
-            table.TextWrapping,
+            table.FloatingPosition,
+            table.FloatingTableAllowsOverlap,
             table.DefaultCellMargins,
             table.CellSpacingPt,
             table.Formatting,
@@ -112,7 +114,8 @@ public sealed class ApplyTablePropertiesCommand(
             table.PreferredWidthPt = PreferredWidthPt;
             table.Alignment = Alignment;
             table.IndentFromLeftPt = IndentFromLeftPt;
-            table.TextWrapping = TextWrapping;
+            table.FloatingPosition = FloatingPosition;
+            table.FloatingTableAllowsOverlap = FloatingTableAllowsOverlap;
             table.DefaultCellMargins = DefaultCellMargins;
             table.CellSpacingPt = CellSpacingPt;
             table.Formatting = Formatting;

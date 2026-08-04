@@ -2662,6 +2662,64 @@ public enum AutoFitMode
     Window
 }
 
+public enum TableHorizontalAnchor
+{
+    Text,
+    Margin,
+    Page
+}
+
+public enum TableVerticalAnchor
+{
+    Text,
+    Margin,
+    Page
+}
+
+public enum TableHorizontalPositionAlignment
+{
+    Left,
+    Center,
+    Right,
+    Inside,
+    Outside
+}
+
+public enum TableVerticalPositionAlignment
+{
+    Inline,
+    Top,
+    Center,
+    Bottom,
+    Inside,
+    Outside
+}
+
+/// <summary>
+/// Complete Word floating-table position payload (<c>w:tblpPr</c>). Nullable fields preserve absence;
+/// offsets and alignment specifications can both survive a non-canonical imported package.
+/// </summary>
+public sealed record TableFloatingPosition(
+    TableHorizontalAnchor? HorizontalAnchor = null,
+    TableVerticalAnchor? VerticalAnchor = null,
+    double? HorizontalOffsetPt = null,
+    double? VerticalOffsetPt = null,
+    TableHorizontalPositionAlignment? HorizontalAlignment = null,
+    TableVerticalPositionAlignment? VerticalAlignment = null,
+    double? LeftFromTextPt = null,
+    double? RightFromTextPt = null,
+    double? TopFromTextPt = null,
+    double? BottomFromTextPt = null)
+{
+    /// <summary>The minimal payload historically emitted by FreeW for Text wrapping: Around.</summary>
+    public static TableFloatingPosition WordCompatibleDefault { get; } = new(
+        HorizontalAnchor: TableHorizontalAnchor.Text,
+        VerticalAnchor: TableVerticalAnchor.Text,
+        VerticalOffsetPt: 0.05,
+        LeftFromTextPt: 9,
+        RightFromTextPt: 9);
+}
+
 /// <summary>A table block: rows of cells, each cell holding paragraphs (w:tbl / w:tr / w:tc).</summary>
 public sealed class Table : Block
 {
@@ -2707,11 +2765,34 @@ public sealed class Table : Block
     public double? IndentFromLeftPt { get; set; }
 
     /// <summary>
-    /// True when the table floats with text wrapping around it (Word's "Text wrapping: Around"). Emits a
-    /// minimal <c>tbl/tblPr/w:tblpPr</c> floating-position element so Word treats the table as floating.
-    /// False (the default) keeps the table inline, so existing tables are unaffected.
+    /// Full authored floating position, or null for an inline table.
     /// </summary>
-    public bool TextWrapping { get; set; }
+    public TableFloatingPosition? FloatingPosition { get; set; }
+
+    /// <summary>
+    /// Whether this floating table may overlap another floating table (<c>w:tblOverlap</c>). Null preserves
+    /// the Word default/absence; true maps to <c>overlap</c> and false maps to <c>never</c>.
+    /// </summary>
+    public bool? FloatingTableAllowsOverlap { get; set; }
+
+    /// <summary>
+    /// Compatibility facade for Word's "Text wrapping: Around" control. Enabling creates the historical
+    /// FreeW position only when no authored position exists; disabling clears floating placement.
+    /// </summary>
+    public bool TextWrapping
+    {
+        get => FloatingPosition is not null;
+        set
+        {
+            if (value)
+                FloatingPosition ??= TableFloatingPosition.WordCompatibleDefault;
+            else
+            {
+                FloatingPosition = null;
+                FloatingTableAllowsOverlap = null;
+            }
+        }
+    }
 
     /// <summary>
     /// Default inside margins (cell padding) applied to every cell that has no <see cref="TableCell.Margins"/>
