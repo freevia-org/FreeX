@@ -3274,7 +3274,7 @@ public static class PptxPackageReader
 
         var nodes = FlattenSmartArtNodes(data);
         var shapes = smart.FallbackShapes;
-        if (nodes.Count != 4 || shapes.Count != 4)
+        if (nodes.Count is < 1 or > 4 || shapes.Count != nodes.Count)
             return false;
 
         if (smart.FallbackShapes.Any(HasUnsupportedSmartArtShapeEffects)
@@ -3299,23 +3299,41 @@ public static class PptxPackageReader
                 || shape.ExtentCyEmu != cellSize))
             return false;
 
+        if (shapes.Count == 1)
+            return true;
+
         var horizontalStep = shapes[1].OffsetXEmu - shapes[0].OffsetXEmu;
-        var verticalStep = shapes[2].OffsetYEmu - shapes[0].OffsetYEmu;
         if (shapes[0].OffsetYEmu != shapes[1].OffsetYEmu
-            || shapes[2].OffsetXEmu != shapes[0].OffsetXEmu
-            || shapes[3].OffsetXEmu != shapes[1].OffsetXEmu
-            || shapes[3].OffsetYEmu != shapes[2].OffsetYEmu
-            || horizontalStep != verticalStep
             || horizontalStep <= cellSize)
+            return false;
+
+        if (shapes.Count == 2)
+            return HasExpectedGridGap(horizontalStep, cellSize);
+
+        var verticalStep = shapes[2].OffsetYEmu - shapes[0].OffsetYEmu;
+        if (shapes[2].OffsetXEmu != shapes[0].OffsetXEmu
+            || verticalStep != horizontalStep)
+            return false;
+
+        if (shapes.Count == 3)
+            return HasExpectedGridGap(horizontalStep, cellSize);
+
+        if (shapes[3].OffsetXEmu != shapes[1].OffsetXEmu
+            || shapes[3].OffsetYEmu != shapes[2].OffsetYEmu)
             return false;
 
         // The shared Grid Matrix plan uses a centered square with a deterministic
         // 2.5% gap. Recompute that gap from the cache so arbitrary four-cell grids
         // do not get mistaken for the proven native grammar.
-        var gap = horizontalStep - cellSize;
-        var gridSize = 2 * cellSize + gap;
-        var expectedGap = (long)(gridSize * 0.025);
-        return Math.Abs(gap - expectedGap) <= 1;
+        return HasExpectedGridGap(horizontalStep, cellSize);
+
+        static bool HasExpectedGridGap(long step, long cellSize)
+        {
+            var gap = step - cellSize;
+            var gridSize = 2 * cellSize + gap;
+            var expectedGap = (long)(gridSize * 0.025);
+            return Math.Abs(gap - expectedGap) <= 1;
+        }
     }
 
     private static bool CanUseIncreasingCircleProcessCache(SmartArtShape smart, SmartArtData data)
