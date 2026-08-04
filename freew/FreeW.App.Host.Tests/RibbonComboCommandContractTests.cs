@@ -45,7 +45,15 @@ public sealed class RibbonComboCommandContractTests
     public void LayoutAndHeaderFooterCombos_ConsumeSharedSelectedValueContract()
     {
         var view = BuildView();
-        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        var stateStore = new RibbonStateStore();
+        var registry = FreeWRibbonCommands.Build(view, stateStore);
+
+        stateStore.GetState("freew.indent-left").Value.Should().Be("0");
+        stateStore.GetState("freew.indent-right").Value.Should().Be("0");
+        stateStore.GetState("freew.space-before").Value.Should().Be("0");
+        stateStore.GetState("freew.space-after").Value.Should().Be("8");
+        stateStore.GetState("freew.hf-header-from-top").Value.Should().Be("0");
+        stateStore.GetState("freew.hf-footer-from-bottom").Value.Should().Be("0");
 
         Execute(view, registry, "freew.indent-left", "24");
         Execute(view, registry, "freew.indent-right", "18");
@@ -61,6 +69,12 @@ public sealed class RibbonComboCommandContractTests
         formatting.SpaceAfterPt.Should().Be(10);
         view.Model.Page.HeaderDistancePt.Should().Be(36);
         view.Model.Page.FooterDistancePt.Should().Be(54);
+        stateStore.GetState("freew.indent-left").Value.Should().Be("24");
+        stateStore.GetState("freew.indent-right").Value.Should().Be("18");
+        stateStore.GetState("freew.space-before").Value.Should().Be("6");
+        stateStore.GetState("freew.space-after").Value.Should().Be("10");
+        stateStore.GetState("freew.hf-header-from-top").Value.Should().Be("36");
+        stateStore.GetState("freew.hf-footer-from-bottom").Value.Should().Be("54");
     }
 
     [StaFact]

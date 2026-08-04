@@ -1951,6 +1951,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.merge-envelopes", new EnvelopesCommand(editor));
         registry.Register("freew.merge-labels", new LabelsCommand(editor, mergeSession));
 
+        RefreshStatefulCommands();
         return registry;
     }
 
