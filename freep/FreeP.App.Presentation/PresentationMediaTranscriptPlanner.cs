@@ -51,6 +51,10 @@ public sealed record PresentationMediaTranscriptCueSpan(
     public string? Language { get; init; }
 
     public IReadOnlyList<string> Classes { get; init; } = [];
+
+    public string? ForegroundColorHex { get; init; }
+
+    public string? BackgroundColorHex { get; init; }
 }
 
 public sealed record PresentationMediaTranscriptCueDescriptor(
@@ -106,6 +110,8 @@ public sealed record PresentationMediaTranscriptTrackDescriptor(
     string StatusMessage,
     IReadOnlyList<PresentationMediaTranscriptCueDescriptor> Cues)
 {
+    public string? WebVttStyleSheet { get; init; }
+
     public int CueCount => Cues.Count;
 
     public bool HasTranscript => Status == PresentationMediaTranscriptTrackStatus.Available && Cues.Count > 0;
@@ -123,7 +129,8 @@ public sealed record PresentationMediaCaptionTrackAuthoringDescriptor(
     string? Language,
     string? Source,
     string? TranscriptText,
-    IReadOnlyList<PresentationMediaTranscriptCueDescriptor>? Cues = null);
+    IReadOnlyList<PresentationMediaTranscriptCueDescriptor>? Cues = null,
+    string? WebVttStyleSheet = null);
 
 public sealed record PresentationMediaCaptionTrackMutationResult(
     bool Succeeded,
@@ -229,6 +236,13 @@ public static class PresentationMediaTranscriptPlanner
         Srt,
         Ttml
     }
+
+    private sealed record WebVttCueStyle(
+        string? ForegroundColorHex,
+        string? BackgroundColorHex,
+        bool Bold,
+        bool Italic,
+        bool Underline);
 
     private static readonly Regex TagPattern = new("<[^>]+>", RegexOptions.Compiled);
     private static readonly Regex WhitespacePattern = new(@"\s+", RegexOptions.Compiled);
@@ -786,7 +800,13 @@ public static class PresentationMediaTranscriptPlanner
         {
             RelationshipId = existingTrack?.RelationshipId ?? string.Empty,
             Source = source,
-            Bytes = BuildCaptionBytes(cues, format),
+            Bytes = BuildCaptionBytes(
+                cues,
+                format,
+                descriptor.WebVttStyleSheet
+                    ?? ExtractWebVttStyleSheet(existingTrack is { IsExternal: false }
+                        ? DecodeUtf8(existingTrack.Bytes)
+                        : string.Empty)),
             ContentType = GetCaptionContentType(source, format),
             Language = NormalizeText(descriptor.Language) ?? NormalizeText(existingTrack?.Language) ?? string.Empty,
             Label = NormalizeText(descriptor.Label) ?? NormalizeText(existingTrack?.Label) ?? InferTrackLabel(source, trackIndex),
@@ -898,9 +918,16 @@ public static class PresentationMediaTranscriptPlanner
         return true;
     }
 
-    private static byte[] BuildWebVttBytes(IReadOnlyList<PresentationMediaTranscriptCueDescriptor> cues)
+    private static byte[] BuildWebVttBytes(
+        IReadOnlyList<PresentationMediaTranscriptCueDescriptor> cues,
+        string? styleSheet = null)
     {
         var builder = new StringBuilder("WEBVTT\r\n\r\n");
+        if (!string.IsNullOrWhiteSpace(styleSheet))
+        {
+            builder.Append(styleSheet.Trim()).Append("\r\n\r\n");
+        }
+
         foreach (var cue in cues)
         {
             builder
@@ -947,10 +974,11 @@ public static class PresentationMediaTranscriptPlanner
 
     private static byte[] BuildCaptionBytes(
         IReadOnlyList<PresentationMediaTranscriptCueDescriptor> cues,
-        CaptionTrackFormat format)
+        CaptionTrackFormat format,
+        string? webVttStyleSheet = null)
         => format switch
         {
-            CaptionTrackFormat.WebVtt => BuildWebVttBytes(cues),
+            CaptionTrackFormat.WebVtt => BuildWebVttBytes(cues, webVttStyleSheet),
             CaptionTrackFormat.Srt => BuildSrtBytes(cues),
             CaptionTrackFormat.Ttml => BuildTtmlBytes(cues),
             _ => BuildWebVttBytes(cues)
@@ -1138,6 +1166,7 @@ public static class PresentationMediaTranscriptPlanner
         var language = NormalizeText(track.Language) ?? string.Empty;
         var source = NormalizeText(track.Source) ?? string.Empty;
         var contentType = NormalizeText(track.ContentType) ?? string.Empty;
+        string? webVttStyleSheet = null;
 
         if (track.IsExternal)
         {
@@ -1157,6 +1186,9 @@ public static class PresentationMediaTranscriptPlanner
 
         var text = DecodeUtf8(track.Bytes);
         var format = DetectFormat(track, text);
+        webVttStyleSheet = format == CaptionTrackFormat.WebVtt
+            ? ExtractWebVttStyleSheet(text)
+            : null;
         var cues = format switch
         {
             CaptionTrackFormat.WebVtt => ParseWebVtt(text),
@@ -1193,7 +1225,10 @@ public static class PresentationMediaTranscriptPlanner
                 contentType,
                 status,
                 statusMessage,
-                cues);
+                cues)
+            {
+                WebVttStyleSheet = webVttStyleSheet
+            };
     }
 
     private static CaptionTrackFormat DetectFormat(MediaCaptionTrackInfo track, string text)
@@ -1244,6 +1279,7 @@ public static class PresentationMediaTranscriptPlanner
     private static IReadOnlyList<PresentationMediaTranscriptCueDescriptor> ParseWebVtt(string text)
     {
         var cues = new List<PresentationMediaTranscriptCueDescriptor>();
+        var styles = ParseWebVttStyles(text);
 
         foreach (var block in EnumerateBlocks(text))
         {
@@ -1286,7 +1322,7 @@ public static class PresentationMediaTranscriptPlanner
 
             cues.Add(new PresentationMediaTranscriptCueDescriptor(start, end, cueText)
             {
-                Spans = ParseWebVttSpans(cueLines),
+                Spans = ParseWebVttSpans(cueLines, styles),
                 WebVttMarkup = string.Join(" ", cueLines),
                 PositionPercent = positionPercent,
                 LinePercent = linePercent,
@@ -1298,6 +1334,97 @@ public static class PresentationMediaTranscriptPlanner
         }
 
         return cues;
+    }
+
+    private static string? ExtractWebVttStyleSheet(string text)
+    {
+        var styleBlocks = EnumerateBlocks(text)
+            .Where(block => block.Count > 0
+                && block[0].Trim().StartsWith("STYLE", StringComparison.OrdinalIgnoreCase))
+            .Select(block => string.Join("\r\n", block))
+            .ToArray();
+        return styleBlocks.Length == 0 ? null : string.Join("\r\n\r\n", styleBlocks);
+    }
+
+    private static IReadOnlyDictionary<string, WebVttCueStyle> ParseWebVttStyles(string text)
+    {
+        var styles = new Dictionary<string, WebVttCueStyle>(StringComparer.OrdinalIgnoreCase);
+        var styleSheet = ExtractWebVttStyleSheet(text);
+        if (string.IsNullOrWhiteSpace(styleSheet))
+        {
+            return styles;
+        }
+
+        foreach (Match rule in Regex.Matches(
+                     styleSheet,
+                     @"::cue\(\.(?<class>[A-Za-z0-9_-]+)\)\s*\{(?<body>[^}]*)\}",
+                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            var style = new WebVttCueStyle(null, null, false, false, false);
+            foreach (var declaration in rule.Groups["body"].Value.Split(';'))
+            {
+                var separator = declaration.IndexOf(':');
+                if (separator <= 0)
+                {
+                    continue;
+                }
+
+                var property = declaration[..separator].Trim().ToLowerInvariant();
+                var value = declaration[(separator + 1)..].Trim();
+                style = property switch
+                {
+                    "color" => style with { ForegroundColorHex = NormalizeWebVttColor(value) ?? style.ForegroundColorHex },
+                    "background-color" => style with { BackgroundColorHex = NormalizeWebVttColor(value) ?? style.BackgroundColorHex },
+                    "font-weight" when value.Equals("bold", StringComparison.OrdinalIgnoreCase)
+                        || int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var weight) && weight >= 600
+                        => style with { Bold = true },
+                    "font-style" when value.Equals("italic", StringComparison.OrdinalIgnoreCase)
+                        => style with { Italic = true },
+                    "text-decoration" when value.Contains("underline", StringComparison.OrdinalIgnoreCase)
+                        => style with { Underline = true },
+                    _ => style
+                };
+            }
+
+            styles[rule.Groups["class"].Value] = style;
+        }
+
+        return styles;
+    }
+
+    private static string? NormalizeWebVttColor(string value)
+    {
+        var normalized = value.Trim();
+        if (normalized.StartsWith('#'))
+        {
+            var hex = normalized[1..];
+            if (hex.Length == 3)
+            {
+                hex = string.Concat(hex.Select(character => $"{character}{character}"));
+            }
+
+            return hex.Length == 6
+                && hex.All(character => Uri.IsHexDigit(character))
+                ? hex.ToUpperInvariant()
+                : null;
+        }
+
+        var rgb = Regex.Match(
+            normalized,
+            @"^rgb\(\s*(?<r>\d{1,3})\s*,\s*(?<g>\d{1,3})\s*,\s*(?<b>\d{1,3})\s*\)$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!rgb.Success
+            || !int.TryParse(rgb.Groups["r"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var red)
+            || !int.TryParse(rgb.Groups["g"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var green)
+            || !int.TryParse(rgb.Groups["b"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var blue)
+            || red is < 0 or > 255
+            || green is < 0 or > 255
+            || blue is < 0 or > 255)
+        {
+            return null;
+        }
+
+        return $"{red:X2}{green:X2}{blue:X2}";
     }
 
     private static IReadOnlyList<PresentationMediaTranscriptCueDescriptor> ParseSrt(string text)
@@ -1711,7 +1838,8 @@ public static class PresentationMediaTranscriptPlanner
     }
 
     private static IReadOnlyList<PresentationMediaTranscriptCueSpan> ParseWebVttSpans(
-        IEnumerable<string> lines)
+        IEnumerable<string> lines,
+        IReadOnlyDictionary<string, WebVttCueStyle>? styles = null)
     {
         var markup = string.Join(" ", lines);
         var spans = new List<PresentationMediaTranscriptCueSpan>();
@@ -1786,15 +1914,20 @@ public static class PresentationMediaTranscriptPlanner
             var text = WhitespacePattern.Replace(WebUtility.HtmlDecode(match.Value), " ");
             if (text.Length > 0)
             {
+                var style = ResolveWebVttCueStyle(
+                    classScopes.SelectMany(scope => scope),
+                    styles);
                 spans.Add(new PresentationMediaTranscriptCueSpan(
                     text,
-                    bold > 0,
-                    italic > 0,
-                    underline > 0)
+                    bold > 0 || style.Bold,
+                    italic > 0 || style.Italic,
+                    underline > 0 || style.Underline)
                 {
                     Voice = voices.LastOrDefault(),
                     Language = languages.LastOrDefault(),
-                    Classes = classScopes.SelectMany(scope => scope).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
+                    Classes = classScopes.SelectMany(scope => scope).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                    ForegroundColorHex = style.ForegroundColorHex,
+                    BackgroundColorHex = style.BackgroundColorHex
                 });
             }
         }
@@ -1819,6 +1952,36 @@ public static class PresentationMediaTranscriptPlanner
             var normalized = value.Trim();
             return normalized.Length == 0 ? null : normalized;
         }
+    }
+
+    private static WebVttCueStyle ResolveWebVttCueStyle(
+        IEnumerable<string> classes,
+        IReadOnlyDictionary<string, WebVttCueStyle>? styles)
+    {
+        var result = new WebVttCueStyle(null, null, false, false, false);
+        if (styles is null)
+        {
+            return result;
+        }
+
+        foreach (var className in classes)
+        {
+            if (!styles.TryGetValue(className, out var style))
+            {
+                continue;
+            }
+
+            result = result with
+            {
+                ForegroundColorHex = style.ForegroundColorHex ?? result.ForegroundColorHex,
+                BackgroundColorHex = style.BackgroundColorHex ?? result.BackgroundColorHex,
+                Bold = result.Bold || style.Bold,
+                Italic = result.Italic || style.Italic,
+                Underline = result.Underline || style.Underline
+            };
+        }
+
+        return result;
     }
 
     private static string StripCueMarkup(string line)

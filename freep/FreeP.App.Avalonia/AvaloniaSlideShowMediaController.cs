@@ -440,8 +440,27 @@ internal sealed class AvaloniaSlideShowMediaController
                 Text = span.Text,
                 FontWeight = span.Bold ? FontWeight.Bold : FontWeight.Normal,
                 FontStyle = span.Italic ? FontStyle.Italic : FontStyle.Normal,
-                TextDecorations = span.Underline ? TextDecorations.Underline : null
+                TextDecorations = span.Underline ? TextDecorations.Underline : null,
+                Foreground = CaptionBrush(span.ForegroundColorHex),
+                Background = CaptionBrush(span.BackgroundColorHex)
             });
+        }
+    }
+
+    private static IBrush? CaptionBrush(string? colorHex)
+    {
+        if (string.IsNullOrWhiteSpace(colorHex))
+        {
+            return null;
+        }
+
+        try
+        {
+            return new SolidColorBrush(Color.Parse("#" + colorHex));
+        }
+        catch (FormatException)
+        {
+            return null;
         }
     }
 

@@ -110,6 +110,9 @@ public sealed class PresentationMediaTranscriptPlannerTests
 
                             NOTE Imported authoring metadata
 
+                            STYLE
+                            ::cue(.speaker) { color: #ffcc00; background-color: rgb(0, 0, 0); font-weight: bold; text-decoration: underline; }
+
                             cue-1
                             00:00.000 --> 00:01.500 align:start position:0%
                             <v Speaker><lang en-GB><c.speaker>Revenue &amp; margin grew</c></lang></v>
@@ -158,15 +161,20 @@ public sealed class PresentationMediaTranscriptPlannerTests
             track.ContentType == "text/vtt" &&
             track.Status == PresentationMediaTranscriptTrackStatus.Available &&
             track.HasTranscript);
+        webVtt.WebVttStyleSheet.Should().Contain("::cue(.speaker)");
         webVtt.Cues.Select(cue => cue.Text).Should().Equal(
             "Revenue & margin grew",
             "Next quarter stays on plan.");
         webVtt.Cues[0].StartTime.Should().Be(TimeSpan.Zero);
         webVtt.Cues[0].EndTime.Should().Be(TimeSpan.FromMilliseconds(1500));
-        webVtt.Cues[0].Spans.Should().ContainSingle(span => span.Text == "Revenue & margin grew" && !span.Bold && !span.Italic);
+        webVtt.Cues[0].Spans.Should().ContainSingle(span => span.Text == "Revenue & margin grew" && span.Bold && span.Underline && !span.Italic);
         webVtt.Cues[0].Spans[0].Voice.Should().Be("Speaker");
         webVtt.Cues[0].Spans[0].Language.Should().Be("en-GB");
         webVtt.Cues[0].Spans[0].Classes.Should().Equal("speaker");
+        webVtt.Cues[0].Spans[0].ForegroundColorHex.Should().Be("FFCC00");
+        webVtt.Cues[0].Spans[0].BackgroundColorHex.Should().Be("000000");
+        webVtt.Cues[0].Spans[0].Bold.Should().BeTrue();
+        webVtt.Cues[0].Spans[0].Underline.Should().BeTrue();
         webVtt.Cues[1].Spans.Should().Contain(span => span.Text == "Next quarter" && span.Italic);
         webVtt.Cues[1].Spans.First(span => span.Text == "Next quarter").Voice.Should().Be("Speaker");
         webVtt.Cues[1].Spans.First(span => span.Text == "Next quarter").Language.Should().Be("en-GB");
@@ -180,6 +188,41 @@ public sealed class PresentationMediaTranscriptPlannerTests
         srt.Cues[0].StartTime.Should().Be(TimeSpan.FromSeconds(4));
         srt.Cues[0].EndTime.Should().Be(TimeSpan.FromMilliseconds(5250));
         srt.Cues[0].Spans.Should().BeEmpty("SRT remains plain-text until its own styling contract is added");
+    }
+
+    [Fact]
+    public void WebVttStyleSheet_IsPreservedWhenReplacingAnInternalTrack()
+    {
+        var media = new MediaInfo { IsVideo = true };
+        media.CaptionTracks.Add(new MediaCaptionTrackInfo
+        {
+            Source = "ppt/media/styled.vtt",
+            ContentType = "text/vtt",
+            Bytes = Encoding.UTF8.GetBytes("""
+                WEBVTT
+
+                STYLE
+                ::cue(.warning) { color: #ff0000; }
+
+                00:00.000 --> 00:01.000
+                <c.warning>Warning</c>
+                """)
+        });
+
+        var result = PresentationMediaTranscriptPlanner.ReplaceInternalCaptionTrack(
+            media,
+            0,
+            new PresentationMediaCaptionTrackAuthoringDescriptor(
+                "Styled captions",
+                "en-US",
+                null,
+                "WEBVTT\n\n00:00.000 --> 00:01.000\n<c.warning>Updated</c>"));
+
+        result.Succeeded.Should().BeTrue();
+        Encoding.UTF8.GetString(media.CaptionTracks.Single().Bytes)
+            .Should().Contain("::cue(.warning) { color: #ff0000; }");
+        Encoding.UTF8.GetString(media.CaptionTracks.Single().Bytes)
+            .Should().Contain("<c.warning>Updated</c>");
     }
 
     [Fact]

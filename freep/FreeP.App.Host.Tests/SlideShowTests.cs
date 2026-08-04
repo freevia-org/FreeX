@@ -2100,7 +2100,11 @@ public sealed class SlideShowMediaControllerTests
                 {
                     Spans =
                     [
-                        new("Bold", Bold: true),
+                        new("Bold", Bold: true)
+                        {
+                            ForegroundColorHex = "FFCC00",
+                            BackgroundColorHex = "000000"
+                        },
                         new(" italic", Italic: true),
                         new(" underline", Underline: true)
                     ]
@@ -2115,6 +2119,10 @@ public sealed class SlideShowMediaControllerTests
         var runs = text.Inlines.OfType<System.Windows.Documents.Run>().ToArray();
         runs.Should().HaveCount(3);
         runs[0].FontWeight.Should().Be(System.Windows.FontWeights.Bold);
+        runs[0].Foreground.Should().BeOfType<System.Windows.Media.SolidColorBrush>()
+            .Which.Color.Should().Be(System.Windows.Media.Color.FromRgb(0xFF, 0xCC, 0x00));
+        runs[0].Background.Should().BeOfType<System.Windows.Media.SolidColorBrush>()
+            .Which.Color.Should().Be(System.Windows.Media.Colors.Black);
         runs[1].FontStyle.Should().Be(System.Windows.FontStyles.Italic);
         runs[2].TextDecorations.Should().ContainSingle()
             .Which.Should().Be(System.Windows.TextDecorations.Underline[0]);
