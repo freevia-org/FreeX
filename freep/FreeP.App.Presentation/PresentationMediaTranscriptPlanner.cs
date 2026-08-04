@@ -1098,27 +1098,57 @@ public static class PresentationMediaTranscriptPlanner
                      string.Equals(element.Name.LocalName, "p", StringComparison.OrdinalIgnoreCase)))
         {
             var inheritedBegin = TimeSpan.Zero;
+            TimeSpan? inheritedEnd = null;
             foreach (var ancestor in paragraph.Ancestors().Reverse())
             {
+                var parentBegin = inheritedBegin;
+                var localBegin = TimeSpan.Zero;
                 if (TryParseTtmlTime(
                         GetTtmlAttribute(ancestor, "begin"),
                         frameRate,
                         tickRate,
-                        out var ancestorBegin))
+                        out localBegin))
                 {
-                    inheritedBegin += ancestorBegin;
+                    inheritedBegin = parentBegin + localBegin;
+                }
+
+                // TTML `end` is relative to the parent begin, while `dur` is
+                // relative to the element's own begin. Keep the earliest
+                // ancestor boundary so a child cue cannot outlive its body/div.
+                if (TryParseTtmlTime(
+                        GetTtmlAttribute(ancestor, "end"),
+                        frameRate,
+                        tickRate,
+                        out var ancestorEnd))
+                {
+                    var absoluteEnd = parentBegin + ancestorEnd;
+                    inheritedEnd = inheritedEnd is null || absoluteEnd < inheritedEnd.Value
+                        ? absoluteEnd
+                        : inheritedEnd;
+                }
+
+                if (TryParseTtmlTime(
+                        GetTtmlAttribute(ancestor, "dur"),
+                        frameRate,
+                        tickRate,
+                        out var ancestorDuration))
+                {
+                    var absoluteEnd = inheritedBegin + ancestorDuration;
+                    inheritedEnd = inheritedEnd is null || absoluteEnd < inheritedEnd.Value
+                        ? absoluteEnd
+                        : inheritedEnd;
                 }
             }
 
-            var localBegin = TimeSpan.Zero;
+            var paragraphBegin = TimeSpan.Zero;
             var beginToken = GetTtmlAttribute(paragraph, "begin");
             if (beginToken is not null
-                && !TryParseTtmlTime(beginToken, frameRate, tickRate, out localBegin))
+                && !TryParseTtmlTime(beginToken, frameRate, tickRate, out paragraphBegin))
             {
                 continue;
             }
 
-            var start = inheritedBegin + localBegin;
+            var start = inheritedBegin + paragraphBegin;
 
             TimeSpan end;
             if (TryParseTtmlTime(
@@ -1140,6 +1170,11 @@ public static class PresentationMediaTranscriptPlanner
             else
             {
                 continue;
+            }
+
+            if (inheritedEnd is TimeSpan ancestorBoundary && ancestorBoundary < end)
+            {
+                end = ancestorBoundary;
             }
 
             var cueText = CollapseWhitespace(paragraph.Value);
