@@ -157,13 +157,26 @@ public sealed class DialogVisualParitySourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(");
+        source.Should().Contain("ListBoxItemPadding = new Thickness(4, 0)");
         source.Should().Contain("var inactiveLinkTypeSelection = Brush(246, 246, 246);");
-        source.Should().Contain("new Style(x => x.OfType<ListBoxItem>().Class(\":selected\"))");
-        source.Should().Contain("new Style(x => x.OfType<ListBoxItem>().Class(\":selected\").Class(\":pointerover\"))");
-        source.Should().Contain("linkTypeBox.Styles.Add(linkTypeSelectionStyle);");
-        source.Should().Contain("linkTypeBox.Styles.Add(linkTypePointerSelectionStyle);");
+        source.Should().Contain("selector.Class(\":selected\").Class(\":focus\")");
+        source.Should().Contain("selector.Class(\":selected\").Class(\":pointerover\")");
+        source.Should().Contain("selector.Class(\":selected\").Class(\":focus\").Class(\":pointerover\")");
+        source.Should().Contain("new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent)");
         source.Should().Contain("targetBox.Focus();");
         source.Should().Contain("targetBox.SelectAll();");
+    }
+
+    [Fact]
+    public void InsertHyperlinkParityCapture_UsesFixtureWithoutChangingProductionPrefill()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+
+        source.Should().Contain("var prefill = _session.GetSelectedRangeHyperlinkDialogPrefill();");
+        captureSource.Should().Contain("HyperlinkDialogParityFixture.Seed(_session.ActiveSheet, address);");
+        captureSource.Should().Contain("await ShowInsertHyperlinkInputDialogAsync();");
     }
 
     [Fact]

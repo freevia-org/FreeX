@@ -101,6 +101,22 @@ public sealed class SmartArtDefaultLiveRendererContractTests
     }
 
     [Fact]
+    public void WpfTitledMatrixRendering_ConsumesTheSharedLivePlan()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "SlideCanvas.cs"));
+
+        source.Should().Contain("SlideCompositor.Compose(");
+        source.Should().NotContain("LayoutTitledMatrix(");
+        source.Should().NotContain("SmartArtLayoutEngine.Layout(",
+            "titledMatrix geometry must remain renderer-neutral");
+    }
+
+    [Fact]
     public void WpfIncreasingCircleProcessRendering_ConsumesTheSharedLivePlan()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");

@@ -29,7 +29,7 @@ internal static class SmartArtInsertionFactory
         var ids = labels.Select((_, index) => (index + 1).ToString()).ToArray();
         var nodePictures = NormalizePictures(preset, labels.Count, pictures);
         var (layoutId, family) = GetLayoutDefinition(preset);
-        var usesFlatComponents = preset == SmartArtLayoutPreset.BasicMatrix;
+        var usesFlatComponents = preset is SmartArtLayoutPreset.BasicMatrix or SmartArtLayoutPreset.TitledMatrix;
         var smart = new SmartArtShape
         {
             Data = new SmartArtData

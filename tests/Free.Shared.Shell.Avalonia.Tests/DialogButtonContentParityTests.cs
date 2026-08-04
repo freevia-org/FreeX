@@ -82,4 +82,35 @@ public sealed class DialogButtonContentParityTests
             }
         }, CancellationToken.None);
     }
+
+    [Theory]
+    [InlineData("_Apply", "Apply", "Alt+A")]
+    [InlineData("Save __As", "Save _As", null)]
+    [InlineData("Save ___As", "Save _As", "Alt+A")]
+    public async Task Action_button_uses_shared_mnemonic_contract(
+        string content,
+        string expectedDisplayText,
+        string? expectedAccessKey)
+    {
+        await Session.Dispatch(() =>
+        {
+            var button = new Button { Content = content };
+            AvaloniaCompactDialogChrome.ApplyButton(
+                button,
+                AvaloniaCompactDialogChrome.WindowsStyle,
+                minWidth: 72);
+
+            button.Content.Should().BeOfType<AccessText>();
+            var label = AvaloniaActionLabelInspector.Inspect(button);
+            label.MnemonicText.Should().Be(content);
+            label.DisplayText.Should().Be(expectedDisplayText);
+            label.AutomationName.Should().Be(expectedDisplayText);
+
+            var accessKey = label.AccessKey;
+            if (expectedAccessKey is null)
+                accessKey.Should().BeNullOrEmpty();
+            else
+                accessKey.Should().Be(expectedAccessKey);
+        }, CancellationToken.None);
+    }
 }

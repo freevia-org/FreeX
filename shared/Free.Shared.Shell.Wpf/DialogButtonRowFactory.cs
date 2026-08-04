@@ -101,23 +101,10 @@ public static class DialogButtonRowFactory
 
     private static void SetAcceleratorKey(Button button, string content)
     {
-        var accelerator = CreateAcceleratorKey(content);
+        var accelerator = ShellStringText.CreateAcceleratorKey(content);
         if (!string.IsNullOrEmpty(accelerator))
         {
             AutomationProperties.SetAcceleratorKey(button, accelerator);
         }
-    }
-
-    private static string CreateAcceleratorKey(string content)
-    {
-        for (var i = 0; i < content.Length - 1; i++)
-        {
-            if (content[i] == '_' && content[i + 1] != '_')
-            {
-                return "Alt+" + char.ToUpperInvariant(content[i + 1]);
-            }
-        }
-
-        return string.Empty;
     }
 }

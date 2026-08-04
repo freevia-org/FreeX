@@ -119,6 +119,35 @@ public sealed class DialogButtonRowFactoryTests
         });
     }
 
+    [Theory]
+    [InlineData("_Apply", "Apply", "Alt+A")]
+    [InlineData("Save __As", "Save _As", null)]
+    [InlineData("Save ___As", "Save _As", "Alt+A")]
+    public void Create_UsesSharedWpfMnemonicContract(
+        string content,
+        string expectedDisplayText,
+        string? expectedAccelerator)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var row = DialogButtonRowFactory.Create(
+                () => { },
+                buttonWidth: 72,
+                acceptContent: content);
+
+            var button = row.Children[0].Should().BeOfType<Button>().Subject;
+            button.Content.Should().Be(content);
+            ShellStringText.NormalizeAccessText((string)button.Content)
+                .Should().Be(expectedDisplayText);
+
+            var accelerator = AutomationProperties.GetAcceleratorKey(button);
+            if (expectedAccelerator is null)
+                accelerator.Should().BeNullOrEmpty();
+            else
+                accelerator.Should().Be(expectedAccelerator);
+        });
+    }
+
     [Fact]
     public void Create_AllowsActionButtonsToGrowBeyondMinimumWidth()
     {

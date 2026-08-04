@@ -59,11 +59,11 @@ public sealed class TabsDialogWpfAuthorityParityTests
 
             var actionButtons = dialog.GetLogicalDescendants().OfType<Button>().ToArray();
             actionButtons
-                .Select(button => button.Content?.ToString())
-                .Should().Equal("Set", "Clear", "Clear All", "_OK", "_Cancel");
+                .Select(button => AvaloniaActionLabelInspector.Inspect(button).DisplayText)
+                .Should().Equal("Set", "Clear", "Clear All", "OK", "Cancel");
             actionButtons
-                .Should().ContainSingle(button => button.IsDefault && button.Content != null && button.Content.ToString() == "_OK")
-                .And.ContainSingle(button => button.IsCancel && button.Content != null && button.Content.ToString() == "_Cancel");
+                .Should().ContainSingle(button => button.IsDefault && AutomationProperties.GetName(button) == "OK")
+                .And.ContainSingle(button => button.IsCancel && AutomationProperties.GetName(button) == "Cancel");
             actionButtons.Skip(3).Select(AutomationProperties.GetName).Should().Equal("OK", "Cancel");
         }, CancellationToken.None);
     }

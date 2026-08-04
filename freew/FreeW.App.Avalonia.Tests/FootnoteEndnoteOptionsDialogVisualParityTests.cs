@@ -36,8 +36,15 @@ public sealed class FootnoteEndnoteOptionsDialogVisualParityTests
                     .OfType<Button>()
                     .Where(button => button is not ToggleButton)
                     .ToArray();
-                buttons.Select(button => button.Content?.ToString())
+                buttons.Select(button => AvaloniaActionLabelInspector.Inspect(button).DisplayText)
+                    .Should().Equal(
+                        ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Ok),
+                        ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Cancel));
+                buttons.Should().OnlyContain(button => button.Content is AccessText);
+                buttons.Select(button => ((AccessText)button.Content!).Text)
                     .Should().Equal(ShellStrings.Current.Ok, ShellStrings.Current.Cancel);
+                buttons.Select(AutomationProperties.GetName).Should().Equal("OK", "Cancel");
+                buttons.Select(AutomationProperties.GetAccessKey).Should().Equal("Alt+O", "Alt+C");
                 buttons[0].IsDefault.Should().BeTrue();
                 buttons[0].IsCancel.Should().BeFalse();
                 buttons[1].IsCancel.Should().BeTrue();
@@ -97,4 +104,5 @@ public sealed class FootnoteEndnoteOptionsDialogVisualParityTests
     private static object GetField(FootnoteEndnoteOptionsDialog dialog, string name) =>
         typeof(FootnoteEndnoteOptionsDialog).GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
             .GetValue(dialog)!;
+
 }

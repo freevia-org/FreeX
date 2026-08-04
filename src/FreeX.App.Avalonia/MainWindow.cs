@@ -16220,29 +16220,33 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Width = HyperlinkDialogPlanner.LinkTypeColumnWidth,
             Height = HyperlinkDialogPlanner.LinkTypeListHeight,
         };
+        AvaloniaCompactDialogChrome.ApplyListBox(
+            linkTypeBox,
+            AvaloniaCompactDialogChrome.WindowsStyle with
+            {
+                ListBoxItemPadding = new Thickness(4, 0),
+            });
         // WPF keeps the selected link type in its inactive selection state because the
-        // address editor receives initial focus.  Avalonia Fluent otherwise paints the
-        // selected row with the active blue accent, so keep this host-template correction
-        // local to the hyperlink dialog instead of changing list selection globally.
+        // address editor receives initial focus.  Keep this correction local to the
+        // hyperlink dialog while covering the template's focused and hover states.
         var inactiveLinkTypeSelection = Brush(246, 246, 246);
-        var linkTypeSelectionStyle = new Style(x => x.OfType<ListBoxItem>().Class(":selected"))
+        void AddInactiveLinkTypeSelectionStyle(Func<Selector, Selector> select)
         {
-            Setters =
+            linkTypeBox.Styles.Add(new Style(x => select(x.OfType<ListBoxItem>()))
             {
-                new Setter(TemplatedControl.BackgroundProperty, inactiveLinkTypeSelection),
-                new Setter(TemplatedControl.ForegroundProperty, HeaderForeground),
-            },
-        };
-        var linkTypePointerSelectionStyle = new Style(x => x.OfType<ListBoxItem>().Class(":selected").Class(":pointerover"))
-        {
-            Setters =
-            {
-                new Setter(TemplatedControl.BackgroundProperty, inactiveLinkTypeSelection),
-                new Setter(TemplatedControl.ForegroundProperty, HeaderForeground),
-            },
-        };
-        linkTypeBox.Styles.Add(linkTypeSelectionStyle);
-        linkTypeBox.Styles.Add(linkTypePointerSelectionStyle);
+                Setters =
+                {
+                    new Setter(TemplatedControl.BackgroundProperty, inactiveLinkTypeSelection),
+                    new Setter(TemplatedControl.ForegroundProperty, HeaderForeground),
+                    new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
+                    new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
+                },
+            });
+        }
+        AddInactiveLinkTypeSelectionStyle(selector => selector.Class(":selected"));
+        AddInactiveLinkTypeSelectionStyle(selector => selector.Class(":selected").Class(":focus"));
+        AddInactiveLinkTypeSelectionStyle(selector => selector.Class(":selected").Class(":pointerover"));
+        AddInactiveLinkTypeSelectionStyle(selector => selector.Class(":selected").Class(":focus").Class(":pointerover"));
         AutomationProperties.SetName(linkTypeBox, UiText.Get("Hyperlink_LinkTo2"));
         AutomationProperties.SetAutomationId(linkTypeBox, "HyperlinkLinkTypeBox");
 
