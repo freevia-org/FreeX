@@ -96,7 +96,8 @@ public static class PresentationHandoutPdfExporter
 
             var slidePage = PresentationPdfExporter.BuildSlidePage(presentation.Slides[slot.SlideIndex]);
             ops.AddRange(MapSlideOps(slidePage, slot.SlideBounds, layout.PageHeight));
-            ops.Add(ToPdfStrokeRect(slot.SlideBounds, layout.PageHeight, SlideBorder, SlideBorderWidth));
+            if (layout.PrintPlan.Options.FrameSlides)
+                ops.Add(ToPdfStrokeRect(slot.SlideBounds, layout.PageHeight, SlideBorder, SlideBorderWidth));
             foreach (var line in slot.BlankLineBounds)
                 ops.Add(ToPdfLine(line, layout.PageHeight, WritingLine, WritingLineWidth));
         }
