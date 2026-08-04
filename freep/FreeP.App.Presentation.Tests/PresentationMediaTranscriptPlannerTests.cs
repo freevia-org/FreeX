@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using FreeP.Core.Model;
 
@@ -220,6 +221,61 @@ public sealed class PresentationMediaTranscriptPlannerTests
         result.Succeeded.Should().BeTrue();
         Encoding.UTF8.GetString(media.CaptionTracks.Single().Bytes)
             .Should().Contain("vertical:lr");
+    }
+
+    [Theory]
+    [InlineData("2", 160)]
+    [InlineData("-1", 320)]
+    public void WebVttIntegerLineSettings_PreserveSnapToLinePlacement(string line, double expectedY)
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 48,
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        Source = "ppt/media/snapped.vtt",
+                        ContentType = "text/vtt",
+                        Bytes = Encoding.UTF8.GetBytes($"""
+                            WEBVTT
+
+                            00:00.000 --> 00:02.000 line:{line}
+                            Snapped cue
+                            """)
+                    }
+                }
+            }
+        });
+
+        var cue = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation)
+            .Tracks.Should().ContainSingle().Subject.Cues.Should().ContainSingle().Subject;
+
+        cue.LineNumber.Should().Be(int.Parse(line, CultureInfo.InvariantCulture));
+        cue.LinePercent.Should().BeNull();
+        PresentationMediaTranscriptPlanner.ComputeCaptionPlacement(cue, 800, 400, 80).Y
+            .Should().Be(expectedY);
+
+        var media = new MediaInfo { IsVideo = true };
+        var result = PresentationMediaTranscriptPlanner.CreateInternalCaptionTrack(
+            media,
+            new PresentationMediaCaptionTrackAuthoringDescriptor(
+                "Snapped captions",
+                "en-US",
+                "ppt/media/snapped-authored.vtt",
+                null,
+                [new PresentationMediaTranscriptCueDescriptor(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Snapped cue")
+                {
+                    LineNumber = int.Parse(line, CultureInfo.InvariantCulture)
+                }]));
+
+        result.Succeeded.Should().BeTrue();
+        Encoding.UTF8.GetString(media.CaptionTracks.Single().Bytes)
+            .Should().Contain($"line:{line}");
     }
 
     [Fact]

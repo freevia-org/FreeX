@@ -49,6 +49,13 @@ public sealed record PresentationMediaTranscriptCueDescriptor(
 
     public double? LinePercent { get; init; }
 
+    /// <summary>
+    /// WebVTT snap-to-lines position.  Zero is the first line from the leading edge;
+    /// negative values count backward from the trailing edge.  A non-null value is
+    /// mutually exclusive with <see cref="LinePercent"/>.
+    /// </summary>
+    public int? LineNumber { get; init; }
+
     public double? SizePercent { get; init; }
 
     public PresentationMediaTranscriptCueAlignment Alignment { get; init; } =
@@ -493,9 +500,11 @@ public static class PresentationMediaTranscriptPlanner
                     : anchorX - width / 2;
         x = Math.Clamp(x, 0, Math.Max(0, mediaWidth - width));
 
-        var y = cue?.LinePercent is { } linePercent
-            ? mediaHeight * Math.Clamp(linePercent, 0, 100) / 100
-            : mediaHeight - height;
+        var y = cue?.LineNumber is { } lineNumber
+            ? ResolveHorizontalLineNumber(lineNumber, mediaHeight, height)
+            : cue?.LinePercent is { } linePercent
+                ? mediaHeight * Math.Clamp(linePercent, 0, 100) / 100
+                : mediaHeight - height;
         y = Math.Clamp(y, 0, Math.Max(0, mediaHeight - height));
 
         return new PresentationMediaCaptionPlacement(x, y, width, height);
@@ -525,17 +534,52 @@ public static class PresentationMediaTranscriptPlanner
         var defaultLinePercent = writingMode == PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft
             ? 100
             : 0;
-        var linePercent = Math.Clamp(cue?.LinePercent ?? defaultLinePercent, 0, 100);
-        var lineAnchorX = mediaWidth * linePercent / 100;
-        var x = writingMode == PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft
-            ? lineAnchorX - width
-            : lineAnchorX;
+        var x = cue?.LineNumber is { } lineNumber
+            ? ResolveVerticalLineNumber(lineNumber, mediaWidth, width, writingMode)
+            : ResolveVerticalPercentLine(cue?.LinePercent, defaultLinePercent, mediaWidth, width, writingMode);
         x = Math.Clamp(x, 0, Math.Max(0, mediaWidth - width));
 
         var rotation = writingMode == PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft
             ? 90
             : -90;
         return new PresentationMediaCaptionPlacement(x, y, width, height, rotation);
+    }
+
+    private static double ResolveHorizontalLineNumber(int lineNumber, double mediaHeight, double lineHeight)
+        => lineNumber >= 0
+            ? lineNumber * lineHeight
+            : mediaHeight - Math.Abs((double)lineNumber) * lineHeight;
+
+    private static double ResolveVerticalLineNumber(
+        int lineNumber,
+        double mediaWidth,
+        double lineWidth,
+        PresentationMediaTranscriptCueWritingMode writingMode)
+    {
+        if (writingMode == PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft)
+        {
+            return lineNumber >= 0
+                ? mediaWidth - (lineNumber + 1) * lineWidth
+                : (Math.Abs((double)lineNumber) - 1) * lineWidth;
+        }
+
+        return lineNumber >= 0
+            ? lineNumber * lineWidth
+            : mediaWidth - Math.Abs((double)lineNumber) * lineWidth;
+    }
+
+    private static double ResolveVerticalPercentLine(
+        double? linePercent,
+        double defaultLinePercent,
+        double mediaWidth,
+        double lineWidth,
+        PresentationMediaTranscriptCueWritingMode writingMode)
+    {
+        var percent = Math.Clamp(linePercent ?? defaultLinePercent, 0, 100);
+        var lineAnchorX = mediaWidth * percent / 100;
+        return writingMode == PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft
+            ? lineAnchorX - lineWidth
+            : lineAnchorX;
     }
 
     private static PresentationMediaCaptionAuthoringPanePlan EmptyCaptionAuthoringPanePlan(int slideIndex)
@@ -827,6 +871,8 @@ public static class PresentationMediaTranscriptPlanner
             builder.Append(" position:").Append(position.ToString("0.###", CultureInfo.InvariantCulture)).Append('%');
         if (cue.LinePercent is { } line)
             builder.Append(" line:").Append(line.ToString("0.###", CultureInfo.InvariantCulture)).Append('%');
+        else if (cue.LineNumber is { } lineNumber)
+            builder.Append(" line:").Append(lineNumber.ToString(CultureInfo.InvariantCulture));
         if (cue.SizePercent is { } size)
             builder.Append(" size:").Append(size.ToString("0.###", CultureInfo.InvariantCulture)).Append('%');
         if (cue.WritingMode != PresentationMediaTranscriptCueWritingMode.Horizontal)
@@ -1156,8 +1202,9 @@ public static class PresentationMediaTranscriptPlanner
                     out var start,
                     out var end,
                     out var positionPercent,
-            out var linePercent,
-            out var sizePercent,
+                    out var linePercent,
+                    out var lineNumber,
+                    out var sizePercent,
                     out var alignment,
                     out var writingMode))
             {
@@ -1174,6 +1221,7 @@ public static class PresentationMediaTranscriptPlanner
             {
                 PositionPercent = positionPercent,
                 LinePercent = linePercent,
+                LineNumber = lineNumber,
                 SizePercent = sizePercent,
                 Alignment = alignment,
                 WritingMode = writingMode
@@ -1447,6 +1495,7 @@ public static class PresentationMediaTranscriptPlanner
             out _,
             out _,
             out _,
+            out _,
             out _);
 
     private static bool TryParseTimingLine(
@@ -1455,6 +1504,7 @@ public static class PresentationMediaTranscriptPlanner
         out TimeSpan end,
         out double? positionPercent,
         out double? linePercent,
+        out int? lineNumber,
         out double? sizePercent,
         out PresentationMediaTranscriptCueAlignment alignment,
         out PresentationMediaTranscriptCueWritingMode writingMode)
@@ -1463,6 +1513,7 @@ public static class PresentationMediaTranscriptPlanner
         end = default;
         positionPercent = null;
         linePercent = null;
+        lineNumber = null;
         sizePercent = null;
         alignment = PresentationMediaTranscriptCueAlignment.Center;
         writingMode = PresentationMediaTranscriptCueWritingMode.Horizontal;
@@ -1508,7 +1559,15 @@ public static class PresentationMediaTranscriptPlanner
                     positionPercent = ParseWebVttPercent(value);
                     break;
                 case "line":
-                    linePercent = ParseWebVttPercent(value);
+                    if (value.EndsWith('%')
+                        && ParseWebVttPercent(value) is { } parsedPercent)
+                    {
+                        linePercent = parsedPercent;
+                    }
+                    else if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedLine))
+                    {
+                        lineNumber = parsedLine;
+                    }
                     break;
                 case "size":
                     sizePercent = ParseWebVttPercent(value);
