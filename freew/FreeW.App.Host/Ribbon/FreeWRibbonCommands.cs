@@ -2151,13 +2151,23 @@ internal static class FreeWRibbonCommands
         public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: isChecked());
     }
 
+    private static string? ComboValue(RibbonCommandContext context)
+    {
+        if (context.SelectedValue is { Length: > 0 } selectedValue)
+            return selectedValue;
+
+        return context.Parameters.TryGetValue("value", out var legacyRaw)
+            ? legacyRaw as string
+            : null;
+    }
+
     // Home > Paragraph > Line Spacing: parse the chosen multiplier (e.g. "1.5") and apply it to every
     // paragraph spanned by the selection. The view routes the change through its undo/redo bus.
     private sealed class LineSpacingCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            if (ComboValue(context) is not { } value)
                 return;
             if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var multiplier) && multiplier > 0)
             {
@@ -2175,7 +2185,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            if (ComboValue(context) is not { } value)
                 return;
             if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
             {
@@ -2196,7 +2206,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            if (ComboValue(context) is not { } value)
                 return;
             if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
             {
@@ -2220,7 +2230,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            if (ComboValue(context) is not { } value)
                 return;
             if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
             {
@@ -2240,7 +2250,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            if (ComboValue(context) is not { } value)
                 return;
             if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
             {
@@ -2404,7 +2414,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value || value.Length == 0)
+            if (ComboValue(context) is not { Length: > 0 } value)
                 return;
 
             var styleId = ResolveStyleId(editor.Model, value);
@@ -8085,7 +8095,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            if (ComboValue(context) is not { } value)
                 return;
             if (HeaderFooterDialogPlanner.TryParseDistance(value, out var pt))
                 editor.ApplyPageSettings(page => page.HeaderDistancePt = pt);
@@ -8099,7 +8109,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+            if (ComboValue(context) is not { } value)
                 return;
             if (HeaderFooterDialogPlanner.TryParseDistance(value, out var pt))
                 editor.ApplyPageSettings(page => page.FooterDistancePt = pt);
@@ -8995,7 +9005,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (context.Parameters.TryGetValue("value", out var raw) && raw is string value && value.Length > 0)
+            if (ComboValue(context) is { Length: > 0 } value)
             {
                 editor.Focus();
                 if (tryModelApply?.Invoke(value) == true)
