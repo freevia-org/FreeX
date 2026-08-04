@@ -2054,6 +2054,85 @@ public sealed class ChartTests : IDisposable
         roundTripped.Series[1].Values.Should().Equal(42, 51, 63);
     }
 
+    [Fact]
+    public void Edit_NativeChartExSeriesLayouts_RoundTripAndUndoWithoutFlatteningFamily()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XElement(cxNs + "chartData",
+                    new XElement(cxNs + "data",
+                        new XAttribute("id", 0),
+                        new XElement(cxNs + "strDim",
+                            new XElement(cxNs + "lvl",
+                                new XElement(cxNs + "pt", new XAttribute("idx", 0), "A")))),
+                    new XElement(cxNs + "data",
+                        new XAttribute("id", 1),
+                        new XElement(cxNs + "numDim",
+                            new XElement(cxNs + "lvl",
+                                new XElement(cxNs + "pt", new XAttribute("idx", 0), "10")))),
+                    new XElement(cxNs + "data",
+                        new XAttribute("id", 2),
+                        new XElement(cxNs + "numDim",
+                            new XElement(cxNs + "lvl",
+                                new XElement(cxNs + "pt", new XAttribute("idx", 0), "20"))))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx", new XElement(cxNs + "txData", new XElement(cxNs + "v", "First"))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 1))),
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "pareto"),
+                                new XElement(cxNs + "tx", new XElement(cxNs + "txData", new XElement(cxNs + "v", "Second"))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 2))))))));
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+        chart.Categories.Add("A");
+        chart.Series.Add(new ChartSeries { Name = "First", ChartExLayoutId = "histogram" });
+        chart.Series[0].Values.Add(10);
+        chart.Series.Add(new ChartSeries { Name = "Second", ChartExLayoutId = "pareto" });
+        chart.Series[1].Values.Add(20);
+
+        var presentation = BuildPresWithChart(chart);
+        var command = new SetChartExSeriesLayoutCommand(0, 1, 1, "boxWhisker");
+        command.Apply(presentation);
+        chart.Series[1].ChartExLayoutId.Should().Be("boxWhisker");
+
+        var clonedChart = SlideCloner.CloneSlide(presentation.Slides[0]).Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        clonedChart.Series.Select(series => series.ChartExLayoutId)
+            .Should().Equal("histogram", "boxWhisker");
+
+        var path = WriteToPptx(presentation);
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var written = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+            written.Descendants(cxNs + "series").Select(series => series.Attribute("layoutId")!.Value)
+                .Should().Equal("histogram", "boxWhisker");
+        }
+
+        var roundTripped = PptxPackageReader.Read(path).Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        roundTripped.Series.Select(series => series.ChartExLayoutId)
+            .Should().Equal("histogram", "boxWhisker");
+        roundTripped.PreservedChartExXml.Should().Contain("dataId");
+        roundTripped.PreservedChartExXml.Should().NotContain("pareto");
+
+        command.Revert(presentation);
+        chart.Series.Select(series => series.ChartExLayoutId)
+            .Should().Equal("histogram", "pareto");
+    }
+
     [Theory]
     [InlineData(ChartType.Surface, "surfaceChart")]
     [InlineData(ChartType.Surface3D, "surface3DChart")]

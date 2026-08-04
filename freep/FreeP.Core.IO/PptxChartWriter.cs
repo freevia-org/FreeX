@@ -110,6 +110,7 @@ internal static class PptxChartWriter
             try
             {
                 var preserved = XDocument.Parse(chart.PreservedChartExXml, LoadOptions.PreserveWhitespace);
+                UpdateChartExSeriesLayouts(preserved, chart);
                 if (chart.RegenerateWorkbookOnSave)
                     UpdateChartExData(preserved, chart);
                 if (IsWaterfallChartEx(preserved, chart))
@@ -237,6 +238,29 @@ internal static class PptxChartWriter
             var valueElement = series[index].Element(cx + "tx")?.Element(cx + "txData")?.Element(cx + "v");
             if (valueElement is not null)
                 valueElement.Value = chart.Series[index].Name ?? string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Applies only the explicitly modeled per-series ChartEx layout identifiers.
+    /// Family-specific children remain verbatim; an absent model value leaves an
+    /// existing native attribute untouched.
+    /// </summary>
+    private static void UpdateChartExSeriesLayouts(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var series = document.Descendants(cx + "plotAreaRegion")
+            .Elements(cx + "series")
+            .ToList();
+
+        if (series.Count == 0 || series.Count != chart.Series.Count)
+            return;
+
+        for (var index = 0; index < series.Count; index++)
+        {
+            var layoutId = chart.Series[index].ChartExLayoutId;
+            if (!string.IsNullOrWhiteSpace(layoutId))
+                series[index].SetAttributeValue("layoutId", layoutId);
         }
     }
 
