@@ -684,7 +684,7 @@ public sealed class FloatingObjectRenderTests
             (Color.FromArgb(158, 0x2E, 0x75, 0xB6), 0),
             (Color.FromRgb(0x2E, 0x75, 0xB6), 0.05),
             (Color.FromRgb(0x2E, 0x75, 0xB6), 1));
-        glowRing.Width.Should().BeApproximately(488.16, 0.01);
+        glowRing.Width.Should().BeApproximately(487.16, 0.01);
         glowRing.Height.Should().BeApproximately(80.2667, 0.01);
         var fillLayer = root.Children.OfType<Border>()
             .Single(border => border.Effect is null

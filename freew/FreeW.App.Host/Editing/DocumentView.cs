@@ -7035,7 +7035,8 @@ public sealed class DocumentView : RichTextBox
             {
                 var horizontalGlowExtentDip = isPrimaryGlowBlueStress ? 6 : 4;
                 const double verticalGlowExtentDip = 4;
-                glowRingLayer.Width = canvas.ActualWidth + horizontalGlowExtentDip * 2;
+                glowRingLayer.Width = canvas.ActualWidth + horizontalGlowExtentDip * 2
+                    - (isPrimaryGlowBlueStress ? 1 : 0);
                 glowRingLayer.Height = canvas.ActualHeight + verticalGlowExtentDip * 2
                     + (isPrimaryGlowBlueStress ? 4 : 0);
                 Canvas.SetLeft(glowRingLayer, -horizontalGlowExtentDip);
