@@ -258,6 +258,43 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildTableLayoutPlan_PreservesCompleteFloatingPositionContract()
+    {
+        var table = Table.Create(1, 1);
+        table.FloatingPosition = new TableFloatingPosition(
+            HorizontalAnchor: TableHorizontalAnchor.Page,
+            VerticalAnchor: TableVerticalAnchor.Margin,
+            HorizontalOffsetPt: -12.5,
+            VerticalOffsetPt: 18.25,
+            HorizontalAlignment: TableHorizontalPositionAlignment.Outside,
+            VerticalAlignment: TableVerticalPositionAlignment.Bottom,
+            LeftFromTextPt: 3,
+            RightFromTextPt: 4,
+            TopFromTextPt: 5,
+            BottomFromTextPt: 6);
+        table.FloatingTableAllowsOverlap = false;
+
+        var plan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(table);
+
+        plan.HasFloatingTextWrap.Should().BeTrue();
+        plan.FloatingPosition.Should().Be(new DocumentTableFloatingPositionPlan(
+            TableHorizontalAnchor.Page,
+            TableVerticalAnchor.Margin,
+            -16.667,
+            24.333,
+            TableHorizontalPositionAlignment.Outside,
+            TableVerticalPositionAlignment.Bottom,
+            4,
+            5.333,
+            6.667,
+            8,
+            false));
+
+        DocumentViewLayoutPlanner.BuildTableLayoutPlan(Table.Create(1, 1))
+            .FloatingPosition.Should().BeNull();
+    }
+
+    [Fact]
     public void BuildTablePaginationPlan_RepeatsHeaderAndKeepsRowsTogetherAcrossPages()
     {
         var document = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
