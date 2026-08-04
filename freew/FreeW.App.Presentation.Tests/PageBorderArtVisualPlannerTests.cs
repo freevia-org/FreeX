@@ -77,21 +77,17 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
-    public void BirdsFlight_UsesWordCadenceAndSharedNavySilhouette()
+    public void BirdsFlight_UsesWordCadenceAndMeasuredNavyMask()
     {
         PageBorderArtVisualPlanner.TryBuildBirdsFlightFrame(35, 3, 816, 1056, 32, out var plan)
             .Should().BeTrue();
 
-        plan.Fills.Should().BeEmpty();
-        plan.Polygons.Should().HaveCount(102);
-        plan.Polygons[0].Should().Match<PageBorderArtPolygon>(polygon =>
-            polygon.Red == 0x04 && polygon.Green == 0x07 && polygon.Blue == 0x50);
-        plan.Polygons[0].Points.Take(4).Should().Equal(
-            new PageBorderArtPoint(34, 35),
-            new PageBorderArtPoint(39, 37),
-            new PageBorderArtPoint(46, 48),
-            new PageBorderArtPoint(49, 44));
-        plan.Polygons[23].Points[0].Should().Be(new PageBorderArtPoint(34, 995));
+        plan.Polygons.Should().BeEmpty();
+        plan.Fills.Should().HaveCount(10710);
+        plan.Fills[0].Should().Be(new PageBorderArtFillRectangle(53, 33, 1, 1, 0xAE, 0xAF, 0xC6));
+        plan.Fills.Should().Contain(fill => fill.Red == 0x04 && fill.Green == 0x07 && fill.Blue == 0x50);
+        plan.Fills.Should().Contain(fill => fill.Red == 0x62 && fill.Green == 0x64 && fill.Blue == 0x92);
+        plan.Fills.Should().NotContain(fill => fill.Red == 0xFF && fill.Green == 0xFF && fill.Blue == 0xFF);
     }
 
     [Fact]

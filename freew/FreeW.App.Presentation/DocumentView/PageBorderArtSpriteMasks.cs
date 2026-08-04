@@ -15,6 +15,13 @@ internal static class PageBorderArtSpriteMasks
     internal static IReadOnlyList<byte[]> WeavingRibbonMasks { get; } = DecodeWeavingRibbonMasks();
     internal static IReadOnlyList<byte> PaintedEggMask { get; } = DecodeMask(PaintedEggPacked);
     internal static IReadOnlyList<byte> CakeSliceMask { get; } = DecodeMask(CakeSlicePacked);
+    internal static IReadOnlyList<byte> BirdsFlightMask { get; } = DecodeMask(BirdsFlightPacked);
+
+    private const string BirdsFlightPacked =
+        "//////////////////v/////////+///6f/////5//8D/f////3//wv0//+//v//H+D//z//f/8/0P//H/+f//9A//9D//j//wD//4F/" +
+        "/f//AP//wB////8A+P/Qgv///wBALwD+////AAAPAP////8AAAfA/////wAAAvD/////AAAA+P////8AAAD4/////wEAAPz/////AQAA" +
+        "/f////8HAACA/////28AAED//////wAAAOr///+/AAAAAP///x8AAAAAAP3/HwAAAAAA8P8PAAAAAADg/w+AAAAAAMD/H/gAAAAAQP9f" +
+        "/wEAAOr//+//AwD+//////8f5P///w==";
 
     private const string CakeSlicePacked =
         "//////8A////////fwD/////64ELoP3///8AAACggP//CwAAAAAq/v8CqgIKAKr8/wCqqqoAqPz/CACqqgAo8H9WFQCqqqDAP1WV" +
