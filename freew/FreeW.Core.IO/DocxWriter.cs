@@ -3188,7 +3188,7 @@ public static class DocxWriter
             // collapses this sequence back into a single ComplexField run. Routed through Content so it
             // sits correctly inside an open revision/comment context, like any other run.
             var complex = runs[i].ComplexField;
-            if (complex is not null)
+            if (complex is not null && complex.SimpleField is null)
             {
                 var fieldRun = runs[i++];
                 var rPr = BuildRunProperties(fieldRun.Formatting);
@@ -3615,6 +3615,25 @@ public static class DocxWriter
         return builder.ToString();
     }
 
+    private static XElement BuildGenericSimpleField(
+        Run run,
+        RunDrawings drawings,
+        IReadOnlyDictionary<string, string> hyperlinks,
+        PreservedNumberingPlan? preservedNumbering = null,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
+    {
+        var field = run.ComplexField!;
+        var metadata = field.SimpleField!;
+        var element = new XElement(W + "fldSimple",
+            new XAttribute(W + "instr", SanitizeXmlText(field.Instruction)));
+        if (metadata.IsLocked)
+            element.Add(new XAttribute(W + "fldLock", "1"));
+        if (metadata.IsDirty)
+            element.Add(new XAttribute(W + "dirty", "1"));
+        element.Add(BuildTextRun(run, drawings, hyperlinks, preservedNumbering, restartOverrides));
+        return element;
+    }
+
     private static XElement BuildRun(
         Run run,
         RunDrawings drawings,
@@ -3660,6 +3679,12 @@ public static class DocxWriter
             wr.Add(BuildWordArtDrawing(wordArt, drawings.Ids));
             return wr;
         }
+
+        // An unmodelled simple field keeps its original field instruction and semantic flags instead of
+        // degrading to a literal run. This branch also covers fields inside content controls, where
+        // BuildRun is invoked directly rather than through the paragraph-level complex-field route.
+        if (run.ComplexField?.SimpleField is not null)
+            return BuildGenericSimpleField(run, drawings, hyperlinks, preservedNumbering, restartOverrides);
 
         // A cross-reference field (Word's References > Cross-reference) emits a w:fldSimple whose w:instr is
         // a REF/PAGEREF/NOTEREF instruction over a bookmark name or note id, with optional \w/\n/\p and \h

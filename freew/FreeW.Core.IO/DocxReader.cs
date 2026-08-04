@@ -2418,14 +2418,20 @@ public static class DocxReader
         {
             var firstRun = paragraph.Runs.Count;
             AddSimpleField(paragraph, child);
-            if (revision.Kind != RevisionKind.None)
+            for (var index = firstRun; index < paragraph.Runs.Count; index++)
             {
-                for (var index = firstRun; index < paragraph.Runs.Count; index++)
+                var fieldRun = paragraph.Runs[index];
+                fieldRun.CommentId = commentId;
+                fieldRun.Control = control;
+                fieldRun.HyperlinkUrl = hyperlinkUrl;
+                fieldRun.HyperlinkAnchor = hyperlinkAnchor;
+                fieldRun.HyperlinkTooltip = hyperlinkTooltip;
+                if (revision.Kind != RevisionKind.None)
                 {
-                    paragraph.Runs[index].Revision = revision.Kind;
-                    paragraph.Runs[index].RevisionAuthor = revision.Author;
-                    paragraph.Runs[index].RevisionDateXml = revision.DateXml;
-                    paragraph.Runs[index].MoveRevisionId = revision.MoveId;
+                    fieldRun.Revision = revision.Kind;
+                    fieldRun.RevisionAuthor = revision.Author;
+                    fieldRun.RevisionDateXml = revision.DateXml;
+                    fieldRun.MoveRevisionId = revision.MoveId;
                 }
             }
         }
@@ -2559,8 +2565,8 @@ public static class DocxReader
     /// Reads a w:fldSimple. A recognised field (PAGE, DATE, TIME, FILENAME, AUTHOR, NUMPAGES) becomes a
     /// field run carrying that kind plus its cached display text; the kind is matched off the leading
     /// instruction keyword so formatting switches (e.g. <c>DATE \@ "d MMMM yyyy"</c>) are tolerated. Any
-    /// other field is flattened to its cached display text (the text inside the wrapped run) so nothing
-    /// is lost.
+    /// other field retains its raw instruction, lock/dirty flags, and cached display text through the
+    /// generic field model so Word can still toggle and update it after a FreeW save.
     /// </summary>
     private static void AddSimpleField(Paragraph paragraph, XElement fldSimple)
     {
@@ -2601,9 +2607,16 @@ public static class DocxReader
             var fallback = kind == RunFieldKind.PageNumber && text.Length == 0 ? "1" : text;
             paragraph.Runs.Add(new Run(fallback, formatting) { FieldKind = kind });
         }
-        else if (text.Length > 0)
+        else
         {
-            paragraph.Runs.Add(new Run(text, formatting));
+            paragraph.Runs.Add(new Run(text, formatting)
+            {
+                ComplexField = new ComplexField(
+                    instruction,
+                    SimpleField: new SimpleFieldMetadata(
+                        IsLocked: ReadOnOffValue(fldSimple.Attribute(W + "fldLock")?.Value),
+                        IsDirty: ReadOnOffValue(fldSimple.Attribute(W + "dirty")?.Value)))
+            });
         }
     }
 

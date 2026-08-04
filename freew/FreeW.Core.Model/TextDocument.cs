@@ -1992,9 +1992,10 @@ public enum RunFieldKind
 }
 
 /// <summary>
-/// A generic Word <em>complex</em> field — the <c>w:fldChar</c> begin / <c>w:instrText</c> / separate /
-/// result / end run sequence (Insert &gt; Quick Parts &gt; Field). Unlike <see cref="RunFieldKind"/>, which
-/// enumerates a fixed set of self-contained <c>w:fldSimple</c> fields, this preserves the raw field-code
+/// A generic Word field. It normally represents the <c>w:fldChar</c> begin / <c>w:instrText</c> / separate /
+/// result / end run sequence (Insert &gt; Quick Parts &gt; Field). When <see cref="SimpleField"/> is non-null,
+/// it instead preserves an unmodelled self-contained <c>w:fldSimple</c>. Unlike <see cref="RunFieldKind"/>,
+/// which enumerates a fixed set of simple fields, this preserves the raw field-code
 /// <see cref="Instruction"/> verbatim, so any field (PAGE, NUMPAGES, DATE with a \@ picture, FILENAME,
 /// AUTHOR, REF, or one FreeW does not specifically model) round-trips losslessly. The owning
 /// <see cref="Run.Text"/> holds the cached result. <see cref="ShowCode"/> drives the Alt+F9 toggle: when
@@ -2003,7 +2004,11 @@ public enum RunFieldKind
 /// </summary>
 /// <param name="Instruction">The raw field instruction, e.g. <c> PAGE </c> or <c> DATE \@ "M/d/yyyy" </c>.</param>
 /// <param name="ShowCode">When true, the editor displays the field code rather than the result (Alt+F9).</param>
-public sealed record ComplexField(string Instruction, bool ShowCode = false)
+/// <param name="SimpleField">Original <c>w:fldSimple</c> metadata, or null for a complex field sequence.</param>
+public sealed record ComplexField(
+    string Instruction,
+    bool ShowCode = false,
+    SimpleFieldMetadata? SimpleField = null)
 {
     /// <summary>The leading keyword of <see cref="Instruction"/> upper-cased (e.g. "PAGE"), or "" if empty.</summary>
     public string Keyword
@@ -2018,6 +2023,12 @@ public sealed record ComplexField(string Instruction, bool ShowCode = false)
         }
     }
 }
+
+/// <summary>
+/// Semantic attributes carried by an unmodelled <c>w:fldSimple</c>. False values are Word's defaults and
+/// are omitted when the field is saved.
+/// </summary>
+public sealed record SimpleFieldMetadata(bool IsLocked = false, bool IsDirty = false);
 
 /// <summary>
 /// The tracked-change state of a <see cref="Run"/>. <see cref="None"/> is an ordinary run;
