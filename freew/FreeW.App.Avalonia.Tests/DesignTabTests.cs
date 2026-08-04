@@ -366,21 +366,32 @@ public sealed class DesignTabTests
     }
 
     [Fact]
-    public void Theme_combo_applies_selected_value_and_rejects_unknown_values()
+    public void Theme_combo_publishes_loaded_and_applied_theme_and_rejects_unknown_values()
     {
         var view = new DocumentView();
         view.LoadDocument(MakeDoc());
         var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        registry.TryGet(new RibbonCommandId("freew.theme"), out var command).Should().BeTrue();
+        var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+        stateful.GetState().Value.Should().Be("Office");
 
         Execute(registry, "freew.theme", RibbonCommandContext.ForSelectedValue("Berlin"));
         view.Document.Theme.Name.Should().Be("Berlin");
+        stateful.GetState().Value.Should().Be("Berlin");
 
         view.Undo();
         view.Document.Theme.Name.Should().Be("Office");
+        stateful.GetState().Value.Should().Be("Office");
 
         Execute(registry, "freew.theme", RibbonCommandContext.ForSelectedValue("Missing Theme"));
         Execute(registry, "freew.theme", RibbonCommandContext.Empty);
         view.Document.Theme.Name.Should().Be("Office");
+        stateful.GetState().Value.Should().Be("Office");
+
+        var loaded = MakeDoc();
+        loaded.Theme = DocumentTheme.FindByName("Ion")!;
+        view.LoadDocument(loaded);
+        stateful.GetState().Value.Should().Be("Ion");
     }
 
     [Fact]
