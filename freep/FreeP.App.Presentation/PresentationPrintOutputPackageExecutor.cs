@@ -251,7 +251,8 @@ public static class PresentationPrintOutputPackageExecutor
         PresentationPrintRequest? request,
         PresentationSlideImageRenderer renderSlideToPng,
         PresentationRasterPdfWriter writeRasterPdf,
-        PresentationPdfContentWriter? writeVectorPdf = null)
+        PresentationPdfContentWriter? writeVectorPdf = null,
+        PresentationSlideImageRendererWithPrintMarkup? renderSlideWithMarkup = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(renderSlideToPng);
@@ -269,7 +270,8 @@ public static class PresentationPrintOutputPackageExecutor
                     presentation,
                     new PresentationRasterPdfExportRequest(normalizedRequest.SlideRange),
                     renderSlideToPng,
-                    writeRasterPdf),
+                    writeRasterPdf,
+                    normalizedRequest.IncludeCommentsAndInkMarkup ? renderSlideWithMarkup : null),
             PresentationPrintOutputPackageRoute.NotesPagePdf =>
                 writeVectorPdf is null
                     ? PresentationNotesPagePdfExporter.ExportToBytes(

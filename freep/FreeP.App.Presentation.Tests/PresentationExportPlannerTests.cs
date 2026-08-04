@@ -632,6 +632,69 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void PrintOutputPackage_FullPageSlides_UsesMarkupRendererOnlyWhenRequested()
+    {
+        var deck = BuildHandoutDeck(1);
+        var pdfBytes = Encoding.ASCII.GetBytes("%PDF-1.7\n%%EOF");
+        var markupCalls = 0;
+
+        var ordinary = PresentationPrintOutputPackageExecutor.BuildPackage(
+            deck,
+            new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides),
+            (_, _, _, _) => TinyPng,
+            _ => pdfBytes,
+            renderSlideWithMarkup: (_, _, _, _, _) =>
+            {
+                markupCalls++;
+                return TinyPng;
+            });
+
+        ordinary.Bytes.Should().Equal(pdfBytes);
+        markupCalls.Should().Be(0);
+
+        var marked = PresentationPrintOutputPackageExecutor.BuildPackage(
+            deck,
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.FullPageSlides,
+                IncludeCommentsAndInkMarkup: true),
+            (_, _, _, _) => throw new InvalidOperationException("Markup requests must use the markup renderer."),
+            _ => pdfBytes,
+            renderSlideWithMarkup: (_, _, _, _, includeMarkup) =>
+            {
+                includeMarkup.Should().BeTrue();
+                markupCalls++;
+                return TinyPng;
+            });
+
+        marked.Bytes.Should().Equal(pdfBytes);
+        markupCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public void SlidePrintMarkupPlanner_MapsCommentAnchorsIntoBoundedCalloutCards()
+    {
+        var deck = BuildHandoutDeck(1);
+        deck.Slides[0].Comments.Add(new SlideComment
+        {
+            Xemu = deck.SlideSizeCxEmu,
+            Yemu = deck.SlideSizeCyEmu,
+            Author = "Reviewer",
+            Text = "Check this slide",
+        });
+
+        var callout = SlidePrintMarkupPlanner.BuildCommentCallouts(deck, deck.Slides[0]).Single();
+
+        callout.AnchorX.Should().BeApproximately(deck.SlideSizeCxEmu / DrawingMlCoordinateUnits.EmuPerPixel - 4, 0.01);
+        callout.AnchorY.Should().BeApproximately(deck.SlideSizeCyEmu / DrawingMlCoordinateUnits.EmuPerPixel - 4, 0.01);
+        callout.CardX.Should().BeGreaterThanOrEqualTo(4);
+        callout.CardY.Should().BeGreaterThanOrEqualTo(4);
+        callout.CardX.Should().BeLessThan(deck.SlideSizeCxEmu / DrawingMlCoordinateUnits.EmuPerPixel);
+        callout.CardY.Should().BeLessThan(deck.SlideSizeCyEmu / DrawingMlCoordinateUnits.EmuPerPixel);
+        callout.Author.Should().Be("Reviewer");
+        callout.Body.Should().Be("Check this slide");
+    }
+
+    [Fact]
     public void PrintOutputPackage_NotesAndHandouts_RouteThroughSharedPdfExporters()
     {
         var notesPackage = PresentationPrintOutputPackageExecutor.BuildPackage(

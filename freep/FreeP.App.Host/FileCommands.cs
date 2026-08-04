@@ -316,7 +316,8 @@ internal sealed class FileCommands
             request,
             WpfPresentationSlideImageRenderer.RenderSlideToPng,
             WpfRasterPdfWriter.WriteToBytes,
-            SkiaPdfWriter.WriteToBytesWithPortableFallback);
+            SkiaPdfWriter.WriteToBytesWithPortableFallback,
+            WpfPresentationSlideImageRenderer.RenderSlideToPngWithPrintMarkup);
         LastPrintExecutionDescriptor = PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(
             LastPrintOutputPackage,
             _nativePrintHostCapabilities,

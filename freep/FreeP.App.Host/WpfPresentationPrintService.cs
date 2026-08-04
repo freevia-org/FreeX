@@ -117,7 +117,10 @@ internal static class WpfPresentationPrintService
         var renderPlan = PresentationRasterPdfExporter.BuildRenderPlan(
             presentation,
             new PresentationRasterPdfExportRequest(request.SlideRange),
-            WpfPresentationSlideImageRenderer.RenderSlideToPng);
+            WpfPresentationSlideImageRenderer.RenderSlideToPng,
+            request.IncludeCommentsAndInkMarkup
+                ? WpfPresentationSlideImageRenderer.RenderSlideToPngWithPrintMarkup
+                : null);
         return new WpfPrintPageSource(
             renderPlan.Pages.Select(page => page.ImageBytes).ToArray(),
             renderPlan.PageWidthPoints,

@@ -40,6 +40,22 @@ public static class SlideRenderer
         int slideIndex,
         int widthPx,
         int heightPx)
+        => RenderToBytesCore(presentation, slideIndex, widthPx, heightPx, includeCommentsAndInkMarkup: false);
+
+    public static byte[] RenderToBytesWithPrintMarkup(
+        Presentation presentation,
+        int slideIndex,
+        int widthPx,
+        int heightPx,
+        bool includeCommentsAndInkMarkup)
+        => RenderToBytesCore(presentation, slideIndex, widthPx, heightPx, includeCommentsAndInkMarkup);
+
+    private static byte[] RenderToBytesCore(
+        Presentation presentation,
+        int slideIndex,
+        int widthPx,
+        int heightPx,
+        bool includeCommentsAndInkMarkup)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         if (slideIndex < 0 || slideIndex >= presentation.Slides.Count)
@@ -52,7 +68,8 @@ public static class SlideRenderer
         {
             Presentation = presentation,
             Slide        = slide,
-            SlideIndex   = slideIndex
+            SlideIndex   = slideIndex,
+            RenderPrintMarkup = includeCommentsAndInkMarkup,
         };
 
         var size = new Size(widthPx, heightPx);

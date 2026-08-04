@@ -103,6 +103,9 @@ public sealed class SlideCanvas : Control
         }
     }
 
+    /// <summary>Whether print-only comment callouts are painted over the slide.</summary>
+    public bool RenderPrintMarkup { get; set; }
+
     public int SlideIndex
     {
         get => _slideIndex;
@@ -237,7 +240,7 @@ public sealed class SlideCanvas : Control
         base.Render(context);
         EnsureOps();
 
-        if (_cachedOps is null || _cachedOps.Count == 0 || _slideWidthDip <= 0) return;
+        if (_cachedOps is null || _slideWidthDip <= 0) return;
 
         double renderW = Bounds.Width;
         double renderH = Bounds.Height;
@@ -252,6 +255,27 @@ public sealed class SlideCanvas : Control
 
         foreach (var op in _cachedOps)
             RenderOp(context, op);
+
+        if (RenderPrintMarkup && _presentation is not null && _slide is not null)
+            RenderPrintCommentCallouts(context, _presentation, _slide);
+    }
+
+    private static void RenderPrintCommentCallouts(DrawingContext dc, Presentation presentation, Slide slide)
+    {
+        var fill = new SolidColorBrush(Color.FromRgb(255, 249, 196));
+        var border = new Pen(new SolidColorBrush(Color.FromRgb(192, 160, 0)), 1);
+        var marker = new SolidColorBrush(Color.FromRgb(220, 40, 40));
+
+        foreach (var callout in SlidePrintMarkupPlanner.BuildCommentCallouts(presentation, slide))
+        {
+            var card = new Rect(callout.CardX, callout.CardY, callout.CardWidth, callout.CardHeight);
+            dc.DrawRectangle(fill, border, card);
+            dc.DrawEllipse(marker, null, new Point(callout.AnchorX, callout.AnchorY), 3, 3);
+            DrawChartLabel(dc, callout.Author, new Rect(card.X + 6, card.Y + 3, card.Width - 12, 9),
+                isBold: true, fontSize: 8, align: TextAlignment.Left);
+            DrawChartLabel(dc, callout.Body, new Rect(card.X + 6, card.Y + 13, card.Width - 12, 11),
+                isBold: false, fontSize: 7, align: TextAlignment.Left);
+        }
     }
 
     private SlideTransformCore ComputeViewTransform(

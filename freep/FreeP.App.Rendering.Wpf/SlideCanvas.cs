@@ -101,6 +101,9 @@ public sealed class SlideCanvas : FrameworkElement
         set => SetValue(RenderSlideBackgroundProperty, value);
     }
 
+    /// <summary>Whether print-only comment callouts are painted over the slide.</summary>
+    public bool RenderPrintMarkup { get; set; }
+
     /// <summary>Shape whose base text is hidden while its rich editor overlay is active.</summary>
     public uint? ActiveTextEditShapeId
     {
@@ -302,7 +305,7 @@ public sealed class SlideCanvas : FrameworkElement
     {
         EnsureOps();
 
-        if (_cachedOps is null || _cachedOps.Count == 0 || _slideWidthDip <= 0)
+        if (_cachedOps is null || _slideWidthDip <= 0)
             return;
 
         if (renderW <= 0 || renderH <= 0) return;
@@ -329,7 +332,28 @@ public sealed class SlideCanvas : FrameworkElement
         foreach (var op in _cachedOps)
             RenderOp(dc, op);
 
+        if (RenderPrintMarkup && Presentation is not null && Slide is not null)
+            RenderPrintCommentCallouts(dc, Presentation, Slide);
+
         dc.Pop();
+    }
+
+    private static void RenderPrintCommentCallouts(DrawingContext dc, Presentation presentation, Slide slide)
+    {
+        var fill = FreezeBrush(new SolidColorBrush(Color.FromRgb(255, 249, 196)));
+        var border = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(192, 160, 0))), 1);
+        var marker = FreezeBrush(new SolidColorBrush(Color.FromRgb(220, 40, 40)));
+
+        foreach (var callout in SlidePrintMarkupPlanner.BuildCommentCallouts(presentation, slide))
+        {
+            var card = new Rect(callout.CardX, callout.CardY, callout.CardWidth, callout.CardHeight);
+            dc.DrawRectangle(fill, border, card);
+            dc.DrawEllipse(marker, null, new Point(callout.AnchorX, callout.AnchorY), 3, 3);
+            DrawChartLabel(dc, callout.Author, new Rect(card.X + 6, card.Y + 3, card.Width - 12, 9),
+                isBold: true, fontSize: 8, align: TextAlignment.Left);
+            DrawChartLabel(dc, callout.Body, new Rect(card.X + 6, card.Y + 13, card.Width - 12, 11),
+                isBold: false, fontSize: 7, align: TextAlignment.Left);
+        }
     }
 
     private SlideTransform ComputeViewTransform(

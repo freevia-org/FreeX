@@ -5,6 +5,12 @@ using FreeP.Core.Model;
 namespace FreeP.App.Compositor;
 
 public delegate byte[] PresentationRasterPdfWriter(PdfRasterDocument document);
+public delegate byte[] PresentationSlideImageRendererWithPrintMarkup(
+    Presentation presentation,
+    int slideIndex,
+    int widthPx,
+    int heightPx,
+    bool includeCommentsAndInkMarkup);
 
 public sealed record PresentationRasterPdfExportRequest(
     PresentationSlideRangeRequest? SlideRange = null,
@@ -44,22 +50,25 @@ public static class PresentationRasterPdfExporter
         Presentation presentation,
         PresentationRasterPdfExportRequest? request,
         PresentationSlideImageRenderer renderSlideToPng,
-        PresentationRasterPdfWriter writePdf) =>
-        writePdf(BuildDocument(presentation, request, renderSlideToPng));
+        PresentationRasterPdfWriter writePdf,
+        PresentationSlideImageRendererWithPrintMarkup? renderSlideWithMarkup = null) =>
+        writePdf(BuildDocument(presentation, request, renderSlideToPng, renderSlideWithMarkup));
 
     public static PdfRasterDocument BuildDocument(
         Presentation presentation,
         PresentationRasterPdfExportRequest? request,
-        PresentationSlideImageRenderer renderSlideToPng)
+        PresentationSlideImageRenderer renderSlideToPng,
+        PresentationSlideImageRendererWithPrintMarkup? renderSlideWithMarkup = null)
     {
-        var plan = BuildRenderPlan(presentation, request, renderSlideToPng);
+        var plan = BuildRenderPlan(presentation, request, renderSlideToPng, renderSlideWithMarkup);
         return new PdfRasterDocument(plan.Pages, BuildDocumentProperties(presentation));
     }
 
     public static PresentationRasterPdfRenderPlan BuildRenderPlan(
         Presentation presentation,
         PresentationRasterPdfExportRequest? request,
-        PresentationSlideImageRenderer renderSlideToPng)
+        PresentationSlideImageRenderer renderSlideToPng,
+        PresentationSlideImageRendererWithPrintMarkup? renderSlideWithMarkup = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(renderSlideToPng);
@@ -80,7 +89,9 @@ public static class PresentationRasterPdfExporter
         foreach (var slideNumber in range.SlideNumbers)
         {
             var slideIndex = slideNumber - 1;
-            var imageBytes = renderSlideToPng(presentation, slideIndex, widthPx, heightPx);
+            var imageBytes = renderSlideWithMarkup is null
+                ? renderSlideToPng(presentation, slideIndex, widthPx, heightPx)
+                : renderSlideWithMarkup(presentation, slideIndex, widthPx, heightPx, true);
             if (imageBytes.Length == 0)
                 throw new InvalidOperationException($"Slide PDF renderer returned no bytes for slide {slideNumber}.");
 

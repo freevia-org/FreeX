@@ -5174,7 +5174,8 @@ public sealed partial class MainWindow : Window
                 request,
                 SlideRenderer.RenderToBytes,
                 SkiaRasterPdfWriter.WriteToBytes,
-                SkiaPdfWriter.WriteToBytesWithPortableFallback);
+                SkiaPdfWriter.WriteToBytesWithPortableFallback,
+                SlideRenderer.RenderToBytesWithPrintMarkup);
         LastPrintExecutionDescriptor = PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(
             LastPrintOutputPackage,
             _nativePrintHostCapabilities,

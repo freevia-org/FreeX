@@ -12,6 +12,22 @@ namespace FreeP.App.Host;
 internal static class WpfPresentationSlideImageRenderer
 {
     public static byte[] RenderSlideToPng(Presentation presentation, int slideIndex, int widthPx, int heightPx)
+        => RenderSlideToPngCore(presentation, slideIndex, widthPx, heightPx, includeCommentsAndInkMarkup: false);
+
+    public static byte[] RenderSlideToPngWithPrintMarkup(
+        Presentation presentation,
+        int slideIndex,
+        int widthPx,
+        int heightPx,
+        bool includeCommentsAndInkMarkup)
+        => RenderSlideToPngCore(presentation, slideIndex, widthPx, heightPx, includeCommentsAndInkMarkup);
+
+    private static byte[] RenderSlideToPngCore(
+        Presentation presentation,
+        int slideIndex,
+        int widthPx,
+        int heightPx,
+        bool includeCommentsAndInkMarkup)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         if (slideIndex < 0 || slideIndex >= presentation.Slides.Count)
@@ -24,7 +40,7 @@ internal static class WpfPresentationSlideImageRenderer
         {
             try
             {
-                result = RenderOnSta(presentation, slideIndex, widthPx, heightPx);
+                result = RenderOnSta(presentation, slideIndex, widthPx, heightPx, includeCommentsAndInkMarkup);
             }
             catch (Exception ex)
             {
@@ -41,12 +57,18 @@ internal static class WpfPresentationSlideImageRenderer
         return result ?? Array.Empty<byte>();
     }
 
-    private static byte[] RenderOnSta(Presentation presentation, int slideIndex, int widthPx, int heightPx)
+    private static byte[] RenderOnSta(
+        Presentation presentation,
+        int slideIndex,
+        int widthPx,
+        int heightPx,
+        bool includeCommentsAndInkMarkup)
     {
         var canvas = new SlideCanvas
         {
             Presentation = presentation,
             Slide = presentation.Slides[slideIndex],
+            RenderPrintMarkup = includeCommentsAndInkMarkup,
         };
 
         canvas.Measure(new Size(widthPx, heightPx));
