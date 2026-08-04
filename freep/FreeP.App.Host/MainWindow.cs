@@ -746,6 +746,8 @@ public sealed partial class MainWindow : Window
                 Add("Format Axis...", () => OpenChartAxisOptionsDialog(hit.AxisKind ?? ChartAxisKind.Value));
                 break;
             case ChartSubtargetKind.Title:
+                Add("Format Chart Title...", () => OpenChartTextOptionsDialog(ChartTextTarget.Title));
+                break;
             case ChartSubtargetKind.Legend:
                 Add("Format Chart Text...", OpenChartTextOptionsDialog);
                 break;
@@ -4537,11 +4539,13 @@ public sealed partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
-    internal void OpenChartTextOptionsDialog()
+    internal void OpenChartTextOptionsDialog() => OpenChartTextOptionsDialog(ChartTextTarget.Chart);
+
+    internal void OpenChartTextOptionsDialog(ChartTextTarget target)
     {
         if (!Editor.CanEditSelectedChartFormatting) return;
 
-        var dialog = new ChartTextOptionsDialog(Editor);
+        var dialog = new ChartTextOptionsDialog(Editor, target);
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();

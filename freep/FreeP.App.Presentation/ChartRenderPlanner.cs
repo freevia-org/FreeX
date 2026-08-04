@@ -1513,16 +1513,21 @@ public static partial class ChartRenderPlanner
                         Height = 56.0
                     }
                     : frame.TitleBounds ?? default,
-                IsBold: !UsesClassicOfficeChartStyle(chart),
-                FontSize: ResolveTitleFontSize(chart, 9.0),
+                IsBold: chart.TitleStyle?.Bold ?? !UsesClassicOfficeChartStyle(chart),
+                FontSize: chart.TitleStyle?.FontSizePt is > 0
+                    ? chart.TitleStyle.FontSizePt.Value
+                    : ResolveTitleFontSize(chart, 9.0),
                 Alignment: ChartPlanTextAlignment.Center)
             {
                 // Classic Office chart titles use Arial; imported titles retain
                 // the renderer's calibrated default typeface.
-                FontFamily = UsesClassicOfficeChartStyle(chart) ? "Arial" : null,
-                TextColor = UsesImportedPieLegendDefaults(chart)
-                    ? new SrgbColor(0x00, 0x00, 0x00)
-                    : null,
+                FontFamily = chart.TitleStyle?.FontFamily
+                    ?? (UsesClassicOfficeChartStyle(chart) ? "Arial" : null),
+                TextColor = chart.TitleStyle?.Color?.Resolved
+                    ?? (UsesImportedPieLegendDefaults(chart)
+                        ? new SrgbColor(0x00, 0x00, 0x00)
+                        : null),
+                IsItalic = chart.TitleStyle?.Italic ?? false,
                 MaxLineCount = wrapsTallSurfaceTitle ? 2 : 1
             }
             : null;

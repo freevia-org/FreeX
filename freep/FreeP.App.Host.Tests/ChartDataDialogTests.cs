@@ -663,6 +663,21 @@ public sealed class ChartDataDialogTests : IDisposable
         options.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
     }
 
+    [StaFact]
+    public void ChartTextOptionsDialog_CanTargetChartTitle()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.Title = "Revenue";
+        sess.SelectedChart.TitleStyle = new ChartTextStyle { FontFamily = "Aptos", FontSizePt = 15 };
+
+        var dialog = new ChartTextOptionsDialog(sess, ChartTextTarget.Title);
+        var options = dialog.BuildCommitPlanForTests();
+
+        options.Target.Should().Be(ChartTextTarget.Title);
+        options.FontFamily.Should().Be("Aptos");
+        options.FontSizePt.Should().Be(15);
+    }
+
     [Fact]
     public void Chart3DAndTextOptions_AreReachableThroughHostSourceRoutes()
     {
@@ -725,7 +740,7 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartTextOptionsDialog.cs");
 
-        source.Should().Contain("ChartTextOptionsPlanner.FromChart(chart)");
+        source.Should().Contain("ChartTextOptionsPlanner.FromChart(chart, target)");
         source.Should().Contain("_planner.BuildCommitPlan()");
         source.Should().Contain("_editor.ApplyChartTextOptions");
         source.Should().NotContain("new SetChartTextOptionsCommand");

@@ -83,7 +83,7 @@ internal static class PptxChartWriter
         var legendEl = BuildLegendEl(chart);
 
         var titleEl = chart.Title is not null && !chart.HasAutomaticTitle
-            ? BuildTitleEl(chart.Title, overlay: chart.TitleOverlay == true)
+            ? BuildTitleEl(chart.Title, chart.TitleStyle, overlay: chart.TitleOverlay == true)
             : null;
 
         var chartSpace = new XElement(C + "chartSpace",
