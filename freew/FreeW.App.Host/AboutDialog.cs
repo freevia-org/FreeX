@@ -10,13 +10,7 @@ namespace FreeW.App.Host;
 public sealed class AboutDialog : SharedAboutDialog
 {
     public AboutDialog()
-        : base(
-            windowTitle: "About FreeW",
-            aboutText: FreeWAppInfo.AboutText,
-            dialogAutomationId: "AboutFreeWDialog",
-            textAutomationId: "AboutFreeWText",
-            okAutomationId: "AboutFreeWOkButton",
-            helpText: "View version, license, privacy, and source information about FreeW.")
+        : base(FreeWAppInfo.AboutPresentation)
     {
     }
 }

@@ -138,6 +138,13 @@ static Capture? CaptureOne(Scenario scenario, string output, Capture? authorityC
 static void Populate(Window dialog, Scenario scenario)
 {
     var state = scenario.State;
+    if (scenario.RouteId == "about")
+    {
+        // About has no editable or stateful fields. Keep initial and populated
+        // captures on the same production presentation contract.
+        FocusScenarioTarget(dialog, scenario);
+        return;
+    }
     if (scenario.RouteId == "manual-hyphenation")
     {
         var choices = FindVisualChildren<ComboBox>(dialog).FirstOrDefault();

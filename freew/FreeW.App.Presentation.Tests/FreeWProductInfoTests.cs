@@ -22,6 +22,22 @@ public sealed class FreeWProductInfoTests
     }
 
     [Fact]
+    public void About_presentation_contract_is_shared_by_both_hosts()
+    {
+        var assembly = typeof(FreeWProductInfoTests).Assembly;
+        var wpf = FreeWAboutDialogPresentation.Create(assembly, "WPF");
+        var avalonia = FreeWAboutDialogPresentation.Create(assembly, "Avalonia");
+
+        wpf.WindowTitle.Should().Be(FreeWAboutDialogPresentation.WindowTitle);
+        avalonia.DialogAutomationId.Should().Be(wpf.DialogAutomationId);
+        avalonia.TextAutomationId.Should().Be(wpf.TextAutomationId);
+        avalonia.OkAutomationId.Should().Be(wpf.OkAutomationId);
+        avalonia.HelpText.Should().Be(wpf.HelpText);
+        avalonia.AvaloniaRootRightMargin.Should().Be(17);
+        wpf.AboutText.Replace("WPF", "Avalonia", StringComparison.Ordinal).Should().Be(avalonia.AboutText);
+    }
+
+    [Fact]
     public void Diagnostics_text_uses_the_supplied_host_assembly_version()
     {
         var assembly = Assembly.GetExecutingAssembly();

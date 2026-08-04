@@ -18,8 +18,10 @@ public static class FreeWAppInfo
 
     public static string ExactVersionText { get; } = FreeWProductInfo.GetBuildVersionText(typeof(FreeWAppInfo).Assembly);
 
-    public static string AboutText { get; } =
-        FreeWProductInfo.CreateAboutText(typeof(FreeWAppInfo).Assembly, "WPF");
+    public static AboutDialogPresentation AboutPresentation { get; } =
+        FreeWAboutDialogPresentation.Create(typeof(FreeWAppInfo).Assembly, "WPF");
+
+    public static string AboutText => AboutPresentation.AboutText;
 
     public static string GetVersionText(Assembly assembly)
     {

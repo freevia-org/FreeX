@@ -18,6 +18,9 @@ public static class AboutDialogMetrics
     public const double AvaloniaTextPaddingTop = TextPadding + 4;
     public const double AvaloniaTextPaddingRight = 0;
     public const double AvaloniaTextLineHeight = 16.75;
+    // The FreeW Avalonia authority capture paints an extra right-edge pixel from its action row.
+    // Keep this host correction explicit rather than changing the shared WPF root margin.
+    public const double FreeWAvaloniaRootRightMargin = RootMargin + 1;
     public const double TextMinHeight = 220;
     public const double TextPadding = 8;
     public const double RootMargin = 16;
