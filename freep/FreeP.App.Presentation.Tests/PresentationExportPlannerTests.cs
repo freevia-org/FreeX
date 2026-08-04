@@ -688,6 +688,63 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void PrintMarkupOption_ControlsCommentCalloutsAndInkStrokesOnNotesAndHandouts()
+    {
+        var presentation = BuildHandoutDeck(1);
+        var slide = presentation.Slides[0];
+        slide.Comments.Add(new SlideComment
+        {
+            Author = "Alice",
+            Initials = "AL",
+            Text = "Review this slide",
+            Xemu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Yemu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Idx = 1,
+        });
+
+        var ink = new SlideShape
+        {
+            Kind = SlideShapeKind.Ink,
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            PreservedObject = new PreservedObjectInfo { ObjectKind = PreservedObjectKind.Ink },
+        };
+        const string inkXml = "<ink xmlns=\"http://www.w3.org/2003/InkML\"><traceFormat><channel name=\"X\" units=\"pt\"/><channel name=\"Y\" units=\"pt\"/></traceFormat><trace>10 10 20 20</trace></ink>";
+        ink.PreservedObject.Parts["ppt/ink/ink1.xml"] = Encoding.UTF8.GetBytes(inkXml);
+        ink.PreservedObject.PartContentTypes["ppt/ink/ink1.xml"] = "application/inkml+xml";
+        slide.Shapes.Add(ink);
+
+        var disabledRequest = new PresentationPrintRequest(PresentationPrintLayoutKind.Handouts, HandoutSlidesPerPage: 1);
+        var enabledRequest = disabledRequest with { IncludeCommentsAndInkMarkup = true };
+        var disabledNotes = PresentationNotesPagePdfExporter.BuildRenderPlan(
+            presentation,
+            new PresentationNotesPagePdfExportRequest(disabledRequest));
+        var enabledNotes = PresentationNotesPagePdfExporter.BuildRenderPlan(
+            presentation,
+            new PresentationNotesPagePdfExportRequest(enabledRequest));
+        var disabledHandouts = PresentationHandoutPdfExporter.BuildRenderPlan(
+            presentation,
+            new PresentationHandoutPdfExportRequest(disabledRequest));
+        var enabledHandouts = PresentationHandoutPdfExporter.BuildRenderPlan(
+            presentation,
+            new PresentationHandoutPdfExportRequest(enabledRequest));
+
+        foreach (var page in new[] { disabledNotes.Pages[0], disabledHandouts.Pages[0] })
+        {
+            page.Ops.OfType<PdfFillEllipse>().Should().BeEmpty();
+            page.Ops.OfType<PdfLine>().Should().BeEmpty();
+            page.Ops.OfType<PdfText>().Select(text => text.Text).Should().NotContain("Review this slide");
+        }
+
+        foreach (var page in new[] { enabledNotes.Pages[0], enabledHandouts.Pages[0] })
+        {
+            page.Ops.OfType<PdfFillEllipse>().Should().ContainSingle();
+            page.Ops.OfType<PdfLine>().Should().ContainSingle(line => line.Color == PdfColor.Black);
+            page.Ops.OfType<PdfText>().Select(text => text.Text).Should().Contain("Review this slide");
+        }
+    }
+
+    [Fact]
     public void NotesAndHandoutPdfRenderPlans_PreserveCustomGeometrySlideOps()
     {
         var deck = BuildCustomGeometryDeck();

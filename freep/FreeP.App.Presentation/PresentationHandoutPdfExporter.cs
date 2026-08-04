@@ -94,7 +94,11 @@ public static class PresentationHandoutPdfExporter
             if (slot.SlideIndex < 0 || slot.SlideIndex >= presentation.Slides.Count)
                 continue;
 
-            var slidePage = PresentationPdfExporter.BuildSlidePage(presentation.Slides[slot.SlideIndex]);
+            var slidePage = PresentationPdfExporter.BuildSlidePage(
+                presentation.Slides[slot.SlideIndex],
+                presentation.SlideSizeCxEmu,
+                presentation.SlideSizeCyEmu,
+                layout.PrintPlan.Options.IncludeCommentsAndInkMarkup);
             ops.AddRange(MapSlideOps(slidePage, slot.SlideBounds, layout.PageHeight));
             if (layout.PrintPlan.Options.FrameSlides)
                 ops.Add(ToPdfStrokeRect(slot.SlideBounds, layout.PageHeight, SlideBorder, SlideBorderWidth));

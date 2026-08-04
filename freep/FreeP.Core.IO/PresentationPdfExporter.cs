@@ -1,4 +1,8 @@
 using System.IO;
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Free.Shared.Drawing;
 using Free.Shared.Pdf;
 using FreeP.Core.Model;
@@ -28,6 +32,10 @@ public static class PresentationPdfExporter
     private const double ArrowheadLengthStrokeScale = 4.0;
     private const double ArrowheadHalfWidthRatio = 0.35;
     private const double DipToPoint = 0.75;
+    private static readonly Regex InkNumberPattern = new(
+        @"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly XNamespace FreePInkNamespace = "https://freex.local/freep/ink/2026";
 
     /// <summary>Renders the presentation to PDF bytes in memory.</summary>
     public static byte[] ExportToBytes(Presentation presentation) =>
@@ -63,15 +71,34 @@ public static class PresentationPdfExporter
     public static PdfContentPage BuildSlidePage(Slide slide, long slideWidthEmu, long slideHeightEmu)
         => BuildSlidePage(
             slide,
-            PresentationPdfScenePlanner.ResolveSlideSize(slideWidthEmu, slideHeightEmu));
+            PresentationPdfScenePlanner.ResolveSlideSize(slideWidthEmu, slideHeightEmu),
+            includeCommentsAndInkMarkup: false);
 
-    private static PdfContentPage BuildSlidePage(Slide slide, PresentationPdfSlideSize slideSize) =>
-        BuildSlidePage(slide, slideSize.WidthPoints, slideSize.HeightPoints);
+    /// <summary>
+    /// Builds a slide page and optionally includes the persisted PowerPoint comments and InkML
+    /// markup requested by the print workflow. The default remains the ordinary slide surface.
+    /// </summary>
+    public static PdfContentPage BuildSlidePage(
+        Slide slide,
+        long slideWidthEmu,
+        long slideHeightEmu,
+        bool includeCommentsAndInkMarkup) =>
+        BuildSlidePage(
+            slide,
+            PresentationPdfScenePlanner.ResolveSlideSize(slideWidthEmu, slideHeightEmu),
+            includeCommentsAndInkMarkup);
+
+    private static PdfContentPage BuildSlidePage(
+        Slide slide,
+        PresentationPdfSlideSize slideSize,
+        bool includeCommentsAndInkMarkup) =>
+        BuildSlidePage(slide, slideSize.WidthPoints, slideSize.HeightPoints, includeCommentsAndInkMarkup);
 
     private static PdfContentPage BuildSlidePage(
         Slide slide,
         double slideWidthPoints,
-        double slideHeightPoints)
+        double slideHeightPoints,
+        bool includeCommentsAndInkMarkup = false)
     {
         ArgumentNullException.ThrowIfNull(slide);
 
@@ -109,6 +136,14 @@ public static class PresentationPdfExporter
         // Skip placeholder shapes (title already rendered above; body placeholders have no freestanding text).
         foreach (var shape in slide.Shapes.Where(s => s.Placeholder is null))
         {
+            if (shape.Kind == SlideShapeKind.Ink)
+            {
+                if (includeCommentsAndInkMarkup)
+                    AppendInkMarkup(ops, shape, slide, slideWidthPoints, slideHeightPoints);
+
+                continue;
+            }
+
             var shapeOps = new List<PdfDrawOp>();
             var shapeBox = TryAppendShapeGeometry(shapeOps, shape, slideHeightPoints);
             var geometryOpsCount = shapeOps.Count;
@@ -138,6 +173,9 @@ public static class PresentationPdfExporter
                 y -= BodyLeadingPt;
             }
         }
+
+        if (includeCommentsAndInkMarkup)
+            AppendCommentMarkup(ops, slide, slideWidthPoints, slideHeightPoints);
 
         return new PdfContentPage(slideWidthPoints, slideHeightPoints, ops);
     }
@@ -1195,6 +1233,269 @@ public static class PresentationPdfExporter
         }
     }
 
+    private static void AppendCommentMarkup(
+        List<PdfDrawOp> ops,
+        Slide slide,
+        double slideWidthPoints,
+        double slideHeightPoints)
+    {
+        foreach (var comment in slide.Comments)
+        {
+            var anchorX = Math.Clamp(
+                PresentationPdfScenePlanner.EmuToPoints(comment.Xemu),
+                4,
+                Math.Max(4, slideWidthPoints - 4));
+            var anchorTop = Math.Clamp(
+                PresentationPdfScenePlanner.EmuToPoints(comment.Yemu),
+                4,
+                Math.Max(4, slideHeightPoints - 4));
+            var markerY = slideHeightPoints - anchorTop - 3;
+            var cardWidth = Math.Min(180, Math.Max(64, slideWidthPoints - 8));
+            var cardHeight = 28.0;
+            var cardX = Math.Clamp(anchorX, 4, Math.Max(4, slideWidthPoints - cardWidth - 4));
+            var cardY = Math.Max(4, markerY - cardHeight - 7);
+            var author = TrimMarkupText(
+                string.IsNullOrWhiteSpace(comment.Initials) ? comment.Author : comment.Initials,
+                24);
+            var body = TrimMarkupText(comment.Text, 82);
+
+            ops.Add(new PdfFillRect(cardX, cardY, cardWidth, cardHeight, new PdfColor(0xFF, 0xF2, 0xCC)));
+            ops.Add(new PdfStrokeRect(cardX, cardY, cardWidth, cardHeight, new PdfColor(0xBF, 0x90, 0x00), 0.5));
+            ops.Add(new PdfFillEllipse(anchorX - 3, markerY - 3, 6, 6, new PdfColor(0xC0, 0x00, 0x00)));
+
+            if (author.Length > 0)
+                ops.Add(new PdfText(cardX + 4, cardY + cardHeight - 10, 8, PdfFontFace.Bold, PdfColor.Black, author));
+            if (body.Length > 0)
+                ops.Add(new PdfText(cardX + 4, cardY + 5, 8, PdfFontFace.Regular, PdfColor.Black, body));
+        }
+    }
+
+    private static string TrimMarkupText(string? text, int maxLength)
+    {
+        var value = OneLine(text ?? string.Empty).Trim();
+        if (value.Length <= maxLength)
+            return value;
+
+        return value[..Math.Max(0, maxLength - 3)] + "...";
+    }
+
+    private static void AppendInkMarkup(
+        List<PdfDrawOp> ops,
+        SlideShape shape,
+        Slide slide,
+        double slideWidthPoints,
+        double slideHeightPoints)
+    {
+        foreach (var stroke in ReadInkStrokes(shape, slide))
+        {
+            var lines = new List<PdfDrawOp>(Math.Max(0, stroke.Points.Count - 1));
+            for (var index = 1; index < stroke.Points.Count; index++)
+            {
+                var start = stroke.Points[index - 1];
+                var end = stroke.Points[index];
+                var x1 = start.X * DipToPoint;
+                var x2 = end.X * DipToPoint;
+                var y1 = slideHeightPoints - (start.Y * DipToPoint);
+                var y2 = slideHeightPoints - (end.Y * DipToPoint);
+                if ((x1 < -slideWidthPoints || x1 > slideWidthPoints * 2)
+                    && (x2 < -slideWidthPoints || x2 > slideWidthPoints * 2))
+                    continue;
+
+                lines.Add(new PdfLine(x1, y1, x2, y2, stroke.Color, stroke.WidthDip * DipToPoint));
+            }
+
+            if (lines.Count == 0)
+                continue;
+
+            if (stroke.Opacity < 0.999)
+                ops.Add(new PdfOpacityGroup(stroke.Opacity, lines));
+            else
+                ops.AddRange(lines);
+        }
+    }
+
+    private static IReadOnlyList<InkStroke> ReadInkStrokes(SlideShape shape, Slide slide)
+    {
+        if (shape.PreservedObject is not { ObjectKind: PreservedObjectKind.Ink } info)
+            return Array.Empty<InkStroke>();
+
+        var bytes = info.Parts
+            .Where(part => info.PartContentTypes.TryGetValue(part.Key, out var contentType)
+                && contentType.Contains("inkml", StringComparison.OrdinalIgnoreCase))
+            .Select(part => part.Value)
+            .Concat(info.Parts
+                .Where(part => part.Key.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                .Select(part => part.Value))
+            .FirstOrDefault(part => part.AsSpan().IndexOf("<ink"u8) >= 0);
+        if (bytes is not { Length: > 0 })
+            return Array.Empty<InkStroke>();
+
+        XDocument document;
+        try
+        {
+            document = XDocument.Parse(Encoding.UTF8.GetString(bytes), LoadOptions.PreserveWhitespace);
+        }
+        catch
+        {
+            return Array.Empty<InkStroke>();
+        }
+
+        var root = document.Root;
+        if (root is null || !string.Equals(root.Name.LocalName, "ink", StringComparison.OrdinalIgnoreCase))
+            return Array.Empty<InkStroke>();
+
+        var traceFormat = root.Descendants().FirstOrDefault(element => element.Name.LocalName == "traceFormat");
+        var channels = traceFormat?.Elements()
+            .Where(element => element.Name.LocalName == "channel")
+            .Select(element => (
+                Name: GetInkAttribute(element, "name") ?? string.Empty,
+                Units: GetInkAttribute(element, "units") ?? string.Empty))
+            .ToArray() ?? [];
+        var xIndex = Array.FindIndex(channels, channel => channel.Name.Equals("X", StringComparison.OrdinalIgnoreCase));
+        var yIndex = Array.FindIndex(channels, channel => channel.Name.Equals("Y", StringComparison.OrdinalIgnoreCase));
+        if (xIndex < 0 || yIndex < 0 || channels.Length < 2)
+            return Array.Empty<InkStroke>();
+
+        var brushes = ReadInkBrushes(root);
+        var frameWidthDip = PresentationPdfScenePlanner.EmuToPoints(shape.ExtentCxEmu) / DipToPoint;
+        var frameHeightDip = PresentationPdfScenePlanner.EmuToPoints(shape.ExtentCyEmu) / DipToPoint;
+        var frameLeftDip = PresentationPdfScenePlanner.EmuToPoints(shape.OffsetXEmu) / DipToPoint;
+        var frameTopDip = PresentationPdfScenePlanner.EmuToPoints(shape.OffsetYEmu) / DipToPoint;
+        var isFreePAbsolute = string.Equals(
+            GetInkAttribute(root, "format", FreePInkNamespace),
+            "freep-slideshow-ink",
+            StringComparison.OrdinalIgnoreCase);
+        var result = new List<InkStroke>();
+
+        foreach (var trace in root.Descendants().Where(element => element.Name.LocalName == "trace"))
+        {
+            var values = InkNumberPattern.Matches(trace.Value)
+                .Select(match => ParseInkDouble(match.Value, double.NaN))
+                .Where(value => !double.IsNaN(value) && !double.IsInfinity(value))
+                .ToArray();
+            if (values.Length < channels.Length)
+                continue;
+
+            var points = new List<(double X, double Y)>();
+            for (var index = 0; index + channels.Length <= values.Length; index += channels.Length)
+            {
+                points.Add((
+                    ConvertInkValue(values[index + xIndex], channels[xIndex].Units),
+                    ConvertInkValue(values[index + yIndex], channels[yIndex].Units)));
+            }
+
+            if (points.Count == 0)
+                continue;
+
+            if (!isFreePAbsolute && points.All(point =>
+                    point.X >= -1 && point.Y >= -1
+                    && point.X <= frameWidthDip + 1 && point.Y <= frameHeightDip + 1))
+            {
+                points = points
+                    .Select(point => (point.X + frameLeftDip, point.Y + frameTopDip))
+                    .ToList();
+            }
+
+            var brushId = GetInkAttribute(trace, "brushRef")?.TrimStart('#');
+            var brush = brushId is not null && brushes.TryGetValue(brushId, out var parsedBrush)
+                ? parsedBrush
+                : new InkBrush(PdfColor.Black, 1.5, 1.0);
+            var color = TryParseInkColor(GetInkAttribute(trace, "color", FreePInkNamespace), out var traceColor)
+                ? traceColor
+                : brush.Color;
+            var width = ParseOptionalInkDouble(GetInkAttribute(trace, "thicknessDip", FreePInkNamespace))
+                ?? brush.WidthDip;
+            var opacity = ParseOptionalInkDouble(GetInkAttribute(trace, "opacity", FreePInkNamespace))
+                ?? brush.Opacity;
+            result.Add(new InkStroke(points, color, Math.Max(0.1, width), Math.Clamp(opacity, 0, 1)));
+        }
+
+        return result;
+    }
+
+    private static Dictionary<string, InkBrush> ReadInkBrushes(XElement root)
+    {
+        var result = new Dictionary<string, InkBrush>(StringComparer.OrdinalIgnoreCase);
+        foreach (var brushElement in root.Descendants().Where(element => element.Name.LocalName == "brush"))
+        {
+            var id = GetInkAttribute(brushElement, "id", XNamespace.Xml);
+            if (string.IsNullOrWhiteSpace(id))
+                continue;
+
+            var color = PdfColor.Black;
+            var width = 1.5;
+            var opacity = 1.0;
+            foreach (var property in brushElement.Elements().Where(element => element.Name.LocalName == "brushProperty"))
+            {
+                switch (GetInkAttribute(property, "name")?.ToLowerInvariant())
+                {
+                    case "color":
+                        TryParseInkColor(GetInkAttribute(property, "value"), out color);
+                        break;
+                    case "width":
+                        width = ConvertInkValue(ParseInkDouble(GetInkAttribute(property, "value"), 1.5), GetInkAttribute(property, "units"));
+                        break;
+                    case "transparency":
+                        var transparency = ParseInkDouble(GetInkAttribute(property, "value"), 0);
+                        opacity = 1 - Math.Clamp(transparency > 1 ? transparency / 255 : transparency, 0, 1);
+                        break;
+                }
+            }
+
+            result[id.TrimStart('#')] = new InkBrush(color, Math.Max(0.1, width), opacity);
+        }
+
+        return result;
+    }
+
+    private static string? GetInkAttribute(XElement element, string localName, XNamespace? namespaceName = null) =>
+        (namespaceName is null
+            ? element.Attributes().FirstOrDefault(attribute => attribute.Name.LocalName == localName)
+            : element.Attribute(namespaceName + localName))?.Value;
+
+    private static double ConvertInkValue(double value, string? units) =>
+        units?.Trim().ToLowerInvariant() switch
+        {
+            "cm" => value * 96 / 2.54,
+            "mm" => value * 96 / 25.4,
+            "in" or "inch" or "inches" => value * 96,
+            "pt" or "point" or "points" => value * 96 / 72,
+            "m" => value * 96 / 0.0254,
+            "um" => value * 96 / 25400,
+            "nm" => value * 96 / 25400000,
+            _ => value,
+        };
+
+    private static double ParseInkDouble(string? value, double fallback) =>
+        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
+    private static double? ParseOptionalInkDouble(string? value) =>
+        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+
+    private static bool TryParseInkColor(string? value, out PdfColor color)
+    {
+        color = PdfColor.Black;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var hex = value.Trim().TrimStart('#');
+        if (hex.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            hex = hex[2..];
+        if (hex.Length == 3)
+            hex = string.Concat(hex.Select(character => new string(character, 2)));
+        if (hex.Length == 8)
+            hex = hex[2..];
+        if (hex.Length != 6 || !int.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
+            return false;
+
+        color = new PdfColor((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
+        return true;
+    }
+
     // The portable text op draws a single line; flatten tabs so spacing is at least visible.
     private static string OneLine(string text) => text.Replace("\t", "    ");
 
@@ -1218,5 +1519,11 @@ public static class PresentationPdfExporter
         double Opacity);
 
     private sealed record ShapeBox(double X, double Y, double Width, double Height);
+    private sealed record InkBrush(PdfColor Color, double WidthDip, double Opacity);
+    private sealed record InkStroke(
+        IReadOnlyList<(double X, double Y)> Points,
+        PdfColor Color,
+        double WidthDip,
+        double Opacity);
     private readonly record struct ShapeBounds(double X, double Y, double Width, double Height);
 }
