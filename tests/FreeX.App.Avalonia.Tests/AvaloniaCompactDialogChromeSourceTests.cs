@@ -264,10 +264,13 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         var tableResizeSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.TableResize.cs"));
 
         allowEditRangeSource.Should().Contain("using Free.Shared.Shell.Avalonia;");
-        allowEditRangeSource.Should().Contain("ApplyDataOpsListBoxChrome(rangesList);");
+        allowEditRangeSource.Should().Contain(
+            "AvaloniaCompactDialogChrome.ApplyListBox(rangesList, AllowEditRangeDialogChromeStyle);");
         allowEditRangeSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow(");
-        allowEditRangeSource.Should().Contain("[newButton, modifyButton, deleteButton, permissionsButton]");
-        allowEditRangeSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, closeButton], new Thickness(0, 10, 0, 0));");
+        allowEditRangeSource.Should().Contain(
+            "Children = { newButton, modifyButton, deleteButton, permissionsButton }");
+        allowEditRangeSource.Should().Contain(
+            "AvaloniaCompactDialogChrome.CreateActionRow([okButton, closeButton], style: AvaloniaCompactDialogChrome.WindowsStyle);");
 
         consolidateSource.Should().Contain("ApplyDataOpsListBoxChrome(referencesList);");
         consolidateSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(listBox, DataOpsDialogChromeStyle);");
