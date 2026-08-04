@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Free.Shared.Shell;
 
 /// <summary>
@@ -107,7 +109,72 @@ public sealed class ResourceShellStrings : IShellStrings
 public static class ShellStringText
 {
     public static string CreateAutomationName(string? textWithAccessKey) =>
-        textWithAccessKey?.Replace("_", string.Empty, StringComparison.Ordinal) ?? string.Empty;
+        NormalizeAccessText(textWithAccessKey);
+
+    /// <summary>Returns the text displayed by WPF/Avalonia access-key text controls.</summary>
+    public static string NormalizeAccessText(string? textWithAccessKey)
+    {
+        if (string.IsNullOrEmpty(textWithAccessKey))
+            return string.Empty;
+
+        var firstMarker = textWithAccessKey.IndexOf('_', StringComparison.Ordinal);
+        if (firstMarker < 0)
+            return textWithAccessKey;
+
+        var normalized = new StringBuilder(textWithAccessKey.Length);
+        normalized.Append(textWithAccessKey, 0, firstMarker);
+        for (var index = firstMarker; index < textWithAccessKey.Length; index++)
+        {
+            if (textWithAccessKey[index] != '_')
+            {
+                normalized.Append(textWithAccessKey[index]);
+                continue;
+            }
+
+            if (index + 1 < textWithAccessKey.Length && textWithAccessKey[index + 1] == '_')
+            {
+                normalized.Append('_');
+                index++;
+            }
+        }
+
+        return normalized.ToString();
+    }
+
+    /// <summary>Indicates whether the text needs an access-key-aware text control.</summary>
+    public static bool RequiresAccessText(string? textWithAccessKey) =>
+        textWithAccessKey is not null
+        && textWithAccessKey.IndexOf('_', StringComparison.Ordinal) >= 0;
+
+    /// <summary>Finds the first unescaped WPF access-key marker.</summary>
+    public static bool TryGetAccessKey(string? textWithAccessKey, out char accessKey)
+    {
+        if (!string.IsNullOrEmpty(textWithAccessKey))
+        {
+            for (var index = 0; index < textWithAccessKey.Length - 1; index++)
+            {
+                if (textWithAccessKey[index] != '_')
+                    continue;
+
+                if (textWithAccessKey[index + 1] == '_')
+                {
+                    index++;
+                    continue;
+                }
+
+                accessKey = char.ToUpperInvariant(textWithAccessKey[index + 1]);
+                return true;
+            }
+        }
+
+        accessKey = default;
+        return false;
+    }
+
+    public static string CreateAcceleratorKey(string? textWithAccessKey) =>
+        TryGetAccessKey(textWithAccessKey, out var accessKey)
+            ? $"Alt+{accessKey}"
+            : string.Empty;
 }
 
 /// <summary>

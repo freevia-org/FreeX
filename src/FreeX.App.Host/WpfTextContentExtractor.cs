@@ -1,7 +1,7 @@
-using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using Free.Shared.Shell;
 
 namespace FreeX.App.Host;
 
@@ -85,35 +85,8 @@ internal static class WpfTextContentExtractor
         return range.Text.TrimEnd('\r', '\n');
     }
 
-    public static string NormalizeAccessText(string text)
-    {
-        if (string.IsNullOrEmpty(text))
-            return "";
-
-        var markerIndex = text.IndexOf('_', StringComparison.Ordinal);
-        if (markerIndex < 0)
-            return text;
-
-        var normalized = new StringBuilder(text.Length);
-        normalized.Append(text, 0, markerIndex);
-
-        for (var i = markerIndex; i < text.Length; i++)
-        {
-            if (text[i] != '_')
-            {
-                normalized.Append(text[i]);
-                continue;
-            }
-
-            if (i + 1 < text.Length && text[i + 1] == '_')
-            {
-                normalized.Append('_');
-                i++;
-            }
-        }
-
-        return normalized.ToString();
-    }
+    public static string NormalizeAccessText(string text) =>
+        ShellStringText.NormalizeAccessText(text);
 
     private static void AppendInlineText(Inline inline, List<string> parts)
     {
