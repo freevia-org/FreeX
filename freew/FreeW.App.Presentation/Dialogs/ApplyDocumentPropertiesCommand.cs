@@ -2,26 +2,38 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Dialogs;
 
-/// <summary>The five editable core-property fields exposed by the Document Properties dialog.</summary>
+/// <summary>The editable core-property fields exposed by the Document Properties dialog.</summary>
 public sealed record DocumentPropertiesDialogValues(
     string? Title,
     string? Author,
     string? Subject,
     string? Keywords,
-    string? Comments)
+    string? Comments,
+    string? Category,
+    string? ContentStatus,
+    string? Language,
+    string? Version)
 {
     public static DocumentPropertiesDialogValues FromInput(
         string? title,
         string? author,
         string? subject,
         string? keywords,
-        string? comments) =>
+        string? comments,
+        string? category,
+        string? contentStatus,
+        string? language,
+        string? version) =>
         new(
             Normalize(title),
             Normalize(author),
             Normalize(subject),
             Normalize(keywords),
-            Normalize(comments));
+            Normalize(comments),
+            Normalize(category),
+            Normalize(contentStatus),
+            Normalize(language),
+            Normalize(version));
 
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -41,7 +53,11 @@ public sealed class ApplyDocumentPropertiesCommand(DocumentPropertiesDialogValue
         + StringBytes(values.Author)
         + StringBytes(values.Subject)
         + StringBytes(values.Keywords)
-        + StringBytes(values.Comments);
+        + StringBytes(values.Comments)
+        + StringBytes(values.Category)
+        + StringBytes(values.ContentStatus)
+        + StringBytes(values.Language)
+        + StringBytes(values.Version);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -67,7 +83,11 @@ public sealed class ApplyDocumentPropertiesCommand(DocumentPropertiesDialogValue
             properties.Author,
             properties.Subject,
             properties.Keywords,
-            properties.Comments);
+            properties.Comments,
+            properties.Category,
+            properties.ContentStatus,
+            properties.Language,
+            properties.Version);
     }
 
     private static void Restore(IDocumentCommandContext context, DocumentPropertiesDialogValues snapshot)
@@ -78,6 +98,10 @@ public sealed class ApplyDocumentPropertiesCommand(DocumentPropertiesDialogValue
         properties.Subject = snapshot.Subject;
         properties.Keywords = snapshot.Keywords;
         properties.Comments = snapshot.Comments;
+        properties.Category = snapshot.Category;
+        properties.ContentStatus = snapshot.ContentStatus;
+        properties.Language = snapshot.Language;
+        properties.Version = snapshot.Version;
     }
 
     private static int StringBytes(string? value) => (value?.Length ?? 0) * sizeof(char);

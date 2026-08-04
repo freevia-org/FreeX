@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using System.Globalization;
 using Free.Shared.Opc;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
@@ -19,6 +20,10 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
     private readonly TextBox _author = new() { MinWidth = 280 };
     private readonly TextBox _subject = new() { MinWidth = 280 };
     private readonly TextBox _keywords = new() { MinWidth = 280 };
+    private readonly TextBox _category = new() { MinWidth = 280 };
+    private readonly TextBox _contentStatus = new() { MinWidth = 280 };
+    private readonly TextBox _language = new() { MinWidth = 280 };
+    private readonly TextBox _version = new() { MinWidth = 280 };
     private readonly TextBox _comments = new()
     {
         MinWidth = 280,
@@ -35,7 +40,7 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
         ArgumentNullException.ThrowIfNull(properties);
 
         Title = "Document Properties";
-        Width = 440;
+        Width = 480;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -47,6 +52,10 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
         _subject.Text = properties.Subject ?? string.Empty;
         _keywords.Text = properties.Keywords ?? string.Empty;
         _comments.Text = properties.Comments ?? string.Empty;
+        _category.Text = properties.Category ?? string.Empty;
+        _contentStatus.Text = properties.ContentStatus ?? string.Empty;
+        _language.Text = properties.Language ?? string.Empty;
+        _version.Text = properties.Version ?? string.Empty;
 
         var grid = new Grid
         {
@@ -56,8 +65,15 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
         AddRow(grid, 0, "Title:", _title, FocusPlan.InitialFocusTargetAutomationId);
         AddRow(grid, 1, "Author:", _author, "DocumentPropertiesAuthor");
         AddRow(grid, 2, "Subject:", _subject, "DocumentPropertiesSubject");
-        AddRow(grid, 3, "Keywords:", _keywords, "DocumentPropertiesKeywords");
-        AddRow(grid, 4, "Comments:", _comments, "DocumentPropertiesComments");
+        AddRow(grid, 3, "Category:", _category, "DocumentPropertiesCategory");
+        AddRow(grid, 4, "Keywords:", _keywords, "DocumentPropertiesKeywords");
+        AddRow(grid, 5, "Comments:", _comments, "DocumentPropertiesComments");
+        AddRow(grid, 6, "Status:", _contentStatus, "DocumentPropertiesContentStatus");
+        AddRow(grid, 7, "Language:", _language, "DocumentPropertiesLanguage");
+        AddRow(grid, 8, "Version:", _version, "DocumentPropertiesVersion");
+        AddReadOnlyRow(grid, 9, "Last saved by:", properties.LastModifiedBy, "DocumentPropertiesLastModifiedBy");
+        AddReadOnlyRow(grid, 10, "Created:", FormatDate(properties.Created), "DocumentPropertiesCreated");
+        AddReadOnlyRow(grid, 11, "Modified:", FormatDate(properties.Modified), "DocumentPropertiesModified");
 
         var ok = new Button { Content = "OK", IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 84, isDefault: true);
@@ -97,7 +113,11 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
             _author.Text,
             _subject.Text,
             _keywords.Text,
-            _comments.Text);
+            _comments.Text,
+            _category.Text,
+            _contentStatus.Text,
+            _language.Text,
+            _version.Text);
         Accepted = true;
         Close();
     }
@@ -123,5 +143,34 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
         Grid.SetColumn(field, 1);
         grid.Children.Add(field);
     }
+
+    private static void AddReadOnlyRow(Grid grid, int row, string label, string? value, string automationId)
+    {
+        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        var field = new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(value) ? "-" : value,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 8, 0, 4),
+        };
+        AutomationProperties.SetAutomationId(field, automationId);
+
+        var caption = new TextBlock
+        {
+            Text = label,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 10, 10, 0),
+        };
+        Grid.SetRow(caption, row);
+        Grid.SetColumn(caption, 0);
+        grid.Children.Add(caption);
+
+        Grid.SetRow(field, row);
+        Grid.SetColumn(field, 1);
+        grid.Children.Add(field);
+    }
+
+    private static string? FormatDate(DateTimeOffset? value) =>
+        value?.ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
 
 }
