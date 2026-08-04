@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
-using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
@@ -19,7 +18,6 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private readonly TextBox _transitionDuration;
     private readonly TextBox _frameBorderColor;
     private readonly TextBox _cropEdges;
-    private readonly TextBlock _validation;
     private readonly IReadOnlyList<SummaryZoomTarget> _summaryTargets;
     private readonly IReadOnlyList<ZoomObjectProperties> _summaryTileProperties;
     private readonly ComboBox? _summaryTile;
@@ -83,11 +81,6 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             MinWidth = 180,
             PlaceholderText = "left, top, right, bottom",
         };
-        _validation = new TextBlock
-        {
-            Foreground = Brushes.Firebrick,
-            TextWrapping = TextWrapping.Wrap,
-        };
         if (_summaryTargets.Count > 0)
         {
             _summaryTile = new ComboBox
@@ -134,7 +127,6 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         }
         children.Add(_returnToParent);
         children.Add(_showBackground);
-        children.Add(_validation);
         children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -166,14 +158,17 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         },
     };
 
-    private void Apply()
+    private async void Apply()
     {
         if (!ZoomObjectPropertiesPlanner.TryParseTransitionDuration(
                 _transitionDuration.Text,
                 _transitionEnabled.IsChecked == true,
                 out var transitionDuration))
         {
-            _validation.Text = "Transition duration must be a positive whole number of milliseconds.";
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                this,
+                ZoomObjectPropertiesPlanner.InvalidTransitionDurationMessage,
+                ZoomObjectPropertiesPlanner.DialogTitle);
             return;
         }
         if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderColor(
@@ -181,16 +176,21 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                 _frameBorderEnabled.IsChecked == true,
                 out var frameBorderColor))
         {
-            _validation.Text = "Border color must be a six-digit RGB value.";
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                this,
+                ZoomObjectPropertiesPlanner.InvalidFrameBorderColorMessage,
+                ZoomObjectPropertiesPlanner.DialogTitle);
             return;
         }
         if (!ZoomObjectPropertiesPlanner.TryParseCropEdges(
                 _cropEdges.Text, out var cropLeft, out var cropTop, out var cropRight, out var cropBottom))
         {
-            _validation.Text = "Crop edges must be four percentages: left, top, right, bottom.";
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                this,
+                ZoomObjectPropertiesPlanner.InvalidCropEdgesMessage,
+                ZoomObjectPropertiesPlanner.DialogTitle);
             return;
         }
-        _validation.Text = string.Empty;
         if (_summaryTile is not null && _summaryOffset is not null && _summaryScale is not null)
         {
             if (!ZoomObjectPropertiesPlanner.TryParseFactorPair(
@@ -198,7 +198,10 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                 || !ZoomObjectPropertiesPlanner.TryParseFactorPair(
                     _summaryScale.Text, allowNegative: false, out var scaleX, out var scaleY))
             {
-                _validation.Text = "Summary tile position and scale must each be two percentages.";
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    this,
+                    ZoomObjectPropertiesPlanner.InvalidSummaryTileLayoutMessage,
+                    ZoomObjectPropertiesPlanner.DialogTitle);
                 return;
             }
 

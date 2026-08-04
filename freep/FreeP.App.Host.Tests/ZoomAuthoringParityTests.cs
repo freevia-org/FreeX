@@ -34,4 +34,21 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("onFormatZoom:       () => OpenZoomObjectPropertiesDialog()");
         source.Should().Contain("Editor.SetSelectedZoomObjectProperties(dialog.Properties)");
     }
+
+    [Fact]
+    public void Wpf_zoom_validation_uses_the_shared_messages_and_modal_warning_surface()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Host",
+            "ZoomObjectPropertiesDialog.cs"));
+
+        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidTransitionDurationMessage");
+        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderColorMessage");
+        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidCropEdgesMessage");
+        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidSummaryTileLayoutMessage");
+        source.Should().Contain("MessageBox.Show(this,");
+        source.Should().NotContain("inline validation");
+    }
 }

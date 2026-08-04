@@ -177,7 +177,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                 out var transitionDuration))
         {
             MessageBox.Show(this,
-                "Transition duration must be a positive whole number of milliseconds.",
+                ZoomObjectPropertiesPlanner.InvalidTransitionDurationMessage,
                 ZoomObjectPropertiesPlanner.DialogTitle,
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -189,7 +189,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                 out var frameBorderColor))
         {
             MessageBox.Show(this,
-                "Border color must be a six-digit RGB value.",
+                ZoomObjectPropertiesPlanner.InvalidFrameBorderColorMessage,
                 ZoomObjectPropertiesPlanner.DialogTitle,
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -199,7 +199,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                 _cropEdges.Text, out var cropLeft, out var cropTop, out var cropRight, out var cropBottom))
         {
             MessageBox.Show(this,
-                "Crop edges must be four percentages: left, top, right, bottom.",
+                ZoomObjectPropertiesPlanner.InvalidCropEdgesMessage,
                 ZoomObjectPropertiesPlanner.DialogTitle,
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -213,7 +213,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                     _summaryScale.Text, allowNegative: false, out var scaleX, out var scaleY))
             {
                 MessageBox.Show(this,
-                    "Summary tile position and scale must each be two percentages.",
+                    ZoomObjectPropertiesPlanner.InvalidSummaryTileLayoutMessage,
                     ZoomObjectPropertiesPlanner.DialogTitle,
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);

@@ -33,6 +33,22 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("Editor.SetSelectedZoomObjectProperties(dialog.Properties)");
     }
 
+    [Fact]
+    public void Avalonia_zoom_validation_matches_wpf_with_the_shared_modal_warning_surface()
+    {
+        var source = File.ReadAllText(RepoFile(
+            "freep",
+            "FreeP.App.Avalonia",
+            "ZoomObjectPropertiesDialog.cs"));
+
+        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidTransitionDurationMessage");
+        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderColorMessage");
+        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidCropEdgesMessage");
+        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidSummaryTileLayoutMessage");
+        source.Should().Contain("AvaloniaUserMessageDialog.ShowWarningAsync(");
+        source.Should().NotContain("_validation");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
