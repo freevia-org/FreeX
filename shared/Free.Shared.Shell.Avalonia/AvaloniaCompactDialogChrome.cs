@@ -455,6 +455,20 @@ public static class AvaloniaCompactDialogChrome
         Dispatcher.UIThread.Post(ApplyWpfComboGlyph, DispatcherPriority.Render);
     }
 
+    public static void ApplyWpfDisabledComboSurface(ComboBox comboBox)
+    {
+        ArgumentNullException.ThrowIfNull(comboBox);
+        comboBox.ApplyTemplate();
+        foreach (var surface in comboBox.GetVisualDescendants()
+            .OfType<Border>()
+            .Where(border => border.Name == "PART_LayoutRoot"))
+            surface.Background = comboBox.Background;
+        foreach (var presenter in comboBox.GetVisualDescendants()
+            .OfType<ContentPresenter>()
+            .Where(presenter => presenter.Name == "PART_ContentPresenter"))
+            presenter.Background = comboBox.Background;
+    }
+
     public static double CalculateReadOnlyDocumentInset(double viewportHeight, double documentHeight)
     {
         if (!double.IsFinite(viewportHeight) ||
