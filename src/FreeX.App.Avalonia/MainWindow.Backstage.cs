@@ -152,8 +152,7 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var hasSelection =
-            _session.SelectedRange.RowCount > 1 || _session.SelectedRange.ColCount > 1;
+        var hasSelection = HasPrintSelection(_session.SelectedRange);
         var scopePlan = WorkbookExportScopePlanner.Build(
             _session.Workbook,
             hasSelection,
