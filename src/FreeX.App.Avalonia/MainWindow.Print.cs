@@ -35,6 +35,8 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    internal static bool HasPrintSelection(GridRange? selectedRange) => selectedRange is not null;
+
     /// <summary>
     /// Directory that contains the workbook's saved file, with a trailing separator, for the
     /// print/export header/footer <c>&amp;Z</c> / <c>&amp;[Path]</c> tokens
@@ -82,8 +84,7 @@ public sealed partial class MainWindow
 
         ClearSelectedDrawingObject();
 
-        var hasSelection =
-            _session.SelectedRange.RowCount > 1 || _session.SelectedRange.ColCount > 1;
+        var hasSelection = HasPrintSelection(_session.SelectedRange);
         var scopePlan = WorkbookExportScopePlanner.Build(
             _session.Workbook,
             hasSelection,

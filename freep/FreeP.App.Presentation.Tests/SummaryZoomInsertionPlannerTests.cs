@@ -117,6 +117,34 @@ public sealed class SummaryZoomInsertionPlannerTests
     }
 
     [Fact]
+    public void Summary_zoom_all_tile_format_scope_normalizes_divergent_tiles_and_undoes_atomically()
+    {
+        var presentation = BuildPresentation();
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = session.InsertSummaryZoom(new[] { "{SECTION-ONE}", "{SECTION-TWO}" });
+        var firstTile = new ZoomObjectProperties(ReturnToParent: false, ImageType: "cover");
+        var allTiles = new ZoomObjectProperties(ReturnToParent: true, ImageType: "preview");
+
+        session.SetSummaryZoomTileProperties(shape.Id, "{SECTION-ONE}", firstTile).Should().BeTrue();
+        session.SetZoomObjectProperties(shape.Id, allTiles).Should().BeTrue();
+
+        var tiles = XElement.Parse(shape.PreservedObject!.RawXml).Descendants()
+            .Where(element => element.Name.LocalName == "summaryZmObj")
+            .ToArray();
+        tiles.Should().HaveCount(2);
+        tiles.Should().AllSatisfy(tile =>
+            tile.Descendants().Single(element => element.Name.LocalName == "zmPr")
+                .Attribute("imageType")!.Value.Should().Be("preview"));
+
+        session.Undo();
+        XElement.Parse(shape.PreservedObject.RawXml).Descendants()
+            .Single(element => element.Name.LocalName == "summaryZmObj"
+                && element.Attribute("sectionId")?.Value == "{SECTION-ONE}")
+            .Descendants().Single(element => element.Name.LocalName == "zmPr")
+            .Attribute("imageType")!.Value.Should().Be("cover");
+    }
+
+    [Fact]
     public void Summary_zoom_tile_properties_are_individual_and_drive_navigation()
     {
         var presentation = BuildPresentation();

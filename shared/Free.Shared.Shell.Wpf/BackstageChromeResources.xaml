@@ -13,8 +13,6 @@
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="HorizontalContentAlignment" Value="Left"/>
         <Setter Property="HorizontalAlignment" Value="Stretch"/>
-        <Setter Property="Padding" Value="22,9"/>
-        <Setter Property="FontSize" Value="13"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
@@ -62,7 +60,5 @@
 
     <Style x:Key="BackstageSidebarBackButton" BasedOn="{StaticResource BackstageSidebarNavButton}" TargetType="Button">
         <Setter Property="HorizontalAlignment" Value="Left"/>
-        <Setter Property="Padding" Value="16,11"/>
-        <Setter Property="FontSize" Value="18"/>
     </Style>
 </ResourceDictionary>

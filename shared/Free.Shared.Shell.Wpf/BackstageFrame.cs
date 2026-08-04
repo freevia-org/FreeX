@@ -180,7 +180,11 @@ public sealed class BackstageFrame : UserControl
 
         _back = new Button { ToolTip = "Back (Esc)" };
         ApplyStyle(_back, "BackstageSidebarBackButton");
-        _back.Content = BuildIcon(BackstageIconKind.Previous, size: 20);
+        _back.Padding = ToThickness(BackstageVisualContract.Frame.BackButtonPadding);
+        _back.FontSize = BackstageVisualContract.Frame.BackButtonFontSize;
+        _back.Content = BuildIcon(
+            BackstageIconKind.Previous,
+            BackstageVisualContract.Frame.BackButtonIconSize);
         _back.Click += (_, _) => Hide();
         DockPanel.SetDock(_back, Dock.Top);
         railDock.Children.Add(_back);
@@ -189,7 +193,7 @@ public sealed class BackstageFrame : UserControl
         DockPanel.SetDock(_bottomNav, Dock.Bottom);
         railDock.Children.Add(_bottomNav);
 
-        _topNav = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
+        _topNav = new StackPanel { Margin = ToThickness(BackstageVisualContract.Frame.TopNavigationMargin) };
         railDock.Children.Add(_topNav); // fills remaining space
 
         _rail = new Border { Background = ResolveSidebarBrush(), Child = railDock };
@@ -473,6 +477,8 @@ public sealed class BackstageFrame : UserControl
     {
         var button = new Button { Tag = entry };
         ApplyStyle(button, "BackstageSidebarNavButton");
+        button.Padding = ToThickness(BackstageVisualContract.Frame.NavigationButtonPadding);
+        button.FontSize = BackstageVisualContract.Frame.NavigationFontSize;
 
         // Render the label through AccessText so a mnemonic underscore (e.g. FreeX's "_Save"/"Save _As")
         // shows the access-key marker and participates in Alt-access, exactly like the hand-rolled rail did.
@@ -480,7 +486,10 @@ public sealed class BackstageFrame : UserControl
         if (entry.Icon is { } kind)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal };
-            row.Children.Add(BuildIcon(kind, size: 22, commandName: entry.IconCommandName));
+            row.Children.Add(BuildIcon(
+                kind,
+                BackstageVisualContract.Frame.NavigationIconSize,
+                entry.IconCommandName));
             row.Children.Add(new AccessText { Text = entry.Label, VerticalAlignment = VerticalAlignment.Center });
             button.Content = row;
         }
@@ -548,7 +557,9 @@ public sealed class BackstageFrame : UserControl
     {
         var icon = _chrome.CreateIcon(new BackstageIconSpec(kind, commandName), size, Brushes.White);
         icon.VerticalAlignment = VerticalAlignment.Center;
-        icon.Margin = kind == BackstageIconKind.Previous ? new Thickness(0) : new Thickness(0, 0, 12, 0);
+        icon.Margin = kind == BackstageIconKind.Previous
+            ? new Thickness(0)
+            : new Thickness(0, 0, BackstageVisualContract.Frame.NavigationIconLabelGap, 0);
         return icon;
     }
 

@@ -134,6 +134,7 @@ public sealed class AvaloniaBackstageFrame : UserControl
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = _topNav,
         };
+        _topNav.Margin = ToThickness(BackstageVisualContract.Frame.TopNavigationMargin);
         railDock.Children.Add(topScroll);
 
         Grid.SetColumn(railDock, 0);
@@ -154,11 +155,16 @@ public sealed class AvaloniaBackstageFrame : UserControl
     {
         var button = new Button
         {
-            Content = _chrome.CreateIcon(BackstageIconKind.Previous, "back", 20, Brushes.White),
+            Content = _chrome.CreateIcon(
+                BackstageIconKind.Previous,
+                "back",
+                BackstageVisualContract.Frame.BackButtonIconSize,
+                Brushes.White),
             Background = Brushes.Transparent,
             Foreground = Brushes.White,
             BorderThickness = new Thickness(0),
-            Padding = new Thickness(16, 13),
+            Padding = ToThickness(BackstageVisualContract.Frame.BackButtonPadding),
+            FontSize = BackstageVisualContract.Frame.BackButtonFontSize,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Left,
         };
@@ -207,7 +213,7 @@ public sealed class AvaloniaBackstageFrame : UserControl
         var content = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 12,
+            Spacing = BackstageVisualContract.Frame.NavigationIconLabelGap,
             VerticalAlignment = VerticalAlignment.Center,
         };
         if (entry.Icon is { } icon)
@@ -215,14 +221,14 @@ public sealed class AvaloniaBackstageFrame : UserControl
             content.Children.Add(_chrome.CreateIcon(
                 icon,
                 entry.IconCommandName,
-                22,
+                BackstageVisualContract.Frame.NavigationIconSize,
                 Brushes.White));
         }
         content.Children.Add(new TextBlock
         {
             Text = entry.Label,
             Foreground = Brushes.White,
-            FontSize = 13,
+            FontSize = BackstageVisualContract.Frame.NavigationFontSize,
             VerticalAlignment = VerticalAlignment.Center,
         });
 
@@ -232,7 +238,7 @@ public sealed class AvaloniaBackstageFrame : UserControl
             Background = Brushes.Transparent,
             Foreground = Brushes.White,
             BorderThickness = new Thickness(0),
-            Padding = new Thickness(16, 10),
+            Padding = ToThickness(BackstageVisualContract.Frame.NavigationButtonPadding),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Tag = entry,

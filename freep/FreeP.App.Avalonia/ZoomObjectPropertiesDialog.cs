@@ -26,10 +26,12 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private readonly ComboBox? _summaryTile;
     private readonly TextBox? _summaryOffset;
     private readonly TextBox? _summaryScale;
+    private readonly CheckBox? _applySummaryPropertiesToAllTiles;
 
     internal ZoomObjectProperties Properties { get; private set; }
     internal ZoomObjectPropertiesPlanner.SummaryZoomTileLayoutEdit? SummaryTileLayout { get; private set; }
     internal ZoomObjectPropertiesPlanner.SummaryZoomTilePropertiesEdit? SummaryTileProperties { get; private set; }
+    internal bool ApplySummaryPropertiesToAllTiles => _applySummaryPropertiesToAllTiles?.IsChecked == true;
 
     internal ZoomObjectPropertiesDialog(
         ZoomObjectProperties current,
@@ -118,6 +120,11 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             };
             _summaryOffset = new TextBox { MinWidth = 180 };
             _summaryScale = new TextBox { MinWidth = 180 };
+            _applySummaryPropertiesToAllTiles = new CheckBox
+            {
+                Content = "Apply format to all Summary Zoom tiles",
+                Margin = new Thickness(0, 4, 0, 0),
+            };
             _summaryTile.SelectionChanged += (_, _) => LoadSummaryTileFields();
         }
         _returnToParent = new CheckBox
@@ -150,6 +157,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             children.Add(Row("Summary tile:", _summaryTile));
             children.Add(Row("Tile position (%):", _summaryOffset));
             children.Add(Row("Tile scale (%):", _summaryScale));
+            children.Add(_applySummaryPropertiesToAllTiles!);
         }
         children.Add(_returnToParent);
         children.Add(_showBackground);
@@ -285,9 +293,12 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         if (_summaryTile is not null && _summaryTile.SelectedIndex >= 0
             && _summaryTile.SelectedIndex < _summaryTargets.Count)
         {
-            SummaryTileProperties = new ZoomObjectPropertiesPlanner.SummaryZoomTilePropertiesEdit(
-                _summaryTargets[_summaryTile.SelectedIndex].SectionId,
-                Properties);
+            if (!ApplySummaryPropertiesToAllTiles)
+            {
+                SummaryTileProperties = new ZoomObjectPropertiesPlanner.SummaryZoomTilePropertiesEdit(
+                    _summaryTargets[_summaryTile.SelectedIndex].SectionId,
+                    Properties);
+            }
         }
         Close(true);
     }

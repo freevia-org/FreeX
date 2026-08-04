@@ -28,7 +28,15 @@ public static class BackstageVisualContract
         RailWidth: 190,
         ContentPadding: new BackstageVisualThickness(40, 28),
         BottomNavigationMargin: new BackstageVisualThickness(0, 0, 0, 10),
-        SeparatorMargin: new BackstageVisualThickness(0, 6));
+        SeparatorMargin: new BackstageVisualThickness(0, 6),
+        TopNavigationMargin: new BackstageVisualThickness(0, 4, 0, 0),
+        NavigationButtonPadding: new BackstageVisualThickness(22, 9),
+        NavigationFontSize: 13,
+        BackButtonPadding: new BackstageVisualThickness(16, 11),
+        BackButtonFontSize: 18,
+        NavigationIconSize: 22,
+        BackButtonIconSize: 20,
+        NavigationIconLabelGap: 12);
 }
 
 public sealed record BackstageVisualTheme(
@@ -53,7 +61,15 @@ public sealed record BackstageFrameMetrics(
     double RailWidth,
     BackstageVisualThickness ContentPadding,
     BackstageVisualThickness BottomNavigationMargin,
-    BackstageVisualThickness SeparatorMargin);
+    BackstageVisualThickness SeparatorMargin,
+    BackstageVisualThickness TopNavigationMargin,
+    BackstageVisualThickness NavigationButtonPadding,
+    double NavigationFontSize,
+    BackstageVisualThickness BackButtonPadding,
+    double BackButtonFontSize,
+    double NavigationIconSize,
+    double BackButtonIconSize,
+    double NavigationIconLabelGap);
 
 public readonly record struct BackstageVisualThickness(double Left, double Top, double Right, double Bottom)
 {

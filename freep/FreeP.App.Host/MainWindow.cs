@@ -5244,7 +5244,9 @@ public sealed partial class MainWindow : Window
             dialog.Owner = this;
         if (dialog.ShowDialog() == true)
         {
-            var changed = dialog.SummaryTileProperties is { } tileProperties
+            var changed = dialog.ApplySummaryPropertiesToAllTiles
+                ? Editor.SetSelectedZoomObjectProperties(dialog.Properties)
+                : dialog.SummaryTileProperties is { } tileProperties
                 && selectedShapeId is uint summaryPropertiesShapeId
                 ? Editor.SetSummaryZoomTileProperties(
                     summaryPropertiesShapeId,
