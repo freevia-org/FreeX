@@ -97,7 +97,10 @@ public static class PresentationNotesPagePdfExporter
             return new PresentationNotesPagePdfRenderPlan(
                 printPlan,
                 [emptyPlan],
-                BuildNotesPages(presentation, emptyPlan).ToArray());
+                BuildNotesPages(
+                    presentation,
+                    emptyPlan,
+                    printPlan.Options.IncludeCommentsAndInkMarkup).ToArray());
         }
 
         var previewPlans = printPlan.SlideRange.SlideNumbers
@@ -107,7 +110,12 @@ public static class PresentationNotesPagePdfExporter
                 pageWidth,
                 pageHeight))
             .ToArray();
-        var pages = previewPlans.SelectMany(plan => BuildNotesPages(presentation, plan)).ToArray();
+        var pages = previewPlans
+            .SelectMany(plan => BuildNotesPages(
+                presentation,
+                plan,
+                printPlan.Options.IncludeCommentsAndInkMarkup))
+            .ToArray();
         return new PresentationNotesPagePdfRenderPlan(printPlan, previewPlans, pages);
     }
 
@@ -124,7 +132,8 @@ public static class PresentationNotesPagePdfExporter
     /// </summary>
     private static IEnumerable<PdfContentPage> BuildNotesPages(
         Presentation presentation,
-        PresentationNotesPagePreviewPlan plan)
+        PresentationNotesPagePreviewPlan plan,
+        bool includeCommentsAndInkMarkup)
     {
         foreach (var renderedPage in plan.RenderPages)
         {
@@ -145,7 +154,8 @@ public static class PresentationNotesPagePdfExporter
                 var slidePage = PresentationPdfExporter.BuildSlidePage(
                     presentation.Slides[slideIndex],
                     presentation.SlideSizeCxEmu,
-                    presentation.SlideSizeCyEmu);
+                    presentation.SlideSizeCyEmu,
+                    includeCommentsAndInkMarkup);
                 ops.AddRange(MapSlideOps(slidePage, plan.SlideBounds, plan.PageBounds.Height));
             }
 
