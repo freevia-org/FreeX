@@ -2048,6 +2048,44 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanShapeAnimation_ResolvesThemeColorBehaviorAndTransforms()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Theme.ColorScheme[ThemeColorSlot.Accent1] = SrgbColor.FromRgb(0x204060);
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 74,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.ChangeColor,
+                PreservedColorBehaviorXml = """
+                    <p:animClr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" clrSpc="scheme">
+                      <p:clrFrom><a:schemeClr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" val="accent1"><a:lumMod val="50000"/><a:tint val="80000"/></a:schemeClr></p:clrFrom>
+                      <p:clrTo><a:schemeClr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" val="accent1"><a:shade val="50000"/></a:schemeClr></p:clrTo>
+                    </p:animClr>
+                    """
+            },
+            startDelayMs: 0,
+            presentation);
+
+        var from = ThemeColorTransform.Apply(
+            presentation.Theme.ColorScheme[ThemeColorSlot.Accent1],
+            lumMod: 0.5,
+            lumOff: 0,
+            tint: 0.8,
+            shade: 1);
+        var to = ThemeColorTransform.Apply(
+            presentation.Theme.ColorScheme[ThemeColorSlot.Accent1],
+            lumMod: 1,
+            lumOff: 0,
+            tint: 1,
+            shade: 0.5);
+
+        plan.ColorFromHex.Should().Be($"{from.R:X2}{from.G:X2}{from.B:X2}");
+        plan.ColorToHex.Should().Be($"{to.R:X2}{to.G:X2}{to.B:X2}");
+    }
+
+    [Fact]
     public void PlanFrame_ProjectsImportedEmphasisTracks()
     {
         var blinkPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(

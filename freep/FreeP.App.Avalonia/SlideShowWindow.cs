@@ -3749,7 +3749,8 @@ public sealed class SlideShowWindow : Window
                 slideWidthDip: _slideDipW,
                 slideHeightDip: _slideDipH);
 
-        foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step))
+        var effectiveColorMap = (_revealedHiddenSlide ?? _controller.CurrentSlide)?.ColorMapOverride;
+        foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step, _presentation, effectiveColorMap))
         {
             var anim = plan.Animation;
             if (_paragraphAnimElements.TryGetValue(anim.ShapeId, out var paragraphElements))
@@ -3758,7 +3759,9 @@ public sealed class SlideShowWindow : Window
                 {
                     var paragraphPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
                         anim,
-                        plan.DelayMs + index * plan.DurationMs);
+                        plan.DelayMs + index * plan.DurationMs,
+                        _presentation,
+                        effectiveColorMap);
                     PlayShapeAnimationWithTiming(paragraphElements[index], paragraphPlan, onReveal: null);
                 }
 
@@ -3837,7 +3840,7 @@ public sealed class SlideShowWindow : Window
         }
     }
 
-    private static SlideShowShapeAnimationPlaybackPlan BuildReverseAnimationPlan(
+    private SlideShowShapeAnimationPlaybackPlan BuildReverseAnimationPlan(
         SlideShowShapeAnimationPlaybackPlan plan)
     {
         var reversedAnimation = PresentationAnimationCommandPlanner.CloneAnimation(plan.Animation);
@@ -3848,7 +3851,12 @@ public sealed class SlideShowWindow : Window
             _ => AnimationKind.Emphasis,
         };
 
-        var reversePlan = SlideShowPlaybackPlanner.PlanShapeAnimation(reversedAnimation, 0);
+        var effectiveColorMap = (_revealedHiddenSlide ?? _controller.CurrentSlide)?.ColorMapOverride;
+        var reversePlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            reversedAnimation,
+            0,
+            _presentation,
+            effectiveColorMap);
         return reversePlan with
         {
             RepeatCount = null,

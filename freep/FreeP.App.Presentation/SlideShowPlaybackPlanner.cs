@@ -345,18 +345,23 @@ public static class SlideShowPlaybackPlanner
         };
     }
 
-    public static IReadOnlyList<SlideShowShapeAnimationPlaybackPlan> PlanAnimationStep(AnimationStep step)
+    public static IReadOnlyList<SlideShowShapeAnimationPlaybackPlan> PlanAnimationStep(
+        AnimationStep step,
+        Presentation? presentation = null,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
         ArgumentNullException.ThrowIfNull(step);
 
         return step.Entries
-            .Select(entry => PlanShapeAnimation(entry.Animation, entry.StartDelayMs))
+            .Select(entry => PlanShapeAnimation(entry.Animation, entry.StartDelayMs, presentation, effectiveClrMap))
             .ToList();
     }
 
     public static SlideShowShapeAnimationPlaybackPlan PlanShapeAnimation(
         ShapeAnimation animation,
-        int startDelayMs)
+        int startDelayMs,
+        Presentation? presentation = null,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
         ArgumentNullException.ThrowIfNull(animation);
 
@@ -369,7 +374,7 @@ public static class SlideShowPlaybackPlanner
         var (fromScaleX, fromScaleY, toScaleX, toScaleY, peakScaleX, peakScaleY) =
             ResolveScaleAxesForPlayback(animation, fromScale, toScale, ResolvePeakScale(animation));
         var (offsetX, offsetY) = ResolveFlyInOffset(animation.Direction);
-        var (colorFromHex, colorToHex) = ResolveColorBehavior(animation, effectKind);
+        var (colorFromHex, colorToHex) = ResolveColorBehavior(animation, effectKind, presentation, effectiveClrMap);
 
         return new SlideShowShapeAnimationPlaybackPlan(
             animation,
@@ -513,7 +518,9 @@ public static class SlideShowPlaybackPlanner
 
     private static (string? From, string? To) ResolveColorBehavior(
         ShapeAnimation animation,
-        SlideShowShapeAnimationEffectKind effectKind)
+        SlideShowShapeAnimationEffectKind effectKind,
+        Presentation? presentation,
+        IReadOnlyDictionary<string, string>? effectiveClrMap)
     {
         if (effectKind is not (SlideShowShapeAnimationEffectKind.ColorPulse
             or SlideShowShapeAnimationEffectKind.ChangeColor
@@ -529,8 +536,8 @@ public static class SlideShowPlaybackPlanner
             XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
             XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
             var root = XElement.Parse(animation.PreservedColorBehaviorXml, LoadOptions.PreserveWhitespace);
-            var from = ReadRgb(root.Element(p + "clrFrom")?.Element(a + "srgbClr"));
-            var to = ReadRgb(root.Element(p + "clrTo")?.Element(a + "srgbClr"));
+            var from = ResolveAnimationColor(root.Element(p + "clrFrom"), presentation, effectiveClrMap, a);
+            var to = ResolveAnimationColor(root.Element(p + "clrTo"), presentation, effectiveClrMap, a);
             return (from, to);
         }
         catch (XmlException)
@@ -539,13 +546,81 @@ public static class SlideShowPlaybackPlanner
         }
     }
 
-    private static string? ReadRgb(XElement? color)
+    private static string? ResolveAnimationColor(
+        XElement? colorContainer,
+        Presentation? presentation,
+        IReadOnlyDictionary<string, string>? effectiveClrMap,
+        XNamespace drawingNamespace)
     {
-        var value = color?.Attribute("val")?.Value.Trim();
-        return value is { Length: 6 }
-            && int.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out _)
-            ? value.ToUpperInvariant()
-            : null;
+        var color = colorContainer?.Elements().FirstOrDefault(element => element.Name.Namespace == drawingNamespace);
+        if (color is null)
+            return null;
+
+        var transforms = ReadColorTransforms(color);
+        SrgbColor resolved;
+        if (color.Name.LocalName.Equals("schemeClr", StringComparison.Ordinal))
+        {
+            var roleName = color.Attribute("val")?.Value.Trim();
+            var slot = ThemeColorResolver.MapRoleToSlot(roleName, effectiveClrMap);
+            var scheme = new SchemeColorRef
+            {
+                RoleName = roleName,
+                Slot = slot,
+                LumMod = transforms.LumMod,
+                LumOff = transforms.LumOff,
+                Tint = transforms.Tint,
+                Shade = transforms.Shade
+            };
+            resolved = ThemeColorResolver.Resolve(
+                new ThemeAwareColor(SrgbColor.Black, scheme),
+                presentation?.Theme ?? PresentationTheme.CreateDefault(),
+                effectiveClrMap);
+        }
+        else if (color.Name.LocalName.Equals("srgbClr", StringComparison.Ordinal) &&
+                 TryReadRgb(color.Attribute("val")?.Value, out var rgb))
+        {
+            resolved = ThemeColorTransform.Apply(
+                rgb,
+                transforms.LumMod,
+                transforms.LumOff,
+                transforms.Tint,
+                transforms.Shade);
+        }
+        else
+        {
+            return null;
+        }
+
+        return $"{resolved.R:X2}{resolved.G:X2}{resolved.B:X2}";
+    }
+
+    private static (double LumMod, double LumOff, double Tint, double Shade) ReadColorTransforms(XElement color)
+    {
+        return (
+            ReadPercentage(color.Element(color.Name.Namespace + "lumMod")?.Attribute("val")?.Value, 1),
+            ReadPercentage(color.Element(color.Name.Namespace + "lumOff")?.Attribute("val")?.Value, 0),
+            ReadPercentage(color.Element(color.Name.Namespace + "tint")?.Attribute("val")?.Value, 1),
+            ReadPercentage(color.Element(color.Name.Namespace + "shade")?.Attribute("val")?.Value, 1));
+    }
+
+    private static double ReadPercentage(string? value, double fallback)
+    {
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var raw)
+            ? Math.Clamp(raw / 100000d, 0, 2)
+            : fallback;
+    }
+
+    private static bool TryReadRgb(string? value, out SrgbColor color)
+    {
+        if (value is { Length: 6 } &&
+            int.TryParse(value.Trim(), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
+        {
+            color = SrgbColor.FromRgb(rgb);
+            return true;
+        }
+
+        color = SrgbColor.Black;
+        return false;
     }
 
     private static SlideShowAnimationRevealTiming ResolveRevealTiming(

@@ -205,7 +205,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("_lastAnimationStepFrameEvidence = SlideShowPlaybackFramePlanner.PlanAnimationStepCheckpoints(step, _slideDipW, _slideDipH);");
         source.Should().Contain("_lastAnimationStepPlaybackReadinessPlan =");
         source.Should().Contain("SlideShowPlaybackFramePlanner.BuildAnimationStepPlaybackReadinessPlan(");
-        source.Should().Contain("foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step))");
+        source.Should().Contain("foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step, _presentation, effectiveColorMap))");
+        source.Should().Contain("plan.DelayMs + index * plan.DurationMs");
+        source.Should().Contain("effectiveColorMap);");
         source.Should().Contain("_lastAnimationFramePlan = SlideShowPlaybackFramePlanner.PlanFrame(plan, 0, _slideDipW, _slideDipH);");
         source.Should().Contain("PlayShapeAnimation(element, plan);");
         source.Should().Contain("PlayFallbackAnimation(anim, plan.DelayMs, plan.DurationMs);");
