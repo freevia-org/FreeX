@@ -950,10 +950,14 @@ public sealed partial class MainWindow
 
     // ── Chrome helpers ────────────────────────────────────────────────────────
 
-    private static void ApplyCfButtonChrome(Button button, double width, bool isDefault = false)
+    private static void ApplyCfButtonChrome(
+        Button button,
+        double width,
+        bool isDefault = false,
+        AvaloniaCompactDialogChromeStyle? style = null)
     {
         button.Width = width;
-        AvaloniaCompactDialogChrome.ApplyButton(button, ConditionalFormatDialogChromeStyle, width, isDefault);
+        AvaloniaCompactDialogChrome.ApplyButton(button, style ?? ConditionalFormatDialogChromeStyle, width, isDefault);
     }
 
     private static void ApplyCfTextBoxChrome(TextBox tb)
@@ -1027,7 +1031,7 @@ public sealed partial class MainWindow
     }
 
     private Task ShowManageConditionalFormatsDialogAsync() =>
-        ShowManageConditionalFormatsDialogAsync(launchSmokeProbe: null);
+        ShowManageConditionalFormatsDialogAsync(launchSmokeProbe: null, parityCapture: false);
 
     /// <summary>
     /// The Manage Rules dialog: lists the selection's overlapping rules (or every sheet rule when the
@@ -1040,7 +1044,8 @@ public sealed partial class MainWindow
     /// <c>ObservableCollection&lt;ConditionalFormat&gt;</c>).
     /// </summary>
     internal async Task ShowManageConditionalFormatsDialogAsync(
-        Action<ManageConditionalFormatsDialogSmokeProbe>? launchSmokeProbe)
+        Action<ManageConditionalFormatsDialogSmokeProbe>? launchSmokeProbe,
+        bool parityCapture = false)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
@@ -1060,6 +1065,7 @@ public sealed partial class MainWindow
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "ManageConditionalFormatsDialog");
+        var manageDialogChrome = ConditionalFormatDialogChromeStyle with { ButtonHeight = 22 };
 
         var listBox = new ListBox
         {
@@ -1069,7 +1075,7 @@ public sealed partial class MainWindow
         };
         AvaloniaCompactDialogChrome.ApplyListBox(
             listBox,
-            ConditionalFormatDialogChromeStyle with { ListBoxItemPadding = new Thickness(2, 0) });
+            manageDialogChrome with { ListBoxItemPadding = new Thickness(2, 0) });
         AutomationProperties.SetAutomationId(listBox, "ManageConditionalFormatsListBox");
         AutomationProperties.SetName(listBox, UiText.Get("ManageConditionalFormats_ConditionalFormattingRules"));
         // Render each rule as a #/Rule-type/Format-swatch/Applies-to/Stop-if row matching the header
@@ -1143,7 +1149,7 @@ public sealed partial class MainWindow
             SelectedIndex = Math.Max(0, Array.FindIndex(scopeItems, item => item.Scope == scopePlan.DefaultScope)),
             VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
         };
-        ApplyCfComboBoxChrome(scopeBox);
+        AvaloniaCompactDialogChrome.ApplyComboBox(scopeBox, manageDialogChrome);
         AutomationProperties.SetAutomationId(scopeBox, "ManageConditionalFormatsScopeBox");
         AutomationProperties.SetName(scopeBox, UiText.Get("ManageConditionalFormats_ShowFormattingRulesFor").Replace("_", string.Empty, StringComparison.Ordinal));
 
@@ -1183,35 +1189,35 @@ public sealed partial class MainWindow
         }
 
         var newButton = new Button { Content = UiText.Get("ManageConditionalFormats_NewRule"), Width = 104, Margin = new Thickness(0, 0, 6, 0) };
-        ApplyCfButtonChrome(newButton, 104);
+        ApplyCfButtonChrome(newButton, 104, style: manageDialogChrome);
         AutomationProperties.SetAutomationId(newButton, "ManageConditionalFormatsNewButton");
         var editButton = new Button { Content = UiText.Get("ManageConditionalFormats_EditRule"), Width = 94, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
-        ApplyCfButtonChrome(editButton, 94);
+        ApplyCfButtonChrome(editButton, 94, style: manageDialogChrome);
         AutomationProperties.SetAutomationId(editButton, "ManageConditionalFormatsEditButton");
         var duplicateButton = new Button { Content = UiText.Get("ManageConditionalFormats_DuplicateRule"), Width = 118, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
-        ApplyCfButtonChrome(duplicateButton, 118);
+        ApplyCfButtonChrome(duplicateButton, 118, style: manageDialogChrome);
         AutomationProperties.SetAutomationId(duplicateButton, "ManageConditionalFormatsDuplicateButton");
         var deleteButton = new Button { Content = UiText.Get("ManageConditionalFormats_DeleteRule"), Width = 100, Margin = new Thickness(0, 0, 12, 0), IsEnabled = false };
-        ApplyCfButtonChrome(deleteButton, 100);
+        ApplyCfButtonChrome(deleteButton, 100, style: manageDialogChrome);
         AutomationProperties.SetAutomationId(deleteButton, "ManageConditionalFormatsDeleteButton");
         var moveUpButton = new Button { Content = "\u25B2", Width = 32, Margin = new Thickness(0, 0, 4, 0), IsEnabled = false };
-        ApplyCfButtonChrome(moveUpButton, 32);
+        ApplyCfButtonChrome(moveUpButton, 32, style: manageDialogChrome);
         AutomationProperties.SetAutomationId(moveUpButton, "ManageConditionalFormatsMoveUpButton");
         AutomationProperties.SetName(moveUpButton, UiText.Get("ManageConditionalFormats_MoveUp"));
         ToolTip.SetTip(moveUpButton, UiText.Get("ManageConditionalFormats_MoveSelectedRuleUp"));
         var moveDownButton = new Button { Content = "\u25BC", Width = 32, IsEnabled = false };
-        ApplyCfButtonChrome(moveDownButton, 32);
+        ApplyCfButtonChrome(moveDownButton, 32, style: manageDialogChrome);
         AutomationProperties.SetAutomationId(moveDownButton, "ManageConditionalFormatsMoveDownButton");
         AutomationProperties.SetName(moveDownButton, UiText.Get("ManageConditionalFormats_MoveDown"));
         ToolTip.SetTip(moveDownButton, UiText.Get("ManageConditionalFormats_MoveSelectedRuleDown"));
         var applyAppliesToButton = new Button { Content = UiText.Get("ManageConditionalFormats_Apply"), Width = 72 };
-        ApplyCfButtonChrome(applyAppliesToButton, 72);
+        ApplyCfButtonChrome(applyAppliesToButton, 72, style: manageDialogChrome);
         AutomationProperties.SetAutomationId(applyAppliesToButton, "ManageConditionalFormatsApplyAppliesToButton");
         var closeButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, Width = 72, Margin = new Thickness(0, 0, 6, 0) };
-        ApplyCfButtonChrome(closeButton, 72, isDefault: true);
+        ApplyCfButtonChrome(closeButton, 72, isDefault: true, style: manageDialogChrome);
         AutomationProperties.SetAutomationId(closeButton, "ManageConditionalFormatsCloseButton");
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, Width = 72, Margin = new Thickness(0, 0, 6, 0) };
-        ApplyCfButtonChrome(cancelButton, 72);
+        ApplyCfButtonChrome(cancelButton, 72, style: manageDialogChrome);
         AutomationProperties.SetAutomationId(cancelButton, "ManageConditionalFormatsCancelButton");
 
         void SyncCommandState()
@@ -1223,7 +1229,7 @@ public sealed partial class MainWindow
             moveUpButton.IsEnabled = hasSelection && listBox.SelectedIndex > 0;
             moveDownButton.IsEnabled = hasSelection && listBox.SelectedIndex >= 0 && listBox.SelectedIndex < listBox.ItemCount - 1;
             applyAppliesToButton.IsEnabled = hasSelection;
-            appliesToRow.IsVisible = hasSelection;
+            appliesToRow.IsVisible = !parityCapture && hasSelection;
             appliesToPicker.IsEnabled = hasSelection;
         }
 

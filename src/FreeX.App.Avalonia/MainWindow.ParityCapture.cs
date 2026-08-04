@@ -1870,22 +1870,10 @@ public sealed partial class MainWindow
     private async Task ShowManageConditionalFormatsParityDialogAsync()
     {
         var sheet = _session.Workbook.Sheets.Count > 0 ? _session.Workbook.Sheets[0] : _session.ActiveSheet;
-        var ruleRange = new GridRange(
-            new CellAddress(sheet.Id, 2, 4),
-            new CellAddress(sheet.Id, 5, 4));
-
-        // Apply 3 example rules so the manager has rows. Each commits through the same apply-command path the
-        // ribbon uses; the demo workbook starts with no rules, so this is idempotent enough for a single run.
-        foreach (var preset in new[]
-                 {
-                     ConditionalFormatPreset.DataBar,
-                     ConditionalFormatPreset.ColorScale,
-                     ConditionalFormatPreset.HighlightGreaterThan,
-                 })
-        {
-            _session.ExecuteReviewCommand(
-                ConditionalFormatPresetFactory.BuildApplyCommand(preset, sheet.Id, ruleRange, value: "100"));
-        }
+        var ruleRange = ConditionalFormatManageParityFixture.CreateRange(sheet.Id);
+        sheet.ConditionalFormats.Clear();
+        foreach (var rule in ConditionalFormatManageParityFixture.CreateRules(sheet.Id))
+            sheet.ConditionalFormats.Add(rule);
         RefreshShell(_statusText.Text ?? "Ready");
 
         var previousSheetId = _session.ActiveSheet.Id;
@@ -1897,7 +1885,7 @@ public sealed partial class MainWindow
 
         try
         {
-            await ShowManageConditionalFormatsDialogAsync();
+            await ShowManageConditionalFormatsDialogAsync(launchSmokeProbe: null, parityCapture: true);
         }
         finally
         {
