@@ -83,6 +83,8 @@ internal static class FreePRibbonCommands
         Action?             onInsertSectionZoom = null,
         Action?             onInsertSummaryZoom = null,
         Action?             onEditZoomTarget = null,
+        Action?             onEditSummaryZoomTargets = null,
+        Action?             onOpenSmartArtTextPane = null,
         // Wave 12B: Find & Replace dialog launchers.
         Action?             onFind             = null,
         Action?             onFindReplace      = null,
@@ -170,6 +172,9 @@ internal static class FreePRibbonCommands
         registry.Register(
             ZoomTargetPlanner.CommandId,
             new ActionRibbonCommand(() => onEditZoomTarget?.Invoke()));
+        registry.Register(
+            SummaryZoomTargetPlanner.CommandId,
+            new ActionRibbonCommand(() => onEditSummaryZoomTargets?.Invoke()));
         registry.Register(
             ZoomObjectPropertiesPlanner.CommandId,
             new ActionRibbonCommand(() => onFormatZoom?.Invoke()));
@@ -998,6 +1003,9 @@ internal static class FreePRibbonCommands
             onNextComment,
             onResolveComment,
             onReopenComment);
+        registry.Register(
+            SmartArtEditingPlanner.OpenTextPaneCommandId,
+            new ActionRibbonCommand(() => onOpenSmartArtTextPane?.Invoke()));
         registry.Register(
             PresentationSelectionPanePlanner.SelectionPaneCommandId,
             new ActionRibbonCommand(() => onSelectionPane?.Invoke()));

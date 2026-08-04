@@ -1,4 +1,5 @@
 using FreeP.App.Compositor;
+using FreeP.Core.IO;
 using FreeP.Core.Model;
 using System.Xml.Linq;
 
@@ -155,6 +156,60 @@ public sealed class SummaryZoomInsertionPlannerTests
                 && element.Attribute("sectionId")?.Value == "{SECTION-ONE}")
             .Descendants().Single(element => element.Name.LocalName == "zmPr")
             .Attribute("imageType")!.Value.Should().Be("preview");
+    }
+
+    [Fact]
+    public void Summary_zoom_targets_can_be_reordered_and_removed_without_losing_retained_tile_state()
+    {
+        var presentation = BuildPresentation();
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = session.InsertSummaryZoom(new[] { "{SECTION-ONE}", "{SECTION-TWO}", "{SECTION-THREE}" });
+
+        session.SetSummaryZoomTileProperties(
+            shape.Id,
+            "{SECTION-ONE}",
+            new ZoomObjectProperties(ImageType: "cover")).Should().BeTrue();
+
+        session.SetSummaryZoomTargets(
+            shape.Id,
+            new[] { "{SECTION-THREE}", "{SECTION-ONE}" }).Should().BeTrue();
+
+        shape.PreservedObject!.SummaryZoomTargets.Select(target => target.SectionId)
+            .Should().ContainInOrder("{SECTION-THREE}", "{SECTION-ONE}");
+        var tiles = XElement.Parse(shape.PreservedObject.RawXml)
+            .Descendants().Where(element => element.Name.LocalName == "summaryZmObj").ToArray();
+        tiles.Select(tile => tile.Attribute("sectionId")!.Value)
+            .Should().ContainInOrder("{SECTION-THREE}", "{SECTION-ONE}");
+        tiles.Should().NotContain(tile => tile.Attribute("sectionId")!.Value == "{SECTION-TWO}");
+        tiles.Single(tile => tile.Attribute("sectionId")!.Value == "{SECTION-ONE}")
+            .Descendants().Single(element => element.Name.LocalName == "zmPr")
+            .Attribute("imageType")!.Value.Should().Be("cover");
+
+        session.Undo();
+        shape.PreservedObject.SummaryZoomTargets.Select(target => target.SectionId)
+            .Should().ContainInOrder("{SECTION-ONE}", "{SECTION-TWO}", "{SECTION-THREE}");
+        session.Redo();
+        shape.PreservedObject.SummaryZoomTargets.Select(target => target.SectionId)
+            .Should().ContainInOrder("{SECTION-THREE}", "{SECTION-ONE}");
+    }
+
+    [Fact]
+    public void Edited_summary_zoom_target_order_reopens_from_pptx()
+    {
+        var presentation = BuildPresentation();
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = session.InsertSummaryZoom(new[] { "{SECTION-ONE}", "{SECTION-TWO}", "{SECTION-THREE}" });
+
+        session.SetSummaryZoomTargets(
+            shape.Id,
+            new[] { "{SECTION-THREE}", "{SECTION-ONE}" }).Should().BeTrue();
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        var reopened = PptxPackageReader.Read(new MemoryStream(stream.ToArray()));
+        reopened.Slides[0].Shapes.Single(candidate => candidate.Kind == SlideShapeKind.Zoom)
+            .PreservedObject!.SummaryZoomTargets.Select(target => target.SectionId)
+            .Should().ContainInOrder("{SECTION-THREE}", "{SECTION-ONE}");
     }
 
     [Fact]

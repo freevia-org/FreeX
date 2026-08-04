@@ -156,3 +156,89 @@ public sealed class SetZoomTargetCommand : IPresentationCommand
         return true;
     }
 }
+
+/// <summary>Replaces the ordered target list of a native Summary Zoom as one undoable edit.</summary>
+public sealed class SetSummaryZoomTargetsCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly IReadOnlyList<SummaryZoomTarget> _newTargets;
+    private readonly string _newRawXml;
+    private IReadOnlyList<SummaryZoomTarget>? _oldTargets;
+    private string? _oldRawXml;
+
+    public SetSummaryZoomTargetsCommand(
+        int slideIndex,
+        uint shapeId,
+        IReadOnlyList<SummaryZoomTarget> targets,
+        string rawXml)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _newTargets = targets?.ToArray()
+            ?? throw new ArgumentNullException(nameof(targets));
+        if (_newTargets.Count < 2)
+            throw new ArgumentException("A Summary Zoom requires at least two targets.", nameof(targets));
+        _newRawXml = string.IsNullOrWhiteSpace(rawXml)
+            ? throw new ArgumentException("Summary Zoom XML is required.", nameof(rawXml))
+            : rawXml;
+    }
+
+    public string Label => "Edit Summary Zoom Targets";
+
+    public bool HasEffect(Presentation presentation) =>
+        TryGetSummaryZoom(presentation, out var info)
+        && (!info.SummaryZoomTargets.SequenceEqual(_newTargets)
+            || !string.Equals(info.RawXml, _newRawXml, StringComparison.Ordinal));
+
+    public void Apply(Presentation presentation)
+    {
+        if (!TryGetSummaryZoom(presentation, out var info))
+            return;
+
+        _oldTargets ??= info.SummaryZoomTargets.ToArray();
+        _oldRawXml ??= info.RawXml;
+        info.SummaryZoomTargets.Clear();
+        info.SummaryZoomTargets.AddRange(_newTargets);
+        info.RawXml = _newRawXml;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        if (_oldTargets is null || _oldRawXml is null || !TryGetSummaryZoom(presentation, out var info))
+            return;
+
+        info.SummaryZoomTargets.Clear();
+        info.SummaryZoomTargets.AddRange(_oldTargets);
+        info.RawXml = _oldRawXml;
+    }
+
+    private bool TryGetSummaryZoom(Presentation presentation, out PreservedObjectInfo info)
+    {
+        info = null!;
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return false;
+
+        var shape = FindShape(presentation.Slides[_slideIndex].Shapes, _shapeId);
+        if (shape is not { Kind: SlideShapeKind.Zoom, PreservedObject.ObjectKind: PreservedObjectKind.Zoom }
+            || shape.PreservedObject is not { } preserved
+            || preserved.SummaryZoomTargets.Count < 2)
+            return false;
+
+        info = preserved;
+        return true;
+    }
+
+    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+            if (shape.Children.Count > 0 && FindShape(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
+    }
+}

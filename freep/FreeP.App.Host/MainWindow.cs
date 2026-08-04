@@ -489,6 +489,8 @@ public sealed partial class MainWindow : Window
             onInsertSectionZoom: () => OpenSectionZoomDialog(),
             onInsertSummaryZoom: () => OpenSummaryZoomDialog(),
             onEditZoomTarget: () => OpenZoomTargetDialog(),
+            onEditSummaryZoomTargets: () => OpenSummaryZoomTargetsDialog(),
+            onOpenSmartArtTextPane: () => ShowSmartArtTextPane(),
             onFormatZoom:       () => OpenZoomObjectPropertiesDialog(),
             onSetZoomCoverImage: () => OpenZoomCoverImagePicker(),
             onResetZoomCoverImage: () => RestoreZoomPreview(),
@@ -5037,6 +5039,29 @@ public sealed partial class MainWindow : Window
                     Editor.Presentation, targetSectionId, out var targetIndex))
                 AttachZoomPreview(shape, targetIndex);
         }
+    }
+
+    internal void OpenSummaryZoomTargetsDialog()
+    {
+        var selectedShapeId = GetSingleSelectedShapeId();
+        var shape = selectedShapeId is uint id && Editor.CurrentSlide is { } slide
+            ? ShapeTreeLookup.Find(slide, id)
+            : null;
+        var info = shape?.PreservedObject;
+        if (selectedShapeId is not uint zoomShapeId
+            || shape?.Kind != SlideShapeKind.Zoom
+            || info?.ObjectKind != PreservedObjectKind.Zoom
+            || info.SummaryZoomTargets.Count < 2)
+            return;
+
+        var options = SummaryZoomInsertionPlanner.BuildTargetOptions(
+            Editor.Presentation, Editor.CurrentSlideIndex);
+        var selected = info.SummaryZoomTargets.Select(target => target.SectionId).ToArray();
+        var dialog = new SummaryZoomDialog(options, SummaryZoomTargetPlanner.DialogTitle, selected);
+        if (IsVisible) dialog.Owner = this;
+        if (dialog.ShowDialog() == true
+            && Editor.SetSummaryZoomTargets(zoomShapeId, dialog.SelectedTargetSectionIds))
+            AttachSummaryZoomPreviews(shape);
     }
 
     internal void OpenZoomObjectPropertiesDialog()

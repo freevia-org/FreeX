@@ -2515,6 +2515,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => _ = OpenSummaryZoomDialogAsync()));
         r.Register(ZoomTargetPlanner.CommandId,
             new ActionRibbonCommand(() => _ = OpenZoomTargetDialogAsync()));
+        r.Register(SummaryZoomTargetPlanner.CommandId,
+            new ActionRibbonCommand(() => _ = OpenSummaryZoomTargetsDialogAsync()));
         r.Register(ZoomObjectPropertiesPlanner.CommandId,
             new ActionRibbonCommand(() => _ = OpenZoomObjectPropertiesDialogAsync()));
         r.Register(ZoomCoverImagePlanner.CommandId,
@@ -3151,6 +3153,9 @@ public sealed partial class MainWindow : Window
                 if (Editor.SelectedShapeIds.Count == 1)
                     Editor.ConvertSmartArtToShapes(Editor.SelectedShapeIds[0]);
             }));
+        r.Register(
+            SmartArtEditingPlanner.OpenTextPaneCommandId,
+            new ActionRibbonCommand(() => ShowSmartArtTextPane()));
 
         // Undo / Redo
         r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));
@@ -4335,6 +4340,32 @@ public sealed partial class MainWindow : Window
                     Editor.Presentation, targetSectionId, out var targetIndex))
                 AttachZoomPreview(shape, targetIndex);
         }
+    }
+
+    internal async void OpenSummaryZoomTargetsDialog() => await OpenSummaryZoomTargetsDialogAsync();
+
+    internal async Task OpenSummaryZoomTargetsDialogAsync()
+    {
+        var selectedShapeId = GetSingleSelectedShapeId();
+        var shape = selectedShapeId is uint id && Editor.CurrentSlide is { } slide
+            ? ShapeTreeLookup.Find(slide, id)
+            : null;
+        var info = shape?.PreservedObject;
+        if (selectedShapeId is not uint zoomShapeId
+            || shape?.Kind != SlideShapeKind.Zoom
+            || info?.ObjectKind != PreservedObjectKind.Zoom
+            || info.SummaryZoomTargets.Count < 2
+            || !IsVisible)
+            return;
+
+        var options = SummaryZoomInsertionPlanner.BuildTargetOptions(
+            Editor.Presentation, Editor.CurrentSlideIndex);
+        var selected = info.SummaryZoomTargets.Select(target => target.SectionId).ToArray();
+        var dialog = new SummaryZoomDialog(options, SummaryZoomTargetPlanner.DialogTitle, selected);
+        var result = await dialog.ShowDialog<bool?>(this);
+        if (result == true
+            && Editor.SetSummaryZoomTargets(zoomShapeId, dialog.SelectedTargetSectionIds))
+            AttachSummaryZoomPreviews(shape);
     }
 
     private void AttachSummaryZoomPreviews(SlideShape shape)

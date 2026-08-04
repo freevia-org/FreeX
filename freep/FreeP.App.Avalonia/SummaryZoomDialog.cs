@@ -14,10 +14,13 @@ internal sealed class SummaryZoomDialog : Window
 
     internal IReadOnlyList<string> SelectedTargetSectionIds { get; private set; } = Array.Empty<string>();
 
-    internal SummaryZoomDialog(IReadOnlyList<(string Id, string DisplayName)> options)
+    internal SummaryZoomDialog(
+        IReadOnlyList<(string Id, string DisplayName)> options,
+        string? title = null,
+        IReadOnlyCollection<string>? selectedTargetIds = null)
     {
         ArgumentNullException.ThrowIfNull(options);
-        Title = SummaryZoomInsertionPlanner.DialogTitle;
+        Title = title ?? SummaryZoomInsertionPlanner.DialogTitle;
         Width = 460;
         Height = 360;
         CanResize = false;
@@ -31,6 +34,9 @@ internal sealed class SummaryZoomDialog : Window
             SelectionMode = SelectionMode.Multiple,
             Height = 210,
         };
+        foreach (var item in items)
+            if (selectedTargetIds?.Contains(item.Id, StringComparer.OrdinalIgnoreCase) == true)
+                _targetList.SelectedItems?.Add(item);
 
         var ok = MakeButton("OK", true, Apply);
         ok.IsEnabled = items.Length >= 2;

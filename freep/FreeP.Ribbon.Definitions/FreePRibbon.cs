@@ -574,6 +574,10 @@ public static class FreePRibbon
                 FreePRibbonText.SmartArtBasicProcessCommand.KeyTip,
                 dropdown: true,
                 menu: BuildSmartArtInsertMenu);
+            group.Medium(SmartArtEditingPlanner.OpenTextPaneCommandId,
+                FreePRibbonText.SmartArtTextPaneCommand.Label,
+                RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtTextPaneCommand.KeyTip);
         });
         tab.Group("links", FreePRibbonText.LinksGroupLabel, FreePRibbonText.LinksGroupKeyTip, 92, group =>
         {
@@ -586,6 +590,8 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Zoom, FreePRibbonText.InsertSummaryZoomKeyTip);
             group.Medium(ZoomTargetPlanner.CommandId, FreePRibbonText.ChangeZoomTargetLabel,
                 RibbonCommandIconKind.Zoom, FreePRibbonText.ChangeZoomTargetKeyTip);
+            group.Medium(SummaryZoomTargetPlanner.CommandId, FreePRibbonText.EditSummaryZoomTargetsLabel,
+                RibbonCommandIconKind.Zoom, FreePRibbonText.EditSummaryZoomTargetsKeyTip);
             group.Medium(ZoomObjectPropertiesPlanner.CommandId, FreePRibbonText.FormatZoomLabel,
                 RibbonCommandIconKind.Effects, FreePRibbonText.FormatZoomKeyTip);
             group.Medium(ZoomCoverImagePlanner.CommandId, FreePRibbonText.SetZoomCoverImageLabel,
