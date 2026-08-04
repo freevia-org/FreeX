@@ -552,6 +552,13 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
     /// </summary>
     public bool HasBakedArtisticEffectPreview { get; set; }
 
+    /// <summary>
+    /// Opaque HD Photo bytes from Word's native <c>a14:imgLayer</c> relationship. Word keeps this editable
+    /// source separate from the baked preview in <see cref="Bytes"/>. FreeW does not decode or mutate the
+    /// payload; it retains the bytes so an imported artistic effect remains editable after save/reopen.
+    /// </summary>
+    public byte[]? NativeArtisticSourceBytes { get; set; }
+
     /// <summary>True when an artistic effect other than None is set.</summary>
     public bool HasArtisticEffect => ArtisticEffect != ImageArtisticEffect.None;
 

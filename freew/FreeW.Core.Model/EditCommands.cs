@@ -3143,6 +3143,7 @@ public sealed class SetImageArtisticEffectCommand(
 {
     private ImageArtisticEffect _previous;
     private bool _previousHadBakedPreview;
+    private byte[]? _previousNativeArtisticSourceBytes;
     private bool _applied;
 
     public string Label => "Artistic Effect";
@@ -3152,9 +3153,13 @@ public sealed class SetImageArtisticEffectCommand(
         if (ImageAt(context) is not { } image) return;
         _previous = image.ArtisticEffect;
         _previousHadBakedPreview = image.HasBakedArtisticEffectPreview;
+        _previousNativeArtisticSourceBytes = image.NativeArtisticSourceBytes;
         image.ArtisticEffect = effect;
         if (effect != _previous)
+        {
             image.HasBakedArtisticEffectPreview = false;
+            image.NativeArtisticSourceBytes = null;
+        }
         _applied = true;
     }
 
@@ -3163,6 +3168,7 @@ public sealed class SetImageArtisticEffectCommand(
         if (!_applied || ImageAt(context) is not { } image) return;
         image.ArtisticEffect = _previous;
         image.HasBakedArtisticEffectPreview = _previousHadBakedPreview;
+        image.NativeArtisticSourceBytes = _previousNativeArtisticSourceBytes;
         _applied = false;
     }
 

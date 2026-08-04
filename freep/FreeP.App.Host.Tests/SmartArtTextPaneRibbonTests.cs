@@ -23,4 +23,23 @@ public sealed class SmartArtTextPaneRibbonTests
         command!.Execute(RibbonCommandContext.Empty);
         invoked.Should().BeTrue();
     }
+
+    [StaFact]
+    public void SmartArtConvertToShapesRibbonCommand_InvokesHostCallback()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var invoked = false;
+
+        var registry = FreePRibbonCommands.Build(
+            new RibbonStateStore(),
+            editor,
+            onConvertSmartArtToShapes: () => invoked = true);
+
+        registry.TryGet(SmartArtAuthoringPlanner.ConvertToShapesCommandId, out var command)
+            .Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+        invoked.Should().BeTrue();
+    }
 }
