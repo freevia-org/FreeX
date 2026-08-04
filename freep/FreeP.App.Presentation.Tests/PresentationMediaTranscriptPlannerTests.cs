@@ -589,7 +589,7 @@ public sealed class PresentationMediaTranscriptPlannerTests
             .DisabledReason.Should().Be(PresentationMediaTranscriptPlanner.ExternalCaptionTrackMessage);
         externalPlan.Actions.Single(action =>
                 action.CommandId == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneDeleteCommandId)
-            .DisabledReason.Should().Be(PresentationMediaTranscriptPlanner.ExternalCaptionTrackMessage);
+            .IsEnabled.Should().BeTrue();
 
         var internalPlan = PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(
             presentation.Slides[0],
@@ -629,7 +629,7 @@ public sealed class PresentationMediaTranscriptPlannerTests
     }
 
     [Fact]
-    public void CaptionTrackAuthoring_RejectsInvalidCuesAndDoesNotMutateExternalTracks()
+    public void CaptionTrackAuthoring_RejectsInvalidCuesAndDeletesExternalLinksWithoutTouchingTheResource()
     {
         var media = new MediaInfo
         {
@@ -673,16 +673,73 @@ public sealed class PresentationMediaTranscriptPlannerTests
 
         var externalDelete = PresentationMediaTranscriptPlanner.DeleteInternalCaptionTrack(media, 0);
 
-        externalDelete.Succeeded.Should().BeFalse();
-        externalDelete.ErrorMessage.Should().Be(PresentationMediaTranscriptPlanner.ExternalCaptionTrackMessage);
-        media.CaptionTracks.Should().HaveCount(2);
-        media.CaptionTracks[0].IsExternal.Should().BeTrue();
+        externalDelete.Succeeded.Should().BeTrue();
+        externalDelete.TrackIndex.Should().Be(0);
+        externalDelete.Track.Should().NotBeNull();
+        externalDelete.Track!.IsExternal.Should().BeTrue();
+        externalDelete.Track.Source.Should().Be("https://cdn.example.com/captions.vtt");
+        media.CaptionTracks.Should().ContainSingle()
+            .Which.IsExternal.Should().BeFalse();
 
-        var internalDelete = PresentationMediaTranscriptPlanner.DeleteInternalCaptionTrack(media, 1);
+        var internalDelete = PresentationMediaTranscriptPlanner.DeleteInternalCaptionTrack(media, 0);
 
         internalDelete.Succeeded.Should().BeTrue();
-        internalDelete.TrackIndex.Should().Be(1);
-        media.CaptionTracks.Should().ContainSingle()
-            .Which.IsExternal.Should().BeTrue();
+        internalDelete.TrackIndex.Should().Be(0);
+        media.CaptionTracks.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void EditingSessionCaptionAuthoring_DeletesExternalTrackThroughUndoBus()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var mediaShape = new SlideShape
+        {
+            Id = 902,
+            Name = "Recorded video",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        RelationshipId = "rIdCaption1",
+                        Source = "https://cdn.example.com/captions.vtt",
+                        Label = "Remote captions",
+                        IsExternal = true,
+                    }
+                }
+            }
+        };
+        presentation.Slides[0].Shapes.Add(mediaShape);
+
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        editor.Select(mediaShape.Id);
+        var plan = PresentationMediaTranscriptPlanner.BuildCaptionAuthoringMutationPlan(
+            mediaShape.Media,
+            PresentationMediaCaptionAuthoringIntentKind.Delete,
+            trackIndex: 0,
+            descriptor: null);
+
+        var result = editor.ApplyMediaCaptionAuthoring(plan);
+
+        result.Succeeded.Should().BeTrue();
+        result.Track.Should().Match<MediaCaptionTrackInfo>(track =>
+            track.IsExternal &&
+            track.RelationshipId == "rIdCaption1" &&
+            track.Source == "https://cdn.example.com/captions.vtt");
+        mediaShape.Media.CaptionTracks.Should().BeEmpty();
+        editor.CanUndo.Should().BeTrue();
+
+        editor.Undo();
+        mediaShape.Media.CaptionTracks.Should().ContainSingle()
+            .Which.Should().Match<MediaCaptionTrackInfo>(track =>
+                track.IsExternal &&
+                track.RelationshipId == "rIdCaption1" &&
+                track.Source == "https://cdn.example.com/captions.vtt");
+
+        editor.Redo();
+        mediaShape.Media.CaptionTracks.Should().BeEmpty();
     }
 }

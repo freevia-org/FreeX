@@ -177,7 +177,7 @@ public static class PresentationMediaTranscriptPlanner
     public const string MissingMediaMessage = "Media object is required.";
     public const string MissingSelectedMediaMessage = "Select one media shape to author captions.";
     public const string MissingCaptionTrackMessage = "Caption track was not found.";
-    public const string ExternalCaptionTrackMessage = "External caption tracks must remain link metadata; create a new internal track instead.";
+    public const string ExternalCaptionTrackMessage = "External caption tracks remain link metadata and cannot be edited in place; create a new internal track to replace one.";
     public const string MissingCaptionDescriptorMessage = "Caption authoring descriptor is required.";
     public const string MissingCaptionContentMessage = "Caption authoring requires typed cues or transcript text.";
     public const string AmbiguousCaptionContentMessage = "Caption authoring accepts either typed cues or transcript text, not both.";
@@ -185,7 +185,7 @@ public static class PresentationMediaTranscriptPlanner
     public const string InvalidCaptionCueTimingMessage = "Caption cues must have non-negative, increasing, non-overlapping time ranges.";
     public const string InvalidCaptionSourceMessage = "Internal caption track source must be a relative .vtt, .srt, .ttml, or .dfxp package path or file name.";
     public const string CaptionAuthoringReadyMessage = "Author internal WebVTT, SRT, TTML, or DFXP caption tracks for the selected media.";
-    public const string CaptionAuthoringExternalTrackMessage = "External caption tracks can be inspected but not replaced or deleted.";
+    public const string CaptionAuthoringExternalTrackMessage = "External caption tracks can be inspected or deleted; create a new internal track to replace one.";
 
     private enum CaptionTrackFormat
     {
@@ -245,6 +245,10 @@ public static class PresentationMediaTranscriptPlanner
         return PresentationMediaCaptionTrackMutationResult.Success(trackIndex, replacement);
     }
 
+    /// <summary>
+    /// Removes an internal or external caption relationship. External deletion does not
+    /// touch the linked resource; it only removes the track from the media object.
+    /// </summary>
     public static PresentationMediaCaptionTrackMutationResult DeleteInternalCaptionTrack(
         MediaInfo? media,
         int trackIndex)
@@ -257,11 +261,6 @@ public static class PresentationMediaTranscriptPlanner
         if (!TryGetCaptionTrack(media, trackIndex, out var track))
         {
             return PresentationMediaCaptionTrackMutationResult.Failure(MissingCaptionTrackMessage);
-        }
-
-        if (track.IsExternal)
-        {
-            return PresentationMediaCaptionTrackMutationResult.Failure(ExternalCaptionTrackMessage);
         }
 
         media.CaptionTracks.RemoveAt(trackIndex);
@@ -311,7 +310,7 @@ public static class PresentationMediaTranscriptPlanner
                 descriptor.Source,
                 descriptor.Status,
                 media.CaptionTracks[index].IsExternal,
-                !media.CaptionTracks[index].IsExternal,
+                true,
                 !media.CaptionTracks[index].IsExternal));
         }
 
@@ -578,7 +577,7 @@ public static class PresentationMediaTranscriptPlanner
             return MissingCaptionTrackMessage;
         }
 
-        return existingTrack.IsExternal ? ExternalCaptionTrackMessage : null;
+        return null;
     }
 
     private static string? FirstContentError(params string?[] errorMessages)
