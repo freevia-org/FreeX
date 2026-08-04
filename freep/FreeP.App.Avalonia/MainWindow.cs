@@ -937,6 +937,7 @@ public sealed partial class MainWindow : Window
             _closeCoordinator.ShouldCancelClosing();
         Closed += (_, _) =>
         {
+            CloseActiveOleHost();
             _findReplaceDialog?.Close();
             _slideSizeDialog?.Close(false);
             _headerFooterDialog?.Close(false);
