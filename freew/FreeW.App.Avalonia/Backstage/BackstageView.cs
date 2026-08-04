@@ -653,11 +653,15 @@ internal sealed class BackstageView : Window
         BuildActionPaneContent(surface);
 
     private static Control BuildExportActionGroupContent(BackstageActionPaneSurfaceSpec surface) =>
-        BuildActionPaneContent(surface, useWpfTextContent: true);
+        BuildActionPaneContent(
+            surface,
+            useWpfTextContent: true,
+            matchWpfScrollBar: true);
 
     private static Control BuildActionPaneContent(
         BackstageActionPaneSurfaceSpec surface,
-        bool useWpfTextContent = false)
+        bool useWpfTextContent = false,
+        bool matchWpfScrollBar = false)
     {
         var metrics = surface.VisualMetrics;
         var content = new StackPanel
@@ -673,7 +677,7 @@ internal sealed class BackstageView : Window
                 content.Children.Add(BuildActionPaneRow(action, metrics, useWpfTextContent));
         }
 
-        return CreateScroll(content);
+        return CreateScroll(content, matchWpfScrollBar);
     }
 
     private static Control BuildActionPaneRow(

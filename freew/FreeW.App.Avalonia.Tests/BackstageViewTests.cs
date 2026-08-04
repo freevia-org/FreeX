@@ -822,6 +822,15 @@ public class BackstageViewTests
                     metrics.ActionDescriptionMargin.Top,
                     metrics.ActionDescriptionMargin.Right,
                     metrics.ActionDescriptionMargin.Bottom));
+
+            var pane = view.GetLogicalDescendants()
+                .OfType<ScrollViewer>()
+                .Single(scroll => scroll.Content is StackPanel panel && panel.MaxWidth == metrics.PaneMaxWidth);
+            pane.Padding.Should().Be(new Thickness(0));
+            pane.Margin.Should().Be(new Thickness(0, 0, 1, 0));
+            pane.FontFamily.Name.Should().Be("Segoe UI");
+            pane.FontSize.Should().Be(12);
+            TextOptions.GetTextRenderingMode(pane).Should().Be(TextRenderingMode.Antialias);
         }, CancellationToken.None);
     }
 
