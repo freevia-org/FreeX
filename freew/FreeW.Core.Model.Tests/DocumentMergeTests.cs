@@ -265,7 +265,13 @@ public class DocumentMergeTests
         sourceTable.TableStyleId = "TableSource";
         sourceTable.PreferredWidthPt = 360;
         sourceTable.Alignment = TableAlignment.Center;
-        sourceTable.TextWrapping = true;
+        sourceTable.FloatingPosition = new TableFloatingPosition(
+            HorizontalAnchor: TableHorizontalAnchor.Page,
+            VerticalAnchor: TableVerticalAnchor.Margin,
+            HorizontalOffsetPt: -18,
+            VerticalAlignment: TableVerticalPositionAlignment.Bottom,
+            LeftFromTextPt: 4.5);
+        sourceTable.FloatingTableAllowsOverlap = false;
         sourceTable.DefaultCellMargins = new TableCellMargins(1, 2, 3, 4);
         sourceTable.CellSpacingPt = 2;
         sourceTable.AutoFit = AutoFitMode.Contents;
@@ -293,6 +299,8 @@ public class DocumentMergeTests
         insertedTable.PreferredWidthPt.Should().Be(360);
         insertedTable.Alignment.Should().Be(TableAlignment.Center);
         insertedTable.TextWrapping.Should().BeTrue();
+        insertedTable.FloatingPosition.Should().Be(sourceTable.FloatingPosition);
+        insertedTable.FloatingTableAllowsOverlap.Should().BeFalse();
         insertedTable.DefaultCellMargins.Should().Be(new TableCellMargins(1, 2, 3, 4));
         insertedTable.CellSpacingPt.Should().Be(2);
         insertedTable.AutoFit.Should().Be(AutoFitMode.Contents);

@@ -3863,8 +3863,63 @@ public static class DocxReader
         if (tblCellSpacing is not null)
             table.CellSpacingPt = DxaToPoints(tblCellSpacing.Attribute(W + "w")?.Value);
 
-        // Floating table (text wrapping around) is signalled by a w:tblpPr position element.
-        table.TextWrapping = tblPr?.Element(W + "tblpPr") is not null;
+        // Floating-table position. Preserve every standard w:tblpPr coordinate/anchor field rather than
+        // reducing the element to the old Around boolean.
+        var tblpPr = tblPr?.Element(W + "tblpPr");
+        if (tblpPr is not null)
+        {
+            double? Twips(string name) => tblpPr.Attribute(W + name) is { } attribute
+                ? DxaToPoints(attribute.Value)
+                : null;
+
+            table.FloatingPosition = new TableFloatingPosition(
+                HorizontalAnchor: tblpPr.Attribute(W + "horzAnchor")?.Value switch
+                {
+                    "text" => TableHorizontalAnchor.Text,
+                    "margin" => TableHorizontalAnchor.Margin,
+                    "page" => TableHorizontalAnchor.Page,
+                    _ => null
+                },
+                VerticalAnchor: tblpPr.Attribute(W + "vertAnchor")?.Value switch
+                {
+                    "text" => TableVerticalAnchor.Text,
+                    "margin" => TableVerticalAnchor.Margin,
+                    "page" => TableVerticalAnchor.Page,
+                    _ => null
+                },
+                HorizontalOffsetPt: Twips("tblpX"),
+                VerticalOffsetPt: Twips("tblpY"),
+                HorizontalAlignment: tblpPr.Attribute(W + "tblpXSpec")?.Value switch
+                {
+                    "left" => TableHorizontalPositionAlignment.Left,
+                    "center" => TableHorizontalPositionAlignment.Center,
+                    "right" => TableHorizontalPositionAlignment.Right,
+                    "inside" => TableHorizontalPositionAlignment.Inside,
+                    "outside" => TableHorizontalPositionAlignment.Outside,
+                    _ => null
+                },
+                VerticalAlignment: tblpPr.Attribute(W + "tblpYSpec")?.Value switch
+                {
+                    "inline" => TableVerticalPositionAlignment.Inline,
+                    "top" => TableVerticalPositionAlignment.Top,
+                    "center" => TableVerticalPositionAlignment.Center,
+                    "bottom" => TableVerticalPositionAlignment.Bottom,
+                    "inside" => TableVerticalPositionAlignment.Inside,
+                    "outside" => TableVerticalPositionAlignment.Outside,
+                    _ => null
+                },
+                LeftFromTextPt: Twips("leftFromText"),
+                RightFromTextPt: Twips("rightFromText"),
+                TopFromTextPt: Twips("topFromText"),
+                BottomFromTextPt: Twips("bottomFromText"));
+        }
+
+        table.FloatingTableAllowsOverlap = tblPr?.Element(W + "tblOverlap")?.Attribute(W + "val")?.Value switch
+        {
+            "overlap" => true,
+            "never" => false,
+            _ => null
+        };
 
         // Default cell margins (w:tblCellMar); absent → null (use the implicit docx default).
         table.DefaultCellMargins = ReadCellMargins(tblPr?.Element(W + "tblCellMar"));

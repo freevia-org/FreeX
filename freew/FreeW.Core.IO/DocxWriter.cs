@@ -2469,10 +2469,61 @@ public static class DocxWriter
         return copy;
     }
 
+    private static XElement BuildFloatingTablePosition(TableFloatingPosition position)
+    {
+        var element = new XElement(W + "tblpPr");
+        void Twips(string name, double? points)
+        {
+            if (points is { } value)
+                element.Add(new XAttribute(W + name, PointsToDxa(value)));
+        }
+
+        Twips("leftFromText", position.LeftFromTextPt);
+        Twips("rightFromText", position.RightFromTextPt);
+        Twips("topFromText", position.TopFromTextPt);
+        Twips("bottomFromText", position.BottomFromTextPt);
+        if (position.VerticalAnchor is { } verticalAnchor)
+            element.Add(new XAttribute(W + "vertAnchor", verticalAnchor switch
+            {
+                TableVerticalAnchor.Margin => "margin",
+                TableVerticalAnchor.Page => "page",
+                _ => "text"
+            }));
+        if (position.HorizontalAnchor is { } horizontalAnchor)
+            element.Add(new XAttribute(W + "horzAnchor", horizontalAnchor switch
+            {
+                TableHorizontalAnchor.Margin => "margin",
+                TableHorizontalAnchor.Page => "page",
+                _ => "text"
+            }));
+        if (position.HorizontalAlignment is { } horizontalAlignment)
+            element.Add(new XAttribute(W + "tblpXSpec", horizontalAlignment switch
+            {
+                TableHorizontalPositionAlignment.Center => "center",
+                TableHorizontalPositionAlignment.Right => "right",
+                TableHorizontalPositionAlignment.Inside => "inside",
+                TableHorizontalPositionAlignment.Outside => "outside",
+                _ => "left"
+            }));
+        Twips("tblpX", position.HorizontalOffsetPt);
+        if (position.VerticalAlignment is { } verticalAlignment)
+            element.Add(new XAttribute(W + "tblpYSpec", verticalAlignment switch
+            {
+                TableVerticalPositionAlignment.Top => "top",
+                TableVerticalPositionAlignment.Center => "center",
+                TableVerticalPositionAlignment.Bottom => "bottom",
+                TableVerticalPositionAlignment.Inside => "inside",
+                TableVerticalPositionAlignment.Outside => "outside",
+                _ => "inline"
+            }));
+        Twips("tblpY", position.VerticalOffsetPt);
+        return element;
+    }
+
     private static XElement BuildTableProperties(Table table)
     {
         // Children must follow the CT_TblPr schema order, else Word's strict validator rejects the table:
-        // tblStyle, tblpPr, tblW, jc, tblCellSpacing, tblInd, tblBorders, tblLayout, tblCellMar, tblLook.
+        // tblStyle, tblpPr, tblOverlap, tblW, jc, tblCellSpacing, tblInd, tblBorders, tblLayout, tblCellMar, tblLook.
         var tblPr = new XElement(W + "tblPr");
 
         // Named table style (w:tblStyle), placed first in CT_TblPr. Emitted when TableStyleId is set so
@@ -2481,15 +2532,11 @@ public static class DocxWriter
         if (table.TableStyleId is { Length: > 0 } styleId)
             tblPr.Add(new XElement(W + "tblStyle", new XAttribute(W + "val", styleId)));
 
-        // Floating-table position (w:tblpPr): a minimal anchor so Word treats the table as floating
-        // ("Text wrapping: Around"). Emitted only when text wrapping is on.
-        if (table.TextWrapping)
-            tblPr.Add(new XElement(W + "tblpPr",
-                new XAttribute(W + "leftFromText", 180),
-                new XAttribute(W + "rightFromText", 180),
-                new XAttribute(W + "vertAnchor", "text"),
-                new XAttribute(W + "horzAnchor", "text"),
-                new XAttribute(W + "tblpY", 1)));
+        if (table.FloatingPosition is { } floatingPosition)
+            tblPr.Add(BuildFloatingTablePosition(floatingPosition));
+        if (table.FloatingTableAllowsOverlap is { } allowsOverlap)
+            tblPr.Add(new XElement(W + "tblOverlap",
+                new XAttribute(W + "val", allowsOverlap ? "overlap" : "never")));
 
         // Preferred table width (w:tblW): a fixed dxa width when set, else automatic (the historical default).
         tblPr.Add(table.PreferredWidthPt is { } widthPt

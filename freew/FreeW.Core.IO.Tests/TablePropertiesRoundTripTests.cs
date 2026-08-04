@@ -2,6 +2,9 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Xml.Linq;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 using FreeW.Core.Model;
 
 namespace FreeW.Core.IO.Tests;
@@ -30,13 +33,18 @@ public class TablePropertiesRoundTripTests
         return RoundTrip(doc).Blocks.OfType<Table>().Single();
     }
 
-    private static XElement DocumentXml(Table table)
+    private static byte[] DocumentBytes(Table table)
     {
         var document = new TextDocument();
         document.Blocks.Add(table);
         using var stream = new MemoryStream();
         DocxWriter.Write(document, stream);
-        using var archive = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        return stream.ToArray();
+    }
+
+    private static XElement DocumentXml(Table table)
+    {
+        using var archive = new ZipArchive(new MemoryStream(DocumentBytes(table)), ZipArchiveMode.Read);
         using var entry = archive.GetEntry("word/document.xml")!.Open();
         return XDocument.Load(entry).Root!;
     }
@@ -59,6 +67,53 @@ public class TablePropertiesRoundTripTests
         read.IndentFromLeftPt.Should().BeApproximately(18, 0.05);
         read.CellSpacingPt.Should().BeApproximately(3, 0.05);
         read.TextWrapping.Should().BeTrue();
+        read.FloatingPosition.Should().Be(TableFloatingPosition.WordCompatibleDefault);
+    }
+
+    [Fact]
+    public void Table_FloatingPositionAndOverlap_EmitExactAttributesAndRoundTrip()
+    {
+        var table = Table.Create(1, 1);
+        table.ColumnWidthsPt.Add(100);
+        table.FloatingPosition = new TableFloatingPosition(
+            HorizontalAnchor: TableHorizontalAnchor.Margin,
+            VerticalAnchor: TableVerticalAnchor.Page,
+            HorizontalOffsetPt: -12.5,
+            VerticalOffsetPt: 15.25,
+            HorizontalAlignment: TableHorizontalPositionAlignment.Outside,
+            VerticalAlignment: TableVerticalPositionAlignment.Inside,
+            LeftFromTextPt: 1.5,
+            RightFromTextPt: 2.5,
+            TopFromTextPt: 3.5,
+            BottomFromTextPt: 4.5);
+        table.FloatingTableAllowsOverlap = false;
+
+        var tblPr = DocumentXml(table).Descendants(W + "tblPr").Single();
+        tblPr.Elements().Take(3).Select(element => element.Name.LocalName)
+            .Should().Equal("tblpPr", "tblOverlap", "tblW");
+        var position = tblPr.Element(W + "tblpPr")!;
+        position.Attribute(W + "leftFromText")!.Value.Should().Be("30");
+        position.Attribute(W + "rightFromText")!.Value.Should().Be("50");
+        position.Attribute(W + "topFromText")!.Value.Should().Be("70");
+        position.Attribute(W + "bottomFromText")!.Value.Should().Be("90");
+        position.Attribute(W + "vertAnchor")!.Value.Should().Be("page");
+        position.Attribute(W + "horzAnchor")!.Value.Should().Be("margin");
+        position.Attribute(W + "tblpXSpec")!.Value.Should().Be("outside");
+        position.Attribute(W + "tblpX")!.Value.Should().Be("-250");
+        position.Attribute(W + "tblpYSpec")!.Value.Should().Be("inside");
+        position.Attribute(W + "tblpY")!.Value.Should().Be("305");
+        tblPr.Element(W + "tblOverlap")!.Attribute(W + "val")!.Value.Should().Be("never");
+
+        using (var package = WordprocessingDocument.Open(new MemoryStream(DocumentBytes(table)), false))
+        {
+            new OpenXmlValidator(FileFormatVersions.Microsoft365).Validate(package)
+                .Where(error => error.ErrorType == ValidationErrorType.Schema)
+                .Should().BeEmpty();
+        }
+
+        var read = SingleTableAfterRoundTrip(table);
+        read.FloatingPosition.Should().Be(table.FloatingPosition);
+        read.FloatingTableAllowsOverlap.Should().BeFalse();
     }
 
     [Fact]

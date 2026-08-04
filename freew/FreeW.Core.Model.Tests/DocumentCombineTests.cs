@@ -63,6 +63,35 @@ public class DocumentCombineTests
     }
 
     [Fact]
+    public void ReviewerInsertedFloatingTable_PreservesCompleteTableShell()
+    {
+        var original = new TextDocument();
+        var revisedA = new TextDocument();
+        var revisedB = new TextDocument();
+        var table = Table.Create(1, 1);
+        table.TableStyleId = "TableGrid";
+        table.PreferredWidthPt = 240;
+        table.Alignment = TableAlignment.Right;
+        table.FloatingPosition = new TableFloatingPosition(
+            HorizontalAnchor: TableHorizontalAnchor.Margin,
+            VerticalAlignment: TableVerticalPositionAlignment.Top,
+            HorizontalOffsetPt: -9);
+        table.FloatingTableAllowsOverlap = true;
+        table.DefaultCellMargins = new TableCellMargins(1, 2, 3, 4);
+        revisedB.Blocks.Add(table);
+
+        var cloned = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml)
+            .Blocks.OfType<Table>().Single();
+
+        cloned.TableStyleId.Should().Be("TableGrid");
+        cloned.PreferredWidthPt.Should().Be(240);
+        cloned.Alignment.Should().Be(TableAlignment.Right);
+        cloned.FloatingPosition.Should().Be(table.FloatingPosition);
+        cloned.FloatingTableAllowsOverlap.Should().BeTrue();
+        cloned.DefaultCellMargins.Should().Be(new TableCellMargins(1, 2, 3, 4));
+    }
+
+    [Fact]
     public void BothReviewersUnchanged_PreservesBlockContentControlRegion()
     {
         var control = BlockContentControl.BibliographyRegion();

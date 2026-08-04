@@ -16,8 +16,34 @@ public class TablePropertiesModelTests
         table.Alignment.Should().Be(TableAlignment.Left);
         table.IndentFromLeftPt.Should().BeNull();
         table.TextWrapping.Should().BeFalse();
+        table.FloatingPosition.Should().BeNull();
+        table.FloatingTableAllowsOverlap.Should().BeNull();
         table.DefaultCellMargins.Should().BeNull();
         table.CellSpacingPt.Should().BeNull();
+    }
+
+    [Fact]
+    public void TextWrappingFacade_PreservesAuthoredPositionAndClearsFloatingStateWhenDisabled()
+    {
+        var table = new Table
+        {
+            FloatingPosition = new TableFloatingPosition(
+                HorizontalAnchor: TableHorizontalAnchor.Page,
+                HorizontalOffsetPt: 24),
+            FloatingTableAllowsOverlap = false
+        };
+        var authored = table.FloatingPosition;
+
+        table.TextWrapping = true;
+        table.FloatingPosition.Should().BeSameAs(authored);
+        table.FloatingTableAllowsOverlap.Should().BeFalse();
+
+        table.TextWrapping = false;
+        table.FloatingPosition.Should().BeNull();
+        table.FloatingTableAllowsOverlap.Should().BeNull();
+
+        table.TextWrapping = true;
+        table.FloatingPosition.Should().Be(TableFloatingPosition.WordCompatibleDefault);
     }
 
     [Fact]
@@ -74,6 +100,10 @@ public class TablePropertiesModelTests
         table.Borders = new TableBorders { Top = new TableBorderEdge(BorderLineStyle.Double, "1F4E79", 1.5) };
         table.PreferredWidthPt = 360;
         table.Alignment = TableAlignment.Center;
+        table.FloatingPosition = new TableFloatingPosition(
+            HorizontalAnchor: TableHorizontalAnchor.Margin,
+            VerticalOffsetPt: 12);
+        table.FloatingTableAllowsOverlap = false;
         table.DefaultCellMargins = new TableCellMargins(1, 6, 1, 6);
         table.AutoFit = AutoFitMode.Window;
         table.ColumnWidthsPt.AddRange([180, 180]);
@@ -91,6 +121,8 @@ public class TablePropertiesModelTests
         bottom.Formatting.BandedColumns.Should().BeTrue();
         bottom.PreferredWidthPt.Should().Be(360);
         bottom.Alignment.Should().Be(TableAlignment.Center);
+        bottom.FloatingPosition.Should().Be(table.FloatingPosition);
+        bottom.FloatingTableAllowsOverlap.Should().BeFalse();
         bottom.DefaultCellMargins.Should().Be(new TableCellMargins(1, 6, 1, 6));
         bottom.AutoFit.Should().Be(AutoFitMode.Window);
         bottom.ColumnWidthsPt.Should().Equal(180, 180);
