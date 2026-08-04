@@ -67,7 +67,71 @@ public sealed class PresentationViewZoomPlannerTests
                 enabled: true,
                 out _)
             .Should()
+                .BeFalse();
+    }
+
+    [Theory]
+    [InlineData("2", true, 25400)]
+    [InlineData(" 2.5 ", true, 31750)]
+    [InlineData("2", false, null)]
+    public void Zoom_border_width_normalizes_enabled_and_disabled_values(
+        string input,
+        bool enabled,
+        int? expected)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderWidth(
+                input,
+                enabled,
+                out var normalized)
+            .Should()
+            .BeTrue();
+
+        normalized.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(25400, "2")]
+    [InlineData(null, "")]
+    public void Zoom_border_width_formats_points(int? widthEmu, string expected)
+    {
+        ZoomObjectPropertiesPlanner.FormatFrameBorderWidth(
+                new ZoomObjectProperties(FrameBorderWidthEmu: widthEmu))
+            .Should()
+            .Be(expected);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("1585")]
+    [InlineData("not-a-width")]
+    public void Zoom_border_width_rejects_invalid_enabled_values(string input)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderWidth(
+                input,
+                enabled: true,
+                out _)
+            .Should()
             .BeFalse();
+    }
+
+    [Theory]
+    [InlineData("DashDot", OutlineDash.DashDot)]
+    [InlineData("dot", OutlineDash.Dot)]
+    [InlineData("", null)]
+    public void Zoom_border_dash_normalizes_values(string input, OutlineDash? expected)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderDash(input, out var normalized)
+            .Should().BeTrue();
+
+        normalized.Should().Be(expected);
+    }
+
+    [Fact]
+    public void Zoom_border_dash_rejects_unknown_values()
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderDash("customDash", out _)
+            .Should().BeFalse();
     }
 
     [Fact]

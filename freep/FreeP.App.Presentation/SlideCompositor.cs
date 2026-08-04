@@ -730,12 +730,43 @@ public static class SlideCompositor
             || !int.TryParse(normalized, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
             return ResolvedOutline.None.Instance;
 
+        var widthEmu = line?.Attribute("w") is { Value: var widthText }
+            && int.TryParse(widthText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedWidth)
+            && parsedWidth > 0
+                ? parsedWidth
+                : fallback?.FrameBorderWidthEmu;
+        var widthPoints = widthEmu is int width
+            ? Math.Clamp(width / 12700d, 0.01, 1584)
+            : 0.75;
+        var dash = line?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "prstDash", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value;
+        var resolvedDash = TryParseZoomDash(dash) ?? fallback?.FrameBorderDash ?? OutlineDash.Solid;
+
         return new ResolvedOutline.Visible(
             new SrgbColor((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb),
-            PointsToDip(0.75),
-            OutlineDash.Solid,
+            PointsToDip(widthPoints),
+            resolvedDash,
             255);
     }
+
+    private static OutlineDash? TryParseZoomDash(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim().ToLowerInvariant() switch
+            {
+                "solid" => OutlineDash.Solid,
+                "dash" => OutlineDash.Dash,
+                "dot" => OutlineDash.Dot,
+                "dashdot" => OutlineDash.DashDot,
+                "lgdash" => OutlineDash.LongDash,
+                "lgdashdot" => OutlineDash.LongDashDot,
+                "lgdashdotdot" => OutlineDash.LongDashDotDot,
+                "sysdash" => OutlineDash.SystemDash,
+                "sysdot" => OutlineDash.SystemDot,
+                "sysdashdot" => OutlineDash.SystemDashDot,
+                _ => null,
+            };
 
     private static void AddSummaryZoomPlaceholder(
         uint shapeId,

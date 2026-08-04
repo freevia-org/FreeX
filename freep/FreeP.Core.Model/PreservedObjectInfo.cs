@@ -46,7 +46,9 @@ public sealed record ZoomObjectProperties(
     int? CropTop = null,
     int? CropRight = null,
     int? CropBottom = null,
-    string? FrameBorderColor = null)
+    string? FrameBorderColor = null,
+    int? FrameBorderWidthEmu = null,
+    OutlineDash? FrameBorderDash = null)
 {
     public bool IsEmpty => ReturnToParent is null
         && ImageType is null
@@ -56,7 +58,9 @@ public sealed record ZoomObjectProperties(
         && CropTop is null
         && CropRight is null
         && CropBottom is null
-        && FrameBorderColor is null;
+        && FrameBorderColor is null
+        && FrameBorderWidthEmu is null
+        && FrameBorderDash is null;
 }
 
 /// <summary>

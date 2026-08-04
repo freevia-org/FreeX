@@ -17,6 +17,8 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private readonly ComboBox _imageType;
     private readonly TextBox _transitionDuration;
     private readonly TextBox _frameBorderColor;
+    private readonly TextBox _frameBorderWidth;
+    private readonly ComboBox _frameBorderDash;
     private readonly TextBox _cropEdges;
     private readonly IReadOnlyList<SummaryZoomTarget> _summaryTargets;
     private readonly IReadOnlyList<ZoomObjectProperties> _summaryTileProperties;
@@ -69,6 +71,18 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             MinWidth = 180,
             PlaceholderText = "six-digit RGB value",
         };
+        _frameBorderWidth = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderWidth(current),
+            MinWidth = 180,
+            PlaceholderText = "positive width in points",
+        };
+        _frameBorderDash = new ComboBox
+        {
+            ItemsSource = ZoomObjectPropertiesPlanner.FrameBorderDashOptions,
+            SelectedItem = current.FrameBorderDash ?? OutlineDash.Solid,
+            MinWidth = 180,
+        };
         _frameBorderEnabled = new CheckBox
         {
             Content = "Use Zoom border",
@@ -117,6 +131,8 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             Row("Transition duration:", _transitionDuration),
             _frameBorderEnabled,
             Row("Border color:", _frameBorderColor),
+            Row("Border width (pt):", _frameBorderWidth),
+            Row("Border dash:", _frameBorderDash),
             Row("Preview crop (%):", _cropEdges),
         };
         if (_summaryTile is not null && _summaryOffset is not null && _summaryScale is not null)
@@ -182,6 +198,30 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                 ZoomObjectPropertiesPlanner.DialogTitle);
             return;
         }
+        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderWidth(
+                _frameBorderWidth.Text,
+                _frameBorderEnabled.IsChecked == true,
+                out var frameBorderWidth))
+        {
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                this,
+                ZoomObjectPropertiesPlanner.InvalidFrameBorderWidthMessage,
+                ZoomObjectPropertiesPlanner.DialogTitle);
+            return;
+        }
+        var frameBorderDashText = _frameBorderEnabled.IsChecked == true
+            ? _frameBorderDash.SelectedItem?.ToString()
+            : null;
+        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderDash(
+                frameBorderDashText,
+                out var frameBorderDash))
+        {
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                this,
+                ZoomObjectPropertiesPlanner.InvalidFrameBorderDashMessage,
+                ZoomObjectPropertiesPlanner.DialogTitle);
+            return;
+        }
         if (!ZoomObjectPropertiesPlanner.TryParseCropEdges(
                 _cropEdges.Text, out var cropLeft, out var cropTop, out var cropRight, out var cropBottom))
         {
@@ -219,7 +259,9 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             cropTop,
             cropRight,
             cropBottom,
-            frameBorderColor);
+            frameBorderColor,
+            frameBorderWidth,
+            frameBorderDash);
         if (_summaryTile is not null && _summaryTile.SelectedIndex >= 0
             && _summaryTile.SelectedIndex < _summaryTargets.Count)
         {
@@ -246,6 +288,8 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         _transitionEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsTransitionEnabled(properties);
         SyncTransitionState();
         _frameBorderColor.Text = properties.FrameBorderColor ?? string.Empty;
+        _frameBorderWidth.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderWidth(properties);
+        _frameBorderDash.SelectedItem = properties.FrameBorderDash ?? OutlineDash.Solid;
         _frameBorderEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderEnabled(properties);
         SyncFrameBorderState();
         _cropEdges.Text = ZoomObjectPropertiesPlanner.FormatCropEdges(properties);
@@ -260,8 +304,13 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private void SyncTransitionState() =>
         _transitionDuration.IsEnabled = _transitionEnabled.IsChecked == true;
 
-    private void SyncFrameBorderState() =>
-        _frameBorderColor.IsEnabled = _frameBorderEnabled.IsChecked == true;
+    private void SyncFrameBorderState()
+    {
+        var enabled = _frameBorderEnabled.IsChecked == true;
+        _frameBorderColor.IsEnabled = enabled;
+        _frameBorderWidth.IsEnabled = enabled;
+        _frameBorderDash.IsEnabled = enabled;
+    }
 
     private static Button MakeButton(string label, bool isDefault, Action action)
     {
