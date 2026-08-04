@@ -9653,6 +9653,7 @@ public sealed class DocumentView : RichTextBox
             tableLayoutPlan.FloatingPosition!,
             surface.ContentLeftDip,
             contentWidth);
+        var textDistanceMargin = ResolveFloatingTableTextDistanceMargin(tableLayoutPlan.FloatingPosition!);
 
         var renderedTable = BuildTable(table, document, sourceBlockIndex, tableLayoutPlan);
         renderedTable.Margin = new Thickness(0);
@@ -9661,11 +9662,11 @@ public sealed class DocumentView : RichTextBox
             Width = new FigureLength(tableWidth, FigureUnitType.Pixel),
             HorizontalAnchor = FigureHorizontalAnchor.PageLeft,
             VerticalAnchor = FigureVerticalAnchor.PageTop,
-            HorizontalOffset = placement.XDip - surface.PageLeftDip,
-            VerticalOffset = placement.YDip - surface.PageTopDip(placement.AnchorPageIndex),
+            HorizontalOffset = placement.XDip - surface.PageLeftDip - textDistanceMargin.Left,
+            VerticalOffset = placement.YDip - surface.PageTopDip(placement.AnchorPageIndex) - textDistanceMargin.Top,
             WrapDirection = WrapDirection.Both,
             CanDelayPlacement = false,
-            Margin = new Thickness(0),
+            Margin = textDistanceMargin,
             Tag = new WpfFloatingTableFigureTag(sourceBlockIndex),
         };
         var wrapper = new WpfParagraph(figure)
@@ -9675,6 +9676,13 @@ public sealed class DocumentView : RichTextBox
         };
         return wrapper;
     }
+
+    private static Thickness ResolveFloatingTableTextDistanceMargin(
+        DocumentTableFloatingPositionPlan position) => new(
+            Math.Max(0, position.LeftFromTextDip ?? 0),
+            Math.Max(0, position.TopFromTextDip ?? 0),
+            Math.Max(0, position.RightFromTextDip ?? 0),
+            Math.Max(0, position.BottomFromTextDip ?? 0));
 
     private static bool ShouldRenderPlannedTablePages(ModelTable table, DocumentTablePaginationPlan paginationPlan) =>
         paginationPlan.Pages.Count > 1 && !TableHasVerticalMerges(table);
