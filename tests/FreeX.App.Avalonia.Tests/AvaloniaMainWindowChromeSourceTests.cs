@@ -211,6 +211,28 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void SelectChartDataDialog_UsesScopedWpfChromeAndInnerWidthMetrics()
+    {
+        var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
+
+        chartTabsSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle SelectDataSourceDialogChromeStyle");
+        chartTabsSource.Should().Contain("ControlHeight = 22");
+        chartTabsSource.Should().Contain("TextBoxHeight = 22");
+        chartTabsSource.Should().Contain("ButtonHeight = 22");
+        chartTabsSource.Should().Contain("ListBoxItemMinHeight = 22");
+        chartTabsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, SelectDataSourceDialogChromeStyle);");
+        chartTabsSource.Should().Contain("Height = 72,");
+        chartTabsSource.Should().Contain("CreateChartButton(UiText.Get(addSeriesAction.LabelResourceKey), 92)");
+        chartTabsSource.Should().Contain("CreateChartButton(UiText.Get(editSeriesAction.LabelResourceKey), 92)");
+        chartTabsSource.Should().Contain("CreateChartButton(UiText.Get(removeSeriesAction.LabelResourceKey), 92)");
+        chartTabsSource.Should().Contain("CreateChartButton(UiText.Get(editAxisLabelsAction.LabelResourceKey), 92)");
+        chartTabsSource.Should().NotContain("Width = 500,");
+        chartTabsSource.Should().Contain("StripDisplayMnemonic(UiText.Get(rangeField.LabelResourceKey))");
+        chartTabsSource.Should().Contain("StripDisplayMnemonic(UiText.Get(switchField.LabelResourceKey))");
+        chartTabsSource.Should().Contain("StripDisplayMnemonic(UiText.Get(firstColumnField.LabelResourceKey))");
+    }
+
+    [Fact]
     public void ChartWorkflowDialogs_UseSharedResidualDescriptors()
     {
         var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));

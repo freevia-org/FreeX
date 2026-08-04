@@ -9,6 +9,7 @@ using Avalonia.Data.Converters;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Services;
@@ -335,6 +336,16 @@ public sealed partial class MainWindow
 
     // ---- Chart Design: Select Data Source (real, ChangeChartSourceCommand) ----------------------------
 
+    private static AvaloniaCompactDialogChromeStyle SelectDataSourceDialogChromeStyle =>
+        ChartDialogChromeStyle with
+        {
+            ControlHeight = 22,
+            TextBoxHeight = 22,
+            ButtonHeight = 22,
+            ButtonPadding = new Thickness(8, 1),
+            ListBoxItemMinHeight = 22,
+        };
+
     private async Task ShowSelectChartDataDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
@@ -408,15 +419,14 @@ public sealed partial class MainWindow
         };
 
         // ---- Switch Row/Column checkbox -------------------------------------------------------
-        var switchRowColumnCheck = CreateChartCheckBox(UiText.Get(switchField.LabelResourceKey), switchRowColumn);
+        var switchRowColumnCheck = CreateChartCheckBox(StripDisplayMnemonic(UiText.Get(switchField.LabelResourceKey)), switchRowColumn);
         switchRowColumnCheck.Margin = new Thickness(0, 4, 0, 0);
         AutomationProperties.SetAutomationId(switchRowColumnCheck, switchField.AutomationId);
 
         // ---- Series ListBox + buttons ---------------------------------------------------------
         var seriesList = new ListBox
         {
-            Height = 80,
-            Width = 500,
+            Height = 72,
             SelectionMode = SelectionMode.Single,
         };
         AutomationProperties.SetName(seriesList, UiText.Get(seriesPanel.ListField.AutomationNameResourceKey!));
@@ -424,24 +434,23 @@ public sealed partial class MainWindow
         AutomationProperties.SetHelpText(seriesList, UiText.Get(seriesPanel.ListField.HelpResourceKey!));
 
         var addSeriesAction = seriesPanel.Actions.Single(action => action.Id == SelectDataSourceDialogActionId.AddSeries);
-        var addSeriesButton = CreateChartButton(UiText.Get(addSeriesAction.LabelResourceKey), 100);
+        var addSeriesButton = CreateChartButton(UiText.Get(addSeriesAction.LabelResourceKey), 92);
         AutomationProperties.SetAutomationId(addSeriesButton, addSeriesAction.AutomationId);
 
         var editSeriesAction = seriesPanel.Actions.Single(action => action.Id == SelectDataSourceDialogActionId.EditSeries);
-        var editSeriesButton = CreateChartButton(UiText.Get(editSeriesAction.LabelResourceKey), 100);
+        var editSeriesButton = CreateChartButton(UiText.Get(editSeriesAction.LabelResourceKey), 92);
         editSeriesButton.IsEnabled = false;
         AutomationProperties.SetAutomationId(editSeriesButton, editSeriesAction.AutomationId);
 
         var removeSeriesAction = seriesPanel.Actions.Single(action => action.Id == SelectDataSourceDialogActionId.RemoveSeries);
-        var removeSeriesButton = CreateChartButton(UiText.Get(removeSeriesAction.LabelResourceKey), 100);
+        var removeSeriesButton = CreateChartButton(UiText.Get(removeSeriesAction.LabelResourceKey), 92);
         removeSeriesButton.IsEnabled = false;
         AutomationProperties.SetAutomationId(removeSeriesButton, removeSeriesAction.AutomationId);
 
         // ---- Axis Labels ListBox + button -----------------------------------------------------
         var axisLabelsList = new ListBox
         {
-            Height = 80,
-            Width = 500,
+            Height = 72,
             SelectionMode = SelectionMode.Single,
         };
         AutomationProperties.SetName(axisLabelsList, UiText.Get(axisLabelsPanel.ListField.AutomationNameResourceKey!));
@@ -449,12 +458,12 @@ public sealed partial class MainWindow
         AutomationProperties.SetHelpText(axisLabelsList, UiText.Get(axisLabelsPanel.ListField.HelpResourceKey!));
 
         var editAxisLabelsAction = axisLabelsPanel.Actions.Single(action => action.Id == SelectDataSourceDialogActionId.EditAxisLabels);
-        var editAxisLabelsButton = CreateChartButton(UiText.Get(editAxisLabelsAction.LabelResourceKey), 100);
+        var editAxisLabelsButton = CreateChartButton(UiText.Get(editAxisLabelsAction.LabelResourceKey), 92);
         editAxisLabelsButton.IsEnabled = false;
         AutomationProperties.SetAutomationId(editAxisLabelsButton, editAxisLabelsAction.AutomationId);
 
         // ---- First column contains category labels checkbox -----------------------------------
-        var categoriesCheck = CreateChartCheckBox(UiText.Get(firstColumnField.LabelResourceKey), firstColumnIsCategories);
+        var categoriesCheck = CreateChartCheckBox(StripDisplayMnemonic(UiText.Get(firstColumnField.LabelResourceKey)), firstColumnIsCategories);
         categoriesCheck.Margin = new Thickness(0, 4, 0, 0);
         AutomationProperties.SetAutomationId(categoriesCheck, firstColumnField.AutomationId);
 
@@ -555,6 +564,7 @@ public sealed partial class MainWindow
         var dialog = NewChartDialog(
             UiText.Get(SelectDataSourcePlanner.DialogTitleResourceKey),
             SelectDataSourcePlanner.DialogAutomationId);
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, SelectDataSourceDialogChromeStyle);
         dialog.SizeToContent = SizeToContent.Manual;
         dialog.Width = 620;
         dialog.Height = 500;
@@ -647,7 +657,7 @@ public sealed partial class MainWindow
             Children =
             {
                 // Range label + ("...") picker button + text box
-                new TextBlock { Text = UiText.Get(rangeField.LabelResourceKey), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get(rangeField.LabelResourceKey)), FontSize = 12, FontFamily = FormulaBarFontFamily },
                 rangeRow,
                 switchRowColumnCheck,
                 // Legend Entries (Series) panel
