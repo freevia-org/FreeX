@@ -3142,6 +3142,7 @@ public sealed class SetImageArtisticEffectCommand(
     int paragraphIndex, int runIndex, ImageArtisticEffect effect) : IDocumentCommand
 {
     private ImageArtisticEffect _previous;
+    private bool _previousHadBakedPreview;
     private bool _applied;
 
     public string Label => "Artistic Effect";
@@ -3150,7 +3151,10 @@ public sealed class SetImageArtisticEffectCommand(
     {
         if (ImageAt(context) is not { } image) return;
         _previous = image.ArtisticEffect;
+        _previousHadBakedPreview = image.HasBakedArtisticEffectPreview;
         image.ArtisticEffect = effect;
+        if (effect != _previous)
+            image.HasBakedArtisticEffectPreview = false;
         _applied = true;
     }
 
@@ -3158,6 +3162,7 @@ public sealed class SetImageArtisticEffectCommand(
     {
         if (!_applied || ImageAt(context) is not { } image) return;
         image.ArtisticEffect = _previous;
+        image.HasBakedArtisticEffectPreview = _previousHadBakedPreview;
         _applied = false;
     }
 

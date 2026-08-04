@@ -6526,6 +6526,8 @@ public sealed class DocumentView : RichTextBox
                 AltText: "Square wrapped sample picture with glow reflection soft edge and artistic effect",
                 ReflectionPreset: 2
             };
+            if (isImportedObjectFormatReflection && image.HasBakedArtisticEffectPreview)
+                reflection = reflection with { Opacity = reflection.Opacity * 0.5 };
             var reflDistPx = (isImportedObjectFormatReflection
                 ? 13.0 * PxPerPoint
                 : reflection.DistanceDip);

@@ -79,8 +79,8 @@ public enum ImageFormat
 /// Artistic effect applied non-destructively to a picture, matching Word's Picture Format &gt; Adjust &gt;
 /// Artistic Effects gallery. <see cref="None"/> means no artistic effect. Each value is rendered at
 /// display time via the pixel pipeline in <c>ImageAdjustHelper.ApplyArtistic</c> and round-trips through
-/// DOCX as a <c>freew:artisticEffect</c> extension attribute on <c>a:blip</c> (the standard
-/// <c>a:extLst/a14:artisticEffect</c> element is also read when present, mapping to the nearest value).
+/// DOCX as a <c>freew:artisticEffect</c> extension. Native Word
+/// <c>a14:imgProps/a14:imgLayer/a14:imgEffect</c> payloads are also imported.
 /// </summary>
 public enum ImageArtisticEffect
 {
@@ -534,20 +534,29 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
 
     // ── Artistic Effects (a14:artisticEffect / freew:artisticEffect) ─────────────────────────────────
     // Picture Format > Adjust > Artistic Effects gallery. Non-destructive: applied at render time by
-    // ImageAdjustHelper.ApplyArtistic; Bytes is never modified. Round-trips via a FreeW extension
-    // attribute freew:artisticEffect on a:blip (integer id = (int)ArtisticEffect enum value). Standard
-    // a:extLst/a14:artisticEffect is read when present and mapped to the nearest enum member.
+    // ImageAdjustHelper.ApplyArtistic; Bytes is never modified. Native Word packages instead store an
+    // already-rendered preview in a:blip and the editable source in a14:imgLayer.
 
     /// <summary>
     /// Artistic filter to apply non-destructively. <see cref="ImageArtisticEffect.None"/> (default) means
     /// no artistic effect. Applied at render time by the pixel pipeline; original <see cref="Bytes"/> are
     /// always preserved.
-    /// Round-trips as a <c>freew:artisticEffect</c> extension attribute on <c>a:blip</c>.
+    /// Round-trips through a lossless FreeW extension; native Office 2010 payloads are also imported.
     /// </summary>
     public ImageArtisticEffect ArtisticEffect { get; set; } = ImageArtisticEffect.None;
 
+    /// <summary>
+    /// True when <see cref="Bytes"/> is Word's already-rendered artistic preview. Renderers must not apply
+    /// <see cref="ArtisticEffect"/> a second time. This is set when importing native <c>a14:imgProps</c>
+    /// markup and retained by the FreeW extension on save.
+    /// </summary>
+    public bool HasBakedArtisticEffectPreview { get; set; }
+
     /// <summary>True when an artistic effect other than None is set.</summary>
     public bool HasArtisticEffect => ArtisticEffect != ImageArtisticEffect.None;
+
+    /// <summary>True when the current image bytes still need the modeled artistic filter.</summary>
+    public bool RequiresArtisticEffectRendering => HasArtisticEffect && !HasBakedArtisticEffectPreview;
 
     // ── Picture Style ─────────────────────────────────────────────────────────────────────────────────
     // A Picture Style preset bundles border + effect settings. The integer is the preset id (0 = none).

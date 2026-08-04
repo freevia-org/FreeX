@@ -3501,6 +3501,7 @@ public static class FreeWVisualEvidencePlanner
             targetImage.SoftEdgePt = sourceImage.SoftEdgePt;
             targetImage.BevelPreset = sourceImage.BevelPreset;
             targetImage.ArtisticEffect = sourceImage.ArtisticEffect;
+            targetImage.HasBakedArtisticEffectPreview = sourceImage.HasBakedArtisticEffectPreview;
             targetImage.PictureStylePreset = sourceImage.PictureStylePreset;
         }
     }

@@ -576,6 +576,28 @@ public class DocumentCommandBusTests
     }
 
     [Fact]
+    public void ArtisticEffectCommand_RestoresBakedPreviewProvenanceOnUndo()
+    {
+        var (doc, bus) = New();
+        var image = new InlineImage([1, 2, 3], widthPt: 120, heightPt: 80)
+        {
+            ArtisticEffect = ImageArtisticEffect.GlowDiffused,
+            HasBakedArtisticEffectPreview = true,
+        };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(image));
+        doc.Blocks.Add(paragraph);
+
+        bus.Execute(new SetImageArtisticEffectCommand(0, 0, ImageArtisticEffect.Blur));
+        image.ArtisticEffect.Should().Be(ImageArtisticEffect.Blur);
+        image.HasBakedArtisticEffectPreview.Should().BeFalse();
+
+        bus.Undo().Should().BeTrue();
+        image.ArtisticEffect.Should().Be(ImageArtisticEffect.GlowDiffused);
+        image.HasBakedArtisticEffectPreview.Should().BeTrue();
+    }
+
+    [Fact]
     public void PictureStyleCatalog_AllPresetsApplyAndUndoThroughSharedCommand()
     {
         foreach (var preset in PictureStyleCatalog.Catalog)

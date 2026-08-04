@@ -52,6 +52,21 @@ public sealed class ImageAdjustHelperTests
         result.Should().BeSameAs(src, "neutral adjustments should return the input reference unchanged");
     }
 
+    [StaFact]
+    public void BakedArtisticPreview_IsNotFilteredAgain()
+    {
+        var src = MakeSource(40, 120, 200);
+        var image = new InlineImage([0x89, 0x50], 100, 80)
+        {
+            ArtisticEffect = ImageArtisticEffect.GlowDiffused,
+            HasBakedArtisticEffectPreview = true,
+        };
+
+        var result = ImageAdjustHelper.Apply(src, image);
+
+        result.Should().BeSameAs(src, "Word's a:blip already contains the rendered artistic preview");
+    }
+
     // ── Transparency ──────────────────────────────────────────────────────────────────────────────────
 
     [StaFact]
