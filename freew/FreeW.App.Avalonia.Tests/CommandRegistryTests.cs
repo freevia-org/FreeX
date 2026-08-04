@@ -600,6 +600,38 @@ public sealed class CommandRegistryTests
     }
 
     [Fact]
+    public void Multilevel_preset_keeps_existing_list_enabled_and_undoes_atomically()
+    {
+        var paragraph = new Paragraph("Existing")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                ListKind = ListKind.MultiLevel,
+                ListLevel = 1,
+                ListStartOverride = 5,
+            },
+        };
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.multilevel-preset-1");
+
+        paragraph.Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        paragraph.Formatting.ListLevel.Should().Be(1);
+        view.Document.MultiLevelList.NumberFormats[1].Should().Be(ListNumberFormat.LowerLetter);
+
+        view.Undo();
+
+        paragraph.Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        paragraph.Formatting.ListStartOverride.Should().Be(5);
+        view.Document.MultiLevelList.NumberFormats[1].Should().Be(ListNumberFormat.Decimal);
+    }
+
+    [Fact]
     public void Ribbon_definition_now_has_37_or_more_commands()
     {
         var definition = FreeWRibbon.BuildDefinition();

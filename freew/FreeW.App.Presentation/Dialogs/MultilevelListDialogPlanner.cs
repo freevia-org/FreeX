@@ -36,7 +36,8 @@ public sealed record MultilevelListDefinition(
     int Levels,
     int? Level0StartAt,
     int? Level1StartAt,
-    IReadOnlyList<ListNumberFormat> NumberFormats);
+    IReadOnlyList<ListNumberFormat> NumberFormats,
+    bool LinkToHeadingStyles = false);
 
 public static class MultilevelListDialogPlanner
 {
@@ -124,6 +125,20 @@ public static class MultilevelListDialogPlanner
             ListKind = ListKind.MultiLevel,
             ListLevel = level,
             ListStartOverride = startAt,
+        };
+    }
+
+    public static string? ResolveLinkedHeadingStyleId(int level, MultilevelListDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        if (!definition.LinkToHeadingStyles)
+            return null;
+
+        return Math.Clamp(level, 0, MultiLevelListFormat.LevelCount - 1) switch
+        {
+            0 => "Heading1",
+            1 => "Heading2",
+            _ => "Heading3",
         };
     }
 

@@ -286,7 +286,12 @@ internal static class FreeWRibbonCommands
         // and promote the outline depth (ListLevel) of the selected list paragraphs.
         // The top-level "freew.multilevel-list" id applies the first (standard decimal) preset directly
         // (clicking the button face vs. the dropdown arrow follows the same pattern as Word's gallery).
-        registry.Register("freew.multilevel-list", new ActionRibbonCommand(() => editor.ApplyMultiLevelList()));
+        registry.Register("freew.multilevel-list", new ActionRibbonCommand(() =>
+            editor.ApplyMultiLevelListDefinition(new MultilevelListDefinition(
+                MultiLevelListFormat.LevelCount,
+                null,
+                null,
+                MultiLevelListFormat.DecimalNumberFormats))));
         registry.Register("freew.multilevel-demote", new ActionRibbonCommand(() => editor.ChangeListLevel(+1)));
         registry.Register("freew.multilevel-promote", new ActionRibbonCommand(() => editor.ChangeListLevel(-1)));
         // Predefined multilevel list preset commands — three Word-parity presets shown in the gallery.

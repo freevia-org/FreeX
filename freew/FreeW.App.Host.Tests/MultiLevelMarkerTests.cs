@@ -186,6 +186,20 @@ public sealed class MultiLevelMarkerTests
     }
 
     [StaFact]
+    public void ListStartOverride_RoundTripsThroughCommit()
+    {
+        var document = BuildMultiLevelDoc();
+        var paragraph = document.Blocks.OfType<Paragraph>().ElementAt(1);
+        paragraph.Formatting = paragraph.Formatting with { ListStartOverride = 5 };
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        view.CommitToModel();
+
+        view.Model.Blocks.OfType<Paragraph>().ElementAt(1).Formatting.ListStartOverride.Should().Be(5);
+    }
+
+    [StaFact]
     public void PreservedStyleNumbering_AppearsAsViewOnlyMarkerAndSurvivesCommit()
     {
         var document = new TextDocument();

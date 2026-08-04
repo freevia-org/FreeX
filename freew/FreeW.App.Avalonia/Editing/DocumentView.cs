@@ -19079,9 +19079,15 @@ public sealed class DocumentView : Control
             foreach (var index in indices)
             {
                 var paragraph = (Paragraph)_doc.Blocks[index];
+                var updated = MultilevelListDialogPlanner.ApplyDefinition(paragraph.Formatting, definition);
                 _bus.Execute(new SetParagraphFormattingCommand(
                     index,
-                    MultilevelListDialogPlanner.ApplyDefinition(paragraph.Formatting, definition)));
+                    updated));
+                var linkedStyleId = MultilevelListDialogPlanner.ResolveLinkedHeadingStyleId(
+                    updated.ListLevel,
+                    definition);
+                if (linkedStyleId is not null && _doc.Styles.ContainsKey(linkedStyleId))
+                    _bus.Execute(new SetParagraphStyleCommand(index, linkedStyleId));
             }
             _bus.Execute(new SetMultiLevelNumberFormatsCommand(definition.NumberFormats));
             _bus.CommitUndoGroup("Define Multilevel List");

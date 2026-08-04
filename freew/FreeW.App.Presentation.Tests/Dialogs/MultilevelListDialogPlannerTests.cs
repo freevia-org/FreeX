@@ -78,4 +78,25 @@ public sealed class MultilevelListDialogPlannerTests
         result.ListLevel.Should().Be(expectedLevel);
         result.ListStartOverride.Should().Be(expectedStart);
     }
+
+    [Theory]
+    [InlineData(0, "Heading1")]
+    [InlineData(1, "Heading2")]
+    [InlineData(8, "Heading3")]
+    public void ResolveLinkedHeadingStyleId_MapsConfiguredLevels(int level, string expectedStyleId)
+    {
+        var definition = new MultilevelListDefinition(
+            9,
+            null,
+            null,
+            MultiLevelListFormat.DecimalNumberFormats,
+            LinkToHeadingStyles: true);
+
+        MultilevelListDialogPlanner.ResolveLinkedHeadingStyleId(level, definition)
+            .Should().Be(expectedStyleId);
+        MultilevelListDialogPlanner.ResolveLinkedHeadingStyleId(
+                level,
+                definition with { LinkToHeadingStyles = false })
+            .Should().BeNull();
+    }
 }
