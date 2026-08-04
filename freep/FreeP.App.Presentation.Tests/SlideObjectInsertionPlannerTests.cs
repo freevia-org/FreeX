@@ -1,4 +1,5 @@
 using FreeP.App.Compositor;
+using FreeP.Core.IO;
 
 namespace FreeP.App.Compositor.Tests;
 
@@ -323,6 +324,58 @@ public sealed class SlideObjectInsertionPlannerTests
             added.SmartArt!.Data!.Family.Should().NotBe(SmartArtFamily.Unknown, preset.ToString());
             added.SmartArt.Data.LayoutUniqueId.Should().Contain("/layout/", preset.ToString());
         }
+    }
+
+    [Fact]
+    public void ApplyCommand_BasicMatrixUsesFlatComponentsAndRoundTripsItsLiveQuadrants()
+    {
+        var editor = MakeSession();
+        var added = SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.SmartArtLayoutCommandId(SmartArtLayoutPreset.BasicMatrix));
+
+        added.Should().NotBeNull();
+        var authored = added!.SmartArt!;
+        authored.Data!.Nodes.Should().HaveCount(3);
+        authored.Data.Nodes.Should().OnlyContain(node => node.Level == 0 && node.Children.Count == 0);
+        var diagram = System.Xml.Linq.XDocument.Parse(
+            System.Text.Encoding.UTF8.GetString(authored.Parts["ppt/diagrams/data1.xml"].Bytes));
+        var diagramNamespace = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        diagram.Descendants(diagramNamespace + "cxn").Should().BeEmpty(
+            "Basic Matrix components are authored as flat siblings");
+
+        var live = SmartArtLayoutEngine.Layout(
+            authored.Data,
+            added.OffsetXEmu,
+            added.OffsetYEmu,
+            added.ExtentCxEmu,
+            added.ExtentCyEmu,
+            editor.Presentation.Theme!);
+        live.Should().HaveCount(4, "Basic Matrix emits one whole diamond plus one quadrant per authored component");
+        live!.Skip(1).Select(shape => shape.PlainText)
+            .Should().Equal("Step 1", "Step 2", "Step 3");
+
+        using var package = new MemoryStream();
+        PptxPackageWriter.Write(editor.Presentation, package);
+        package.Position = 0;
+        var reopened = PptxPackageReader.Read(package);
+        var reread = reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.SmartArt);
+        var rereadSmartArt = reread.SmartArt!;
+
+        rereadSmartArt.Data!.LayoutUniqueId.Should().Contain("/layout/basicMatrix");
+        rereadSmartArt.Data.Nodes.Should().HaveCount(3);
+        rereadSmartArt.Data.Nodes.Should().OnlyContain(node => node.Level == 0 && node.Children.Count == 0);
+        var rereadLive = SmartArtLayoutEngine.Layout(
+            rereadSmartArt.Data,
+            reread.OffsetXEmu,
+            reread.OffsetYEmu,
+            reread.ExtentCxEmu,
+            reread.ExtentCyEmu,
+            reopened.Theme!);
+        rereadLive.Should().HaveCount(4);
+        rereadLive!.Skip(1).Select(shape => shape.PlainText)
+            .Should().Equal("Step 1", "Step 2", "Step 3");
     }
 
     [Fact]

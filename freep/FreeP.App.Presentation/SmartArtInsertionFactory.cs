@@ -29,6 +29,7 @@ internal static class SmartArtInsertionFactory
         var ids = labels.Select((_, index) => (index + 1).ToString()).ToArray();
         var nodePictures = NormalizePictures(preset, labels.Count, pictures);
         var (layoutId, family) = GetLayoutDefinition(preset);
+        var usesFlatComponents = preset == SmartArtLayoutPreset.BasicMatrix;
         var smart = new SmartArtShape
         {
             Data = new SmartArtData
@@ -39,16 +40,31 @@ internal static class SmartArtInsertionFactory
             },
         };
 
-        var root = new SmartArtNode { ModelId = ids[0], Text = labels[0], Level = 0 };
-        if (nodePictures is not null)
-            root.Picture = ToImagePart(nodePictures[0]);
-        smart.Data.Nodes.Add(root);
-        for (var index = 1; index < labels.Count; index++)
+        if (usesFlatComponents)
         {
-            var node = new SmartArtNode { ModelId = ids[index], Text = labels[index], Level = 1 };
+            for (var index = 0; index < labels.Count; index++)
+            {
+                smart.Data.Nodes.Add(new SmartArtNode
+                {
+                    ModelId = ids[index],
+                    Text = labels[index],
+                    Level = 0,
+                });
+            }
+        }
+        else
+        {
+            var root = new SmartArtNode { ModelId = ids[0], Text = labels[0], Level = 0 };
             if (nodePictures is not null)
-                node.Picture = ToImagePart(nodePictures[index]);
-            root.Children.Add(node);
+                root.Picture = ToImagePart(nodePictures[0]);
+            smart.Data.Nodes.Add(root);
+            for (var index = 1; index < labels.Count; index++)
+            {
+                var node = new SmartArtNode { ModelId = ids[index], Text = labels[index], Level = 1 };
+                if (nodePictures is not null)
+                    node.Picture = ToImagePart(nodePictures[index]);
+                root.Children.Add(node);
+            }
         }
 
         var prefix = "ppt/diagrams/";
@@ -59,7 +75,7 @@ internal static class SmartArtInsertionFactory
         var drawingPath = $"{prefix}drawing{partIndex}.xml";
 
         AddPart(smart, "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml", dataPath,
-            BuildDataXml(labels, ids));
+            BuildDataXml(labels, ids, usesFlatComponents));
         AddPart(smart, "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml", layoutPath,
             new XDocument(new XElement(Diagram + "layoutDef",
                 new XAttribute(XNamespace.Xmlns + "dgm", Diagram.NamespaceName),
@@ -309,7 +325,10 @@ internal static class SmartArtInsertionFactory
             _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
         };
 
-    private static XDocument BuildDataXml(IReadOnlyList<string> labels, IReadOnlyList<string> ids)
+    private static XDocument BuildDataXml(
+        IReadOnlyList<string> labels,
+        IReadOnlyList<string> ids,
+        bool usesFlatComponents)
     {
         var points = labels.Select((label, index) => new XElement(Diagram + "pt",
             new XAttribute("modelId", ids[index]), new XAttribute("type", "node"),
@@ -318,11 +337,13 @@ internal static class SmartArtInsertionFactory
                 new XElement(Drawing + "r", new XElement(Drawing + "rPr", new XAttribute("lang", "en-US")),
                     new XElement(Drawing + "t", label)))))).ToArray();
 
-        var connections = Enumerable.Range(1, labels.Count - 1).Select(index => new XElement(Diagram + "cxn",
-            new XAttribute("modelId", (labels.Count + index).ToString()),
-            new XAttribute("type", "parOf"), new XAttribute("srcId", ids[0]),
-            new XAttribute("destId", ids[index]), new XAttribute("srcOrd", index - 1),
-            new XAttribute("destOrd", 0))).ToArray();
+        var connections = usesFlatComponents
+            ? []
+            : Enumerable.Range(1, labels.Count - 1).Select(index => new XElement(Diagram + "cxn",
+                new XAttribute("modelId", (labels.Count + index).ToString()),
+                new XAttribute("type", "parOf"), new XAttribute("srcId", ids[0]),
+                new XAttribute("destId", ids[index]), new XAttribute("srcOrd", index - 1),
+                new XAttribute("destOrd", 0))).ToArray();
 
         return new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(Diagram + "dataModel",
