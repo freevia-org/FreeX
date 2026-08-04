@@ -749,7 +749,7 @@ public sealed partial class MainWindow : Window
                 Add("Format Chart Title...", () => OpenChartTextOptionsDialog(ChartTextTarget.Title));
                 break;
             case ChartSubtargetKind.Legend:
-                Add("Format Chart Text...", OpenChartTextOptionsDialog);
+                Add("Format Chart Legend...", () => OpenChartTextOptionsDialog(ChartTextTarget.Legend));
                 break;
             case ChartSubtargetKind.PlotArea:
                 Add("Format Plot Area...", () => OpenChartAreaOptionsDialog(ChartAreaFormattingTarget.PlotArea));

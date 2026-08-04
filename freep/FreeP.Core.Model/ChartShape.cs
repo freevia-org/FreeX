@@ -764,6 +764,9 @@ public sealed class ChartShape
     /// <summary>Explicit <c>c:legend/c:overlay</c> value. Null means unspecified.</summary>
     public bool? LegendOverlay { get; set; }
 
+    /// <summary>Optional independent formatting for legend text.</summary>
+    public ChartTextStyle? LegendTextStyle { get; set; }
+
     /// <summary>True when OOXML <c>c:varyColors</c> asks chart points to use independent fallback colors.</summary>
     public bool VaryColors { get; set; }
 
