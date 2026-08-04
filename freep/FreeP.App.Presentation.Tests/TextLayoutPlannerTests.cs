@@ -9,6 +9,47 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class TextLayoutPlannerTests
 {
     [Fact]
+    public void PlanShapeAutoFitBounds_GrowsSingleColumnShapeByAnchor()
+    {
+        var text = new ResolvedTextLayout
+        {
+            AutoFitKind = TextAutoFitKind.Shape,
+            Anchor = VerticalAnchor.Middle,
+            InsetTopDip = 4,
+            InsetBottomDip = 4,
+            ColumnCount = 1
+        };
+        var bounds = new LayoutRect(10, 20, 100, 50);
+        var measures = new[] { new TextParagraphMeasure(0, 80, 2, 2) };
+
+        var planned = TextLayoutPlanner.PlanShapeAutoFitBounds(text, bounds, measures);
+
+        planned.Should().Be(new LayoutRect(10, -1, 100, 92));
+    }
+
+    [Fact]
+    public void PlanShapeAutoFitBounds_LeavesMultiColumnAndFittingShapesUntouched()
+    {
+        var multiColumn = new ResolvedTextLayout
+        {
+            AutoFitKind = TextAutoFitKind.Shape,
+            ColumnCount = 2
+        };
+        var bounds = new LayoutRect(10, 20, 100, 50);
+        var measures = new[] { new TextParagraphMeasure(0, 80, 2, 2) };
+
+        TextLayoutPlanner.PlanShapeAutoFitBounds(multiColumn, bounds, measures)
+            .Should().Be(bounds);
+
+        var fitting = new ResolvedTextLayout { AutoFitKind = TextAutoFitKind.Shape };
+        TextLayoutPlanner.PlanShapeAutoFitBounds(
+                fitting,
+                bounds,
+                new[] { new TextParagraphMeasure(0, 1, 0, 0) })
+            .Should().Be(bounds);
+    }
+
+    [Fact]
     public void PlanTableCellText_MiddleAnchor_UsesInsetsAndMeasuredParagraphs()
     {
         var text = new ResolvedTextLayout
