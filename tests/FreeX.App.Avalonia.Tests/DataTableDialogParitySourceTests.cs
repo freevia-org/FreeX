@@ -48,6 +48,7 @@ public sealed class DataTableDialogParitySourceTests
         dataTableMethod.Should().Contain("AttachDialogRangePicker(dialog, columnInputPicker, columnInputBox, \"range.data-table.column-input-cell\")");
         dataTableMethod.Should().Contain("new ColumnDefinition { Width = new GridLength(110) }");
         dataTableMethod.Should().Contain("dialog.Content = new StackPanel");
+        dataTableMethod.Should().Contain("Margin = new Thickness(0, 8, 0, 0)");
         dataTableMethod.Should().NotContain("DockPanel.SetDock(buttonRow, Dock.Bottom)");
         dataTableMethod.Should().NotContain("CreateDataTableField(\"Row input cell\"");
 

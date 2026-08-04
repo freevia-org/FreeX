@@ -44,7 +44,8 @@ public sealed record ChartDisplayOptionsSurfacePlan(
     string HighLowLinesLabel,
     string PlotHint,
     string OkLabel,
-    string CancelLabel);
+    string CancelLabel,
+    string WaterfallConnectorLinesLabel);
 
 /// <summary>
 /// Working-copy planner for the small set of chart display controls common to PowerPoint's
@@ -84,6 +85,7 @@ public sealed class ChartDisplayOptionsPlanner
     public const string VaryColorsLabel = "Vary colors by point";
     public const string LegendOverlayLabel = "Overlay legend";
     public const string HighLowLinesLabel = "High-low lines";
+    public const string WaterfallConnectorLinesLabel = "Waterfall connector lines";
     public const string PlotHint = "Bar gap width accepts 0-500; overlap accepts -100 to 100. Blank uses the chart default.";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
@@ -153,6 +155,8 @@ public sealed class ChartDisplayOptionsPlanner
     private bool? _legendOverlay;
     private bool? _highLowLines;
     private bool _supportsHighLowLines;
+    private bool? _waterfallConnectorLines;
+    private bool _supportsWaterfallConnectorLines;
     private IReadOnlyList<ChartDisplayStyleOption> _availableStyleOptions = StyleOptions;
 
     private ChartDisplayOptionsPlanner(ChartShape chart)
@@ -189,6 +193,10 @@ public sealed class ChartDisplayOptionsPlanner
         _legendOverlay = chart.LegendOverlay;
         _supportsHighLowLines = chart.ChartType == ChartType.Stock;
         _highLowLines = _supportsHighLowLines ? chart.HasHighLowLines : null;
+        _supportsWaterfallConnectorLines = chart.ChartType == ChartType.Waterfall;
+        _waterfallConnectorLines = _supportsWaterfallConnectorLines
+            ? chart.ShowWaterfallConnectorLines
+            : null;
     }
 
     public static ChartDisplayOptionsSurfacePlan BuildSurfacePlan() =>
@@ -227,7 +235,8 @@ public sealed class ChartDisplayOptionsPlanner
             HighLowLinesLabel,
             PlotHint,
             OkLabel,
-            CancelLabel);
+            CancelLabel,
+            WaterfallConnectorLinesLabel);
 
     public static ChartDisplayOptionsPlanner FromChart(ChartShape chart)
     {
@@ -275,6 +284,8 @@ public sealed class ChartDisplayOptionsPlanner
     public bool? LegendOverlay => _legendOverlay;
     public bool? HighLowLines => _highLowLines;
     public bool SupportsHighLowLines => _supportsHighLowLines;
+    public bool? WaterfallConnectorLines => _waterfallConnectorLines;
+    public bool SupportsWaterfallConnectorLines => _supportsWaterfallConnectorLines;
 
     public static IReadOnlyList<ChartDisplayBlanksOption> DisplayBlanksOptions { get; } =
     [
@@ -334,6 +345,8 @@ public sealed class ChartDisplayOptionsPlanner
     public void SetVaryColors(bool value) => _varyColors = value;
     public void SetLegendOverlay(bool? value) => _legendOverlay = value;
     public void SetHighLowLines(bool? value) => _highLowLines = _supportsHighLowLines ? value : null;
+    public void SetWaterfallConnectorLines(bool? value) =>
+        _waterfallConnectorLines = _supportsWaterfallConnectorLines ? value : null;
 
     public ChartDisplayOptions BuildCommitPlan() => new(
         string.IsNullOrWhiteSpace(_title) ? null : _title,
@@ -361,7 +374,8 @@ public sealed class ChartDisplayOptionsPlanner
         _showLeaderLines,
         _titleOverlayChanged ? _titleOverlay : null,
         _plotVisibleOnlyChanged ? _plotVisibleOnly : null,
-        _roundedCornersChanged ? _roundedCorners : null);
+        _roundedCornersChanged ? _roundedCorners : null,
+        _supportsWaterfallConnectorLines ? _waterfallConnectorLines : null);
 
     private ChartTextStyle? BuildLabelTextStyle()
     {

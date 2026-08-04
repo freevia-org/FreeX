@@ -7678,6 +7678,28 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartDisplayOptionsDialog_waterfall_connector_lines_uses_shared_planner()
+    {
+        ChartDisplayOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.Waterfall);
+            chartShape.Chart!.ShowWaterfallConnectorLines = true;
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartDisplayOptionsDialog(window.Editor);
+            dialog.SetWaterfallConnectorLinesForTests(false);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().NotBeNull();
+        options!.ShowWaterfallConnectorLines.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task ChartDataTableOptionsDialog_constructs_and_commits_shared_options()
     {
         ChartDataTableOptions? options = null;

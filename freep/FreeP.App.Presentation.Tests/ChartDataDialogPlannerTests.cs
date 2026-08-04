@@ -463,6 +463,26 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void ChartDisplayOptionsPlanner_WaterfallConnectorLinesAreScopedToWaterfallCharts()
+    {
+        var waterfall = MakeChart();
+        waterfall.ChartType = ChartType.Waterfall;
+        waterfall.ShowWaterfallConnectorLines = true;
+
+        var planner = ChartDisplayOptionsPlanner.FromChart(waterfall);
+        planner.SupportsWaterfallConnectorLines.Should().BeTrue();
+        planner.WaterfallConnectorLines.Should().BeTrue();
+        planner.SetWaterfallConnectorLines(false);
+        planner.BuildCommitPlan().ShowWaterfallConnectorLines.Should().BeFalse();
+
+        var column = ChartDisplayOptionsPlanner.FromChart(MakeChart());
+        column.SupportsWaterfallConnectorLines.Should().BeFalse();
+        column.WaterfallConnectorLines.Should().BeNull();
+        column.SetWaterfallConnectorLines(false);
+        column.BuildCommitPlan().ShowWaterfallConnectorLines.Should().BeNull();
+    }
+
+    [Fact]
     public void ChartDisplayOptionsPlanner_ClampsBarPlotRangesAndPreservesAutomaticValues()
     {
         var planner = ChartDisplayOptionsPlanner.FromChart(MakeChart());

@@ -844,7 +844,9 @@ public static class AvaloniaCompactDialogChrome
             .Name("PART_SelectedContentHost"));
         var tabPaneBorder = style.DialogTabPaneBorderBrush ?? DialogTabPaneBorderBrush;
         contentPaneStyle.Setters.Add(new Setter(Border.BorderBrushProperty, tabPaneBorder));
-        contentPaneStyle.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(1)));
+        contentPaneStyle.Setters.Add(new Setter(
+            Border.BorderThicknessProperty,
+            new Thickness(DialogTabChromeMetrics.PaneBorderThickness)));
         // Avalonia's platform TabControl template reserves an 11px body inset. The
         // WPF dialog pane is flush with the surrounding content, so cancel that
         // template inset while retaining the shared one-pixel pane frame.
@@ -855,37 +857,44 @@ public static class AvaloniaCompactDialogChrome
         contentPaneStyle.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, Brushes.White));
         tabControl.Styles.Add(contentPaneStyle);
 
-        if (contentPaneMargin is { } authorityPaneMargin)
+        var authorityPaneMargin = contentPaneMargin ?? new Thickness(0);
+        // The Fluent template can retain its own 12px presenter inset after the selector style
+        // runs. Apply the shared authority margin to the realized presenter as well, including
+        // the default zero-margin contract used by ordinary tabbed dialogs.
+        void ApplyAuthorityPaneMargin()
         {
-            void ApplyAuthorityPaneMargin()
+            tabControl.ApplyTemplate();
+            var selectedPane = tabControl.GetVisualDescendants()
+                .OfType<ContentPresenter>()
+                .FirstOrDefault(presenter => presenter.Name == "PART_SelectedContentHost");
+            if (selectedPane is not null)
             {
-                tabControl.ApplyTemplate();
-                var selectedPane = tabControl.GetVisualDescendants()
-                    .OfType<ContentPresenter>()
-                    .FirstOrDefault(presenter => presenter.Name == "PART_SelectedContentHost");
-                if (selectedPane is not null)
-                {
-                    // Fluent's template contributes a 12px horizontal inset outside the
-                    // presenter. A raw negative margin participates in its measure pass and
-                    // can collapse the pane, so consume that compensation at the template
-                    // boundary while keeping the selected content host stretched.
-                    selectedPane.Margin = new Thickness(
-                        authorityPaneMargin.Left < 0 ? 0 : authorityPaneMargin.Left,
-                        authorityPaneMargin.Top,
-                        authorityPaneMargin.Right < 0 ? 0 : authorityPaneMargin.Right,
-                        authorityPaneMargin.Bottom);
-                    selectedPane.HorizontalAlignment = HorizontalAlignment.Stretch;
-                }
+                // Fluent's template contributes a 12px horizontal inset outside the
+                // presenter. A raw negative margin participates in its measure pass and
+                // can collapse the pane, so consume that compensation at the template
+                // boundary while keeping the selected content host stretched.
+                selectedPane.Margin = new Thickness(
+                    authorityPaneMargin.Left < 0 ? 0 : authorityPaneMargin.Left,
+                    authorityPaneMargin.Top,
+                    authorityPaneMargin.Right < 0 ? 0 : authorityPaneMargin.Right,
+                    authorityPaneMargin.Bottom);
+                selectedPane.HorizontalAlignment = HorizontalAlignment.Stretch;
             }
-
-            tabControl.AttachedToVisualTree += (_, _) =>
-                Dispatcher.UIThread.Post(ApplyAuthorityPaneMargin, DispatcherPriority.Render);
-            Dispatcher.UIThread.Post(ApplyAuthorityPaneMargin, DispatcherPriority.Render);
         }
+
+        tabControl.AttachedToVisualTree += (_, _) =>
+            Dispatcher.UIThread.Post(ApplyAuthorityPaneMargin, DispatcherPriority.Render);
+        Dispatcher.UIThread.Post(ApplyAuthorityPaneMargin, DispatcherPriority.Render);
 
         var tabStyle = new Style(s => s.OfType<TabItem>());
         tabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, style.DialogInactiveTabBorderBrush ?? DialogInactiveTabBorderBrush));
-        tabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
+        tabStyle.Setters.Add(new Setter(
+            TabItem.BorderThicknessProperty,
+            new Thickness(
+                DialogTabChromeMetrics.PaneBorderThickness,
+                DialogTabChromeMetrics.PaneBorderThickness,
+                DialogTabChromeMetrics.PaneBorderThickness,
+                0)));
         tabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, style.DialogInactiveTabBackgroundBrush ?? DialogInactiveTabBackgroundBrush));
         tabStyle.Setters.Add(new Setter(TemplatedControl.ForegroundProperty, Brushes.Black));
         tabStyle.Setters.Add(new Setter(TemplatedControl.FontFamilyProperty, style.FontFamily));
@@ -898,14 +907,28 @@ public static class AvaloniaCompactDialogChrome
             tabStyle.Setters.Add(new Setter(Layoutable.MaxHeightProperty, explicitTabHeight));
         }
         tabStyle.Setters.Add(new Setter(TabItem.PaddingProperty, new Thickness(6, 2)));
-        tabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, -1, 0)));
+        tabStyle.Setters.Add(new Setter(
+            TabItem.MarginProperty,
+            new Thickness(0, 0, -DialogTabChromeMetrics.AdjacentTabOverlap, 0)));
         tabControl.Styles.Add(tabStyle);
 
         var selectedTabStyle = new Style(s => s.OfType<TabItem>().Class(":selected"));
         selectedTabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, Brushes.White));
         selectedTabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, tabPaneBorder));
-        selectedTabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
-        selectedTabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, -1, -1)));
+        selectedTabStyle.Setters.Add(new Setter(
+            TabItem.BorderThicknessProperty,
+            new Thickness(
+                DialogTabChromeMetrics.PaneBorderThickness,
+                DialogTabChromeMetrics.PaneBorderThickness,
+                DialogTabChromeMetrics.PaneBorderThickness,
+                0)));
+        selectedTabStyle.Setters.Add(new Setter(
+            TabItem.MarginProperty,
+            new Thickness(
+                0,
+                0,
+                -DialogTabChromeMetrics.AdjacentTabOverlap,
+                -DialogTabChromeMetrics.SelectedTabContentOverlap)));
         selectedTabStyle.Setters.Add(new Setter(TabItem.ZIndexProperty, 1));
         tabControl.Styles.Add(selectedTabStyle);
 

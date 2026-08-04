@@ -161,6 +161,19 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [StaFact]
+    public void ChartDisplayOptionsDialog_WaterfallConnectorLinesUsesSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.ChartType = ChartType.Waterfall;
+        sess.SelectedChart.ShowWaterfallConnectorLines = true;
+
+        var dialog = new ChartDisplayOptionsDialog(sess);
+        dialog.SetWaterfallConnectorLinesForTests(false);
+
+        dialog.BuildCommitPlanForTests().ShowWaterfallConnectorLines.Should().BeFalse();
+    }
+
+    [StaFact]
     public void ChartAxisOptionsDialog_ConstructsAndUsesSharedPlanner()
     {
         var (sess, _) = MakeSession();

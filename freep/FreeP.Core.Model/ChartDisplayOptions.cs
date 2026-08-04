@@ -30,4 +30,5 @@ public sealed record ChartDisplayOptions(
     bool? ShowLeaderLines = null,
     bool? TitleOverlay = null,
     bool? PlotVisibleOnly = null,
-    bool? RoundedCorners = null);
+    bool? RoundedCorners = null,
+    bool? ShowWaterfallConnectorLines = null);

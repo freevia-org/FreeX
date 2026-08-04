@@ -149,13 +149,13 @@ public sealed class ParagraphDialog : FreeWDialogWindow
     private Control BuildBreaksTab()
     {
         var panel = new StackPanel { Margin = new Thickness(10) };
-        panel.Children.Add(new TextBlock { Text = "Pagination", FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 0, 0, 5) });
+        panel.Children.Add(new TextBlock { Text = "Pagination", FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 0, 0, 8) });
         panel.Children.Add(_keepWithNext);
         panel.Children.Add(_keepLinesTogether);
         panel.Children.Add(_widowControl);
         panel.Children.Add(_pageBreakBefore);
         panel.Children.Add(new Separator { Margin = new Thickness(0, 4, 0, 8) });
-        panel.Children.Add(new TextBlock { Text = "Formatting exceptions", FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 0, 0, 5) });
+        panel.Children.Add(new TextBlock { Text = "Formatting exceptions", FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 0, 0, 8) });
         panel.Children.Add(_suppressHyphens);
         panel.Children.Add(_suppressLineNumbers);
         return panel;
@@ -278,7 +278,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
 
     private static CheckBox Check(string label, bool value)
     {
-        var box = new CheckBox { Content = label, IsChecked = value, Margin = new Thickness(0, 0, 0, 1) };
+        var box = new CheckBox { Content = label, IsChecked = value, Margin = new Thickness(0, 0, 0, 6) };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle);
         return box;
     }
