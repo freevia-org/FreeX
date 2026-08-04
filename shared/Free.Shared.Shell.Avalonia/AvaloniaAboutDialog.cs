@@ -14,13 +14,27 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
     private Button _okButton = null!;
     private readonly TextBox _aboutTextBox;
 
+    public AvaloniaAboutDialog(AboutDialogPresentation presentation)
+        : this(
+            presentation.WindowTitle,
+            presentation.AboutText,
+            presentation.DialogAutomationId,
+            presentation.TextAutomationId,
+            presentation.OkAutomationId,
+            presentation.HelpText,
+            presentation.AvaloniaRootRightMargin)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+    }
+
     public AvaloniaAboutDialog(
         string windowTitle,
         string aboutText,
         string dialogAutomationId,
         string textAutomationId,
         string okAutomationId,
-        string helpText)
+        string helpText,
+        double? rightContentMargin = null)
     {
         Title = windowTitle;
         Width = AboutDialogMetrics.Width;
@@ -61,7 +75,7 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
         AutomationProperties.SetAutomationId(_aboutTextBox, textAutomationId);
         AutomationProperties.SetHelpText(_aboutTextBox, helpText);
 
-        Content = CreateContent(okAutomationId, helpText);
+        Content = CreateContent(okAutomationId, helpText, rightContentMargin);
         ApplyAboutVisualChrome();
         Opened += (_, _) =>
         {
@@ -72,14 +86,14 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
 
     internal TextBox AboutTextBoxForTest => _aboutTextBox;
 
-    private Control CreateContent(string okAutomationId, string helpText)
+    private Control CreateContent(string okAutomationId, string helpText, double? rightContentMargin)
     {
         var root = new DockPanel
         {
             Margin = new Thickness(
                 AboutDialogMetrics.RootMargin,
                 AboutDialogMetrics.RootMargin,
-                AboutDialogMetrics.RootMargin,
+                rightContentMargin ?? AboutDialogMetrics.RootMargin,
                 AboutDialogMetrics.RootMargin),
         };
         var ok = _okButton = new Button

@@ -199,5 +199,5 @@ public sealed partial class InsertChartDialog
         };
 
     internal static StackPanel CreateButtonRow(Action accept) =>
-        DialogButtonRowFactory.Create(accept, buttonWidth: 76);
+        DialogButtonRowFactory.Create(accept, buttonWidth: ChartTypeChangePlanner.PickerButtonWidth);
 }

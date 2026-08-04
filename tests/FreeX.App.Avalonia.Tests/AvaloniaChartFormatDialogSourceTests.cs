@@ -41,6 +41,7 @@ public sealed class AvaloniaChartFormatDialogSourceTests
     {
         var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
         var chartRemainingDialogsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartRemainingDialogs.cs"));
+        var chartFormatDialogsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatDialogs.cs"));
         var combined = chartTabsSource + Environment.NewLine + chartRemainingDialogsSource;
 
         combined.Should().Contain("private bool TryGetSelectedChart(ChartWorkflowCommandDescriptor command");
@@ -55,6 +56,18 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         combined.Should().Contain("ChartTypeChangePlanner.PickerCategoryWidth");
         combined.Should().Contain("ChartTypeChangePlanner.PickerSubtypeWidth");
         combined.Should().Contain("ChartTypeChangePlanner.PickerListHeight");
+        combined.Should().Contain("ChartTypeChangePlanner.PickerButtonWidth");
+        combined.Should().Contain("Height = ChartTypeChangePlanner.PickerPanelHeight");
+        combined.Should().Contain("bodyGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });");
+        combined.Should().Contain("Grid.SetRow(categoryList, 1);");
+        combined.Should().Contain("Grid.SetRow(subtypeGallery, 1);");
+        combined.Should().Contain("Grid.SetRowSpan(preview, 2);");
+        combined.Should().Contain("Margin = new Thickness(0, 0, 0, 6),");
+        combined.Should().Contain("Margin = new Thickness(0, 0, 0, 8),");
+        combined.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, ChartDialogChromeStyle);");
+        combined.Should().Contain("ConfigureChartDialogKeyboardLifecycle(dialog, subtypeGallery);");
+        chartFormatDialogsSource.Should().Contain("AutomationProperties.SetName(okButton");
+        chartFormatDialogsSource.Should().Contain("AutomationProperties.SetName(cancelButton");
         combined.Should().Contain("ChartWorkflowCommandCatalog.SelectDataSource");
         combined.Should().Contain("ChartWorkflowCommandCatalog.MoveChart");
         combined.Should().Contain("ChartWorkflowCommandCatalog.FormatChartArea");

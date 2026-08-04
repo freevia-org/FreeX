@@ -317,6 +317,7 @@ public sealed partial class ChartDialogTests
         changeSource.Should().Contain("ChartTypeChangePlanner.PickerCategoryColumnWidth");
         changeSource.Should().Contain("ChartTypeChangePlanner.PickerSubtypeColumnWidth");
         changeSource.Should().Contain("ChartTypeChangePlanner.PickerSubtypeWidth");
+        pickerSource.Should().Contain("ChartTypeChangePlanner.PickerButtonWidth");
         pickerSource.Should().Contain("ChartTypeChangePlanner.PickerCategoryWidth");
         pickerSource.Should().Contain("ChartTypeChangePlanner.PickerPreviewWidth");
         pickerSource.Should().Contain("ChartTypeChangePlanner.PickerColumnGap");

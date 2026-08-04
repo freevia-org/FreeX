@@ -35,7 +35,17 @@ public sealed class WpfAuthoritySurfaceParityTests
             AutomationProperties.GetAutomationId(dialog).Should().Be("AboutFreeWDialog");
             var text = dialog.GetLogicalDescendants().OfType<TextBox>()
                 .Single(textBox => AutomationProperties.GetAutomationId(textBox) == "AboutFreeWText");
+            var root = dialog.GetLogicalDescendants().OfType<DockPanel>().Single();
             text.IsReadOnly.Should().BeTrue();
+            text.AcceptsReturn.Should().BeTrue();
+            text.Focusable.Should().BeTrue();
+            text.HorizontalContentAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Left);
+            text.VerticalContentAlignment.Should().Be(global::Avalonia.Layout.VerticalAlignment.Top);
+            root.Margin.Should().Be(new Thickness(
+                AboutDialogMetrics.RootMargin,
+                AboutDialogMetrics.RootMargin,
+                AboutDialogMetrics.FreeWAvaloniaRootRightMargin,
+                AboutDialogMetrics.RootMargin));
             text.FontSize.Should().Be(AboutDialogMetrics.AvaloniaTextFontSize);
             text.Text.Should().Contain("A free word processor for DOCX editing and format-fidelity work.");
             text.Text.Should().Contain("Built with .NET 10 and Avalonia.");

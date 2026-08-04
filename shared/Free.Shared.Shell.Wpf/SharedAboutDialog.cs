@@ -15,6 +15,18 @@ public class SharedAboutDialog : DialogWindow
 {
     private readonly TextBox _aboutTextBox;
 
+    public SharedAboutDialog(AboutDialogPresentation presentation)
+        : this(
+            presentation.WindowTitle,
+            presentation.AboutText,
+            presentation.DialogAutomationId,
+            presentation.TextAutomationId,
+            presentation.OkAutomationId,
+            presentation.HelpText)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+    }
+
     /// <param name="windowTitle">Window title string (e.g. "About FreeX").</param>
     /// <param name="aboutText">Body text shown in the read-only text box.</param>
     /// <param name="dialogAutomationId">AutomationId for the window (e.g. "AboutFreeXDialog").</param>

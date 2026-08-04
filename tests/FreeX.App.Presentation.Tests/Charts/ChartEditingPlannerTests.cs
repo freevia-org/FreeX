@@ -176,6 +176,7 @@ public sealed class ChartEditingPlannerTests
         ChartTypeChangePlanner.PickerPreviewWidth.Should().Be(180);
         ChartTypeChangePlanner.PickerColumnGap.Should().Be(12);
         ChartTypeChangePlanner.PickerListHeight.Should().Be(230);
+        ChartTypeChangePlanner.PickerButtonWidth.Should().Be(76);
     }
 
     [Fact]

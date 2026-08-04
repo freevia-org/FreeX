@@ -99,6 +99,36 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
     }
 
     [Fact]
+    public void Controller_ClampsVolumeToSharedZeroToHundredRange()
+    {
+        var factory = new FakeBackendFactory();
+        var controller = new AvaloniaSlideShowMediaController(new Canvas(), factory);
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 42,
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 9144000,
+            ExtentCyEmu = 6858000,
+            Media = new MediaInfo
+            {
+                IsVideo = false,
+                Bytes = [1, 2, 3],
+                ContentType = "audio/wav",
+            },
+        });
+
+        controller.EnterSlide(slide, 960, 720, 960, 720);
+        var mediaSession = factory.Backend.Sessions.Single();
+
+        controller.TrySetVolume(42, 150).Should().BeTrue();
+        mediaSession.Volume.Should().Be(100);
+        controller.TrySetVolume(42, -25).Should().BeTrue();
+        mediaSession.Volume.Should().Be(0);
+        controller.Teardown();
+    }
+
+    [Fact]
     public void Controller_ResolvesGroupedMediaForPlaybackAndResize()
     {
         var factory = new FakeBackendFactory();
