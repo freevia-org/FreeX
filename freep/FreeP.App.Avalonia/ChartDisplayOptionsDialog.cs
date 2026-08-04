@@ -45,6 +45,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private readonly CheckBox _legendOverlayCheck;
     private readonly CheckBox _highLowLinesCheck;
     private readonly CheckBox _waterfallConnectorLinesCheck;
+    private readonly CheckBox _dropLinesCheck;
+    private readonly CheckBox _upDownBarsCheck;
 
     internal ChartDisplayOptionsDialog(EditingSession editor)
     {
@@ -189,6 +191,20 @@ internal sealed class ChartDisplayOptionsDialog : Window
             IsChecked = _planner.WaterfallConnectorLines,
             IsEnabled = _planner.SupportsWaterfallConnectorLines,
         };
+        _dropLinesCheck = new CheckBox
+        {
+            Content = surface.DropLinesLabel,
+            IsThreeState = true,
+            IsChecked = _planner.DropLines,
+            IsEnabled = _planner.SupportsDropLines,
+        };
+        _upDownBarsCheck = new CheckBox
+        {
+            Content = surface.UpDownBarsLabel,
+            IsThreeState = true,
+            IsChecked = _planner.UpDownBars,
+            IsEnabled = _planner.SupportsUpDownBars,
+        };
 
         var buttons = new StackPanel
         {
@@ -240,6 +256,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
                 _legendOverlayCheck,
                 _highLowLinesCheck,
                 _waterfallConnectorLinesCheck,
+                _dropLinesCheck,
+                _upDownBarsCheck,
                 new TextBlock { Text = surface.PlotHint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7 },
                 buttons,
             },
@@ -267,6 +285,10 @@ internal sealed class ChartDisplayOptionsDialog : Window
     internal void SetHighLowLinesForTests(bool? value) => _highLowLinesCheck.IsChecked = value;
 
     internal void SetWaterfallConnectorLinesForTests(bool? value) => _waterfallConnectorLinesCheck.IsChecked = value;
+
+    internal void SetDropLinesForTests(bool? value) => _dropLinesCheck.IsChecked = value;
+
+    internal void SetUpDownBarsForTests(bool? value) => _upDownBarsCheck.IsChecked = value;
 
     internal void SetLeaderLinesForTests(bool? value) => _showLeaderLinesCheck.IsChecked = value;
 
@@ -367,6 +389,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
         _planner.SetLegendOverlay(_legendOverlayCheck.IsChecked);
         _planner.SetHighLowLines(_highLowLinesCheck.IsChecked);
         _planner.SetWaterfallConnectorLines(_waterfallConnectorLinesCheck.IsChecked);
+        _planner.SetDropLines(_dropLinesCheck.IsChecked);
+        _planner.SetUpDownBars(_upDownBarsCheck.IsChecked);
     }
 
     private static Control MakeRow(string label, Control control)
