@@ -327,7 +327,6 @@ public sealed partial class MainWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
             Child = new StackPanel
             {
-                Spacing = 10,
                 Children =
                 {
                     new TextBlock
@@ -336,6 +335,7 @@ public sealed partial class MainWindow
                         FontSize = 12,
                         FontFamily = FormulaBarFontFamily,
                         FontWeight = FontWeight.SemiBold,
+                        Margin = new Thickness(0, 0, 0, 12),
                     },
                     new TextBlock
                     {
@@ -344,6 +344,7 @@ public sealed partial class MainWindow
                         FontFamily = FormulaBarFontFamily,
                         TextWrapping = TextWrapping.Wrap,
                         Foreground = Brush(96, 96, 96),
+                        Margin = new Thickness(0, 0, 0, 14),
                     },
                     new TextBlock
                     {
@@ -351,6 +352,7 @@ public sealed partial class MainWindow
                         FontSize = 12,
                         FontFamily = FormulaBarFontFamily,
                         FontWeight = FontWeight.SemiBold,
+                        Margin = new Thickness(0, 0, 0, 8),
                     },
                     sampleArea,
                 },

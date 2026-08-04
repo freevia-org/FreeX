@@ -79,6 +79,17 @@ public sealed class AvaloniaChartFormatDialogSourceTests
     }
 
     [Fact]
+    public void ChangeChartTypePreview_UsesWpfElementSpacingContract()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
+
+        source.Should().Contain("Margin = new Thickness(0, 0, 0, 12),");
+        source.Should().Contain("Margin = new Thickness(0, 0, 0, 14),");
+        source.Should().Contain("Margin = new Thickness(0, 0, 0, 8),");
+        source.Should().NotContain("Spacing = 10,");
+    }
+
+    [Fact]
     public void SelectDataSourceDialog_WiresSwitchRowColumnThroughToCommand()
     {
         var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
