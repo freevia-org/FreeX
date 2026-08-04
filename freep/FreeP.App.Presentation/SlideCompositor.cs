@@ -730,9 +730,18 @@ public static class SlideCompositor
             || !int.TryParse(normalized, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
             return ResolvedOutline.None.Instance;
 
+        var widthEmu = line?.Attribute("w") is { Value: var widthText }
+            && int.TryParse(widthText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedWidth)
+            && parsedWidth > 0
+                ? parsedWidth
+                : fallback?.FrameBorderWidthEmu;
+        var widthPoints = widthEmu is int width
+            ? Math.Clamp(width / 12700d, 0.01, 1584)
+            : 0.75;
+
         return new ResolvedOutline.Visible(
             new SrgbColor((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb),
-            PointsToDip(0.75),
+            PointsToDip(widthPoints),
             OutlineDash.Solid,
             255);
     }
