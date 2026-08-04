@@ -9,6 +9,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
 {
     private readonly CheckBox _returnToParent;
     private readonly CheckBox _showBackground;
+    private readonly CheckBox _transitionEnabled;
     private readonly ComboBox _imageType;
     private readonly TextBox _transitionDuration;
     private readonly TextBox _cropEdges;
@@ -61,6 +62,13 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             Text = current.TransitionDuration ?? string.Empty,
             MinWidth = 180,
         };
+        _transitionEnabled = new CheckBox
+        {
+            Content = "Use Zoom transition",
+            IsChecked = ZoomObjectPropertiesPlanner.IsTransitionEnabled(current),
+        };
+        _transitionEnabled.Checked += (_, _) => SyncTransitionState();
+        _transitionEnabled.Unchecked += (_, _) => SyncTransitionState();
         _cropEdges = new TextBox
         {
             Text = ZoomObjectPropertiesPlanner.FormatCropEdges(current),
@@ -86,13 +94,16 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         }
 
         var grid = new Grid { Margin = new Thickness(14) };
-        for (var i = 0; i < 6 + (_summaryTargets.Count > 0 ? 3 : 0); i++)
+        for (var i = 0; i < 7 + (_summaryTargets.Count > 0 ? 3 : 0); i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         var row = 0;
         AddRow(grid, row++, "Image source:", _imageType);
+        Grid.SetRow(_transitionEnabled, row++);
+        Grid.SetColumnSpan(_transitionEnabled, 2);
+        grid.Children.Add(_transitionEnabled);
         AddRow(grid, row++, "Transition duration:", _transitionDuration);
         AddRow(grid, row++, "Preview crop (%):", _cropEdges);
         if (_summaryTile is not null)
@@ -123,6 +134,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         grid.Children.Add(buttons);
         Content = grid;
         Properties = current;
+        SyncTransitionState();
         LoadSummaryTileFields();
     }
 
@@ -139,6 +151,18 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private void Apply()
     {
         var imageType = _imageType.SelectedItem as string ?? "preview";
+        if (!ZoomObjectPropertiesPlanner.TryParseTransitionDuration(
+                _transitionDuration.Text,
+                _transitionEnabled.IsChecked == true,
+                out var transitionDuration))
+        {
+            MessageBox.Show(this,
+                "Transition duration must be a positive whole number of milliseconds.",
+                ZoomObjectPropertiesPlanner.DialogTitle,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
         if (!ZoomObjectPropertiesPlanner.TryParseCropEdges(
                 _cropEdges.Text, out var cropLeft, out var cropTop, out var cropRight, out var cropBottom))
         {
@@ -172,7 +196,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         Properties = new ZoomObjectProperties(
             _returnToParent.IsChecked == true,
             imageType,
-            string.IsNullOrWhiteSpace(_transitionDuration.Text) ? null : _transitionDuration.Text.Trim(),
+            transitionDuration,
             _showBackground.IsChecked == true,
             cropLeft,
             cropTop,
@@ -201,6 +225,8 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             ? properties.ImageType!.ToLowerInvariant()
             : "preview";
         _transitionDuration.Text = properties.TransitionDuration ?? string.Empty;
+        _transitionEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsTransitionEnabled(properties);
+        SyncTransitionState();
         _cropEdges.Text = ZoomObjectPropertiesPlanner.FormatCropEdges(properties);
         _returnToParent.IsChecked = properties.ReturnToParent ?? true;
         _showBackground.IsChecked = properties.ShowBackground ?? true;
@@ -209,4 +235,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _summaryScale.Text = ZoomObjectPropertiesPlanner.FormatFactorPair(
             target.ScaleFactorX, target.ScaleFactorY);
     }
+
+    private void SyncTransitionState() =>
+        _transitionDuration.IsEnabled = _transitionEnabled.IsChecked == true;
 }

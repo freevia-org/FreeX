@@ -9,6 +9,7 @@ public static class ZoomObjectPropertiesPlanner
 {
     public const string CommandId = "freep.zoom.format";
     public const string DialogTitle = "Zoom Format";
+    public const int DefaultTransitionDurationMs = 1000;
 
     public sealed record SummaryZoomTileLayoutEdit(
         string SectionId,
@@ -87,6 +88,42 @@ public static class ZoomObjectPropertiesPlanner
     public static bool IsSupportedImageType(string? imageType) =>
         string.Equals(imageType, "preview", StringComparison.OrdinalIgnoreCase)
         || string.Equals(imageType, "cover", StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsTransitionEnabled(ZoomObjectProperties properties) =>
+        !string.IsNullOrWhiteSpace(properties.TransitionDuration);
+
+    /// <summary>
+    /// Normalizes the Zoom transition control used by both desktop dialogs. An unchecked
+    /// transition removes transitionDur; enabling it with an empty field uses PowerPoint's
+    /// one-second authoring default. Stored values remain invariant-culture integer milliseconds.
+    /// </summary>
+    public static bool TryParseTransitionDuration(
+        string? text,
+        bool enabled,
+        out string? normalized)
+    {
+        normalized = null;
+        if (!enabled)
+            return true;
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            normalized = DefaultTransitionDurationMs.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        if (!int.TryParse(
+                text.Trim(),
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var durationMs)
+            || durationMs <= 0)
+            return false;
+
+        normalized = durationMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return true;
+    }
 
     public static string FormatCropEdges(ZoomObjectProperties properties)
     {
