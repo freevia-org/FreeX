@@ -319,7 +319,8 @@ public sealed record DocumentFloatingHandleRect(
 public sealed record DocumentFloatingWrapExclusionZone(
     DocumentFloatRect Rect,
     ImageWrapping Wrapping,
-    FloatingWrapTextSide WrapTextSide = FloatingWrapTextSide.BothSides);
+    FloatingWrapTextSide WrapTextSide = FloatingWrapTextSide.BothSides,
+    int BlockIndex = -1);
 
 public sealed record DocumentFloatingWrapReservationPlan(
     DocumentFloatingObjectKind Kind,
@@ -1455,7 +1456,10 @@ public static class DocumentViewLayoutPlanner
         ArgumentNullException.ThrowIfNull(snapshots);
 
         return snapshots
-            .Select(snapshot => BuildWrapExclusionZone(snapshot.Rect, snapshot.Wrapping, snapshot.WrapTextSide))
+            .Select(snapshot => BuildWrapExclusionZone(snapshot.Rect, snapshot.Wrapping, snapshot.WrapTextSide)
+                is { } zone
+                ? zone with { BlockIndex = snapshot.BlockIndex }
+                : null)
             .OfType<DocumentFloatingWrapExclusionZone>()
             .ToList();
     }

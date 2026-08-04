@@ -4,6 +4,37 @@ namespace FreeW.App.Presentation.Tests;
 
 public sealed class PageVerticalAlignmentPlannerTests
 {
+    [Fact]
+    public void OrderBodyStartsByColumn_uses_reading_order_for_wrapped_blocks()
+    {
+        var starts = PageVerticalAlignmentPlanner.OrderBodyStartsByColumn([
+            new PageVerticalAlignmentPlanner.BodyFlowStart(0, 0, 120),
+            new PageVerticalAlignmentPlanner.BodyFlowStart(1, 1, 140),
+            new PageVerticalAlignmentPlanner.BodyFlowStart(2, 0, 220),
+            new PageVerticalAlignmentPlanner.BodyFlowStart(1, 1, 20),
+        ]);
+
+        starts.Select(start => start.BlockIndex)
+            .Should()
+            .Equal(0, 2, 1);
+        starts.Select(start => start.PageSpaceY)
+            .Should()
+            .Equal(120, 220, 20);
+    }
+
+    [Fact]
+    public void OrderBodyStartsByColumn_deduplicates_continuations_of_the_same_block()
+    {
+        var starts = PageVerticalAlignmentPlanner.OrderBodyStartsByColumn([
+            new PageVerticalAlignmentPlanner.BodyFlowStart(4, 1, 80),
+            new PageVerticalAlignmentPlanner.BodyFlowStart(4, 0, 420),
+            new PageVerticalAlignmentPlanner.BodyFlowStart(4, 1, 10),
+        ]);
+
+        starts.Should().ContainSingle();
+        starts[0].Should().Be(new PageVerticalAlignmentPlanner.BodyFlowStart(4, 0, 420));
+    }
+
     [Theory]
     [InlineData(PageVerticalAlignment.Top, 120, 0)]
     [InlineData(PageVerticalAlignment.Center, 120, 60)]
