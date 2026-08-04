@@ -426,6 +426,7 @@ internal static class FreePRibbonText
     public static RibbonText ThemeSliceCommand { get; } = new("Ribbon_Command_ThemeSlice_Label", "Ribbon_Command_ThemeSlice_KeyTip");
     public static RibbonText CustomizeGroup { get; } = new("Ribbon_Group_Customize_Label", "Ribbon_Group_Customize_KeyTip");
     public static RibbonText SmartArtColorsGroup { get; } = new("Ribbon_Group_SmartArtColors_Label", "Ribbon_Group_SmartArtColors_KeyTip");
+    public static RibbonText SmartArtTextPaneCommand { get; } = new("Ribbon_Command_SmartArtTextPane_Label", "Ribbon_Command_SmartArtTextPane_KeyTip");
     public static RibbonText SmartArtThemeAccentsCommand { get; } = new("Ribbon_Command_SmartArtThemeAccents_Label", "Ribbon_Command_SmartArtThemeAccents_KeyTip");
     public static RibbonText SmartArtSingleAccentCommand { get; } = new("Ribbon_Command_SmartArtSingleAccent_Label", "Ribbon_Command_SmartArtSingleAccent_KeyTip");
     public static RibbonText SmartArtMonochromaticAccent2Command { get; } = new("Ribbon_Command_SmartArtMonochromaticAccent2_Label", "Ribbon_Command_SmartArtMonochromaticAccent2_KeyTip");

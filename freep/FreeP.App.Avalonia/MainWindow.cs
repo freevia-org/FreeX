@@ -3153,6 +3153,9 @@ public sealed partial class MainWindow : Window
                 if (Editor.SelectedShapeIds.Count == 1)
                     Editor.ConvertSmartArtToShapes(Editor.SelectedShapeIds[0]);
             }));
+        r.Register(
+            SmartArtEditingPlanner.OpenTextPaneCommandId,
+            new ActionRibbonCommand(() => ShowSmartArtTextPane()));
 
         // Undo / Redo
         r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));

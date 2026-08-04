@@ -574,6 +574,10 @@ public static class FreePRibbon
                 FreePRibbonText.SmartArtBasicProcessCommand.KeyTip,
                 dropdown: true,
                 menu: BuildSmartArtInsertMenu);
+            group.Medium(SmartArtEditingPlanner.OpenTextPaneCommandId,
+                FreePRibbonText.SmartArtTextPaneCommand.Label,
+                RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtTextPaneCommand.KeyTip);
         });
         tab.Group("links", FreePRibbonText.LinksGroupLabel, FreePRibbonText.LinksGroupKeyTip, 92, group =>
         {

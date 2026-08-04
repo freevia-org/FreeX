@@ -143,6 +143,9 @@ public sealed record SmartArtTextPaneKeyboardRoute(
 
 public static class SmartArtEditingPlanner
 {
+    /// <summary>Opens the editable SmartArt outline pane for the selected graphic.</summary>
+    public const string OpenTextPaneCommandId = "freep.smartart.text-pane";
+
     public const string DefaultNewNodeText = "New node";
 
     private static readonly XNamespace Dgm = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
