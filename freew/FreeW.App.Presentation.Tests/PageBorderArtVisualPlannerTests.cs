@@ -154,20 +154,18 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
-    public void FlowersRoses_UsesWordCadenceAndMeasuredSourcePalette()
+    public void FlowersRoses_UsesWordCadenceAndMeasuredIndexedPalette()
     {
         PageBorderArtVisualPlanner.TryBuildFlowersRosesFrame(38, 3, 816, 1056, 32, out var plan)
             .Should().BeTrue();
 
-        plan.Fills.Should().BeEmpty();
-        plan.Polygons.Should().HaveCount(1326);
-        plan.Polygons[0].Points[0].Should().Be(new PageBorderArtPoint(45, 46));
-        plan.Polygons[3].Should().Match<PageBorderArtPolygon>(polygon =>
-            polygon.Red == 0x1A && polygon.Green == 0xB3 && polygon.Blue == 0);
-        plan.Polygons[6].Should().Match<PageBorderArtPolygon>(polygon =>
-            polygon.Red == 0xE9 && polygon.Green == 0x6A && polygon.Blue == 0xD3);
-        plan.Polygons[7].Should().Match<PageBorderArtPolygon>(polygon =>
-            polygon.Red == 0xA0 && polygon.Green == 0x49 && polygon.Blue == 0x91);
+        plan.Polygons.Should().BeEmpty();
+        plan.Fills.Should().HaveCount(41208);
+        plan.Fills[0].Should().Be(new PageBorderArtFillRectangle(35, 32, 1, 1, 0xB3, 0xB2, 0xB3));
+        plan.Fills.Should().Contain(fill => fill.Red == 0xE7 && fill.Green == 0x69 && fill.Blue == 0xD1);
+        plan.Fills.Should().Contain(fill => fill.Red == 0x1A && fill.Green == 0xB3 && fill.Blue == 0);
+        plan.Fills.Should().Contain(fill => fill.Red == 0xA8 && fill.Green == 0x4D && fill.Blue == 0x98);
+        plan.Fills.Should().NotContain(fill => fill.Red == 0xFE && fill.Green == 0xFE && fill.Blue == 0xFE);
     }
 
     [Fact]

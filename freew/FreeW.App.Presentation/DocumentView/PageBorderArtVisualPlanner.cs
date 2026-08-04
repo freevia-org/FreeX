@@ -70,6 +70,22 @@ public sealed record PageBorderArtFilledShapePlan(
 
 public static class PageBorderArtVisualPlanner
 {
+    private static readonly IReadOnlyList<(byte Red, byte Green, byte Blue)?> FlowersRosesPalette =
+    [
+        null,
+        (0xE7, 0x69, 0xD1),
+        (0x1A, 0xB3, 0x00),
+        (0xA8, 0x4D, 0x98),
+        (0x8A, 0x89, 0x8A),
+        (0x13, 0x85, 0x00),
+        (0x38, 0x46, 0x35),
+        (0xB3, 0xB2, 0xB3),
+        (0x12, 0x5C, 0x05),
+        (0xDD, 0xDD, 0xDD),
+        (0x6C, 0x53, 0x68),
+        (0x18, 0xA3, 0x00),
+    ];
+
     // Word's Vine border is a fixed 48x32 monochrome sprite repeated along each rail.
     private static readonly string[] VineRailMask =
     [
@@ -513,10 +529,18 @@ public static class PageBorderArtVisualPlanner
             return false;
         }
 
-        var polygons = new List<PageBorderArtPolygon>();
+        var fills = new List<PageBorderArtFillRectangle>();
         foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
-            AddRose(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
-        plan = new PageBorderArtFilledShapePlan([], polygons);
+            AddIndexedPaletteMask(
+                fills,
+                PageBorderArtSpriteMasks.FlowersRosesMask,
+                FlowersRosesPalette,
+                placement.Xdip,
+                placement.Ydip,
+                placement.SizeDip,
+                horizontal: true,
+                transparentMaterial: 0);
+        plan = new PageBorderArtFilledShapePlan(fills, []);
         return true;
     }
 
@@ -1279,51 +1303,6 @@ public static class PageBorderArtVisualPlanner
             (7, 16.5), (6, 16), (10, 13), (14, 12));
     }
 
-    private static void AddRose(
-        List<PageBorderArtPolygon> polygons,
-        double x,
-        double y,
-        double size)
-    {
-        var scale = size / 32.0;
-        PageBorderArtPoint Point(double px, double py) => new(x + px * scale, y + py * scale);
-        void Add(byte red, byte green, byte blue, params (double X, double Y)[] points) =>
-            polygons.Add(new PageBorderArtPolygon(
-                points.Select(point => Point(point.X, point.Y)).ToList(), red, green, blue));
-
-        Add(0x40, 0x40, 0x40,
-            (13, 14), (16, 14), (19, 22), (28, 28), (27, 31), (18, 26), (14, 18));
-        Add(0x0F, 0x64, 0x00,
-            (15, 16), (16, 17), (20, 23), (27, 28), (26, 29), (19, 25));
-        Add(0x40, 0x40, 0x40,
-            (18, 19), (19, 14), (23, 8), (27, 7), (30, 10), (32, 16),
-            (31, 22), (28, 25), (24, 25), (21, 22));
-        Add(0x1A, 0xB3, 0x00,
-            (20, 18), (21, 14), (24, 9), (27, 8), (29, 11), (31, 16),
-            (30, 21), (27, 24), (24, 23), (22, 21));
-        Add(0x0F, 0x64, 0x00, (25, 9), (27, 9), (27, 23), (25, 24));
-
-        Add(0x40, 0x40, 0x40,
-            (1, 5), (4, 1), (8, 2), (11, 0), (15, 2), (20, 1), (23, 4),
-            (20, 8), (19, 11), (23, 14), (22, 18), (18, 21), (14, 20),
-            (11, 23), (6, 22), (4, 18), (0, 16), (1, 12), (0, 9));
-        Add(0xE9, 0x6A, 0xD3,
-            (2, 6), (5, 3), (8, 4), (11, 2), (14, 4), (19, 3), (21, 5),
-            (18, 8), (17, 11), (21, 14), (20, 17), (17, 19), (13, 18),
-            (10, 21), (7, 20), (6, 17), (2, 15), (3, 12), (2, 9));
-        Add(0xA0, 0x49, 0x91, (2, 6), (7, 7), (9, 11), (3, 10));
-        Add(0xA0, 0x49, 0x91, (6, 13), (18, 12), (19, 15), (8, 16));
-        Add(0xA0, 0x49, 0x91, (9, 3), (12, 4), (11, 9), (15, 12), (13, 14), (8, 10));
-
-        Add(0x40, 0x40, 0x40,
-            (0, 21), (4, 19), (8, 20), (11, 23), (10, 26), (7, 27),
-            (7, 32), (4, 32), (4, 27), (1, 25));
-        Add(0xE9, 0x6A, 0xD3,
-            (2, 21), (5, 21), (9, 23), (8, 25), (6, 25), (6, 27),
-            (5, 30), (5, 26), (2, 24));
-        Add(0x0F, 0x64, 0x00, (6, 26), (9, 24), (8, 29), (6, 31));
-    }
-
     private static void AddVineCorner(
         List<PageBorderArtFillRectangle> fills,
         double x,
@@ -1440,6 +1419,57 @@ public static class PageBorderArtVisualPlanner
                 {
                     material = next;
                     if (material != transparentMaterial)
+                        runStart = column;
+                }
+            }
+        }
+    }
+
+    private static void AddIndexedPaletteMask(
+        List<PageBorderArtFillRectangle> fills,
+        IReadOnlyList<byte> mask,
+        IReadOnlyList<(byte Red, byte Green, byte Blue)?> palette,
+        double x,
+        double y,
+        double size,
+        bool horizontal,
+        byte transparentMaterial)
+    {
+        var scale = size / PageBorderArtSpriteMasks.MaskSize;
+        for (var row = 0; row < PageBorderArtSpriteMasks.MaskSize; row++)
+        {
+            var runStart = -1;
+            var material = transparentMaterial;
+            for (var column = 0; column <= PageBorderArtSpriteMasks.MaskSize; column++)
+            {
+                var next = column < PageBorderArtSpriteMasks.MaskSize
+                    ? mask[row * PageBorderArtSpriteMasks.MaskSize + column]
+                    : transparentMaterial;
+                if (next != material && runStart >= 0)
+                {
+                    var color = palette[material]!.Value;
+                    var runLength = column - runStart;
+                    fills.Add(horizontal
+                        ? new PageBorderArtFillRectangle(
+                            x + runStart * scale,
+                            y + row * scale,
+                            runLength * scale,
+                            scale,
+                            color.Red, color.Green, color.Blue)
+                        : new PageBorderArtFillRectangle(
+                            x + row * scale,
+                            y + runStart * scale,
+                            scale,
+                            runLength * scale,
+                            color.Red, color.Green, color.Blue));
+                    runStart = -1;
+                }
+                if (next != material)
+                {
+                    material = next;
+                    if (material >= palette.Count)
+                        throw new InvalidOperationException("Page-border art mask references an unknown material.");
+                    if (palette[material].HasValue)
                         runStart = column;
                 }
             }

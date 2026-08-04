@@ -16,6 +16,23 @@ internal static class PageBorderArtSpriteMasks
     internal static IReadOnlyList<byte> PaintedEggMask { get; } = DecodeMask(PaintedEggPacked);
     internal static IReadOnlyList<byte> CakeSliceMask { get; } = DecodeMask(CakeSlicePacked);
     internal static IReadOnlyList<byte> BirdsFlightMask { get; } = DecodeMask(BirdsFlightPacked);
+    internal static IReadOnlyList<byte> FlowersRosesMask { get; } = DecodeIndexedMask(FlowersRosesPacked);
+
+    private const string FlowersRosesPacked =
+        "AAAABwYKAAkGCQAABwQKCgoEAAAAAAAAAAAAAAAAAAAAAAQDBAQGBgoECgoBAQEBAQEKBwAAAAAAAAAAAAAAAAAJAwEHCgQJAwcK" +
+        "AQEBAQEBAQEKAAAAAAAAAAAAAAAAAAkDAQcHBwoDCQQBAQEBAQEBAwQAAAAAAAAAAAAAAAAABwkKBwoBAQEDBwAKAQEBAQoAAAAA" +
+        "AAAAAAAAAAAAAAQKCgkACgEBAQEDCgkKCgMBCgAAAAAAAAAAAAAAAAAAAwEBAwkKAQEBAQEBCgoHBwoDCQAAAAAAAAAAAAAAAAAB" +
+        "AQEBAAoBAQEBAQEBAQMKCQoGCQAAAAAAAAAAAAAAAAoBAQEHCgEBCgoEBwQEBwQBAwoAAAAAAAAJAAAAAAAABAMBAQoHCgoECgoD" +
+        "BgcKBAMBAQoKAAAACgYAAAAAAAAABwoDBAkECgEBAQEJCgEKCgEBAQoAAAkGBgAAAAAAAAAAAAcKAwMKCgoKCgQDAQoDAQEBCgAJ" +
+        "BgoICQAAAAAAAAAECgQKCgMBAQEBAQEBBAEBAQoABAUICAIGAAAAAAAAAAoBCQMBAQEBAQEBAQEEAQEKBwAIAgYFAgsEAAAAAAAA" +
+        "CgEECgEBAQEBAQEBAQQDCgkABwUCCgsCAgYAAAAAAAAKAQoEAQEBAQEBAQEBBAQJAAAKAgsEAgICCwAAAAAACQMBCQoBAQEBAQEB" +
+        "CgQEBQkAAAUCBQcCAgICBAAAAAAHAwoECgoDAQEBAQoJBwgFBwAABQIFBwICAgIKAAAAAAAJAAAAAAkKCgoKAAAABgsEAAAFAgUH" +
+        "AgICAggJAAAAAAAAAAAAAAAAAAAAAAAJAgYAAAUCBQcCAgICCwcAAAAJBwcJAAAAAAAAAAAAAAAKAgYABgILBAICAgIFCQAABgoD" +
+        "AQMKCgAAAAAAAAAAAAAGCwoHCwIEBQICAgoAAAAEBwoBAQEBCgAAAAAAAAAAAAkGBQAGAgoIAgILAAAAAAkGBwoKCgoDBAAAAAAA" +
+        "AAAAAAkIBwkGCAYLBQoAAAAAAAcBAQMDAwoGCQgICAYGBgAAAAAGCAoJAAAAAAAAAAAAAAoBAQEBAQQJCgkACQkAAAAAAAAKCAYA" +
+        "AAAAAAAAAAAABwMBAQEDCQoFCAYEAAAAAAAAAAAHBgYECQAAAAAAAAAABwoKCgQKCAgKBwoKAAAAAAAAAAAABggFCAAAAAAAAAAA" +
+        "BAUIAAAAAAAGBgYECQkJCQkHBAoGCgQHCQkAAAAAAAAKAgYAAAAAAAAACQQGBgYGCgQECQAAAAAAAAAAAAAAAAYIBwAAAAAAAAAA" +
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAJCgkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
 
     private const string BirdsFlightPacked =
         "//////////////////v/////////+///6f/////5//8D/f////3//wv0//+//v//H+D//z//f/8/0P//H/+f//9A//9D//j//wD//4F/" +
@@ -97,6 +114,14 @@ internal static class PageBorderArtSpriteMasks
 
         for (var pixel = 0; pixel < pixels.Length; pixel++)
             pixels[pixel] = (byte)((packed[pixel / 4] >> (2 * (pixel % 4))) & 0x03);
+        return pixels;
+    }
+
+    private static IReadOnlyList<byte> DecodeIndexedMask(string packedBase64)
+    {
+        var pixels = Convert.FromBase64String(packedBase64);
+        if (pixels.Length != MaskSize * MaskSize)
+            throw new InvalidOperationException("Invalid indexed page-border art mask payload.");
         return pixels;
     }
 }
