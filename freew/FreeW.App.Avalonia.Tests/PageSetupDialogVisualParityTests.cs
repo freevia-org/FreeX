@@ -48,8 +48,10 @@ public sealed class PageSetupDialogVisualParityTests
 
                 var tabs = dialog.GetLogicalDescendants().OfType<TabControl>().Single();
                 tabs.SelectedIndex.Should().Be(expectedTab);
-                tabs.Items.OfType<TabItem>().Select(item => item.Header?.ToString())
+                var tabItems = tabs.Items.OfType<TabItem>().ToArray();
+                tabItems.Select(item => item.Header?.ToString())
                     .Should().Equal("Margins", "Paper", "Layout");
+                tabItems.Select(item => item.Width).Should().Equal(59, 40, 48);
 
                 var grids = dialog.GetLogicalDescendants().OfType<Grid>().ToArray();
                 grids.Should().NotBeEmpty();
@@ -88,6 +90,12 @@ public sealed class PageSetupDialogVisualParityTests
                     .ToArray();
                 actionButtons.Where(button => button.Content?.ToString() is "OK" or "Cancel")
                     .Should().OnlyContain(button => button.MinWidth == metrics.ActionButtonWidth);
+                var actions = dialog.GetLogicalDescendants().OfType<StackPanel>()
+                    .Single(panel => panel.Children.OfType<Button>().Count() == 2
+                        && panel.Children.OfType<Button>()
+                            .All(button => button.MinWidth == metrics.ActionButtonWidth));
+                actions.Spacing.Should().Be(14);
+                actions.Margin.Right.Should().Be(15);
                 actionButtons.Where(button => button.Content?.ToString() is "Line Numbers…" or "Borders…")
                     .Should().OnlyContain(button => button.MinWidth == metrics.LauncherButtonWidth);
             }
@@ -126,6 +134,12 @@ public sealed class PageSetupDialogVisualParityTests
                     .Should().Equal(new Thickness(0), new Thickness(0, 4, 0, 0));
                 checks.Children.OfType<CheckBox>()
                     .Should().OnlyContain(check => check.Height == 18 && check.MinHeight == 18);
+                var launchers = layout.Children.OfType<StackPanel>()
+                    .Single(panel => panel.Children.OfType<Button>().Count() == 2
+                        && panel.Children.OfType<Button>()
+                            .All(button => button.MinWidth == PageSetupDialogPlanner.PresentationMetrics.LauncherButtonWidth));
+                launchers.Spacing.Should().Be(14);
+                launchers.Margin.Left.Should().Be(-1);
             }
             finally
             {

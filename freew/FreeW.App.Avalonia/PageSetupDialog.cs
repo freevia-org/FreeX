@@ -29,6 +29,14 @@ public sealed class PageSetupDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = PageLayoutDialogChrome.Style;
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
+    // The authority capture is rendered at 96 DPI with the WPF dialog's compact tab metrics.
+    // Avalonia's Fluent header measures these three English labels differently on Linux, so keep
+    // the route's tab geometry explicit while the shared chrome still owns colors and templates.
+    private static readonly double[] AuthorityTabWidths = [59, 40, 48];
+    private const double AuthorityActionSpacing = 14;
+    private const double AuthorityActionRightInset = 15;
+    private const double AuthorityLauncherLeftInset = -1;
+    private const double AuthorityLauncherSpacing = 14;
 
     private readonly TextBox _top;
     private readonly TextBox _bottom;
@@ -106,6 +114,8 @@ public sealed class PageSetupDialog : FreeWDialogWindow
             tabs,
             DialogChromeStyle,
             contentPaneMargin: ToThickness(metrics.TabPaneMargin));
+        for (var index = 0; index < tabs.Items.Count && index < AuthorityTabWidths.Length; index++)
+            ((TabItem)tabs.Items[index]!).Width = AuthorityTabWidths[index];
 
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(16, 8, 16, 0));
         var root = new Grid
@@ -116,14 +126,20 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         Grid.SetRow(_status, 1);
         var actionStyle = DialogChromeStyle with
         {
-            DefaultButtonBorderBrush = AvaloniaCompactDialogChrome.NeutralButtonBorderBrush
+            DefaultButtonBorderBrush = AvaloniaCompactDialogChrome.NeutralButtonBorderBrush,
+            ActionSpacing = AuthorityActionSpacing
         };
         var actions = PageLayoutDialogChrome.Actions(
             Accept,
             () => Close(null),
             style: actionStyle,
             buttonWidth: metrics.ActionButtonWidth);
-        actions.Margin = ToThickness(metrics.ActionRowMargin);
+        var actionMargin = metrics.ActionRowMargin;
+        actions.Margin = new Thickness(
+            actionMargin.Left,
+            actionMargin.Top,
+            AuthorityActionRightInset,
+            actionMargin.Bottom);
         Grid.SetRow(actions, 2);
         root.Children.Add(actions);
         root.Children.Add(tabs);
@@ -177,7 +193,12 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         checks.Children.Add(_differentOddEven);
         panel.Children.Add(checks);
 
-        var launchers = new StackPanel { Orientation = Orientation.Horizontal, Spacing = metrics.LauncherSpacing, Margin = new Thickness(0, metrics.LauncherTopSpacing, 0, 0) };
+        var launchers = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = AuthorityLauncherSpacing,
+            Margin = new Thickness(AuthorityLauncherLeftInset, metrics.LauncherTopSpacing, 0, 0)
+        };
         var lineNumbers = new Button { Content = PageSetupDialogPlanner.LineNumbersLabel };
         var borders = new Button { Content = PageSetupDialogPlanner.BordersLabel };
         AvaloniaCompactDialogChrome.ApplyButton(lineNumbers, DialogChromeStyle, minWidth: metrics.LauncherButtonWidth);
