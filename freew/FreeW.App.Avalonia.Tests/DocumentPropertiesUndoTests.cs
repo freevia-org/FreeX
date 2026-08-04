@@ -11,7 +11,8 @@ public sealed class DocumentPropertiesUndoTests
     {
         var document = TextDocument.CreateEmpty();
         document.Properties.Title = "Before";
-        document.Properties.Category = "Keep";
+        document.Properties.Category = "Before category";
+        document.Properties.LastModifiedBy = "Word Owner";
         var view = new DocumentView();
         view.LoadDocument(document);
 
@@ -20,21 +21,32 @@ public sealed class DocumentPropertiesUndoTests
             "Ada",
             "Parity",
             "metadata",
-            null));
+            null,
+            "Reports",
+            "Final",
+            "en-GB",
+            "4.2"));
 
         view.Document.Properties.Title.Should().Be("After");
         view.Document.Properties.Author.Should().Be("Ada");
-        view.Document.Properties.Category.Should().Be("Keep");
+        view.Document.Properties.Category.Should().Be("Reports");
+        view.Document.Properties.ContentStatus.Should().Be("Final");
+        view.Document.Properties.Language.Should().Be("en-GB");
+        view.Document.Properties.Version.Should().Be("4.2");
+        view.Document.Properties.LastModifiedBy.Should().Be("Word Owner");
         view.CanUndo.Should().BeTrue();
 
         view.Undo();
         view.Document.Properties.Title.Should().Be("Before");
         view.Document.Properties.Author.Should().BeNull();
-        view.Document.Properties.Category.Should().Be("Keep");
+        view.Document.Properties.Category.Should().Be("Before category");
+        view.Document.Properties.ContentStatus.Should().BeNull();
+        view.Document.Properties.LastModifiedBy.Should().Be("Word Owner");
 
         view.Redo();
         view.Document.Properties.Title.Should().Be("After");
         view.Document.Properties.Author.Should().Be("Ada");
-        view.Document.Properties.Category.Should().Be("Keep");
+        view.Document.Properties.Category.Should().Be("Reports");
+        view.Document.Properties.ContentStatus.Should().Be("Final");
     }
 }

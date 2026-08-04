@@ -969,25 +969,41 @@ public class BackstageViewTests
     {
         await Session.Dispatch(() =>
         {
-            var properties = new Free.Shared.Opc.DocumentProperties();
+            var properties = new Free.Shared.Opc.DocumentProperties
+            {
+                LastModifiedBy = "Word Owner",
+                Created = new DateTimeOffset(2026, 8, 4, 9, 30, 0, TimeSpan.Zero),
+                Modified = new DateTimeOffset(2026, 8, 4, 10, 15, 0, TimeSpan.Zero),
+            };
             var dialog = new PropertiesDialog(properties);
             FindControl<TextBox>(dialog, "DocumentPropertiesTitle").Text = "  Report  ";
             FindControl<TextBox>(dialog, "DocumentPropertiesAuthor").Text = "Ada";
             FindControl<TextBox>(dialog, "DocumentPropertiesSubject").Text = "Parity";
             FindControl<TextBox>(dialog, "DocumentPropertiesKeywords").Text = "freew backstage";
             FindControl<TextBox>(dialog, "DocumentPropertiesComments").Text = "  ";
+            FindControl<TextBox>(dialog, "DocumentPropertiesCategory").Text = " Reports ";
+            FindControl<TextBox>(dialog, "DocumentPropertiesContentStatus").Text = "Final";
+            FindControl<TextBox>(dialog, "DocumentPropertiesLanguage").Text = " en-GB ";
+            FindControl<TextBox>(dialog, "DocumentPropertiesVersion").Text = "4.2";
+            FindControl<TextBlock>(dialog, "DocumentPropertiesLastModifiedBy").Text.Should().Be("Word Owner");
+            FindControl<TextBlock>(dialog, "DocumentPropertiesCreated").Text.Should().NotBeNullOrWhiteSpace();
+            FindControl<TextBlock>(dialog, "DocumentPropertiesModified").Text.Should().NotBeNullOrWhiteSpace();
 
             FindControl<Button>(dialog, "DocumentPropertiesOkButton")
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
             dialog.Accepted.Should().BeTrue();
-            properties.CountNonEmptyCoreProperties().Should().Be(0);
+            properties.CountNonEmptyCoreProperties().Should().Be(3);
             dialog.Result.Should().Be(new DocumentPropertiesDialogValues(
                 "Report",
                 "Ada",
                 "Parity",
                 "freew backstage",
-                null));
+                null,
+                "Reports",
+                "Final",
+                "en-GB",
+                "4.2"));
         }, CancellationToken.None);
     }
 
