@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
@@ -291,13 +292,18 @@ public sealed class WpfAuthoritySurfaceParityTests
             var dialog = new PageSetupDialog(new PageSettings());
             var buttons = dialog.GetLogicalDescendants().OfType<Button>()
                 .Where(button => button is not global::Avalonia.Controls.Primitives.ToggleButton)
-                .Select(button => button.Content?.ToString()?.TrimStart('_'))
+                .Select(button => button.Content switch
+                {
+                    AccessText accessText => ShellStrings.Current.CreateAutomationName(accessText.Text ?? string.Empty),
+                    string text => text.TrimStart('_'),
+                    _ => button.Content?.ToString()?.TrimStart('_'),
+                })
                 .ToArray();
 
             buttons.Should().Equal("OK", "Cancel", "Line Numbers\u2026", "Borders\u2026");
             dialog.GetLogicalDescendants().OfType<Button>()
-                .Should().ContainSingle(button => button.IsDefault && button.Content != null && button.Content!.ToString()!.TrimStart('_') == "OK")
-                .And.ContainSingle(button => button.IsCancel && button.Content != null && button.Content!.ToString()!.TrimStart('_') == "Cancel");
+                .Should().ContainSingle(button => button.IsDefault && AutomationProperties.GetName(button) == "OK")
+                .And.ContainSingle(button => button.IsCancel && AutomationProperties.GetName(button) == "Cancel");
         }, CancellationToken.None);
     }
 
