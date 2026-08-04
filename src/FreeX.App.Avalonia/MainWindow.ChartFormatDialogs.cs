@@ -1347,12 +1347,16 @@ public sealed partial class MainWindow
         return dialog;
     }
 
-    private static (Button Ok, Button Cancel, StackPanel Row) CreateChartDialogButtons(string idPrefix)
+    private static (Button Ok, Button Cancel, StackPanel Row) CreateChartDialogButtons(
+        string idPrefix,
+        double buttonWidth = 80)
     {
-        var okButton = CreateChartButton(UiText.Get("Common_Ok"), 80, isDefault: true);
+        var okButton = CreateChartButton(UiText.Get("Common_Ok"), buttonWidth, isDefault: true);
+        AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
         AutomationProperties.SetAutomationId(okButton, $"{idPrefix}OkButton");
-        var cancelButton = CreateChartButton(UiText.Get("Common_Cancel"), 80);
+        var cancelButton = CreateChartButton(UiText.Get("Common_Cancel"), buttonWidth);
         cancelButton.IsCancel = true;
+        AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
         AutomationProperties.SetAutomationId(cancelButton, $"{idPrefix}CancelButton");
         var row = CreateChartDialogActionRow([okButton, cancelButton], new Thickness(0, 8, 0, 0));
         return (okButton, cancelButton, row);

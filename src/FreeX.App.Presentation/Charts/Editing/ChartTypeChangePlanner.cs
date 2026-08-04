@@ -55,6 +55,7 @@ public static class ChartTypeChangePlanner
     public const double PickerPreviewWidth = 180;
     public const double PickerColumnGap = 12;
     public const double PickerListHeight = 230;
+    public const double PickerButtonWidth = 76;
 
     // English display labels and shell-localization keys for every renderer-authorable family, in a stable gallery-style order.
     private static readonly (ChartType Type, string DisplayName, string DisplayNameKey)[] Catalog =

@@ -202,48 +202,36 @@ public sealed partial class MainWindow
         dialog.MinHeight = ChartTypeChangePlanner.DialogHeight;
         dialog.SizeToContent = SizeToContent.Manual;
 
-        var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChangeChartType");
+        var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons(
+            "ChangeChartType",
+            ChartTypeChangePlanner.PickerButtonWidth);
         okButton.Click += (_, _) => dialog.Close(subtypeGallery.SelectedItem is ChartTypePickerOptionPlan picked ? (ChartType?)picked.Type : null);
         cancelButton.Click += (_, _) => dialog.Close((ChartType?)null);
 
-        // Body grid: category list | subtype gallery | preview.
-        var bodyGrid = new Grid { Margin = new Thickness(ChartTypeChangePlanner.PickerColumnGap, 8, ChartTypeChangePlanner.PickerColumnGap, 0) };
+        // WPF keeps the All Charts heading/help in the picker grid's first row. The lists begin in
+        // the second row, while the preview spans both rows; preserve that vertical relationship.
+        var bodyGrid = new Grid
+        {
+            Height = ChartTypeChangePlanner.PickerPanelHeight,
+            Margin = new Thickness(ChartTypeChangePlanner.PickerColumnGap),
+        };
         bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ChartTypeChangePlanner.PickerCategoryColumnWidth) });
         bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ChartTypeChangePlanner.PickerSubtypeColumnWidth) });
         bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ChartTypeChangePlanner.PickerPreviewWidth) });
+        bodyGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        bodyGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        categoryList.Margin = new Thickness(0, 0, ChartTypeChangePlanner.PickerColumnGap, 0);
-        Grid.SetColumn(categoryList, 0);
-        bodyGrid.Children.Add(categoryList);
-
-        subtypeGallery.Margin = new Thickness(0, 0, ChartTypeChangePlanner.PickerColumnGap, 0);
-        Grid.SetColumn(subtypeGallery, 1);
-        bodyGrid.Children.Add(subtypeGallery);
-
-        Grid.SetColumn(preview, 2);
-        bodyGrid.Children.Add(preview);
-
-        dialog.Content = new StackPanel
+        var pickerHeading = new StackPanel
         {
-            Margin = new Thickness(16),
-            Spacing = 4,
             Children =
             {
-                // WPF "Choose a chart type" heading + "All Charts" subheading and help text.
-                new TextBlock
-                {
-                    Text = UiText.Get(ChartTypePickerPlanner.ChooseChartTypeHeadingKey),
-                    FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                    FontWeight = FontWeight.SemiBold,
-                },
                 new TextBlock
                 {
                     Text = UiText.Get(panel.HeadingResourceKey),
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
                     FontWeight = FontWeight.SemiBold,
-                    Margin = new Thickness(0, 4, 0, 0),
+                    Margin = new Thickness(0, 0, 0, 2),
                 },
                 new TextBlock
                 {
@@ -252,13 +240,49 @@ public sealed partial class MainWindow
                     FontFamily = FormulaBarFontFamily,
                     TextWrapping = TextWrapping.Wrap,
                     Foreground = Brush(96, 96, 96),
-                    Margin = new Thickness(0, 0, 0, 4),
+                    Margin = new Thickness(0, 0, 0, 6),
+                },
+            },
+        };
+        Grid.SetColumnSpan(pickerHeading, 3);
+        bodyGrid.Children.Add(pickerHeading);
+
+        categoryList.Margin = new Thickness(0, ChartTypeChangePlanner.PickerColumnGap * 2, ChartTypeChangePlanner.PickerColumnGap, 0);
+        Grid.SetColumn(categoryList, 0);
+        Grid.SetRow(categoryList, 1);
+        bodyGrid.Children.Add(categoryList);
+
+        subtypeGallery.Margin = new Thickness(0, ChartTypeChangePlanner.PickerColumnGap * 2, ChartTypeChangePlanner.PickerColumnGap, 0);
+        Grid.SetColumn(subtypeGallery, 1);
+        Grid.SetRow(subtypeGallery, 1);
+        bodyGrid.Children.Add(subtypeGallery);
+
+        preview.Margin = new Thickness(0, ChartTypeChangePlanner.PickerColumnGap * 2, 0, 0);
+        Grid.SetColumn(preview, 2);
+        Grid.SetRowSpan(preview, 2);
+        bodyGrid.Children.Add(preview);
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 0,
+            Children =
+            {
+                // WPF "Choose a chart type" heading.
+                new TextBlock
+                {
+                    Text = UiText.Get(ChartTypePickerPlanner.ChooseChartTypeHeadingKey),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    FontWeight = FontWeight.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 8),
                 },
                 bodyGrid,
                 buttonRow,
             },
         };
-        ConfigurePivotDialogLifecycle(dialog, subtypeGallery);
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, ChartDialogChromeStyle);
+        ConfigureChartDialogKeyboardLifecycle(dialog, subtypeGallery);
 
         return await dialog.ShowDialog<ChartType?>(this);
     }
