@@ -39,13 +39,6 @@ public static class AvaloniaRibbonRenderer
     private const string SelectedTabUnderlineTag = "FreeX.SelectedTabUnderline";
     private const string PopupChromeClass = "freex-ribbon-popup-chrome";
     private const string SubmenuPlacementClass = "freex-ribbon-submenu-placement";
-    private const double TabHeaderHeight = 28;
-    // Selected-tab accent underline thickness — matches the WPF TabItem template's
-    // BorderThickness="0,0,0,3" (MainWindowResources.xaml). Kept as a single shared token so the Linux
-    // underline renders at the same solid 3px weight as Windows (it was rendering hairline-thin
-    // because the underline row reserved exactly its own height, leaving no slack for the bottom-
-    // aligned bar). The grid row reserves a touch more than the bar so the full bar is always drawn.
-    private const double SelectedTabUnderlineThickness = 3;
     private const double RibbonCheckBoxHeight = 16;
     private const double RibbonCheckGlyphSize = 11;
     private const int MaxRowsPerColumn = 3;
@@ -401,19 +394,24 @@ public static class AvaloniaRibbonRenderer
                 // accent bar always gets its full height instead of being squeezed to a hairline.
                 new RowDefinition { Height = GridLength.Auto },
             },
-            Height = TabHeaderHeight,
+            Height = RibbonTabChromeMetrics.HeaderHeight,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             MinWidth = 42,
+            Margin = new Thickness(0, 0, RibbonTabChromeMetrics.InterTabGap, 0),
         };
         AddHeaderChild(grid, new TextBlock
         {
             Text = header,
-            FontSize = 12,
+            FontSize = RibbonTabChromeMetrics.FontSize,
             FontFamily = RibbonFontFamily,
             Foreground = palette.TabTextBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(5, 0),
+            Margin = new Thickness(
+                RibbonTabChromeMetrics.HeaderHorizontalPadding,
+                RibbonTabChromeMetrics.HeaderVerticalPadding,
+                RibbonTabChromeMetrics.HeaderHorizontalPadding,
+                RibbonTabChromeMetrics.HeaderVerticalPadding),
         }, 0);
         if (!string.IsNullOrWhiteSpace(keyTip))
         {
@@ -443,8 +441,8 @@ public static class AvaloniaRibbonRenderer
         AddHeaderChild(grid, new Border
         {
             Tag = SelectedTabUnderlineTag,
-            Height = SelectedTabUnderlineThickness,
-            MinHeight = SelectedTabUnderlineThickness,
+            Height = RibbonTabChromeMetrics.SelectedUnderlineThickness,
+            MinHeight = RibbonTabChromeMetrics.SelectedUnderlineThickness,
             Background = palette.AccentBrush,
             IsVisible = false,
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -1095,13 +1093,13 @@ public static class AvaloniaRibbonRenderer
                 new Setter(TemplatedControl.BackgroundProperty, palette.TabStripBrush),
                 new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
-                new Setter(TemplatedControl.FontSizeProperty, 12d),
+                new Setter(TemplatedControl.FontSizeProperty, RibbonTabChromeMetrics.FontSize),
                 new Setter(TemplatedControl.FontFamilyProperty, RibbonFontFamily),
                 new Setter(TemplatedControl.TemplateProperty, RibbonTabItemTemplate),
                 new Setter(TemplatedControl.ForegroundProperty, palette.TabTextBrush),
                 // Avalonia Fluent default tab height is ~48px vs WPF's compact header row; constrain it.
                 new Setter(Layoutable.MinHeightProperty, 0d),
-                new Setter(Layoutable.HeightProperty, TabHeaderHeight),
+                new Setter(Layoutable.HeightProperty, RibbonTabChromeMetrics.HeaderHeight),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
                 new Setter(Layoutable.MarginProperty, new Thickness(0)),
                 new Setter(InputElement.CursorProperty, new Cursor(StandardCursorType.Hand)),
