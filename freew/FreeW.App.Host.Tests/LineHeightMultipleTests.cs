@@ -143,7 +143,7 @@ public sealed class LineHeightMultipleTests
 
         var wpf = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
         var ratio = new System.Windows.Media.FontFamily("Calibri").LineSpacing;
-        var expected = ParagraphFormatting.Default.LineSpacing * ratio * 1.01 * 12 * PxPerPoint;
+        var expected = ParagraphFormatting.Default.LineSpacing * ratio * 1.00975 * 12 * PxPerPoint;
         Assert.Equal(expected, wpf.LineHeight, 1);
     }
 

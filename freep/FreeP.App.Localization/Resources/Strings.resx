@@ -1393,6 +1393,12 @@
   <data name="Ribbon_Group_SmartArtColors_Label" xml:space="preserve">
     <value>SmartArt Colors</value>
   </data>
+  <data name="Ribbon_Command_SmartArtTextPane_Label" xml:space="preserve">
+    <value>Text Pane</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtTextPane_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
   <data name="Ribbon_Group_SmartArtColors_KeyTip" xml:space="preserve">
     <value>A</value>
   </data>

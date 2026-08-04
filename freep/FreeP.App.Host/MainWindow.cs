@@ -490,6 +490,7 @@ public sealed partial class MainWindow : Window
             onInsertSummaryZoom: () => OpenSummaryZoomDialog(),
             onEditZoomTarget: () => OpenZoomTargetDialog(),
             onEditSummaryZoomTargets: () => OpenSummaryZoomTargetsDialog(),
+            onOpenSmartArtTextPane: () => ShowSmartArtTextPane(),
             onFormatZoom:       () => OpenZoomObjectPropertiesDialog(),
             onSetZoomCoverImage: () => OpenZoomCoverImagePicker(),
             onResetZoomCoverImage: () => RestoreZoomPreview(),

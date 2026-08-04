@@ -34,6 +34,18 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
     }
 
     [Fact]
+    public void AvaloniaSmartArtTextPane_IsReachableFromTheRibbonRegistry()
+    {
+        var sourcePath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../FreeP.App.Avalonia/MainWindow.cs"));
+        var source = File.ReadAllText(sourcePath);
+
+        source.Should().Contain("SmartArtEditingPlanner.OpenTextPaneCommandId");
+        source.Should().Contain("new ActionRibbonCommand(() => ShowSmartArtTextPane())");
+    }
+
+    [Fact]
     public void AvaloniaSmartArtAuthoring_RejectsFailedNativeRefreshBeforeUndoCommit()
     {
         var sourcePath = Path.GetFullPath(Path.Combine(
