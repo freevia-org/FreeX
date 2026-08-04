@@ -334,7 +334,7 @@ public sealed class PresentationMediaTranscriptPlannerTests
     }
 
     [Fact]
-    public void ReplaceInternalCaptionTrack_FromTranscriptText_NormalizesToPackageReadyWebVtt()
+    public void ReplaceInternalCaptionTrack_FromTranscriptText_PreservesExistingSrtFormat()
     {
         var media = new MediaInfo
         {
@@ -345,6 +345,7 @@ public sealed class PresentationMediaTranscriptPlannerTests
                 {
                     Source = "ppt/media/legacy.srt",
                     ContentType = "application/x-subrip",
+                    RelationshipId = "rIdLegacyCaption",
                     Label = "Legacy captions",
                     Language = "es-ES",
                     Bytes = Encoding.UTF8.GetBytes("""
@@ -373,15 +374,84 @@ public sealed class PresentationMediaTranscriptPlannerTests
         result.TrackIndex.Should().Be(0);
 
         var track = media.CaptionTracks.Should().ContainSingle().Subject;
-        track.Source.Should().Be("ppt/media/authored-captions1.vtt");
-        track.ContentType.Should().Be("text/vtt");
+        track.Source.Should().Be("ppt/media/legacy.srt");
+        track.ContentType.Should().Be("application/x-subrip");
+        track.RelationshipId.Should().Be("rIdLegacyCaption");
         track.Language.Should().Be("fr-FR");
         track.Label.Should().Be("Legacy captions");
         track.IsExternal.Should().BeFalse();
 
         var text = Encoding.UTF8.GetString(track.Bytes);
-        text.Should().Contain("00:00:02.000 --> 00:00:03.250");
+        text.Should().Contain("00:00:02,000 --> 00:00:03,250");
         text.Should().Contain("Bonjour equipe.");
+    }
+
+    [Fact]
+    public void ReplaceInternalCaptionTrack_FromTypedCues_PreservesNativeTtmlFormatAndPackageIdentity()
+    {
+        var media = new MediaInfo
+        {
+            IsVideo = true,
+            CaptionTracks =
+            {
+                new MediaCaptionTrackInfo
+                {
+                    RelationshipId = "rIdNativeTtml",
+                    Source = "ppt/media/native-caption.ttml",
+                    ContentType = "application/ttml+xml",
+                    Label = "Native captions",
+                    Language = "en-US",
+                    Bytes = Encoding.UTF8.GetBytes("""
+                        <tt xmlns="http://www.w3.org/ns/ttml"><body><div>
+                          <p begin="00:00:00.000" end="00:00:01.000">Old cue.</p>
+                        </div></body></tt>
+                        """)
+                }
+            }
+        };
+
+        var result = PresentationMediaTranscriptPlanner.ReplaceInternalCaptionTrack(
+            media,
+            0,
+            new PresentationMediaCaptionTrackAuthoringDescriptor(
+                Label: null,
+                Language: null,
+                Source: null,
+                TranscriptText: null,
+                Cues:
+                [
+                    new PresentationMediaTranscriptCueDescriptor(
+                        TimeSpan.FromMilliseconds(500),
+                        TimeSpan.FromMilliseconds(1750),
+                        "New <caption> cue")
+                ]));
+
+        result.Succeeded.Should().BeTrue();
+
+        var track = media.CaptionTracks.Should().ContainSingle().Subject;
+        track.Source.Should().Be("ppt/media/native-caption.ttml");
+        track.ContentType.Should().Be("application/ttml+xml");
+        track.RelationshipId.Should().Be("rIdNativeTtml");
+        var text = Encoding.UTF8.GetString(track.Bytes);
+        text.Should().Contain("<tt xmlns=\"http://www.w3.org/ns/ttml\">");
+        text.Should().Contain("begin=\"00:00:00.500\"");
+        text.Should().Contain("New &lt;caption&gt; cue");
+        text.Should().NotContain("WEBVTT");
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 92,
+            Name = "Native caption video",
+            Kind = SlideShapeKind.Media,
+            Media = media
+        });
+
+        var cue = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation)
+            .Tracks.Should().ContainSingle().Subject.Cues.Should().ContainSingle().Subject;
+        cue.StartTime.Should().Be(TimeSpan.FromMilliseconds(500));
+        cue.EndTime.Should().Be(TimeSpan.FromMilliseconds(1750));
+        cue.Text.Should().Be("New <caption> cue");
     }
 
     [Fact]
