@@ -44,22 +44,18 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
-    public void MapleMuffins_UsesWordCadenceAndSharedOrangeWrapperGeometry()
+    public void MapleMuffins_UsesWordCadenceAndMeasuredIndexedPalette()
     {
         PageBorderArtVisualPlanner.TryBuildMapleMuffinsFrame(2, 3, 816, 1056, 32, out var plan)
             .Should().BeTrue();
 
-        plan.Fills.Should().BeEmpty();
-        plan.Polygons.Should().HaveCount(816);
-        plan.Polygons[0].Points.Take(4).Should().Equal(
-            new PageBorderArtPoint(37, 45),
-            new PageBorderArtPoint(35, 44),
-            new PageBorderArtPoint(34, 41),
-            new PageBorderArtPoint(35, 38));
-        plan.Polygons[1].Red.Should().Be(0xFF);
-        plan.Polygons[1].Green.Should().Be(0x80);
-        plan.Polygons[2].Red.Should().Be(0xBF);
-        plan.Polygons[184].Points[0].Should().Be(new PageBorderArtPoint(37, 1005));
+        plan.Polygons.Should().BeEmpty();
+        plan.Fills.Should().HaveCount(41004);
+        plan.Fills[0].Should().Be(new PageBorderArtFillRectangle(42, 33, 2, 1, 0xEF, 0xEF, 0xEF));
+        plan.Fills.Should().Contain(fill => fill.Red == 0xFE && fill.Green == 0x7F && fill.Blue == 0);
+        plan.Fills.Should().Contain(fill => fill.Red == 0xBE && fill.Green == 0x41 && fill.Blue == 0);
+        plan.Fills.Should().Contain(fill => fill.Red == 0x14 && fill.Green == 0x0A && fill.Blue == 0x04);
+        plan.Fills.Should().NotContain(fill => fill.Red == 0xFF && fill.Green == 0xFF && fill.Blue == 0xFF);
     }
 
     [Fact]

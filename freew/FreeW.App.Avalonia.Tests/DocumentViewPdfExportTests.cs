@@ -1389,12 +1389,13 @@ public sealed class DocumentViewPdfExportTests
             var pdf = view.BuildPdfContent();
             var fills = pdf.Pages.Single().Ops.OfType<PdfFillRect>().ToArray();
             var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
-            fills.Should().BeEmpty();
-            paths.Should().HaveCount(816);
-            paths[0].FillColor.Should().Be(PdfColor.Black);
-            paths[0].Contours.Single().Start.Should().Be(new PdfPathPoint(27.75, 758.25));
-            paths[1].FillColor.Should().Be(new PdfColor(0xFF, 0x80, 0));
-            paths[2].FillColor.Should().Be(new PdfColor(0xBF, 0x40, 0));
+            paths.Should().BeEmpty();
+            fills.Should().HaveCount(41004);
+            fills[0].Should().Be(new PdfFillRect(31.5, 766.5, 1.5, 0.75, new PdfColor(0xEF, 0xEF, 0xEF)));
+            fills.Should().Contain(fill => fill.Color == new PdfColor(0xFE, 0x7F, 0));
+            fills.Should().Contain(fill => fill.Color == new PdfColor(0xBE, 0x41, 0));
+            fills.Should().Contain(fill => fill.Color == new PdfColor(0x14, 0x0A, 0x04));
+            fills.Should().NotContain(fill => fill.Color == new PdfColor(0xFF, 0xFF, 0xFF));
             pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
 
             using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
@@ -1406,7 +1407,7 @@ public sealed class DocumentViewPdfExportTests
                 if (pixel.Red > 180 && pixel.Green is > 35 and < 170 && pixel.Blue < 30)
                     orangeInk++;
             }
-            orangeInk.Should().BeGreaterThan(280);
+            orangeInk.Should().BeGreaterThan(300);
             bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
         }, CancellationToken.None);
 
