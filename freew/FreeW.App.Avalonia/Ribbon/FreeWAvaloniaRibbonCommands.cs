@@ -891,6 +891,20 @@ internal static class FreeWAvaloniaRibbonCommands
         public RibbonCommandState GetState() => new(IsChecked: isChecked());
     }
 
+    private sealed class ThemeCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!string.IsNullOrWhiteSpace(context.SelectedValue)
+                && DocumentTheme.FindByName(context.SelectedValue) is { } theme)
+            {
+                editor.ApplyTheme(theme);
+            }
+        }
+
+        public RibbonCommandState GetState() => new(Value: editor.Document.Theme.Name);
+    }
+
     private sealed class TrackChangesToggleCommand(DocumentView editor) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -2624,11 +2638,7 @@ internal static class FreeWAvaloniaRibbonCommands
         RibbonCommandRegistry r, DocumentView editor, RibbonHostCallbacks callbacks)
     {
         // ── Themes ───────────────────────────────────────────────────────────
-        r.Register("freew.theme", new ValueRibbonCommand(value =>
-        {
-            if (!string.IsNullOrWhiteSpace(value) && DocumentTheme.FindByName(value) is { } theme)
-                editor.ApplyTheme(theme);
-        }));
+        r.Register("freew.theme", new ThemeCommand(editor));
         foreach (var theme in DocumentTheme.Catalog)
         {
             var t = theme;
