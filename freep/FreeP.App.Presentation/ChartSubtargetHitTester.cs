@@ -79,6 +79,16 @@ public static class ChartSubtargetHitTester
             }
         }
 
+        if (scene.SecondaryAxis.Title is { } secondaryAxisTitle &&
+            Contains(secondaryAxisTitle.Label.Bounds, point))
+        {
+            hit = new ChartSubtargetHit(
+                shape.Id,
+                ChartSubtargetKind.AxisTitle,
+                AxisKind: ChartAxisKind.SecondaryValue);
+            return true;
+        }
+
         foreach (var legend in scene.LegendItems)
         {
             if (Contains(legend.SwatchBounds, point) || Contains(legend.Label.Bounds, point))
