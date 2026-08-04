@@ -1314,6 +1314,69 @@ public sealed class AnimationPanePlannerTests
             control.Kind == AnimationPanePlaybackControlKind.PlayCurrentSlide && !control.IsEnabled);
     }
 
+    [Fact]
+    public void BuildPlaybackSessionPlan_PlayFromSelectedScopesToSelectedTriggerSequence()
+    {
+        var slide = new Slide();
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 10u,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Appear,
+            Trigger = AnimationTrigger.OnClick,
+            DurationMs = 300,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 20u,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Fade,
+            Trigger = AnimationTrigger.OnClick,
+            TriggerShapeId = 99u,
+            DurationMs = 400,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 30u,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Pulse,
+            Trigger = AnimationTrigger.OnClick,
+            DurationMs = 250,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 21u,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.FlyIn,
+            Trigger = AnimationTrigger.WithPrevious,
+            TriggerShapeId = 99u,
+            DurationMs = 500,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 22u,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Zoom,
+            Trigger = AnimationTrigger.OnClick,
+            TriggerShapeId = 99u,
+            DurationMs = 200,
+        });
+
+        var timeline = AnimationPanePlanner.BuildTimelinePlan(
+            slide,
+            selectedAnimationIndex: 1,
+            displayCulture: Invariant);
+        var session = AnimationPanePlanner.BuildPlaybackSessionPlan(
+            timeline,
+            AnimationPanePlaybackControlKind.PlayFromSelected);
+
+        session.Segments.Select(segment => segment.ShapeId).Should().Equal(20u, 21u, 22u);
+        session.Segments.Should().NotContain(segment => segment.ShapeId == 30u);
+        session.Segments.Select(segment => segment.RelativeStartMs).Should().Equal(0, 0, 500);
+        session.Segments.Select(segment => segment.RelativeEndMs).Should().Equal(400, 500, 700);
+        session.TotalDurationMs.Should().Be(700);
+    }
+
     [Theory]
     [InlineData(AnimationPanePlaybackControlKind.PreviewCurrentSlide)]
     [InlineData(AnimationPanePlaybackControlKind.PlayCurrentSlide)]

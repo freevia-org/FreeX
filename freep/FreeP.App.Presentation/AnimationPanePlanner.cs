@@ -116,6 +116,7 @@ public sealed record AnimationPaneTimelineItemPlan(
     public int? RepeatCount { get; init; }
     public bool RepeatIndefinitely { get; init; }
     public bool AutoReverse { get; init; }
+    public uint? TriggerShapeId { get; init; }
 }
 
 public sealed record AnimationPaneWorkflowViewPlan(
@@ -468,6 +469,7 @@ public static class AnimationPanePlanner
                 RepeatCount = animation.RepeatCount,
                 RepeatIndefinitely = animation.RepeatIndefinitely,
                 AutoReverse = animation.AutoReverse,
+                TriggerShapeId = animation.TriggerShapeId,
             });
         }
 
@@ -605,26 +607,35 @@ public static class AnimationPanePlanner
                 "Select an animation row to play from it");
         }
 
-        var anchorStartMs = timelinePlan.Items[startIndex].StartMs;
-        var segments = timelinePlan.Items
-            .Skip(startIndex)
-            .Select(item =>
-            {
-                var relativeStartMs = Math.Max(0, item.StartMs - anchorStartMs);
-                var relativeEndMs = Math.Max(relativeStartMs, item.EndMs - anchorStartMs);
-                return new AnimationPanePlaybackSegmentPlan(
-                    item.Index,
-                    item.ShapeId,
-                    item.ShapeName,
-                    item.EffectText,
-                    item.Trigger,
-                    item.StartMs,
-                    relativeStartMs,
-                    Math.Max(0, item.DurationMs),
-                    item.EndMs,
-                    relativeEndMs);
-            })
-            .ToArray();
+        var startItem = timelinePlan.Items[startIndex];
+        var isTriggerPlayback = commandKind == AnimationPanePlaybackControlKind.PlayFromSelected
+            && startItem.TriggerShapeId is not null;
+        var playbackItems = isTriggerPlayback
+            ? timelinePlan.Items
+                .Where(item => item.TriggerShapeId == startItem.TriggerShapeId && item.Index >= startIndex)
+                .ToArray()
+            : timelinePlan.Items.Skip(startIndex).ToArray();
+        var anchorStartMs = startItem.StartMs;
+        var segments = isTriggerPlayback
+            ? BuildTriggerPlaybackSegments(playbackItems, anchorStartMs)
+            : playbackItems
+                .Select(item =>
+                {
+                    var relativeStartMs = Math.Max(0, item.StartMs - anchorStartMs);
+                    var relativeEndMs = Math.Max(relativeStartMs, item.EndMs - anchorStartMs);
+                    return new AnimationPanePlaybackSegmentPlan(
+                        item.Index,
+                        item.ShapeId,
+                        item.ShapeName,
+                        item.EffectText,
+                        item.Trigger,
+                        item.StartMs,
+                        relativeStartMs,
+                        Math.Max(0, item.DurationMs),
+                        item.EndMs,
+                        relativeEndMs);
+                })
+                .ToArray();
         var totalDurationMs = segments.Length == 0 ? 0 : segments.Max(segment => segment.RelativeEndMs);
         var safeElapsedMs = Math.Clamp(elapsedMs, 0, totalDurationMs);
         var sourceTotalDurationMs = timelinePlan.Items.Count == 0 ? 0 : timelinePlan.Items.Max(item => item.EndMs);
@@ -646,6 +657,45 @@ public static class AnimationPanePlanner
             commandKind == AnimationPanePlaybackControlKind.PlayFromSelected
                 ? $"Playing from animation {startIndex + 1}"
                 : "Playing all current slide animations");
+    }
+
+    private static AnimationPanePlaybackSegmentPlan[] BuildTriggerPlaybackSegments(
+        IReadOnlyList<AnimationPaneTimelineItemPlan> items,
+        int anchorStartMs)
+    {
+        var segments = new AnimationPanePlaybackSegmentPlan[items.Count];
+        var sequenceAnchorMs = 0;
+        var previousEndMs = 0;
+
+        for (var index = 0; index < items.Count; index++)
+        {
+            var item = items[index];
+            if (item.Trigger == AnimationTrigger.OnClick)
+                sequenceAnchorMs = previousEndMs;
+
+            var relativeStartMs = item.Trigger switch
+            {
+                AnimationTrigger.AfterPrevious => previousEndMs + Math.Max(0, item.DelayMs),
+                _ => sequenceAnchorMs + Math.Max(0, item.DelayMs),
+            };
+            var durationMs = Math.Max(0, item.DurationMs);
+            var relativeEndMs = Math.Max(relativeStartMs, relativeStartMs + durationMs);
+            previousEndMs = relativeEndMs;
+
+            segments[index] = new AnimationPanePlaybackSegmentPlan(
+                item.Index,
+                item.ShapeId,
+                item.ShapeName,
+                item.EffectText,
+                item.Trigger,
+                anchorStartMs + relativeStartMs,
+                relativeStartMs,
+                durationMs,
+                anchorStartMs + relativeEndMs,
+                relativeEndMs);
+        }
+
+        return segments;
     }
 
     private static AnimationPanePlaybackSessionPlan BuildIdlePlaybackSessionPlan(

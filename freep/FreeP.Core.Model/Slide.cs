@@ -65,6 +65,22 @@ public sealed class CustomGeometryPath
 }
 
 /// <summary>
+/// One authored connection site from <c>a:custGeom/a:cxnLst</c>.
+///
+/// DrawingML permits the position and angle to be geometry-guide expressions rather
+/// than literal numbers, so the raw attribute tokens are retained for round-trip. The
+/// connector resolver evaluates the common literal and edge-guide tokens it can resolve
+/// against the shape's geometry coordinate space and keeps its existing fallback for
+/// expressions that require an unmodeled guide list.
+/// </summary>
+public sealed class CustomGeometryConnectionSite
+{
+    public string X { get; set; } = "0";
+    public string Y { get; set; } = "0";
+    public string Angle { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Bevel descriptor (a:bevelT / a:bevelB inside a:sp3d). All sizes in EMU.
 /// </summary>
 public sealed class BevelInfo
@@ -417,6 +433,12 @@ public sealed class SlideShape
     /// Each entry corresponds to one a:path in a:custGeom/a:pathLst.
     /// </summary>
     public List<CustomGeometryPath> CustomGeometry { get; } = new();
+
+    /// <summary>
+    /// Authored custom connection sites from <c>a:custGeom/a:cxnLst</c>.
+    /// Site order is the OOXML connection-site index order.
+    /// </summary>
+    public List<CustomGeometryConnectionSite> CustomConnectionSites { get; } = new();
 
     // ── Shape effects ─────────────────────────────────────────────────────────
 

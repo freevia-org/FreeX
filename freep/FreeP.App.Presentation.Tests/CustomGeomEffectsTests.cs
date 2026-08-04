@@ -309,6 +309,46 @@ public sealed class CustomGeomEffectsTests
     }
 
     [Fact]
+    public void CustGeom_RoundTrip_PreservesAuthoredConnectionSites()
+    {
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 0, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 100, Y: 100));
+
+        var shape = new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400
+        };
+        shape.CustomGeometry.Add(path);
+        shape.CustomConnectionSites.Add(new CustomGeometryConnectionSite
+        {
+            X = "75", Y = "20", Angle = "5400000"
+        });
+        shape.CustomConnectionSites.Add(new CustomGeometryConnectionSite
+        {
+            X = "hc", Y = "b"
+        });
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(shape);
+
+        using var ms = new System.IO.MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var roundTripped = FreeP.Core.IO.PptxPackageReader.Read(ms).Slides[0].Shapes[0];
+
+        roundTripped.CustomConnectionSites.Should().HaveCount(2);
+        roundTripped.CustomConnectionSites[0].X.Should().Be("75");
+        roundTripped.CustomConnectionSites[0].Y.Should().Be("20");
+        roundTripped.CustomConnectionSites[0].Angle.Should().Be("5400000");
+        roundTripped.CustomConnectionSites[1].X.Should().Be("hc");
+        roundTripped.CustomConnectionSites[1].Y.Should().Be("b");
+    }
+
+    [Fact]
     public void CustGeom_RoundTrip_PreservesCurveControlCoordinates()
     {
         var path = new CustomGeometryPath { PathW = 100, PathH = 100 };

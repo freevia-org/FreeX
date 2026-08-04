@@ -125,6 +125,16 @@ public static class SlideCloner
             copy.CustomGeometry.Add(pathCopy);
         }
 
+        foreach (var site in shape.CustomConnectionSites)
+        {
+            copy.CustomConnectionSites.Add(new CustomGeometryConnectionSite
+            {
+                X = site.X,
+                Y = site.Y,
+                Angle = site.Angle,
+            });
+        }
+
         // Theme 21: OLE package bytes belong to the editable duplicate.
         copy.OleObject = shape.OleObject is null ? null : CloneOleObject(shape.OleObject);
 
