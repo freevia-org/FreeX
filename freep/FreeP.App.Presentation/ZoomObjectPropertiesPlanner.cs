@@ -18,6 +18,8 @@ public static class ZoomObjectPropertiesPlanner
         "Border width must be a positive value in points.";
     public const string InvalidFrameBorderDashMessage =
         "Border dash must be a supported PowerPoint line pattern.";
+    public const string InvalidFrameGeometryMessage =
+        "Frame shape must be Rectangle, Rounded rectangle, or Ellipse.";
     public const string InvalidCropEdgesMessage =
         "Crop edges must be four percentages: left, top, right, bottom.";
     public const string InvalidSummaryTileLayoutMessage =
@@ -80,7 +82,8 @@ public static class ZoomObjectPropertiesPlanner
             ReadNullableInt(properties.Descendants().FirstOrDefault(element => element.Name.LocalName == "srcRect")?.Attribute("b")?.Value),
             ReadFrameBorderColor(properties),
             ReadFrameBorderWidth(properties),
-            ReadFrameBorderDash(properties));
+            ReadFrameBorderDash(properties),
+            ReadFrameGeometry(properties));
         return value.IsEmpty ? fallback : value;
     }
 
@@ -119,6 +122,46 @@ public static class ZoomObjectPropertiesPlanner
                 string.Equals(element.Name.LocalName, "prstDash", StringComparison.OrdinalIgnoreCase))
             ?.Attribute("val")?.Value;
         return TryParseFrameBorderDash(token, out var dash) ? dash : null;
+    }
+
+    private static string? ReadFrameGeometry(XElement properties)
+    {
+        var shapeProperties = properties.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase));
+        var token = shapeProperties?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "prstGeom", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("prst")?.Value;
+        return TryNormalizeFrameGeometry(token, out var normalized) ? normalized : null;
+    }
+
+    public static IReadOnlyList<string> FrameGeometryOptions { get; } =
+        new[] { "rect", "roundRect", "ellipse" };
+
+    public static bool TryParseFrameGeometry(string? text, out string? normalized)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            normalized = null;
+            return true;
+        }
+
+        return TryNormalizeFrameGeometry(text, out normalized);
+    }
+
+    private static bool TryNormalizeFrameGeometry(string? text, out string? normalized)
+    {
+        normalized = null;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var value = text.Trim();
+        var match = FrameGeometryOptions.FirstOrDefault(option =>
+            string.Equals(option, value, StringComparison.OrdinalIgnoreCase));
+        if (match is null)
+            return false;
+
+        normalized = match;
+        return true;
     }
 
     private static bool? ReadNullableBoolean(string? value) =>

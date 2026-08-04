@@ -134,6 +134,28 @@ public sealed class PresentationViewZoomPlannerTests
             .Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData("rect", "rect")]
+    [InlineData("ROUNDRECT", "roundRect")]
+    [InlineData("ellipse", "ellipse")]
+    [InlineData("", null)]
+    public void Zoom_frame_geometry_normalizes_supported_values(
+        string input,
+        string? expected)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameGeometry(input, out var normalized)
+            .Should().BeTrue();
+
+        normalized.Should().Be(expected);
+    }
+
+    [Fact]
+    public void Zoom_frame_geometry_rejects_unrendered_presets()
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameGeometry("hexagon", out _)
+            .Should().BeFalse();
+    }
+
     [Fact]
     public void Built_in_plans_expose_zoom_and_fit_to_window_command_ids()
     {

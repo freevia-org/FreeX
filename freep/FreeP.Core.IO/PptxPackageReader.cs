@@ -1739,9 +1739,15 @@ public static class PptxPackageReader
                 element.Name.LocalName == "srcRect")?.Attribute("b")?.Value),
             ReadZoomFrameBorderColor(properties),
             ReadZoomFrameBorderWidth(properties),
-            ReadZoomFrameBorderDash(properties));
+            ReadZoomFrameBorderDash(properties),
+            ReadZoomFrameGeometry(properties));
         return value.IsEmpty ? null : value;
     }
+
+    private static string? ReadZoomFrameGeometry(XElement properties) =>
+        properties.Descendants().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "prstGeom", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("prst")?.Value?.Trim();
 
     private static string? ReadZoomFrameBorderColor(XElement properties)
     {

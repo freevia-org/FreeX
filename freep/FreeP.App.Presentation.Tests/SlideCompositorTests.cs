@@ -338,7 +338,8 @@ public sealed class SlideCompositorTests
                 CropBottom: 5000,
                 FrameBorderColor: "4472C4",
                 FrameBorderWidthEmu: 25400,
-                FrameBorderDash: OutlineDash.DashDot)).Should().BeTrue();
+                FrameBorderDash: OutlineDash.DashDot,
+                FrameGeometry: "ellipse")).Should().BeTrue();
 
         var pictures = SlideCompositor.Compose(presentation, presentation.Slides[0])
             .OfType<DrawOp.Picture>()
@@ -359,6 +360,7 @@ public sealed class SlideCompositorTests
         border.Color.Should().Be(new SrgbColor(0x44, 0x72, 0xC4));
         border.WidthDip.Should().BeApproximately(2 * (96.0 / 72.0), 0.00001);
         border.Dash.Should().Be(OutlineDash.DashDot);
+        pictures[0].PictureFrameGeometry.Should().Be("ellipse");
         pictures[1].HasCrop.Should().BeFalse();
     }
 

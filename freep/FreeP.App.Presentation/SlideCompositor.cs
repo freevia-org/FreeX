@@ -590,6 +590,7 @@ public static class SlideCompositor
                     StringComparison.OrdinalIgnoreCase));
             var crop = ResolveZoomCrop(properties, info.ZoomProperties);
             var outline = ResolveZoomFrameOutline(properties, info.ZoomProperties);
+            var geometry = ResolveZoomFrameGeometry(properties, info.ZoomProperties);
             var relId = properties?.Descendants()
                 .SelectMany(element => element.Attributes())
                 .FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, "embed",
@@ -617,6 +618,7 @@ public static class SlideCompositor
                 CropRight = crop.Right,
                 CropBottom = crop.Bottom,
                 Outline = outline,
+                PictureFrameGeometry = geometry,
             });
             composed = true;
         }
@@ -652,6 +654,7 @@ public static class SlideCompositor
                 StringComparison.OrdinalIgnoreCase));
         var crop = ResolveZoomCrop(properties, info.ZoomProperties);
         var outline = ResolveZoomFrameOutline(properties, info.ZoomProperties);
+        var geometry = ResolveZoomFrameGeometry(properties, info.ZoomProperties);
         var relId = properties?.Descendants()
             .SelectMany(element => element.Attributes())
             .FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, "embed",
@@ -678,6 +681,7 @@ public static class SlideCompositor
             CropRight = crop.Right,
             CropBottom = crop.Bottom,
             Outline = outline,
+            PictureFrameGeometry = geometry,
         });
         return true;
     }
@@ -748,6 +752,19 @@ public static class SlideCompositor
             PointsToDip(widthPoints),
             resolvedDash,
             255);
+    }
+
+    private static string? ResolveZoomFrameGeometry(
+        XElement? properties,
+        ZoomObjectProperties? fallback)
+    {
+        var geometry = properties?.Descendants()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "prstGeom",
+                StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("prst")?.Value;
+        return string.IsNullOrWhiteSpace(geometry)
+            ? fallback?.FrameGeometry
+            : geometry.Trim();
     }
 
     private static OutlineDash? TryParseZoomDash(string? value) =>
@@ -829,6 +846,9 @@ public static class SlideCompositor
                 Outline     = shape.Kind == SlideShapeKind.Zoom
                     ? ResolveZoomFrameOutline(null, shape.PreservedObject?.ZoomProperties)
                     : ResolvedOutline.None.Instance,
+                PictureFrameGeometry = shape.Kind == SlideShapeKind.Zoom
+                    ? shape.PreservedObject?.ZoomProperties?.FrameGeometry
+                    : null,
             });
         }
         else
