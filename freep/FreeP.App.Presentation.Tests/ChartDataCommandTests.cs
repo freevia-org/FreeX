@@ -540,6 +540,36 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void ReplaceChartData_ChangingNativeChartExType_DetachesNativeFamilyAndUndoRestoresIt()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.IsChartEx = true;
+        chart.ChartExLayoutId = "histogram";
+        chart.PreservedChartExXml = "<cx:chartSpace xmlns:cx=\"http://schemas.microsoft.com/office/drawing/2014/chartex\" />";
+
+        bus.Execute(new ReplaceChartDataCommand(
+            0,
+            id,
+            chart.Categories,
+            chart.Series.Select(series => series.Name),
+            chart.Series.Select(series => (IEnumerable<double?>)series.Values),
+            ChartType.LineMarkers));
+
+        chart.ChartType.Should().Be(ChartType.LineMarkers);
+        chart.IsChartEx.Should().BeFalse();
+        chart.ChartExLayoutId.Should().BeNull();
+        chart.PreservedChartExXml.Should().BeNull();
+
+        bus.Undo();
+
+        chart.ChartType.Should().Be(ChartType.ColumnClustered);
+        chart.IsChartEx.Should().BeTrue();
+        chart.ChartExLayoutId.Should().Be("histogram");
+        chart.PreservedChartExXml.Should().Contain("chartSpace");
+    }
+
+    [Fact]
     public void ReplaceChartData_ToScatter_CreatesCoordinatesAndUndoRestoresThem()
     {
         var (p, bus, id) = MakeChartPresentation();
