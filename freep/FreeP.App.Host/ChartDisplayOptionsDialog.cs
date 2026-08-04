@@ -42,6 +42,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly CheckBox _legendOverlayCheck;
     private readonly CheckBox _highLowLinesCheck;
     private readonly CheckBox _waterfallConnectorLinesCheck;
+    private readonly CheckBox _dropLinesCheck;
+    private readonly CheckBox _upDownBarsCheck;
 
     public ChartDisplayOptionsDialog(EditingSession editor)
     {
@@ -189,6 +191,20 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             IsChecked = _planner.WaterfallConnectorLines,
             IsEnabled = _planner.SupportsWaterfallConnectorLines,
         };
+        _dropLinesCheck = new CheckBox
+        {
+            Content = surface.DropLinesLabel,
+            IsThreeState = true,
+            IsChecked = _planner.DropLines,
+            IsEnabled = _planner.SupportsDropLines,
+        };
+        _upDownBarsCheck = new CheckBox
+        {
+            Content = surface.UpDownBarsLabel,
+            IsThreeState = true,
+            IsChecked = _planner.UpDownBars,
+            IsEnabled = _planner.SupportsUpDownBars,
+        };
 
         var buttons = new StackPanel
         {
@@ -235,6 +251,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         content.Children.Add(_legendOverlayCheck);
         content.Children.Add(_highLowLinesCheck);
         content.Children.Add(_waterfallConnectorLinesCheck);
+        content.Children.Add(_dropLinesCheck);
+        content.Children.Add(_upDownBarsCheck);
         content.Children.Add(new TextBlock { Text = surface.PlotHint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
         Content = content;
@@ -261,6 +279,10 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     internal void SetHighLowLinesForTests(bool? value) => _highLowLinesCheck.IsChecked = value;
 
     internal void SetWaterfallConnectorLinesForTests(bool? value) => _waterfallConnectorLinesCheck.IsChecked = value;
+
+    internal void SetDropLinesForTests(bool? value) => _dropLinesCheck.IsChecked = value;
+
+    internal void SetUpDownBarsForTests(bool? value) => _upDownBarsCheck.IsChecked = value;
 
     internal void SetLabelTextStyleForTests(string? family, double? sizePt, bool? bold, bool? italic, string? color)
     {
@@ -317,6 +339,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _planner.SetLegendOverlay(_legendOverlayCheck.IsChecked);
         _planner.SetHighLowLines(_highLowLinesCheck.IsChecked);
         _planner.SetWaterfallConnectorLines(_waterfallConnectorLinesCheck.IsChecked);
+        _planner.SetDropLines(_dropLinesCheck.IsChecked);
+        _planner.SetUpDownBars(_upDownBarsCheck.IsChecked);
     }
 
     private static StackPanel MakeRow(string label, Control control)

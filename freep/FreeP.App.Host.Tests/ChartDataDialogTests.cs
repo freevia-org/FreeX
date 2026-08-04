@@ -174,6 +174,23 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [StaFact]
+    public void ChartDisplayOptionsDialog_LineDecorationsUseSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.ChartType = ChartType.LineMarkers;
+        sess.SelectedChart.ShowDropLines = true;
+        sess.SelectedChart.ShowUpDownBars = false;
+
+        var dialog = new ChartDisplayOptionsDialog(sess);
+        dialog.SetDropLinesForTests(false);
+        dialog.SetUpDownBarsForTests(true);
+        var options = dialog.BuildCommitPlanForTests();
+
+        options.ShowDropLines.Should().BeFalse();
+        options.ShowUpDownBars.Should().BeTrue();
+    }
+
+    [StaFact]
     public void ChartAxisOptionsDialog_ConstructsAndUsesSharedPlanner()
     {
         var (sess, _) = MakeSession();

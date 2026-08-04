@@ -65,6 +65,8 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
     private bool? _oldLegendOverlay;
     private bool? _oldHighLowLines;
     private bool? _oldWaterfallConnectorLines;
+    private bool? _oldDropLines;
+    private bool? _oldUpDownBars;
     private int? _oldStyleId;
 
     public SetChartDisplayOptionsCommand(
@@ -104,6 +106,8 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         _oldWaterfallConnectorLines = chart.ChartType == ChartType.Waterfall
             ? chart.ShowWaterfallConnectorLines
             : null;
+        _oldDropLines = SupportsLineDecorations(chart.ChartType) ? chart.ShowDropLines : null;
+        _oldUpDownBars = SupportsLineDecorations(chart.ChartType) ? chart.ShowUpDownBars : null;
         _oldStyleId = chart.StyleId;
 
         chart.Title = string.IsNullOrWhiteSpace(_newOptions.Title) ? null : _newOptions.Title;
@@ -128,6 +132,10 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
             chart.HasHighLowLines = _newOptions.HighLowLines.Value;
         if (chart.ChartType == ChartType.Waterfall && _newOptions.ShowWaterfallConnectorLines.HasValue)
             chart.ShowWaterfallConnectorLines = _newOptions.ShowWaterfallConnectorLines.Value;
+        if (SupportsLineDecorations(chart.ChartType) && _newOptions.ShowDropLines.HasValue)
+            chart.ShowDropLines = _newOptions.ShowDropLines.Value;
+        if (SupportsLineDecorations(chart.ChartType) && _newOptions.ShowUpDownBars.HasValue)
+            chart.ShowUpDownBars = _newOptions.ShowUpDownBars.Value;
 
         if (chart.DataLabels is not null)
         {
@@ -199,6 +207,10 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
             chart.HasHighLowLines = _oldHighLowLines.Value;
         if (chart.ChartType == ChartType.Waterfall && _oldWaterfallConnectorLines.HasValue)
             chart.ShowWaterfallConnectorLines = _oldWaterfallConnectorLines.Value;
+        if (SupportsLineDecorations(chart.ChartType) && _oldDropLines.HasValue)
+            chart.ShowDropLines = _oldDropLines.Value;
+        if (SupportsLineDecorations(chart.ChartType) && _oldUpDownBars.HasValue)
+            chart.ShowUpDownBars = _oldUpDownBars.Value;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -231,6 +243,9 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
 
     private static int? Normalize(int? value, int minimum, int maximum) =>
         value is null ? null : Math.Clamp(value.Value, minimum, maximum);
+
+    private static bool SupportsLineDecorations(ChartType chartType) =>
+        chartType is ChartType.Line or ChartType.LineMarkers or ChartType.Stock;
 
     private static ChartTextStyle? CloneTextStyle(ChartTextStyle? source) => source is null
         ? null

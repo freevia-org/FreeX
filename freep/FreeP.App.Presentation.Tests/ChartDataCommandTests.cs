@@ -1365,6 +1365,44 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartDisplayOptions_LineDecorations_RoundTripAndUndo()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.LineMarkers;
+        chart.ShowDropLines = true;
+        chart.ShowUpDownBars = false;
+
+        bus.Execute(new SetChartDisplayOptionsCommand(
+            0,
+            id,
+            new ChartDisplayOptions(
+                null,
+                null,
+                false,
+                DataLabelPosition.BestFit,
+                false,
+                false,
+                ShowDropLines: false,
+                ShowUpDownBars: true)));
+
+        chart.ShowDropLines.Should().BeFalse();
+        chart.ShowUpDownBars.Should().BeTrue();
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var reloaded = PptxPackageReader.Read(stream);
+        var reloadedChart = reloaded.Slides[0].Shapes[0].Chart!;
+        reloadedChart.ShowDropLines.Should().BeFalse();
+        reloadedChart.ShowUpDownBars.Should().BeTrue();
+
+        bus.Undo();
+        chart.ShowDropLines.Should().BeTrue();
+        chart.ShowUpDownBars.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetChartDisplayOptions_ChangesChartStyleAndUndoRestoresIt()
     {
         var (p, bus, id) = MakeChartPresentation();

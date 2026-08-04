@@ -45,7 +45,9 @@ public sealed record ChartDisplayOptionsSurfacePlan(
     string PlotHint,
     string OkLabel,
     string CancelLabel,
-    string WaterfallConnectorLinesLabel);
+    string WaterfallConnectorLinesLabel,
+    string DropLinesLabel,
+    string UpDownBarsLabel);
 
 /// <summary>
 /// Working-copy planner for the small set of chart display controls common to PowerPoint's
@@ -86,6 +88,8 @@ public sealed class ChartDisplayOptionsPlanner
     public const string LegendOverlayLabel = "Overlay legend";
     public const string HighLowLinesLabel = "High-low lines";
     public const string WaterfallConnectorLinesLabel = "Waterfall connector lines";
+    public const string DropLinesLabel = "Drop lines";
+    public const string UpDownBarsLabel = "Up/down bars";
     public const string PlotHint = "Bar gap width accepts 0-500; overlap accepts -100 to 100. Blank uses the chart default.";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
@@ -157,6 +161,10 @@ public sealed class ChartDisplayOptionsPlanner
     private bool _supportsHighLowLines;
     private bool? _waterfallConnectorLines;
     private bool _supportsWaterfallConnectorLines;
+    private bool? _dropLines;
+    private bool _supportsDropLines;
+    private bool? _upDownBars;
+    private bool _supportsUpDownBars;
     private IReadOnlyList<ChartDisplayStyleOption> _availableStyleOptions = StyleOptions;
 
     private ChartDisplayOptionsPlanner(ChartShape chart)
@@ -197,6 +205,10 @@ public sealed class ChartDisplayOptionsPlanner
         _waterfallConnectorLines = _supportsWaterfallConnectorLines
             ? chart.ShowWaterfallConnectorLines
             : null;
+        _supportsDropLines = SupportsLineDecorations(chart.ChartType);
+        _dropLines = _supportsDropLines ? chart.ShowDropLines : null;
+        _supportsUpDownBars = SupportsLineDecorations(chart.ChartType);
+        _upDownBars = _supportsUpDownBars ? chart.ShowUpDownBars : null;
     }
 
     public static ChartDisplayOptionsSurfacePlan BuildSurfacePlan() =>
@@ -236,7 +248,9 @@ public sealed class ChartDisplayOptionsPlanner
             PlotHint,
             OkLabel,
             CancelLabel,
-            WaterfallConnectorLinesLabel);
+            WaterfallConnectorLinesLabel,
+            DropLinesLabel,
+            UpDownBarsLabel);
 
     public static ChartDisplayOptionsPlanner FromChart(ChartShape chart)
     {
@@ -286,6 +300,10 @@ public sealed class ChartDisplayOptionsPlanner
     public bool SupportsHighLowLines => _supportsHighLowLines;
     public bool? WaterfallConnectorLines => _waterfallConnectorLines;
     public bool SupportsWaterfallConnectorLines => _supportsWaterfallConnectorLines;
+    public bool? DropLines => _dropLines;
+    public bool SupportsDropLines => _supportsDropLines;
+    public bool? UpDownBars => _upDownBars;
+    public bool SupportsUpDownBars => _supportsUpDownBars;
 
     public static IReadOnlyList<ChartDisplayBlanksOption> DisplayBlanksOptions { get; } =
     [
@@ -347,6 +365,8 @@ public sealed class ChartDisplayOptionsPlanner
     public void SetHighLowLines(bool? value) => _highLowLines = _supportsHighLowLines ? value : null;
     public void SetWaterfallConnectorLines(bool? value) =>
         _waterfallConnectorLines = _supportsWaterfallConnectorLines ? value : null;
+    public void SetDropLines(bool? value) => _dropLines = _supportsDropLines ? value : null;
+    public void SetUpDownBars(bool? value) => _upDownBars = _supportsUpDownBars ? value : null;
 
     public ChartDisplayOptions BuildCommitPlan() => new(
         string.IsNullOrWhiteSpace(_title) ? null : _title,
@@ -375,7 +395,9 @@ public sealed class ChartDisplayOptionsPlanner
         _titleOverlayChanged ? _titleOverlay : null,
         _plotVisibleOnlyChanged ? _plotVisibleOnly : null,
         _roundedCornersChanged ? _roundedCorners : null,
-        _supportsWaterfallConnectorLines ? _waterfallConnectorLines : null);
+        _supportsWaterfallConnectorLines ? _waterfallConnectorLines : null,
+        _supportsDropLines ? _dropLines : null,
+        _supportsUpDownBars ? _upDownBars : null);
 
     private ChartTextStyle? BuildLabelTextStyle()
     {
@@ -401,4 +423,7 @@ public sealed class ChartDisplayOptionsPlanner
 
     private static int? Normalize(int? value, int minimum, int maximum) =>
         value is null ? null : Math.Clamp(value.Value, minimum, maximum);
+
+    private static bool SupportsLineDecorations(ChartType chartType) =>
+        chartType is ChartType.Line or ChartType.LineMarkers or ChartType.Stock;
 }
