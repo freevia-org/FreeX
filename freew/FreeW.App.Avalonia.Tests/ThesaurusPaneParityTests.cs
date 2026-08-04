@@ -80,11 +80,12 @@ public sealed class ThesaurusPaneParityTests
         var pane = File.ReadAllText(RepoFile("freew", "FreeW.App.Avalonia", "ThesaurusPane.cs"));
         var wpf = File.ReadAllText(RepoFile("freew", "FreeW.App.Host", "ThesaurusPane.cs"));
 
-        pane.Should().Contain("Content = \"Insert\"");
+        pane.Should().Contain("Content = \"↵\"");
         pane.Should().Contain("action.InsertToolTip");
         pane.Should().Contain("TopLevel.GetTopLevel(this)?.Clipboard");
         pane.Should().Contain("return false;");
         pane.Should().NotContain("Content = \"Replace\"");
+        wpf.Should().Contain("Content = \"↵\"");
         wpf.Should().Contain("action.InsertToolTip");
         wpf.Should().NotContain("action.ReplaceToolTip");
     }

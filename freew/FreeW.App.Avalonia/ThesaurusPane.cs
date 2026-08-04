@@ -100,7 +100,7 @@ internal sealed class ThesaurusPane : Border
         var label = new TextBlock { Text = action.DisplayText, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
         var insert = new Button
         {
-            Content = "Insert",
+            Content = "↵",
             MinWidth = 68,
             IsEnabled = action.CanInsert() && _editor.CanReplaceCurrentProofingWord(action.DisplayText)
         };
