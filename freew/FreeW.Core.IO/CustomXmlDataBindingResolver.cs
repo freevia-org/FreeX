@@ -152,6 +152,13 @@ public static class CustomXmlDataBindingResolver
         }
 
         var storage = metadata?.StoreMappedDataAs;
+        if (string.IsNullOrEmpty(storage)
+            || string.Equals(storage, "text", StringComparison.OrdinalIgnoreCase))
+        {
+            displayText = value;
+            return true;
+        }
+
         DateTimeOffset date;
         string fullDate;
         if (string.Equals(storage, "date", StringComparison.OrdinalIgnoreCase))
