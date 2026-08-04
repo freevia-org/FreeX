@@ -23598,6 +23598,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = initialRowInputCellText ?? string.Empty,
         };
         ApplyDataToolsTextBoxChrome(rowInputBox);
+        ApplyDataTableInputChrome(rowInputBox);
         AutomationProperties.SetName(rowInputBox, UiText.Get("DataTable_RowInputAutomationName"));
         AutomationProperties.SetAutomationId(rowInputBox, "DataTableRowInputCellBox");
         AutomationProperties.SetHelpText(rowInputBox, UiText.Get("DataTable_RowInputAutomationHelpText"));
@@ -23607,6 +23608,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = initialColumnInputCellText ?? string.Empty,
         };
         ApplyDataToolsTextBoxChrome(columnInputBox);
+        ApplyDataTableInputChrome(columnInputBox);
         AutomationProperties.SetName(columnInputBox, UiText.Get("DataTable_ColumnInputAutomationName"));
         AutomationProperties.SetAutomationId(columnInputBox, "DataTableColumnInputCellBox");
         AutomationProperties.SetHelpText(columnInputBox, UiText.Get("DataTable_ColumnInputAutomationHelpText"));
@@ -23616,9 +23618,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var rowInputPicker = CreateDialogRangePickerButton(
             "DataTableRowInputCellPickerButton",
             UiText.Get("DataTable_RowInputPickerAutomationName"));
+        ApplyDataTablePickerChrome(rowInputPicker);
         var columnInputPicker = CreateDialogRangePickerButton(
             "DataTableColumnInputCellPickerButton",
             UiText.Get("DataTable_ColumnInputPickerAutomationName"));
+        ApplyDataTablePickerChrome(columnInputPicker);
 
         var errorText = new TextBlock
         {
@@ -23753,7 +23757,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0),
             Children =
             {
                 okButton,
@@ -23762,7 +23766,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         dialog.Content = new StackPanel
         {
-            Margin = new Thickness(12),
+            // WPF's non-client frame leaves a narrower content area inside the same
+            // 360x210 logical authority surface. Keep the Avalonia client controls on
+            // that authority without changing the window size or interaction contract.
+            Margin = new Thickness(12, 12, 27, 12),
             Children =
             {
                 new StackPanel { Children = { fields, errorText } },
@@ -23824,6 +23831,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = label,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
+            Foreground = Brushes.Black,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, row == 0 ? 0 : 8, 8, 0),
         };
@@ -23835,6 +23843,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Grid.SetColumn(editor, 1);
         fields.Children.Add(labelBlock);
         fields.Children.Add(editor);
+    }
+
+    private static void ApplyDataTableInputChrome(TextBox input)
+    {
+        input.Height = 20;
+        input.MinHeight = 20;
+        input.MaxHeight = 20;
+    }
+
+    private static void ApplyDataTablePickerChrome(Button picker)
+    {
+        picker.Height = 20;
+        picker.MinHeight = 20;
+        picker.MaxHeight = 20;
     }
 
     private async Task ShowForecastSheetDialogAsync()

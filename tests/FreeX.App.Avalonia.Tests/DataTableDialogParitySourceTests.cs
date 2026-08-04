@@ -48,12 +48,19 @@ public sealed class DataTableDialogParitySourceTests
         dataTableMethod.Should().Contain("AttachDialogRangePicker(dialog, columnInputPicker, columnInputBox, \"range.data-table.column-input-cell\")");
         dataTableMethod.Should().Contain("new ColumnDefinition { Width = new GridLength(110) }");
         dataTableMethod.Should().Contain("dialog.Content = new StackPanel");
-        dataTableMethod.Should().Contain("Margin = new Thickness(0, 8, 0, 0)");
+        dataTableMethod.Should().Contain("Margin = new Thickness(0)");
         dataTableMethod.Should().NotContain("DockPanel.SetDock(buttonRow, Dock.Bottom)");
         dataTableMethod.Should().NotContain("CreateDataTableField(\"Row input cell\"");
 
         var parityCapture = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
-        parityCapture.Should().Contain("ShowDataTableInputDialogAsync(\"E2\", \"F2\")");
+        parityCapture.Should().Contain("ShowDataTableInputDialogAsync()");
+        dataTableMethod.Should().Contain("ApplyDataTableInputChrome(rowInputBox)");
+        dataTableMethod.Should().Contain("ApplyDataTableInputChrome(columnInputBox)");
+        dataTableMethod.Should().Contain("ApplyDataTablePickerChrome(rowInputPicker)");
+        dataTableMethod.Should().Contain("ApplyDataTablePickerChrome(columnInputPicker)");
+        avalonia.Should().Contain("Foreground = Brushes.Black");
+        dataTableMethod.Should().Contain("Margin = new Thickness(0)");
+        avalonia.Should().Contain("new Thickness(12, 12, 27, 12)");
     }
 
     private static string ExtractBetween(string source, string startMarker, string endMarker)
