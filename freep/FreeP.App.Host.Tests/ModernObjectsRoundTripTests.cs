@@ -463,7 +463,8 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
                 zoom.Id,
                 new ZoomObjectProperties(
                     FrameBorderColor: "4472C4",
-                    FrameBorderWidthEmu: 25400))
+                    FrameBorderWidthEmu: 25400,
+                    FrameBorderDash: OutlineDash.Dot))
             .Should()
             .BeTrue();
 
@@ -474,8 +475,12 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         XElement.Parse(zoom.PreservedObject.RawXml)
             .Descendants().Single(element => element.Name.LocalName == "ln")
             .Attribute("w")!.Value.Should().Be("25400");
+        XElement.Parse(zoom.PreservedObject.RawXml)
+            .Descendants().Single(element => element.Name.LocalName == "prstDash")
+            .Attribute("val")!.Value.Should().Be("dot");
         zoom.PreservedObject.ZoomProperties!.FrameBorderColor.Should().Be("4472C4");
         zoom.PreservedObject.ZoomProperties.FrameBorderWidthEmu.Should().Be(25400);
+        zoom.PreservedObject.ZoomProperties.FrameBorderDash.Should().Be(OutlineDash.Dot);
 
         session.Undo();
         zoom.PreservedObject.RawXml.Should().NotContain("4472C4");
@@ -483,7 +488,7 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
 
         var reopened = PptxPackageReader.Read(WritePptxToMemory(presentation));
         reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
-            .PreservedObject!.ZoomProperties!.FrameBorderWidthEmu.Should().Be(25400);
+            .PreservedObject!.ZoomProperties!.FrameBorderDash.Should().Be(OutlineDash.Dot);
     }
 
     [Fact]

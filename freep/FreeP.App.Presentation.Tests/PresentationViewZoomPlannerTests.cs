@@ -115,6 +115,25 @@ public sealed class PresentationViewZoomPlannerTests
             .BeFalse();
     }
 
+    [Theory]
+    [InlineData("DashDot", OutlineDash.DashDot)]
+    [InlineData("dot", OutlineDash.Dot)]
+    [InlineData("", null)]
+    public void Zoom_border_dash_normalizes_values(string input, OutlineDash? expected)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderDash(input, out var normalized)
+            .Should().BeTrue();
+
+        normalized.Should().Be(expected);
+    }
+
+    [Fact]
+    public void Zoom_border_dash_rejects_unknown_values()
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderDash("customDash", out _)
+            .Should().BeFalse();
+    }
+
     [Fact]
     public void Built_in_plans_expose_zoom_and_fit_to_window_command_ids()
     {

@@ -824,6 +824,7 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             CropBottom = ValidateCrop(properties.CropBottom, nameof(properties.CropBottom)),
             FrameBorderColor = ValidateFrameBorderColor(properties.FrameBorderColor),
             FrameBorderWidthEmu = ValidateFrameBorderWidth(properties.FrameBorderWidthEmu),
+            FrameBorderDash = ValidateFrameBorderDash(properties.FrameBorderDash),
         };
     }
 
@@ -856,6 +857,16 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
         return value;
     }
 
+    private static OutlineDash? ValidateFrameBorderDash(OutlineDash? value)
+    {
+        if (value is null)
+            return null;
+        if (!Enum.IsDefined(value.Value))
+            throw new ArgumentOutOfRangeException(nameof(value), value,
+                "Zoom frame border dash is not a supported PowerPoint pattern.");
+        return value;
+    }
+
     private static bool TryPatchRawXml(
         string rawXml,
         ZoomObjectProperties properties,
@@ -883,7 +894,8 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             SetAttribute(zoomProperty, "transitionDur", properties.TransitionDuration);
             SetAttribute(zoomProperty, "showBg", properties.ShowBackground);
             SetCrop(zoomProperty, properties);
-            ZoomFrameBorderXml.Set(zoomProperty, properties.FrameBorderColor, properties.FrameBorderWidthEmu);
+            ZoomFrameBorderXml.Set(zoomProperty, properties.FrameBorderColor,
+                properties.FrameBorderWidthEmu, properties.FrameBorderDash);
         }
         patchedXml = root.ToString(SaveOptions.DisableFormatting);
         return true;
@@ -1265,7 +1277,8 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
         SetAttribute(properties, "transitionDur", _newValue.TransitionDuration);
         SetAttribute(properties, "showBg", _newValue.ShowBackground);
         SetCrop(properties, _newValue);
-        ZoomFrameBorderXml.Set(properties, _newValue.FrameBorderColor, _newValue.FrameBorderWidthEmu);
+        ZoomFrameBorderXml.Set(properties, _newValue.FrameBorderColor,
+            _newValue.FrameBorderWidthEmu, _newValue.FrameBorderDash);
         patchedXml = document.Root!.ToString(SaveOptions.DisableFormatting);
         return true;
     }
@@ -1284,6 +1297,7 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
             TransitionDuration = properties.TransitionDuration?.Trim(),
             FrameBorderColor = ValidateFrameBorderColor(properties.FrameBorderColor),
             FrameBorderWidthEmu = ValidateFrameBorderWidth(properties.FrameBorderWidthEmu),
+            FrameBorderDash = ValidateFrameBorderDash(properties.FrameBorderDash),
         };
     }
 
@@ -1305,6 +1319,16 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
         if (value <= 0 || value > 20116800)
             throw new ArgumentOutOfRangeException(nameof(value), value,
                 "Zoom frame border width must be between 1 and 20116800 EMU.");
+        return value;
+    }
+
+    private static OutlineDash? ValidateFrameBorderDash(OutlineDash? value)
+    {
+        if (value is null)
+            return null;
+        if (!Enum.IsDefined(value.Value))
+            throw new ArgumentOutOfRangeException(nameof(value), value,
+                "Zoom frame border dash is not a supported PowerPoint pattern.");
         return value;
     }
 

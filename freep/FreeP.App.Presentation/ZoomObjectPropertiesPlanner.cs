@@ -16,6 +16,8 @@ public static class ZoomObjectPropertiesPlanner
         "Border color must be a six-digit RGB value.";
     public const string InvalidFrameBorderWidthMessage =
         "Border width must be a positive value in points.";
+    public const string InvalidFrameBorderDashMessage =
+        "Border dash must be a supported PowerPoint line pattern.";
     public const string InvalidCropEdgesMessage =
         "Crop edges must be four percentages: left, top, right, bottom.";
     public const string InvalidSummaryTileLayoutMessage =
@@ -77,7 +79,8 @@ public static class ZoomObjectPropertiesPlanner
             ReadNullableInt(properties.Descendants().FirstOrDefault(element => element.Name.LocalName == "srcRect")?.Attribute("r")?.Value),
             ReadNullableInt(properties.Descendants().FirstOrDefault(element => element.Name.LocalName == "srcRect")?.Attribute("b")?.Value),
             ReadFrameBorderColor(properties),
-            ReadFrameBorderWidth(properties));
+            ReadFrameBorderWidth(properties),
+            ReadFrameBorderDash(properties));
         return value.IsEmpty ? fallback : value;
     }
 
@@ -104,6 +107,18 @@ public static class ZoomObjectPropertiesPlanner
         return int.TryParse(line?.Attribute("w")?.Value, out var width) && width > 0
             ? width
             : null;
+    }
+
+    private static OutlineDash? ReadFrameBorderDash(XElement properties)
+    {
+        var line = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
+        var token = line?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "prstDash", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value;
+        return TryParseFrameBorderDash(token, out var dash) ? dash : null;
     }
 
     private static bool? ReadNullableBoolean(string? value) =>
@@ -136,6 +151,26 @@ public static class ZoomObjectPropertiesPlanner
         properties.FrameBorderWidthEmu is int width
             ? (width / 12700d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
             : string.Empty;
+
+    public static string FormatFrameBorderDash(ZoomObjectProperties properties) =>
+        (properties.FrameBorderDash ?? OutlineDash.Solid).ToString();
+
+    public static IReadOnlyList<OutlineDash> FrameBorderDashOptions { get; } =
+        Enum.GetValues<OutlineDash>();
+
+    public static bool TryParseFrameBorderDash(string? text, out OutlineDash? normalized)
+    {
+        normalized = null;
+        if (string.IsNullOrWhiteSpace(text))
+            return true;
+
+        if (!Enum.TryParse<OutlineDash>(text.Trim(), ignoreCase: true, out var dash)
+            || !Enum.IsDefined(dash))
+            return false;
+
+        normalized = dash;
+        return true;
+    }
 
     public static bool TryParseFrameBorderWidth(
         string? text,
