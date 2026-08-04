@@ -1,6 +1,8 @@
 ﻿using FreeP.App.Compositor;
 using PresentationModel = FreeP.Core.Model.Presentation;
 
+using System.Xml.Linq;
+
 namespace FreeP.App.Compositor.Tests;
 
 /// <summary>
@@ -362,6 +364,44 @@ public sealed class SlideCompositorTests
         border.Dash.Should().Be(OutlineDash.DashDot);
         pictures[0].PictureFrameGeometry.Should().Be("ellipse");
         pictures[1].HasCrop.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Compose_ZoomFrameBorder_ResolvesNativeThemeColorAndTransforms()
+    {
+        var presentation = PresentationModel.CreateEmpty();
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+        var theme = presentation.Theme;
+        theme.ColorScheme[ThemeColorSlot.Accent1] = new SrgbColor(0x20, 0x40, 0x60);
+        presentation.Theme = theme;
+
+        var zoom = SlideZoomInsertionPlanner.CreateShape(presentation, 0, "slide-2");
+        presentation.Slides[0].Shapes.Add(zoom);
+        SummaryZoomPreviewPlanner.AttachPreviewImage(
+            presentation, zoom, targetSlideIndex: 1, _ => new byte[] { 1, 2, 3 })
+            .Should().BeTrue();
+
+        var raw = XElement.Parse(zoom.PreservedObject!.RawXml);
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var shapeProperties = raw.Descendants()
+            .Single(element => element.Name.LocalName == "spPr");
+        var line = new XElement(drawing + "ln");
+        shapeProperties.Add(line);
+        line.Elements(drawing + "solidFill").Remove();
+        line.Add(new XElement(drawing + "solidFill",
+            new XElement(drawing + "schemeClr",
+                new XAttribute("val", "accent1"),
+                new XElement(drawing + "lumMod", new XAttribute("val", "50000")),
+                new XElement(drawing + "tint", new XAttribute("val", "80000")))));
+        zoom.PreservedObject.RawXml = raw.ToString(SaveOptions.DisableFormatting);
+
+        var picture = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Picture>().Single();
+        var outline = picture.Outline.Should().BeOfType<ResolvedOutline.Visible>().Subject;
+        var expected = ThemeColorTransform.Apply(
+            theme.ColorScheme[ThemeColorSlot.Accent1],
+            lumMod: 0.5, lumOff: 0, tint: 0.8, shade: 1);
+        outline.Color.Should().Be(expected);
     }
 
     private static TextBody BodyWithText(string text)

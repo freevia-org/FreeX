@@ -550,7 +550,9 @@ public static class SlideCompositor
         SlideShape shape,
         LayoutRect boundsDip,
         double rotationDeg,
-        List<DrawOp> ops)
+        List<DrawOp> ops,
+        PresentationTheme theme,
+        IReadOnlyDictionary<string, string>? effectiveClrMap)
     {
         var info = shape.PreservedObject;
         if (info is null || string.IsNullOrWhiteSpace(info.RawXml))
@@ -589,7 +591,7 @@ public static class SlideCompositor
                 .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr",
                     StringComparison.OrdinalIgnoreCase));
             var crop = ResolveZoomCrop(properties, info.ZoomProperties);
-            var outline = ResolveZoomFrameOutline(properties, info.ZoomProperties);
+            var outline = ResolveZoomFrameOutline(properties, info.ZoomProperties, theme, effectiveClrMap);
             var geometry = ResolveZoomFrameGeometry(properties, info.ZoomProperties);
             var relId = properties?.Descendants()
                 .SelectMany(element => element.Attributes())
@@ -633,7 +635,9 @@ public static class SlideCompositor
         SlideShape shape,
         LayoutRect boundsDip,
         double rotationDeg,
-        List<DrawOp> ops)
+        List<DrawOp> ops,
+        PresentationTheme theme,
+        IReadOnlyDictionary<string, string>? effectiveClrMap)
     {
         var info = shape.PreservedObject;
         if (info is null || string.IsNullOrWhiteSpace(info.RawXml))
@@ -653,7 +657,7 @@ public static class SlideCompositor
             .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr",
                 StringComparison.OrdinalIgnoreCase));
         var crop = ResolveZoomCrop(properties, info.ZoomProperties);
-        var outline = ResolveZoomFrameOutline(properties, info.ZoomProperties);
+        var outline = ResolveZoomFrameOutline(properties, info.ZoomProperties, theme, effectiveClrMap);
         var geometry = ResolveZoomFrameGeometry(properties, info.ZoomProperties);
         var relId = properties?.Descendants()
             .SelectMany(element => element.Attributes())
@@ -714,7 +718,9 @@ public static class SlideCompositor
 
     private static ResolvedOutline ResolveZoomFrameOutline(
         XElement? properties,
-        ZoomObjectProperties? fallback)
+        ZoomObjectProperties? fallback,
+        PresentationTheme? theme = null,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
         var shapeProperties = properties?.Elements().FirstOrDefault(element =>
             string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase));
@@ -722,16 +728,11 @@ public static class SlideCompositor
             string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
         var solidFill = line?.Elements().FirstOrDefault(element =>
             string.Equals(element.Name.LocalName, "solidFill", StringComparison.OrdinalIgnoreCase));
-        var color = solidFill?.Elements().FirstOrDefault(element =>
-            string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("val")?.Value
-            ?? fallback?.FrameBorderColor;
-        if (color is null)
-            return ResolvedOutline.None.Instance;
-
-        var normalized = color.Trim().TrimStart('#');
-        if (normalized.Length != 6
-            || !int.TryParse(normalized, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
+        var resolvedColor = ResolveZoomFrameColor(solidFill, theme, effectiveClrMap);
+        if (resolvedColor is null
+            && TryParseZoomRgb(fallback?.FrameBorderColor, out var fallbackColor))
+            resolvedColor = fallbackColor;
+        if (resolvedColor is null)
             return ResolvedOutline.None.Instance;
 
         var widthEmu = line?.Attribute("w") is { Value: var widthText }
@@ -748,10 +749,69 @@ public static class SlideCompositor
         var resolvedDash = TryParseZoomDash(dash) ?? fallback?.FrameBorderDash ?? OutlineDash.Solid;
 
         return new ResolvedOutline.Visible(
-            new SrgbColor((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb),
+            resolvedColor.Value,
             PointsToDip(widthPoints),
             resolvedDash,
             255);
+    }
+
+    private static SrgbColor? ResolveZoomFrameColor(
+        XElement? solidFill,
+        PresentationTheme? theme,
+        IReadOnlyDictionary<string, string>? effectiveClrMap)
+    {
+        if (solidFill is null)
+            return null;
+
+        var rgb = solidFill.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value;
+        if (TryParseZoomRgb(rgb, out var resolvedRgb))
+            return resolvedRgb;
+
+        var scheme = solidFill.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "schemeClr", StringComparison.OrdinalIgnoreCase));
+        var role = scheme?.Attribute("val")?.Value?.Trim();
+        if (theme is null || string.IsNullOrWhiteSpace(role))
+            return null;
+
+        var slot = ThemeColorResolver.MapRoleToSlot(role, effectiveClrMap);
+        var schemeRef = new SchemeColorRef
+        {
+            RoleName = role,
+            Slot = slot,
+            LumMod = ReadZoomColorTransform(scheme, "lumMod", 1.0),
+            LumOff = ReadZoomColorTransform(scheme, "lumOff", 0.0),
+            Tint = ReadZoomColorTransform(scheme, "tint", 1.0),
+            Shade = ReadZoomColorTransform(scheme, "shade", 1.0),
+        };
+        var color = new ThemeAwareColor(theme.ColorScheme[slot], schemeRef);
+        return ThemeColorResolver.Resolve(color, theme, effectiveClrMap);
+    }
+
+    private static bool TryParseZoomRgb(string? value, out SrgbColor color)
+    {
+        color = default;
+        var normalized = value?.Trim().TrimStart('#');
+        if (normalized is not { Length: 6 }
+            || !int.TryParse(normalized, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
+            return false;
+
+        color = new SrgbColor((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
+        return true;
+    }
+
+    private static double ReadZoomColorTransform(
+        XElement? scheme,
+        string name,
+        double fallback)
+    {
+        var value = scheme?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, name, StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value;
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var raw)
+            ? Math.Clamp(raw / 100000d, 0, 1)
+            : fallback;
     }
 
     private static string? ResolveZoomFrameGeometry(
@@ -823,14 +883,16 @@ public static class SlideCompositor
 
         if (shape.Kind == SlideShapeKind.Zoom
             && shape.PreservedObject?.SummaryZoomTargets.Count > 0
-            && TryComposeSummaryZoomPreviews(shape, boundsDip, anchor.RotationDeg, ops))
+            && TryComposeSummaryZoomPreviews(
+                shape, boundsDip, anchor.RotationDeg, ops, theme, effectiveClrMap))
         {
             return;
         }
 
         if (shape.Kind == SlideShapeKind.Zoom
             && shape.PreservedObject?.SummaryZoomTargets.Count == 0
-            && TryComposeSingleZoomPreview(shape, boundsDip, anchor.RotationDeg, ops))
+            && TryComposeSingleZoomPreview(
+                shape, boundsDip, anchor.RotationDeg, ops, theme, effectiveClrMap))
         {
             return;
         }
@@ -844,7 +906,8 @@ public static class SlideCompositor
                 DestDip     = boundsDip,
                 RotationDeg = anchor.RotationDeg,
                 Outline     = shape.Kind == SlideShapeKind.Zoom
-                    ? ResolveZoomFrameOutline(null, shape.PreservedObject?.ZoomProperties)
+                    ? ResolveZoomFrameOutline(
+                        null, shape.PreservedObject?.ZoomProperties, theme, effectiveClrMap)
                     : ResolvedOutline.None.Instance,
                 PictureFrameGeometry = shape.Kind == SlideShapeKind.Zoom
                     ? shape.PreservedObject?.ZoomProperties?.FrameGeometry
@@ -859,7 +922,8 @@ public static class SlideCompositor
                 Geometry    = ShapeGeometryBuilder.Build(DrawingShapeKind.Rectangle, boundsDip),
                 Fill        = new ResolvedFill.Solid(new SrgbColor(0xCC, 0xCC, 0xCC)),
                 Outline     = shape.Kind == SlideShapeKind.Zoom
-                    ? ResolveZoomFrameOutline(null, shape.PreservedObject?.ZoomProperties)
+                    ? ResolveZoomFrameOutline(
+                        null, shape.PreservedObject?.ZoomProperties, theme, effectiveClrMap)
                     : ResolvedOutline.None.Instance,
                 BoundsDip   = boundsDip,
                 RotationDeg = anchor.RotationDeg,
