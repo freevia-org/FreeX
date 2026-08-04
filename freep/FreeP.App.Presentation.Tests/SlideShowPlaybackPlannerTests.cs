@@ -2225,6 +2225,35 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanShapeAnimation_UsesAuthoredGrowWithColorAmountScale()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 53,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.GrowWithColor,
+                ScaleBehavior = AnimationScaleBehavior.FromTo(1.5),
+                DurationMs = 400,
+            },
+            startDelayMs: 0);
+
+        plan.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.GrowWithColor);
+        plan.FromScale.Should().Be(1);
+        plan.ToScale.Should().Be(1);
+        plan.PeakScale.Should().Be(1.5);
+
+        var frame = SlideShowPlaybackFramePlanner.PlanFrame(
+            plan,
+            elapsedMs: 200,
+            slideWidthDip: 960,
+            slideHeightDip: 540);
+
+        frame.TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Emphasis);
+        frame.Scale.Should().Be(1.5);
+    }
+
+    [Fact]
     public void PlanAnimationStepFrames_UsesControllerDelaysForSharedHostEvidence()
     {
         var step = new AnimationStep(

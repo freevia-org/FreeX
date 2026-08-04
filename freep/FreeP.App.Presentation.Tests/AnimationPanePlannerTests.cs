@@ -917,6 +917,37 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Fact]
+    public void BuildEffectOptionsPlan_ProjectsGrowWithColorAmountAndAppliesIt()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = presentation.Slides[0].Shapes[0].Id,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.GrowWithColor,
+            ScaleBehavior = AnimationScaleBehavior.FromTo(1.5),
+        });
+
+        var options = AnimationPanePlanner.BuildEffectOptionsPlan(editor.CurrentSlideAnimations, 0);
+
+        options.CanApply.Should().BeTrue();
+        options.SelectedOptionText.Should().Be("Larger (150%)");
+        options.Options.Should().ContainSingle(option =>
+            option.Id == "amount-150" && option.IsSelected);
+
+        var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            "amount-400");
+
+        mutation.ShouldApply.Should().BeTrue();
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, mutation).Should().BeTrue();
+        editor.CurrentSlideAnimations[0].ScaleBehavior!.ToX
+            .Should().Be(AnimationScaleBehavior.Format(4));
+    }
+
+    [Fact]
     public void BuildEffectOptionsPlan_ProjectsSpinAmountAndPreservesSelection()
     {
         var animations = new[]
