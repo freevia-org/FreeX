@@ -49,6 +49,12 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         combined.Should().Contain("dialog.Width = ChartTypeChangePlanner.DialogWidth;");
         combined.Should().Contain("dialog.Height = ChartTypeChangePlanner.DialogHeight;");
         combined.Should().Contain("dialog.SizeToContent = SizeToContent.Manual;");
+        combined.Should().Contain("ChartTypeChangePlanner.PickerCategoryColumnWidth");
+        combined.Should().Contain("ChartTypeChangePlanner.PickerSubtypeColumnWidth");
+        combined.Should().Contain("ChartTypeChangePlanner.PickerPreviewWidth");
+        combined.Should().Contain("ChartTypeChangePlanner.PickerCategoryWidth");
+        combined.Should().Contain("ChartTypeChangePlanner.PickerSubtypeWidth");
+        combined.Should().Contain("ChartTypeChangePlanner.PickerListHeight");
         combined.Should().Contain("ChartWorkflowCommandCatalog.SelectDataSource");
         combined.Should().Contain("ChartWorkflowCommandCatalog.MoveChart");
         combined.Should().Contain("ChartWorkflowCommandCatalog.FormatChartArea");

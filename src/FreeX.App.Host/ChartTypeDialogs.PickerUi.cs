@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Model;
 
 using static FreeX.App.Host.ChartDialogHelpers;
@@ -25,7 +26,7 @@ public sealed partial class InsertChartDialog
         });
         heading.Children.Add(CreateInlineHelp(UiText.Get(panel.HelpResourceKey)));
         grid.Children.Add(heading);
-        gallery.Margin = new Thickness(0, 34, 12, 0);
+        gallery.Margin = new Thickness(0, 34, ChartTypeChangePlanner.PickerColumnGap, 0);
         AutomationProperties.SetName(gallery, UiText.Get(panel.SubtypeGalleryAutomationNameResourceKey));
         Grid.SetRow(gallery, 1);
         grid.Children.Add(gallery);
@@ -46,11 +47,11 @@ public sealed partial class InsertChartDialog
         var grid = CreatePickerGrid();
         categoryList.ItemsSource = categories;
         categoryList.DisplayMemberPath = nameof(ChartTypePickerCategory.Name);
-        categoryList.Width = 150;
-        categoryList.Margin = new Thickness(0, 24, 12, 0);
+        categoryList.Width = ChartTypeChangePlanner.PickerCategoryWidth;
+        categoryList.Margin = new Thickness(0, 24, ChartTypeChangePlanner.PickerColumnGap, 0);
         AutomationProperties.SetName(categoryList, UiText.Get(panel.CategoryListAutomationNameResourceKey!));
         subtypeGallery.DisplayMemberPath = nameof(ChartTypeGalleryChoice.SubtypeName);
-        subtypeGallery.Margin = new Thickness(0, 24, 12, 0);
+        subtypeGallery.Margin = new Thickness(0, 24, ChartTypeChangePlanner.PickerColumnGap, 0);
         AutomationProperties.SetName(subtypeGallery, UiText.Get(panel.SubtypeGalleryAutomationNameResourceKey));
         categoryList.SelectionChanged += (_, _) =>
         {
@@ -120,10 +121,10 @@ public sealed partial class InsertChartDialog
 
     private static Grid CreatePickerGrid()
     {
-        var grid = new Grid { Margin = new Thickness(12), MinHeight = 250 };
+        var grid = new Grid { Margin = new Thickness(ChartTypeChangePlanner.PickerColumnGap), MinHeight = 250 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ChartTypeChangePlanner.PickerPreviewWidth) });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         return grid;

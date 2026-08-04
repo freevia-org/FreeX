@@ -38,7 +38,7 @@ public sealed class ChangeChartTypeDialog : Window
         DockPanel.SetDock(heading, Dock.Top);
         root.Children.Add(heading);
         var panel = InsertChartDialog.CreateAllChartsPanel(_categoryList, _subtypeGallery, currentType);
-        panel.Height = 290;
+        panel.Height = ChartTypeChangePlanner.PickerPanelHeight;
         // The "All Charts" grid has three columns: Auto (category list) | Star (subtype gallery) | 180 (preview).
         // The shared InsertChartDialog hosts this grid inside a width-bounded TabControl, so the Star column
         // resolves against a finite width and the gallery gets a real slot. Here the grid is instead docked
@@ -53,8 +53,8 @@ public sealed class ChangeChartTypeDialog : Window
         // off the fixed-width dialog. Pin all three columns to fixed widths sized to their real content —
         //   category list 150 + 12px gap | gallery 180 + 12px gap | preview 180 —
         // so the whole "All Charts" row fits the 640px dialog with the gallery between the list and preview.
-        panel.ColumnDefinitions[0].Width = new GridLength(162); // category list (150) + its 12px right gap.
-        panel.ColumnDefinitions[1].Width = new GridLength(192); // gallery (180) + its 12px right gap.
+        panel.ColumnDefinitions[0].Width = new GridLength(ChartTypeChangePlanner.PickerCategoryColumnWidth);
+        panel.ColumnDefinitions[1].Width = new GridLength(ChartTypeChangePlanner.PickerSubtypeColumnWidth);
         panel.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
         // The "All Charts" heading + help text live in row 0 of column 0; now that column 0 is a fixed 162px
         // they would wrap. Let the heading span all three columns so it reads on one line as before.
@@ -69,7 +69,7 @@ public sealed class ChangeChartTypeDialog : Window
         // so populate and select it directly here — mirroring the Avalonia ShowChartTypePickerAsync — and
         // give it a deterministic width plus a visible border so it reads like the Linux/Excel surface.
         PopulateSubtypeGallery(currentType);
-        _subtypeGallery.Width = 180;
+        _subtypeGallery.Width = ChartTypeChangePlanner.PickerSubtypeWidth;
         _subtypeGallery.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
         _subtypeGallery.BorderBrush = SystemColors.ControlDarkBrush;
         _subtypeGallery.BorderThickness = new Thickness(1);

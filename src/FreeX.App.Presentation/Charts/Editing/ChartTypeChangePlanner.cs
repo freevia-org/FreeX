@@ -45,6 +45,17 @@ public static class ChartTypeChangePlanner
     /// <summary>Shared Change Chart Type dialog height used by desktop shells and visual evidence checks.</summary>
     public const double DialogHeight = 390;
 
+    /// <summary>Shared picker geometry used by the WPF and Avalonia "All Charts" shells.</summary>
+    public const double PickerPanelHeight = 290;
+
+    public const double PickerCategoryWidth = 150;
+    public const double PickerCategoryColumnWidth = 162;
+    public const double PickerSubtypeWidth = 180;
+    public const double PickerSubtypeColumnWidth = 192;
+    public const double PickerPreviewWidth = 180;
+    public const double PickerColumnGap = 12;
+    public const double PickerListHeight = 230;
+
     // English display labels and shell-localization keys for every renderer-authorable family, in a stable gallery-style order.
     private static readonly (ChartType Type, string DisplayName, string DisplayNameKey)[] Catalog =
     [
