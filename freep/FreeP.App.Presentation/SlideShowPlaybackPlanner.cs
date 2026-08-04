@@ -517,6 +517,7 @@ public static class SlideShowPlaybackPlanner
     {
         if (effectKind is not (SlideShowShapeAnimationEffectKind.ColorPulse
             or SlideShowShapeAnimationEffectKind.ChangeColor
+            or SlideShowShapeAnimationEffectKind.GrowWithColor
             or SlideShowShapeAnimationEffectKind.Shimmer)
             || string.IsNullOrWhiteSpace(animation.PreservedColorBehaviorXml))
         {

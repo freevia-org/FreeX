@@ -2023,15 +2023,17 @@ public sealed class SlideShowPlaybackPlannerTests
         }
     }
 
-    [Fact]
-    public void PlanShapeAnimation_ResolvesAuthoredRgbColorBehavior()
+    [Theory]
+    [InlineData(AnimationPreset.ChangeColor)]
+    [InlineData(AnimationPreset.GrowWithColor)]
+    public void PlanShapeAnimation_ResolvesAuthoredRgbColorBehavior(AnimationPreset preset)
     {
         var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
                 ShapeId = 73,
                 Kind = AnimationKind.Emphasis,
-                Preset = AnimationPreset.ChangeColor,
+                Preset = preset,
                 PreservedColorBehaviorXml = """
                     <p:animClr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" clrSpc="rgb">
                       <p:clrFrom><a:srgbClr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" val="ff0000" /></p:clrFrom>
