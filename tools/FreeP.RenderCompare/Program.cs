@@ -743,13 +743,21 @@ internal static class Program
             return 2;
         }
 
+        var deckFilter = ParseDeckFilter(ReadOption(args, "--decks"));
+
         var result = PowerPointCorpusValidator.Validate(
             corpusDirectory,
             outputDirectory,
             referenceDirectory,
             width,
             height,
-            deckTimeout: TimeSpan.FromSeconds(timeoutSeconds));
+            deckTimeout: TimeSpan.FromSeconds(timeoutSeconds),
+            deckFilter: deckFilter,
+            onDeckCompleted: deck => Console.WriteLine(
+                $"  [{deck.DeckName}] export={deck.FailureKind} " +
+                $"slides={deck.GeneratedSlides}/{deck.TotalSlides} " +
+                $"refs={deck.MatchingSlides}/{deck.ComparedSlides} " +
+                $"missing={deck.MissingReferences} diff={deck.MismatchedReferences}"));
         result.Print(Console.Out);
         return result.ExitCode;
     }
@@ -865,6 +873,18 @@ internal static class Program
         return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
     }
 
+    private static IReadOnlySet<string>? ParseDeckFilter(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var names = value.Split(
+                [',', ';'],
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return names.Count == 0 ? null : names;
+    }
+
     private static void PrintUsage()
     {
         Console.WriteLine("FreeP.RenderCompare — PowerPoint interop harness (Wave 1F)");
@@ -913,8 +933,8 @@ internal static class Program
         Console.WriteLine("      Print compact per-deck status and PowerPoint reference PNG availability.");
         Console.WriteLine("      --require-complete-refs fails when refs are missing unless --allow-missing-powerpoint is set and PowerPoint COM is unavailable.");
         Console.WriteLine();
-        Console.WriteLine("  --powerpoint-corpus-validate <corpusDir> <outDir> [--refs <refsDir>] [--width W] [--height H] [--deck-timeout-seconds N]");
-        Console.WriteLine("      Open/export every corpus deck through isolated PowerPoint workers and optionally verify slide hashes against references.");
+        Console.WriteLine("  --powerpoint-corpus-validate <corpusDir> <outDir> [--refs <refsDir>] [--decks <name[,name...]>] [--width W] [--height H] [--deck-timeout-seconds N]");
+        Console.WriteLine("      Open/export corpus decks through isolated PowerPoint workers, optionally filter by stem/filename, and verify slide hashes against references.");
         Console.WriteLine();
         Console.WriteLine("  --powerpoint-corpus-capture-refs <corpusDir> <refsDir> [--force] [--width W] [--height H] [--deck-timeout-seconds N]");
         Console.WriteLine("      Capture PowerPoint COM slide PNGs into a reference tree; --force permits overwriting an existing tree.");
