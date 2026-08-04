@@ -14,11 +14,15 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private readonly CheckBox _showBackground;
     private readonly CheckBox _transitionEnabled;
     private readonly CheckBox _frameBorderEnabled;
+    private readonly CheckBox _frameBorderGradientEnabled;
     private readonly ComboBox _imageType;
     private readonly TextBox _transitionDuration;
     private readonly TextBox _frameBorderColor;
     private readonly TextBox _frameBorderWidth;
     private readonly ComboBox _frameBorderDash;
+    private readonly TextBox _frameBorderGradientStart;
+    private readonly TextBox _frameBorderGradientEnd;
+    private readonly TextBox _frameBorderGradientAngle;
     private readonly ComboBox _frameGeometry;
     private readonly TextBox _cropEdges;
     private readonly IReadOnlyList<SummaryZoomTarget> _summaryTargets;
@@ -92,6 +96,30 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderEnabled(current),
         };
         _frameBorderEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
+        _frameBorderGradientEnabled = new CheckBox
+        {
+            Content = "Use gradient border",
+            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderGradientEnabled(current),
+        };
+        _frameBorderGradientEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
+        _frameBorderGradientStart = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientStart(current),
+            MinWidth = 180,
+            PlaceholderText = "start RGB value",
+        };
+        _frameBorderGradientEnd = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientEnd(current),
+            MinWidth = 180,
+            PlaceholderText = "end RGB value",
+        };
+        _frameBorderGradientAngle = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientAngle(current),
+            MinWidth = 180,
+            PlaceholderText = "angle 0-360 degrees",
+        };
         _frameGeometry = new ComboBox
         {
             ItemsSource = ZoomObjectPropertiesPlanner.FrameGeometryOptions,
@@ -149,6 +177,10 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             Row("Border color:", _frameBorderColor),
             Row("Border width (pt):", _frameBorderWidth),
             Row("Border dash:", _frameBorderDash),
+            _frameBorderGradientEnabled,
+            Row("Gradient start:", _frameBorderGradientStart),
+            Row("Gradient end:", _frameBorderGradientEnd),
+            Row("Gradient angle (deg):", _frameBorderGradientAngle),
             Row("Frame shape:", _frameGeometry),
             Row("Preview crop (%):", _cropEdges),
         };
@@ -240,6 +272,23 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                 ZoomObjectPropertiesPlanner.DialogTitle);
             return;
         }
+        var gradientEnabled = _frameBorderEnabled.IsChecked == true
+            && _frameBorderGradientEnabled.IsChecked == true;
+        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderGradient(
+                _frameBorderGradientStart.Text,
+                _frameBorderGradientEnd.Text,
+                _frameBorderGradientAngle.Text,
+                gradientEnabled,
+                out var frameBorderGradient))
+        {
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                this,
+                ZoomObjectPropertiesPlanner.InvalidFrameBorderGradientMessage,
+                ZoomObjectPropertiesPlanner.DialogTitle);
+            return;
+        }
+        if (gradientEnabled)
+            frameBorderColor = null;
         if (!ZoomObjectPropertiesPlanner.TryParseFrameGeometry(
                 _frameGeometry.SelectedItem?.ToString(), out var frameGeometry))
         {
@@ -289,7 +338,8 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             frameBorderColor,
             frameBorderWidth,
             frameBorderDash,
-            frameGeometry);
+            frameGeometry,
+            frameBorderGradient);
         if (_summaryTile is not null && _summaryTile.SelectedIndex >= 0
             && _summaryTile.SelectedIndex < _summaryTargets.Count)
         {
@@ -322,6 +372,10 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         _frameBorderWidth.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderWidth(properties);
         _frameBorderDash.SelectedItem = properties.FrameBorderDash ?? OutlineDash.Solid;
         _frameBorderEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderEnabled(properties);
+        _frameBorderGradientEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderGradientEnabled(properties);
+        _frameBorderGradientStart.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientStart(properties);
+        _frameBorderGradientEnd.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientEnd(properties);
+        _frameBorderGradientAngle.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientAngle(properties);
         SyncFrameBorderState();
         _frameGeometry.SelectedItem = ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
             geometry => string.Equals(geometry, properties.FrameGeometry, StringComparison.OrdinalIgnoreCase))
@@ -341,9 +395,14 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private void SyncFrameBorderState()
     {
         var enabled = _frameBorderEnabled.IsChecked == true;
-        _frameBorderColor.IsEnabled = enabled;
+        var gradient = enabled && _frameBorderGradientEnabled.IsChecked == true;
+        _frameBorderColor.IsEnabled = enabled && !gradient;
         _frameBorderWidth.IsEnabled = enabled;
         _frameBorderDash.IsEnabled = enabled;
+        _frameBorderGradientEnabled.IsEnabled = enabled;
+        _frameBorderGradientStart.IsEnabled = gradient;
+        _frameBorderGradientEnd.IsEnabled = gradient;
+        _frameBorderGradientAngle.IsEnabled = gradient;
     }
 
     private static Button MakeButton(string label, bool isDefault, Action action)

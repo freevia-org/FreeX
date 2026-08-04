@@ -11,11 +11,15 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private readonly CheckBox _showBackground;
     private readonly CheckBox _transitionEnabled;
     private readonly CheckBox _frameBorderEnabled;
+    private readonly CheckBox _frameBorderGradientEnabled;
     private readonly ComboBox _imageType;
     private readonly TextBox _transitionDuration;
     private readonly TextBox _frameBorderColor;
     private readonly TextBox _frameBorderWidth;
     private readonly ComboBox _frameBorderDash;
+    private readonly TextBox _frameBorderGradientStart;
+    private readonly TextBox _frameBorderGradientEnd;
+    private readonly TextBox _frameBorderGradientAngle;
     private readonly ComboBox _frameGeometry;
     private readonly TextBox _cropEdges;
     private readonly IReadOnlyList<SummaryZoomTarget> _summaryTargets;
@@ -101,6 +105,31 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         };
         _frameBorderEnabled.Checked += (_, _) => SyncFrameBorderState();
         _frameBorderEnabled.Unchecked += (_, _) => SyncFrameBorderState();
+        _frameBorderGradientEnabled = new CheckBox
+        {
+            Content = "Use gradient border",
+            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderGradientEnabled(current),
+        };
+        _frameBorderGradientEnabled.Checked += (_, _) => SyncFrameBorderState();
+        _frameBorderGradientEnabled.Unchecked += (_, _) => SyncFrameBorderState();
+        _frameBorderGradientStart = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientStart(current),
+            MinWidth = 180,
+            ToolTip = "six-digit RGB value; for example 4472C4",
+        };
+        _frameBorderGradientEnd = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientEnd(current),
+            MinWidth = 180,
+            ToolTip = "six-digit RGB value; for example FFFFFF",
+        };
+        _frameBorderGradientAngle = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientAngle(current),
+            MinWidth = 180,
+            ToolTip = "linear angle in degrees from 0 to 360",
+        };
         _frameGeometry = new ComboBox
         {
             ItemsSource = ZoomObjectPropertiesPlanner.FrameGeometryOptions,
@@ -139,7 +168,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         }
 
         var grid = new Grid { Margin = new Thickness(14) };
-        for (var i = 0; i < 12 + (_summaryTargets.Count > 0 ? 4 : 0); i++)
+        for (var i = 0; i < 16 + (_summaryTargets.Count > 0 ? 4 : 0); i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -156,6 +185,12 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         AddRow(grid, row++, "Border color:", _frameBorderColor);
         AddRow(grid, row++, "Border width (pt):", _frameBorderWidth);
         AddRow(grid, row++, "Border dash:", _frameBorderDash);
+        Grid.SetRow(_frameBorderGradientEnabled, row++);
+        Grid.SetColumnSpan(_frameBorderGradientEnabled, 2);
+        grid.Children.Add(_frameBorderGradientEnabled);
+        AddRow(grid, row++, "Gradient start:", _frameBorderGradientStart);
+        AddRow(grid, row++, "Gradient end:", _frameBorderGradientEnd);
+        AddRow(grid, row++, "Gradient angle (deg):", _frameBorderGradientAngle);
         AddRow(grid, row++, "Frame shape:", _frameGeometry);
         AddRow(grid, row++, "Preview crop (%):", _cropEdges);
         if (_summaryTile is not null)
@@ -257,6 +292,24 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                 MessageBoxImage.Warning);
             return;
         }
+        var gradientEnabled = _frameBorderEnabled.IsChecked == true
+            && _frameBorderGradientEnabled.IsChecked == true;
+        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderGradient(
+                _frameBorderGradientStart.Text,
+                _frameBorderGradientEnd.Text,
+                _frameBorderGradientAngle.Text,
+                gradientEnabled,
+                out var frameBorderGradient))
+        {
+            MessageBox.Show(this,
+                ZoomObjectPropertiesPlanner.InvalidFrameBorderGradientMessage,
+                ZoomObjectPropertiesPlanner.DialogTitle,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+        if (gradientEnabled)
+            frameBorderColor = null;
         if (!ZoomObjectPropertiesPlanner.TryParseFrameGeometry(
                 _frameGeometry.SelectedItem?.ToString(), out var frameGeometry))
         {
@@ -309,7 +362,8 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             frameBorderColor,
             frameBorderWidth,
             frameBorderDash,
-            frameGeometry);
+            frameGeometry,
+            frameBorderGradient);
         if (_summaryTile is not null && _summaryTile.SelectedIndex >= 0
             && _summaryTile.SelectedIndex < _summaryTargets.Count)
         {
@@ -342,6 +396,10 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _frameBorderWidth.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderWidth(properties);
         _frameBorderDash.SelectedItem = properties.FrameBorderDash ?? OutlineDash.Solid;
         _frameBorderEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderEnabled(properties);
+        _frameBorderGradientEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderGradientEnabled(properties);
+        _frameBorderGradientStart.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientStart(properties);
+        _frameBorderGradientEnd.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientEnd(properties);
+        _frameBorderGradientAngle.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientAngle(properties);
         SyncFrameBorderState();
         _frameGeometry.SelectedItem = ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
             geometry => string.Equals(geometry, properties.FrameGeometry, StringComparison.OrdinalIgnoreCase))
@@ -361,8 +419,13 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private void SyncFrameBorderState()
     {
         var enabled = _frameBorderEnabled.IsChecked == true;
-        _frameBorderColor.IsEnabled = enabled;
+        var gradient = enabled && _frameBorderGradientEnabled.IsChecked == true;
+        _frameBorderColor.IsEnabled = enabled && !gradient;
         _frameBorderWidth.IsEnabled = enabled;
         _frameBorderDash.IsEnabled = enabled;
+        _frameBorderGradientEnabled.IsEnabled = enabled;
+        _frameBorderGradientStart.IsEnabled = gradient;
+        _frameBorderGradientEnd.IsEnabled = gradient;
+        _frameBorderGradientAngle.IsEnabled = gradient;
     }
 }

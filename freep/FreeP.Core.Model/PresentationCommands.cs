@@ -826,6 +826,33 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             FrameBorderWidthEmu = ValidateFrameBorderWidth(properties.FrameBorderWidthEmu),
             FrameBorderDash = ValidateFrameBorderDash(properties.FrameBorderDash),
             FrameGeometry = ValidateFrameGeometry(properties.FrameGeometry),
+            FrameBorderGradient = ValidateFrameBorderGradient(properties.FrameBorderGradient),
+        };
+    }
+
+    private static ZoomFrameBorderGradient? ValidateFrameBorderGradient(
+        ZoomFrameBorderGradient? value)
+    {
+        if (value is null)
+            return null;
+
+        static string NormalizeColor(string color, string parameterName)
+        {
+            var normalized = color.Trim().TrimStart('#');
+            if (normalized.Length != 6 || !normalized.All(Uri.IsHexDigit))
+                throw new ArgumentException(
+                    "Zoom frame gradient colors must be six-digit RGB values.", parameterName);
+            return normalized.ToUpperInvariant();
+        }
+
+        if (value.Angle is < 0 or > 21_600_000)
+            throw new ArgumentOutOfRangeException(nameof(value), value.Angle,
+                "Zoom frame gradient angle must be between 0 and 360 degrees.");
+
+        return value with
+        {
+            StartColor = NormalizeColor(value.StartColor, nameof(value.StartColor)),
+            EndColor = NormalizeColor(value.EndColor, nameof(value.EndColor)),
         };
     }
 
@@ -910,7 +937,8 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             SetAttribute(zoomProperty, "showBg", properties.ShowBackground);
             SetCrop(zoomProperty, properties);
             ZoomFrameBorderXml.Set(zoomProperty, properties.FrameBorderColor,
-                properties.FrameBorderWidthEmu, properties.FrameBorderDash);
+                properties.FrameBorderWidthEmu, properties.FrameBorderDash,
+                properties.FrameBorderGradient);
             ZoomFrameGeometryXml.Set(zoomProperty, properties.FrameGeometry);
         }
         patchedXml = root.ToString(SaveOptions.DisableFormatting);
@@ -1294,7 +1322,8 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
         SetAttribute(properties, "showBg", _newValue.ShowBackground);
         SetCrop(properties, _newValue);
         ZoomFrameBorderXml.Set(properties, _newValue.FrameBorderColor,
-            _newValue.FrameBorderWidthEmu, _newValue.FrameBorderDash);
+            _newValue.FrameBorderWidthEmu, _newValue.FrameBorderDash,
+            _newValue.FrameBorderGradient);
         ZoomFrameGeometryXml.Set(properties, _newValue.FrameGeometry);
         patchedXml = document.Root!.ToString(SaveOptions.DisableFormatting);
         return true;
@@ -1316,6 +1345,33 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
             FrameBorderWidthEmu = ValidateFrameBorderWidth(properties.FrameBorderWidthEmu),
             FrameBorderDash = ValidateFrameBorderDash(properties.FrameBorderDash),
             FrameGeometry = ValidateFrameGeometry(properties.FrameGeometry),
+            FrameBorderGradient = ValidateFrameBorderGradient(properties.FrameBorderGradient),
+        };
+    }
+
+    private static ZoomFrameBorderGradient? ValidateFrameBorderGradient(
+        ZoomFrameBorderGradient? value)
+    {
+        if (value is null)
+            return null;
+
+        static string NormalizeColor(string color, string parameterName)
+        {
+            var normalized = color.Trim().TrimStart('#');
+            if (normalized.Length != 6 || !normalized.All(Uri.IsHexDigit))
+                throw new ArgumentException(
+                    "Zoom frame gradient colors must be six-digit RGB values.", parameterName);
+            return normalized.ToUpperInvariant();
+        }
+
+        if (value.Angle is < 0 or > 21_600_000)
+            throw new ArgumentOutOfRangeException(nameof(value), value.Angle,
+                "Zoom frame gradient angle must be between 0 and 360 degrees.");
+
+        return value with
+        {
+            StartColor = NormalizeColor(value.StartColor, nameof(value.StartColor)),
+            EndColor = NormalizeColor(value.EndColor, nameof(value.EndColor)),
         };
     }
 

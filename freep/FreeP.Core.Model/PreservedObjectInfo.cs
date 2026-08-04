@@ -49,7 +49,8 @@ public sealed record ZoomObjectProperties(
     string? FrameBorderColor = null,
     int? FrameBorderWidthEmu = null,
     OutlineDash? FrameBorderDash = null,
-    string? FrameGeometry = null)
+    string? FrameGeometry = null,
+    ZoomFrameBorderGradient? FrameBorderGradient = null)
 {
     public bool IsEmpty => ReturnToParent is null
         && ImageType is null
@@ -62,7 +63,8 @@ public sealed record ZoomObjectProperties(
         && FrameBorderColor is null
         && FrameBorderWidthEmu is null
         && FrameBorderDash is null
-        && FrameGeometry is null;
+        && FrameGeometry is null
+        && FrameBorderGradient is null;
 }
 
 /// <summary>

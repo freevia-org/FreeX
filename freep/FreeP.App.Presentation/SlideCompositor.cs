@@ -728,13 +728,6 @@ public static class SlideCompositor
             string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
         var solidFill = line?.Elements().FirstOrDefault(element =>
             string.Equals(element.Name.LocalName, "solidFill", StringComparison.OrdinalIgnoreCase));
-        var resolvedColor = ResolveZoomFrameColor(solidFill, theme, effectiveClrMap);
-        if (resolvedColor is null
-            && TryParseZoomRgb(fallback?.FrameBorderColor, out var fallbackColor))
-            resolvedColor = fallbackColor;
-        if (resolvedColor is null)
-            return ResolvedOutline.None.Instance;
-
         var widthEmu = line?.Attribute("w") is { Value: var widthText }
             && int.TryParse(widthText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedWidth)
             && parsedWidth > 0
@@ -748,11 +741,78 @@ public static class SlideCompositor
             ?.Attribute("val")?.Value;
         var resolvedDash = TryParseZoomDash(dash) ?? fallback?.FrameBorderDash ?? OutlineDash.Solid;
 
+        var gradientFill = line?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "gradFill", StringComparison.OrdinalIgnoreCase));
+        if (TryResolveZoomGradient(gradientFill, out var resolvedGradient))
+            return new ResolvedOutline.Gradient(
+                resolvedGradient!, PointsToDip(widthPoints), resolvedDash);
+        if (gradientFill is null
+            && TryResolveZoomGradient(fallback?.FrameBorderGradient, out resolvedGradient))
+            return new ResolvedOutline.Gradient(
+                resolvedGradient!, PointsToDip(widthPoints), resolvedDash);
+
+        var resolvedColor = ResolveZoomFrameColor(solidFill, theme, effectiveClrMap);
+        if (resolvedColor is null
+            && TryParseZoomRgb(fallback?.FrameBorderColor, out var fallbackColor))
+            resolvedColor = fallbackColor;
+        if (resolvedColor is null)
+            return ResolvedOutline.None.Instance;
+
         return new ResolvedOutline.Visible(
             resolvedColor.Value,
             PointsToDip(widthPoints),
             resolvedDash,
             255);
+    }
+
+    private static bool TryResolveZoomGradient(
+        XElement? gradient,
+        out ResolvedFill.Gradient? resolved)
+    {
+        resolved = null;
+        var stops = gradient?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "gsLst", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().Where(element =>
+                string.Equals(element.Name.LocalName, "gs", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (stops is not { Length: >= 2 })
+            return false;
+
+        var colors = stops.Select(stop => stop.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value).ToArray();
+        if (colors.Any(color => !TryParseZoomRgb(color, out _)))
+            return false;
+
+        var angleText = gradient?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "lin", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("ang")?.Value;
+        var angle = int.TryParse(angleText, NumberStyles.Integer,
+            CultureInfo.InvariantCulture, out var angleValue)
+            ? angleValue / 60000d
+            : 0d;
+        var resolvedStops = colors.Select((color, index) =>
+        {
+            TryParseZoomRgb(color!, out var resolvedColor);
+            return new ResolvedFill.ResolvedGradientStop(
+                index / (double)(colors.Length - 1), resolvedColor);
+        }).ToArray();
+        resolved = new ResolvedFill.Gradient(resolvedStops, GradientKind.Linear, angle);
+        return true;
+    }
+
+    private static bool TryResolveZoomGradient(
+        ZoomFrameBorderGradient? gradient,
+        out ResolvedFill.Gradient? resolved)
+    {
+        resolved = null;
+        if (gradient is null
+            || !TryParseZoomRgb(gradient.StartColor, out var start)
+            || !TryParseZoomRgb(gradient.EndColor, out var end))
+            return false;
+
+        resolved = new ResolvedFill.Gradient(start, end, gradient.Angle / 60000d);
+        return true;
     }
 
     private static SrgbColor? ResolveZoomFrameColor(

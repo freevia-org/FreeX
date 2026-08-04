@@ -1740,7 +1740,8 @@ public static class PptxPackageReader
             ReadZoomFrameBorderColor(properties),
             ReadZoomFrameBorderWidth(properties),
             ReadZoomFrameBorderDash(properties),
-            ReadZoomFrameGeometry(properties));
+            ReadZoomFrameGeometry(properties),
+            ReadZoomFrameBorderGradient(properties));
         return value.IsEmpty ? null : value;
     }
 
@@ -1810,6 +1811,46 @@ public static class PptxPackageReader
                 "sysdashdot" => OutlineDash.SystemDashDot,
                 _ => null,
             };
+    }
+
+    private static ZoomFrameBorderGradient? ReadZoomFrameBorderGradient(XElement properties)
+    {
+        var line = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
+        var gradient = line?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "gradFill", StringComparison.OrdinalIgnoreCase));
+        var stops = gradient?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "gsLst", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().Where(element =>
+                string.Equals(element.Name.LocalName, "gs", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (stops is not { Length: >= 2 })
+            return null;
+
+        var start = ReadZoomRgbStop(stops[0]);
+        var end = ReadZoomRgbStop(stops[^1]);
+        var angleText = gradient?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "lin", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("ang")?.Value;
+        var angle = string.IsNullOrWhiteSpace(angleText)
+            ? 0
+            : int.TryParse(angleText, out var parsedAngle) ? parsedAngle : -1;
+        return start is not null && end is not null
+            && angle is >= 0 and <= 21_600_000
+            ? new ZoomFrameBorderGradient(start, end, angle)
+            : null;
+    }
+
+    private static string? ReadZoomRgbStop(XElement stop)
+    {
+        var value = stop.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value?.Trim().TrimStart('#');
+        return value is { Length: 6 } && value.All(Uri.IsHexDigit)
+            ? value.ToUpperInvariant()
+            : null;
     }
 
     private static IEnumerable<SummaryZoomTarget> ReadSummaryZoomTargets(XElement graphicFrame)

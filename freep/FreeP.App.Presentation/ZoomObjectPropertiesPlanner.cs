@@ -18,6 +18,8 @@ public static class ZoomObjectPropertiesPlanner
         "Border width must be a positive value in points.";
     public const string InvalidFrameBorderDashMessage =
         "Border dash must be a supported PowerPoint line pattern.";
+    public const string InvalidFrameBorderGradientMessage =
+        "Gradient border requires two six-digit RGB colors and an angle from 0 to 360 degrees.";
     public const string InvalidFrameGeometryMessage =
         "Frame shape must be Rectangle, Rounded rectangle, or Ellipse.";
     public const string InvalidCropEdgesMessage =
@@ -83,7 +85,8 @@ public static class ZoomObjectPropertiesPlanner
             ReadFrameBorderColor(properties),
             ReadFrameBorderWidth(properties),
             ReadFrameBorderDash(properties),
-            ReadFrameGeometry(properties));
+            ReadFrameGeometry(properties),
+            ReadFrameBorderGradient(properties));
         return value.IsEmpty ? fallback : value;
     }
 
@@ -122,6 +125,46 @@ public static class ZoomObjectPropertiesPlanner
                 string.Equals(element.Name.LocalName, "prstDash", StringComparison.OrdinalIgnoreCase))
             ?.Attribute("val")?.Value;
         return TryParseFrameBorderDash(token, out var dash) ? dash : null;
+    }
+
+    private static ZoomFrameBorderGradient? ReadFrameBorderGradient(XElement properties)
+    {
+        var line = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
+        var gradient = line?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "gradFill", StringComparison.OrdinalIgnoreCase));
+        var stops = gradient?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "gsLst", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().Where(element =>
+                string.Equals(element.Name.LocalName, "gs", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (stops is not { Length: >= 2 })
+            return null;
+
+        var start = ReadRgbStop(stops[0]);
+        var end = ReadRgbStop(stops[^1]);
+        var angleText = gradient?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "lin", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("ang")?.Value;
+        var angle = string.IsNullOrWhiteSpace(angleText)
+            ? 0
+            : int.TryParse(angleText, out var parsedAngle) ? parsedAngle : -1;
+        return start is not null && end is not null
+            && angle is >= 0 and <= 21_600_000
+            ? new ZoomFrameBorderGradient(start, end, angle)
+            : null;
+    }
+
+    private static string? ReadRgbStop(XElement stop)
+    {
+        var value = stop.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value?.Trim().TrimStart('#');
+        return value is { Length: 6 } && value.All(Uri.IsHexDigit)
+            ? value.ToUpperInvariant()
+            : null;
     }
 
     private static string? ReadFrameGeometry(XElement properties)
@@ -191,7 +234,8 @@ public static class ZoomObjectPropertiesPlanner
         !string.IsNullOrWhiteSpace(properties.TransitionDuration);
 
     public static bool IsFrameBorderEnabled(ZoomObjectProperties properties) =>
-        TryNormalizeFrameBorderColor(properties.FrameBorderColor, out _);
+        TryNormalizeFrameBorderColor(properties.FrameBorderColor, out _)
+        || properties.FrameBorderGradient is not null;
 
     public static string FormatFrameBorderWidth(ZoomObjectProperties properties) =>
         properties.FrameBorderWidthEmu is int width
@@ -200,6 +244,45 @@ public static class ZoomObjectPropertiesPlanner
 
     public static string FormatFrameBorderDash(ZoomObjectProperties properties) =>
         (properties.FrameBorderDash ?? OutlineDash.Solid).ToString();
+
+    public static string FormatFrameBorderGradientStart(ZoomObjectProperties properties) =>
+        properties.FrameBorderGradient?.StartColor ?? string.Empty;
+
+    public static string FormatFrameBorderGradientEnd(ZoomObjectProperties properties) =>
+        properties.FrameBorderGradient?.EndColor ?? string.Empty;
+
+    public static string FormatFrameBorderGradientAngle(ZoomObjectProperties properties) =>
+        properties.FrameBorderGradient is { } gradient
+            ? (gradient.Angle / 60000d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+            : "0";
+
+    public static bool IsFrameBorderGradientEnabled(ZoomObjectProperties properties) =>
+        properties.FrameBorderGradient is not null;
+
+    public static bool TryParseFrameBorderGradient(
+        string? startText,
+        string? endText,
+        string? angleText,
+        bool enabled,
+        out ZoomFrameBorderGradient? normalized)
+    {
+        normalized = null;
+        if (!enabled)
+            return true;
+
+        if (!TryNormalizeFrameBorderColor(startText, out var start)
+            || !TryNormalizeFrameBorderColor(endText, out var end)
+            || !double.TryParse(angleText?.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var degrees)
+            || !double.IsFinite(degrees)
+            || degrees < 0
+            || degrees > 360)
+            return false;
+
+        normalized = new ZoomFrameBorderGradient(
+            start!, end!, checked((int)Math.Round(degrees * 60000d, MidpointRounding.AwayFromZero)));
+        return true;
+    }
 
     public static IReadOnlyList<OutlineDash> FrameBorderDashOptions { get; } =
         Enum.GetValues<OutlineDash>();
