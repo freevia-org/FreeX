@@ -256,6 +256,12 @@ internal sealed class PageBox : Border
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(marginLeft, marginTop, marginRight, marginBottom),
+            VerticalContentAlignment = page.VerticalAlignment switch
+            {
+                PageVerticalAlignment.Center => VerticalAlignment.Center,
+                PageVerticalAlignment.Bottom => VerticalAlignment.Bottom,
+                _ => VerticalAlignment.Top
+            },
             // Fix height to the full page content height so the box has a definite page size.
             MinHeight = contentHeight + marginTop + marginBottom,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
