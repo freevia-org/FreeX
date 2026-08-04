@@ -3715,44 +3715,47 @@ public static class DocxReader
             return;
         }
 
-        // A manual page break (w:br w:type="page") forces the following content onto a new page. It is
-        // emitted as its own break-only run; recover it as a page-break run (otherwise it — and any
-        // text-less run holding it — would be dropped, making FreeW under-paginate versus Word).
-        if (r.Elements(W + "br").Any(b => b.Attribute(W + "type")?.Value == "page"))
-        {
-            var breakRun = Run.PageBreak();
-            breakRun.Formatting = ReadRunFormatting(r.Element(W + "rPr"));
-            ApplyRevision(breakRun);
-            paragraph.Runs.Add(breakRun);
-        }
-
-        // A manual column break is distinct from a page break: in a multi-column section it advances to
-        // the next column, while in a one-column section the next column begins on the following page.
-        if (r.Elements(W + "br").Any(b => b.Attribute(W + "type")?.Value == "column"))
-        {
-            var breakRun = Run.ColumnBreak();
-            breakRun.Formatting = ReadRunFormatting(r.Element(W + "rPr"));
-            ApplyRevision(breakRun);
-            paragraph.Runs.Add(breakRun);
-        }
-
-        // Preserve the authored child order: Word stores a manual break opportunity as w:softHyphen
-        // between adjacent w:t/w:delText fragments. Reconstruct it as U+00AD in the model so later text
-        // edits can keep the break at its exact character position. Tabs are likewise read in place.
-        var text = ReadRunTextContent(r);
-        if (text.Length == 0)
-            return;
+        // Word may place text before and after one or more manual breaks inside the same w:r. Stream the
+        // children in source order and split only at page/column breaks so "before, break, after" cannot
+        // become "break, beforeafter" during import. Text wrapping breaks remain embedded newlines.
         var rPr = r.Element(W + "rPr");
-        var textRun = new Run(text, ReadRunFormatting(rPr)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId, Control = control };
-        ApplyRevision(textRun);
-        ApplyFormatRevision(textRun, rPr);
-        paragraph.Runs.Add(textRun);
-    }
-
-    private static string ReadRunTextContent(XElement run)
-    {
+        var formatting = ReadRunFormatting(rPr);
         var text = new StringBuilder();
-        foreach (var child in run.Elements())
+
+        void AddTextFragment()
+        {
+            if (text.Length == 0)
+                return;
+
+            var textRun = new Run(text.ToString(), formatting)
+            {
+                HyperlinkUrl = hyperlinkUrl,
+                HyperlinkAnchor = hyperlinkAnchor,
+                HyperlinkTooltip = hyperlinkTooltip,
+                CommentId = commentId,
+                Control = control,
+            };
+            ApplyRevision(textRun);
+            ApplyFormatRevision(textRun, rPr);
+            paragraph.Runs.Add(textRun);
+            text.Clear();
+        }
+
+        void AddBreakFragment(bool isPageBreak)
+        {
+            AddTextFragment();
+            var breakRun = isPageBreak ? Run.PageBreak() : Run.ColumnBreak();
+            breakRun.Formatting = formatting;
+            breakRun.HyperlinkUrl = hyperlinkUrl;
+            breakRun.HyperlinkAnchor = hyperlinkAnchor;
+            breakRun.HyperlinkTooltip = hyperlinkTooltip;
+            breakRun.CommentId = commentId;
+            breakRun.Control = control;
+            ApplyRevision(breakRun);
+            paragraph.Runs.Add(breakRun);
+        }
+
+        foreach (var child in r.Elements())
         {
             if (child.Name == W + "t" || child.Name == W + "delText")
                 text.Append(child.Value);
@@ -3760,8 +3763,26 @@ public static class DocxReader
                 text.Append(Hyphenator.SoftHyphen);
             else if (child.Name == W + "tab")
                 text.Append('\t');
+            else if (child.Name == W + "cr")
+                text.Append('\n');
+            else if (child.Name == W + "br")
+            {
+                switch (child.Attribute(W + "type")?.Value)
+                {
+                    case "page":
+                        AddBreakFragment(isPageBreak: true);
+                        break;
+                    case "column":
+                        AddBreakFragment(isPageBreak: false);
+                        break;
+                    default:
+                        text.Append('\n');
+                        break;
+                }
+            }
         }
-        return text.ToString();
+
+        AddTextFragment();
     }
 
     private static void ResolveAlternateContent(XElement run)
