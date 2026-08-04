@@ -307,4 +307,19 @@ public sealed partial class ChartDialogTests
         dialogSource.Should().Contain("Keyboard.Focus(_subtypeGallery);");
     }
 
+    [Fact]
+    public void ChangeChartTypeDialog_UsesSharedPickerGeometryContract()
+    {
+        var changeSource = ReadChartTypeDialogSource();
+        var pickerSource = DialogSourceTestSupport.ReadHostSourceFile("ChartTypeDialogs.PickerUi.cs");
+
+        changeSource.Should().Contain("ChartTypeChangePlanner.PickerPanelHeight");
+        changeSource.Should().Contain("ChartTypeChangePlanner.PickerCategoryColumnWidth");
+        changeSource.Should().Contain("ChartTypeChangePlanner.PickerSubtypeColumnWidth");
+        changeSource.Should().Contain("ChartTypeChangePlanner.PickerSubtypeWidth");
+        pickerSource.Should().Contain("ChartTypeChangePlanner.PickerCategoryWidth");
+        pickerSource.Should().Contain("ChartTypeChangePlanner.PickerPreviewWidth");
+        pickerSource.Should().Contain("ChartTypeChangePlanner.PickerColumnGap");
+    }
+
 }

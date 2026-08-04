@@ -145,8 +145,8 @@ public sealed partial class MainWindow
         // ---- Category list (left) ------------------------------------------------------------------
         var categoryList = new ListBox
         {
-            Width = 160,
-            Height = 230,
+            Width = ChartTypeChangePlanner.PickerCategoryWidth,
+            Height = ChartTypeChangePlanner.PickerListHeight,
             SelectionMode = SelectionMode.Single,
             ItemsSource = categories,
             DisplayMemberBinding = new global::Avalonia.Data.Binding(string.Empty)
@@ -160,8 +160,8 @@ public sealed partial class MainWindow
         // ---- Subtype gallery (right top) -----------------------------------------------------------
         var subtypeGallery = new ListBox
         {
-            Width = 200,
-            Height = 230,
+            Width = ChartTypeChangePlanner.PickerSubtypeWidth,
+            Height = ChartTypeChangePlanner.PickerListHeight,
             SelectionMode = SelectionMode.Single,
             DisplayMemberBinding = new global::Avalonia.Data.Binding(string.Empty)
             {
@@ -207,16 +207,16 @@ public sealed partial class MainWindow
         cancelButton.Click += (_, _) => dialog.Close((ChartType?)null);
 
         // Body grid: category list | subtype gallery | preview.
-        var bodyGrid = new Grid { Margin = new Thickness(0, 8, 0, 0) };
-        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
+        var bodyGrid = new Grid { Margin = new Thickness(ChartTypeChangePlanner.PickerColumnGap, 8, ChartTypeChangePlanner.PickerColumnGap, 0) };
+        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ChartTypeChangePlanner.PickerCategoryColumnWidth) });
+        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ChartTypeChangePlanner.PickerSubtypeColumnWidth) });
+        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ChartTypeChangePlanner.PickerPreviewWidth) });
 
-        categoryList.Margin = new Thickness(0, 0, 12, 0);
+        categoryList.Margin = new Thickness(0, 0, ChartTypeChangePlanner.PickerColumnGap, 0);
         Grid.SetColumn(categoryList, 0);
         bodyGrid.Children.Add(categoryList);
 
-        subtypeGallery.Margin = new Thickness(0, 0, 12, 0);
+        subtypeGallery.Margin = new Thickness(0, 0, ChartTypeChangePlanner.PickerColumnGap, 0);
         Grid.SetColumn(subtypeGallery, 1);
         bodyGrid.Children.Add(subtypeGallery);
 

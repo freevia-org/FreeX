@@ -4,6 +4,39 @@ namespace FreeP.App.Compositor.Tests;
 
 public sealed class PresentationViewZoomPlannerTests
 {
+    [Theory]
+    [InlineData(null, true, "1000")]
+    [InlineData(" 01250 ", true, "1250")]
+    [InlineData("2500", false, null)]
+    public void Zoom_transition_control_normalizes_enabled_and_disabled_values(
+        string? input,
+        bool enabled,
+        string? expected)
+    {
+        ZoomObjectPropertiesPlanner.TryParseTransitionDuration(
+                input,
+                enabled,
+                out var normalized)
+            .Should()
+            .BeTrue();
+
+        normalized.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("not-a-duration")]
+    public void Zoom_transition_control_rejects_invalid_enabled_values(string input)
+    {
+        ZoomObjectPropertiesPlanner.TryParseTransitionDuration(
+                input,
+                enabled: true,
+                out _)
+            .Should()
+            .BeFalse();
+    }
+
     [Fact]
     public void Built_in_plans_expose_zoom_and_fit_to_window_command_ids()
     {

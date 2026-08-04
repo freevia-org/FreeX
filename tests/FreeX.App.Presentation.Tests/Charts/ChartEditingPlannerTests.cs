@@ -168,6 +168,14 @@ public sealed class ChartEditingPlannerTests
     {
         ChartTypeChangePlanner.DialogWidth.Should().Be(640);
         ChartTypeChangePlanner.DialogHeight.Should().Be(390);
+        ChartTypeChangePlanner.PickerPanelHeight.Should().Be(290);
+        ChartTypeChangePlanner.PickerCategoryWidth.Should().Be(150);
+        ChartTypeChangePlanner.PickerCategoryColumnWidth.Should().Be(162);
+        ChartTypeChangePlanner.PickerSubtypeWidth.Should().Be(180);
+        ChartTypeChangePlanner.PickerSubtypeColumnWidth.Should().Be(192);
+        ChartTypeChangePlanner.PickerPreviewWidth.Should().Be(180);
+        ChartTypeChangePlanner.PickerColumnGap.Should().Be(12);
+        ChartTypeChangePlanner.PickerListHeight.Should().Be(230);
     }
 
     [Fact]

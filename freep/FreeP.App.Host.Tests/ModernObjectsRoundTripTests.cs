@@ -404,6 +404,47 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void ZoomTransition_ToggleIsUndoableAndRoundTripsNativeDuration()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var zoom = session.InsertSlideZoom("slide-2");
+        ZoomObjectPropertiesPlanner.TryParseTransitionDuration(
+                " 01250 ", enabled: true, out var normalized)
+            .Should().BeTrue();
+
+        var enabled = new ZoomObjectProperties(TransitionDuration: normalized);
+        session.SetZoomObjectProperties(zoom.Id, enabled).Should().BeTrue();
+        XElement.Parse(zoom.PreservedObject!.RawXml)
+            .Descendants().Single(element => element.Name.LocalName == "zmPr")
+            .Attribute("transitionDur")!.Value.Should().Be("1250");
+
+        session.Undo();
+        XElement.Parse(zoom.PreservedObject.RawXml)
+            .Descendants().Single(element => element.Name.LocalName == "zmPr")
+            .Attribute("transitionDur").Should().BeNull();
+        session.Redo();
+
+        var reopened = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
+            .PreservedObject!.ZoomProperties!.TransitionDuration.Should().Be("1250");
+
+        ZoomObjectPropertiesPlanner.TryParseTransitionDuration(
+                "1250", enabled: false, out var disabledDuration)
+            .Should().BeTrue();
+        session.SetZoomObjectProperties(
+                zoom.Id,
+                new ZoomObjectProperties(TransitionDuration: disabledDuration))
+            .Should().BeTrue();
+        XElement.Parse(zoom.PreservedObject.RawXml)
+            .Descendants().Single(element => element.Name.LocalName == "zmPr")
+            .Attribute("transitionDur").Should().BeNull();
+    }
+
+    [Fact]
     public void SummaryZoomTileLayout_IsUndoableAndRoundTripsNativeFactors()
     {
         var presentation = new Presentation();

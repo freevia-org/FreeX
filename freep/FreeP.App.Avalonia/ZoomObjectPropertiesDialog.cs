@@ -13,6 +13,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(global::Avalonia.Media.FontFamily.Default);
     private readonly CheckBox _returnToParent;
     private readonly CheckBox _showBackground;
+    private readonly CheckBox _transitionEnabled;
     private readonly ComboBox _imageType;
     private readonly TextBox _transitionDuration;
     private readonly TextBox _cropEdges;
@@ -56,6 +57,12 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             Text = current.TransitionDuration ?? string.Empty,
             MinWidth = 180,
         };
+        _transitionEnabled = new CheckBox
+        {
+            Content = "Use Zoom transition",
+            IsChecked = ZoomObjectPropertiesPlanner.IsTransitionEnabled(current),
+        };
+        _transitionEnabled.IsCheckedChanged += (_, _) => SyncTransitionState();
         _cropEdges = new TextBox
         {
             Text = ZoomObjectPropertiesPlanner.FormatCropEdges(current),
@@ -99,6 +106,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         var children = new List<Control>
         {
             Row("Image source:", _imageType),
+            _transitionEnabled,
             Row("Transition duration:", _transitionDuration),
             Row("Preview crop (%):", _cropEdges),
         };
@@ -126,6 +134,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         foreach (var child in children)
             content.Children.Add(child);
         Content = content;
+        SyncTransitionState();
         LoadSummaryTileFields();
     }
 
@@ -142,6 +151,14 @@ internal sealed class ZoomObjectPropertiesDialog : Window
 
     private void Apply()
     {
+        if (!ZoomObjectPropertiesPlanner.TryParseTransitionDuration(
+                _transitionDuration.Text,
+                _transitionEnabled.IsChecked == true,
+                out var transitionDuration))
+        {
+            _validation.Text = "Transition duration must be a positive whole number of milliseconds.";
+            return;
+        }
         if (!ZoomObjectPropertiesPlanner.TryParseCropEdges(
                 _cropEdges.Text, out var cropLeft, out var cropTop, out var cropRight, out var cropBottom))
         {
@@ -168,7 +185,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         Properties = new ZoomObjectProperties(
             _returnToParent.IsChecked == true,
             _imageType.SelectedItem as string ?? "preview",
-            string.IsNullOrWhiteSpace(_transitionDuration.Text) ? null : _transitionDuration.Text.Trim(),
+            transitionDuration,
             _showBackground.IsChecked == true,
             cropLeft,
             cropTop,
@@ -197,6 +214,8 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             ? properties.ImageType!.ToLowerInvariant()
             : "preview";
         _transitionDuration.Text = properties.TransitionDuration ?? string.Empty;
+        _transitionEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsTransitionEnabled(properties);
+        SyncTransitionState();
         _cropEdges.Text = ZoomObjectPropertiesPlanner.FormatCropEdges(properties);
         _returnToParent.IsChecked = properties.ReturnToParent ?? true;
         _showBackground.IsChecked = properties.ShowBackground ?? true;
@@ -205,6 +224,9 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         _summaryScale.Text = ZoomObjectPropertiesPlanner.FormatFactorPair(
             target.ScaleFactorX, target.ScaleFactorY);
     }
+
+    private void SyncTransitionState() =>
+        _transitionDuration.IsEnabled = _transitionEnabled.IsChecked == true;
 
     private static Button MakeButton(string label, bool isDefault, Action action)
     {

@@ -40,6 +40,13 @@ public sealed class LegalNoticesDialogVisualParityTests
             dialog.FontFamily.Should().Be(AvaloniaCompactDialogChrome.WindowsUiFontFamily);
             dialog.FontSize.Should().Be(12);
 
+            dialog.Content.Should().BeOfType<DockPanel>().Subject.Margin.Should().Be(
+                new Thickness(
+                    LegalNoticesDialogMetrics.ContentMargin,
+                    LegalNoticesDialogMetrics.ContentMargin - 1,
+                    LegalNoticesDialogMetrics.ContentMargin,
+                    LegalNoticesDialogMetrics.ContentMargin));
+
             var tabs = dialog.GetLogicalDescendants().OfType<TabControl>().Single();
             tabs.Items.Count.Should().Be(5);
             tabs.SelectedIndex.Should().Be(0);
