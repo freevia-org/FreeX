@@ -22,6 +22,9 @@ public static class OptionsDialogPlanner
     public const int ToggleTopMargin = 4;
     public const int SectionHeaderTopMargin = 12;
     public const int HelpTextFontSize = 11;
+    // Retained paired evidence paints the WPF AutoCorrect pane one pixel narrower than the
+    // Avalonia template's otherwise equivalent client surface.
+    public const int AutoCorrectTabPaneRightInset = 1;
 
     public const string Title = "FreeW Options";
     public const string GeneralTabHeader = "General";

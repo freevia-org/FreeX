@@ -1,11 +1,13 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Automation;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Options;
@@ -54,7 +56,7 @@ public sealed class OptionsDialogVisualParityTests
                     .OfType<Button>()
                     .Where(button => button is not ToggleButton)
                     .ToArray();
-                buttons.Select(button => button.Content?.ToString())
+                buttons.Select(UserFacingButtonText)
                     .Should().Equal(ShellStrings.Current.Ok, ShellStrings.Current.Cancel);
                 buttons[0].MinWidth.Should().Be(84);
                 buttons[0].IsDefault.Should().BeTrue();
@@ -238,9 +240,66 @@ public sealed class OptionsDialogVisualParityTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task Options_autocorrect_pane_uses_retained_wpf_width_and_action_semantics()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new OptionsDialog(new FreeWOptions
+            {
+                AutoCorrect = new AutoCorrectOptions
+                {
+                    ReplaceText = true,
+                    Replacements = [new AutoCorrectReplacement("teh", "the")],
+                },
+            });
+            try
+            {
+                dialog.Show();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+                var tabs = dialog.GetLogicalDescendants().OfType<TabControl>().Single();
+                tabs.SelectedIndex = 0;
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+                tabs.GetVisualDescendants()
+                    .OfType<ContentPresenter>()
+                    .Single(presenter => presenter.Name == "PART_SelectedContentHost")
+                    .Bounds.Width.Should().Be(OptionsDialogPlanner.DialogWidth - (2 * OptionsDialogPlanner.TabMargin));
+                tabs.SelectedIndex = 1;
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var pane = tabs.GetVisualDescendants()
+                    .OfType<ContentPresenter>()
+                    .Single(presenter => presenter.Name == "PART_SelectedContentHost");
+                pane.Bounds.Width.Should().Be(
+                    OptionsDialogPlanner.DialogWidth - (2 * OptionsDialogPlanner.TabMargin) - OptionsDialogPlanner.AutoCorrectTabPaneRightInset);
+
+                var buttons = dialog.GetLogicalDescendants()
+                    .OfType<Button>()
+                    .Where(button => button is not ToggleButton)
+                    .ToArray();
+                buttons.Select(UserFacingButtonText).Should().Equal(ShellStrings.Current.Ok, ShellStrings.Current.Cancel);
+                buttons[0].IsDefault.Should().BeTrue();
+                buttons[1].IsCancel.Should().BeTrue();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     private static T GetField<T>(OptionsDialog dialog, string name) where T : class =>
         (T)(typeof(OptionsDialog)
             .GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
             .GetValue(dialog)
             ?? throw new InvalidOperationException($"Missing OptionsDialog field {name}."));
+
+    private static string? UserFacingButtonText(Button button) => button.Content switch
+    {
+        string text => text,
+        AccessText accessText => accessText.Text,
+        TextBlock textBlock => textBlock.Text,
+        _ => button.Content?.ToString(),
+    };
 }

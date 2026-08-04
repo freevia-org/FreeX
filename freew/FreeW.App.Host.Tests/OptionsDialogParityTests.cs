@@ -89,6 +89,46 @@ public sealed class OptionsDialogParityTests
     }
 
     [StaFact]
+    public void Wpf_autocorrect_pane_keeps_authority_width_and_action_semantics()
+    {
+        var owner = new Window();
+        owner.Show();
+        var dialog = new OptionsDialog(owner, new FreeWOptions
+        {
+            AutoCorrect = new AutoCorrectOptions
+            {
+                ReplaceText = true,
+                Replacements = [new AutoCorrectReplacement("teh", "the")],
+            },
+        });
+        try
+        {
+            dialog.Show();
+            dialog.UpdateLayout();
+            var tabs = FindVisualChildren<TabControl>(dialog).Single();
+            tabs.SelectedIndex = 1;
+            dialog.UpdateLayout();
+            dialog.UpdateLayout();
+
+            var pane = ((TabItem)tabs.SelectedItem).Content.Should().BeOfType<Grid>().Subject;
+            pane.ActualWidth.Should().BeApproximately(378.6666666667, 0.1);
+
+            var buttons = FindVisualChildren<Button>(dialog)
+                .Where(button => button.IsVisible && button.Content is not null)
+                .ToArray();
+            buttons.Select(button => button.Content?.ToString())
+                .Should().Equal(ShellStrings.Current.Ok, ShellStrings.Current.Cancel);
+            buttons[0].IsDefault.Should().BeTrue();
+            buttons[1].IsCancel.Should().BeTrue();
+        }
+        finally
+        {
+            dialog.Close();
+            owner.Close();
+        }
+    }
+
+    [StaFact]
     public void Wpf_autoformat_uses_shared_row_spacing_and_enabled_state()
     {
         var owner = new Window();

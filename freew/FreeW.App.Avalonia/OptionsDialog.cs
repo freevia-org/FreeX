@@ -1,8 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Options;
 using FreeW.Core.Model;
@@ -82,10 +85,27 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             tabs,
             DialogChromeStyle,
-            contentPaneMargin: new Thickness(-12, -1, -12, 0));
+            contentPaneMargin: new Thickness(-12, -1, 0, 0));
         tabs.Items.Add(new TabItem { Header = _surface.Tabs[0].Header, Content = BuildGeneralTab() });
         tabs.Items.Add(new TabItem { Header = _surface.AutoCorrect.Header, Content = BuildAutoCorrectTab() });
         tabs.Items.Add(new TabItem { Header = _surface.AutoFormat.Header, Content = BuildAutoFormatTab() });
+        void ApplyAutoCorrectPaneInset()
+        {
+            tabs.ApplyTemplate();
+            var selectedPane = tabs.GetVisualDescendants()
+                .OfType<ContentPresenter>()
+                .FirstOrDefault(presenter => presenter.Name == "PART_SelectedContentHost");
+            if (selectedPane is not null)
+                selectedPane.Margin = new Thickness(
+                    0,
+                    -1,
+                    tabs.SelectedIndex == 1 ? OptionsDialogPlanner.AutoCorrectTabPaneRightInset : 0,
+                    0);
+        }
+        tabs.SelectionChanged += (_, _) =>
+            Dispatcher.UIThread.Post(ApplyAutoCorrectPaneInset, DispatcherPriority.Render);
+        tabs.AttachedToVisualTree += (_, _) =>
+            Dispatcher.UIThread.Post(ApplyAutoCorrectPaneInset, DispatcherPriority.Render);
 
         var buttons = AvaloniaDialogButtonRowFactory.CreateOkCancel(
             Accept,
