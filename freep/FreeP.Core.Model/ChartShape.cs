@@ -715,6 +715,9 @@ public sealed class ChartShape
     /// </summary>
     public bool? TitleOverlay { get; set; }
 
+    /// <summary>Optional independent formatting for the chart title text.</summary>
+    public ChartTextStyle? TitleStyle { get; set; }
+
     /// <summary>Optional authored chart-area fill from <c>c:chartSpace/c:spPr</c>.</summary>
     public ShapeFill? ChartAreaFill { get; set; }
 

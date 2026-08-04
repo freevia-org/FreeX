@@ -79,6 +79,7 @@ internal static class PptxChartReader
         var titleElement = chartEl.Element(C + "title");
         shape.Title = ReadTitle(titleElement);
         shape.TitleOverlay = ReadTitleOverlay(titleElement);
+        shape.TitleStyle = ReadTitleStyle(titleElement, scheme);
         shape.DisplayBlanksAs = ReadDisplayBlanksAs(
             chartEl.Element(C + "dispBlanksAs")?.Attribute("val")?.Value);
         shape.PlotVisibleOnly = ParseNullableBoolElement(chartEl.Element(C + "plotVisOnly"));
