@@ -194,4 +194,30 @@ public class PageBreakRoundTripTests
             .Should().ContainSingle().Which.Text
             .Should().Be($"first\nsec{Hyphenator.SoftHyphen}ond");
     }
+
+    [Fact]
+    public void NoBreakHyphen_PreservesInlinePositionAndCanonicalElement()
+    {
+        var document = ReadDocumentWithMixedRun(
+            new XElement(W + "t", "non"),
+            new XElement(W + "noBreakHyphen"),
+            new XElement(W + "t", "breaking"));
+
+        document.Blocks.OfType<Paragraph>().Single().Runs.Should().ContainSingle()
+            .Which.Text.Should().Be($"non{Hyphenator.NoBreakHyphen}breaking");
+
+        using var saved = new MemoryStream();
+        DocxWriter.Write(document, saved);
+        using var archive = new ZipArchive(new MemoryStream(saved.ToArray()), ZipArchiveMode.Read);
+        using var entry = archive.GetEntry("word/document.xml")!.Open();
+        var xml = XDocument.Load(entry);
+        xml.Descendants(W + "r").Single().Elements()
+            .Where(element => element.Name != W + "rPr")
+            .Select(element => element.Name.LocalName == "t" ? element.Value : element.Name.LocalName)
+            .Should().Equal("non", "noBreakHyphen", "breaking");
+
+        saved.Position = 0;
+        DocxReader.Read(saved).Blocks.OfType<Paragraph>().Single().Runs.Should().ContainSingle()
+            .Which.Text.Should().Be($"non{Hyphenator.NoBreakHyphen}breaking");
+    }
 }
