@@ -2404,6 +2404,7 @@ public static class PptxPackageWriter
             childTimingItems.Add(BuildScaleBehaviorEl(anim, ref nodeId));
         if (anim.Preset is AnimationPreset.ColorPulse
             or AnimationPreset.ChangeColor
+            or AnimationPreset.GrowWithColor
             or AnimationPreset.Shimmer)
         {
             var colorBehavior = BuildPreservedColorBehaviorEl(anim, ref nodeId);
