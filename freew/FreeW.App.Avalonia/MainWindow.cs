@@ -102,6 +102,7 @@ public sealed partial class MainWindow : Window
     private readonly OutlineView _outlineView;
     private Control? _ribbonControl;
     private IRibbonCommandRegistry? _ribbonRegistry;
+    private readonly RibbonStateStore _ribbonStateStore = new();
     private int _ribbonStateRefreshCount;
     private bool _ribbonKeyTipsVisible;
     private Border? _findBar;
@@ -1983,7 +1984,8 @@ public sealed partial class MainWindow : Window
                 _editor.Focus();
             },
             palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
-            onFileTabSelected: () => _ = ShowBackstageAsync());
+            onFileTabSelected: () => _ = ShowBackstageAsync(),
+            stateStore: _ribbonStateStore);
         HasToolbar = true;
         _ribbonHost = new Border
         {
@@ -4055,7 +4057,8 @@ public sealed partial class MainWindow : Window
         AvaloniaRibbonRenderer.SyncToggleStates(
             _ribbonControl,
             _ribbonRegistry,
-            RibbonVisualPalette.FromTheme(App.ActiveTheme));
+            RibbonVisualPalette.FromTheme(App.ActiveTheme),
+            _ribbonStateStore);
     }
 
     private void StopReadAloudAfterDocumentChange()
