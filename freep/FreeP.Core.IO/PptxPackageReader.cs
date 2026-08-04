@@ -2694,6 +2694,15 @@ public static class PptxPackageReader
             data.IsLiveLayoutSupported = CanUseDefaultListStaggeredCache(smart, data);
         }
 
+        if (IsList1Layout(layoutUniqueId)
+            && smart.FallbackShapes.Count > 0
+            && !CanUseList1Cache(smart, data))
+        {
+            // list1 is live for authoring, but imported drawings are promoted
+            // only for the exact four-slot cache reproduced by the corpus.
+            data.IsLiveLayoutSupported = false;
+        }
+
         if (IsCycle2Layout(layoutUniqueId)
             && smart.FallbackShapes.Count > 0
             && !CanUseCycle2NodeAndArrowCache(smart, data))
@@ -2918,6 +2927,15 @@ public static class PptxPackageReader
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return id.Split('/').Last() == "default";
+    }
+
+    private static bool IsList1Layout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return id.Split('/').Last() == "list1";
     }
 
     private static bool CanUseSimpleNodeCache(SmartArtShape smart, SmartArtData data)
@@ -3523,6 +3541,45 @@ public static class PptxPackageReader
             + (firstRow[2].OffsetXEmu - firstRow[1].OffsetXEmu) / 2;
         return secondRow[0].OffsetXEmu == expectedSecondRowFirstX
             && secondRow[1].OffsetXEmu == expectedSecondRowSecondX;
+    }
+
+    private static bool CanUseList1Cache(SmartArtShape smart, SmartArtData data)
+    {
+        if (!IsList1Layout(data.LayoutUniqueId))
+            return false;
+
+        var nodes = FlattenSmartArtNodes(data);
+        var shapes = smart.FallbackShapes;
+        if (data.Nodes.Count != 4
+            || nodes.Count != 4
+            || data.Nodes.Any(node => node.Level != 0 || node.Children.Count != 0)
+            || shapes.Count != 4)
+            return false;
+
+        if (shapes.Any(HasUnsupportedSmartArtShapeEffects)
+            || HasUnsupportedSmartArtDrawingEffects(smart))
+            return false;
+
+        if (shapes.Any(shape => shape.Kind != SlideShapeKind.AutoShape
+                || shape.AutoShapeKind != DrawingShapeKind.RoundedRectangle
+                || string.IsNullOrWhiteSpace(shape.PlainText))
+            || !shapes.Select(shape => shape.PlainText)
+                .SequenceEqual(nodes.Select(node => node.Text), StringComparer.Ordinal)
+            || nodes.Select(node => node.Text)
+                .Distinct(StringComparer.Ordinal)
+                .Count() != nodes.Count)
+            return false;
+
+        // Keep the signature exact because the reader does not have the
+        // graphic-frame dimensions at this layer.
+        const long boxX = 329_184;
+        const long boxWidth = 7_571_232;
+        const long boxHeight = 1_213_589;
+        var expectedY = new long[] { 229_792, 1_587_001, 2_944_210, 4_301_419 };
+        return shapes.Select(shape => shape.OffsetXEmu).All(value => value == boxX)
+            && shapes.Select(shape => shape.ExtentCxEmu).All(value => value == boxWidth)
+            && shapes.Select(shape => shape.ExtentCyEmu).All(value => value == boxHeight)
+            && shapes.Select(shape => shape.OffsetYEmu).SequenceEqual(expectedY);
     }
 
     private static bool HasUnsupportedSmartArtShapeEffects(SlideShape shape)
