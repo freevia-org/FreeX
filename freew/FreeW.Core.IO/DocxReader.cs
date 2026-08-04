@@ -4215,7 +4215,15 @@ public static class DocxReader
         // Recover rotation/flip, crop, and picture border from the pic:pic payload.
         var picPic = container.Descendants(Pic + "pic").FirstOrDefault();
         if (picPic is not null)
+        {
             ApplyPictureFormat(picPic, image);
+            if (image.HasBakedArtisticEffectPreview && blip is not null)
+                image.NativeArtisticSourceBytes = ReadNativeArtisticSource(
+                    blip,
+                    archive,
+                    imageRelationships,
+                    embeddedRelationshipId);
+        }
 
         return image;
     }
@@ -4577,6 +4585,26 @@ public static class DocxReader
         }
 
         return ImageArtisticEffect.None;
+    }
+
+    private static byte[]? ReadNativeArtisticSource(
+        XElement blip,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        string? previewRelationshipId)
+    {
+        var sourceRelationshipId = blip.Descendants(A14 + "imgLayer")
+            .Select(layer => layer.Attribute(R + "embed")?.Value)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        if (sourceRelationshipId is null
+            || sourceRelationshipId == previewRelationshipId
+            || !imageRelationships.TryGetValue(sourceRelationshipId, out var sourceTarget)
+            || !string.Equals(Path.GetExtension(sourceTarget), ".wdp", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return LoadMedia(archive, sourceTarget);
     }
 
     private static string? ReadFreeWBlipExtensionValue(XElement blip, string localName)

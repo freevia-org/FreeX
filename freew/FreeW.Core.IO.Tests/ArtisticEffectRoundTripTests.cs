@@ -17,6 +17,8 @@ public class ArtisticEffectRoundTripTests
     private static readonly XNamespace A14     = "http://schemas.microsoft.com/office/drawing/2010/main";
     private static readonly XNamespace Pic     = "http://schemas.openxmlformats.org/drawingml/2006/picture";
     private static readonly XNamespace R       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace PackageRel = "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace Ct      = "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace FreeWExt = XNamespace.Get("http://schemas.freew.app/2024/ext");
 
     private static byte[] MinimalPng() =>
@@ -60,6 +62,19 @@ public class ArtisticEffectRoundTripTests
         using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
         using var entry = zip.GetEntry("word/document.xml")!.Open();
         return XDocument.Load(entry).Descendants(A + "blip").FirstOrDefault();
+    }
+
+    private static XDocument LoadXmlEntry(ZipArchive zip, string path)
+    {
+        using var input = zip.GetEntry(path)!.Open();
+        return XDocument.Load(input);
+    }
+
+    private static void ReplaceXmlEntry(ZipArchive zip, string path, XDocument document)
+    {
+        zip.GetEntry(path)?.Delete();
+        using var output = zip.CreateEntry(path).Open();
+        document.Save(output);
     }
 
     // ── None: no attribute emitted ─────────────────────────────────────────────
@@ -147,6 +162,24 @@ public class ArtisticEffectRoundTripTests
         blip.Descendants(A14 + "imgEffect").Should().BeEmpty(
             "FreeW-authored bytes are the editable source, not Word's baked preview");
         image.RequiresArtisticEffectRendering.Should().BeTrue();
+    }
+
+    [Fact]
+    public void UnbakedImage_DoesNotEmitOrphanNativeSourcePart()
+    {
+        var image = new InlineImage(MinimalPng(), 100, 80)
+        {
+            ArtisticEffect = ImageArtisticEffect.GlowDiffused,
+            NativeArtisticSourceBytes = [0x49, 0x49, 0xBC, 0x01],
+        };
+        using var stream = new MemoryStream();
+        DocxWriter.Write(DocumentWith(image), stream);
+
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.Entries.Should().NotContain(entry => entry.FullName.EndsWith(".wdp", StringComparison.OrdinalIgnoreCase));
+        LoadXmlEntry(zip, "[Content_Types].xml").Descendants(Ct + "Default")
+            .Should().NotContain(element => (string?)element.Attribute("Extension") == "wdp");
     }
 
     [Theory]
@@ -242,6 +275,81 @@ public class ArtisticEffectRoundTripTests
         read.ArtisticEffect.Should().Be(ImageArtisticEffect.GlowDiffused);
         read.HasBakedArtisticEffectPreview.Should().BeTrue();
         read.RequiresArtisticEffectRendering.Should().BeFalse();
+    }
+
+    [Fact]
+    public void NativeArtisticSource_RoundTripsAsDistinctWdpRelationship()
+    {
+        var sourceBytes = new byte[] { 0x49, 0x49, 0xBC, 0x01, 0x10, 0x20, 0x30, 0x40 };
+        var image = new InlineImage(MinimalPng(), 100, 80)
+        {
+            ArtisticEffect = ImageArtisticEffect.GlowDiffused,
+            HasBakedArtisticEffectPreview = true,
+        };
+        using var nativePackage = new MemoryStream();
+        DocxWriter.Write(DocumentWith(image), nativePackage);
+
+        nativePackage.Position = 0;
+        using (var zip = new ZipArchive(nativePackage, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            using (var source = zip.CreateEntry("word/media/nativeSource.wdp").Open())
+                source.Write(sourceBytes);
+
+            var documentXml = LoadXmlEntry(zip, "word/document.xml");
+            documentXml.Descendants(A14 + "imgLayer").Single()
+                .SetAttributeValue(R + "embed", "rIdNativeArtisticSource");
+            ReplaceXmlEntry(zip, "word/document.xml", documentXml);
+
+            var relationships = LoadXmlEntry(zip, "word/_rels/document.xml.rels");
+            relationships.Root!.Add(new XElement(PackageRel + "Relationship",
+                new XAttribute("Id", "rIdNativeArtisticSource"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
+                new XAttribute("Target", "media/nativeSource.wdp")));
+            ReplaceXmlEntry(zip, "word/_rels/document.xml.rels", relationships);
+
+            var contentTypes = LoadXmlEntry(zip, "[Content_Types].xml");
+            contentTypes.Root!.Add(new XElement(Ct + "Default",
+                new XAttribute("Extension", "wdp"),
+                new XAttribute("ContentType", "image/vnd.ms-photo")));
+            ReplaceXmlEntry(zip, "[Content_Types].xml", contentTypes);
+        }
+
+        nativePackage.Position = 0;
+        var importedDocument = DocxReader.Read(nativePackage);
+        var importedImage = importedDocument.Paragraphs.Single().Runs.Single().Image!;
+        importedImage.NativeArtisticSourceBytes.Should().Equal(sourceBytes);
+
+        using var savedPackage = new MemoryStream();
+        DocxWriter.Write(importedDocument, savedPackage);
+        savedPackage.Position = 0;
+        using (var zip = new ZipArchive(savedPackage, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var documentXml = LoadXmlEntry(zip, "word/document.xml");
+            var blip = documentXml.Descendants(A + "blip").Single();
+            var previewRelationshipId = blip.Attribute(R + "embed")!.Value;
+            var sourceRelationshipId = blip.Descendants(A14 + "imgLayer").Single()
+                .Attribute(R + "embed")!.Value;
+            sourceRelationshipId.Should().NotBe(previewRelationshipId);
+
+            var relationships = LoadXmlEntry(zip, "word/_rels/document.xml.rels");
+            var sourceTarget = relationships.Descendants(PackageRel + "Relationship")
+                .Single(relationship => relationship.Attribute("Id")?.Value == sourceRelationshipId)
+                .Attribute("Target")!.Value;
+            sourceTarget.Should().EndWith(".wdp");
+            using var source = zip.GetEntry("word/" + sourceTarget)!.Open();
+            using var sourceBuffer = new MemoryStream();
+            source.CopyTo(sourceBuffer);
+            sourceBuffer.ToArray().Should().Equal(sourceBytes);
+
+            var contentTypes = LoadXmlEntry(zip, "[Content_Types].xml");
+            contentTypes.Descendants(Ct + "Default")
+                .Single(element => element.Attribute("Extension")?.Value == "wdp")
+                .Attribute("ContentType")!.Value.Should().Be("image/vnd.ms-photo");
+        }
+
+        savedPackage.Position = 0;
+        var reopenedImage = DocxReader.Read(savedPackage).Paragraphs.Single().Runs.Single().Image!;
+        reopenedImage.NativeArtisticSourceBytes.Should().Equal(sourceBytes);
     }
 
     // ── HasArtisticEffect property ─────────────────────────────────────────────

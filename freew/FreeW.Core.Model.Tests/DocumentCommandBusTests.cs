@@ -583,6 +583,7 @@ public class DocumentCommandBusTests
         {
             ArtisticEffect = ImageArtisticEffect.GlowDiffused,
             HasBakedArtisticEffectPreview = true,
+            NativeArtisticSourceBytes = [4, 5, 6],
         };
         var paragraph = new Paragraph();
         paragraph.Runs.Add(Run.FromImage(image));
@@ -591,10 +592,12 @@ public class DocumentCommandBusTests
         bus.Execute(new SetImageArtisticEffectCommand(0, 0, ImageArtisticEffect.Blur));
         image.ArtisticEffect.Should().Be(ImageArtisticEffect.Blur);
         image.HasBakedArtisticEffectPreview.Should().BeFalse();
+        image.NativeArtisticSourceBytes.Should().BeNull();
 
         bus.Undo().Should().BeTrue();
         image.ArtisticEffect.Should().Be(ImageArtisticEffect.GlowDiffused);
         image.HasBakedArtisticEffectPreview.Should().BeTrue();
+        image.NativeArtisticSourceBytes.Should().Equal(4, 5, 6);
     }
 
     [Fact]

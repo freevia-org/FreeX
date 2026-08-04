@@ -349,16 +349,18 @@ internal static class Ooxml
     public const string ThemePartName = "/word/theme/theme1.xml";
 
     /// <summary>
-    /// The OPC content type for a media-part image extension (png/jpeg/gif/bmp/tiff/emf/wmf), used to emit the
+    /// The OPC content type for a media-part image extension (png/jpeg/gif/bmp/tiff/emf/wmf/wdp), used to emit the
     /// matching <c>[Content_Types].xml</c> Default for each image format a document actually carries. The
     /// extension is the lower-case file extension (no dot) produced by <c>InlineImage.ExtensionFor</c>.
     /// Defaults to <c>image/png</c> for an unrecognised extension (the historical behaviour).
     /// </summary>
     public static string ImageContentTypeForExtension(string extension) =>
-        OpcMediaTypes.TryGetDefaultContentType(extension, out var contentType) &&
-        contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
-            ? contentType
-            : "image/png";
+        string.Equals(extension, "wdp", StringComparison.OrdinalIgnoreCase)
+            ? "image/vnd.ms-photo"
+            : OpcMediaTypes.TryGetDefaultContentType(extension, out var contentType) &&
+              contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+                ? contentType
+                : "image/png";
 
     /// <summary>W3CDTF as used by dcterms:created/modified (UTC, second precision, trailing 'Z').</summary>
     public static string ToW3CDtf(DateTimeOffset value) => OpcPackageProperties.ToW3CDtf(value);

@@ -3502,6 +3502,7 @@ public static class FreeWVisualEvidencePlanner
             targetImage.BevelPreset = sourceImage.BevelPreset;
             targetImage.ArtisticEffect = sourceImage.ArtisticEffect;
             targetImage.HasBakedArtisticEffectPreview = sourceImage.HasBakedArtisticEffectPreview;
+            targetImage.NativeArtisticSourceBytes = sourceImage.NativeArtisticSourceBytes;
             targetImage.PictureStylePreset = sourceImage.PictureStylePreset;
         }
     }

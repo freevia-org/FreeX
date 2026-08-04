@@ -246,8 +246,13 @@ public static class DocxWriter
             .Concat(commentImages)
             .Concat(footnoteImages)
             .Concat(endnoteImages)
-            .Where(p => p.HasEmbeddedPayload)
-            .Select(p => InlineImage.ExtensionFor(p.Image.Format))
+            .SelectMany(p => new[]
+            {
+                p.HasEmbeddedPayload ? InlineImage.ExtensionFor(p.Image.Format) : null,
+                p.NativeArtisticSourceFileName is not null ? "wdp" : null,
+            })
+            .Where(extension => extension is not null)
+            .Select(extension => extension!)
             .Distinct()
             .OrderBy(ext => ext, StringComparer.Ordinal)
             .ToList();
@@ -264,6 +269,17 @@ public static class DocxWriter
             if (document.RemovePersonalInformation)
                 SanitizePersonalInformation(content);
             WritePart(archive, entryPath, content);
+        }
+
+        void WriteImageParts(ImagePart image)
+        {
+            if (image.HasEmbeddedPayload)
+                WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
+            if (image.NativeArtisticSourceFileName is { } sourceFileName
+                && image.Image.NativeArtisticSourceBytes is { Length: > 0 } sourceBytes)
+            {
+                WriteBinaryPart(archive, "word/media/" + sourceFileName, sourceBytes);
+            }
         }
 
         WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasCustomProps, hasSettings, hasBibliography, charts, embeddedObjects.Any(part => !part.EmbeddedObject.IsLinked), smartArts, hasEmbeddedFonts, preservedParts, document.Preserved.ContentTypeDefaults, options.MainDocumentContentType));
@@ -307,8 +323,7 @@ public static class DocxWriter
             {
                 WritePart(archive, "word/_rels/" + part.FileName + ".rels", BuildHeaderFooterRels(part));
                 foreach (var image in part.Images)
-                    if (image.HasEmbeddedPayload)
-                        WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
+                    WriteImageParts(image);
             }
         }
         if (hasFootnotes)
@@ -318,8 +333,7 @@ public static class DocxWriter
             {
                 WritePart(archive, "word/_rels/footnotes.xml.rels", BuildNoteRels(footnoteImages, footnotePreservedDrawings, footnoteHyperlinks));
                 foreach (var image in footnoteImages)
-                    if (image.HasEmbeddedPayload)
-                        WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
+                    WriteImageParts(image);
             }
         }
         if (hasEndnotes)
@@ -329,8 +343,7 @@ public static class DocxWriter
             {
                 WritePart(archive, "word/_rels/endnotes.xml.rels", BuildNoteRels(endnoteImages, endnotePreservedDrawings, endnoteHyperlinks));
                 foreach (var image in endnoteImages)
-                    if (image.HasEmbeddedPayload)
-                        WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
+                    WriteImageParts(image);
             }
         }
         if (hasComments)
@@ -345,13 +358,11 @@ public static class DocxWriter
             {
                 WritePart(archive, "word/_rels/comments.xml.rels", BuildCommentsRels(commentImages, commentPreservedDrawings, commentHyperlinks));
                 foreach (var image in commentImages)
-                    if (image.HasEmbeddedPayload)
-                        WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
+                    WriteImageParts(image);
             }
         }
         foreach (var image in images)
-            if (image.HasEmbeddedPayload)
-                WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
+            WriteImageParts(image);
         foreach (var chart in charts)
         {
             WritePart(archive, "word/charts/" + chart.FileName, BuildChartSpace(chart));
@@ -404,9 +415,18 @@ public static class DocxWriter
     }
 
     /// <summary>An inline image paired with its embedded/link relationship ids, media file name and drawing id.</summary>
-    private sealed record ImagePart(InlineImage Image, string RelationshipId, string FileName, uint DrawingId)
+    private sealed record ImagePart(
+        InlineImage Image,
+        string RelationshipId,
+        string FileName,
+        uint DrawingId,
+        string? NativeArtisticSourceFileName)
     {
         public bool HasEmbeddedPayload => Image.Bytes.Length > 0 || string.IsNullOrWhiteSpace(Image.LinkedImageTarget);
+
+        public string? NativeArtisticSourceRelationshipId => NativeArtisticSourceFileName is null
+            ? null
+            : RelationshipId + "ArtisticSource";
 
         public string? LinkRelationshipId => string.IsNullOrWhiteSpace(Image.LinkedImageTarget)
             ? null
@@ -414,6 +434,22 @@ public static class DocxWriter
                 ? "rIdLinked" + RelationshipId[3..]
                 : RelationshipId + "Linked";
     }
+
+    private static ImagePart CreateImagePart(
+        InlineImage image,
+        string relationshipId,
+        string fileName,
+        uint drawingId,
+        HashSet<string> usedPartNames) => new(
+            image,
+            relationshipId,
+            fileName,
+            drawingId,
+            image.HasBakedArtisticEffectPreview
+                && image.HasArtisticEffect
+                && image.NativeArtisticSourceBytes is { Length: > 0 }
+                ? NextAvailablePartFileName(usedPartNames, "word/media", "artisticSource", "wdp")
+                : null);
 
     /// <summary>
     /// An inline chart paired with the document relationship id, chart part file name (relative to
@@ -497,11 +533,12 @@ public static class DocxWriter
                         // Continue the image numbering so the icon media file name never clashes with a body
                         // image; the appended part is emitted by the ordinary media/rel/content-type loops.
                         var imageIndex = images.Count + 1;
-                        iconPart = new ImagePart(
+                        iconPart = CreateImagePart(
                             icon,
                             $"rIdImg{imageIndex}",
                             NextAvailablePartFileName(usedPartNames, "word/media", "image", InlineImage.ExtensionFor(icon.Format)),
-                            (uint)imageIndex);
+                            (uint)imageIndex,
+                            usedPartNames);
                         images.Add(iconPart);
                     }
                     embedded.Add(new EmbeddedObjectPart(
@@ -633,11 +670,12 @@ public static class DocxWriter
         void Add(InlineImage image)
         {
             var index = images.Count + 1;
-            images.Add(new ImagePart(
+            images.Add(CreateImagePart(
                 image,
                 $"rIdImg{index}",
                 NextAvailablePartFileName(usedPartNames, "word/media", "image", InlineImage.ExtensionFor(image.Format)),
-                (uint)index));
+                (uint)index,
+                usedPartNames));
         }
         return images;
     }
@@ -746,7 +784,7 @@ public static class DocxWriter
                         widthPt: 468,
                         heightPt: 117,
                         InlineImage.DetectFormat(watermark.ImageBytes!));
-                    watermarkImage = new ImagePart(
+                    watermarkImage = CreateImagePart(
                         image,
                         "rIdWatermarkImage",
                         NextAvailablePartFileName(
@@ -754,7 +792,8 @@ public static class DocxWriter
                             "word/media",
                             $"{fileName[..^4]}_watermark",
                             InlineImage.ExtensionFor(image.Format)),
-                        (uint)(images.Count + 1));
+                        (uint)(images.Count + 1),
+                        usedPartNames);
                     images.Add(watermarkImage);
                 }
                 parts.Add(new HeaderFooterPart(
@@ -836,11 +875,12 @@ public static class DocxWriter
                     // collides with the document-level image ids. The media file name embeds the part stem so
                     // each part's media files are unique within word/media/, and carries the image's real
                     // extension so non-PNG header/footer images round-trip too.
-                    images.Add(new ImagePart(
+                    images.Add(CreateImagePart(
                         image,
                         $"rIdImg{index}",
                         NextAvailablePartFileName(usedPartNames, "word/media", $"{stem}_image", InlineImage.ExtensionFor(image.Format)),
-                        (uint)index));
+                        (uint)index,
+                        usedPartNames));
                 }
         return images;
     }
@@ -1333,6 +1373,11 @@ public static class DocxWriter
         {
             if (image.HasEmbeddedPayload)
                 relationships.Add(Relationship(image.RelationshipId, ImageRel, "media/" + image.FileName));
+            if (image.NativeArtisticSourceRelationshipId is { } sourceRelationshipId
+                && image.NativeArtisticSourceFileName is { } sourceFileName)
+            {
+                relationships.Add(Relationship(sourceRelationshipId, ImageRel, "media/" + sourceFileName));
+            }
             if (image.LinkRelationshipId is { } linkRelationshipId)
                 relationships.Add(Relationship(linkRelationshipId, ImageRel, image.Image.LinkedImageTarget!, external: true));
         }
@@ -2097,11 +2142,12 @@ public static class DocxWriter
                     if (run.Image is { } image)
                     {
                         var index = images.Count + 1;
-                        images.Add(new ImagePart(
+                        images.Add(CreateImagePart(
                             image,
                             $"rIdImg{index}",
                             NextAvailablePartFileName(usedPartNames, "word/media", "comment_image", InlineImage.ExtensionFor(image.Format)),
-                            (uint)index));
+                            (uint)index,
+                            usedPartNames));
                     }
         return images;
     }
@@ -2134,11 +2180,12 @@ public static class DocxWriter
                 if (run.Image is { } image)
                 {
                     var index = images.Count + 1;
-                    images.Add(new ImagePart(
+                    images.Add(CreateImagePart(
                         image,
                         $"rIdImg{index}",
                         NextAvailablePartFileName(usedPartNames, "word/media", partPrefix + "_image", InlineImage.ExtensionFor(image.Format)),
-                        (uint)index));
+                        (uint)index,
+                        usedPartNames));
                 }
         return images;
     }
@@ -2295,6 +2342,14 @@ public static class DocxWriter
                     image.RelationshipId,
                     ImageRel,
                     "media/" + image.FileName));
+            if (image.NativeArtisticSourceRelationshipId is { } sourceRelationshipId
+                && image.NativeArtisticSourceFileName is { } sourceFileName)
+            {
+                relationships.Add(OpcRelationships.CreateRelationship(
+                    sourceRelationshipId,
+                    ImageRel,
+                    "media/" + sourceFileName));
+            }
             if (image.LinkRelationshipId is { } linkRelationshipId)
                 relationships.Add(OpcRelationships.CreateRelationship(
                     linkRelationshipId,
@@ -4417,7 +4472,8 @@ public static class DocxWriter
             blip,
             colorTemperature,
             artisticEffect,
-            part.HasEmbeddedPayload ? part.RelationshipId : null,
+            part.NativeArtisticSourceRelationshipId
+                ?? (part.HasEmbeddedPayload ? part.RelationshipId : null),
             image.HasBakedArtisticEffectPreview);
         var blipFill = new XElement(Pic + "blipFill",
             blip,
@@ -4568,7 +4624,7 @@ public static class DocxWriter
         XElement blip,
         long? colorTemperature,
         ImageArtisticEffect? artisticEffect,
-        string? embeddedRelationshipId,
+        string? nativeArtisticSourceRelationshipId,
         bool hasBakedArtisticEffectPreview)
     {
         if (colorTemperature is null && artisticEffect is null)
@@ -4577,14 +4633,14 @@ public static class DocxWriter
         var extLst = new XElement(A + "extLst");
         if (hasBakedArtisticEffectPreview
             && artisticEffect is { } effect
-            && embeddedRelationshipId is not null
+            && nativeArtisticSourceRelationshipId is not null
             && GetOfficeArtisticEffectElementName(effect) is { } officeElementName)
         {
             extLst.Add(new XElement(A + "ext",
                 new XAttribute("uri", "{BEBA8EAE-BF5A-486C-A8C5-ECC9F3942E4B}"),
                 new XElement(A14 + "imgProps",
                     new XElement(A14 + "imgLayer",
-                        new XAttribute(R + "embed", embeddedRelationshipId),
+                        new XAttribute(R + "embed", nativeArtisticSourceRelationshipId),
                         new XElement(A14 + "imgEffect",
                             new XElement(A14 + officeElementName))))));
         }
@@ -7944,6 +8000,14 @@ public static class DocxWriter
                     image.RelationshipId,
                     ImageRel,
                     "media/" + image.FileName));
+            if (image.NativeArtisticSourceRelationshipId is { } sourceRelationshipId
+                && image.NativeArtisticSourceFileName is { } sourceFileName)
+            {
+                relationships.Add(OpcRelationships.CreateRelationship(
+                    sourceRelationshipId,
+                    ImageRel,
+                    "media/" + sourceFileName));
+            }
             if (image.LinkRelationshipId is { } linkRelationshipId)
                 relationships.Add(OpcRelationships.CreateRelationship(
                     linkRelationshipId,
@@ -7986,6 +8050,14 @@ public static class DocxWriter
                     image.RelationshipId,
                     ImageRel,
                     "media/" + image.FileName));
+            if (image.NativeArtisticSourceRelationshipId is { } sourceRelationshipId
+                && image.NativeArtisticSourceFileName is { } sourceFileName)
+            {
+                relationships.Add(OpcRelationships.CreateRelationship(
+                    sourceRelationshipId,
+                    ImageRel,
+                    "media/" + sourceFileName));
+            }
             if (image.LinkRelationshipId is { } linkRelationshipId)
                 relationships.Add(OpcRelationships.CreateRelationship(
                     linkRelationshipId,
