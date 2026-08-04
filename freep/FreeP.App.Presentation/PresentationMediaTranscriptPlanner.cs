@@ -17,11 +17,35 @@ public enum PresentationMediaTranscriptTrackStatus
     NoBytes
 }
 
+public enum PresentationMediaTranscriptCueAlignment
+{
+    Start,
+    Center,
+    End,
+    Left,
+    Right
+}
+
+public sealed record PresentationMediaCaptionPlacement(
+    double X,
+    double Y,
+    double Width,
+    double Height);
+
 public sealed record PresentationMediaTranscriptCueDescriptor(
     TimeSpan StartTime,
     TimeSpan EndTime,
     string Text)
 {
+    public double? PositionPercent { get; init; }
+
+    public double? LinePercent { get; init; }
+
+    public double? SizePercent { get; init; }
+
+    public PresentationMediaTranscriptCueAlignment Alignment { get; init; } =
+        PresentationMediaTranscriptCueAlignment.Center;
+
     public string StartTimeText => FormatTime(StartTime);
 
     public string EndTimeText => FormatTime(EndTime);
@@ -434,6 +458,35 @@ public static class PresentationMediaTranscriptPlanner
             position >= cue.StartTime && position < cue.EndTime);
     }
 
+    public static PresentationMediaCaptionPlacement ComputeCaptionPlacement(
+        PresentationMediaTranscriptCueDescriptor? cue,
+        double mediaWidth,
+        double mediaHeight,
+        double defaultHeight)
+    {
+        var widthPercent = Math.Clamp(cue?.SizePercent ?? 100, 1, 100);
+        var width = Math.Max(1, mediaWidth * widthPercent / 100);
+        var height = Math.Max(1, defaultHeight);
+        var positionPercent = Math.Clamp(cue?.PositionPercent ?? 50, 0, 100);
+        var anchorX = mediaWidth * positionPercent / 100;
+        var alignment = cue?.Alignment ?? PresentationMediaTranscriptCueAlignment.Center;
+        var x = alignment is PresentationMediaTranscriptCueAlignment.Start
+            or PresentationMediaTranscriptCueAlignment.Left
+            ? anchorX
+            : alignment is PresentationMediaTranscriptCueAlignment.End
+                or PresentationMediaTranscriptCueAlignment.Right
+                    ? anchorX - width
+                    : anchorX - width / 2;
+        x = Math.Clamp(x, 0, Math.Max(0, mediaWidth - width));
+
+        var y = cue?.LinePercent is { } linePercent
+            ? mediaHeight * Math.Clamp(linePercent, 0, 100) / 100
+            : mediaHeight - height;
+        y = Math.Clamp(y, 0, Math.Max(0, mediaHeight - height));
+
+        return new PresentationMediaCaptionPlacement(x, y, width, height);
+    }
+
     private static PresentationMediaCaptionAuthoringPanePlan EmptyCaptionAuthoringPanePlan(int slideIndex)
         => new(
             slideIndex,
@@ -636,7 +689,7 @@ public static class PresentationMediaTranscriptPlanner
                 continue;
             }
 
-            normalized.Add(new PresentationMediaTranscriptCueDescriptor(cue.StartTime, cue.EndTime, text));
+            normalized.Add(cue with { Text = text });
         }
 
         return normalized;
@@ -692,13 +745,39 @@ public static class PresentationMediaTranscriptPlanner
             builder
                 .Append(FormatWebVttTimestamp(cue.StartTime))
                 .Append(" --> ")
-                .Append(FormatWebVttTimestamp(cue.EndTime))
+                .Append(FormatWebVttTimestamp(cue.EndTime));
+            AppendWebVttSettings(builder, cue);
+            builder
                 .Append("\r\n")
                 .Append(EscapeWebVttText(cue.Text))
                 .Append("\r\n\r\n");
         }
 
         return Encoding.UTF8.GetBytes(builder.ToString());
+    }
+
+    private static void AppendWebVttSettings(
+        StringBuilder builder,
+        PresentationMediaTranscriptCueDescriptor cue)
+    {
+        if (cue.Alignment != PresentationMediaTranscriptCueAlignment.Center)
+        {
+            builder.Append(" align:").Append(cue.Alignment switch
+            {
+                PresentationMediaTranscriptCueAlignment.Start => "start",
+                PresentationMediaTranscriptCueAlignment.End => "end",
+                PresentationMediaTranscriptCueAlignment.Left => "left",
+                PresentationMediaTranscriptCueAlignment.Right => "right",
+                _ => "center"
+            });
+        }
+
+        if (cue.PositionPercent is { } position)
+            builder.Append(" position:").Append(position.ToString("0.###", CultureInfo.InvariantCulture)).Append('%');
+        if (cue.LinePercent is { } line)
+            builder.Append(" line:").Append(line.ToString("0.###", CultureInfo.InvariantCulture)).Append('%');
+        if (cue.SizePercent is { } size)
+            builder.Append(" size:").Append(size.ToString("0.###", CultureInfo.InvariantCulture)).Append('%');
     }
 
     private static byte[] BuildCaptionBytes(
@@ -1019,7 +1098,14 @@ public static class PresentationMediaTranscriptPlanner
 
             var timingIndex = block.FindIndex(line => line.Contains("-->", StringComparison.Ordinal));
             if (timingIndex < 0
-                || !TryParseTimingLine(block[timingIndex], out var start, out var end))
+                || !TryParseTimingLine(
+                    block[timingIndex],
+                    out var start,
+                    out var end,
+                    out var positionPercent,
+                    out var linePercent,
+                    out var sizePercent,
+                    out var alignment))
             {
                 continue;
             }
@@ -1030,7 +1116,13 @@ public static class PresentationMediaTranscriptPlanner
                 continue;
             }
 
-            cues.Add(new PresentationMediaTranscriptCueDescriptor(start, end, cueText));
+            cues.Add(new PresentationMediaTranscriptCueDescriptor(start, end, cueText)
+            {
+                PositionPercent = positionPercent,
+                LinePercent = linePercent,
+                SizePercent = sizePercent,
+                Alignment = alignment
+            });
         }
 
         return cues;
@@ -1292,9 +1384,30 @@ public static class PresentationMediaTranscriptPlanner
     }
 
     private static bool TryParseTimingLine(string line, out TimeSpan start, out TimeSpan end)
+        => TryParseTimingLine(
+            line,
+            out start,
+            out end,
+            out _,
+            out _,
+            out _,
+            out _);
+
+    private static bool TryParseTimingLine(
+        string line,
+        out TimeSpan start,
+        out TimeSpan end,
+        out double? positionPercent,
+        out double? linePercent,
+        out double? sizePercent,
+        out PresentationMediaTranscriptCueAlignment alignment)
     {
         start = default;
         end = default;
+        positionPercent = null;
+        linePercent = null;
+        sizePercent = null;
+        alignment = PresentationMediaTranscriptCueAlignment.Center;
 
         var parts = line.Split(["-->"], 2, StringSplitOptions.None);
         if (parts.Length != 2)
@@ -1303,12 +1416,61 @@ public static class PresentationMediaTranscriptPlanner
         }
 
         var startToken = parts[0].Trim();
-        var endToken = parts[1]
-            .Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries)
-            .FirstOrDefault();
-        return TryParseCaptionTime(startToken, out start)
-            && TryParseCaptionTime(endToken, out end)
-            && end >= start;
+        var endAndSettings = parts[1]
+            .Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+        var endToken = endAndSettings.FirstOrDefault();
+        if (!TryParseCaptionTime(startToken, out start)
+            || !TryParseCaptionTime(endToken, out end)
+            || end < start)
+        {
+            return false;
+        }
+
+        foreach (var setting in endAndSettings.Skip(1))
+        {
+            var separator = setting.IndexOf(':');
+            if (separator <= 0 || separator == setting.Length - 1)
+                continue;
+
+            var key = setting[..separator].ToLowerInvariant();
+            var value = setting[(separator + 1)..];
+            switch (key)
+            {
+                case "align":
+                    alignment = value.ToLowerInvariant() switch
+                    {
+                        "start" => PresentationMediaTranscriptCueAlignment.Start,
+                        "end" => PresentationMediaTranscriptCueAlignment.End,
+                        "left" => PresentationMediaTranscriptCueAlignment.Left,
+                        "right" => PresentationMediaTranscriptCueAlignment.Right,
+                        _ => PresentationMediaTranscriptCueAlignment.Center
+                    };
+                    break;
+                case "position":
+                    positionPercent = ParseWebVttPercent(value);
+                    break;
+                case "line":
+                    linePercent = ParseWebVttPercent(value);
+                    break;
+                case "size":
+                    sizePercent = ParseWebVttPercent(value);
+                    break;
+            }
+        }
+
+        return true;
+    }
+
+    private static double? ParseWebVttPercent(string value)
+    {
+        if (!value.EndsWith('%')
+            || !double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent)
+            || percent is < 0 or > 100)
+        {
+            return null;
+        }
+
+        return percent;
     }
 
     private static bool TryParseCaptionTime(string? token, out TimeSpan value)

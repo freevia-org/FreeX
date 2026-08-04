@@ -2053,6 +2053,44 @@ public sealed class SlideShowMediaControllerTests
     }
 
     [StaFact]
+    public void ActiveWebVttCue_UsesAuthoredCaptionPlacement()
+    {
+        var overlay = new System.Windows.Controls.Canvas();
+        var ctrl = new SlideShowMediaController(overlay, new FakeFileWriter());
+        var slide = SlideWithMedia(MakeMediaShape());
+        var track = new PresentationMediaTranscriptTrackDescriptor(
+            SlideIndex: 0,
+            ShapeId: 1,
+            ShapeName: "Video1",
+            TrackIndex: 0,
+            Label: "English",
+            Language: "en-US",
+            Source: "captions.vtt",
+            ContentType: "text/vtt",
+            Status: PresentationMediaTranscriptTrackStatus.Available,
+            StatusMessage: string.Empty,
+            Cues:
+            [
+                new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Positioned")
+                {
+                    PositionPercent = 25,
+                    LinePercent = 30,
+                    SizePercent = 50,
+                    Alignment = PresentationMediaTranscriptCueAlignment.Start
+                }
+            ]);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720, [track]);
+        ctrl.RefreshCaptionsForTest(TimeSpan.FromMilliseconds(500));
+
+        var caption = overlay.Children.OfType<System.Windows.Controls.Border>().Single();
+        System.Windows.Controls.Canvas.GetLeft(caption).Should().Be(240);
+        System.Windows.Controls.Canvas.GetTop(caption).Should().Be(216);
+        caption.Width.Should().Be(480);
+        caption.Height.Should().Be(86);
+    }
+
+    [StaFact]
     public void UpdateLayout_RepositionsCaptionOverlayAfterCanvasResize()
     {
         var fakeWriter = new FakeFileWriter();
