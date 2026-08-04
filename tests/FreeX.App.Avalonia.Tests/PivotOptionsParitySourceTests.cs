@@ -12,6 +12,10 @@ public sealed class PivotOptionsParitySourceTests
         source.Should().Contain("MissingItemsLimitLabels");
         source.Should().Contain("TryParsePageWrap(pageWrapBox.Text");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(groupBox, PivotDialogChromeStyle);");
+        source.Should().Contain("AvaloniaDisplayOptionSpacingCompensation");
+        source.Should().Contain("AvaloniaDisplayOptionTopInsetCompensation");
+        source.Should().Contain("AvaloniaDisplayOptionBottomInsetCompensation");
+        source.Should().NotContain("PivotOptionsPlanner.DisplayOption");
         source.Should().NotContain("presentation-only");
         source.Should().NotContain("only the\n    // nine totals");
 
