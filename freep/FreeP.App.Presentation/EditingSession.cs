@@ -2771,6 +2771,7 @@ public sealed class EditingSession
         else if (chartType == ChartType.Waterfall)
         {
             chart.Categories.AddRange(["Starting value", "Reduction", "Growth", "Ending value"]);
+            chart.WaterfallTotalPointIndices = [3];
             var series = new ChartSeries { Name = "Value" };
             series.Values.AddRange([100, -30, 20, 90]);
             chart.Series.Add(series);
@@ -3951,6 +3952,15 @@ public sealed class EditingSession
             _currentSlideIndex,
             _selectedShapeIds[0],
             options));
+    }
+
+    /// <summary>Sets or clears one waterfall point's PowerPoint total semantics.</summary>
+    public void SetWaterfallPointTotal(int pointIndex, bool setAsTotal)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0)
+            return;
+        Bus.Execute(new SetWaterfallTotalPointCommand(
+            _currentSlideIndex, _selectedShapeIds[0], pointIndex, setAsTotal));
     }
 
     /// <summary>Applies one plot-area or legend layout edit as a single undo step.</summary>
