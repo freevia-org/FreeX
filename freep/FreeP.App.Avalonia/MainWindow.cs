@@ -349,6 +349,7 @@ public sealed partial class MainWindow : Window
     private Control? _ribbonControl;
     private RibbonDefinition? _ribbonDefinition;
     private RibbonCommandRegistry? _ribbonCommandRegistry;
+    private readonly RibbonStateStore _ribbonStateStore = new();
     private bool _ribbonKeyTipsVisible;
     private string? _ribbonKeyTipTabId;
     private string? _ribbonKeyTipGroupId;
@@ -2606,7 +2607,8 @@ public sealed partial class MainWindow : Window
             registry,
             afterExecute: null,
             palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
-            onFileTabSelected: ShowBackstage);
+            onFileTabSelected: ShowBackstage,
+            stateStore: _ribbonStateStore);
 
         HasToolbar = true;
         return new Border
@@ -10018,7 +10020,8 @@ public sealed partial class MainWindow : Window
             AvaloniaRibbonRenderer.SyncToggleStates(
                 _ribbonControl,
                 _ribbonCommandRegistry,
-                RibbonVisualPalette.FromTheme(App.ActiveTheme));
+                RibbonVisualPalette.FromTheme(App.ActiveTheme),
+                _ribbonStateStore);
         }
     }
 
