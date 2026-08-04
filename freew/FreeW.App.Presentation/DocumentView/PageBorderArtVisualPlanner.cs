@@ -107,6 +107,78 @@ public static class PageBorderArtVisualPlanner
         "................................................",
     ];
 
+    private static readonly string[] VineBottomRailMask =
+    [
+        "................................................",
+        "................................................",
+        "................................................",
+        "................................................",
+        "...................################.............",
+        ".................###################............",
+        "..................##################............",
+        "....................######..#########...........",
+        "....................##########.######...........",
+        ".....................#########..####............",
+        "....######...........##########.####.#..........",
+        "###############.......###########...##..........",
+        "################.......##########.######.....###",
+        "########................########...#############",
+        "####....................########...#############",
+        "##..............######..............############",
+        "..........##############..............##########",
+        ".........###############..............########..",
+        "........################.............#######....",
+        ".......#################............########....",
+        "....##############..##..#.......#########.......",
+        "....################....################........",
+        "...##################...################........",
+        "....##################..##############..........",
+        "..........############..........................",
+        "............###########.........................",
+        "............###########.........................",
+        ".............#########..........................",
+        "................................................",
+        "................................................",
+        "................................................",
+        "................................................",
+    ];
+
+    private static readonly string[] VineLeftRailMask =
+    [
+        "................................................",
+        "................................................",
+        "................................................",
+        "................................................",
+        "..............#########.........................",
+        ".............##########.........................",
+        "............############........................",
+        "...........############.........................",
+        ".......###############.##############...........",
+        "....##################.################.........",
+        "....################...#################........",
+        ".....#############..###.........#########.......",
+        "........################............#######.....",
+        "........################............########....",
+        "..........##############..............########..",
+        "...........#############.............##########.",
+        "##................####.............#############",
+        "####.....................#######..##############",
+        "########................#########.##############",
+        "################........#########.######......##",
+        ".#############........###########...#...........",
+        "....###...............##########.###............",
+        ".....................#########..#####...........",
+        ".....................#######...#######..........",
+        "....................#################...........",
+        "..................###################...........",
+        "..................##################............",
+        "....................###############.............",
+        "................................................",
+        "................................................",
+        "................................................",
+        "................................................",
+    ];
+
     private static readonly string[][] VineCornerMasks =
     [
         [
@@ -707,10 +779,10 @@ public static class PageBorderArtVisualPlanner
         var horizontalLength = frameWidth - 2 * horizontalStart;
         var verticalStart = inset + size;
         var verticalLength = frameHeight - 2 * verticalStart;
-        AddVineRail(fills, horizontalStart, horizontalLength, inset, size, horizontal: true, reverseAcross: false);
-        AddVineRail(fills, horizontalStart, horizontalLength, frameHeight - inset - size, size, horizontal: true, reverseAcross: false);
-        AddVineRail(fills, verticalStart, verticalLength, inset, size, horizontal: false, reverseAcross: true);
-        AddVineRail(fills, verticalStart, verticalLength, frameWidth - inset - size, size, horizontal: false, reverseAcross: true);
+        AddVineRail(fills, VineRailMask, horizontalStart, horizontalLength, inset, size, horizontal: true, reverseAcross: false);
+        AddVineRail(fills, VineBottomRailMask, horizontalStart, horizontalLength, frameHeight - inset - size, size, horizontal: true, reverseAcross: false);
+        AddVineRail(fills, VineLeftRailMask, verticalStart, verticalLength, inset, size, horizontal: false, reverseAcross: false);
+        AddVineRail(fills, VineRailMask, verticalStart, verticalLength, frameWidth - inset - size, size, horizontal: false, reverseAcross: true);
         AddVineCorner(fills, inset, inset, size, VineCornerMasks[0]);
         AddVineCorner(fills, frameWidth - inset - size, inset, size, VineCornerMasks[1]);
         AddVineCorner(fills, inset, frameHeight - inset - size, size, VineCornerMasks[2]);
@@ -1033,6 +1105,7 @@ public static class PageBorderArtVisualPlanner
 
     private static void AddVineRail(
         List<PageBorderArtFillRectangle> fills,
+        IReadOnlyList<string> maskRows,
         double alongStart,
         double alongLength,
         double acrossStart,
@@ -1047,9 +1120,9 @@ public static class PageBorderArtVisualPlanner
         {
             var motifStart = alongStart + index * step;
             var scale = size / 32.0;
-            for (var row = 0; row < VineRailMask.Length; row++)
+            for (var row = 0; row < maskRows.Count; row++)
             {
-                var mask = VineRailMask[row];
+                var mask = maskRows[row];
                 var runStart = -1;
                 for (var column = 0; column <= mask.Length; column++)
                 {
