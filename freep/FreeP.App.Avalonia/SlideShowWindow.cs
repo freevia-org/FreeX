@@ -5795,6 +5795,8 @@ public sealed class SlideShowWindow : Window
             new[] { (1.0, 0.0), (0.65, 0.5), (1.0, 1.0) },
             value => el.Opacity = value));
 
+        AddAuthoredColorOverlay(el, plan);
+
         if (plan.EffectKind == SlideShowShapeAnimationEffectKind.GrowWithColor)
         {
             el.RenderTransformOrigin = RelativePoint.Center;
@@ -5808,6 +5810,118 @@ public sealed class SlideShowWindow : Window
             });
         }
     }
+
+    private void AddAuthoredColorOverlay(Control element, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        if (plan.ColorFromHex is null
+            || plan.ColorToHex is null
+            || element is not Image image
+            || image.Source is not Bitmap source
+            || element.Parent is not Panel parent
+            || !TryParseAnimationColor(plan.ColorFromHex, out var from)
+            || !TryParseAnimationColor(plan.ColorToHex, out var to))
+        {
+            return;
+        }
+
+        var brush = new SolidColorBrush(from);
+        var tint = new Rectangle
+        {
+            Width = element.Width,
+            Height = element.Height,
+            Fill = brush,
+            Opacity = 0,
+            OpacityMask = new ImageBrush(source) { Stretch = Stretch.None },
+            IsHitTestVisible = false
+        };
+        Canvas.SetLeft(tint, Canvas.GetLeft(element));
+        Canvas.SetTop(tint, Canvas.GetTop(element));
+        parent.Children.Add(tint);
+
+        var endColor = plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? to : from;
+        DelayedAction(plan.DelayMs, () =>
+        {
+            AnimateColorKeyframes(
+                plan.DurationMs,
+                new[] { (from, 0.0), (to, 0.5), (endColor, 1.0) },
+                value => brush.Color = value);
+            AnimateKeyframes(
+                plan.DurationMs,
+                new[] { (0.0, 0.0), (0.65, 0.5), (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? 0.65 : 0.0, 1.0) },
+                value => tint.Opacity = value);
+        });
+    }
+
+    private static bool TryParseAnimationColor(string value, out Color color)
+    {
+        color = default;
+        if (value.Length != 6
+            || !byte.TryParse(value[..2], System.Globalization.NumberStyles.HexNumber, null, out var r)
+            || !byte.TryParse(value[2..4], System.Globalization.NumberStyles.HexNumber, null, out var g)
+            || !byte.TryParse(value[4..], System.Globalization.NumberStyles.HexNumber, null, out var b))
+        {
+            return false;
+        }
+
+        color = Color.FromRgb(r, g, b);
+        return true;
+    }
+
+    private void AnimateColorKeyframes(
+        int durationMs,
+        IReadOnlyList<(Color Value, double Progress)> keyframes,
+        Action<Color> apply)
+    {
+        if (keyframes.Count == 0)
+            return;
+
+        if (durationMs <= 0)
+        {
+            apply(keyframes[^1].Value);
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(frameMs) });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var progress = Math.Min(1.0, (double)frame / steps);
+            var value = keyframes[0].Value;
+            for (var i = 1; i < keyframes.Count; i++)
+            {
+                if (progress > keyframes[i].Progress)
+                    continue;
+
+                var previous = keyframes[i - 1];
+                var current = keyframes[i];
+                var local = (progress - previous.Progress) / Math.Max(0.0001, current.Progress - previous.Progress);
+                value = InterpolateAnimationColor(previous.Value, current.Value, EaseInOut(local));
+                break;
+            }
+
+            if (progress >= keyframes[^1].Progress)
+                value = keyframes[^1].Value;
+
+            apply(value);
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                apply(keyframes[^1].Value);
+            }
+        };
+        timer.Start();
+    }
+
+    private static Color InterpolateAnimationColor(Color from, Color to, double progress) =>
+        Color.FromArgb(
+            (byte)(from.A + (to.A - from.A) * progress),
+            (byte)(from.R + (to.R - from.R) * progress),
+            (byte)(from.G + (to.G - from.G) * progress),
+            (byte)(from.B + (to.B - from.B) * progress));
 
     private void AnimateKeyframes(
         int durationMs,

@@ -242,8 +242,10 @@ public sealed class AnimationPresetRoundTripTests
         cTn.Attribute("presetSubtype")!.Value.Should().Be("authoredPulseVariant");
     }
 
-    [Fact]
-    public void ColorEffectBehaviorSurvivesReadCloneAndWrite()
+    [Theory]
+    [InlineData(AnimationPreset.ChangeColor)]
+    [InlineData(AnimationPreset.GrowWithColor)]
+    public void ColorEffectBehaviorSurvivesReadCloneAndWrite(AnimationPreset preset)
     {
         var presentation = Presentation.CreateEmpty();
         presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
@@ -251,7 +253,7 @@ public sealed class AnimationPresetRoundTripTests
         {
             ShapeId = 7,
             Kind = AnimationKind.Emphasis,
-            Preset = AnimationPreset.ChangeColor,
+            Preset = preset,
             PreservedColorBehaviorXml = """
                 <p:animClr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" clrSpc="rgb">
                   <p:cBhvr><p:cTn id="77" dur="500" fill="hold"/><p:tgtEl><p:spTgt spid="7"/></p:tgtEl></p:cBhvr>
@@ -265,7 +267,7 @@ public sealed class AnimationPresetRoundTripTests
         PptxPackageWriter.Write(presentation, first);
         var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
         var animation = reloaded.Slides[0].Animations.Single();
-        animation.Preset.Should().Be(AnimationPreset.ChangeColor);
+        animation.Preset.Should().Be(preset);
         animation.PreservedColorBehaviorXml.Should().Contain("clrFrom");
         animation.PreservedColorBehaviorXml.Should().Contain("FF0000");
 
