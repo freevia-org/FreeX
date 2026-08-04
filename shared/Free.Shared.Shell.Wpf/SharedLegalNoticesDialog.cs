@@ -82,6 +82,7 @@ public partial class SharedLegalNoticesDialog : DialogWindow
 
         _tabControl.ItemsSource = notices.Select(CreateTabItem).ToList();
         _tabControl.SelectedIndex = notices.Count > 0 ? 0 : -1;
+        DialogTabChrome.Apply(_tabControl);
         AutomationProperties.SetName(_tabControl, "Legal notice sections");
         AutomationProperties.SetAutomationId(_tabControl, "LegalNoticesSectionTabs");
         AutomationProperties.SetHelpText(_tabControl, "Choose a legal notice section to read and copy.");
