@@ -16,14 +16,17 @@ public static class FreeXAboutDialogPresentation
         Assembly assembly,
         string uiFramework,
         string? windowTitle = null,
-        string? helpText = null)
+        string? helpText = null,
+        string? thirdPartyRuntimeNotice = null)
     {
         ArgumentNullException.ThrowIfNull(assembly);
         ArgumentException.ThrowIfNullOrWhiteSpace(uiFramework);
 
         var versionText = AppHelpInfo.GetVersionText(assembly);
         var aboutText = string.Equals(uiFramework, "WPF", StringComparison.Ordinal)
-            ? AppHelpInfo.BuildWpfAboutText(versionText)
+            ? AppHelpInfo.BuildWpfAboutText(
+                versionText,
+                thirdPartyRuntimeNotice ?? throw new ArgumentNullException(nameof(thirdPartyRuntimeNotice)))
             : AppHelpInfo.BuildAboutText(
                 versionText,
                 $"Built with .NET 10, {uiFramework}, ClosedXML.");

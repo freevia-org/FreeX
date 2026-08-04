@@ -13,7 +13,8 @@ public sealed class AboutDialog : SharedAboutDialog
             typeof(AboutDialog).Assembly,
             "WPF",
             UiText.Get("MainWindowMessage_AboutFreeXTitle"),
-            UiText.Get("MainWindow_TooltipDescription_ViewVersionAndLicenseInformationAboutFreeX")))
+            UiText.Get("MainWindow_TooltipDescription_ViewVersionAndLicenseInformationAboutFreeX"),
+            AppInfo.ThirdPartyRuntimeNotice))
     {
     }
 }

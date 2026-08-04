@@ -9,7 +9,11 @@ public sealed class FreeXAboutDialogPresentationTests
     public void Both_hosts_share_dialog_configuration_and_versioned_product_content()
     {
         var assembly = typeof(FreeXAboutDialogPresentationTests).Assembly;
-        var wpf = FreeXAboutDialogPresentation.Create(assembly, "WPF");
+        const string wpfRuntimeNotice = "WPF runtime notice.";
+        var wpf = FreeXAboutDialogPresentation.Create(
+            assembly,
+            "WPF",
+            thirdPartyRuntimeNotice: wpfRuntimeNotice);
         var avalonia = FreeXAboutDialogPresentation.Create(assembly, "Avalonia");
 
         wpf.WindowTitle.Should().Be(FreeXAboutDialogPresentation.WindowTitle);
@@ -23,9 +27,9 @@ public sealed class FreeXAboutDialogPresentationTests
                 AppHelpInfo.GetVersionText(assembly),
                 AppHelpInfo.AvaloniaPlatformSummary));
         wpf.AboutText.Should().Be(
-            AppHelpInfo.BuildWpfAboutText(AppHelpInfo.GetVersionText(assembly)));
-        wpf.AboutText.Should().Contain(AppHelpInfo.ThirdPartyRuntimeNotice);
-        avalonia.AboutText.Should().NotContain(AppHelpInfo.ThirdPartyRuntimeNotice);
+            AppHelpInfo.BuildWpfAboutText(AppHelpInfo.GetVersionText(assembly), wpfRuntimeNotice));
+        wpf.AboutText.Should().Contain(wpfRuntimeNotice);
+        avalonia.AboutText.Should().NotContain(wpfRuntimeNotice);
     }
 
     [Fact]
@@ -35,7 +39,8 @@ public sealed class FreeXAboutDialogPresentationTests
             typeof(FreeXAboutDialogPresentationTests).Assembly,
             "WPF",
             windowTitle: "Localized About FreeX",
-            helpText: "Localized About help.");
+            helpText: "Localized About help.",
+            thirdPartyRuntimeNotice: "WPF runtime notice.");
 
         presentation.WindowTitle.Should().Be("Localized About FreeX");
         presentation.HelpText.Should().Be("Localized About help.");
