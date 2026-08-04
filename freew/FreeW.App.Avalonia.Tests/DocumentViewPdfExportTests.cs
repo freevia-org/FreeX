@@ -1427,14 +1427,13 @@ public sealed class DocumentViewPdfExportTests
             view.LoadDocument(document);
 
             var pdf = view.BuildPdfContent();
-            var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
-            pdf.Pages.Single().Ops.OfType<PdfFillRect>().Should().BeEmpty();
-            paths.Should().HaveCount(510);
-            paths[0].FillColor.Should().Be(PdfColor.Black);
-            paths[0].Contours.Single().Start.Should().Be(new PdfPathPoint(29.25, 765));
-            paths[1].FillColor.Should().Be(new PdfColor(0xFF, 0xEE, 0xCA));
-            paths[2].FillColor.Should().Be(new PdfColor(0xFF, 0x99, 0xC2));
-            paths[3].FillColor.Should().Be(PdfColor.Black);
+            var fills = pdf.Pages.Single().Ops.OfType<PdfFillRect>().ToArray();
+            pdf.Pages.Single().Ops.OfType<PdfPath>().Should().BeEmpty();
+            fills.Should().HaveCount(18972);
+            fills[0].Should().Be(new PdfFillRect(39, 767.25, 3, 0.75, PdfColor.Black));
+            fills.Should().Contain(fill => fill.Color == new PdfColor(0xFF, 0xEE, 0xCA));
+            fills.Should().Contain(fill => fill.Color == new PdfColor(0xFF, 0x99, 0xC2));
+            fills.Should().NotContain(fill => fill.Color == new PdfColor(0xFF, 0xFF, 0xFF));
             pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
 
             using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
@@ -1443,10 +1442,10 @@ public sealed class DocumentViewPdfExportTests
             for (var x = 32; x < 64; x++)
             {
                 var pixel = bitmap.GetPixel(x, y);
-                if (pixel.Red > 220 && pixel.Green > 100 && pixel.Blue > 90)
+                if (pixel.Red > 240 && pixel.Green is > 130 and < 245 && pixel.Blue is > 150 and < 230)
                     coloredInk++;
             }
-            coloredInk.Should().BeGreaterThan(300);
+            coloredInk.Should().BeInRange(295, 305);
             bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
         }, CancellationToken.None);
 
