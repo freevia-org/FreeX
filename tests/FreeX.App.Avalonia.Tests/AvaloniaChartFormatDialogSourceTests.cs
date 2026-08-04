@@ -82,11 +82,21 @@ public sealed class AvaloniaChartFormatDialogSourceTests
     public void ChangeChartTypePreview_UsesWpfElementSpacingContract()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
+        var previewStart = source.IndexOf(
+            "private Border BuildChartTypePreviewPanel",
+            StringComparison.Ordinal);
+        var previewEnd = source.IndexOf(
+            "// ---- Chart Design: Select Data Source",
+            previewStart,
+            StringComparison.Ordinal);
+        previewStart.Should().BeGreaterThanOrEqualTo(0);
+        previewEnd.Should().BeGreaterThan(previewStart);
+        var previewSource = source[previewStart..previewEnd];
 
-        source.Should().Contain("Margin = new Thickness(0, 0, 0, 12),");
-        source.Should().Contain("Margin = new Thickness(0, 0, 0, 14),");
-        source.Should().Contain("Margin = new Thickness(0, 0, 0, 8),");
-        source.Should().NotContain("Spacing = 10,");
+        previewSource.Should().Contain("Margin = new Thickness(0, 0, 0, 12),");
+        previewSource.Should().Contain("Margin = new Thickness(0, 0, 0, 14),");
+        previewSource.Should().Contain("Margin = new Thickness(0, 0, 0, 8),");
+        previewSource.Should().NotContain("Spacing = 10,");
     }
 
     [Fact]
