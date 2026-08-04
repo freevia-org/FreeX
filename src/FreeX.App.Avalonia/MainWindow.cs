@@ -23751,6 +23751,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 8, 0, 0),
             Children =
             {
                 okButton,
