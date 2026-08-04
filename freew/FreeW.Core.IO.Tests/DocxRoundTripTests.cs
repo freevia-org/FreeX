@@ -211,6 +211,33 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void ThemeLinkedRunColor_RetainsSourceAttributesUntilFixedColorChanges()
+    {
+        var document = ReadHandAuthoredDocx(
+            "<w:p><w:r><w:rPr><w:color w:val=\"7F6000\" w:themeColor=\"accent4\" " +
+            "w:themeTint=\"99\" w:themeShade=\"80\"/></w:rPr><w:t>Theme</w:t></w:r></w:p>");
+        var run = document.Paragraphs.Single().Runs.Single();
+
+        run.Formatting.ColorHex.Should().Be("#7F6000");
+        run.Formatting.ThemeColor.Should().Be(new WordThemeColor("accent4", "7F6000", "99", "80"));
+
+        var color = WriteDocumentXml(document).Descendants(
+            XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main") + "color").Single();
+        color.Attribute(XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main") + "val")!.Value.Should().Be("7F6000");
+        color.Attribute(XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main") + "themeColor")!.Value.Should().Be("accent4");
+        color.Attribute(XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main") + "themeTint")!.Value.Should().Be("99");
+        color.Attribute(XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main") + "themeShade")!.Value.Should().Be("80");
+
+        run.Formatting = run.Formatting with { ColorHex = "#FF0000" };
+        color = WriteDocumentXml(document).Descendants(
+            XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main") + "color").Single();
+        color.Attribute(XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main") + "val")!.Value.Should().Be("FF0000");
+        color.Attribute(XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main") + "themeColor").Should().BeNull();
+        color.Attribute(XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main") + "themeTint").Should().BeNull();
+        color.Attribute(XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main") + "themeShade").Should().BeNull();
+    }
+
+    [Fact]
     public void Superscript_RoundTrips()
     {
         var doc = new TextDocument();

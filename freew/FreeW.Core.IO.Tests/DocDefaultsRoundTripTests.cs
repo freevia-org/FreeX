@@ -172,6 +172,22 @@ public class DocDefaultsRoundTripTests
     }
 
     [Fact]
+    public void DocDefaults_ThemeLinkedColor_RoundTrips()
+    {
+        var document = Read(
+            "<w:rPr><w:color w:val=\"1F4E79\" w:themeColor=\"accent1\" " +
+            "w:themeShade=\"80\"/></w:rPr>");
+
+        document.DefaultRun.ColorHex.Should().Be("#1F4E79");
+        document.DefaultRun.ThemeColor.Should().Be(new WordThemeColor("accent1", "1F4E79", ShadeHex: "80"));
+
+        var color = WriteStylesXml(document).Descendants(W + "color").Single();
+        color.Attribute(W + "val")!.Value.Should().Be("1F4E79");
+        color.Attribute(W + "themeColor")!.Value.Should().Be("accent1");
+        color.Attribute(W + "themeShade")!.Value.Should().Be("80");
+    }
+
+    [Fact]
     public void DocDefaults_ClassicCharacterProperties_RoundTripInCanonicalOrder()
     {
         var doc = Read(

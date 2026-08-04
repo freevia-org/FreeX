@@ -7561,6 +7561,40 @@ public static class DocxWriter
         return ax;
     }
 
+    private static XElement? BuildRunColorElement(RunFormatting formatting)
+    {
+        if (formatting.ThemeColor is { ThemeToken.Length: > 0 } theme
+            && ThemeColorFallbackMatches(theme.ValueToken, formatting.ColorHex))
+        {
+            var color = new XElement(W + "color",
+                new XAttribute(W + "val", string.IsNullOrWhiteSpace(theme.ValueToken)
+                    ? "auto"
+                    : theme.ValueToken.TrimStart('#')),
+                new XAttribute(W + "themeColor", theme.ThemeToken));
+            if (!string.IsNullOrWhiteSpace(theme.TintHex))
+                color.Add(new XAttribute(W + "themeTint", theme.TintHex.TrimStart('#')));
+            if (!string.IsNullOrWhiteSpace(theme.ShadeHex))
+                color.Add(new XAttribute(W + "themeShade", theme.ShadeHex.TrimStart('#')));
+            return color;
+        }
+
+        return formatting.ColorHex is { Length: > 0 } fixedColor
+            ? new XElement(W + "color", new XAttribute(W + "val", fixedColor.TrimStart('#')))
+            : null;
+    }
+
+    private static bool ThemeColorFallbackMatches(string valueToken, string? colorHex)
+    {
+        var normalizedValue = valueToken.Trim().TrimStart('#');
+        if (normalizedValue.Equals("auto", StringComparison.OrdinalIgnoreCase))
+            return string.IsNullOrWhiteSpace(colorHex);
+
+        return string.Equals(
+            normalizedValue,
+            colorHex?.Trim().TrimStart('#'),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     private static XElement? BuildRunProperties(RunFormatting f)
     {
         // Children MUST follow the CT_RPr (EG_RPrBase) schema sequence, otherwise Word's strict
@@ -7596,8 +7630,8 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "vanish"));
         if (f.WebHidden)
             rPr.Add(new XElement(W + "webHidden"));
-        if (f.ColorHex is { Length: > 0 } color)
-            rPr.Add(new XElement(W + "color", new XAttribute(W + "val", color.TrimStart('#'))));
+        if (BuildRunColorElement(f) is { } color)
+            rPr.Add(color);
         // w:spacing (character spacing, expand/condense) — value in twentieths of a point (dxa), signed.
         // Emitted only when non-zero so default runs round-trip byte-unchanged.
         if (f.CharacterSpacingPt != 0)
@@ -9254,8 +9288,8 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "vanish"));
         if (f.WebHidden)
             rPr.Add(new XElement(W + "webHidden"));
-        if (f.ColorHex is { Length: > 0 } color)
-            rPr.Add(new XElement(W + "color", new XAttribute(W + "val", color.TrimStart('#'))));
+        if (BuildRunColorElement(f) is { } color)
+            rPr.Add(color);
         if (f.CharacterSpacingPt != 0)
             rPr.Add(new XElement(W + "spacing", new XAttribute(W + "val", PointsToDxa(f.CharacterSpacingPt))));
         if (f.KerningMinSizePt is { } kern && kern > 0)
