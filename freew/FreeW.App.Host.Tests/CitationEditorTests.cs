@@ -1,4 +1,6 @@
 using System.Linq;
+using Free.Shared.Ribbon;
+using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using Xunit;
 
@@ -149,5 +151,29 @@ public sealed class CitationEditorTests
         view.Model.BibliographyStyle.Should().Be(CitationStyle.Apa);
         view.Model.Blocks.OfType<Paragraph>().SelectMany(paragraph => paragraph.Runs)
             .Single(run => run.ComplexField?.Keyword == "CITATION").Text.Should().Be("(Smith, 2024)");
+    }
+
+    [StaFact]
+    public void CitationStyleRibbonState_TracksInitialLoadedAndAppliedStyles()
+    {
+        var view = new DocumentView();
+        view.LoadModel(new TextDocument { BibliographyStyle = CitationStyle.Harvard });
+        var stateStore = new RibbonStateStore();
+        var registry = FreeWRibbonCommands.Build(view, stateStore);
+        var commandId = new RibbonCommandId("freew.citation-style");
+
+        registry.TryGet(commandId, out var command).Should().BeTrue();
+        var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+        stateStore.GetState(commandId).Value.Should().Be("Harvard");
+        stateful.GetState().Value.Should().Be("Harvard");
+
+        view.LoadModel(new TextDocument { BibliographyStyle = CitationStyle.Chicago });
+        stateStore.GetState(commandId).Value.Should().Be("Chicago");
+
+        command!.Execute(RibbonCommandContext.ForSelectedValue("Vancouver"));
+
+        view.Model.BibliographyStyle.Should().Be(CitationStyle.Vancouver);
+        stateful.GetState().Value.Should().Be("Vancouver");
+        stateStore.GetState(commandId).Value.Should().Be("Vancouver");
     }
 }
