@@ -72,7 +72,8 @@ public sealed class SmartArtTests : IDisposable
         bool cycle2NodeAndArrowCache = false,
         bool relationship1NodeAndEllipseCache = false,
         long? relationship1HorizontalStepEmu = null,
-        bool verticalArrowListNodeCache = false)
+        bool verticalArrowListNodeCache = false,
+        bool process1NodeAndConnectorCache = false)
     {
         var path = Path.Combine(_tempDir, $"smartart_{Guid.NewGuid():N}.pptx");
 
@@ -99,6 +100,8 @@ public sealed class SmartArtTests : IDisposable
         // Build dsp:drawing XML with fallback shapes
         int shapeIdx = 1;
         var fallbackEls = new List<XElement>();
+        var process1BoxX = new long[] { 329_184, 1_933_956, 3_538_728, 5_143_500, 6_748_272 };
+        var process1ConnectorX = new long[] { 1_584_198, 3_188_970, 4_793_742, 6_398_514 };
         for (var nodeIndex = 0; nodeIndex < nodeTexts.Length; nodeIndex++)
         {
             var text = nodeTexts[nodeIndex];
@@ -129,20 +132,30 @@ public sealed class SmartArtTests : IDisposable
                     new XElement(dspNs + "cNvSpPr")),
                 new XElement(dspNs + "spPr",
                     new XElement(aNs + "xfrm",
-                        new XElement(aNs + "off", new XAttribute("x", verticalArrowListNodeCache
+                        new XElement(aNs + "off", new XAttribute("x", process1NodeAndConnectorCache
+                            ? process1BoxX[nodeIndex]
+                            : verticalArrowListNodeCache
                             ? 329_184L
                             : relationship1NodeAndEllipseCache
                                 ? 1_522_800L + nodeIndex * (relationship1HorizontalStepEmu ?? 1_392_000L)
-                                : (idx - 1) * 914400L), new XAttribute("y", verticalArrowListNodeCache
+                                : (idx - 1) * 914400L), new XAttribute("y", process1NodeAndConnectorCache
+                            ? 689_376L
+                            : verticalArrowListNodeCache
                             ? 229_792L + nodeIndex * 1_344_642L
                             : relationship1NodeAndEllipseCache ? 1_672_400L : 457200L)),
-                        new XElement(aNs + "ext", new XAttribute("cx", verticalArrowListNodeCache
+                        new XElement(aNs + "ext", new XAttribute("cx", process1NodeAndConnectorCache
+                            ? 1_152_144L
+                            : verticalArrowListNodeCache
                             ? 7_571_232L
-                            : relationship1NodeAndEllipseCache ? 2_400_000L : 914400L), new XAttribute("cy", verticalArrowListNodeCache
+                            : relationship1NodeAndEllipseCache ? 2_400_000L : 914400L), new XAttribute("cy", process1NodeAndConnectorCache
+                            ? 4_366_048L
+                            : verticalArrowListNodeCache
                             ? 1_251_289L
                             : relationship1NodeAndEllipseCache ? 2_400_000L : 457200L))),
                     new XElement(aNs + "prstGeom",
-                        new XAttribute("prst", verticalArrowListNodeCache
+                        new XAttribute("prst", process1NodeAndConnectorCache
+                            ? "roundRect"
+                            : verticalArrowListNodeCache
                             ? "downArrow"
                             : cycle2NodeAndArrowCache || relationship1NodeAndEllipseCache ? "ellipse" : "rect"),
                         new XElement(aNs + "avLst")),
@@ -184,6 +197,23 @@ public sealed class SmartArtTests : IDisposable
                         new XElement(aNs + "solidFill",
                             new XElement(aNs + "srgbClr", new XAttribute("val", "AAB6C1"))))));
             }
+
+            if (process1NodeAndConnectorCache && nodeIndex < nodeTexts.Length - 1)
+            {
+                idx = shapeIdx++;
+                fallbackEls.Add(new XElement(dspNs + "sp",
+                    new XElement(dspNs + "nvSpPr",
+                        new XElement(dspNs + "cNvPr", new XAttribute("id", idx), new XAttribute("name", $"Process1 connector {idx}")),
+                        new XElement(dspNs + "cNvSpPr")),
+                    new XElement(dspNs + "spPr",
+                        new XElement(aNs + "xfrm",
+                            new XElement(aNs + "off", new XAttribute("x", process1ConnectorX[nodeIndex]), new XAttribute("y", "2872400")),
+                            new XElement(aNs + "ext", new XAttribute("cx", "246888"), new XAttribute("cy", "914"))),
+                        new XElement(aNs + "ln",
+                            new XElement(aNs + "solidFill",
+                                new XElement(aNs + "srgbClr", new XAttribute("val", "0E4B66"))),
+                            new XElement(aNs + "prstDash", new XAttribute("val", "solid"))))));
+            }
         }
 
         if (groupedListUnmodeledRole)
@@ -207,6 +237,15 @@ public sealed class SmartArtTests : IDisposable
                 new XAttribute(XNamespace.Xmlns + "r", rNs.NamespaceName),
                 new XElement(dspNs + "spTree", fallbackEls)));
 
+        var process1Connections = process1NodeAndConnectorCache
+            ? new XElement(dgmNs + "cxnLst",
+                Enumerable.Range(1, nodeTexts.Length - 1).Select(i =>
+                    new XElement(dgmNs + "cxn",
+                        new XAttribute("type", "parOf"),
+                        new XAttribute("srcId", $"n{i}"),
+                        new XAttribute("destId", $"n{i + 1}"))))
+            : null;
+
         // Build minimal diagram data XML (just a root element)
         var dataXml = layoutUniqueId is not null || pictureAccentProcess || pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || continuousPictureList || pictureGrid
             ? new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
@@ -220,7 +259,8 @@ public sealed class SmartArtTests : IDisposable
                                 new XElement(dgmNs + "t",
                                     new XElement(aNs + "p",
                                         new XElement(aNs + "r",
-                                            new XElement(aNs + "t", text)))))))))
+                                            new XElement(aNs + "t", text))))))),
+                    process1Connections))
             : new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
                 new XElement(dgmNs + "dataModel",
                     new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
@@ -298,7 +338,9 @@ public sealed class SmartArtTests : IDisposable
                                 new XElement(pNs + "nvPr")),
                             new XElement(pNs + "xfrm",
                                 new XElement(aNs + "off", new XAttribute("x", "914400"), new XAttribute("y", "457200")),
-                                new XElement(aNs + "ext", new XAttribute("cx", "7315200"), new XAttribute("cy", "3657600"))),
+                                new XElement(aNs + "ext",
+                                    new XAttribute("cx", process1NodeAndConnectorCache ? "8229600" : "7315200"),
+                                    new XAttribute("cy", process1NodeAndConnectorCache ? "5744800" : "3657600"))),
                             new XElement(aNs + "graphic",
                                 new XElement(aNs + "graphicData",
                                     new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/diagram"),
@@ -913,6 +955,169 @@ public sealed class SmartArtTests : IDisposable
         smartArt.Data.IsLiveLayoutSupported.Should().BeFalse(
             "the richer PowerPoint background/chord/rectangle cache is outside the seven-shape grammar");
         smartArt.FallbackShapes.Should().HaveCount(12);
+    }
+
+    [Fact]
+    public void Reader_ImportedProcess1_AdmitsExactFiveStageNodeAndConnectorCache()
+    {
+        var presentation = PptxPackageReader.Read(
+            FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx"));
+        var slide = presentation.Slides[0];
+        var smartShape = slide.Shapes.Single(shape => shape.Kind == SlideShapeKind.SmartArt);
+        var smartArt = smartShape.SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.Process);
+        smartArt.Data.LayoutUniqueId.Should().EndWith("/process1");
+        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue();
+        smartArt.Data.Nodes.SelectMany(FlattenNodes).Select(node => node.Text)
+            .Should().Equal("Plan", "Design", "Build", "Test", "Deploy");
+        smartArt.FallbackShapes.Should().HaveCount(9);
+        smartArt.FallbackShapes.Where((_, index) => index % 2 == 0)
+            .Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle);
+        smartArt.FallbackShapes.Where((_, index) => index % 2 == 1)
+            .Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Line);
+        smartArt.FallbackShapes.Select(shape => shape.PlainText)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Should().Equal("Plan", "Design", "Build", "Test", "Deploy");
+
+        var live = SmartArtLayoutEngine.Layout(
+            smartArt.Data,
+            smartShape.OffsetXEmu,
+            smartShape.OffsetYEmu,
+            smartShape.ExtentCxEmu,
+            smartShape.ExtentCyEmu,
+            presentation.Theme);
+        live.Should().NotBeNull();
+        live!.Should().HaveCount(9);
+        live.Select(shape => (shape.OffsetXEmu - smartShape.OffsetXEmu, shape.OffsetYEmu - smartShape.OffsetYEmu))
+            .Should().Equal(smartArt.FallbackShapes.Select(shape => (shape.OffsetXEmu, shape.OffsetYEmu)));
+
+        var composed = SlideCompositor.Compose(presentation, slide)
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .Where(shape => shape.Text is null
+                || shape.Text.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text
+                    is "Plan" or "Design" or "Build" or "Test" or "Deploy")
+            .ToArray();
+        composed.Should().HaveCount(9,
+            "the imported process1 cache is replaced by the shared node-and-connector plan");
+        composed.Where(shape => shape.Text is not null)
+            .Select(shape => shape.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Plan", "Design", "Build", "Test", "Deploy");
+    }
+
+    [Theory]
+    [InlineData("geometry")]
+    [InlineData("order")]
+    [InlineData("effect")]
+    [InlineData("extra-role")]
+    [InlineData("picture")]
+    public void Reader_Process1_NearMissesPreserveCachedDrawingFallback(string mutation)
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Plan", "Design", "Build", "Test", "Deploy"],
+            pictureAccentProcess: mutation == "picture",
+            includeNodeImage: mutation == "picture",
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/process1",
+            groupedListUnmodeledRole: mutation == "extra-role",
+            includeNodeOuterShadow: mutation == "effect",
+            process1NodeAndConnectorCache: true);
+        var dspNs = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var aNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        if (mutation == "geometry")
+        {
+            RewriteSmartArtDrawing(pptxPath, document =>
+            {
+                document.Descendants(dspNs + "sp").First()
+                    .Element(dspNs + "spPr")!
+                    .Element(aNs + "xfrm")!
+                    .Element(aNs + "off")!
+                    .SetAttributeValue("x", "329185");
+            });
+        }
+        else if (mutation == "order")
+        {
+            RewriteSmartArtDrawing(pptxPath, document =>
+            {
+                var texts = document.Descendants(dspNs + "sp")
+                    .SelectMany(shape => shape.Descendants(aNs + "t"))
+                    .ToList();
+                (texts[0].Value, texts[1].Value) = (texts[1].Value, texts[0].Value);
+            });
+        }
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.Nodes.Should().HaveCount(1, mutation);
+        smartArt.Data.IsLiveLayoutSupported.Should().BeFalse(mutation);
+        smartArt.FallbackShapes.Should().NotBeEmpty(mutation);
+    }
+
+    [Fact]
+    public void Reader_Process1_MalformedHierarchyConnectionsPreserveCachedDrawingFallback()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Plan", "Design", "Build", "Test", "Deploy"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/process1",
+            process1NodeAndConnectorCache: true);
+        var dgmNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+
+        RewriteSmartArtData(pptxPath, document =>
+        {
+            document.Descendants(dgmNs + "cxn").First()
+                .SetAttributeValue("destId", "missing-node");
+        });
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse("malformed process1 hierarchy");
+        smartArt.FallbackShapes.Should().HaveCount(9,
+            "malformed data connections must preserve the complete cached drawing");
+    }
+
+    [Theory]
+    [InlineData("node")]
+    [InlineData("connector")]
+    public void Reader_Process1_MissingCachedShapeOrConnectorPreservesFallback(string missingRole)
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Plan", "Design", "Build", "Test", "Deploy"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/process1",
+            process1NodeAndConnectorCache: true);
+        var dspNs = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+
+        RewriteSmartArtDrawing(pptxPath, document =>
+        {
+            var shapes = document.Descendants(dspNs + "sp").ToList();
+            shapes[missingRole == "node" ? 0 : 1].Remove();
+        });
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse($"missing process1 {missingRole} cache");
+        smartArt.FallbackShapes.Should().HaveCount(8,
+            "a missing cached role must retain the remaining cached drawing");
+    }
+
+    private static IEnumerable<SmartArtNode> FlattenNodes(SmartArtNode node)
+    {
+        yield return node;
+        foreach (var child in node.Children)
+        {
+            foreach (var descendant in FlattenNodes(child))
+                yield return descendant;
+        }
     }
 
     [Fact]
@@ -6389,6 +6594,22 @@ public sealed class SmartArtTests : IDisposable
         mutate(document);
         source.Delete();
         var replacement = archive.CreateEntry(drawingPath);
+        using var writer = new StreamWriter(replacement.Open(), new UTF8Encoding(false));
+        document.Save(writer, SaveOptions.DisableFormatting);
+    }
+
+    private static void RewriteSmartArtData(string path, Action<XDocument> mutate)
+    {
+        const string dataPath = "ppt/diagrams/data1.xml";
+        using var archive = ZipFile.Open(path, ZipArchiveMode.Update);
+        var source = archive.GetEntry(dataPath)!;
+        XDocument document;
+        using (var stream = source.Open())
+            document = XDocument.Load(stream);
+
+        mutate(document);
+        source.Delete();
+        var replacement = archive.CreateEntry(dataPath);
         using var writer = new StreamWriter(replacement.Open(), new UTF8Encoding(false));
         document.Save(writer, SaveOptions.DisableFormatting);
     }

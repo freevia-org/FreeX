@@ -6,6 +6,34 @@ namespace FreeP.RenderCompare.Tests;
 public sealed class SmartArtFixtureEvidenceTests
 {
     [Fact]
+    public void Process1FixtureContainsTheAuditedFiveStageNodeAndConnectorGrammar()
+    {
+        var root = FindRepositoryRoot();
+        var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
+
+        using var archive = ZipFile.OpenRead(path);
+        var layout = ReadXml(archive, "ppt/diagrams/layout1.xml");
+        var drawing = ReadXml(archive, "ppt/diagrams/drawing1.xml");
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/process1");
+        var shapes = drawing.Descendants(dsp + "sp").ToList();
+        shapes.Should().HaveCount(9);
+        shapes.Where((_, index) => index % 2 == 0)
+            .Select(shape => (string?)shape.Descendants(a + "prstGeom").Single().Attribute("prst"))
+            .Should().OnlyContain(value => value == "roundRect");
+        shapes.Where((_, index) => index % 2 == 1)
+            .Should().OnlyContain(shape => shape.Descendants(a + "ln").Any());
+        drawing.Descendants(a + "t").Select(element => element.Value)
+            .Should().Equal("Plan", "Design", "Build", "Test", "Deploy");
+        ReadXml(archive, "ppt/diagrams/data1.xml")
+            .Descendants(dgm + "pt")
+            .Should().HaveCount(5);
+    }
+
+    [Fact]
     public void GroupedListFixtureContainsTheAuditedCachedBandGrammar()
     {
         var root = FindRepositoryRoot();

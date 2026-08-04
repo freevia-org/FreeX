@@ -1470,6 +1470,28 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "The deterministic fixture admits only four distinct non-empty flat nodes with four effect-free DownArrow cache shapes in exact shared-planner slot geometry. Richer, malformed, effect-bearing, picture-bearing, reordered, differently spaced, or otherwise unproven verticalArrowList caches remain on cached drawing fallback; exact PowerPoint arrow contours, text fitting, effects, and larger imported variants remain deferred."),
         new(
+            EvidenceId: "freep.smartart.process1-import-node-connectors",
+            Area: "SmartArt process1 imported five-stage node-and-connector live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume the same shared process1 node and connector plan through SlideCompositor; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/avalonia-parity-wave137-freep-smartart-process1-20260804.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.Core.IO/PptxPackageReader.cs",
+                "freep/FreeP.App.Presentation/SmartArtLayoutEngine.cs",
+                "freep/FreeP.App.Presentation/SlideCompositor.cs",
+                "freep/FreeP.App.Host.Tests/PptxPackageReaderSourceTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtDefaultLiveRendererContractTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SmartArtDefaultLiveRendererContractTests.cs",
+                "tools/FreeP.RenderCompare.Tests/SmartArtFixtureEvidenceTests.cs",
+                "tools/FreeP.RenderCompare/SmartArtFixtureGenerator.cs"
+            ],
+            RemainingWork: "The deterministic process1 fixture admits only one five-node ordered chain with five effect-free rounded node boxes and four empty line connectors at the exact shared-plan slots. Changed geometry, reordered or mismatched text, effects, pictures, extra roles, missing cache parts, richer process caches, and other unproven process variants remain on cached drawing fallback; exact PowerPoint geometry, text fitting, effects, and broader process-family import parity remain deferred."),
+        new(
             EvidenceId: "freep.smartart.basic-process",
             Area: "SmartArt basic process live layout",
             Status: "shared-render-planner-evidence",

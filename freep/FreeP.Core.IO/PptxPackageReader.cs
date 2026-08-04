@@ -2744,6 +2744,15 @@ public static class PptxPackageReader
             data.IsLiveLayoutSupported = false;
         }
 
+        if (IsProcess1Layout(layoutUniqueId)
+            && smart.FallbackShapes.Count > 0
+            && !CanUseProcess1NodeAndConnectorCache(smart, data))
+        {
+            // process1 is live for authoring, but imported drawings are promoted
+            // only for the exact five-stage cache reproduced by the corpus.
+            data.IsLiveLayoutSupported = false;
+        }
+
         return data;
 
         string ReadSmartArtParagraphText(XElement paragraph)
@@ -3324,6 +3333,15 @@ public static class PptxPackageReader
         return id.Split('/').Last() == "verticalarrowlist";
     }
 
+    private static bool IsProcess1Layout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return id.Split('/').Last() == "process1";
+    }
+
     private static bool CanUseVerticalArrowListCache(SmartArtShape smart, SmartArtData data)
     {
         if (!IsVerticalArrowListLayout(data.LayoutUniqueId)
@@ -3362,6 +3380,68 @@ public static class PptxPackageReader
             && shapes.Select(shape => shape.ExtentCxEmu).All(value => value == slotWidth)
             && shapes.Select(shape => shape.ExtentCyEmu).All(value => value == slotHeight)
             && shapes.Select(shape => shape.OffsetYEmu).SequenceEqual(expectedY);
+    }
+
+    private static bool CanUseProcess1NodeAndConnectorCache(SmartArtShape smart, SmartArtData data)
+    {
+        if (!IsProcess1Layout(data.LayoutUniqueId))
+            return false;
+
+        var nodes = FlattenSmartArtNodes(data);
+        var shapes = smart.FallbackShapes;
+        if (data.Nodes.Count != 1
+            || nodes.Count != 5
+            || shapes.Count != 9
+            || nodes.Any(node => string.IsNullOrWhiteSpace(node.Text)))
+            return false;
+
+        // The deterministic process1 fixture is one ordered five-node chain.
+        if (nodes.Select((node, index) => node.Level == index
+                && node.Children.Count == (index < nodes.Count - 1 ? 1 : 0))
+            .Any(valid => !valid))
+            return false;
+
+        if (shapes.Any(HasUnsupportedSmartArtShapeEffects)
+            || HasUnsupportedSmartArtDrawingEffects(smart))
+            return false;
+
+        const long boxWidth = 1_152_144;
+        const long boxHeight = 4_366_048;
+        const long boxY = 689_376;
+        const long connectorWidth = 246_888;
+        const long connectorHeight = 914;
+        var expectedBoxX = new long[] { 329_184, 1_933_956, 3_538_728, 5_143_500, 6_748_272 };
+        var expectedConnectorX = new long[] { 1_584_198, 3_188_970, 4_793_742, 6_398_514 };
+
+        for (var index = 0; index < nodes.Count; index++)
+        {
+            var box = shapes[index * 2];
+            if (box.Kind != SlideShapeKind.AutoShape
+                || box.AutoShapeKind != DrawingShapeKind.RoundedRectangle
+                || !string.Equals(box.PlainText, nodes[index].Text, StringComparison.Ordinal)
+                || box.OffsetXEmu != expectedBoxX[index]
+                || box.OffsetYEmu != boxY
+                || box.ExtentCxEmu != boxWidth
+                || box.ExtentCyEmu != boxHeight)
+                return false;
+
+            if (index == nodes.Count - 1)
+                continue;
+
+            var connector = shapes[index * 2 + 1];
+            if (connector.Kind != SlideShapeKind.AutoShape
+                || connector.AutoShapeKind != DrawingShapeKind.Line
+                || !string.IsNullOrWhiteSpace(connector.PlainText)
+                || connector.OffsetXEmu != expectedConnectorX[index]
+                || connector.OffsetYEmu != 2_872_400
+                || connector.ExtentCxEmu != connectorWidth
+                || connector.ExtentCyEmu != connectorHeight)
+                return false;
+        }
+
+        return nodes.Select(node => node.Text)
+            .Distinct(StringComparer.Ordinal)
+            .Count() == nodes.Count;
     }
 
     private static bool CanUseDefaultListStaggeredCache(SmartArtShape smart, SmartArtData data)

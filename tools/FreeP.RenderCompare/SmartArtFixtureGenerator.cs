@@ -67,7 +67,7 @@ internal static class SmartArtFixtureGenerator
             return;
         }
 
-        // Define the nine deterministic slides.
+        // Define the ten deterministic slides.
         var slides = new[]
         {
             new SlideSpec
@@ -75,7 +75,8 @@ internal static class SmartArtFixtureGenerator
                 Title     = "SmartArt Live — Process",
                 LayoutUid = "urn:microsoft.com/office/officeart/2005/8/layout/process1",
                 Nodes     = [("n1","Plan"), ("n2","Design"), ("n3","Build"), ("n4","Test"), ("n5","Deploy")],
-                Connections = [("n1","n2"), ("n2","n3"), ("n3","n4"), ("n4","n5")]
+                Connections = [("n1","n2"), ("n2","n3"), ("n3","n4"), ("n4","n5")],
+                HasProcess1CachedDrawing = true
             },
             new SlideSpec
             {
@@ -658,6 +659,9 @@ internal static class SmartArtFixtureGenerator
 
     private static XDocument BuildDrawingXml(SlideSpec spec)
     {
+        if (spec.HasProcess1CachedDrawing)
+            return BuildProcess1DrawingXml(spec);
+
         if (spec.HasGroupedListCachedDrawing)
             return BuildGroupedListDrawingXml(spec);
 
@@ -772,6 +776,48 @@ internal static class SmartArtFixtureGenerator
                     child.text,
                     "rect",
                     (groupX, childStartY + childIndex * (childHeight + gapY), groupWidth, childHeight)));
+            }
+        }
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(Dsp + "drawing",
+                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XElement(Dsp + "spTree", elements)));
+    }
+
+    private static XDocument BuildProcess1DrawingXml(SlideSpec spec)
+    {
+        // These are the exact local coordinates emitted by LayoutProcess for the
+        // deterministic 8,229,600 x 5,744,800 EMU process frame.
+        const long boxWidth = 1_152_144;
+        const long boxHeight = 4_366_048;
+        const long boxY = 689_376;
+        const long connectorWidth = 246_888;
+        const long connectorHeight = 914;
+        var boxX = new long[] { 329_184, 1_933_956, 3_538_728, 5_143_500, 6_748_272 };
+        var connectorX = new long[] { 1_584_198, 3_188_970, 4_793_742, 6_398_514 };
+        var elements = new List<XElement>();
+
+        for (var index = 0; index < spec.Nodes.Length; index++)
+        {
+            var node = spec.Nodes[index];
+            elements.Add(BuildDspShape(
+                (uint)(10 + index),
+                $"Process1 node {index + 1}",
+                node.text,
+                "roundRect",
+                (boxX[index], boxY, boxWidth, boxHeight)));
+
+            if (index < spec.Nodes.Length - 1)
+            {
+                elements.Add(BuildDspShape(
+                    (uint)(20 + index),
+                    $"Process1 connector {index + 1}",
+                    string.Empty,
+                    null,
+                    (connectorX[index], 2_872_400, connectorWidth, connectorHeight)));
             }
         }
 
@@ -1092,6 +1138,7 @@ internal static class SmartArtFixtureGenerator
         public string LayoutUid { get; init; } = string.Empty;
         public (string id, string text)[]   Nodes       { get; init; } = [];
         public (string src, string dst)[]   Connections { get; init; } = [];
+        public bool HasProcess1CachedDrawing { get; init; }
         public bool HasHierarchy3CachedDrawing { get; init; }
         public bool HasGroupedListCachedDrawing { get; init; }
         public bool HasBasicRelationshipCachedDrawing { get; init; }
