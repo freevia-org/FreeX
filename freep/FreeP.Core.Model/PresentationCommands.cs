@@ -1085,6 +1085,76 @@ public sealed class SetMediaVolumeCommand : IPresentationCommand
     }
 }
 
+/// <summary>Changes one media object's authored start mode and loop policy as one undoable edit.</summary>
+public sealed class SetMediaPlaybackOptionsCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly MediaPlaybackStartMode _beforeStartMode;
+    private readonly MediaPlaybackStartMode _afterStartMode;
+    private readonly bool _beforeLoop;
+    private readonly bool _afterLoop;
+
+    public SetMediaPlaybackOptionsCommand(
+        int slideIndex,
+        uint shapeId,
+        MediaPlaybackStartMode beforeStartMode,
+        bool beforeLoop,
+        MediaPlaybackStartMode afterStartMode,
+        bool afterLoop)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _beforeStartMode = beforeStartMode;
+        _beforeLoop = beforeLoop;
+        _afterStartMode = afterStartMode;
+        _afterLoop = afterLoop;
+    }
+
+    public string Label => "Set Media Playback Options";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var media = FindMedia(presentation);
+        return media is not null
+            && (media.PlaybackStartMode != _afterStartMode || media.Loop != _afterLoop);
+    }
+
+    public void Apply(Presentation presentation) => SetOptions(FindMedia(presentation), _afterStartMode, _afterLoop);
+
+    public void Revert(Presentation presentation) => SetOptions(FindMedia(presentation), _beforeStartMode, _beforeLoop);
+
+    private MediaInfo? FindMedia(Presentation presentation)
+    {
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return null;
+
+        return FindMedia(presentation.Slides[_slideIndex].Shapes);
+    }
+
+    private MediaInfo? FindMedia(IEnumerable<SlideShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == _shapeId && shape.Kind == SlideShapeKind.Media)
+                return shape.Media;
+            if (shape.Children.Count > 0 && FindMedia(shape.Children) is { } child)
+                return child;
+        }
+
+        return null;
+    }
+
+    private static void SetOptions(MediaInfo? media, MediaPlaybackStartMode startMode, bool loop)
+    {
+        if (media is null)
+            return;
+
+        media.PlaybackStartMode = startMode;
+        media.Loop = loop;
+    }
+}
+
 /// <summary>Edits one native Summary Zoom tile's supported format properties.</summary>
 public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
 {

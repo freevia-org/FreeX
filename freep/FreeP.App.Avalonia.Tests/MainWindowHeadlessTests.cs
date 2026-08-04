@@ -5384,6 +5384,42 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Media_playback_pane_applies_selected_playback_options()
+    {
+        var startMode = MediaPlaybackStartMode.InClickSequence;
+        var loop = false;
+        var applied = false;
+        var dirty = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var mediaShape = new SlideShape
+            {
+                Id = 726,
+                Name = "Demo video",
+                Kind = SlideShapeKind.Media,
+                Media = new MediaInfo { IsVideo = true }
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
+            window.Editor.Select(mediaShape.Id);
+
+            window.ShowMediaCaptionPane();
+            window.SetMediaPlaybackPaneInput(MediaPlaybackStartMode.Automatically, true);
+            applied = window.ApplyMediaPlaybackPane();
+            startMode = mediaShape.Media!.PlaybackStartMode;
+            loop = mediaShape.Media.Loop;
+            dirty = window.IsDirty;
+        });
+
+        if (!ran) return;
+        applied.Should().BeTrue();
+        startMode.Should().Be(MediaPlaybackStartMode.Automatically);
+        loop.Should().BeTrue();
+        dirty.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Review_comment_add_edit_routes_through_shared_mutation_plan()
     {
         SlideComment? addedComment = null;

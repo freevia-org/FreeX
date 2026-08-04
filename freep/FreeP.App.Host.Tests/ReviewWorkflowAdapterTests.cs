@@ -1019,6 +1019,41 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_MediaPlaybackPane_AppliesSelectedPlaybackOptions()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var mediaShape = new SlideShape
+            {
+                Id = 724,
+                Name = "Demo video",
+                Kind = SlideShapeKind.Media,
+                Media = new MediaInfo { IsVideo = true }
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
+            window.Editor.Select(mediaShape.Id);
+
+            window.ShowMediaCaptionPane();
+            window.MediaPlaybackStartMode.Should().Be(MediaPlaybackStartMode.InClickSequence);
+            window.MediaLoop.Should().BeFalse();
+
+            window.SetMediaPlaybackPaneInput(MediaPlaybackStartMode.Automatically, true);
+            window.MediaPlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
+            window.MediaLoop.Should().BeTrue();
+            window.ApplyMediaPlaybackPane().Should().BeTrue();
+
+            mediaShape.Media!.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
+            mediaShape.Media.Loop.Should().BeTrue();
+            window.IsDirty.Should().BeTrue();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_ApplyProofingCorrection_UsesSharedMutationAndRefreshesPlans()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
