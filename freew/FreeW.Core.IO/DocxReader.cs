@@ -3962,6 +3962,11 @@ public static class DocxReader
                         "tbRl" => CellTextDirection.Rotate270,
                         _ => CellTextDirection.Horizontal
                     };
+
+                    // Cell Options: Word represents disabled wrapping through the inverse w:noWrap toggle;
+                    // fit-text is the ordinary w:tcFitText on/off property.
+                    cell.WrapText = !ReadToggle(tcPr, "noWrap");
+                    cell.FitText = ReadToggle(tcPr, "tcFitText");
                 }
                 foreach (var child in tc.Elements())
                 {

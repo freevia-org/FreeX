@@ -37,6 +37,8 @@ public class TablePropertiesModelTests
 
         cell.VerticalAlignment.Should().Be(TableCellVerticalAlignment.Top);
         cell.Margins.Should().BeNull();
+        cell.WrapText.Should().BeTrue();
+        cell.FitText.Should().BeFalse();
     }
 
     [Fact]

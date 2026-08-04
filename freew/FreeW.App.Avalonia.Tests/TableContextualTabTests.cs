@@ -931,7 +931,9 @@ public sealed class TableContextualTabTests
         ColumnWidthPt: 144,
         CellPreferredWidthPt: 150,
         CellVerticalAlignment: TableCellVerticalAlignment.Center,
-        CellMargins: new TableCellMargins(2, 8, 2, 8));
+        CellMargins: new TableCellMargins(2, 8, 2, 8),
+        CellWrapText: true,
+        CellFitText: false);
 
     private static void Execute(RibbonCommandRegistry registry, string id)
     {

@@ -321,6 +321,8 @@ public static class DocumentMerge
             Margins = source.Margins,
             Borders = source.Borders,
             TextDirection = source.TextDirection,
+            WrapText = source.WrapText,
+            FitText = source.FitText,
         };
         foreach (var paragraph in source.Paragraphs)
             clone.Paragraphs.Add(CloneParagraph(paragraph));

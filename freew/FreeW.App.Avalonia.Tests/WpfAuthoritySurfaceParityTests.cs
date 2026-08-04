@@ -218,6 +218,12 @@ public sealed class WpfAuthoritySurfaceParityTests
             dialog.TabsForTest.SelectedIndex.Should().Be(3);
             AutomationProperties.GetAutomationId(dialog.InitialFocusTargetForTest)
                 .Should().Be("TablePropertiesCellWidthBox");
+            dialog.GetLogicalDescendants().OfType<CheckBox>().Single(checkBox =>
+                    AutomationProperties.GetAutomationId(checkBox) == "TablePropertiesCellWrapTextCheckBox")
+                .IsChecked.Should().BeTrue();
+            dialog.GetLogicalDescendants().OfType<CheckBox>().Single(checkBox =>
+                    AutomationProperties.GetAutomationId(checkBox) == "TablePropertiesCellFitTextCheckBox")
+                .IsChecked.Should().BeFalse();
             AssertDefaultCancelButtons(dialog);
 
             TextBox(dialog, "TablePropertiesIndentBox").Text = "-1";
@@ -240,11 +246,15 @@ public sealed class WpfAuthoritySurfaceParityTests
                 ColumnWidthPt: 144,
                 CellPreferredWidthPt: 144,
                 CellVerticalAlignment: TableCellVerticalAlignment.Center,
-                CellMargins: new TableCellMargins(3, 5, 3, 5));
+                CellMargins: new TableCellMargins(3, 5, 3, 5),
+                CellWrapText: false,
+                CellFitText: true);
             MainWindow.ApplyTablePropertiesResult(editor, values);
             table.PreferredWidthPt.Should().Be(300);
             cell.WidthPt.Should().Be(144);
             cell.Margins.Should().Be(new TableCellMargins(3, 5, 3, 5));
+            cell.WrapText.Should().BeFalse();
+            cell.FitText.Should().BeTrue();
 
             editor.CanUndo.Should().BeTrue();
             editor.Undo();
@@ -252,11 +262,15 @@ public sealed class WpfAuthoritySurfaceParityTests
             cell.WidthPt.Should().BeNull();
             cell.Margins.Should().BeNull();
             cell.VerticalAlignment.Should().Be(TableCellVerticalAlignment.Top);
+            cell.WrapText.Should().BeTrue();
+            cell.FitText.Should().BeFalse();
 
             editor.Redo();
             table.PreferredWidthPt.Should().Be(300);
             cell.WidthPt.Should().Be(144);
             cell.Margins.Should().Be(new TableCellMargins(3, 5, 3, 5));
+            cell.WrapText.Should().BeFalse();
+            cell.FitText.Should().BeTrue();
         }, CancellationToken.None);
     }
 

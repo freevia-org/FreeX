@@ -2595,28 +2595,33 @@ public static class DocxWriter
             tcPr.Add(new XElement(W + "vMerge", new XAttribute(W + "val", "restart")));
         else if (cell.VerticalMerge == VerticalMergeState.Continue)
             tcPr.Add(new XElement(W + "vMerge", new XAttribute(W + "val", "continue")));
+        // Per-cell border override (w:tcBorders): emitted only when the cell has at least one explicit edge
+        // so plain cells inherit table-level borders unchanged. Edge order follows CT_TcBorders schema.
+        if (cell.Borders is { IsEmpty: false } borders)
+            tcPr.Add(BuildCellBordersElement(borders));
         var fill = cell.ShadingColorHex is { Length: > 0 } shading ? shading.TrimStart('#') : overrideShade;
         if (fill is { Length: > 0 })
             tcPr.Add(new XElement(W + "shd",
                 new XAttribute(W + "val", "clear"),
                 new XAttribute(W + "color", "auto"),
                 new XAttribute(W + "fill", fill)));
-        // Per-cell border override (w:tcBorders): emitted only when the cell has at least one explicit edge
-        // so plain cells inherit table-level borders unchanged. Edge order follows CT_TcBorders schema.
-        if (cell.Borders is { IsEmpty: false } borders)
-            tcPr.Add(BuildCellBordersElement(borders));
-        // Per-cell margin override (w:tcMar) and vertical alignment (w:vAlign), in CT_TcPr schema order
-        // (tcMar before vAlign, both after tcBorders). Emitted only when set, so plain cells stay unchanged.
+        // Cell Options: wrapping is on by default, so only the inverse noWrap token is emitted. Fit text
+        // is off by default and likewise appears only when enabled.
+        if (!cell.WrapText)
+            tcPr.Add(new XElement(W + "noWrap"));
+        // Per-cell margin, text direction, fit-text, and vertical alignment follow CT_TcPr schema order.
         if (cell.Margins is { } margins)
             tcPr.Add(BuildCellMarginsElement("tcMar", margins));
-        if (cell.VerticalAlignment != TableCellVerticalAlignment.Top)
-            tcPr.Add(new XElement(W + "vAlign", new XAttribute(W + "val",
-                cell.VerticalAlignment == TableCellVerticalAlignment.Center ? "center" : "bottom")));
         // Text direction (w:textDirection): emitted only when not the default horizontal direction so
         // existing cells round-trip unchanged. Maps to the same btLr/tbRl tokens Word uses.
         if (cell.TextDirection != CellTextDirection.Horizontal)
             tcPr.Add(new XElement(W + "textDirection", new XAttribute(W + "val",
                 cell.TextDirection == CellTextDirection.Rotate90 ? "btLr" : "tbRl")));
+        if (cell.FitText)
+            tcPr.Add(new XElement(W + "tcFitText"));
+        if (cell.VerticalAlignment != TableCellVerticalAlignment.Top)
+            tcPr.Add(new XElement(W + "vAlign", new XAttribute(W + "val",
+                cell.VerticalAlignment == TableCellVerticalAlignment.Center ? "center" : "bottom")));
         return tcPr.HasElements ? tcPr : null;
     }
 

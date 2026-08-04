@@ -69,7 +69,9 @@ public sealed class ApplyTablePropertiesCommand(
         TableCell Cell,
         double? WidthPt,
         TableCellVerticalAlignment VerticalAlignment,
-        TableCellMargins? Margins);
+        TableCellMargins? Margins,
+        bool WrapText,
+        bool FitText);
 
     private sealed record Snapshot(
         double? PreferredWidthPt,
@@ -101,7 +103,9 @@ public sealed class ApplyTablePropertiesCommand(
                 cell,
                 cell.WidthPt,
                 cell.VerticalAlignment,
-                cell.Margins))]);
+                cell.Margins,
+                cell.WrapText,
+                cell.FitText))]);
 
         public void Restore(Table table)
         {
@@ -127,6 +131,8 @@ public sealed class ApplyTablePropertiesCommand(
                 cell.Cell.WidthPt = cell.WidthPt;
                 cell.Cell.VerticalAlignment = cell.VerticalAlignment;
                 cell.Cell.Margins = cell.Margins;
+                cell.Cell.WrapText = cell.WrapText;
+                cell.Cell.FitText = cell.FitText;
             }
         }
     }
