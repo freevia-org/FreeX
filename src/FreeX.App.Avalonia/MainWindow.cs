@@ -1265,6 +1265,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private SelectionPaneObjectKind? _selectedDrawingObjectKind;
     private Guid? _selectedDrawingObjectId;
     private readonly AvaloniaRibbonContextSource _ribbonContextSource = new();
+    private readonly RibbonStateStore _ribbonStateStore = new();
     private Action? _refreshRibbonToggleStates;
 
     /// <summary>
@@ -1998,7 +1999,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             () => _session,
             RefreshShell,
             ribbonCallbacks,
-            _ribbonContextSource);
+            _ribbonContextSource,
+            _ribbonStateStore);
         _refreshRibbonToggleStates = refreshRibbonToggleStates;
         _ribbonCommandRegistry = ribbonCommandRegistry;
         _ribbonControl = ribbon;

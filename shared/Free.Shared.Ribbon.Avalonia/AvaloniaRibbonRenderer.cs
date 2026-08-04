@@ -82,6 +82,7 @@ public static class AvaloniaRibbonRenderer
     private sealed class CheckBoxExecutionState
     {
         internal bool IsSynchronizing;
+        internal IRibbonStateStore? StateStore;
     }
 
     private sealed class ComboExecutionState
@@ -91,7 +92,115 @@ public static class AvaloniaRibbonRenderer
         internal string? PendingSelectionValue;
     }
 
+    private sealed class StateStoreBinding
+    {
+        private readonly Control _root;
+        private readonly IRibbonStateStore _stateStore;
+        private readonly IRibbonCommandRegistry _registry;
+        private readonly AvaloniaRibbonPalette _palette;
+
+        internal StateStoreBinding(
+            Control root,
+            IRibbonStateStore stateStore,
+            IRibbonCommandRegistry registry,
+            AvaloniaRibbonPalette palette)
+        {
+            _root = root;
+            _stateStore = stateStore;
+            _registry = registry;
+            _palette = palette;
+            _root.AttachedToLogicalTree += (_, _) => Attach();
+            _root.DetachedFromLogicalTree += (_, _) => Detach();
+        }
+
+        private bool _attached;
+        private readonly List<(ToggleButton Toggle, EventHandler<AvaloniaPropertyChangedEventArgs> Handler)> _toggleHandlers = new();
+
+        internal void Attach()
+        {
+            if (_attached)
+                return;
+
+            _attached = true;
+            _stateStore.StateChanged += OnStateChanged;
+            ForEachRibbonDescendant(_root, control =>
+            {
+                if (control is CheckBox checkBox)
+                    CheckBoxExecutionStates.GetOrCreateValue(checkBox).StateStore = _stateStore;
+
+                if (control is ToggleButton toggle && TryGetRenderedCommandId(toggle, out var commandId))
+                {
+                    EventHandler<AvaloniaPropertyChangedEventArgs> handler = (_, args) =>
+                    {
+                        if (args.Property == ToggleButton.IsCheckedProperty &&
+                            _registry.TryGet(commandId, out IRibbonCommand? _))
+                        {
+                            // Avalonia changes IsChecked before raising Click. Keep the shared store
+                            // current before the command handler observes the toggle.
+                            _stateStore.SetChecked(commandId, toggle.IsChecked == true);
+                        }
+                    };
+                    toggle.PropertyChanged += handler;
+                    _toggleHandlers.Add((toggle, handler));
+                }
+            });
+            ApplyExplicitStates();
+        }
+
+        private void Detach()
+        {
+            if (!_attached)
+                return;
+
+            _attached = false;
+            _stateStore.StateChanged -= OnStateChanged;
+            foreach (var (toggle, handler) in _toggleHandlers)
+                toggle.PropertyChanged -= handler;
+            _toggleHandlers.Clear();
+
+            ForEachRibbonDescendant(_root, control =>
+            {
+                if (control is CheckBox checkBox)
+                    CheckBoxExecutionStates.GetOrCreateValue(checkBox).StateStore = null;
+            });
+        }
+
+        private void OnStateChanged(object? sender, RibbonStateChangedEventArgs args) =>
+            Apply(args.Id, args.State);
+
+        private void ApplyExplicitStates()
+        {
+            ForEachRibbonDescendant(_root, control =>
+            {
+                if (TryGetRenderedCommandId(control, out var commandId) &&
+                    _stateStore.TryGetState(commandId, out var state))
+                {
+                    ApplyControl(control, commandId, state);
+                }
+            });
+        }
+
+        private void Apply(RibbonCommandId commandId, RibbonCommandState state)
+        {
+            ForEachRibbonDescendant(_root, control =>
+            {
+                if (TryGetRenderedCommandId(control, out var renderedId) && renderedId == commandId)
+                    ApplyControl(control, renderedId, state);
+            });
+        }
+
+        private void ApplyControl(Control control, RibbonCommandId commandId, RibbonCommandState state)
+        {
+            var commandIsLive = control is ComboBox ||
+                control is Button { Flyout: not null } ||
+                _registry.TryGet(commandId, out _);
+            if (commandIsLive)
+                ApplyRibbonCommandState(control, state, _palette);
+        }
+    }
+
     private static readonly ConditionalWeakTable<ComboBox, ComboExecutionState> ComboExecutionStates = new();
+    private static readonly ConditionalWeakTable<Control, StateStoreBinding> StateStoreBindings = new();
 
     internal static AvaloniaRibbonPalette ResolvePalette(RibbonVisualPalette? palette = null) =>
         new(palette ?? RibbonVisualPalette.FromTheme(BrandThemes.FreeX));
@@ -269,30 +378,28 @@ public static class AvaloniaRibbonRenderer
     /// current <see cref="IRibbonStatefulCommand.GetState"/>. Call from the host's RefreshShell so
     /// Bold/Italic/Underline and other format-state buttons reflect the active-cell state.
     /// </summary>
-    public static void SyncToggleStates(Control ribbon, IRibbonCommandRegistry? registry, RibbonVisualPalette? palette = null)
+    public static void SyncToggleStates(
+        Control ribbon,
+        IRibbonCommandRegistry? registry,
+        RibbonVisualPalette? palette = null,
+        IRibbonStateStore? stateStore = null)
     {
         if (registry is null)
             return;
         var resolvedPalette = ResolvePalette(palette);
-        foreach (var toggle in ribbon.GetVisualDescendants().OfType<ToggleButton>())
+        ForEachRibbonDescendant(ribbon, control =>
         {
-            if (toggle.Tag is string id && !string.IsNullOrEmpty(id)
-                && registry.TryGet(new RibbonCommandId(id), out var cmd)
+            if (TryGetRenderedCommandId(control, out var commandId)
+                && registry.TryGet(commandId, out var cmd)
                 && cmd is IRibbonStatefulCommand stateful)
             {
-                ApplyRibbonCommandState(toggle, stateful.GetState(), resolvedPalette);
+                var state = stateful.GetState();
+                if (stateStore is not null)
+                    stateStore.SetState(commandId, state);
+                else
+                    ApplyRibbonCommandState(control, state, resolvedPalette);
             }
-        }
-
-        foreach (var combo in ribbon.GetVisualDescendants().OfType<ComboBox>())
-        {
-            if (combo.Tag is string id && !string.IsNullOrEmpty(id)
-                && registry.TryGet(new RibbonCommandId(id), out var cmd)
-                && cmd is IRibbonStatefulCommand stateful)
-            {
-                ApplyRibbonCommandState(combo, stateful.GetState(), resolvedPalette);
-            }
-        }
+        });
     }
 
     /// <summary>Builds the content panel for one tab (the body shown under the tab header).</summary>
@@ -300,14 +407,16 @@ public static class AvaloniaRibbonRenderer
         RibbonTab tab,
         IRibbonCommandRegistry? registry = null,
         Action? afterExecute = null,
-        RibbonVisualPalette? palette = null)
-        => BuildTabContent(tab, registry, afterExecute, ResolvePalette(palette));
+        RibbonVisualPalette? palette = null,
+        IRibbonStateStore? stateStore = null)
+        => BuildTabContent(tab, registry, afterExecute, ResolvePalette(palette), stateStore);
 
     private static Control BuildTabContent(
         RibbonTab tab,
         IRibbonCommandRegistry? registry,
         Action? afterExecute,
-        AvaloniaRibbonPalette resolvedPalette)
+        AvaloniaRibbonPalette resolvedPalette,
+        IRibbonStateStore? stateStore)
     {
         ArgumentNullException.ThrowIfNull(tab);
 
@@ -339,12 +448,28 @@ public static class AvaloniaRibbonRenderer
         if (string.Equals(tab.Id, "DrawTab", StringComparison.Ordinal))
             DisableStaticDrawUnavailableCommands(panel);
 
-        return new Border
+        var result = new Border
         {
             Background = resolvedPalette.SurfaceBrush,
             Padding = new Thickness(0, RibbonVisualMetrics.TabContentTopPadding, 0, 0),
             Child = panel,
         };
+        BindStateStore(result, stateStore, registry, resolvedPalette);
+        return result;
+    }
+
+    private static void BindStateStore(
+        Control root,
+        IRibbonStateStore? stateStore,
+        IRibbonCommandRegistry? registry,
+        AvaloniaRibbonPalette palette)
+    {
+        if (stateStore is null || registry is null || StateStoreBindings.TryGetValue(root, out _))
+            return;
+
+        var binding = new StateStoreBinding(root, stateStore, registry, palette);
+        StateStoreBindings.Add(root, binding);
+        binding.Attach();
     }
 
     private static void DisableStaticDrawUnavailableCommands(Control root)
@@ -458,11 +583,16 @@ public static class AvaloniaRibbonRenderer
     }
 
     /// <summary>Builds a single <see cref="TabItem"/> for a tab (header + content), tagged with the tab id.</summary>
-    private static TabItem BuildTabItem(RibbonTab tab, IRibbonCommandRegistry? registry, Action? afterExecute, AvaloniaRibbonPalette palette) => new()
+    private static TabItem BuildTabItem(
+        RibbonTab tab,
+        IRibbonCommandRegistry? registry,
+        Action? afterExecute,
+        AvaloniaRibbonPalette palette,
+        IRibbonStateStore? stateStore) => new()
     {
         Header = BuildTabHeader(tab.Header, tab.KeyTip ??
             (tab.IsContextual ? ContextualTabKeyTips.GetValueOrDefault(tab.Id) : null), palette),
-        Content = BuildTabContent(tab, registry, afterExecute, palette),
+        Content = BuildTabContent(tab, registry, afterExecute, palette, stateStore),
         Tag = tab.Id,
     };
 
@@ -492,7 +622,8 @@ public static class AvaloniaRibbonRenderer
         IRibbonContextSource? contextSource = null,
         Action? afterExecute = null,
         RibbonVisualPalette? palette = null,
-        Action? onFileTabSelected = null)
+        Action? onFileTabSelected = null,
+        IRibbonStateStore? stateStore = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
         var resolvedPalette = ResolvePalette(palette);
@@ -515,7 +646,7 @@ public static class AvaloniaRibbonRenderer
             : ResolveTabStripTabs(definition, contextSource.Current);
 
         foreach (var tab in initialTabs)
-            tabControl.Items.Add(BuildTabItem(tab, registry, afterExecute, resolvedPalette));
+            tabControl.Items.Add(BuildTabItem(tab, registry, afterExecute, resolvedPalette, stateStore));
 
         if (tabControl.Items.Count > 0)
             tabControl.SelectedIndex = tabControl.Items.Count > 1 ? 1 : 0;
@@ -546,7 +677,8 @@ public static class AvaloniaRibbonRenderer
             UpdateTabHeaderSelectionStates(tabControl);
         };
         if (contextSource is not null)
-            contextSource.ContextChanged += (_, _) => SyncContextualTabs(tabControl, definition, registry, contextSource, afterExecute, resolvedPalette);
+            contextSource.ContextChanged += (_, _) => SyncContextualTabs(
+                tabControl, definition, registry, contextSource, afterExecute, resolvedPalette, stateStore);
 
         return tabControl;
     }
@@ -924,7 +1056,8 @@ public static class AvaloniaRibbonRenderer
         IRibbonCommandRegistry? registry,
         IRibbonContextSource contextSource,
         Action? afterExecute,
-        AvaloniaRibbonPalette palette)
+        AvaloniaRibbonPalette palette,
+        IRibbonStateStore? stateStore)
     {
         var desired = ResolveTabStripTabs(definition, contextSource.Current);
         var selectedId = (tabControl.SelectedItem as TabItem)?.Tag as string;
@@ -959,7 +1092,7 @@ public static class AvaloniaRibbonRenderer
                     tabControl.Items.RemoveAt(existingIndex);
                     tabControl.Items.Insert(
                         existingIndex,
-                        BuildTabItem(tab, registry, afterExecute, palette));
+                        BuildTabItem(tab, registry, afterExecute, palette, stateStore));
                 }
                 continue;
             }
@@ -976,7 +1109,9 @@ public static class AvaloniaRibbonRenderer
                 }
             }
 
-            tabControl.Items.Insert(Math.Min(insertAfter + 1, tabControl.Items.Count), BuildTabItem(tab, registry, afterExecute, palette));
+            tabControl.Items.Insert(
+                Math.Min(insertAfter + 1, tabControl.Items.Count),
+                BuildTabItem(tab, registry, afterExecute, palette, stateStore));
         }
 
         // Preserve selection if still visible; otherwise select the first tab.
@@ -1542,7 +1677,10 @@ public static class AvaloniaRibbonRenderer
         box.IsCheckedChanged += (_, _) =>
         {
             if (!executionState.IsSynchronizing)
+            {
+                executionState.StateStore?.SetChecked(check.CommandId, box.IsChecked == true);
                 Execute(check.CommandId, registry, afterExecute);
+            }
         };
         return box;
     }
@@ -2066,6 +2204,23 @@ public static class AvaloniaRibbonRenderer
 
     private static void ApplyEnablement(Control element, RibbonControl control, IRibbonCommandRegistry? registry, AvaloniaRibbonPalette? palette = null)
         => ApplyStateAndEnablement(element, control.CommandId, registry, palette);
+
+    private static bool TryGetRenderedCommandId(Control control, out RibbonCommandId commandId)
+    {
+        commandId = default;
+        if (control.Tag is not string tag || string.IsNullOrEmpty(tag) ||
+            tag.StartsWith("collapsed:", StringComparison.Ordinal))
+            return false;
+
+        var value = tag.EndsWith(".Dropdown", StringComparison.Ordinal)
+            ? tag[..^".Dropdown".Length]
+            : tag;
+        if (string.IsNullOrEmpty(value))
+            return false;
+
+        commandId = new RibbonCommandId(value);
+        return true;
+    }
 
     private static void ApplyStateAndEnablement(Control element, RibbonCommandId commandId, IRibbonCommandRegistry? registry, AvaloniaRibbonPalette? palette = null)
     {
