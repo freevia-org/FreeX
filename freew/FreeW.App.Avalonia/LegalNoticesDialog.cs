@@ -1,4 +1,8 @@
 using System.Reflection;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 
@@ -40,5 +44,25 @@ internal sealed class LegalNoticesDialog : AvaloniaLegalNoticesDialog
             closeButtonContent: "Close",
             helpText: "Shows the legal, privacy, and third-party notices packaged with this FreeW executable.")
     {
+        ApplyLegalNoticesAuthorityDocumentInset();
+        Opened += (_, _) => ApplyLegalNoticesAuthorityDocumentInset();
+    }
+
+    private void ApplyLegalNoticesAuthorityDocumentInset()
+    {
+        // The WPF read-only TextBox uses its eight-pixel content padding directly.
+        // Avalonia's template adds four pixels before that shared padding; this route's
+        // realized template contributes one of those pixels in the paired authority.
+        if (Content is not Control root)
+            return;
+
+        foreach (var textBox in root.GetLogicalDescendants().OfType<TextBox>())
+        {
+            textBox.Padding = new Thickness(
+                LegalNoticesDialogMetrics.TextPadding + 1,
+                textBox.Padding.Top,
+                LegalNoticesDialogMetrics.TextPadding,
+                LegalNoticesDialogMetrics.TextPadding);
+        }
     }
 }
