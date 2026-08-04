@@ -252,6 +252,55 @@ public sealed class ReferencesTabTests
     });
 
     [Fact]
+    public Task RefreshTableOfAuthorities_preserves_passim_formatting_and_tab_leader_options() => RunOnUiThread(() =>
+    {
+        var blocks = new List<Block> { new Paragraph("Before") };
+        for (var i = 0; i < 5; i++)
+        {
+            var mark = Run.CitationMark(new Citation("Roe v. Wade", CitationCategory.Cases));
+            if (i == 0)
+                mark.Formatting = new RunFormatting { Bold = true, Underline = true, ColorHex = "#C00000" };
+            blocks.Add(new Paragraph { Runs = { mark } });
+        }
+
+        blocks.AddRange(TableOfAuthorities.Build(new[] { new Citation("Old Case", CitationCategory.Cases) }));
+        blocks.Add(new Paragraph("After"));
+        var view = ViewWith(blocks.ToArray());
+        view.Document.Page.WidthPt = 700;
+        view.Document.Page.MarginLeftPt = 80;
+        view.Document.Page.MarginRightPt = 90;
+        view.Measure(new global::Avalonia.Size(800, 4000));
+
+        view.RefreshTableOfAuthorities(new ToaOptions
+        {
+            CategoryFilter = CitationCategory.Cases,
+            KeepOriginalFormatting = true,
+            UsePassim = true,
+            TabLeader = ToaTabLeader.Dashes
+        });
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Table of Authorities", "Cases", "Roe v. Wade\tpassim");
+        view.Document.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().NotContain("Old Case")
+            .And.EndWith("After");
+
+        var entry = view.Document.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.Formatting.TabStops.Should().Equal(
+            new TabStop(530, TabStopAlignment.Right, TabLeader.Dashes));
+        entry.Runs.Select(run => run.Text).Should().Equal("Roe v. Wade", "\t", "passim");
+        entry.Runs[0].Formatting.Should().Be(new RunFormatting
+        {
+            Bold = true,
+            Underline = true,
+            ColorHex = "#C00000"
+        });
+    });
+
+    [Fact]
     public void InsertCaption_inserts_autonumbered_paragraph_after_caret()
     {
         var view = ViewWith();

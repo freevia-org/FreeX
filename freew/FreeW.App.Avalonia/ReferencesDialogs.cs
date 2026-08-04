@@ -800,6 +800,8 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
 
         AvaloniaCompactDialogChrome.ApplyListBox(_masterList, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyListBox(_currentList, DialogChromeStyle);
+        _masterList.DoubleTapped += (_, _) => _ = EditMasterAsync();
+        _currentList.DoubleTapped += (_, _) => _ = EditCurrentAsync();
         RefreshMasterList();
         RefreshCurrentList();
 

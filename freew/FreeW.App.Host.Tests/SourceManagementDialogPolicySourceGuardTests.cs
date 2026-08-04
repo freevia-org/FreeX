@@ -62,6 +62,15 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().NotContain("Any(s => s.Tag == src.Tag)");
     }
 
+    [Fact]
+    public void FreeWRibbonCommands_PreservesWpfDoubleClickEditInteraction()
+    {
+        var source = ReadHostRibbonSource();
+
+        source.Should().Contain("masterList.MouseDoubleClick += (_, _) => EditMasterSource();");
+        source.Should().Contain("docList.MouseDoubleClick += (_, _) => EditDocSource();");
+    }
+
     private static string ReadHostRibbonSource()
     {
         var path = Path.Combine(

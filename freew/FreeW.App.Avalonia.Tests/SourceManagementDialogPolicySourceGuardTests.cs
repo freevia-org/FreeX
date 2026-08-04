@@ -49,6 +49,8 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().Contain("SourceManagementDialogPlanner.EditCurrentSource(");
         source.Should().Contain("SourceManagementDialogPlanner.DeleteCurrentSource(");
         source.Should().Contain("SourceManagementDialogPlanner.BuildResult(");
+        source.Should().Contain("_masterList.DoubleTapped += (_, _) => _ = EditMasterAsync();");
+        source.Should().Contain("_currentList.DoubleTapped += (_, _) => _ = EditCurrentAsync();");
     }
 
     [Fact]
