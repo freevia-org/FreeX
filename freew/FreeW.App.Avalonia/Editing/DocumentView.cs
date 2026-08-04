@@ -6797,6 +6797,8 @@ public sealed class DocumentView : Control
 
         foreach (var placed in _placed.Where(placed => !placed.Sentinel))
             Include(placed.Y, placed.LineHeight);
+        foreach (var image in _images)
+            Include(image.Rect.Y, image.Rect.Height);
         foreach (var (rect, _, _, _) in _rects)
             Include(rect.Y, rect.Height);
         foreach (var (rect, _, _) in _paragraphDecorations)

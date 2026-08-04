@@ -11,19 +11,6 @@ public sealed class PageVerticalAlignmentTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
-    private static async Task<bool> OnUiThread(Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false; // no headless drawing backend in this environment
-        }
-    }
-
     [Fact]
     public async Task Print_layout_applies_section_vertical_alignment_to_body_content()
     {
@@ -33,15 +20,12 @@ public sealed class PageVerticalAlignmentTests
         double centerOffset = 0;
         double bottomOffset = 0;
 
-        var ran = await OnUiThread(() =>
+        await Session.Dispatch(() =>
         {
             topY = MeasureFirstGlyph(PageVerticalAlignment.Top, out _);
             centerY = MeasureFirstGlyph(PageVerticalAlignment.Center, out centerOffset);
             bottomY = MeasureFirstGlyph(PageVerticalAlignment.Bottom, out bottomOffset);
-        });
-
-        if (!ran)
-            return;
+        }, CancellationToken.None);
 
         centerOffset.Should().BeGreaterThan(0);
         bottomOffset.Should().BeGreaterThan(centerOffset);
@@ -55,7 +39,7 @@ public sealed class PageVerticalAlignmentTests
         double topY = 0;
         double webY = 0;
 
-        var ran = await OnUiThread(() =>
+        await Session.Dispatch(() =>
         {
             var doc = OneParagraph(PageVerticalAlignment.Bottom);
             var print = new DocumentView();
@@ -68,12 +52,32 @@ public sealed class PageVerticalAlignmentTests
             web.ViewMode = DocumentViewMode.WebLayout;
             web.Measure(new Size(960, 1200));
             webY = web.GetPlacedForBlock(0).First().Y;
-        });
-
-        if (!ran)
-            return;
+        }, CancellationToken.None);
 
         webY.Should().BeLessThan(topY, "Web Layout has no print-page vertical whitespace");
+    }
+
+    [Fact]
+    public async Task Bottom_alignment_uses_image_bottom_and_shifts_image_rect()
+    {
+        Rect topRect = default;
+        Rect shortRect = default;
+        Rect tallRect = default;
+        double shortOffset = 0;
+        double tallOffset = 0;
+
+        await Session.Dispatch(() =>
+        {
+            (topRect, _) = MeasureInlineImage(PageVerticalAlignment.Top, 100);
+            (shortRect, shortOffset) = MeasureInlineImage(PageVerticalAlignment.Bottom, 100);
+            (tallRect, tallOffset) = MeasureInlineImage(PageVerticalAlignment.Bottom, 250);
+        }, CancellationToken.None);
+
+        (shortRect.Y - topRect.Y).Should().BeApproximately(shortOffset, 0.01);
+        (shortOffset - tallOffset).Should().BeApproximately(
+            tallRect.Height - shortRect.Height,
+            0.01,
+            "Bottom alignment must measure the image's true bottom when no glyph geometry exists");
     }
 
     private static double MeasureFirstGlyph(PageVerticalAlignment alignment, out double offset)
@@ -81,8 +85,29 @@ public sealed class PageVerticalAlignmentTests
         var view = new DocumentView();
         view.LoadDocument(OneParagraph(alignment));
         view.Measure(new Size(960, 1200));
-        offset = view.BodyPageVerticalOffsetsForTest.Single();
+        offset = alignment == PageVerticalAlignment.Top
+            ? 0
+            : view.BodyPageVerticalOffsetsForTest.Single();
         return view.GetPlacedForBlock(0).First().Y;
+    }
+
+    private static (Rect Rect, double Offset) MeasureInlineImage(PageVerticalAlignment alignment, double heightPt)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(string.Empty, RunFormatting.Default)
+        {
+            Image = new InlineImage([1], 100, heightPt) { Wrapping = ImageWrapping.Inline }
+        });
+        document.Blocks.Add(paragraph);
+        document.Page.VerticalAlignment = alignment;
+
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.Measure(new Size(960, 1200));
+        return (view.InlineImageRects.Single(),
+            alignment == PageVerticalAlignment.Top ? 0 : view.BodyPageVerticalOffsetsForTest.Single());
     }
 
     private static TextDocument OneParagraph(PageVerticalAlignment alignment)
