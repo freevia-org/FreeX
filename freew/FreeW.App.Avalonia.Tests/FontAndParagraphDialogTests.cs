@@ -628,6 +628,9 @@ public sealed class FontAndParagraphDialogTests
         formatting.WidowControl.Should().BeFalse();
         formatting.WidowControlIsSet.Should().BeTrue(
             "the WPF Paragraph dialog writes an explicit widow-control off value");
+        formatting.SuppressAutoHyphens.Should().BeFalse();
+        formatting.SuppressAutoHyphensIsSet.Should().BeTrue(
+            "the paragraph dialog writes an explicit auto-hyphenation suppression override");
     }
 
     [Fact]

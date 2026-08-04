@@ -7,9 +7,8 @@ namespace FreeW.Core.IO.Tests;
 /// <c>freew-fidelity-corpus/files/</c> folder, round-trips it through <see cref="DocxWriter"/> +
 /// <see cref="DocxReader"/>, and asserts no exception and no loss of <em>modelled</em> content.
 ///
-/// The corpus binaries are NOT committed (fetched via <c>tools/Fetch-FreeWFidelityCorpus.ps1</c>), so when
-/// the folder is absent — e.g. on CI — this test skips cleanly (it asserts nothing rather than failing).
-/// Run it locally after fetching the corpus to exercise FreeW against messy real-world Word documents.
+/// Repository-local fixtures are committed in nested feature folders. Additional third-party binaries are
+/// fetched on demand via <c>tools/Fetch-FreeWFidelityCorpus.ps1</c> into the same corpus tree.
 /// </summary>
 public class FreeWFidelityCorpusRoundTripTests
 {
@@ -18,10 +17,12 @@ public class FreeWFidelityCorpusRoundTripTests
     {
         var files = CorpusFiles();
 
-        // Corpus-gated: the DOCX binaries are download-on-demand (tools/Fetch-FreeWFidelityCorpus.ps1) and not
-        // committed, so when the folder is absent (e.g. CI) this test no-ops rather than failing.
-        if (files.Count == 0)
-            return;
+        files.Should().Contain(
+            file => file.EndsWith(Path.Combine("review", "citation-bibliography.docx"), StringComparison.OrdinalIgnoreCase),
+            "the committed nested review corpus must be exercised");
+        files.Should().Contain(
+            file => file.EndsWith(Path.Combine("tables", "01-banded-rows-header.docx"), StringComparison.OrdinalIgnoreCase),
+            "the committed nested table corpus must be exercised");
 
         var tmpDir = Path.Combine(Path.GetTempPath(), "freew-fidelity-corpus-roundtrip");
         Directory.CreateDirectory(tmpDir);
@@ -75,7 +76,7 @@ public class FreeWFidelityCorpusRoundTripTests
         {
             var candidate = Path.Combine(dir.FullName, "freew-fidelity-corpus", "files");
             if (Directory.Exists(candidate))
-                return Directory.GetFiles(candidate, "*.docx")
+                return Directory.GetFiles(candidate, "*.docx", SearchOption.AllDirectories)
                     .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
                     .ToList();
             dir = dir.Parent;

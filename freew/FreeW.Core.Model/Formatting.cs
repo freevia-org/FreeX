@@ -534,10 +534,17 @@ public sealed record ParagraphFormatting
     /// When true, automatic hyphenation is suppressed for this paragraph (pPr/w:suppressAutoHyphens), even
     /// when the document has <see cref="PageSettings.AutoHyphenation"/> on. Defaults to false so existing
     /// paragraphs are unaffected; round-trips to docx as the <c>w:suppressAutoHyphens</c> toggle, mirroring
-    /// <see cref="WidowControl"/>. The live editor honours it by skipping soft-hyphen insertion for the
-    /// paragraph's runs.
+    /// <see cref="WidowControl"/>. <see cref="SuppressAutoHyphensIsSet"/> preserves an explicit off token
+    /// so direct paragraph formatting can override a suppressing style. The live editor honours it by
+    /// skipping soft-hyphen insertion for the paragraph's runs.
     /// </summary>
     public bool SuppressAutoHyphens { get; init; }
+
+    /// <summary>
+    /// True when the source paragraph explicitly carries <c>w:suppressAutoHyphens</c>, including an
+    /// explicit off value. This distinguishes inherited/absent formatting from an authored override.
+    /// </summary>
+    public bool SuppressAutoHyphensIsSet { get; init; }
 
     /// <summary>
     /// When true, Word omits line numbers alongside this paragraph

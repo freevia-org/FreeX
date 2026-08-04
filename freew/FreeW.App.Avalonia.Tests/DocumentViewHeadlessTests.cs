@@ -390,6 +390,46 @@ public sealed class DocumentViewHeadlessTests
     }
 
     [Fact]
+    public async Task Direct_auto_hyphenation_opt_in_overrides_suppressing_style()
+    {
+        ParagraphFormatting? resolved = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = new TextDocument();
+            doc.Styles["NoHyphens"] = new DocumentStyle
+            {
+                Id = "NoHyphens",
+                Name = "No Hyphens",
+                Paragraph = ParagraphFormatting.Default with
+                {
+                    SuppressAutoHyphens = true,
+                    SuppressAutoHyphensIsSet = true,
+                },
+            };
+            var paragraph = new Paragraph("hyphenation rabbit")
+            {
+                StyleId = "NoHyphens",
+                Formatting = ParagraphFormatting.Default with
+                {
+                    SuppressAutoHyphensIsSet = true,
+                },
+            };
+            doc.Blocks.Add(paragraph);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+
+            resolved = InvokePrivate<ParagraphFormatting>(view, "ResolveParagraphFmt", paragraph);
+        });
+
+        if (!ran)
+            return;
+
+        resolved.Should().NotBeNull();
+        resolved!.SuppressAutoHyphens.Should().BeFalse();
+        resolved.SuppressAutoHyphensIsSet.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task ExportPdf_through_shared_tier_produces_valid_pdf()
     {
         byte[]? bytes = null;

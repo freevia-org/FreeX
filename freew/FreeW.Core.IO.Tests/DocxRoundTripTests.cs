@@ -3979,17 +3979,37 @@ public class DocxRoundTripTests
     }
 
     [Fact]
-    public void SuppressAutoHyphens_RoundTripsPerParagraph()
+    public void SuppressAutoHyphens_RoundTripsExplicitOnAndOffPerParagraph()
     {
+        var w = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
         var doc = new TextDocument();
-        doc.Blocks.Add(new Paragraph("normal"));
-        doc.Blocks.Add(new Paragraph("no hyphens") { Formatting = ParagraphFormatting.Default with { SuppressAutoHyphens = true } });
+        doc.Blocks.Add(new Paragraph("inherit"));
+        doc.Blocks.Add(new Paragraph("suppress")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                SuppressAutoHyphens = true,
+                SuppressAutoHyphensIsSet = true
+            }
+        });
+        doc.Blocks.Add(new Paragraph("explicit off")
+        {
+            Formatting = ParagraphFormatting.Default with { SuppressAutoHyphensIsSet = true }
+        });
 
-        var result = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+        var suppressTokens = xml.Descendants(w + "suppressAutoHyphens").ToList();
+        suppressTokens.Should().HaveCount(2);
+        suppressTokens[0].Attribute(w + "val").Should().BeNull();
+        suppressTokens[1].Attribute(w + "val")?.Value.Should().Be("0");
 
-        var paragraphs = result.Paragraphs.ToList();
-        paragraphs[0].Formatting.SuppressAutoHyphens.Should().BeFalse();
-        paragraphs[1].Formatting.SuppressAutoHyphens.Should().BeTrue();
+        var result = RoundTrip(doc).Paragraphs.ToList();
+        result[0].Formatting.SuppressAutoHyphens.Should().BeFalse();
+        result[0].Formatting.SuppressAutoHyphensIsSet.Should().BeFalse();
+        result[1].Formatting.SuppressAutoHyphens.Should().BeTrue();
+        result[1].Formatting.SuppressAutoHyphensIsSet.Should().BeTrue();
+        result[2].Formatting.SuppressAutoHyphens.Should().BeFalse();
+        result[2].Formatting.SuppressAutoHyphensIsSet.Should().BeTrue();
     }
 
     [Fact]
