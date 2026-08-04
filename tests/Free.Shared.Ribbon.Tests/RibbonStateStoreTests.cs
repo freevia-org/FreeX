@@ -10,6 +10,7 @@ public class RibbonStateStoreTests
         var store = new RibbonStateStore();
 
         store.GetState("Bold").Should().Be(RibbonCommandState.Default);
+        store.TryGetState("Bold", out _).Should().BeFalse();
     }
 
     [Fact]
@@ -22,6 +23,8 @@ public class RibbonStateStoreTests
         store.SetChecked("Bold", true);
 
         store.GetState("Bold").IsChecked.Should().BeTrue();
+        store.TryGetState("Bold", out var state).Should().BeTrue();
+        state.IsChecked.Should().BeTrue();
         events.Should().ContainSingle();
         events[0].Id.Should().Be(new RibbonCommandId("Bold"));
         events[0].State.IsChecked.Should().BeTrue();

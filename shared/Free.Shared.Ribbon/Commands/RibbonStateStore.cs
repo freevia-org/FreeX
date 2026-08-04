@@ -28,6 +28,9 @@ public interface IRibbonStateStore
     /// if it has never been set.</summary>
     RibbonCommandState GetState(RibbonCommandId id);
 
+    /// <summary>Returns whether an explicit state has been written for <paramref name="id"/>.</summary>
+    bool TryGetState(RibbonCommandId id, out RibbonCommandState state);
+
     /// <summary>Replaces the whole state for <paramref name="id"/>. Raises <see cref="StateChanged"/> only when
     /// the value actually changes.</summary>
     void SetState(RibbonCommandId id, RibbonCommandState state);
@@ -58,6 +61,9 @@ public sealed class RibbonStateStore : IRibbonStateStore
 
     public RibbonCommandState GetState(RibbonCommandId id) =>
         _states.TryGetValue(id, out var state) ? state : RibbonCommandState.Default;
+
+    public bool TryGetState(RibbonCommandId id, out RibbonCommandState state) =>
+        _states.TryGetValue(id, out state!);
 
     public void SetState(RibbonCommandId id, RibbonCommandState state)
     {

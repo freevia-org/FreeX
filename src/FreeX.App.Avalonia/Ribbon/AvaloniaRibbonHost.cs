@@ -253,7 +253,8 @@ internal static class AvaloniaRibbonHost
         Func<WorkbookSession?> session,
         Action<string> setStatus,
         AvaloniaRibbonHostCallbacks callbacks,
-        IRibbonContextSource? contextSource)
+        IRibbonContextSource? contextSource,
+        IRibbonStateStore? stateStore = null)
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(session, setStatus, callbacks);
         var definition = AvaloniaRibbonComposition.BuildDefinition();
@@ -263,10 +264,11 @@ internal static class AvaloniaRibbonHost
             registry,
             contextSource,
             palette: palette,
-            onFileTabSelected: callbacks.Backstage);
+            onFileTabSelected: callbacks.Backstage,
+            stateStore: stateStore);
         return (
             ribbon,
-            () => AvaloniaRibbonRenderer.SyncToggleStates(ribbon, registry, palette),
+            () => AvaloniaRibbonRenderer.SyncToggleStates(ribbon, registry, palette, stateStore),
             registry);
     }
 
