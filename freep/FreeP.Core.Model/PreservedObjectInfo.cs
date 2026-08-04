@@ -52,7 +52,8 @@ public sealed record ZoomObjectProperties(
     string? FrameGeometry = null,
     ZoomFrameBorderGradient? FrameBorderGradient = null,
     ZoomFrameBorderPattern? FrameBorderPattern = null,
-    bool? FrameBorderNoFill = null)
+    bool? FrameBorderNoFill = null,
+    ThemeColorSlot? FrameBorderThemeColor = null)
 {
     public bool IsEmpty => ReturnToParent is null
         && ImageType is null
@@ -68,7 +69,8 @@ public sealed record ZoomObjectProperties(
         && FrameGeometry is null
         && FrameBorderGradient is null
         && FrameBorderPattern is null
-        && FrameBorderNoFill is null;
+        && FrameBorderNoFill is null
+        && FrameBorderThemeColor is null;
 }
 
 /// <summary>

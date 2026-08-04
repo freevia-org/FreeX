@@ -90,7 +90,8 @@ public static class ZoomObjectPropertiesPlanner
             ReadFrameGeometry(properties),
             ReadFrameBorderGradient(properties),
             ReadFrameBorderPattern(properties),
-            ReadFrameBorderNoFill(properties));
+            ReadFrameBorderNoFill(properties),
+            ReadFrameBorderThemeColor(properties));
         return value.IsEmpty ? fallback : value;
     }
 
@@ -193,6 +194,20 @@ public static class ZoomObjectPropertiesPlanner
             : null;
     }
 
+    private static ThemeColorSlot? ReadFrameBorderThemeColor(XElement properties)
+    {
+        var line = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
+        var value = line?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "solidFill", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "schemeClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value;
+        return ThemeColorSlotMapper.TryMapRole(value, out var slot) ? slot : null;
+    }
+
     private static string? ReadPatternRgb(XElement? color)
     {
         var value = color?.Elements().FirstOrDefault(element =>
@@ -283,7 +298,8 @@ public static class ZoomObjectPropertiesPlanner
         TryNormalizeFrameBorderColor(properties.FrameBorderColor, out _)
         || properties.FrameBorderGradient is not null
         || properties.FrameBorderPattern is not null
-        || properties.FrameBorderNoFill == true;
+        || properties.FrameBorderNoFill == true
+        || properties.FrameBorderThemeColor is not null;
 
     public static string FormatFrameBorderWidth(ZoomObjectProperties properties) =>
         properties.FrameBorderWidthEmu is int width
@@ -315,6 +331,12 @@ public static class ZoomObjectPropertiesPlanner
 
     public static bool IsFrameBorderNoFillEnabled(ZoomObjectProperties properties) =>
         properties.FrameBorderNoFill == true;
+
+    public static IReadOnlyList<ThemeColorSlot> FrameBorderThemeColorOptions { get; } =
+        Enum.GetValues<ThemeColorSlot>();
+
+    public static bool IsFrameBorderThemeColorEnabled(ZoomObjectProperties properties) =>
+        properties.FrameBorderThemeColor is not null;
 
     public static string FormatFrameBorderPatternPreset(ZoomObjectProperties properties) =>
         properties.FrameBorderPattern?.Preset ?? FrameBorderPatternOptions[0];

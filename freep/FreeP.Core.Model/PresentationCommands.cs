@@ -815,9 +815,16 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
         if (properties.FrameBorderNoFill == true
             && (properties.FrameBorderColor is not null
                 || properties.FrameBorderGradient is not null
-                || properties.FrameBorderPattern is not null))
+                || properties.FrameBorderPattern is not null
+                || properties.FrameBorderThemeColor is not null))
             throw new ArgumentException(
                 "A Zoom frame border cannot combine no-fill with another fill.", nameof(properties));
+        if (properties.FrameBorderThemeColor is not null
+            && (properties.FrameBorderColor is not null
+                || properties.FrameBorderGradient is not null
+                || properties.FrameBorderPattern is not null))
+            throw new ArgumentException(
+                "A Zoom frame border cannot combine a theme color with another fill.", nameof(properties));
         if (properties.ImageType is not null
             && !string.Equals(properties.ImageType, "preview", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(properties.ImageType, "cover", StringComparison.OrdinalIgnoreCase))
@@ -838,6 +845,7 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             FrameBorderGradient = ValidateFrameBorderGradient(properties.FrameBorderGradient),
             FrameBorderPattern = ValidateFrameBorderPattern(properties.FrameBorderPattern),
             FrameBorderNoFill = properties.FrameBorderNoFill == true ? true : null,
+            FrameBorderThemeColor = ValidateFrameBorderThemeColor(properties.FrameBorderThemeColor),
         };
     }
 
@@ -947,6 +955,16 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
         return value;
     }
 
+    private static ThemeColorSlot? ValidateFrameBorderThemeColor(ThemeColorSlot? value)
+    {
+        if (value is null)
+            return null;
+        if (!Enum.IsDefined(value.Value))
+            throw new ArgumentOutOfRangeException(nameof(value), value,
+                "Zoom frame border theme color is not a supported theme slot.");
+        return value;
+    }
+
     private static bool TryPatchRawXml(
         string rawXml,
         ZoomObjectProperties properties,
@@ -978,7 +996,8 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             properties.FrameBorderWidthEmu, properties.FrameBorderDash,
             properties.FrameBorderGradient,
             properties.FrameBorderPattern,
-            properties.FrameBorderNoFill);
+            properties.FrameBorderNoFill,
+            properties.FrameBorderThemeColor);
             ZoomFrameGeometryXml.Set(zoomProperty, properties.FrameGeometry);
         }
         patchedXml = root.ToString(SaveOptions.DisableFormatting);
@@ -1365,7 +1384,8 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
             _newValue.FrameBorderWidthEmu, _newValue.FrameBorderDash,
             _newValue.FrameBorderGradient,
             _newValue.FrameBorderPattern,
-            _newValue.FrameBorderNoFill);
+            _newValue.FrameBorderNoFill,
+            _newValue.FrameBorderThemeColor);
         ZoomFrameGeometryXml.Set(properties, _newValue.FrameGeometry);
         patchedXml = document.Root!.ToString(SaveOptions.DisableFormatting);
         return true;
@@ -1380,9 +1400,16 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
         if (properties.FrameBorderNoFill == true
             && (properties.FrameBorderColor is not null
                 || properties.FrameBorderGradient is not null
-                || properties.FrameBorderPattern is not null))
+                || properties.FrameBorderPattern is not null
+                || properties.FrameBorderThemeColor is not null))
             throw new ArgumentException(
                 "A Zoom frame border cannot combine no-fill with another fill.", nameof(properties));
+        if (properties.FrameBorderThemeColor is not null
+            && (properties.FrameBorderColor is not null
+                || properties.FrameBorderGradient is not null
+                || properties.FrameBorderPattern is not null))
+            throw new ArgumentException(
+                "A Zoom frame border cannot combine a theme color with another fill.", nameof(properties));
         if (properties.ImageType is not null
             && !string.Equals(properties.ImageType, "preview", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(properties.ImageType, "cover", StringComparison.OrdinalIgnoreCase))
@@ -1399,6 +1426,7 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
             FrameBorderGradient = ValidateFrameBorderGradient(properties.FrameBorderGradient),
             FrameBorderPattern = ValidateFrameBorderPattern(properties.FrameBorderPattern),
             FrameBorderNoFill = properties.FrameBorderNoFill == true ? true : null,
+            FrameBorderThemeColor = ValidateFrameBorderThemeColor(properties.FrameBorderThemeColor),
         };
     }
 
@@ -1497,6 +1525,16 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
         if (!Enum.IsDefined(value.Value))
             throw new ArgumentOutOfRangeException(nameof(value), value,
                 "Zoom frame border dash is not a supported PowerPoint pattern.");
+        return value;
+    }
+
+    private static ThemeColorSlot? ValidateFrameBorderThemeColor(ThemeColorSlot? value)
+    {
+        if (value is null)
+            return null;
+        if (!Enum.IsDefined(value.Value))
+            throw new ArgumentOutOfRangeException(nameof(value), value,
+                "Zoom frame border theme color is not a supported theme slot.");
         return value;
     }
 

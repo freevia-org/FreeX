@@ -15,13 +15,14 @@ internal static class ZoomFrameBorderXml
         OutlineDash? dash,
         ZoomFrameBorderGradient? gradient = null,
         ZoomFrameBorderPattern? pattern = null,
-        bool? noFill = null)
+        bool? noFill = null,
+        ThemeColorSlot? themeColor = null)
     {
         if (noFill == false)
             noFill = null;
 
         // Null means the model did not understand the native line; preserve it verbatim.
-        if (color is null && widthEmu is null && dash is null && gradient is null && pattern is null && noFill is null)
+        if (color is null && widthEmu is null && dash is null && gradient is null && pattern is null && noFill is null && themeColor is null)
             return;
 
         var shapeProperties = zoomProperties.Elements().FirstOrDefault(element =>
@@ -49,7 +50,9 @@ internal static class ZoomFrameBorderXml
         var solidFill = line?.Elements(Drawing + "solidFill").FirstOrDefault();
         if (gradient is not null && pattern is not null)
             throw new ArgumentException("A Zoom frame border cannot use both gradient and pattern fills.");
-        if (noFill == true && (color is not null || gradient is not null || pattern is not null))
+        if (themeColor is not null && (color is not null || gradient is not null || pattern is not null || noFill == true))
+            throw new ArgumentException("A Zoom frame border cannot combine a theme color with another fill.");
+        if (noFill == true && (color is not null || gradient is not null || pattern is not null || themeColor is not null))
             throw new ArgumentException("A Zoom frame border cannot combine no-fill with another fill.");
 
         if (noFill == true)
@@ -96,6 +99,18 @@ internal static class ZoomFrameBorderXml
                 new XElement(Drawing + "bgClr",
                     new XElement(Drawing + "srgbClr",
                         new XAttribute("val", pattern.BackgroundColor)))));
+            if (line.Parent is null)
+                shapeProperties.Add(line);
+            return;
+        }
+
+        if (themeColor is ThemeColorSlot themeSlot)
+        {
+            line ??= new XElement(Drawing + "ln");
+            RemoveRecognizedFills(line);
+            line.AddFirst(new XElement(Drawing + "solidFill",
+                new XElement(Drawing + "schemeClr",
+                    new XAttribute("val", ThemeColorSlotMapper.ToSchemeColorString(themeSlot)))));
             if (line.Parent is null)
                 shapeProperties.Add(line);
             return;

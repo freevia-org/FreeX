@@ -1743,7 +1743,8 @@ public static class PptxPackageReader
             ReadZoomFrameGeometry(properties),
             ReadZoomFrameBorderGradient(properties),
             ReadZoomFrameBorderPattern(properties),
-            ReadZoomFrameBorderNoFill(properties));
+            ReadZoomFrameBorderNoFill(properties),
+            ReadZoomFrameBorderThemeColor(properties));
         return value.IsEmpty ? null : value;
     }
 
@@ -1875,6 +1876,20 @@ public static class PptxPackageReader
             string.Equals(element.Name.LocalName, "noFill", StringComparison.OrdinalIgnoreCase)) == true
             ? true
             : null;
+    }
+
+    private static ThemeColorSlot? ReadZoomFrameBorderThemeColor(XElement properties)
+    {
+        var line = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "ln", StringComparison.OrdinalIgnoreCase));
+        var value = line?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "solidFill", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "schemeClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value;
+        return ThemeColorSlotMapper.TryMapRole(value, out var slot) ? slot : null;
     }
 
     private static string? ReadZoomPatternColor(XElement? color)

@@ -599,6 +599,42 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void ZoomFrameBorder_ThemeColorIsUndoableAndRoundTripsNativeState()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var zoom = session.InsertSlideZoom("slide-2");
+        session.SetZoomObjectProperties(
+                zoom.Id,
+                new ZoomObjectProperties(
+                    FrameBorderWidthEmu: 25400,
+                    FrameBorderDash: OutlineDash.Dot,
+                    FrameBorderThemeColor: ThemeColorSlot.Accent2))
+            .Should().BeTrue();
+
+        var line = XElement.Parse(zoom.PreservedObject!.RawXml)
+            .Descendants().Single(element => element.Name.LocalName == "ln");
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        line.Element(drawing + "solidFill")!.Element(drawing + "schemeClr")!
+            .Attribute("val")!.Value.Should().Be("accent2");
+        line.Descendants(drawing + "srgbClr").Should().BeEmpty();
+        zoom.PreservedObject.ZoomProperties!.FrameBorderThemeColor
+            .Should().Be(ThemeColorSlot.Accent2);
+
+        session.Undo();
+        zoom.PreservedObject.RawXml.Should().NotContain("schemeClr");
+        session.Redo();
+
+        var reopened = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
+            .PreservedObject!.ZoomProperties!.FrameBorderThemeColor
+            .Should().Be(ThemeColorSlot.Accent2);
+    }
+
+    [Fact]
     public void ZoomFrameGeometry_IsUndoableAndRoundTripsNativePreset()
     {
         var presentation = new Presentation();

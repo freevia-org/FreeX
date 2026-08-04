@@ -184,6 +184,17 @@ public sealed class PresentationViewZoomPlannerTests
             .Should().BeFalse();
     }
 
+    [Fact]
+    public void Zoom_border_theme_color_is_an_explicit_enabled_state()
+    {
+        var properties = new ZoomObjectProperties(FrameBorderThemeColor: ThemeColorSlot.Accent2);
+
+        ZoomObjectPropertiesPlanner.IsFrameBorderEnabled(properties).Should().BeTrue();
+        ZoomObjectPropertiesPlanner.IsFrameBorderThemeColorEnabled(properties).Should().BeTrue();
+        ZoomObjectPropertiesPlanner.FrameBorderThemeColorOptions
+            .Should().Contain(ThemeColorSlot.Accent2);
+    }
+
     [Theory]
     [InlineData("not-a-pattern", "4472C4", "FFFFFF")]
     [InlineData("pct50", "GGGGGG", "FFFFFF")]
