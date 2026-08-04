@@ -644,36 +644,22 @@ public static class PageBorderArtVisualPlanner
         {
             new(inset, inset, railWidth, size, 0, 0, 0),
             new(inset, frameHeight - inset - size, railWidth, size, 0, 0, 0),
-            new(inset - 1, inset, size, railHeight, 0, 0, 0),
+            new(inset, inset, size, railHeight, 0, 0, 0),
             new(frameWidth - inset - size, inset, size, railHeight, 0, 0, 0),
-            new(inset - 1 + size, 128, 1, 800, 0, 0, 0),
         };
         var polygons = new List<PageBorderArtPolygon>();
-        AddRibbonHorizontalStripes(
-            polygons,
-            inset,
-            inset,
-            railWidth,
-            size,
-            slash: true,
-            phaseDip: size * 0.375,
-            steepWhiteBandStartDip: inset + size * 2.375,
-            steepWhiteBandEndDip: frameWidth - inset - size * 2.125);
-        AddRibbonHorizontalStripes(polygons, inset, frameHeight - inset - size, railWidth, size, slash: true, phaseDip: 0);
-        const double verticalMiddleTop = 128;
-        const double verticalMiddleBottom = 928;
-        var verticalTopMaterialEnd = inset + 2 * size;
-        var verticalBottomMaterialStart = frameHeight - inset - 2 * size;
-        AddRibbonVerticalStripes(polygons, inset - 1, inset, verticalTopMaterialEnd - inset, size, slash: false, phaseDip: 0, parallelWhiteBand: true);
-        AddRibbonVerticalStripes(polygons, inset - 1, verticalTopMaterialEnd, verticalMiddleTop - verticalTopMaterialEnd, size, slash: false, phaseDip: 0, parallelWhiteBand: false);
-        AddRibbonVerticalStripes(polygons, inset - 1, verticalMiddleTop, verticalMiddleBottom - verticalMiddleTop, size, slash: false, phaseDip: size * -0.75, parallelWhiteBand: false);
-        AddRibbonVerticalStripes(polygons, inset - 1, verticalMiddleBottom, verticalBottomMaterialStart - verticalMiddleBottom, size, slash: false, phaseDip: 0, parallelWhiteBand: false);
-        AddRibbonVerticalStripes(polygons, inset - 1, verticalBottomMaterialStart, frameHeight - inset - verticalBottomMaterialStart, size, slash: false, phaseDip: 0, parallelWhiteBand: true);
-        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, inset, verticalTopMaterialEnd - inset, size, slash: false, phaseDip: 0, parallelWhiteBand: true);
-        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalTopMaterialEnd, verticalMiddleTop - verticalTopMaterialEnd, size, slash: false, phaseDip: 0, parallelWhiteBand: false);
-        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalMiddleTop, verticalMiddleBottom - verticalMiddleTop, size, slash: false, phaseDip: size * -0.34375, parallelWhiteBand: false);
-        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalMiddleBottom, verticalBottomMaterialStart - verticalMiddleBottom, size, slash: false, phaseDip: 0, parallelWhiteBand: false);
-        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalBottomMaterialStart, frameHeight - inset - verticalBottomMaterialStart, size, slash: false, phaseDip: 0, parallelWhiteBand: true);
+        var horizontalStart = inset + size;
+        var horizontalLength = frameWidth - 2 * horizontalStart;
+        var verticalStart = inset + size;
+        var verticalLength = frameHeight - 2 * verticalStart;
+        AddWeavingRibbonRail(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonTopRail], horizontalStart, horizontalLength, inset, size, horizontal: true);
+        AddWeavingRibbonRail(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonBottomRail], horizontalStart, horizontalLength, frameHeight - inset - size, size, horizontal: true);
+        AddWeavingRibbonRail(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonLeftRail], verticalStart, verticalLength, inset, size, horizontal: false);
+        AddWeavingRibbonRail(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonRightRail], verticalStart, verticalLength, frameWidth - inset - size, size, horizontal: false);
+        AddWeavingRibbonMask(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonTopLeftCorner], inset, inset, size, horizontal: true);
+        AddWeavingRibbonMask(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonTopRightCorner], frameWidth - inset - size, inset, size, horizontal: true);
+        AddWeavingRibbonMask(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonBottomLeftCorner], inset, frameHeight - inset - size, size, horizontal: true);
+        AddWeavingRibbonMask(fills, PageBorderArtSpriteMasks.WeavingRibbonMasks[PageBorderArtSpriteMasks.WeavingRibbonBottomRightCorner], frameWidth - inset - size, frameHeight - inset - size, size, horizontal: true);
         plan = new PageBorderArtFilledShapePlan(fills, polygons);
         return true;
     }
@@ -1441,146 +1427,76 @@ public static class PageBorderArtVisualPlanner
             coordinates.Select(coordinate => point(coordinate.X, coordinate.Y)).ToList(),
             0xFF, 0xFF, 0xFF));
 
-    private static void AddRibbonHorizontalStripes(
-        List<PageBorderArtPolygon> polygons,
-        double x,
-        double y,
-        double width,
+    private static void AddWeavingRibbonRail(
+        List<PageBorderArtFillRectangle> fills,
+        IReadOnlyList<byte> mask,
+        double alongStart,
+        double alongLength,
+        double acrossStart,
         double size,
-        bool slash,
-        double phaseDip,
-        double? steepWhiteBandStartDip = null,
-        double? steepWhiteBandEndDip = null)
+        bool horizontal)
     {
-        var end = x + width;
-        for (var tileX = x + phaseDip; tileX < end; tileX += size)
+        var count = Math.Max(1, (int)Math.Floor((alongLength - 0.01) / size));
+        var step = count > 1 ? (alongLength - size) / (count - 1) : 0;
+        for (var index = 0; index < count; index++)
         {
-            var usesSteepWhiteBand = steepWhiteBandStartDip is not null &&
-                                     steepWhiteBandEndDip is not null &&
-                                     tileX >= steepWhiteBandStartDip.Value &&
-                                     tileX < steepWhiteBandEndDip.Value;
-            var points = slash
-                ? new[]
-                {
-                    (tileX, y + size * 0.96875),
-                    (tileX, y + size),
-                    (tileX + size * (usesSteepWhiteBand ? 0.3125 : 0.34375), y + size),
-                    (tileX + size, y + size * (usesSteepWhiteBand ? 0.25 : 0.34375)),
-                    (tileX + size, y),
-                    (tileX + size * (usesSteepWhiteBand ? 0.75 : 0.65625), y),
-                }
-                : new[]
-                {
-                    (tileX, y),
-                    (tileX + size * 0.34375, y),
-                    (tileX + size, y + size * 0.96875),
-                    (tileX + size, y + size),
-                    (tileX + size * 0.65625, y + size),
-                    (tileX, y + size * 0.34375),
-                };
-            AddClampedRibbonPolygon(polygons, points, x, y, end, y + size, 0xFF);
-            AddClampedRibbonPolygon(
-                polygons,
-                new[]
-                {
-                    (tileX + size * 0.3125, y + size * 0.15625),
-                    (tileX + size * 0.40625, y + size * 0.28125),
-                    (tileX + size * 0.40625, y + size * 0.625),
-                    (tileX + size * 0.3125, y + size * 0.71875),
-                    (tileX + size * 0.15625, y + size * 0.90625),
-                    (tileX + size * 0.09375, y + size * 0.84375),
-                    (tileX + size * 0.0625, y + size * 0.625),
-                    (tileX + size * 0.0625, y + size * 0.40625),
-                    (tileX + size * 0.15625, y + size * 0.3125),
-                },
-                x,
-                y,
-                end,
-                y + size,
-                0xC0);
+            var along = alongStart + index * step;
+            AddWeavingRibbonMask(
+                fills,
+                mask,
+                horizontal ? along : acrossStart,
+                horizontal ? acrossStart : along,
+                size,
+                horizontal);
         }
     }
 
-    private static void AddRibbonVerticalStripes(
-        List<PageBorderArtPolygon> polygons,
+    private static void AddWeavingRibbonMask(
+        List<PageBorderArtFillRectangle> fills,
+        IReadOnlyList<byte> mask,
         double x,
         double y,
-        double height,
         double size,
-        bool slash,
-        double phaseDip,
-        bool parallelWhiteBand)
+        bool horizontal)
     {
-        var end = y + height;
-        for (var tileY = y + phaseDip; tileY < end; tileY += size)
+        var scale = size / PageBorderArtSpriteMasks.MaskSize;
+        for (var row = 0; row < PageBorderArtSpriteMasks.MaskSize; row++)
         {
-            var points = slash
-                ? new[]
+            var runStart = -1;
+            byte material = 0;
+            for (var column = 0; column <= PageBorderArtSpriteMasks.MaskSize; column++)
+            {
+                var next = column < PageBorderArtSpriteMasks.MaskSize
+                    ? mask[row * PageBorderArtSpriteMasks.MaskSize + column]
+                    : (byte)0;
+                if (next != material && runStart >= 0)
                 {
-                    (x, tileY + size * 0.96875),
-                    (x, tileY + size),
-                    (x + size * 0.34375, tileY + size),
-                    (x + size, tileY + size * 0.34375),
-                    (x + size, tileY),
-                    (x + size * 0.65625, tileY),
+                    var runLength = column - runStart;
+                    var shade = material == 1 ? (byte)0xC0 : (byte)0xFF;
+                    fills.Add(horizontal
+                        ? new PageBorderArtFillRectangle(
+                            x + runStart * scale,
+                            y + row * scale,
+                            runLength * scale,
+                            scale,
+                            shade, shade, shade)
+                        : new PageBorderArtFillRectangle(
+                            x + row * scale,
+                            y + runStart * scale,
+                            scale,
+                            runLength * scale,
+                            shade, shade, shade));
+                    runStart = -1;
                 }
-                : parallelWhiteBand
-                    ? new[]
-                    {
-                        (x, tileY),
-                        (x + size * 0.25, tileY),
-                        (x + size, tileY + size * 0.75),
-                        (x + size, tileY + size),
-                        (x + size * 0.75, tileY + size),
-                        (x, tileY + size * 0.25),
-                    }
-                : new[]
+                if (next != material)
                 {
-                    (x, tileY),
-                    (x + size * 0.34375, tileY),
-                    (x + size, tileY + size * 0.96875),
-                    (x + size, tileY + size),
-                    (x + size * 0.65625, tileY + size),
-                    (x, tileY + size * 0.34375),
-                };
-            AddClampedRibbonPolygon(polygons, points, x, y, x + size, end, 0xFF);
-            AddClampedRibbonPolygon(
-                polygons,
-                new[]
-                {
-                    (x + size * 0.15625, tileY + size * 0.6875),
-                    (x + size * 0.28125, tileY + size * 0.59375),
-                    (x + size * 0.625, tileY + size * 0.59375),
-                    (x + size * 0.71875, tileY + size * 0.6875),
-                    (x + size * 0.90625, tileY + size * 0.84375),
-                    (x + size * 0.84375, tileY + size * 0.90625),
-                    (x + size * 0.625, tileY + size * 0.9375),
-                    (x + size * 0.40625, tileY + size * 0.9375),
-                    (x + size * 0.3125, tileY + size * 0.84375),
-                },
-                x,
-                y,
-                x + size,
-                end,
-                0xC0);
+                    material = next;
+                    if (material != 0)
+                        runStart = column;
+                }
+            }
         }
     }
-
-    private static void AddClampedRibbonPolygon(
-        List<PageBorderArtPolygon> polygons,
-        IEnumerable<(double X, double Y)> points,
-        double left,
-        double top,
-        double right,
-        double bottom,
-        byte gray) =>
-        polygons.Add(new PageBorderArtPolygon(
-            points.Select(point => new PageBorderArtPoint(
-                Math.Clamp(point.X, left, right),
-                Math.Clamp(point.Y, top, bottom))).ToList(),
-            gray,
-            gray,
-            gray));
 
     private static void AddVerticalRail(
         List<PageBorderArtFillRectangle> fills,
