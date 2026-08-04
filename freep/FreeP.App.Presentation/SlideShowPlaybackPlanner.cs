@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Xml;
+using System.Xml.Linq;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -180,6 +183,10 @@ public sealed record SlideShowShapeAnimationPlaybackPlan(
     public int? RepeatCount { get; init; }
     public bool RepeatIndefinitely { get; init; }
     public bool AutoReverse { get; init; }
+    /// <summary>Resolved authored RGB source color for a native color emphasis effect.</summary>
+    public string? ColorFromHex { get; init; }
+    /// <summary>Resolved authored RGB destination color for a native color emphasis effect.</summary>
+    public string? ColorToHex { get; init; }
 }
 
 public sealed record SlideShowFallbackAnimationPlaybackPlan(
@@ -362,6 +369,7 @@ public static class SlideShowPlaybackPlanner
         var (fromScaleX, fromScaleY, toScaleX, toScaleY, peakScaleX, peakScaleY) =
             ResolveScaleAxesForPlayback(animation, fromScale, toScale, ResolvePeakScale(animation));
         var (offsetX, offsetY) = ResolveFlyInOffset(animation.Direction);
+        var (colorFromHex, colorToHex) = ResolveColorBehavior(animation, effectKind);
 
         return new SlideShowShapeAnimationPlaybackPlan(
             animation,
@@ -394,6 +402,8 @@ public static class SlideShowPlaybackPlanner
             RepeatCount = animation.RepeatCount,
             RepeatIndefinitely = animation.RepeatIndefinitely,
             AutoReverse = animation.AutoReverse,
+            ColorFromHex = colorFromHex,
+            ColorToHex = colorToHex,
             FromScaleX = fromScaleX,
             FromScaleY = fromScaleY,
             ToScaleX = toScaleX,
@@ -499,6 +509,42 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Underline => SlideShowShapeAnimationEffectKind.Underline,
             _ => SlideShowShapeAnimationEffectKind.Appear
         };
+    }
+
+    private static (string? From, string? To) ResolveColorBehavior(
+        ShapeAnimation animation,
+        SlideShowShapeAnimationEffectKind effectKind)
+    {
+        if (effectKind is not (SlideShowShapeAnimationEffectKind.ColorPulse
+            or SlideShowShapeAnimationEffectKind.ChangeColor
+            or SlideShowShapeAnimationEffectKind.Shimmer)
+            || string.IsNullOrWhiteSpace(animation.PreservedColorBehaviorXml))
+        {
+            return (null, null);
+        }
+
+        try
+        {
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            var root = XElement.Parse(animation.PreservedColorBehaviorXml, LoadOptions.PreserveWhitespace);
+            var from = ReadRgb(root.Element(p + "clrFrom")?.Element(a + "srgbClr"));
+            var to = ReadRgb(root.Element(p + "clrTo")?.Element(a + "srgbClr"));
+            return (from, to);
+        }
+        catch (XmlException)
+        {
+            return (null, null);
+        }
+    }
+
+    private static string? ReadRgb(XElement? color)
+    {
+        var value = color?.Attribute("val")?.Value.Trim();
+        return value is { Length: 6 }
+            && int.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out _)
+            ? value.ToUpperInvariant()
+            : null;
     }
 
     private static SlideShowAnimationRevealTiming ResolveRevealTiming(

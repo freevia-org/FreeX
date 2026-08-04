@@ -2024,6 +2024,28 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanShapeAnimation_ResolvesAuthoredRgbColorBehavior()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 73,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.ChangeColor,
+                PreservedColorBehaviorXml = """
+                    <p:animClr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" clrSpc="rgb">
+                      <p:clrFrom><a:srgbClr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" val="ff0000" /></p:clrFrom>
+                      <p:clrTo><a:srgbClr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" val="00aaFF" /></p:clrTo>
+                    </p:animClr>
+                    """
+            },
+            startDelayMs: 0);
+
+        plan.ColorFromHex.Should().Be("FF0000");
+        plan.ColorToHex.Should().Be("00AAFF");
+    }
+
+    [Fact]
     public void PlanFrame_ProjectsImportedEmphasisTracks()
     {
         var blinkPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(

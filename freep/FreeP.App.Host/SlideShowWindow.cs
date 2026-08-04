@@ -5808,6 +5808,8 @@ public sealed class SlideShowWindow : Window
         Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
         sb.Children.Add(anim);
 
+        AddAuthoredColorOverlay(sb, el, plan);
+
         if (plan.EffectKind == SlideShowShapeAnimationEffectKind.GrowWithColor)
         {
             var scale = new ScaleTransform(1, 1, el.Width / 2, el.Height / 2);
@@ -5829,6 +5831,80 @@ public sealed class SlideShowWindow : Window
             sb.Children.Add(scaleX);
             sb.Children.Add(scaleY);
         }
+    }
+
+    private static void AddAuthoredColorOverlay(
+        Storyboard storyboard,
+        FrameworkElement element,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        if (plan.ColorFromHex is null
+            || plan.ColorToHex is null
+            || element is not Image image
+            || image.Source is not ImageSource source
+            || element.Parent is not Panel parent
+            || !TryParseAnimationColor(plan.ColorFromHex, out var from)
+            || !TryParseAnimationColor(plan.ColorToHex, out var to))
+        {
+            return;
+        }
+
+        var brush = new SolidColorBrush(from);
+        var tint = new Rectangle
+        {
+            Width = element.Width,
+            Height = element.Height,
+            Fill = brush,
+            Opacity = 0,
+            OpacityMask = new ImageBrush(source) { Stretch = Stretch.None },
+            IsHitTestVisible = false
+        };
+        var left = Canvas.GetLeft(element);
+        var top = Canvas.GetTop(element);
+        Canvas.SetLeft(tint, double.IsNaN(left) ? 0 : left);
+        Canvas.SetTop(tint, double.IsNaN(top) ? 0 : top);
+        parent.Children.Add(tint);
+
+        var color = new ColorAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs))
+        };
+        color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0)));
+        color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(0.5)));
+        color.KeyFrames.Add(new LinearColorKeyFrame(
+            plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? to : from,
+            KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(color, brush);
+        Storyboard.SetTargetProperty(color, new PropertyPath(SolidColorBrush.ColorProperty));
+        storyboard.Children.Add(color);
+
+        var opacity = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs))
+        };
+        opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0)));
+        opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.5)));
+        opacity.KeyFrames.Add(new LinearDoubleKeyFrame(
+            plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? 0.65 : 0,
+            KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(opacity, tint);
+        Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
+        storyboard.Children.Add(opacity);
+    }
+
+    private static bool TryParseAnimationColor(string value, out Color color)
+    {
+        color = default;
+        if (value.Length != 6
+            || !byte.TryParse(value[..2], System.Globalization.NumberStyles.HexNumber, null, out var r)
+            || !byte.TryParse(value[2..4], System.Globalization.NumberStyles.HexNumber, null, out var g)
+            || !byte.TryParse(value[4..], System.Globalization.NumberStyles.HexNumber, null, out var b))
+        {
+            return false;
+        }
+
+        color = Color.FromRgb(r, g, b);
+        return true;
     }
 
     /// <summary>
