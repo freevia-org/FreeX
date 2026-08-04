@@ -1833,6 +1833,127 @@ public sealed class ChartTests : IDisposable
             .Should().Equal(1);
     }
 
+    [Fact]
+    public void RoundTrip_NonWaterfallChartEx_PreservesNativeLayoutWithoutWaterfallMutation()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XElement(cxNs + "chartData",
+                    new XElement(cxNs + "data",
+                        new XAttribute("id", 0),
+                        new XElement(cxNs + "strDim",
+                            new XElement(cxNs + "lvl",
+                                new XElement(cxNs + "pt", new XAttribute("idx", 0), "A"),
+                                new XElement(cxNs + "pt", new XAttribute("idx", 1), "B"))),
+                        new XElement(cxNs + "numDim",
+                            new XElement(cxNs + "lvl",
+                                new XElement(cxNs + "pt", new XAttribute("idx", 0), "10"),
+                                new XElement(cxNs + "pt", new XAttribute("idx", 1), "20"))))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData", new XElement(cxNs + "v", "Value"))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0))))))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+
+        var cloned = SlideCloner.CloneSlide(BuildPresWithChart(chart).Slides[0]).Shapes.Single().Chart!;
+        cloned.IsChartEx.Should().BeTrue();
+        cloned.ChartExLayoutId.Should().Be("histogram");
+        cloned.PreservedChartExXml.Should().Be(chart.PreservedChartExXml);
+
+        var path = WriteToPptx(BuildPresWithChart(chart));
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartEx = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+            chartEx.Descendants(cxNs + "series").Single()
+                .Attribute("layoutId")!.Value.Should().Be("histogram");
+            chartEx.Descendants(cxNs + "layoutPr").Should().BeEmpty(
+                "non-waterfall ChartEx families must not receive waterfall connector or subtotal metadata");
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        rt.IsChartEx.Should().BeTrue();
+        rt.ChartExLayoutId.Should().Be("histogram");
+        rt.ChartType.Should().Be(ChartType.ColumnClustered);
+        rt.WaterfallTotalPointIndices.Should().BeNull();
+    }
+
+    [Fact]
+    public void Edit_NativeSingleSeriesChartEx_UpdatesDataWithoutChangingFamilyPayload()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var data = new XElement(cxNs + "data",
+            new XAttribute("id", 0),
+            new XElement(cxNs + "strDim",
+                new XElement(cxNs + "lvl",
+                    new XAttribute("ptCount", 2),
+                    new XElement(cxNs + "pt", new XAttribute("idx", 0), "A"),
+                    new XElement(cxNs + "pt", new XAttribute("idx", 1), "B"))),
+            new XElement(cxNs + "numDim",
+                new XElement(cxNs + "lvl",
+                    new XAttribute("ptCount", 2),
+                    new XElement(cxNs + "pt", new XAttribute("idx", 0), "10"),
+                    new XElement(cxNs + "pt", new XAttribute("idx", 1), "20"))));
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XElement(cxNs + "chartData", data),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData",
+                                        new XElement(cxNs + "v", "Value"))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0)),
+                                new XElement(cxNs + "histogramExtension",
+                                    new XAttribute("binCount", 4))))))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting),
+            RegenerateWorkbookOnSave = true,
+            Categories = { "First", "Second", "Third" }
+        };
+        var series = new ChartSeries { Name = "Edited values" };
+        series.Values.AddRange(new double?[] { 12.5, null, 31 });
+        chart.Series.Add(series);
+
+        var path = WriteToPptx(BuildPresWithChart(chart));
+        using var archive = ZipFile.OpenRead(path);
+        var written = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var writtenSeries = written.Descendants(cxNs + "series").Single();
+
+        writtenSeries.Attribute("layoutId")!.Value.Should().Be("histogram");
+        writtenSeries.Element(cxNs + "histogramExtension")!.Attribute("binCount")!.Value.Should().Be("4");
+        written.Descendants(cxNs + "strDim").Single().Element(cxNs + "lvl")!
+            .Elements(cxNs + "pt").Select(point => point.Value).Should().Equal("First", "Second", "Third");
+        written.Descendants(cxNs + "numDim").Single().Element(cxNs + "lvl")!
+            .Elements(cxNs + "pt").Select(point => (int)point.Attribute("idx")!).Should().Equal(0, 2);
+        written.Descendants(cxNs + "numDim").Single().Element(cxNs + "lvl")!
+            .Elements(cxNs + "pt").Select(point => point.Value).Should().Equal("12.5", "31");
+        writtenSeries.Element(cxNs + "tx")!.Element(cxNs + "txData")!.Element(cxNs + "v")!.Value
+            .Should().Be("Edited values");
+        written.Descendants(cxNs + "layoutPr").Should().BeEmpty();
+    }
+
     [Theory]
     [InlineData(ChartType.Surface, "surfaceChart")]
     [InlineData(ChartType.Surface3D, "surface3DChart")]

@@ -110,7 +110,10 @@ internal static class PptxChartWriter
             try
             {
                 var preserved = XDocument.Parse(chart.PreservedChartExXml, LoadOptions.PreserveWhitespace);
-                UpdateChartExSemantics(preserved, chart);
+                if (chart.RegenerateWorkbookOnSave)
+                    UpdateChartExData(preserved, chart);
+                if (IsWaterfallChartEx(preserved, chart))
+                    UpdateChartExSemantics(preserved, chart);
                 return preserved;
             }
             catch (XmlException)
@@ -157,6 +160,78 @@ internal static class PptxChartWriter
                 new XElement(cx + "chart",
                     new XElement(cx + "plotArea",
                         new XElement(cx + "plotAreaRegion", series)))));
+    }
+
+    private static bool IsWaterfallChartEx(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var layoutId = document
+            .Descendants(cx + "series")
+            .Select(series => series.Attribute("layoutId")?.Value)
+            .FirstOrDefault();
+        return string.Equals(layoutId, "waterfall", StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(chart.ChartExLayoutId ?? layoutId, "waterfall", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Applies an explicit chart-data edit to a preserved native ChartEx payload.
+    ///
+    /// ChartEx families share the chartData dimensions, but their plot semantics do
+    /// not. Keep this update deliberately narrow: only a single-series payload with
+    /// the dimensions understood by the reader is safe to edit without inventing or
+    /// deleting family-specific nodes. Ambiguous payloads remain verbatim rather than
+    /// being silently downgraded by a generic classic-chart writer.
+    /// </summary>
+    private static void UpdateChartExData(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var data = document.Descendants(cx + "chartData")
+            .Elements(cx + "data")
+            .SingleOrDefault();
+        var series = document.Descendants(cx + "plotAreaRegion")
+            .Elements(cx + "series")
+            .ToList();
+        var categoryLevel = data?.Element(cx + "strDim")?.Element(cx + "lvl");
+        var valueLevel = data?.Element(cx + "numDim")?.Element(cx + "lvl");
+
+        if (data is null || series.Count != 1 || categoryLevel is null || valueLevel is null ||
+            chart.Series.Count != 1)
+            return;
+
+        ReplaceChartExPoints(categoryLevel, chart.Categories, static value => value);
+        ReplaceChartExPoints(
+            valueLevel,
+            chart.Series[0].Values,
+            value => value?.ToString("G", CultureInfo.InvariantCulture));
+
+        var valueElement = series[0].Element(cx + "tx")?.Element(cx + "txData")?.Element(cx + "v");
+        if (valueElement is not null)
+            valueElement.Value = chart.Series[0].Name ?? string.Empty;
+    }
+
+    private static void ReplaceChartExPoints<T>(
+        XElement level,
+        IEnumerable<T> values,
+        Func<T, string?> format)
+    {
+        var materialized = values.ToList();
+        level.SetAttributeValue("ptCount", materialized.Count);
+        level.Elements().Where(element => element.Name == level.Name.Namespace + "pt").Remove();
+
+        var pointIndex = 0;
+        foreach (var value in materialized)
+        {
+            var text = format(value);
+            if (text is null)
+            {
+                pointIndex++;
+                continue;
+            }
+
+            level.Add(new XElement(level.Name.Namespace + "pt",
+                new XAttribute("idx", pointIndex), text));
+            pointIndex++;
+        }
     }
 
     private static void UpdateChartExSemantics(XDocument document, ChartShape chart)
