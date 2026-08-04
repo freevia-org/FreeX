@@ -10,8 +10,10 @@ public sealed class MailMergeFinishPlannerSourceTests
         var source = File.ReadAllText(
             Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
 
-        source.Should().Contain("MailMergeFinishPlanner.PlanNewDocumentAllRecords(");
+        source.Should().Contain("MailMergeFinishPlanner.Plan(");
         source.Should().Contain("finishPlan.RowIndexes");
+        source.Should().Contain("finishPlan.Destination == MailMergeFinishDestination.Printer");
+        source.Should().Contain("printDocument!(combined)");
         source.Should().NotContain("var augmentedRows = data.Rows.Select(r => session.AugmentRow(r)).ToList();");
     }
 

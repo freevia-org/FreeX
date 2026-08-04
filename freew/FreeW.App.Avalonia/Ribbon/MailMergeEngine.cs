@@ -4,6 +4,11 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Ribbon;
 
+internal sealed record MailMergeFinishBuildResult(
+    TextDocument Document,
+    int MergedRecordCount,
+    int SkippedRecordCount);
+
 /// <summary>
 /// AV-MAIL: the Avalonia shell's mail-merge glue between the Mailings ribbon commands and the portable
 /// <see cref="MailMerge"/> engine. Owns a single <see cref="MailMergeSession"/> shared by every Mailings
@@ -481,18 +486,48 @@ internal sealed class MailMergeEngine
 
     public TextDocument? FinishMerge(MailMergeFinishPlan finishPlan)
     {
-        if (Session.Data is not { Count: > 0 } data)
+        if (Session.Data is not { Count: > 0 })
         {
             ShowInfo("Select recipients first (Mailings > Select Recipients), then Finish & Merge.");
             return null;
         }
 
-        var template = Session.IsPreviewing ? Session.Template! : _editor.Document;
         if (!finishPlan.Success)
         {
             ShowInfo($"Finish & Merge cannot continue: {finishPlan.Issue}.");
             return null;
         }
+
+        if (finishPlan.Destination != MailMergeFinishDestination.NewDocument)
+            return null;
+
+        var result = BuildFinishedMerge(finishPlan);
+        if (result is null)
+            return null;
+
+        _editor.LoadDocument(result.Document);
+        Session.Template = null;
+        Session.CurrentIndex = 0;
+
+        ShowInfo(result.SkippedRecordCount > 0
+            ? $"Merged {result.MergedRecordCount} record(s) into a single document ({result.SkippedRecordCount} skipped)."
+            : $"Merged {result.MergedRecordCount} record(s) into a single document.");
+        return result.Document;
+    }
+
+    /// <summary>
+    /// Builds the selected merge output without replacing the visible document or changing preview/session
+    /// state. Print Documents uses this path so cancelling or completing printer submission leaves the merge
+    /// template open and reusable.
+    /// </summary>
+    public MailMergeFinishBuildResult? BuildFinishedMerge(MailMergeFinishPlan finishPlan)
+    {
+        if (!finishPlan.Success ||
+            Session.Data is not { Count: > 0 } data ||
+            finishPlan.RowIndexes.Any(index => index < 0 || index >= data.Count))
+            return null;
+
+        var template = Session.IsPreviewing ? Session.Template! : _editor.Document;
 
         // Augment every row with the composed «AddressBlock» / «GreetingLine» values so those composite
         // placeholders resolve across every record, then run the rules-aware merge (records flagged by a
@@ -502,15 +537,7 @@ internal sealed class MailMergeEngine
         var merged = MailMerge.MergeAllWithRules(template, augmentedData, state);
         var combined = MailMerge.CombineMergedRecords(merged, Session.Mode);
 
-        _editor.LoadDocument(combined);
-        Session.Template = null;
-        Session.CurrentIndex = 0;
-
-        var skipped = state.SkippedIndices.Count;
-        ShowInfo(skipped > 0
-            ? $"Merged {merged.Count} record(s) into a single document ({skipped} skipped)."
-            : $"Merged {merged.Count} record(s) into a single document.");
-        return combined;
+        return new MailMergeFinishBuildResult(combined, merged.Count, state.SkippedIndices.Count);
     }
 
     /// <summary>
