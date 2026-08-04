@@ -649,6 +649,22 @@ static void RenderDocumentComposite(
         var (thisMarginLeft, thisMarginTop, thisMarginRight, thisMarginBottom) =
             PageLayout.MarginsDip(thisPageSettings);
 
+        var bodyVerticalOffset = 0d;
+        if (i == actualPageCount - 1
+            && thisPageSettings.ColumnCount == 1
+            && doc.Blocks.All(block => block is FreeW.Core.Model.Paragraph)
+            && doc.Footnotes.Count == 0
+            && doc.Endnotes.Count == 0
+            && TryMeasureFinalParagraphPageFreeSpace(
+                docPage,
+                flow.Blocks.OfType<System.Windows.Documents.Paragraph>().LastOrDefault()?.Margin.Bottom ?? 0,
+                out var bodyFreeSpace))
+        {
+            bodyVerticalOffset = PageVerticalAlignmentPlanner.ResolveBodyOffset(
+                thisPageSettings.VerticalAlignment,
+                bodyFreeSpace);
+        }
+
         int thisPixW = (int)Math.Max(1, Math.Round(thisPageWDip));
         int thisPixH = (int)Math.Max(1, Math.Round(thisPageHDip));
 
@@ -704,8 +720,12 @@ static void RenderDocumentComposite(
                 // Layer 2: body FlowDocument content (the paginator's Visual is already laid out).
                 // We use VisualBrush here because DocumentPage.Visual IS a fully-realized visual
                 // that the WPF paginator has already laid out; it works correctly headlessly.
+                if (bodyVerticalOffset > 0)
+                    dc.PushTransform(new TranslateTransform(0, bodyVerticalOffset));
                 dc.DrawRectangle(new VisualBrush(docPage.Visual) { Stretch = Stretch.None },
                     null, new Rect(0, 0, pageWDip, pageHDip));
+                if (bodyVerticalOffset > 0)
+                    dc.Pop();
 
                 // WPF's detached paginator paints an opaque page surface. On an otherwise plain
                 // body page that surface must not erase Word's header-owned watermark. Structured
@@ -2638,6 +2658,59 @@ static int FindLastPaintedRow(RenderTargetBitmap bitmap)
     }
 
     return 0;
+}
+
+static bool TryMeasureFinalParagraphPageFreeSpace(
+    DocumentPage page,
+    double paragraphSpaceAfterDip,
+    out double freeSpaceDip)
+{
+    freeSpaceDip = 0;
+    var root = page.Visual;
+    Rect lastLineBounds = Rect.Empty;
+    var lastLineLeading = 0d;
+    var pending = new Stack<DependencyObject>();
+    pending.Push(root);
+
+    while (pending.Count > 0)
+    {
+        var node = pending.Pop();
+        if (node is Visual visual
+            && string.Equals(node.GetType().Name, "LineVisual", StringComparison.Ordinal))
+        {
+            var localBounds = VisualTreeHelper.GetDescendantBounds(visual);
+            if (!localBounds.IsEmpty)
+            {
+                try
+                {
+                    var pageBounds = visual.TransformToAncestor(root).TransformBounds(localBounds);
+                    if (lastLineBounds.IsEmpty || pageBounds.Bottom > lastLineBounds.Bottom)
+                    {
+                        lastLineBounds = pageBounds;
+                        // WPF positions glyph ink inside the line box with leading above and below.
+                        // Adding the measured top leading recovers the line box's lower edge.
+                        lastLineLeading = Math.Max(0, localBounds.Top);
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    return false;
+                }
+            }
+        }
+
+        for (var childIndex = 0; childIndex < VisualTreeHelper.GetChildrenCount(node); childIndex++)
+            pending.Push(VisualTreeHelper.GetChild(node, childIndex));
+    }
+
+    if (lastLineBounds.IsEmpty)
+        return false;
+
+    var occupiedBottom = lastLineBounds.Bottom
+        + lastLineLeading
+        + Math.Max(0, paragraphSpaceAfterDip);
+    freeSpaceDip = Math.Max(0, page.ContentBox.Bottom - occupiedBottom);
+    return true;
 }
 
 /// <summary>

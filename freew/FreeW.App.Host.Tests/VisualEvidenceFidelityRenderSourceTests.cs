@@ -425,6 +425,17 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("anchorPageAssignment[source.BlockIndex] == pageIndex");
     }
 
+    [Fact]
+    public void FidelityRender_UsesMeasuredFinalParagraphSpaceForPageVerticalAlignment()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+
+        source.Should().Contain("TryMeasureFinalParagraphPageFreeSpace(");
+        source.Should().Contain("PageVerticalAlignmentPlanner.ResolveBodyOffset(");
+        source.Should().Contain("new TranslateTransform(0, bodyVerticalOffset)");
+        source.Should().Contain("doc.Blocks.All(block => block is FreeW.Core.Model.Paragraph)");
+    }
+
     private static string RepositoryFile(params string[] parts)
     {
         var directory = AppContext.BaseDirectory;
