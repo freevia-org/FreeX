@@ -2091,6 +2091,48 @@ public sealed class SlideShowMediaControllerTests
     }
 
     [StaFact]
+    public void ActiveWebVttVerticalCue_UsesWritingDirectionAndRotatesTextSurface()
+    {
+        var overlay = new System.Windows.Controls.Canvas();
+        var ctrl = new SlideShowMediaController(overlay, new FakeFileWriter());
+        var slide = SlideWithMedia(MakeMediaShape());
+        var track = new PresentationMediaTranscriptTrackDescriptor(
+            SlideIndex: 0,
+            ShapeId: 1,
+            ShapeName: "Video1",
+            TrackIndex: 0,
+            Label: "Japanese",
+            Language: "ja-JP",
+            Source: "captions.vtt",
+            ContentType: "text/vtt",
+            Status: PresentationMediaTranscriptTrackStatus.Available,
+            StatusMessage: string.Empty,
+            Cues:
+            [
+                new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Vertical")
+                {
+                    PositionPercent = 75,
+                    SizePercent = 40,
+                    WritingMode = PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft
+                }
+            ]);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720, [track]);
+        ctrl.RefreshCaptionsForTest(TimeSpan.FromMilliseconds(500));
+
+        var caption = overlay.Children.OfType<System.Windows.Controls.Border>().Single();
+        System.Windows.Controls.Canvas.GetLeft(caption).Should().Be(874);
+        System.Windows.Controls.Canvas.GetTop(caption).Should().Be(396);
+        caption.Width.Should().Be(86);
+        caption.Height.Should().Be(288);
+        var text = caption.Child.Should().BeOfType<System.Windows.Controls.TextBlock>().Subject;
+        text.RenderTransform.Should().BeOfType<System.Windows.Media.RotateTransform>()
+            .Which.Angle.Should().Be(90);
+        text.Width.Should().Be(288);
+        text.Height.Should().Be(86);
+    }
+
+    [StaFact]
     public void UpdateLayout_RepositionsCaptionOverlayAfterCanvasResize()
     {
         var fakeWriter = new FakeFileWriter();

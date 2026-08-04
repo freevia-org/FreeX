@@ -267,8 +267,15 @@ public sealed class SlideShowMediaController
             if (slot.Element is not null)
                 ApplyRect(slot.Element, r);
 
-            if (slot.CaptionHost is not null)
-                ApplyCaptionPlacement(slot.CaptionHost, r, cue: null);
+            if (slot.CaptionHost is not null && slot.CaptionText is not null)
+            {
+                var cue = slot.Element is null
+                    ? null
+                    : PresentationMediaTranscriptPlanner.FindActiveCue(
+                        slot.CaptionTrack,
+                        slot.Element.Position);
+                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, r, cue);
+            }
         }
     }
 
@@ -354,7 +361,7 @@ public sealed class SlideShowMediaController
             Visibility = Visibility.Collapsed,
             IsHitTestVisible = false,
         };
-        ApplyCaptionPlacement(host, bounds, cue: null);
+        ApplyCaptionPlacement(host, text, bounds, cue: null);
         Panel.SetZIndex(host, 10);
         _overlay.Children.Add(host);
         return (host, text);
@@ -362,6 +369,7 @@ public sealed class SlideShowMediaController
 
     private static void ApplyCaptionPlacement(
         Border host,
+        TextBlock text,
         MediaShapeRect bounds,
         PresentationMediaTranscriptCueDescriptor? cue)
     {
@@ -373,6 +381,13 @@ public sealed class SlideShowMediaController
             defaultHeight);
         host.Width = placement.Width;
         host.Height = placement.Height;
+        var isVertical = placement.RotationDegrees != 0;
+        text.Width = isVertical ? placement.Height : double.NaN;
+        text.Height = isVertical ? placement.Width : double.NaN;
+        text.RenderTransformOrigin = new Point(0.5, 0.5);
+        text.RenderTransform = isVertical
+            ? new RotateTransform(placement.RotationDegrees)
+            : Transform.Identity;
         Canvas.SetLeft(host, bounds.X + placement.X);
         Canvas.SetTop(host, bounds.Y + placement.Y);
     }
@@ -400,7 +415,7 @@ public sealed class SlideShowMediaController
                 && ShapeTreeLookup.Find(activeSlide, slot.ShapeId) is { Media: not null } shape)
             {
                 var bounds = ComputeMediaRect(shape, _slideDipW, _slideDipH, _canvasW, _canvasH);
-                ApplyCaptionPlacement(slot.CaptionHost, bounds, cue);
+                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue);
             }
             slot.CaptionHost.Visibility = cue is null
                 ? Visibility.Collapsed
