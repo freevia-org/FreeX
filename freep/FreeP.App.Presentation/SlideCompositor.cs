@@ -767,6 +767,21 @@ public static class SlideCompositor
 
         var resolvedColor = ResolveZoomFrameColor(solidFill, theme, effectiveClrMap);
         if (resolvedColor is null
+            && fallback?.FrameBorderThemeColor is { } themeSlot
+            && theme is not null)
+        {
+            resolvedColor = ThemeColorResolver.Resolve(
+                new ThemeAwareColor(
+                    theme.ColorScheme[themeSlot],
+                    new SchemeColorRef
+                    {
+                        Slot = themeSlot,
+                        RoleName = ThemeColorSlotMapper.ToSchemeColorString(themeSlot),
+                    }),
+                theme,
+                effectiveClrMap);
+        }
+        if (resolvedColor is null
             && TryParseZoomRgb(fallback?.FrameBorderColor, out var fallbackColor))
             resolvedColor = fallbackColor;
         if (resolvedColor is null)

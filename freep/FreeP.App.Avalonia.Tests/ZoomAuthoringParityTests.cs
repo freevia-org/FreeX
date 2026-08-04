@@ -26,6 +26,8 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderPattern(");
         source.Should().Contain("Use no-fill border");
         source.Should().Contain("IsFrameBorderNoFillEnabled");
+        source.Should().Contain("Use theme border color");
+        source.Should().Contain("FrameBorderThemeColor");
         source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameGeometry(");
         source.Should().Contain("Frame shape:");
         source.Should().Contain("_frameBorderColor.IsEnabled");
