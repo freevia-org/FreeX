@@ -3522,9 +3522,15 @@ public sealed class DocumentView : RichTextBox
                 if (_model.Blocks[index] is not ModelParagraph paragraph)
                     continue;
 
+                var updated = MultilevelListDialogPlanner.ApplyDefinition(paragraph.Formatting, definition);
                 _commands.Execute(new SetParagraphFormattingCommand(
                     index,
-                    MultilevelListDialogPlanner.ApplyDefinition(paragraph.Formatting, definition)));
+                    updated));
+                var linkedStyleId = MultilevelListDialogPlanner.ResolveLinkedHeadingStyleId(
+                    updated.ListLevel,
+                    definition);
+                if (linkedStyleId is not null && _model.Styles.ContainsKey(linkedStyleId))
+                    _commands.Execute(new SetParagraphStyleCommand(index, linkedStyleId));
             }
 
             _commands.Execute(new SetMultiLevelNumberFormatsCommand(definition.NumberFormats));
@@ -8556,7 +8562,7 @@ public sealed class DocumentView : RichTextBox
     /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null);
 
     private sealed record RenderedBookmarkBoundary(BookmarkBoundary Boundary);
 
@@ -8781,6 +8787,7 @@ public sealed class DocumentView : RichTextBox
             {
                 ListKind = tag?.ListKind ?? ListKind.None,
                 ListLevel = tag?.ListLevel ?? 0,
+                ListStartOverride = tag?.ListStartOverride,
                 WidowControlIsSet = tag?.WidowControlIsSet ?? false
             },
             // The bookmark names, style id, and section break (invisible markers with no FlowDocument slot)
@@ -10593,8 +10600,8 @@ public sealed class DocumentView : RichTextBox
         // representation, and page-break-before has no native slot. Keep the model metadata on every
         // paragraph Tag so an edit/commit cycle cannot serialize renderer-only flow properties such as the
         // widow-control approximation as authored keep-lines-together.
-        // The list nesting depth is carried on the Tag too: the editor flattens a list run into one WPF
-        // List, so depth has no structural slot and would otherwise reset to 0 on commit (see ParagraphTag).
+        // The list nesting depth and start override are carried on the Tag too: the editor flattens a list
+        // run into one WPF List, so neither has a structural slot and both would otherwise reset on commit.
         // The border's line style / per-edge flags and the shading pattern have no WPF Border equivalent,
         // so carry the full ParagraphBorder + shading pattern on the Tag whenever they are non-default; they
         // are recovered verbatim on commit (see ReadParagraphFormatting) so the dialog's choices survive.
@@ -10612,7 +10619,8 @@ public sealed class DocumentView : RichTextBox
             paragraph.SectionBreak,
             paragraph.DropCap,
             paraFmt.ListKind != ListKind.None ? paraFmt.ListKind : null,
-            paraFmt.KeepLinesTogether);
+            paraFmt.KeepLinesTogether,
+            paraFmt.ListStartOverride);
 
         var runs = paragraph.Runs;
         var dropCapPlan = !inTableCell

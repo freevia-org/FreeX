@@ -305,6 +305,39 @@ public sealed class HomeDialogDepthTests
         registry.TryGet("freew.multilevel-preset-2", out _).Should().BeTrue("freew.multilevel-preset-2 must be registered");
     }
 
+    [StaFact]
+    public void MultilevelPreset_KeepsExistingListEnabledAndUndoesAsOneStep()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Existing")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                ListKind = ListKind.MultiLevel,
+                ListLevel = 1,
+                ListStartOverride = 5,
+            },
+        });
+        var editor = ViewWith(doc);
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+        registry.TryGet("freew.multilevel-preset-1", out var command).Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        var applied = editor.Model.Blocks.OfType<Paragraph>().Single();
+        applied.Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        applied.Formatting.ListLevel.Should().Be(1);
+        editor.Model.MultiLevelList.NumberFormats[1].Should().Be(ListNumberFormat.LowerLetter);
+
+        editor.Undo();
+
+        var restored = editor.Model.Blocks.OfType<Paragraph>().Single();
+        restored.Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        restored.Formatting.ListStartOverride.Should().Be(5);
+        editor.Model.MultiLevelList.NumberFormats[1].Should().Be(ListNumberFormat.Decimal);
+    }
+
     // ── 8. PasteSpecialOption enum shape ─────────────────────────────────────
 
     [Fact]

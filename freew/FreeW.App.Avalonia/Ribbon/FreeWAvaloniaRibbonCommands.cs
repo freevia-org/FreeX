@@ -161,10 +161,12 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.multilevel-preset-1", new ActionRibbonCommand(() =>
             ApplyMultiLevelPreset(editor, MultiLevelListFormat.DecimalLowerLetterLowerRomanNumberFormats)));
         r.Register("freew.multilevel-preset-2", new ActionRibbonCommand(() =>
-        {
-            editor.ApplyMultiLevelHeadingPreset();
-            editor.ApplyMultiLevelNumberFormats(MultiLevelListFormat.DecimalNumberFormats);
-        }));
+            editor.ApplyMultiLevelListDefinition(new MultilevelListDefinition(
+                MultiLevelListFormat.LevelCount,
+                null,
+                null,
+                MultiLevelListFormat.DecimalNumberFormats,
+                LinkToHeadingStyles: true))));
         r.Register("freew.multilevel-define", new ActionRibbonCommand(
             callbacks.OpenMultilevelListDialog ?? (() =>
             {
@@ -648,15 +650,20 @@ internal static class FreeWAvaloniaRibbonCommands
 
     private static void ApplyMultiLevelList(DocumentView editor)
     {
-        if (editor.GetCaretFormatting().Paragraph.ListKind != ListKind.MultiLevel)
-            editor.ApplyMultiLevelListToSelection();
-        editor.ApplyMultiLevelNumberFormats(MultiLevelListFormat.DecimalNumberFormats);
+        editor.ApplyMultiLevelListDefinition(new MultilevelListDefinition(
+            MultiLevelListFormat.LevelCount,
+            null,
+            null,
+            MultiLevelListFormat.DecimalNumberFormats));
     }
 
     private static void ApplyMultiLevelPreset(DocumentView editor, IReadOnlyList<ListNumberFormat> numberFormats)
     {
-        editor.ApplyMultiLevelListToSelection();
-        editor.ApplyMultiLevelNumberFormats(numberFormats);
+        editor.ApplyMultiLevelListDefinition(new MultilevelListDefinition(
+            MultiLevelListFormat.LevelCount,
+            null,
+            null,
+            numberFormats));
     }
 
     private static void ChangeListLevel(DocumentView editor, bool demote)

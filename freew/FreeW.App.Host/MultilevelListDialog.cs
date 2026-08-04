@@ -29,33 +29,34 @@ internal static class MultilevelListDialog
             "Decimal outline using the standard FreeW multilevel list.",
             view =>
             {
-                view.ApplyMultiLevelList();
-                view.ApplyMultiLevelNumberFormats(MultiLevelListFormat.DecimalNumberFormats);
+                view.ApplyMultiLevelListDefinition(new MultilevelListDefinition(
+                    MultiLevelListFormat.LevelCount,
+                    null,
+                    null,
+                    MultiLevelListFormat.DecimalNumberFormats));
             }),
         new(
             "Outline: 1. / a. / i.",
             "Decimal + lower-letter + lower-roman per-level numbering.",
             view =>
             {
-                view.ApplyMultiLevelList();
-                view.ApplyMultiLevelNumberFormats(MultiLevelListFormat.DecimalLowerLetterLowerRomanNumberFormats);
+                view.ApplyMultiLevelListDefinition(new MultilevelListDefinition(
+                    MultiLevelListFormat.LevelCount,
+                    null,
+                    null,
+                    MultiLevelListFormat.DecimalLowerLetterLowerRomanNumberFormats));
             }),
         new(
             "Outline (Headings): link to Heading styles",
             "Apply multilevel list and map each level to Heading 1-3 styles.",
             view =>
             {
-                view.ApplyMultiLevelList();
-                var fmt = view.CurrentParagraphFormatting;
-                var headingStyleId = fmt.ListLevel switch
-                {
-                    0 => "Heading1",
-                    1 => "Heading2",
-                    _ => "Heading3",
-                };
-                if (view.Model.Styles.ContainsKey(headingStyleId))
-                    view.SetParagraphStyle(headingStyleId);
-                view.ApplyMultiLevelNumberFormats(MultiLevelListFormat.DecimalNumberFormats);
+                view.ApplyMultiLevelListDefinition(new MultilevelListDefinition(
+                    MultiLevelListFormat.LevelCount,
+                    null,
+                    null,
+                    MultiLevelListFormat.DecimalNumberFormats,
+                    LinkToHeadingStyles: true));
             }),
     ];
 
