@@ -19,8 +19,19 @@ public sealed record ThesaurusActionRow(
     string SourceWord,
     string RawSynonym,
     string DisplayText,
-    string ReplaceToolTip,
-    string CopyToolTip);
+    string InsertToolTip,
+    string CopyToolTip)
+{
+    public string ReplaceToolTip => InsertToolTip;
+}
+
+public static class ThesaurusActionRowExtensions
+{
+    public static bool CanInsert(this ThesaurusActionRow action) =>
+        !string.IsNullOrWhiteSpace(action.SourceWord) &&
+        !string.IsNullOrWhiteSpace(action.RawSynonym) &&
+        !string.IsNullOrWhiteSpace(action.DisplayText);
+}
 
 public static class ThesaurusPresentationPlanner
 {
@@ -66,7 +77,7 @@ public static class ThesaurusPresentationPlanner
             sourceWord,
             synonym,
             display,
-            $"Replace \"{sourceWord}\" with \"{display}\"",
+            $"Insert \"{display}\" in place of \"{sourceWord}\"",
             $"Copy \"{display}\" to clipboard");
     }
 

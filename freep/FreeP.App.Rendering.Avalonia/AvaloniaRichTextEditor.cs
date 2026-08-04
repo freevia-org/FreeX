@@ -46,6 +46,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private AvaloniaRichTextEditor? _activeInlineTableCellEditor;
     private AvaloniaRichTextEditingSurface.InlineTableCellHit? _activeInlineTableCellHit;
     private readonly Func<bool, bool>? _navigateInlineTableCell;
+    private readonly Action? _cancelInlineTableCellEdit;
     private readonly List<PendingInlineTableRows> _pendingInlineTableRows = new();
 
     internal AvaloniaRichTextEditor(
@@ -53,7 +54,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
         byte backgroundAlpha,
         string fallbackFontFamily = InCanvasRichTextEditorDefaults.FallbackFontFamily,
         double fallbackFontSizePt = InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt,
-        Func<bool, bool>? navigateInlineTableCell = null)
+        Func<bool, bool>? navigateInlineTableCell = null,
+        Action? cancelInlineTableCellEdit = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fallbackFontFamily);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(fallbackFontSizePt);
@@ -62,6 +64,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         _fallbackFontFamily = fallbackFontFamily;
         _fallbackFontSizePt = fallbackFontSizePt;
         _navigateInlineTableCell = navigateInlineTableCell;
+        _cancelInlineTableCellEdit = cancelInlineTableCellEdit;
         _richTextView = new AvaloniaRichTextEditingSurface();
         var textWrapping = body?.Wrap == false
             ? TextWrapping.NoWrap
@@ -658,6 +661,20 @@ internal sealed class AvaloniaRichTextEditor : Grid
             FocusEditor();
     }
 
+    private void CancelInlineTableCellEdit()
+    {
+        var cellEditor = _activeInlineTableCellEditor;
+        if (cellEditor is null)
+            return;
+
+        _activeInlineTableCellEditor = null;
+        _activeInlineTableCellHit = null;
+        cellEditor.InputBox.LostFocus -= OnInlineTableCellEditorLostFocus;
+        Children.Remove(cellEditor);
+        RenderBody();
+        FocusEditor();
+    }
+
     private bool BeginInlineTableCellEdit(
         AvaloniaRichTextEditingSurface.InlineTableCellHit hit)
     {
@@ -673,7 +690,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
             backgroundAlpha: 0,
             fallbackFontFamily: _fallbackFontFamily,
             fallbackFontSizePt: _fallbackFontSizePt,
-            navigateInlineTableCell: NavigateInlineTableCell)
+            navigateInlineTableCell: NavigateInlineTableCell,
+            cancelInlineTableCellEdit: CancelInlineTableCellEdit)
         {
             Width = Math.Max(1, hit.Bounds.Width),
             Height = Math.Max(1, hit.Bounds.Height),
@@ -691,6 +709,13 @@ internal sealed class AvaloniaRichTextEditor : Grid
         _activeInlineTableCellHit = hit;
         Children.Add(cellEditor);
         cellEditor.FocusEditor();
+        var initialSelection = TableCellEditPlanner.PlanInitialSelection(body);
+        cellEditor.SelectionStart = initialSelection.Start;
+        cellEditor.SelectionEnd = initialSelection.End;
+        cellEditor.ApplyPlanMetadata(
+            cellEditor.CurrentPlan(),
+            "freep-table-cell-rich-editor",
+            "freep-table-cell-mixed-formatting");
         return true;
     }
 
@@ -871,6 +896,19 @@ internal sealed class AvaloniaRichTextEditor : Grid
         bool control = (e.KeyModifiers & KeyModifiers.Control) != 0;
         bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
 
+        if (e.Key == Key.Escape && _cancelInlineTableCellEdit is not null)
+        {
+            var keyboardPlan = TableCellEditPlanner.PlanKeyboard(
+                TableCellEditKeyboardKey.Escape,
+                ToTableCellEditKeyboardModifiers(e.KeyModifiers));
+            if (keyboardPlan.Action == TableCellEditKeyboardAction.Cancel)
+            {
+                _cancelInlineTableCellEdit();
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (e.Key == Key.Tab && _navigateInlineTableCell is not null)
         {
             e.Handled = _navigateInlineTableCell(shift);
@@ -892,6 +930,20 @@ internal sealed class AvaloniaRichTextEditor : Grid
                 case Key.V:
                     e.Handled = true;
                     await PasteClipboardAsync();
+                    return;
+                case Key.B:
+                    e.Handled = ToggleTextFormat(TableCellTextFormatKind.Bold);
+                    return;
+                case Key.I:
+                    e.Handled = ToggleTextFormat(TableCellTextFormatKind.Italic);
+                    return;
+                case Key.U:
+                    e.Handled = ToggleTextFormat(TableCellTextFormatKind.Underline);
+                    return;
+                case Key.OemPlus:
+                case Key.Add:
+                    e.Handled = ToggleTextFormat(
+                        shift ? TableCellTextFormatKind.Superscript : TableCellTextFormatKind.Subscript);
                     return;
             }
         }
@@ -1134,5 +1186,20 @@ internal sealed class AvaloniaRichTextEditor : Grid
         InputBox.BorderThickness = style.Underline == true
             ? new Thickness(1.5, 1.5, 1.5, 3.0)
             : new Thickness(1.5);
+    }
+
+    private static TableCellEditKeyboardModifiers ToTableCellEditKeyboardModifiers(
+        KeyModifiers modifiers)
+    {
+        var result = TableCellEditKeyboardModifiers.None;
+        if ((modifiers & KeyModifiers.Control) != 0)
+            result |= TableCellEditKeyboardModifiers.Control;
+        if ((modifiers & KeyModifiers.Shift) != 0)
+            result |= TableCellEditKeyboardModifiers.Shift;
+        if ((modifiers & KeyModifiers.Alt) != 0)
+            result |= TableCellEditKeyboardModifiers.Alt;
+        if ((modifiers & KeyModifiers.Meta) != 0)
+            result |= TableCellEditKeyboardModifiers.Platform;
+        return result;
     }
 }

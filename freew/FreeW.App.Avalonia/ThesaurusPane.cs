@@ -12,12 +12,27 @@ namespace FreeW.App.Avalonia;
 internal sealed class ThesaurusPane : Border
 {
     private readonly DocumentView _editor;
-    private readonly Func<string, Task>? _copyText;
+    private readonly Func<string, Task<bool>>? _copyText;
     private readonly TextBlock _heading;
     private readonly TextBlock _status;
     private readonly StackPanel _senses;
+    private readonly List<(Button Insert, Button Copy)> _actionButtons = [];
 
-    internal ThesaurusPane(DocumentView editor, Func<string, Task>? copyText = null)
+    internal ThesaurusPane(DocumentView editor)
+        : this(editor, (Func<string, Task<bool>>?)null)
+    {
+    }
+
+    internal ThesaurusPane(DocumentView editor, Func<string, Task> copyText)
+        : this(editor, async text =>
+        {
+            await copyText(text);
+            return true;
+        })
+    {
+    }
+
+    internal ThesaurusPane(DocumentView editor, Func<string, Task<bool>>? copyText)
     {
         _editor = editor;
         _copyText = copyText;
@@ -44,6 +59,8 @@ internal sealed class ThesaurusPane : Border
 
     internal string HeadingForTest => _heading.Text ?? string.Empty;
     internal int SenseCountForTest => _senses.Children.OfType<StackPanel>().Count();
+    internal IReadOnlyList<(bool InsertEnabled, bool CopyEnabled)> ActionStatesForTest =>
+        _actionButtons.Select(buttons => (buttons.Insert.IsEnabled, buttons.Copy.IsEnabled)).ToArray();
 
     public void Toggle()
     {
@@ -60,6 +77,7 @@ internal sealed class ThesaurusPane : Border
         _heading.Text = plan.HeadingText;
         _status.Text = plan.StatusText;
         _senses.Children.Clear();
+        _actionButtons.Clear();
         foreach (var sense in plan.Senses)
         {
             var panel = new StackPanel { Margin = new Thickness(10, 5, 10, 3), Spacing = 4 };
@@ -71,7 +89,7 @@ internal sealed class ThesaurusPane : Border
     }
 
     internal bool ReplaceForTest(string synonym) => Replace(synonym);
-    internal Task CopyForTestAsync(string synonym) => CopyAsync(synonym);
+    internal Task<bool> CopyForTestAsync(string synonym) => CopyAsync(synonym);
 
     private Control BuildAction(ThesaurusActionRow action)
     {
@@ -80,19 +98,28 @@ internal sealed class ThesaurusPane : Border
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var label = new TextBlock { Text = action.DisplayText, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
-        var replace = new Button { Content = "Replace", MinWidth = 68 };
-        ToolTip.SetTip(replace, action.ReplaceToolTip);
-        replace.Click += (_, _) => Replace(action.DisplayText);
+        var insert = new Button
+        {
+            Content = "↵",
+            MinWidth = 68,
+            IsEnabled = action.CanInsert() && _editor.CanReplaceCurrentProofingWord(action.DisplayText)
+        };
+        ToolTip.SetTip(insert, action.InsertToolTip);
+        insert.Click += (_, _) => Replace(action.DisplayText);
         var copy = new Button { Content = "Copy", MinWidth = 54 };
         ToolTip.SetTip(copy, action.CopyToolTip);
         copy.Click += async (_, _) => await CopyAsync(action.DisplayText);
-        Grid.SetColumn(replace, 1);
+        copy.IsEnabled = CanCopy;
+        _actionButtons.Add((insert, copy));
+        Grid.SetColumn(insert, 1);
         Grid.SetColumn(copy, 2);
         grid.Children.Add(label);
-        grid.Children.Add(replace);
+        grid.Children.Add(insert);
         grid.Children.Add(copy);
         return grid;
     }
+
+    private bool CanCopy => _copyText is not null || TopLevel.GetTopLevel(this)?.Clipboard is not null;
 
     private bool Replace(string synonym)
     {
@@ -103,14 +130,23 @@ internal sealed class ThesaurusPane : Border
         return replaced;
     }
 
-    private async Task CopyAsync(string synonym)
+    private async Task<bool> CopyAsync(string synonym)
     {
         if (_copyText is not null)
-        {
-            await _copyText(synonym);
-            return;
-        }
+            return await _copyText(synonym);
         if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
-            await clipboard.SetTextAsync(synonym);
+        {
+            try
+            {
+                await clipboard.SetTextAsync(synonym);
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        return false;
     }
 }

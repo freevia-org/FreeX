@@ -333,6 +333,8 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         {
             if (_tabs.SelectedIndex is >= 0 and < 4)
                 _focusTrace.Add($"TabPage:{((TabItem)_tabs.SelectedItem!).Header}");
+            if (_tabs.SelectedIndex == (int)TablePropertiesDialogTab.Cell)
+                NormalizeCellComboSurfaces();
         };
         _tabs.SelectedIndex = Math.Clamp((int)initialTab, 0, 3);
         AutomationProperties.SetAutomationId(_tabs, "TablePropertiesTabs");
@@ -367,7 +369,12 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
             if (args.Source is Control control && AutomationProperties.GetAutomationId(control) is { Length: > 0 } automationId)
                 _focusTrace.Add(automationId);
         }, RoutingStrategies.Bubble);
-        Opened += (_, _) => FocusInitialField();
+        Opened += (_, _) =>
+        {
+            FocusInitialField();
+            if (_tabs.SelectedIndex == (int)TablePropertiesDialogTab.Cell)
+                NormalizeCellComboSurfaces();
+        };
     }
 
     internal TabControl TabsForTest => _tabs;
@@ -441,6 +448,14 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         _floatingDistanceLeft.IsEnabled = enabled;
         _floatingDistanceBottom.IsEnabled = enabled;
         _floatingDistanceRight.IsEnabled = enabled;
+    }
+
+    private void NormalizeCellComboSurfaces()
+    {
+        AvaloniaCompactDialogChrome.ApplyWpfDisabledComboSurface(_floatingHorizontalAnchor);
+        AvaloniaCompactDialogChrome.ApplyWpfDisabledComboSurface(_floatingHorizontalMode);
+        AvaloniaCompactDialogChrome.ApplyWpfDisabledComboSurface(_floatingVerticalAnchor);
+        AvaloniaCompactDialogChrome.ApplyWpfDisabledComboSurface(_floatingVerticalMode);
     }
 
     private static TabItem TabPage(string header, string automationId, Control content)

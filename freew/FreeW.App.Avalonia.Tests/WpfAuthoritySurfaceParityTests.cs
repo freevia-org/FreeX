@@ -4,6 +4,8 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Free.Shared.Ribbon;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
@@ -338,6 +340,44 @@ public sealed class WpfAuthoritySurfaceParityTests
             tabs[3].GetLogicalDescendants().OfType<Expander>()
                 .Select(expander => Convert.ToString(expander.Header))
                 .Should().ContainSingle("Positioning");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Table_properties_normalizes_disabled_positioning_combo_surfaces_on_cell_tab()
+    {
+        await Session.Dispatch(() =>
+        {
+            var (_, table) = CreateTableEditor();
+            var dialog = new TablePropertiesDialog(
+                new ModelTableContext(table, table.Rows[0], table.Rows[0].Cells[0]),
+                TablePropertiesDialogTab.Cell);
+            try
+            {
+                dialog.Width = 560;
+                dialog.Height = 600;
+                dialog.Show();
+                dialog.Measure(new Size(560, 600));
+                dialog.Arrange(new Rect(0, 0, 560, 600));
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var positioningCombos = dialog.GetVisualDescendants()
+                    .OfType<ComboBox>()
+                    .Where(combo => (AutomationProperties.GetAutomationId(combo) ?? string.Empty).StartsWith("TablePropertiesHorizontal", StringComparison.Ordinal)
+                        || (AutomationProperties.GetAutomationId(combo) ?? string.Empty).StartsWith("TablePropertiesVertical", StringComparison.Ordinal))
+                    .ToArray();
+                positioningCombos.Should().HaveCount(4);
+                positioningCombos.Should().OnlyContain(combo => !combo.IsEffectivelyEnabled);
+                positioningCombos.SelectMany(combo => combo.GetVisualDescendants()
+                        .OfType<Border>()
+                        .Where(border => border.Name == "PART_LayoutRoot"))
+                    .Should().OnlyContain(surface => surface.Background == positioningCombos[0].Background);
+            }
+            finally
+            {
+                dialog.Close();
+            }
         }, CancellationToken.None);
     }
 
