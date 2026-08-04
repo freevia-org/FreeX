@@ -18,4 +18,22 @@ public sealed class PageVerticalAlignmentPlannerTests
         PageVerticalAlignmentPlanner.ResolveBodyOffset(alignment, freeSpaceDip)
             .Should().Be(expectedOffsetDip);
     }
+
+    [Theory]
+    [InlineData(PageVerticalAlignment.Justified, 120, 2, 60)]
+    [InlineData(PageVerticalAlignment.Justified, 120, 1, 120)]
+    [InlineData(PageVerticalAlignment.Justified, 120, 0, 0)]
+    [InlineData(PageVerticalAlignment.Center, 120, 2, 0)]
+    public void ResolveJustifiedParagraphGap_DistributesOnlyAcrossBoundaries(
+        PageVerticalAlignment alignment,
+        double freeSpaceDip,
+        int paragraphGapCount,
+        double expectedGapDip)
+    {
+        PageVerticalAlignmentPlanner.ResolveJustifiedParagraphGap(
+                alignment,
+                freeSpaceDip,
+                paragraphGapCount)
+            .Should().Be(expectedGapDip);
+    }
 }

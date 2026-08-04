@@ -80,6 +80,45 @@ public sealed class PageVerticalAlignmentTests
             "Bottom alignment must measure the image's true bottom when no glyph geometry exists");
     }
 
+    [Fact]
+    public async Task Justified_alignment_distributes_page_space_between_body_blocks_and_hit_tests_shifted_text()
+    {
+        double firstTop = 0;
+        double secondTop = 0;
+        double thirdTop = 0;
+        double gap = 0;
+        (int Block, int Offset)? hit = null;
+
+        await Session.Dispatch(() =>
+        {
+            var topDocument = ThreeParagraphs(PageVerticalAlignment.Top);
+            var topView = new DocumentView();
+            topView.LoadDocument(topDocument);
+            topView.Measure(new Size(960, 1200));
+            firstTop = topView.GetPlacedForBlock(0).First().Y;
+            var topSecond = topView.GetPlacedForBlock(1).First().Y;
+
+            var justifiedView = new DocumentView();
+            justifiedView.LoadDocument(ThreeParagraphs(PageVerticalAlignment.Justified));
+            justifiedView.Measure(new Size(960, 1200));
+            secondTop = justifiedView.GetPlacedForBlock(1).First().Y;
+            thirdTop = justifiedView.GetPlacedForBlock(2).First().Y;
+            gap = justifiedView.BodyPageVerticalJustifiedGapsForTest.Single();
+
+            var secondGlyph = justifiedView.GetPlacedForBlock(1).First();
+            hit = justifiedView.TestHitTest(new Point(
+                secondGlyph.X + Math.Max(0.1, secondGlyph.W / 2),
+                secondGlyph.Y + secondGlyph.LineHeight / 2));
+
+            (secondTop - topSecond).Should().BeApproximately(gap, 0.01);
+            (thirdTop - secondTop).Should().BeGreaterThan(gap);
+            firstTop.Should().BeApproximately(topView.GetPlacedForBlock(0).First().Y, 0.01);
+        }, CancellationToken.None);
+
+        gap.Should().BeGreaterThan(0);
+        hit.Should().Be((1, 1));
+    }
+
     private static double MeasureFirstGlyph(PageVerticalAlignment alignment, out double offset)
     {
         var view = new DocumentView();
@@ -115,6 +154,17 @@ public sealed class PageVerticalAlignmentTests
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
         document.Blocks.Add(new Paragraph("A short body paragraph."));
+        document.Page.VerticalAlignment = alignment;
+        return document;
+    }
+
+    private static TextDocument ThreeParagraphs(PageVerticalAlignment alignment)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("First paragraph."));
+        document.Blocks.Add(new Paragraph("Second paragraph."));
+        document.Blocks.Add(new Paragraph("Third paragraph."));
         document.Page.VerticalAlignment = alignment;
         return document;
     }

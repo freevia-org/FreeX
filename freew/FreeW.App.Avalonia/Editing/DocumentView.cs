@@ -308,6 +308,8 @@ public sealed class DocumentView : Control
     // Section page vertical alignment is applied after the body pass, once each page's used height is
     // known. Header/footer and note bands stay anchored to their page regions.
     private readonly List<double> _bodyPageVerticalOffsets = new();
+    // Justified section alignment distributes this per-page gap at each emitted body-block boundary.
+    private readonly List<double> _bodyPageVerticalJustifiedGaps = new();
     private DocumentViewSurfacePlan _surfacePlan =
         DocumentViewLayoutPlanner.BuildSurfacePlan(new PageSettings(), DocumentViewLayoutKind.PrintLayout, FallbackWidth);
 
@@ -1007,6 +1009,7 @@ public sealed class DocumentView : Control
     public int PlacedGlyphCount => _placed.Count(p => !p.Sentinel);
     public IReadOnlyList<DocumentDropCapLayoutPlan> DropCapLayoutPlans => _dropCapLayoutPlans;
     internal IReadOnlyList<double> BodyPageVerticalOffsetsForTest => _bodyPageVerticalOffsets;
+    internal IReadOnlyList<double> BodyPageVerticalJustifiedGapsForTest => _bodyPageVerticalJustifiedGaps;
     public string PlainText => _doc.PlainText;
 
     /// <summary>
@@ -6778,8 +6781,12 @@ public sealed class DocumentView : Control
     private void ApplyPageVerticalAlignment()
     {
         _bodyPageVerticalOffsets.Clear();
+        _bodyPageVerticalJustifiedGaps.Clear();
         if (_viewMode != DocumentViewMode.PrintLayout
-            || _doc.Page.VerticalAlignment is PageVerticalAlignment.Top or PageVerticalAlignment.Justified)
+            || _doc.Page.VerticalAlignment == PageVerticalAlignment.Top
+            // The current post-layout shift is page-space Y based. Keep multi-column justified
+            // pages on the existing top-flow path until the column-aware boundary model exists.
+            || (_doc.Page.VerticalAlignment == PageVerticalAlignment.Justified && _colCount > 1))
         {
             return;
         }
@@ -6787,6 +6794,9 @@ public sealed class DocumentView : Control
         var pageCount = Math.Max(1, _pageCount);
         var bodyBottoms = new double[pageCount];
         var hasBody = new bool[pageCount];
+        var bodyBlockStarts = Enumerable.Range(0, pageCount)
+            .Select(_ => new Dictionary<int, double>())
+            .ToArray();
 
         void Include(double y, double height)
         {
@@ -6795,8 +6805,23 @@ public sealed class DocumentView : Control
             hasBody[page] = true;
         }
 
-        foreach (var placed in _placed.Where(placed => !placed.Sentinel))
+        void IncludeBlockStart(int block, double y)
+        {
+            var page = Math.Clamp(PageIndexFromPageSpaceY(y), 0, pageCount - 1);
+            if (!bodyBlockStarts[page].TryGetValue(block, out var existing)
+                || y < existing)
+            {
+                bodyBlockStarts[page][block] = y;
+            }
+        }
+
+        foreach (var placed in _placed)
+        {
+            IncludeBlockStart(placed.Block, placed.Y);
+            if (placed.Sentinel)
+                continue;
             Include(placed.Y, placed.LineHeight);
+        }
         foreach (var image in _images)
             Include(image.Rect.Y, image.Rect.Height);
         foreach (var (rect, _, _, _) in _rects)
@@ -6824,6 +6849,7 @@ public sealed class DocumentView : Control
         foreach (var smartArt in _inlineSmartArts)
             Include(smartArt.Rect.Y, smartArt.Rect.Height);
 
+        var justifiedBoundariesByPage = new double[pageCount][];
         for (var page = 0; page < pageCount; page++)
         {
             var pageTop = _surfacePlan.PageTopDip(page);
@@ -6836,15 +6862,36 @@ public sealed class DocumentView : Control
                 ? Math.Max(0, bodyBottoms[page] - pageTop - _marginTopDip)
                 : 0;
             var freeSpace = Math.Max(0, availableTextHeight - usedHeight);
-            _bodyPageVerticalOffsets.Add(PageVerticalAlignmentPlanner.ResolveBodyOffset(
-                _doc.Page.VerticalAlignment,
-                freeSpace));
+            if (_doc.Page.VerticalAlignment == PageVerticalAlignment.Justified)
+            {
+                var starts = bodyBlockStarts[page].Values.OrderBy(value => value).ToArray();
+                justifiedBoundariesByPage[page] = starts.Skip(1).ToArray();
+                _bodyPageVerticalJustifiedGaps.Add(PageVerticalAlignmentPlanner.ResolveJustifiedParagraphGap(
+                    _doc.Page.VerticalAlignment,
+                    freeSpace,
+                    justifiedBoundariesByPage[page].Length));
+            }
+            else
+            {
+                justifiedBoundariesByPage[page] = [];
+                _bodyPageVerticalOffsets.Add(PageVerticalAlignmentPlanner.ResolveBodyOffset(
+                    _doc.Page.VerticalAlignment,
+                    freeSpace));
+            }
         }
 
         double OffsetFor(double y)
         {
-            var page = Math.Clamp(PageIndexFromPageSpaceY(y), 0, _bodyPageVerticalOffsets.Count - 1);
-            return _bodyPageVerticalOffsets[page];
+            if (_doc.Page.VerticalAlignment == PageVerticalAlignment.Justified)
+            {
+                var page = Math.Clamp(PageIndexFromPageSpaceY(y), 0, _bodyPageVerticalJustifiedGaps.Count - 1);
+                var boundaries = justifiedBoundariesByPage[page];
+                var boundariesPassed = boundaries.Count(boundary => y >= boundary - 0.01);
+                return boundariesPassed * _bodyPageVerticalJustifiedGaps[page];
+            }
+
+            var offsetPage = Math.Clamp(PageIndexFromPageSpaceY(y), 0, _bodyPageVerticalOffsets.Count - 1);
+            return _bodyPageVerticalOffsets[offsetPage];
         }
 
         var shiftedPlaced = _placed

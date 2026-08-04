@@ -19,4 +19,20 @@ public static class PageVerticalAlignmentPlanner
             _ => 0
         };
     }
+
+    /// <summary>
+    /// Resolves the extra space Word distributes at each paragraph boundary for section
+    /// vertical alignment <c>both</c>. The caller supplies the number of boundaries on the
+    /// page, so a page with one flow block remains unchanged.
+    /// </summary>
+    public static double ResolveJustifiedParagraphGap(
+        PageVerticalAlignment alignment,
+        double freeSpaceDip,
+        int paragraphGapCount)
+    {
+        if (alignment != PageVerticalAlignment.Justified || paragraphGapCount <= 0)
+            return 0;
+
+        return Math.Max(0, freeSpaceDip) / paragraphGapCount;
+    }
 }
