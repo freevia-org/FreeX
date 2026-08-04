@@ -60,6 +60,42 @@ public sealed class HyphenationRenderTests
     }
 
     [StaFact]
+    public void ExplicitOff_OverridesSuppressingParagraphStyle()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Styles["NoHyphens"] = new DocumentStyle
+        {
+            Id = "NoHyphens",
+            Name = "No Hyphens",
+            Paragraph = ParagraphFormatting.Default with
+            {
+                SuppressAutoHyphens = true,
+                SuppressAutoHyphensIsSet = true,
+            },
+        };
+        doc.Blocks.Add(new Paragraph("hyphenation rabbit")
+        {
+            StyleId = "NoHyphens",
+            Formatting = ParagraphFormatting.Default with
+            {
+                SpaceAfterPt = 0,
+                SuppressAutoHyphensIsSet = true,
+            },
+        });
+        doc.Page.AutoHyphenation = true;
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        RenderedText(view).Should().Contain(Hyphenator.SoftHyphen.ToString());
+
+        view.CommitToModel();
+        var formatting = view.Model.Paragraphs.Single().Formatting;
+        formatting.SuppressAutoHyphens.Should().BeFalse();
+        formatting.SuppressAutoHyphensIsSet.Should().BeTrue();
+    }
+
+    [StaFact]
     public void DoNotHyphenateCaps_LeavesAllCapsWordsWhole()
     {
         // "HYPHENATION" all-caps is left whole; the lower-case "rabbit" still hyphenates.

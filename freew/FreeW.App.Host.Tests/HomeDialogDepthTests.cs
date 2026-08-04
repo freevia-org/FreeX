@@ -101,6 +101,7 @@ public sealed class HomeDialogDepthTests
         para0.Formatting.WidowControl.Should().BeTrue();
         para0.Formatting.PageBreakBefore.Should().BeFalse();
         para0.Formatting.SuppressAutoHyphens.Should().BeTrue();
+        para0.Formatting.SuppressAutoHyphensIsSet.Should().BeTrue();
         para0.Formatting.SuppressLineNumbers.Should().BeTrue();
         para0.Formatting.SuppressLineNumbersIsSet.Should().BeTrue();
         para0.Formatting.ContextualSpacing.Should().BeTrue();

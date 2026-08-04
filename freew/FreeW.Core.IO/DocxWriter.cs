@@ -3453,8 +3453,11 @@ public static class DocxWriter
             pPr.Add(new XElement(W + "tabs",
                 f.TabStops.Select(BuildTabStop)));
         // Suppress automatic hyphenation for this paragraph (w:suppressAutoHyphens) — after w:tabs.
+        // An explicit off token is significant: it cancels a suppressing paragraph style.
         if (f.SuppressAutoHyphens)
             pPr.Add(new XElement(W + "suppressAutoHyphens"));
+        else if (f.SuppressAutoHyphensIsSet)
+            pPr.Add(new XElement(W + "suppressAutoHyphens", new XAttribute(W + "val", "0")));
         // Right-to-left paragraph direction (w:bidi) — CT_PPrBase order: after suppressAutoHyphens
         // (and several non-modelled toggles), before spacing/ind.
         if (f.Rtl)

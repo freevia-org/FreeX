@@ -6210,6 +6210,7 @@ public static class DocxReader
         var widowControlIsSet = pPr.Element(W + "widowControl") is not null;
         // Suppress automatic hyphenation for this paragraph (w:suppressAutoHyphens), read as a toggle.
         var suppressAutoHyphens = ReadToggle(pPr, "suppressAutoHyphens");
+        var suppressAutoHyphensIsSet = pPr.Element(W + "suppressAutoHyphens") is not null;
         // Suppress line-number glyphs for this paragraph while retaining its sequence position.
         // Keep presence separately so an explicit val="0" can override a suppressing paragraph style.
         var suppressLineNumbers = ReadToggle(pPr, "suppressLineNumbers");
@@ -6267,6 +6268,7 @@ public static class DocxReader
             WidowControl = widowControl,
             WidowControlIsSet = widowControlIsSet,
             SuppressAutoHyphens = suppressAutoHyphens,
+            SuppressAutoHyphensIsSet = suppressAutoHyphensIsSet,
             SuppressLineNumbers = suppressLineNumbers,
             SuppressLineNumbersIsSet = suppressLineNumbersIsSet,
             Rtl = rtl,

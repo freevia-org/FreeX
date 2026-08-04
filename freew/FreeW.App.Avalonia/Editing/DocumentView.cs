@@ -19363,6 +19363,7 @@ public sealed class DocumentView : Control
             WidowControlIsSet = true,
             PageBreakBefore = pageBreakBefore,
             SuppressAutoHyphens = suppressAutoHyphens,
+            SuppressAutoHyphensIsSet = true,
             SuppressLineNumbers = suppressLineNumbers,
             SuppressLineNumbersIsSet = true,
             ContextualSpacing = contextualSpacing
@@ -23277,6 +23278,14 @@ public sealed class DocumentView : Control
                 ? paragraph.Formatting.SpaceAfterPt
                 : styleParagraph.SpaceAfterPt,
             SpaceAfterIsSet = paragraph.Formatting.SpaceAfterIsSet || styleParagraph.SpaceAfterIsSet,
+            SuppressAutoHyphens = (paragraph.Formatting.SuppressAutoHyphensIsSet
+                    || paragraph.Formatting.SuppressAutoHyphens)
+                ? paragraph.Formatting.SuppressAutoHyphens
+                : styleParagraph.SuppressAutoHyphens,
+            SuppressAutoHyphensIsSet = paragraph.Formatting.SuppressAutoHyphensIsSet
+                || paragraph.Formatting.SuppressAutoHyphens
+                || styleParagraph.SuppressAutoHyphensIsSet
+                || styleParagraph.SuppressAutoHyphens,
             SuppressLineNumbers = paragraph.Formatting.SuppressLineNumbersIsSet
                 ? paragraph.Formatting.SuppressLineNumbers
                 : styleParagraph.SuppressLineNumbers,
@@ -23344,6 +23353,11 @@ public sealed class DocumentView : Control
         SpaceBeforeIsSet = baseParagraph.SpaceBeforeIsSet || over.SpaceBeforeIsSet,
         SpaceAfterPt = over.SpaceAfterIsSet ? over.SpaceAfterPt : baseParagraph.SpaceAfterPt,
         SpaceAfterIsSet = baseParagraph.SpaceAfterIsSet || over.SpaceAfterIsSet,
+        SuppressAutoHyphens = (over.SuppressAutoHyphensIsSet || over.SuppressAutoHyphens)
+            ? over.SuppressAutoHyphens
+            : baseParagraph.SuppressAutoHyphens,
+        SuppressAutoHyphensIsSet = baseParagraph.SuppressAutoHyphensIsSet || baseParagraph.SuppressAutoHyphens
+            || over.SuppressAutoHyphensIsSet || over.SuppressAutoHyphens,
         SuppressLineNumbers = over.SuppressLineNumbersIsSet
             ? over.SuppressLineNumbers
             : baseParagraph.SuppressLineNumbers,

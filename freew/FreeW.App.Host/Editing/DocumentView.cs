@@ -4892,6 +4892,7 @@ public sealed class DocumentView : RichTextBox
             WidowControlIsSet  = true,
             PageBreakBefore    = pageBreakBefore,
             SuppressAutoHyphens= suppressAutoHyphens,
+            SuppressAutoHyphensIsSet = true,
             SuppressLineNumbers = suppressLineNumbers,
             SuppressLineNumbersIsSet = true,
             ContextualSpacing  = contextualSpacing,
@@ -8562,7 +8563,7 @@ public sealed class DocumentView : RichTextBox
     /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressAutoHyphensIsSet = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null);
 
     private sealed record RenderedBookmarkBoundary(BookmarkBoundary Boundary);
 
@@ -10614,6 +10615,7 @@ public sealed class DocumentView : RichTextBox
             borderNeedsTag ? paraFmt.Border : null,
             shadingNeedsTag ? paraFmt.ShadingPattern : ShadingPattern.Clear,
             paraFmt.SuppressAutoHyphens,
+            paraFmt.SuppressAutoHyphensIsSet,
             paraFmt.SuppressLineNumbers,
             paraFmt.SuppressLineNumbersIsSet,
             paragraph.SectionBreak,
@@ -17465,13 +17467,16 @@ public sealed class DocumentView : RichTextBox
         var widowControl = tag?.WidowControl ?? false;
         var widowControlIsSet = tag?.WidowControlIsSet ?? false;
         var keepLinesTogether = tag?.KeepLinesTogether ?? paragraph.KeepTogether;
-        // SuppressAutoHyphens has no FlowDocument property either, so it rides on the Tag like WidowControl.
-        var suppressAutoHyphens = paragraph.Tag is ParagraphTag { SuppressAutoHyphens: true };
+        // SuppressAutoHyphens has no FlowDocument property either, so its value and explicit presence ride
+        // on the Tag like WidowControl.
+        var suppressAutoHyphens = tag?.SuppressAutoHyphens ?? false;
+        var suppressAutoHyphensIsSet = tag?.SuppressAutoHyphensIsSet ?? false;
         var suppressLineNumbers = paragraph.Tag is ParagraphTag { SuppressLineNumbers: true };
         var suppressLineNumbersIsSet = paragraph.Tag is ParagraphTag { SuppressLineNumbersIsSet: true };
         return ParagraphFormatting.Default with
         {
             SuppressAutoHyphens = suppressAutoHyphens,
+            SuppressAutoHyphensIsSet = suppressAutoHyphensIsSet,
             SuppressLineNumbers = suppressLineNumbers,
             SuppressLineNumbersIsSet = suppressLineNumbersIsSet,
             Alignment = FromWpfAlignment(paragraph.TextAlignment),
@@ -17657,6 +17662,11 @@ public sealed class DocumentView : RichTextBox
             return p with
             {
                 ContextualSpacing = p.ContextualSpacing ?? sp.ContextualSpacing ?? document.DefaultParagraph.ContextualSpacing,
+                SuppressAutoHyphens = (p.SuppressAutoHyphensIsSet || p.SuppressAutoHyphens)
+                    ? p.SuppressAutoHyphens
+                    : sp.SuppressAutoHyphens,
+                SuppressAutoHyphensIsSet = p.SuppressAutoHyphensIsSet || p.SuppressAutoHyphens
+                    || sp.SuppressAutoHyphensIsSet || sp.SuppressAutoHyphens,
                 SuppressLineNumbers = p.SuppressLineNumbersIsSet
                     ? p.SuppressLineNumbers
                     : sp.SuppressLineNumbersIsSet && sp.SuppressLineNumbers,
