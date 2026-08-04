@@ -3,7 +3,7 @@ using System.Globalization;
 namespace FreeP.Core.Model;
 
 /// <summary>
-/// Renderer-neutral amount semantics for PowerPoint's Grow/Shrink emphasis effect.
+/// Renderer-neutral amount semantics for PowerPoint's Grow/Shrink, Pulse, and Grow With Color emphasis effects.
 /// The amount authority is p:animScale, never p:cTn/@presetSubtype.
 /// </summary>
 public static class AnimationAmountSemantics
@@ -22,7 +22,10 @@ public static class AnimationAmountSemantics
     public static IReadOnlyList<AnimationAmountChoice> SupportedChoices => Choices;
 
     public static bool IsGrowShrink(AnimationPreset preset) =>
-        preset is AnimationPreset.Grow or AnimationPreset.Shrink;
+        preset is AnimationPreset.Grow
+            or AnimationPreset.Shrink
+            or AnimationPreset.Pulse
+            or AnimationPreset.GrowWithColor;
 
     public static (double X, double Y) ResolveScaleAxes(
         AnimationPreset preset,

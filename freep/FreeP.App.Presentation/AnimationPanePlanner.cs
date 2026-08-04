@@ -1796,6 +1796,8 @@ public static class AnimationPanePlanner
 
             case AnimationPreset.Grow:
             case AnimationPreset.Shrink:
+            case AnimationPreset.Pulse:
+            case AnimationPreset.GrowWithColor:
                 foreach (var option in GrowShrinkAmountOptions(animation))
                     yield return option;
                 break;

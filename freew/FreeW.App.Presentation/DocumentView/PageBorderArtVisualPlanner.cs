@@ -360,10 +360,20 @@ public static class PageBorderArtVisualPlanner
             return false;
         }
 
-        var polygons = new List<PageBorderArtPolygon>();
+        var fills = new List<PageBorderArtFillRectangle>();
         foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
-            AddBirdInFlight(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
-        plan = new PageBorderArtFilledShapePlan([], polygons);
+            AddMaterialMask(
+                fills,
+                PageBorderArtSpriteMasks.BirdsFlightMask,
+                placement.Xdip,
+                placement.Ydip,
+                placement.SizeDip,
+                horizontal: true,
+                transparentMaterial: 3,
+                material0: (0x04, 0x07, 0x50),
+                material1: (0x62, 0x64, 0x92),
+                material2: (0xAE, 0xAF, 0xC6));
+        plan = new PageBorderArtFilledShapePlan(fills, []);
         return true;
     }
 
@@ -1189,27 +1199,6 @@ public static class PageBorderArtVisualPlanner
         Add(0xBF, 0x40, 0, (19, 16), (21, 16), (20, 28), (18, 28));
     }
 
-    private static void AddBirdInFlight(
-        List<PageBorderArtPolygon> polygons,
-        double x,
-        double y,
-        double size)
-    {
-        var scale = size / 32.0;
-        PageBorderArtPoint Point(double px, double py) => new(x + px * scale, y + py * scale);
-        polygons.Add(new PageBorderArtPolygon(
-            [
-                Point(2, 3), Point(7, 5), Point(14, 16), Point(17, 12), Point(23, 6), Point(25, 0),
-                Point(25, 6), Point(22, 13), Point(30, 7), Point(31, 8), Point(24, 15), Point(22, 19),
-                Point(31, 23), Point(32, 26), Point(26, 26), Point(20, 24), Point(20, 29), Point(27, 32),
-                Point(20, 31), Point(16, 26), Point(11, 31), Point(8, 32), Point(8, 27), Point(11, 22),
-                Point(7, 18), Point(6, 13), Point(6, 7),
-            ],
-            0x04,
-            0x07,
-            0x50));
-    }
-
     private static void AddCandyCorn(
         List<PageBorderArtPolygon> polygons,
         double x,
@@ -1405,9 +1394,11 @@ public static class PageBorderArtVisualPlanner
         double size,
         bool horizontal,
         byte transparentMaterial = 0,
+        (byte Red, byte Green, byte Blue)? material0 = null,
         (byte Red, byte Green, byte Blue)? material1 = null,
         (byte Red, byte Green, byte Blue)? material2 = null)
     {
+        var color0 = material0 ?? (0x00, 0x00, 0x00);
         var color1 = material1 ?? (0xC0, 0xC0, 0xC0);
         var color2 = material2 ?? (0xFF, 0xFF, 0xFF);
         var scale = size / PageBorderArtSpriteMasks.MaskSize;
@@ -1425,7 +1416,7 @@ public static class PageBorderArtVisualPlanner
                     var runLength = column - runStart;
                     var color = material switch
                     {
-                        0 => ((byte)0x00, (byte)0x00, (byte)0x00),
+                        0 => color0,
                         1 => color1,
                         2 => color2,
                         _ => ((byte)0xFF, (byte)0xFF, (byte)0xFF),

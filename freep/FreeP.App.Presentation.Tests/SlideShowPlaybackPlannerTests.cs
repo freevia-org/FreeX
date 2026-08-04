@@ -1882,7 +1882,8 @@ public sealed class SlideShowPlaybackPlannerTests
     [InlineData(AnimationPreset.Shrink, 0.5, 0.5)]
     [InlineData(AnimationPreset.Shrink, 4.0, 4.0)]
     [InlineData(AnimationPreset.Grow, 1.35, 1.35)]
-    public void PlanShapeAnimation_UsesSharedGrowShrinkAmountScale(
+    [InlineData(AnimationPreset.Pulse, 1.5, 1.5)]
+    public void PlanShapeAnimation_UsesSharedAnimationAmountScale(
         AnimationPreset preset,
         double scale,
         double expectedPeakScale)
@@ -2222,6 +2223,35 @@ public sealed class SlideShowPlaybackPlannerTests
         growFrame.Scale.Should().Be(growPlan.PeakScale);
         growFrame.Opacity.Should().Be(1);
         growFrame.EvidenceSummary.Should().Contain("GrowShrink Scale");
+    }
+
+    [Fact]
+    public void PlanShapeAnimation_UsesAuthoredGrowWithColorAmountScale()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 53,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.GrowWithColor,
+                ScaleBehavior = AnimationScaleBehavior.FromTo(1.5),
+                DurationMs = 400,
+            },
+            startDelayMs: 0);
+
+        plan.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.GrowWithColor);
+        plan.FromScale.Should().Be(1);
+        plan.ToScale.Should().Be(1);
+        plan.PeakScale.Should().Be(1.5);
+
+        var frame = SlideShowPlaybackFramePlanner.PlanFrame(
+            plan,
+            elapsedMs: 200,
+            slideWidthDip: 960,
+            slideHeightDip: 540);
+
+        frame.TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Emphasis);
+        frame.Scale.Should().Be(1.5);
     }
 
     [Fact]

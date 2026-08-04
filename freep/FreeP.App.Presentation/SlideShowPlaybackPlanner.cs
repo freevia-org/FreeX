@@ -527,7 +527,7 @@ public static class SlideShowPlaybackPlanner
             return (1, 0);
         }
 
-        return animation.Preset is AnimationPreset.Grow or AnimationPreset.Shrink
+        return AnimationAmountSemantics.IsGrowShrink(animation.Preset)
             ? (1, 1)
             : (0, 1);
     }

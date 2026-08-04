@@ -314,6 +314,68 @@ public sealed class AnimationPresetRoundTripTests
         AnimationAmountSemantics.ResolveScale(animation.Preset, animation.ScaleBehavior).Should().Be(1.35);
     }
 
+    [Fact]
+    public void GrowWithColorScaleSurvivesReadWriteAsAnAuthoredAmount()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.GrowWithColor,
+            ScaleBehavior = AnimationScaleBehavior.FromTo(1.5),
+        });
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+
+        animation.Preset.Should().Be(AnimationPreset.GrowWithColor);
+        animation.Direction.Should().BeNull();
+        animation.EffectSubtype.Should().BeNull();
+        animation.ScaleBehavior!.ToX.Should().Be(AnimationScaleBehavior.Format(1.5));
+        AnimationAmountSemantics.ResolveScale(animation.Preset, animation.ScaleBehavior).Should().Be(1.5);
+
+        using var archive = new ZipArchive(new MemoryStream(first.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetClass")?.Value == "emph"
+                && element.Attribute("presetID")?.Value == "12");
+        cTn.Attribute("presetSubtype")!.Value.Should().Be("0");
+        cTn.Descendants(p + "animScale").Single()
+            .Element(p + "to")!.Attribute("x")!.Value
+            .Should().Be(AnimationScaleBehavior.Format(1.5));
+    }
+
+    [Fact]
+    public void PulseScaleSurvivesReadWriteAsAnAuthoredAmount()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 8, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 8,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Pulse,
+            ScaleBehavior = AnimationScaleBehavior.FromTo(1.5),
+        });
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(stream.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+
+        animation.Preset.Should().Be(AnimationPreset.Pulse);
+        animation.Direction.Should().BeNull();
+        animation.EffectSubtype.Should().BeNull();
+        animation.ScaleBehavior!.ToX.Should().Be(AnimationScaleBehavior.Format(1.5));
+        AnimationAmountSemantics.ResolveScale(animation.Preset, animation.ScaleBehavior).Should().Be(1.5);
+    }
+
     [Theory]
     [InlineData("100000", "150000", null, 1.5)] // from_to
     [InlineData("80000", null, "30000", 1.1)]   // from_by

@@ -103,8 +103,8 @@ public sealed class AnimationPanePlannerTests
             CanMoveLater = true,
             IsSelected = true,
         });
-        plan.Items[1].EffectOptions.CanApply.Should().BeFalse();
-        plan.Items[1].EffectOptions.DisabledReason.Should().Be(AnimationPanePlanner.UnsupportedEffectOptionMessage);
+        plan.Items[1].EffectOptions.CanApply.Should().BeTrue();
+        plan.Items[1].EffectOptions.Options.Should().HaveCount(5);
         plan.Items[2].Should().BeEquivalentTo(new
         {
             Index = 2,
@@ -224,13 +224,13 @@ public sealed class AnimationPanePlannerTests
         evidence.View.Heading.Should().Be("Animation Pane - slide 3 (3 animations)");
         evidence.RowCount.Should().Be(3);
         evidence.EditableTimingRowCount.Should().Be(3);
-        evidence.EffectOptionRowCount.Should().Be(0);
+        evidence.EffectOptionRowCount.Should().Be(1);
         evidence.ReorderableRowCount.Should().Be(3);
         evidence.HasSelectedRow.Should().BeTrue();
         evidence.CanPreview.Should().BeTrue();
         evidence.CanPlayFromSelected.Should().BeTrue();
         evidence.EvidenceLines.Should().Equal(
-            "Rows: 3; selected: 2; timing editors: 3; effect-option rows: 0; reorderable rows: 3",
+            "Rows: 3; selected: 2; timing editors: 3; effect-option rows: 1; reorderable rows: 3",
             "Playback controls: Preview: available; Play From Selected: available; Play All: available; Stop: unavailable",
             "Selected row: Content Box - Em: Pulse; trigger With Previous; duration 1s; delay 0.25s");
     }
@@ -914,6 +914,68 @@ public sealed class AnimationPanePlannerTests
             .Equal(expectedLabelsCsv.Split(','));
         plan.Options.Should().ContainSingle(option =>
             option.DisplayText == expectedSelected && option.IsSelected);
+    }
+
+    [Fact]
+    public void BuildEffectOptionsPlan_ProjectsGrowWithColorAmountAndAppliesIt()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = presentation.Slides[0].Shapes[0].Id,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.GrowWithColor,
+            ScaleBehavior = AnimationScaleBehavior.FromTo(1.5),
+        });
+
+        var options = AnimationPanePlanner.BuildEffectOptionsPlan(editor.CurrentSlideAnimations, 0);
+
+        options.CanApply.Should().BeTrue();
+        options.SelectedOptionText.Should().Be("Larger (150%)");
+        options.Options.Should().ContainSingle(option =>
+            option.Id == "amount-150" && option.IsSelected);
+
+        var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            "amount-400");
+
+        mutation.ShouldApply.Should().BeTrue();
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, mutation).Should().BeTrue();
+        editor.CurrentSlideAnimations[0].ScaleBehavior!.ToX
+            .Should().Be(AnimationScaleBehavior.Format(4));
+    }
+
+    [Fact]
+    public void BuildEffectOptionsPlan_ProjectsPulseAmountAndAppliesIt()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = presentation.Slides[0].Shapes[0].Id,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Pulse,
+            ScaleBehavior = AnimationScaleBehavior.FromTo(1.5),
+        });
+
+        var options = AnimationPanePlanner.BuildEffectOptionsPlan(editor.CurrentSlideAnimations, 0);
+
+        options.CanApply.Should().BeTrue();
+        options.SelectedOptionText.Should().Be("Larger (150%)");
+        options.Options.Should().ContainSingle(option =>
+            option.Id == "amount-150" && option.IsSelected);
+
+        var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            "amount-400");
+
+        mutation.ShouldApply.Should().BeTrue();
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, mutation).Should().BeTrue();
+        editor.CurrentSlideAnimations[0].ScaleBehavior!.ToX
+            .Should().Be(AnimationScaleBehavior.Format(4));
     }
 
     [Fact]
