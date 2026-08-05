@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
@@ -189,28 +190,17 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
             bitmap.CopyPixels(new PixelRect(0, 0, width, height), pointer, byteCount, stride);
             var pixels = new byte[byteCount];
             Marshal.Copy(pointer, pixels, 0, byteCount);
-            return new CaptureRaster(logicalWidth, logicalHeight, width, height, CountNonBackgroundPixels(pixels));
+            return new CaptureRaster(
+                logicalWidth,
+                logicalHeight,
+                width,
+                height,
+                BgraRasterStatistics.CountNonBackgroundPixels(pixels));
         }
         finally
         {
             Marshal.FreeHGlobal(pointer);
         }
-    }
-
-    private static long CountNonBackgroundPixels(byte[] pixels)
-    {
-        if (pixels.Length < 4)
-            return 0;
-        var background = (B: pixels[0], G: pixels[1], R: pixels[2]);
-        long count = 0;
-        for (var index = 0; index < pixels.Length; index += 4)
-        {
-            if (Math.Abs(pixels[index] - background.B) +
-                Math.Abs(pixels[index + 1] - background.G) +
-                Math.Abs(pixels[index + 2] - background.R) > 12)
-                count++;
-        }
-        return count;
     }
 
     private static string Sha256(string path)

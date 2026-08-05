@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Free.Shared.Drawing;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
 using FreeP.App.Compositor;
@@ -235,25 +236,9 @@ internal static class WpfWholeWindowVisualEvidenceCapture
             height,
             96,
             96,
-            CountNonBackgroundPixels(pixels),
+            BgraRasterStatistics.CountNonBackgroundPixels(pixels),
             sourceDpiX,
             sourceDpiY);
-    }
-
-    private static long CountNonBackgroundPixels(byte[] pixels)
-    {
-        if (pixels.Length < 4)
-            return 0;
-        var background = (B: pixels[0], G: pixels[1], R: pixels[2]);
-        long count = 0;
-        for (var index = 0; index < pixels.Length; index += 4)
-        {
-            if (Math.Abs(pixels[index] - background.B) +
-                Math.Abs(pixels[index + 1] - background.G) +
-                Math.Abs(pixels[index + 2] - background.R) > 12)
-                count++;
-        }
-        return count;
     }
 
     private static string Sha256(string path)

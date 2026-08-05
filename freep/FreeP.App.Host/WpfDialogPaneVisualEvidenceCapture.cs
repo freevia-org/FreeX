@@ -10,6 +10,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Free.Shared.Drawing;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
 using FreeP.App.Compositor;
@@ -382,7 +383,7 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         var stride = width * 4;
         var pixels = new byte[stride * height];
         bitmap.CopyPixels(pixels, stride, 0);
-        var nonBackground = CountNonBackgroundPixels(pixels);
+        var nonBackground = BgraRasterStatistics.CountNonBackgroundPixels(pixels);
         return new CaptureRaster(
             logicalWidth,
             logicalHeight,
@@ -399,22 +400,6 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         VisualTreeHelper.GetChildrenCount(window) > 0 && VisualTreeHelper.GetChild(window, 0) is FrameworkElement client
             ? client
             : window.Content as FrameworkElement ?? window;
-
-    private static long CountNonBackgroundPixels(byte[] pixels)
-    {
-        if (pixels.Length < 4)
-            return 0;
-        var b = pixels[0];
-        var g = pixels[1];
-        var r = pixels[2];
-        long count = 0;
-        for (var index = 0; index < pixels.Length; index += 4)
-        {
-            if (Math.Abs(pixels[index] - b) + Math.Abs(pixels[index + 1] - g) + Math.Abs(pixels[index + 2] - r) > 12)
-                count++;
-        }
-        return count;
-    }
 
     private static IReadOnlyList<DialogPaneVisualEvidenceButton> Buttons(DependencyObject root) =>
         Descendants(root).OfType<Button>()

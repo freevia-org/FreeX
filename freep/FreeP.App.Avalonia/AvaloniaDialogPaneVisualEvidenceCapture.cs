@@ -11,6 +11,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -344,28 +345,17 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
             bitmap.CopyPixels(new PixelRect(0, 0, width, height), pointer, byteCount, stride);
             var pixels = new byte[byteCount];
             Marshal.Copy(pointer, pixels, 0, byteCount);
-            return new CaptureRaster(logicalWidth, logicalHeight, width, height, CountNonBackgroundPixels(pixels));
+            return new CaptureRaster(
+                logicalWidth,
+                logicalHeight,
+                width,
+                height,
+                BgraRasterStatistics.CountNonBackgroundPixels(pixels));
         }
         finally
         {
             Marshal.FreeHGlobal(pointer);
         }
-    }
-
-    private static long CountNonBackgroundPixels(byte[] pixels)
-    {
-        if (pixels.Length < 4)
-            return 0;
-        var b = pixels[0];
-        var g = pixels[1];
-        var r = pixels[2];
-        long count = 0;
-        for (var index = 0; index < pixels.Length; index += 4)
-        {
-            if (Math.Abs(pixels[index] - b) + Math.Abs(pixels[index + 1] - g) + Math.Abs(pixels[index + 2] - r) > 12)
-                count++;
-        }
-        return count;
     }
 
     private static IReadOnlyList<DialogPaneVisualEvidenceButton> Buttons(Visual root) =>
