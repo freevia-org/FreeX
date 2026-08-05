@@ -65,6 +65,9 @@ public sealed class ParagraphNoteDialogPolicySourceGuardTests
         source.Should().NotContain("NoteNumberFormat.LowerRoman");
         source.Should().NotContain("NoteNumberRestart.EachPage");
         source.Should().NotContain("NoteNumberRestart.EachSection");
+        source.Should().Contain("private FootnoteEndnoteOptionsDialogResult? _result;");
+        source.Should().Contain("_result = result;");
+        source.Should().NotContain("internal sealed record Result(");
     }
 
     [Fact]

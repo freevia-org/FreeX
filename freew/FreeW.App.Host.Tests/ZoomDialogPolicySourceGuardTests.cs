@@ -10,9 +10,13 @@ public sealed class ZoomDialogPolicySourceGuardTests
         var source = ReadHostSource("ZoomDialog.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain("ZoomDialogPlanner.Build(currentFactor)");
-        source.Should().Contain("new ZoomDialogSelectionRequest(");
-        source.Should().Contain("ZoomDialogPlanner.TryCreateResult(");
+        source.Should().Contain("new ZoomDialogSession(currentFactor)");
+        source.Should().Contain("_session.PlanAcceptance(_fitFactors)");
+        source.Should().Contain("acceptance.Validation.FocusTarget");
+        source.Should().NotContain("new ZoomDialogSelectionRequest(");
+        source.Should().NotContain("GetSelectedFitOption");
+        source.Should().NotContain("GetSelectedPresetPercent");
+        source.Should().NotContain("ResolveValidationError");
         source.Should().NotContain("private static readonly int[] Presets");
         source.Should().NotContain("int.TryParse(");
         source.Should().NotContain("NumberStyles.Integer");

@@ -13,22 +13,13 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    /// <summary>The settings the dialog produces.</summary>
-    internal sealed record Result(
-        NoteNumberFormat FootnoteFormat,
-        int FootnoteStartAt,
-        NoteNumberRestart FootnoteRestart,
-        NoteNumberFormat EndnoteFormat,
-        int EndnoteStartAt,
-        NoteNumberRestart EndnoteRestart);
-
     private readonly ComboBox _footnoteFormatBox;
     private readonly TextBox _footnoteStartBox;
     private readonly ComboBox _footnoteRestartBox;
     private readonly ComboBox _endnoteFormatBox;
     private readonly TextBox _endnoteStartBox;
     private readonly ComboBox _endnoteRestartBox;
-    private Result? _result;
+    private FootnoteEndnoteOptionsDialogResult? _result;
 
     internal FootnoteEndnoteOptionsDialog(Window? owner, NoteNumberingOptions footnote, NoteNumberingOptions endnote)
     {
@@ -162,13 +153,7 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
             return;
         }
 
-        _result = new Result(
-            result!.FootnoteFormat,
-            result.FootnoteStartAt,
-            result.FootnoteRestart,
-            result.EndnoteFormat,
-            result.EndnoteStartAt,
-            result.EndnoteRestart);
+        _result = result;
         Close();
     }
 
@@ -211,7 +196,10 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
     /// Show the dialog seeded with the document's current footnote/endnote numbering settings;
     /// returns the chosen settings, or null if cancelled.
     /// </summary>
-    public static Result? Prompt(Window? owner, NoteNumberingOptions footnote, NoteNumberingOptions endnote)
+    public static FootnoteEndnoteOptionsDialogResult? Prompt(
+        Window? owner,
+        NoteNumberingOptions footnote,
+        NoteNumberingOptions endnote)
     {
         var dialog = new FootnoteEndnoteOptionsDialog(owner, footnote, endnote);
         dialog.ShowDialog();

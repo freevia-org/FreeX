@@ -10,10 +10,12 @@ public sealed class ZoomDialogPolicySourceGuardTests
         var source = ReadAvaloniaSource("ZoomDialog.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain("ZoomDialogPlanner.Build(currentScale)");
-        source.Should().Contain("new ZoomDialogSelectionRequest(");
-        source.Should().Contain("ZoomDialogPlanner.TryCreateResult(");
-        source.Should().Contain("ZoomDialogPlanner.ValidationMessageFor(error)");
+        source.Should().Contain("new ZoomDialogSession(currentScale)");
+        source.Should().Contain("_session.PlanAcceptance(DefaultFitFactors)");
+        source.Should().Contain("acceptance.Validation.FocusTarget");
+        source.Should().NotContain("new ZoomDialogSelectionRequest(");
+        source.Should().NotContain("GetSelectedFitOption");
+        source.Should().NotContain("GetSelectedPresetPercent");
         source.Should().Contain("ZoomDialogFitFactors");
         source.Should().NotContain("NumericUpDown");
         source.Should().NotContain("currentScale * 100");

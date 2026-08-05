@@ -14,8 +14,8 @@ namespace FreeW.App.Avalonia;
 ///
 /// <para>
 /// The dialog stays Avalonia-only chrome: preset/default selection, custom percentage parsing,
-/// validation, and result resolution live in <see cref="ZoomDialogPlanner"/> so it matches the WPF
-/// dialog policy.
+/// validation, focus recovery, and result resolution live in <see cref="ZoomDialogSession"/> so it
+/// matches the WPF dialog policy.
 /// </para>
 /// </summary>
 internal sealed class ZoomDialog : FreeWDialogWindow
@@ -39,7 +39,7 @@ internal sealed class ZoomDialog : FreeWDialogWindow
         VerticalAlignment = VerticalAlignment.Center,
     };
     private readonly TextBlock _status = new();
-    private readonly List<(RadioButton Button, int Percent)> _presetButtons = [];
+    private readonly ZoomDialogSession _session;
     private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.Zoom;
 
     /// <summary>The scale the user accepted (1.0 == 100%), or <c>null</c> if cancelled.</summary>
@@ -58,10 +58,24 @@ internal sealed class ZoomDialog : FreeWDialogWindow
         AutomationProperties.SetAutomationId(_percentBox, FocusPlan.InitialFocusTargetAutomationId);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(16, 8, 16, 0));
 
-        var plan = ZoomDialogPlanner.Build(currentScale);
+        _session = new ZoomDialogSession(currentScale);
+        var plan = _session.InitialPlan;
         _percentBox.Text = plan.CustomPercentText;
-        _percentBox.GotFocus += (_, _) => _customButton.IsChecked = true;
-        _percentBox.TextChanged += (_, _) => _customButton.IsChecked = true;
+        _percentBox.GotFocus += (_, _) => SelectCustom();
+        _percentBox.TextChanged += (_, _) =>
+        {
+            _session.UpdateCustomPercentText(_percentBox.Text);
+            _customButton.IsChecked = true;
+        };
+
+        _pageWidthButton.IsCheckedChanged += (_, _) => SelectFitWhenChecked(_pageWidthButton, ZoomDialogFitOption.PageWidth);
+        _textWidthButton.IsCheckedChanged += (_, _) => SelectFitWhenChecked(_textWidthButton, ZoomDialogFitOption.TextWidth);
+        _wholePageButton.IsCheckedChanged += (_, _) => SelectFitWhenChecked(_wholePageButton, ZoomDialogFitOption.WholePage);
+        _customButton.IsCheckedChanged += (_, _) =>
+        {
+            if (_customButton.IsChecked == true)
+                _session.SelectCustom();
+        };
 
         var customRow = new StackPanel
         {
@@ -88,7 +102,11 @@ internal sealed class ZoomDialog : FreeWDialogWindow
         {
             var button = Preset($"{preset.Percent}%");
             button.IsChecked = preset.IsSelected;
-            _presetButtons.Add((button, preset.Percent));
+            button.IsCheckedChanged += (_, _) =>
+            {
+                if (button.IsChecked == true)
+                    _session.SelectPreset(preset.Percent);
+            };
             presets.Children.Add(button);
         }
 
@@ -129,50 +147,57 @@ internal sealed class ZoomDialog : FreeWDialogWindow
     }
 
     internal bool TryResolveScale(out double scale, out ZoomDialogValidationError? error) =>
-        ZoomDialogPlanner.TryCreateResult(BuildSelectionRequest(), DefaultFitFactors, out scale, out error);
+        TryResolveScale(_session.PlanAcceptance(DefaultFitFactors), out scale, out error);
 
     private void Accept()
     {
         _status.IsVisible = false;
-        if (!TryResolveScale(out var scale, out var error))
+        var acceptance = _session.PlanAcceptance(DefaultFitFactors);
+        if (!acceptance.IsAccepted)
         {
-            _status.Text = ZoomDialogPlanner.ValidationMessageFor(error);
+            _status.Text = acceptance.Validation!.Message;
             _status.IsVisible = true;
-            _customButton.IsChecked = true;
-            FocusPercent();
+            ApplyControlState(acceptance.ControlState);
+            Focus(acceptance.Validation.FocusTarget);
             return;
         }
 
-        Result = scale;
+        Result = acceptance.Result;
         Close();
     }
 
-    private ZoomDialogSelectionRequest BuildSelectionRequest() => new ZoomDialogSelectionRequest(
-        GetSelectedFitOption(),
-        GetSelectedPresetPercent(),
-        _percentBox.Text);
-
-    private ZoomDialogFitOption? GetSelectedFitOption()
+    private static bool TryResolveScale(
+        ZoomDialogAcceptance acceptance,
+        out double scale,
+        out ZoomDialogValidationError? error)
     {
-        if (_pageWidthButton.IsChecked == true)
-            return ZoomDialogFitOption.PageWidth;
-        if (_textWidthButton.IsChecked == true)
-            return ZoomDialogFitOption.TextWidth;
-        if (_wholePageButton.IsChecked == true)
-            return ZoomDialogFitOption.WholePage;
-
-        return null;
+        scale = acceptance.Result ?? default;
+        error = acceptance.Validation?.Error;
+        return acceptance.IsAccepted;
     }
 
-    private int? GetSelectedPresetPercent()
+    private void SelectCustom()
     {
-        foreach (var (button, percent) in _presetButtons)
-        {
-            if (button.IsChecked == true)
-                return percent;
-        }
+        _session.SelectCustom();
+        _customButton.IsChecked = true;
+    }
 
-        return null;
+    private void SelectFitWhenChecked(RadioButton button, ZoomDialogFitOption fitOption)
+    {
+        if (button.IsChecked == true)
+            _session.SelectFit(fitOption);
+    }
+
+    private void ApplyControlState(ZoomDialogControlState state)
+    {
+        if (state.IsCustomSelected)
+            _customButton.IsChecked = true;
+    }
+
+    private void Focus(ZoomDialogFocusTarget target)
+    {
+        if (target == ZoomDialogFocusTarget.CustomPercent)
+            FocusPercent();
     }
 
     private static RadioButton Preset(string label)

@@ -102,4 +102,71 @@ public sealed class ZoomDialogPlannerTests
             .Should()
             .Be("Enter a whole zoom percentage.");
     }
+
+    [Fact]
+    public void Session_ProjectsInitialPresetAndCustomSelections()
+    {
+        var preset = new ZoomDialogSession(1.0);
+        var custom = new ZoomDialogSession(1.25);
+
+        preset.ControlState.PresetPercent.Should().Be(100);
+        preset.ControlState.IsCustomSelected.Should().BeFalse();
+        custom.ControlState.PresetPercent.Should().BeNull();
+        custom.ControlState.IsCustomSelected.Should().BeTrue();
+        custom.ControlState.CustomPercentText.Should().Be(125.ToString(CultureInfo.CurrentCulture));
+    }
+
+    [Fact]
+    public void Session_ChoiceTransitionsClearOtherSelectionKinds()
+    {
+        var session = new ZoomDialogSession(1.0);
+
+        session.SelectFit(ZoomDialogFitOption.PageWidth);
+        session.ControlState.Should().Be(new ZoomDialogControlState(
+            ZoomDialogFitOption.PageWidth,
+            PresetPercent: null,
+            CustomPercentText: "100"));
+
+        session.SelectPreset(75);
+        session.ControlState.Should().Be(new ZoomDialogControlState(
+            FitOption: null,
+            PresetPercent: 75,
+            CustomPercentText: "100"));
+
+        session.UpdateCustomPercentText("130");
+        session.ControlState.Should().Be(new ZoomDialogControlState(
+            FitOption: null,
+            PresetPercent: null,
+            CustomPercentText: "130"));
+    }
+
+    [Fact]
+    public void Session_AcceptsSelectedFitWithoutRendererProjection()
+    {
+        var session = new ZoomDialogSession(1.0);
+        session.SelectFit(ZoomDialogFitOption.TextWidth);
+
+        var acceptance = session.PlanAcceptance(new ZoomDialogFitFactors(1.1, 1.42, 0.7));
+
+        acceptance.IsAccepted.Should().BeTrue();
+        acceptance.Result.Should().Be(1.42);
+        acceptance.Validation.Should().BeNull();
+    }
+
+    [Fact]
+    public void Session_InvalidCustomValueReturnsRecoveryStateAndFocusTarget()
+    {
+        var session = new ZoomDialogSession(1.0);
+        session.UpdateCustomPercentText("invalid");
+
+        var acceptance = session.PlanAcceptance(new ZoomDialogFitFactors(1.1, 1.2, 0.7));
+
+        acceptance.IsAccepted.Should().BeFalse();
+        acceptance.Result.Should().BeNull();
+        acceptance.ControlState.IsCustomSelected.Should().BeTrue();
+        acceptance.Validation.Should().Be(new ZoomDialogValidation(
+            ZoomDialogValidationError.WholePercentRequired,
+            "Enter a whole zoom percentage.",
+            ZoomDialogFocusTarget.CustomPercent));
+    }
 }
