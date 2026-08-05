@@ -239,8 +239,91 @@ public sealed class AvaloniaCatalogContextMenuTests
         regular.IsChecked.Should().BeFalse();
         total.IsChecked.Should().BeTrue();
         invalid.IsEnabled.Should().BeFalse();
+        Assert.IsType<KeyGesture>(regular.InputGesture).Key.Should().Be(Key.S);
         regular.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         dispatchCount.Should().Be(1);
+    });
+
+    [Fact]
+    public Task WaterfallPoint_KeyTipRoutesAtMenuRootAndHonorsEnablementAndEscape() => RunOnUiThread(() =>
+    {
+        var chart = CreateWaterfallChart();
+        var anchor = new Button();
+        var window = new Window { Content = anchor };
+        var dispatchCount = 0;
+        var menu = AvaloniaManagedContextMenu.Attach(
+            anchor,
+            () => AvaloniaWaterfallPointContextMenu.BuildItems(chart, 0, () => dispatchCount++));
+
+        window.Show();
+        menu.Open(anchor);
+        menu.IsOpen.Should().BeTrue();
+        var item = menu.Items.OfType<MenuItem>().Single();
+        item.Focus().Should().BeTrue();
+        item.IsFocused.Should().BeTrue();
+
+        var keyDown = new KeyEventArgs
+        {
+            RoutedEvent = InputElement.KeyDownEvent,
+            Key = Key.S,
+            KeyModifiers = KeyModifiers.None,
+            Source = menu,
+        };
+        menu.RaiseEvent(keyDown);
+
+        keyDown.Handled.Should().BeTrue();
+        dispatchCount.Should().Be(1);
+        menu.IsOpen.Should().BeFalse();
+
+        var invalidAnchor = new Button();
+        var invalidWindow = new Window { Content = invalidAnchor };
+        var invalidMenu = AvaloniaManagedContextMenu.Attach(
+            invalidAnchor,
+            () => AvaloniaWaterfallPointContextMenu.BuildItems(chart, 9, () => dispatchCount++));
+        invalidWindow.Show();
+        invalidMenu.Open(invalidAnchor);
+        invalidMenu.IsOpen.Should().BeTrue();
+        var disabledItem = invalidMenu.Items.OfType<MenuItem>().Single();
+        disabledItem.IsEnabled.Should().BeFalse();
+
+        var disabledKeyDown = new KeyEventArgs
+        {
+            RoutedEvent = InputElement.KeyDownEvent,
+            Key = Key.S,
+            KeyModifiers = KeyModifiers.None,
+            Source = invalidMenu,
+        };
+        invalidMenu.RaiseEvent(disabledKeyDown);
+
+        disabledKeyDown.Handled.Should().BeFalse();
+        dispatchCount.Should().Be(1);
+        invalidMenu.IsOpen.Should().BeTrue();
+
+        var escape = new KeyEventArgs
+        {
+            RoutedEvent = InputElement.KeyDownEvent,
+            Key = Key.Escape,
+            KeyModifiers = KeyModifiers.None,
+            Source = invalidMenu,
+        };
+        invalidMenu.RaiseEvent(escape);
+
+        escape.Handled.Should().BeTrue();
+        invalidMenu.IsOpen.Should().BeFalse();
+
+        var outsideMenuKeyDown = new KeyEventArgs
+        {
+            RoutedEvent = InputElement.KeyDownEvent,
+            Key = Key.S,
+            KeyModifiers = KeyModifiers.None,
+            Source = anchor,
+        };
+        anchor.RaiseEvent(outsideMenuKeyDown);
+
+        outsideMenuKeyDown.Handled.Should().BeFalse();
+        dispatchCount.Should().Be(1);
+        window.Close();
+        invalidWindow.Close();
     });
 
     private static PivotChartFieldContextMenuState PivotChartState(bool hasFilterState) => new(

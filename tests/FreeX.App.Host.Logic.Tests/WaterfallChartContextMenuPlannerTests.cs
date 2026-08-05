@@ -41,6 +41,7 @@ public sealed class WaterfallChartContextMenuPlannerTests
 
         constructorSource.Should().Contain("SheetGrid.WaterfallChartPointContextMenuRequested += OnWaterfallChartPointContextMenuRequested;");
         contextMenuSource.Should().Contain("private void OnWaterfallChartPointContextMenuRequested(ChartModel chart, int pointIndex, System.Windows.Point gridPos)");
+        contextMenuSource.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());");
         contextMenuSource.Should().Contain("new SetWaterfallTotalPointCommand(_currentSheetId, chart.Id, pointIndex, setAsTotal)");
         contextMenuSource.Should().Contain("WaterfallChartContextMenuPlanner.IsPointTotal(chart, pointIndex)");
     }
