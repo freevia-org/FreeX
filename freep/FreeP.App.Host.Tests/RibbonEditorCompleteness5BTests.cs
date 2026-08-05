@@ -810,9 +810,10 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
-    public void Cmd_SlideNumber_WithoutHostCallback_AppliesSharedPlannerDefault()
+    public void Cmd_SlideNumber_WithoutHostCallback_HonorsEnabledTitleSlidePlaceholders()
     {
         var (ed, pres) = MakeSession();
+        pres.ShowSpecialPlaceholdersOnTitleSlide = true;
         var reg = MakeRegistry(ed);
 
         Exec(reg, HeaderFooterCommandPlanner.SlideNumberCommandId);
