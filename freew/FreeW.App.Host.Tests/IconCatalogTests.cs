@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host.Tests;
 
@@ -13,25 +14,28 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public sealed class IconCatalogTests
 {
+    private static readonly IReadOnlyList<IconPickerEntry> Catalog =
+        IconPickerCatalog.LoadFromBaseDirectory(AppContext.BaseDirectory);
+
     // ── 1. Catalog non-empty & paths valid ────────────────────────────────────────────────────────
 
     [Fact]
     public void Catalog_IsNonEmpty()
     {
-        ContentIconCatalog.All.Should().NotBeEmpty("the ContentIconsSvg folder must have at least one SVG");
+        Catalog.Should().NotBeEmpty("the ContentIconsSvg folder must have at least one SVG");
     }
 
     [Fact]
     public void Catalog_AllEntriesHaveValidPaths()
     {
-        foreach (var entry in ContentIconCatalog.All)
+        foreach (var entry in Catalog)
             File.Exists(entry.Path).Should().BeTrue($"SVG file must exist on disk: {entry.Path}");
     }
 
     [Fact]
     public void Catalog_CoversExpectedCategories()
     {
-        var categories = ContentIconCatalog.Categories;
+        var categories = IconPickerDialogPlanner.Categories(Catalog);
         categories.Should().Contain("Arrows",     "arrows/ subfolder must be present");
         categories.Should().Contain("Business",   "business/ subfolder must be present");
         categories.Should().Contain("People",     "people/ subfolder must be present");
@@ -50,10 +54,10 @@ public sealed class IconCatalogTests
     public void Catalog_AllEntriesRasteriseToNonEmptyPngInlineImage()
     {
         // If the catalog is empty (content not copied yet) skip rather than fail.
-        if (!ContentIconCatalog.All.Any())
+        if (!Catalog.Any())
             return;
 
-        foreach (var entry in ContentIconCatalog.All)
+        foreach (var entry in Catalog)
         {
             var image = SvgRasterizerHelper.RasterizeToInlineImage(entry.Path);
             image.PngBytes.Should().NotBeEmpty($"{entry.Name} must rasterise to PNG bytes");
@@ -67,11 +71,11 @@ public sealed class IconCatalogTests
     [StaFact]
     public void CatalogIcon_RoundTripsThroughDocx()
     {
-        if (!ContentIconCatalog.All.Any())
+        if (!Catalog.Any())
             return;
 
         // Pick the first entry as a representative sample.
-        var entry = ContentIconCatalog.All.First();
+        var entry = Catalog.First();
         var image = SvgRasterizerHelper.RasterizeToInlineImage(entry.Path);
 
         var doc  = new TextDocument();
@@ -95,22 +99,22 @@ public sealed class IconCatalogTests
     [Fact]
     public void Filter_NullCategoryAndSearch_ReturnsAll()
     {
-        ContentIconCatalog.Filter(null, null).Count()
-            .Should().Be(ContentIconCatalog.All.Count);
+        IconPickerDialogPlanner.Filter(Catalog, null, null).Count
+            .Should().Be(Catalog.Count);
     }
 
     [Fact]
     public void Filter_AllCategoryLabel_ReturnsAll()
     {
-        ContentIconCatalog.Filter(ContentIconCatalog.AllCategoriesLabel, null).Count()
-            .Should().Be(ContentIconCatalog.All.Count);
+        IconPickerDialogPlanner.Filter(Catalog, IconPickerDialogPlanner.AllCategoriesLabel, null).Count
+            .Should().Be(Catalog.Count);
     }
 
     [Fact]
     public void Filter_ByCategory_ReturnsOnlyThatCategory()
     {
-        var category = ContentIconCatalog.Categories.First();
-        var filtered = ContentIconCatalog.Filter(category, null).ToList();
+        var category = IconPickerDialogPlanner.Categories(Catalog).First();
+        var filtered = IconPickerDialogPlanner.Filter(Catalog, category, null);
         filtered.Should().NotBeEmpty();
         filtered.All(e => e.Category.Equals(category, StringComparison.OrdinalIgnoreCase))
             .Should().BeTrue("filter by category must only return matching entries");
@@ -120,24 +124,24 @@ public sealed class IconCatalogTests
     public void Filter_BySearchTerm_ReturnsMatchingSubset()
     {
         // All entries have keywords; searching for "a" (almost every name has one) must match some.
-        var results = ContentIconCatalog.Filter(null, "a").ToList();
+        var results = IconPickerDialogPlanner.Filter(Catalog, null, "a");
         results.Should().NotBeEmpty("at least some icons must match the single-letter query 'a'");
-        results.Count.Should().BeLessThan(ContentIconCatalog.All.Count,
+        results.Count.Should().BeLessThan(Catalog.Count,
             "a meaningful search must narrow the results");
     }
 
     [Fact]
     public void Filter_ByNonMatchingTerm_ReturnsEmpty()
     {
-        var results = ContentIconCatalog.Filter(null, "xyznotanicon9999").ToList();
+        var results = IconPickerDialogPlanner.Filter(Catalog, null, "xyznotanicon9999");
         results.Should().BeEmpty("a nonsense search term must match nothing");
     }
 
     [Fact]
     public void Filter_ByCategoryAndSearch_IntersectsCorrectly()
     {
-        var category = ContentIconCatalog.Categories.First();
-        var results  = ContentIconCatalog.Filter(category, "xyznotanicon9999").ToList();
+        var category = IconPickerDialogPlanner.Categories(Catalog).First();
+        var results = IconPickerDialogPlanner.Filter(Catalog, category, "xyznotanicon9999");
         results.Should().BeEmpty("category + no-match search term must yield no results");
     }
 

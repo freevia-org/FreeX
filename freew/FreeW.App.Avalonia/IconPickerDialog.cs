@@ -10,20 +10,19 @@ using FreeW.App.Presentation.Dialogs;
 namespace FreeW.App.Avalonia;
 
 /// <summary>
-/// Avalonia's icon picker. It owns the same category/search/selection lifecycle as WPF. The selected
-/// SVG is returned as a shared selection record; rasterization remains a host-owned follow-up because the
-/// WPF SharpVectors rasterizer is intentionally not a cross-platform dependency.
+/// Avalonia renderer for the shared icon-picker session. The selected SVG is returned as a shared
+/// selection record; rasterization remains a host-owned follow-up because the WPF SharpVectors rasterizer
+/// is intentionally not a cross-platform dependency.
 /// </summary>
 internal sealed class IconPickerDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
-    private readonly IReadOnlyList<IconPickerEntry> _entries;
+    private readonly IconPickerDialogSession _session;
     private readonly ComboBox _category;
     private readonly TextBox _search;
     private readonly WrapPanel _tiles;
     private readonly TextBlock _status;
     private readonly Dictionary<string, DrawingImage?> _thumbnails = new(StringComparer.OrdinalIgnoreCase);
-    private IconPickerEntry? _selected;
 
     private const int ThumbSize = 54;
     private const int IconSize = 38;
@@ -38,11 +37,12 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
         MinHeight = 320;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
-        _entries = LoadEntries();
+        _session = new IconPickerDialogSession(
+            IconPickerCatalog.LoadFromBaseDirectory(AppContext.BaseDirectory));
 
         _category = new ComboBox { Width = 120, Margin = new Thickness(0, 0, 14, 0) };
         _category.ItemsSource = new[] { IconPickerDialogPlanner.AllCategoriesLabel }
-            .Concat(IconPickerDialogPlanner.Categories(_entries)).ToArray();
+            .Concat(_session.Categories).ToArray();
         _category.SelectedIndex = 0;
         _search = new TextBox { Width = 160 };
         _tiles = new WrapPanel
@@ -124,13 +124,11 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
 
     private void Refresh()
     {
-        _selected = null;
         _tiles.Children.Clear();
-        var entries = IconPickerDialogPlanner.Filter(
-            _entries,
+        var state = _session.ApplyFilter(
             _category.SelectedItem as string,
             _search.Text);
-        foreach (var entry in entries)
+        foreach (var entry in state.VisibleEntries)
         {
             var tile = new Border
             {
@@ -156,14 +154,14 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
                 if (args.GetCurrentPoint(tile).Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonPressed
                     && args.ClickCount == 2)
                 {
-                    _selected = entry;
+                    _session.Select(entry);
                     Accept();
                     args.Handled = true;
                 }
             };
             _tiles.Children.Add(tile);
         }
-        _status.Text = entries.Count == 0 ? "No icons match." : $"{entries.Count} icons";
+        _status.Text = state.StatusText;
     }
 
     private Control CreateThumbnail(IconPickerEntry entry)
@@ -194,7 +192,7 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
 
     private void Select(IconPickerEntry entry, Border tile)
     {
-        _selected = entry;
+        _session.Select(entry);
         foreach (var existing in _tiles.Children.OfType<Border>())
         {
             existing.BorderBrush = Brushes.Transparent;
@@ -206,12 +204,13 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
 
     private async void Accept()
     {
-        if (_selected is not null)
+        var plan = _session.PlanAccept();
+        if (plan.ShouldAccept)
         {
-            Close(IconPickerDialogPlanner.Select(_selected));
+            Close(plan.Selection);
             return;
         }
-        await AvaloniaUserMessageDialog.ShowWarningAsync(this, "Select an icon first.", "Insert Icon");
+        await AvaloniaUserMessageDialog.ShowWarningAsync(this, plan.WarningMessage!, "Insert Icon");
     }
 
     private static Button Button(string text, Action action, bool isDefault = false, bool isCancel = false)
@@ -222,26 +221,4 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
         return button;
     }
 
-    private static IReadOnlyList<IconPickerEntry> LoadEntries()
-    {
-        var root = Path.Combine(AppContext.BaseDirectory, "Resources", "ContentIconsSvg");
-        if (!Directory.Exists(root))
-            return [];
-
-        return Directory.EnumerateDirectories(root)
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .SelectMany(categoryPath => Directory.EnumerateFiles(categoryPath, "*.svg")
-                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-                .Select(path =>
-                {
-                    var category = TitleCase(Path.GetFileName(categoryPath));
-                    var name = TitleCase(Path.GetFileNameWithoutExtension(path).Replace('-', ' '));
-                    return new IconPickerEntry(name, category, $"{name} {category}".ToLowerInvariant(), path);
-                }))
-            .ToArray();
-    }
-
-    private static string TitleCase(string value) =>
-        string.Join(' ', value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Select(word => word.Length == 0 ? word : char.ToUpperInvariant(word[0]) + word[1..]));
 }

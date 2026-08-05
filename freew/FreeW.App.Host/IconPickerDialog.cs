@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -17,7 +18,7 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     // ── State ─────────────────────────────────────────────────────────────────────────────────────
     private InlineImage? _result;
-    private ContentIconCatalog.IconEntry? _selected;
+    private readonly IconPickerDialogSession _session;
 
     // ── Controls ──────────────────────────────────────────────────────────────────────────────────
     private readonly ComboBox _categoryBox;
@@ -43,6 +44,8 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResize;
         ShowInTaskbar = false;
+        _session = new IconPickerDialogSession(
+            IconPickerCatalog.LoadFromBaseDirectory(AppContext.BaseDirectory));
 
         var root = new DockPanel { Margin = new Thickness(10) };
 
@@ -60,8 +63,8 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         });
 
         _categoryBox = new ComboBox { MinWidth = 120, Margin = new Thickness(0, 0, 14, 0) };
-        _categoryBox.Items.Add(ContentIconCatalog.AllCategoriesLabel);
-        foreach (var cat in ContentIconCatalog.Categories)
+        _categoryBox.Items.Add(IconPickerDialogPlanner.AllCategoriesLabel);
+        foreach (var cat in _session.Categories)
             _categoryBox.Items.Add(cat);
         _categoryBox.SelectedIndex = 0;
         _categoryBox.SelectionChanged += (_, _) => Refresh();
@@ -152,22 +155,21 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void Refresh()
     {
         _grid.Children.Clear();
-        _selected = null;
 
         var category = _categoryBox.SelectedItem as string;
         var search   = _searchBox.Text;
-        var entries  = ContentIconCatalog.Filter(category, search).ToList();
+        var state = _session.ApplyFilter(category, search);
 
-        _statusBar.Text = entries.Count == 0 ? "No icons match." : $"{entries.Count} icons";
+        _statusBar.Text = state.StatusText;
 
-        foreach (var entry in entries)
+        foreach (var entry in state.VisibleEntries)
         {
             var tile = MakeTile(entry);
             _grid.Children.Add(tile);
         }
     }
 
-    private Border MakeTile(ContentIconCatalog.IconEntry entry)
+    private Border MakeTile(IconPickerEntry entry)
     {
         // Load a small preview thumbnail: render the SVG at IconSize×IconSize.
         Image? preview = null;
@@ -251,7 +253,8 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         if (sender is Border tile)
         {
             SetSelected(tile, true);
-            _selected = tile.Tag as ContentIconCatalog.IconEntry;
+            if (tile.Tag is IconPickerEntry entry)
+                _session.Select(entry);
         }
     }
 
@@ -259,8 +262,11 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         if (sender is Border tile)
         {
-            _selected = tile.Tag as ContentIconCatalog.IconEntry;
-            Accept();
+            if (tile.Tag is IconPickerEntry entry)
+            {
+                _session.Select(entry);
+                Accept();
+            }
         }
     }
 
@@ -275,15 +281,16 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     // ── Accept ────────────────────────────────────────────────────────────────────────────────────
     private void Accept()
     {
-        if (_selected is null)
+        var plan = _session.PlanAccept();
+        if (!plan.ShouldAccept)
         {
-            DialogMessageHelper.ShowWarning(this, "Select an icon first.", "Insert Icon");
+            DialogMessageHelper.ShowWarning(this, plan.WarningMessage!, "Insert Icon");
             return;
         }
 
         try
         {
-            _result = SvgRasterizerHelper.RasterizeToInlineImage(_selected.Path);
+            _result = SvgRasterizerHelper.RasterizeToInlineImage(plan.Selection!.Path);
             Close();
         }
         catch (Exception ex)

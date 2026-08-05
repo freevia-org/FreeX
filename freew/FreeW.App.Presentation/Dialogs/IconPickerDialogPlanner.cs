@@ -11,9 +11,22 @@ public sealed record IconPickerSelection(
     string Category,
     string Path);
 
+public sealed record IconPickerProjection(
+    IReadOnlyList<IconPickerEntry> Entries,
+    string StatusText);
+
+public sealed record IconPickerAcceptPlan(
+    IconPickerSelection? Selection,
+    string? WarningMessage)
+{
+    public bool ShouldAccept => Selection is not null;
+}
+
 public static class IconPickerDialogPlanner
 {
     public const string AllCategoriesLabel = "(All)";
+    public const string NoMatchesStatusText = "No icons match.";
+    public const string SelectionRequiredMessage = "Select an icon first.";
 
     public static IReadOnlyList<string> Categories(IEnumerable<IconPickerEntry> entries) =>
         entries.Select(entry => entry.Category)
@@ -45,6 +58,26 @@ public static class IconPickerDialogPlanner
         return result.ToArray();
     }
 
+    public static IconPickerProjection Project(
+        IEnumerable<IconPickerEntry> entries,
+        string? category,
+        string? search)
+    {
+        var filtered = Filter(entries, category, search);
+        return new IconPickerProjection(filtered, StatusText(filtered.Count));
+    }
+
+    public static string StatusText(int visibleEntryCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(visibleEntryCount);
+        return visibleEntryCount == 0 ? NoMatchesStatusText : $"{visibleEntryCount} icons";
+    }
+
     public static IconPickerSelection Select(IconPickerEntry entry) =>
         new(entry.Name, entry.Category, entry.Path);
+
+    public static IconPickerAcceptPlan PlanAccept(IconPickerEntry? entry) =>
+        entry is null
+            ? new IconPickerAcceptPlan(null, SelectionRequiredMessage)
+            : new IconPickerAcceptPlan(Select(entry), null);
 }

@@ -55,7 +55,7 @@ public sealed class IconPickerDialogVisualParityTests
             var firstTile = (Border)tiles.Children[0];
             var firstEntry = (IconPickerEntry)firstTile.Tag!;
             Invoke(dialog, "Select", firstEntry, firstTile);
-            Field<IconPickerEntry>(dialog, "_selected").Should().Be(firstEntry);
+            Field<IconPickerDialogSession>(dialog, "_session").State.SelectedEntry.Should().Be(firstEntry);
             firstTile.BorderBrush.Should().NotBe(Brushes.Transparent);
             firstTile.Background.Should().NotBe(Brushes.Transparent);
         }, CancellationToken.None);
