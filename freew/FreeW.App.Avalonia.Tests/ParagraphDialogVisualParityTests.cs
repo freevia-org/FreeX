@@ -170,6 +170,38 @@ public sealed class ParagraphDialogVisualParityTests
     }
 
     [Fact]
+    public async Task Paragraph_dialog_preserves_Wpf_client_surface_inset()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new ParagraphDialog(ParagraphFormatting.Default)
+            {
+                Width = 366,
+                Height = 308,
+                SizeToContent = SizeToContent.Manual,
+            };
+            try
+            {
+                dialog.Show();
+                dialog.Measure(new Size(366, 308));
+                dialog.Arrange(new Rect(0, 0, 366, 308));
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var tabs = Field<TabControl>(dialog, "_tabs");
+                tabs.Bounds.X.Should().Be(12);
+                tabs.Bounds.Y.Should().Be(12);
+                tabs.Bounds.Width.Should().Be(343);
+                tabs.Bounds.Height.Should().Be(253);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Validation_routes_to_the_Wpf_first_field_and_keeps_the_dialog_open()
     {
         await Session.Dispatch(() =>
