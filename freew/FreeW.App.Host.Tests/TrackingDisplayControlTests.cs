@@ -45,6 +45,7 @@ public sealed class TrackingDisplayControlTests
     public void CurrentReviewWorkflowStatus_UsesSharedReviewPlanner()
     {
         var doc = TextDocument.CreateEmpty();
+        doc.TrackRevisions = true;
         doc.Blocks.Clear();
         var para = new Paragraph();
         para.Runs.Add(new Run("added") { Revision = RevisionKind.Inserted, RevisionAuthor = "Alice" });
@@ -52,7 +53,7 @@ public sealed class TrackingDisplayControlTests
         doc.Blocks.Add(para);
         doc.Comments[1] = new Comment(1, "Comment", "Bob");
 
-        var view = new DocumentView { TrackChangesEnabled = true };
+        var view = new DocumentView();
         view.LoadModel(doc);
         view.ApplyShowMarkupComments(false);
 
