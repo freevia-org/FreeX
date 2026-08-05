@@ -1036,6 +1036,76 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void SerializeRtf_RoundTripsRichRunsParagraphsAndSafeHyperlink()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            Align = TextAlign.Center,
+            SpaceBeforePt = 3,
+            SpaceAfterPt = 6,
+            Runs =
+            {
+                new Run
+                {
+                    Text = "Bold red",
+                    FontFamily = "Calibri",
+                    FontSizePt = 16,
+                    Bold = true,
+                    Underline = true,
+                    Color = new ThemeAwareColor(new SrgbColor(0xC0, 0x00, 0x00)),
+                },
+                new Run
+                {
+                    Text = " and link",
+                    Italic = true,
+                    Strikethrough = true,
+                    Hyperlink = new Hyperlink { Url = "https://example.com/review" },
+                },
+            },
+        });
+        body.Paragraphs.Add(new Paragraph
+        {
+            RightToLeft = true,
+            Runs = { new Run { Text = "\u05D0\u05D1\u05D2", RightToLeft = true } },
+        });
+
+        var payload = new InCanvasRichClipboardPayload(
+            body,
+            InCanvasTextEditPlanner.ExtractPlainText(body));
+        var rtf = ExternalRichTextClipboardPlanner.SerializeRtf(payload);
+        var source = Encoding.ASCII.GetString(rtf);
+
+        source.Should().StartWith(@"{\rtf1\ansi");
+        source.Should().Contain(@"{\fonttbl");
+        source.Should().Contain(@"{\colortbl");
+        source.Should().Contain(@"\b");
+        source.Should().Contain(@"\ul");
+        source.Should().Contain(@"\strike");
+        source.Should().Contain(@"\fs32");
+        source.Should().Contain("HYPERLINK");
+
+        var restored = ExternalRichTextClipboardPlanner.TryParseRtf(rtf);
+        restored.Should().NotBeNull();
+        restored!.PlainText.Should().Be("Bold red and link\n\u05D0\u05D1\u05D2");
+        restored.Body.Paragraphs[0].Align.Should().Be(TextAlign.Center);
+        restored.Body.Paragraphs[0].Runs.Should().Contain(run =>
+            run.Text == "Bold red"
+            && run.Bold
+            && run.Underline
+            && run.FontFamily == "Calibri"
+            && run.FontSizePt == 16
+            && run.Color!.Resolved == new SrgbColor(0xC0, 0x00, 0x00));
+        restored.Body.Paragraphs[0].Runs.Should().Contain(run =>
+            run.Text == " and link"
+            && run.Italic
+            && run.Strikethrough
+            && run.Hyperlink!.Url == "https://example.com/review");
+        restored.Body.Paragraphs[1].RightToLeft.Should().BeTrue();
+        restored.Body.Paragraphs[1].Runs.Single().RightToLeft.Should().BeTrue();
+    }
+
+    [Fact]
     public void RtfCharacterDirection_RtlchAndLtrch_PreserveMixedRunOverrides()
     {
         const string rtf =

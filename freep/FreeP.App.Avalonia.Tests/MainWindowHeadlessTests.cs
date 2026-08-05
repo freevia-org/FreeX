@@ -835,6 +835,7 @@ public sealed class MainWindowHeadlessTests
             "freep.slideshow.from-current-slide",
             "freep.slideshow.rehearse-timings",
             "freep.slideshow.record-timings",
+            "freep.slideshow.setup",
             "freep.slideshow.custom-shows");
     }
 

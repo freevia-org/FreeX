@@ -461,7 +461,7 @@ public static class AvaloniaCompactDialogChrome
         comboBox.ApplyTemplate();
         foreach (var surface in comboBox.GetVisualDescendants()
             .OfType<Border>()
-            .Where(border => border.Name == "PART_LayoutRoot"))
+            .Where(border => border.Name is "PART_LayoutRoot" or "Background"))
             surface.Background = comboBox.Background;
         foreach (var presenter in comboBox.GetVisualDescendants()
             .OfType<ContentPresenter>()

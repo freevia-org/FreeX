@@ -1110,16 +1110,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         if (clipboard is null)
             return false;
 
-        var item = new DataTransferItem();
-        var bytes = InCanvasRichClipboardPlanner.Serialize(payload);
-        if (OperatingSystem.IsWindows())
-            item.Set(RichTextPlatformFormat, bytes);
-        else
-            item.Set(RichTextFormat, bytes);
-        item.SetText(payload.PlainText);
-
-        var transfer = new DataTransfer();
-        transfer.Add(item);
+        var transfer = BuildRichTextDataTransfer(payload);
         try
         {
             await clipboard.SetDataAsync(transfer);
@@ -1132,6 +1123,32 @@ internal sealed class AvaloniaRichTextEditor : Grid
             ((IDisposable)transfer).Dispose();
             return false;
         }
+    }
+
+    /// <summary>
+    /// Builds the actual rich-editor clipboard transfer. The private FreeP payload preserves
+    /// editor-only resources, while standard RTF gives WPF, Office, and Linux rich editors a
+    /// truthful interoperable text/run projection.
+    /// </summary>
+    internal static DataTransfer BuildRichTextDataTransfer(InCanvasRichClipboardPayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        var item = new DataTransferItem();
+        var bytes = InCanvasRichClipboardPlanner.Serialize(payload);
+        if (OperatingSystem.IsWindows())
+            item.Set(RichTextPlatformFormat, bytes);
+        else
+            item.Set(RichTextFormat, bytes);
+
+        item.Set(
+            OperatingSystem.IsWindows() ? ExternalRtfWindowsFormat : ExternalRtfLinuxFormat,
+            ExternalRichTextClipboardPlanner.SerializeRtf(payload));
+        item.SetText(payload.PlainText);
+
+        var transfer = new DataTransfer();
+        transfer.Add(item);
+        return transfer;
     }
 
     private static async Task<T?> TryGetValueAsync<T>(

@@ -190,6 +190,7 @@ internal static class FreePRibbonIcons
             // Wave 4C: Slide Show buttons
             ["freep.slideshow.from-beginning"]     = RibbonCommandIconKind.Next,
             ["freep.slideshow.from-current-slide"] = RibbonCommandIconKind.Previous,
+            ["freep.slideshow.setup"]             = RibbonCommandIconKind.More,
             ["freep.slideshow.custom-shows"]        = RibbonCommandIconKind.List,
 
             // Wave 4C: Animation entrance effects

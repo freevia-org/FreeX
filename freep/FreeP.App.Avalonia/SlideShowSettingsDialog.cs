@@ -1,0 +1,118 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
+using FreeP.App.Compositor;
+
+namespace FreeP.App.Avalonia;
+
+internal sealed class SlideShowSettingsDialog : Window
+{
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+
+    private readonly EditingSession _editor;
+    private readonly CheckBox _useTimingsCheck;
+    private readonly CheckBox _showAnimationCheck;
+    private readonly CheckBox _loopCheck;
+
+    internal SlideShowSettingsState InitialState { get; }
+
+    public SlideShowSettingsDialog(EditingSession editor)
+    {
+        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+        InitialState = SlideShowSettingsPlanner.BuildState(editor.Presentation);
+
+        Title = "Set Up Slide Show";
+        Width = 345.3333333333333;
+        Height = 190;
+        CanResize = false;
+        ShowInTaskbar = false;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Background = Brushes.White;
+
+        _useTimingsCheck = new CheckBox
+        {
+            Content = "Use timings, if present",
+            IsChecked = InitialState.UseSlideTimings,
+        };
+        _showAnimationCheck = new CheckBox
+        {
+            Content = "Show without animation",
+            IsChecked = !InitialState.ShowWithAnimation,
+        };
+        _loopCheck = new CheckBox
+        {
+            Content = "Loop until stopped",
+            IsChecked = InitialState.LoopUntilStopped,
+        };
+
+        foreach (var check in new[] { _useTimingsCheck, _showAnimationCheck, _loopCheck })
+        {
+            AvaloniaCompactDialogChrome.ApplyCheckBox(check, DialogChromeStyle);
+            check.Height = 22;
+            check.MinHeight = 22;
+            check.MaxHeight = 22;
+            check.Padding = new Thickness(0);
+        }
+
+        Content = BuildContent();
+        KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Escape)
+                return;
+            Close(false);
+            e.Handled = true;
+        };
+    }
+
+    private Control BuildContent()
+    {
+        var panel = new StackPanel { Margin = new Thickness(14), Spacing = 4 };
+        panel.Children.Add(_useTimingsCheck);
+        panel.Children.Add(_showAnimationCheck);
+        panel.Children.Add(_loopCheck);
+
+        var ok = BuildButton("OK", () => Apply(), isDefault: true);
+        var cancel = BuildButton("Cancel", () => Close(false), isCancel: true);
+        var actions = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0));
+        actions.Spacing = 6;
+        panel.Children.Add(actions);
+        return panel;
+    }
+
+    private static Button BuildButton(string label, Action action, bool isDefault = false, bool isCancel = false)
+    {
+        var button = new Button
+        {
+            Content = label,
+            MinWidth = 76,
+            IsDefault = isDefault,
+            IsCancel = isCancel,
+        };
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 76, isDefault: isDefault);
+        button.Click += (_, _) => action();
+        return button;
+    }
+
+    internal bool ApplyForTests(bool useSlideTimings, bool showWithAnimation, bool loopUntilStopped)
+    {
+        _useTimingsCheck.IsChecked = useSlideTimings;
+        _showAnimationCheck.IsChecked = !showWithAnimation;
+        _loopCheck.IsChecked = loopUntilStopped;
+        return Apply();
+    }
+
+    private bool Apply()
+    {
+        var applied = SlideShowSettingsPlanner.TryApply(
+            _editor,
+            _useTimingsCheck.IsChecked == true,
+            _showAnimationCheck.IsChecked != true,
+            _loopCheck.IsChecked == true);
+        if (applied && IsVisible)
+            Close(true);
+        return applied;
+    }
+}

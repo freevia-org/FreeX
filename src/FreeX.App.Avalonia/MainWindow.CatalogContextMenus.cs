@@ -26,6 +26,9 @@ public sealed partial class MainWindow
     };
     private readonly Dictionary<string, Button> _avaloniaQuickAccessButtons =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Button> _avaloniaQuickAccessKeyTipButtons =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<Button, Border> _avaloniaQuickAccessKeyTipBadges = [];
     private AppOptions? _avaloniaQuickAccessOptions;
     private Panel? _avaloniaQuickAccessTitleBarHost;
     private Border? _avaloniaQuickAccessBelowRibbonHost;
@@ -99,28 +102,45 @@ public sealed partial class MainWindow
         ApplyAvaloniaQuickAccessToolbarPlacement();
         _avaloniaQuickAccessToolbar.Children.Clear();
         _avaloniaQuickAccessButtons.Clear();
+        _avaloniaQuickAccessKeyTipButtons.Clear();
+        _avaloniaQuickAccessKeyTipBadges.Clear();
         var commands = QuickAccessToolbarCatalog.Normalize(_avaloniaQuickAccessOptions.QuickAccessToolbarCommands);
         _avaloniaQuickAccessOptions.QuickAccessToolbarCommands = commands.Select(command => command.Id).ToList();
         var showBelowRibbon = _avaloniaQuickAccessOptions.QuickAccessToolbarBelowRibbon;
 
-        foreach (var command in commands)
+        for (var index = 0; index < commands.Count; index++)
         {
-            var button = CreateAvaloniaQuickAccessButton(command, showBelowRibbon);
+            var command = commands[index];
+            var keyTip = FormatAvaloniaQuickAccessKeyTip(index + 1);
+            var button = CreateAvaloniaQuickAccessButton(command, showBelowRibbon, keyTip);
             _avaloniaQuickAccessToolbar.Children.Add(button);
             _avaloniaQuickAccessButtons[command.Id] = button;
+            _avaloniaQuickAccessKeyTipButtons[keyTip] = button;
 
             if (IsAvaloniaQuickAccessHistoryCommand(command.Id))
                 _avaloniaQuickAccessToolbar.Children.Add(CreateAvaloniaQuickAccessHistoryButton(command, showBelowRibbon));
         }
 
         RefreshAvaloniaQuickAccessToolbarState();
+        RefreshAvaloniaQuickAccessKeyTipBadges();
     }
 
     private Button CreateAvaloniaQuickAccessButton(
         QuickAccessToolbarCommandDefinition command,
-        bool showBelowRibbon)
+        bool showBelowRibbon,
+        string keyTip)
     {
         var foreground = showBelowRibbon ? PrimaryInk : StatusBarForeground;
+        var keyTipBadge = CreateAvaloniaQuickAccessKeyTipBadge(keyTip);
+        var content = new Grid
+        {
+            IsHitTestVisible = false,
+            Children =
+            {
+                AvaloniaRibbonIcons.BuildMonochrome(command.IconKind, 16, command.Id, foreground),
+                keyTipBadge,
+            },
+        };
         var button = new Button
         {
             Width = IsAvaloniaQuickAccessHistoryCommand(command.Id) ? 24 : 26,
@@ -129,9 +149,10 @@ public sealed partial class MainWindow
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
             Foreground = foreground,
-            Content = AvaloniaRibbonIcons.BuildMonochrome(command.IconKind, 16, command.Id, foreground),
+            Content = content,
             Tag = command.Id,
         };
+        _avaloniaQuickAccessKeyTipBadges[button] = keyTipBadge;
         WindowDecorationProperties.SetElementRole(button, WindowDecorationsElementRole.User);
         AutomationProperties.SetAutomationId(button, command.AutomationId);
         AutomationProperties.SetName(button, UiText.Get(command.TitleResourceKey));
@@ -140,6 +161,30 @@ public sealed partial class MainWindow
         AttachAvaloniaQuickAccessCustomization(button, command.Id);
         return button;
     }
+
+    private static Border CreateAvaloniaQuickAccessKeyTipBadge(string keyTip) => new()
+    {
+        Tag = "QuickAccessKeyTipBadge",
+        Background = new SolidColorBrush(Color.FromRgb(0xFF, 0xF4, 0xCE)),
+        BorderBrush = new SolidColorBrush(Color.FromRgb(0x76, 0x70, 0x5C)),
+        BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(2),
+        Padding = new Thickness(3, 0),
+        MinWidth = 18,
+        HorizontalAlignment = HorizontalAlignment.Right,
+        VerticalAlignment = VerticalAlignment.Top,
+        Margin = new Thickness(0, -7, -5, 0),
+        IsVisible = false,
+        IsHitTestVisible = false,
+        Child = new TextBlock
+        {
+            Text = keyTip,
+            FontFamily = new FontFamily("Segoe UI"),
+            FontSize = 10,
+            Foreground = Brushes.Black,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        },
+    };
 
     private Button CreateAvaloniaQuickAccessHistoryButton(
         QuickAccessToolbarCommandDefinition command,
@@ -427,6 +472,38 @@ public sealed partial class MainWindow
             HasSelection: _session.SelectedRanges.Count > 0);
         foreach (var (commandId, button) in _avaloniaQuickAccessButtons)
             button.IsEnabled = QuickAccessCommandStateResolver.CanExecute(commandId, state);
+
+        RefreshAvaloniaQuickAccessKeyTipBadges();
+    }
+
+    private void RefreshAvaloniaQuickAccessKeyTipBadges()
+    {
+        foreach (var (button, badge) in _avaloniaQuickAccessKeyTipBadges)
+            badge.IsVisible = _ribbonKeyTipsVisible && button.IsEffectivelyEnabled;
+    }
+
+    internal string? AvaloniaQuickAccessKeyTipForTest(string commandId) =>
+        _avaloniaQuickAccessKeyTipButtons
+            .FirstOrDefault(entry => string.Equals(entry.Value.Tag as string, commandId, StringComparison.OrdinalIgnoreCase))
+            .Key;
+
+    internal bool AvaloniaQuickAccessKeyTipVisibleForTest(string commandId) =>
+        _avaloniaQuickAccessKeyTipButtons
+            .FirstOrDefault(entry => string.Equals(entry.Value.Tag as string, commandId, StringComparison.OrdinalIgnoreCase))
+            .Value is { } button &&
+        _avaloniaQuickAccessKeyTipBadges.TryGetValue(button, out var badge) &&
+        badge.IsVisible;
+
+    private static string FormatAvaloniaQuickAccessKeyTip(int visibleIndex)
+    {
+        if (visibleIndex <= 9)
+            return visibleIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        var offset = visibleIndex - 9;
+        const string extraKeyTipCharacters = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        return offset <= extraKeyTipCharacters.Length
+            ? $"0{extraKeyTipCharacters[offset - 1]}"
+            : visibleIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private static bool IsAvaloniaQuickAccessHistoryCommand(string commandId) =>

@@ -79,6 +79,32 @@ public sealed class DialogLifecycleParityTests
     }
 
     [Fact]
+    public async Task SlideShowSettings_modal_dialog_applies_shared_playback_options()
+    {
+        await Session.Dispatch(() =>
+        {
+            var editor = MakeSession();
+            var dialog = new SlideShowSettingsDialog(editor);
+            var buttons = dialog.GetLogicalDescendants().OfType<Button>().ToArray();
+
+            buttons.Single(button => Equals(button.Content, "OK")).IsDefault.Should().BeTrue();
+            buttons.Single(button => Equals(button.Content, "Cancel")).IsCancel.Should().BeTrue();
+            dialog.InitialState.Should().Be(new SlideShowSettingsState(true, true, false));
+
+            dialog.ApplyForTests(
+                useSlideTimings: false,
+                showWithAnimation: false,
+                loopUntilStopped: true).Should().BeTrue();
+
+            editor.Presentation.UseSlideTimings.Should().BeFalse();
+            editor.Presentation.ShowWithAnimation.Should().BeFalse();
+            editor.Presentation.LoopUntilStopped.Should().BeTrue();
+            editor.Undo();
+            editor.Presentation.UseSlideTimings.Should().BeTrue();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task FindReplace_modeless_dialog_reuses_instance_switches_mode_and_escape_closes()
     {
         await Session.Dispatch(() =>

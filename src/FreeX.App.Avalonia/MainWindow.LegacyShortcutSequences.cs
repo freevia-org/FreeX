@@ -26,12 +26,14 @@ public sealed partial class MainWindow
     private LegacyDataFilterSequenceState _legacyDataFilterSequenceState;
     private LegacyEditPasteSpecialSequenceState _legacyEditPasteSpecialSequenceState;
     private string _ribbonKeyTipInput = "";
+    private string _quickAccessKeyTipInput = "";
 
     internal LegacyDataFilterSequenceState LegacyDataFilterSequenceStateForTest =>
         _legacyDataFilterSequenceState;
     internal LegacyEditPasteSpecialSequenceState LegacyEditPasteSpecialSequenceStateForTest =>
         _legacyEditPasteSpecialSequenceState;
     internal string RibbonKeyTipInputForTest => _ribbonKeyTipInput;
+    internal string QuickAccessKeyTipInputForTest => _quickAccessKeyTipInput;
 
     internal static IReadOnlySet<string> InteractiveValidationLegacyDataFilterInteractionIds { get; } =
         new HashSet<string>(StringComparer.Ordinal)
@@ -47,6 +49,9 @@ public sealed partial class MainWindow
     /// </summary>
     private bool TryHandleLegacyDataFilterSequence(KeyEventArgs args)
     {
+        if (TryHandleQuickAccessKeyTipSequence(args))
+            return true;
+
         if (TryHandleLegacyEditPasteSpecialSequence(args))
             return true;
 
@@ -346,8 +351,118 @@ public sealed partial class MainWindow
     private void ResetRibbonKeyTipSequence()
     {
         _ribbonKeyTipInput = "";
+        _quickAccessKeyTipInput = "";
         SetRibbonKeyTipsVisible(false);
         if (_ribbonControl is not null)
             AvaloniaRibbonRenderer.CloseKeyTipFlyouts(_ribbonControl);
+    }
+
+    /// <summary>
+    /// Routes the configured Avalonia Quick Access Toolbar using the WPF keytip policy: visible commands
+    /// receive 1-9, then two-character 01, 02 ... tips, while Undo/Redo history buttons remain unkeyed.
+    /// This path is intentionally dynamic because the QAT is user-configurable and its order is persisted.
+    /// </summary>
+    private bool TryHandleQuickAccessKeyTipSequence(KeyEventArgs args)
+    {
+        var sequenceActive = _quickAccessKeyTipInput.Length > 0;
+        var directAltToken = args.KeyModifiers == KeyModifiers.Alt
+            ? ToRibbonKeyTipToken(args.Key)
+            : null;
+        var visibleContinuation = _ribbonKeyTipsVisible && args.KeyModifiers == KeyModifiers.None;
+
+        if (!sequenceActive && directAltToken is null && !visibleContinuation)
+            return false;
+
+        if (!CanHandleLegacyDataFilterSequence(args))
+        {
+            if (sequenceActive)
+                ResetRibbonKeyTipSequence();
+            return false;
+        }
+
+        if (sequenceActive &&
+            (args.Key is Key.LeftAlt or Key.RightAlt ||
+             args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.None))
+        {
+            ResetRibbonKeyTipSequence();
+            return false;
+        }
+
+        if (args.Key == Key.Escape && args.KeyModifiers == KeyModifiers.None)
+        {
+            if (!sequenceActive)
+                return false;
+
+            ResetRibbonKeyTipSequence();
+            args.Handled = true;
+            return true;
+        }
+
+        if (sequenceActive && args.KeyModifiers != KeyModifiers.None)
+        {
+            ResetRibbonKeyTipSequence();
+            return false;
+        }
+
+        var token = directAltToken ?? ToRibbonKeyTipToken(args.Key);
+        if (token is null)
+        {
+            if (!sequenceActive)
+                return false;
+
+            ResetRibbonKeyTipSequence();
+            args.Handled = true;
+            return true;
+        }
+
+        var nextInput = sequenceActive ? _quickAccessKeyTipInput + token : token;
+        var match = MatchAvaloniaQuickAccessKeyTip(nextInput);
+        if (!match.IsMatch)
+        {
+            // Let the normal ribbon catalog handle letters and the first three default QAT digits. Any
+            // active QAT prefix, however, owns its invalid continuation and must consume it like WPF.
+            if (!sequenceActive)
+                return false;
+
+            ResetRibbonKeyTipSequence();
+            args.Handled = true;
+            return true;
+        }
+
+        _quickAccessKeyTipInput = nextInput;
+        SetRibbonKeyTipsVisible(false);
+        args.Handled = true;
+
+        if (match.ExactKeyTip is { } exact)
+        {
+            ExecuteQuickAccessKeyTip(exact);
+            if (!match.HasLongerKeyTip)
+                ResetRibbonKeyTipSequence();
+        }
+
+        return true;
+    }
+
+    private (string? ExactKeyTip, bool HasLongerKeyTip, bool IsMatch) MatchAvaloniaQuickAccessKeyTip(
+        string input)
+    {
+        var normalized = input.Trim().ToUpperInvariant();
+        var exact = _avaloniaQuickAccessKeyTipButtons.Keys
+            .FirstOrDefault(keyTip => string.Equals(keyTip, normalized, StringComparison.OrdinalIgnoreCase));
+        var hasLonger = _avaloniaQuickAccessKeyTipButtons.Keys.Any(keyTip =>
+            keyTip.Length > normalized.Length &&
+            keyTip.StartsWith(normalized, StringComparison.OrdinalIgnoreCase));
+        return (exact, hasLonger, exact is not null || hasLonger);
+    }
+
+    private void ExecuteQuickAccessKeyTip(string keyTip)
+    {
+        if (!_avaloniaQuickAccessKeyTipButtons.TryGetValue(keyTip, out var button))
+            return;
+
+        if (!button.IsEffectivelyEnabled)
+            return;
+
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
     }
 }

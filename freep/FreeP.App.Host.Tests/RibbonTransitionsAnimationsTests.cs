@@ -40,7 +40,7 @@ public class RibbonTransitionsAnimationsTests
     private static RibbonCommandRegistry MakeRegistry(EditingSession editor,
         Action? onStart = null, Action? onCurrent = null, Action? onCustomShows = null,
         Action? onRehearseTimings = null, Action? onRecordTimings = null,
-        Action? onTransitionSound = null)
+        Action? onTransitionSound = null, Action? onSlideShowSettings = null)
         => FreePRibbonCommands.Build(
             new RibbonStateStore(),
             editor,
@@ -49,7 +49,8 @@ public class RibbonTransitionsAnimationsTests
             onRehearseTimings,
             onRecordTimings,
             onCustomShows: onCustomShows,
-            onTransitionSound: onTransitionSound);
+            onTransitionSound: onTransitionSound,
+            onSlideShowSettings: onSlideShowSettings);
 
     /// <summary>Executes a registered command by id.</summary>
     private static void Exec(RibbonCommandRegistry registry, string id, RibbonCommandContext? context = null)
@@ -145,6 +146,7 @@ public class RibbonTransitionsAnimationsTests
         Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.from-beginning");
         Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.from-current-slide");
         Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.custom-shows");
+        Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.setup");
     }
 
     // ── Transition commands ────────────────────────────────────────────────────────
@@ -674,6 +676,16 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
+    public void Cmd_SetupSlideShow_InvokesOnSettings()
+    {
+        var (ed, _) = MakeSession();
+        bool fired = false;
+        var reg = MakeRegistry(ed, onSlideShowSettings: () => fired = true);
+        Exec(reg, "freep.slideshow.setup");
+        Assert.True(fired);
+    }
+
+    [Fact]
     public void Cmd_FromBeginning_NullAction_DoesNotThrow()
     {
         var (ed, _) = MakeSession();
@@ -745,6 +757,7 @@ public class RibbonTransitionsAnimationsTests
     [InlineData("freep.slideshow.from-current-slide")]
     [InlineData("freep.slideshow.rehearse-timings")]
     [InlineData("freep.slideshow.record-timings")]
+    [InlineData("freep.slideshow.setup")]
     [InlineData("freep.slideshow.custom-shows")]
     [InlineData("freep.anim.entrance.appear")]
     [InlineData("freep.anim.entrance.fade")]
