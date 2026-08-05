@@ -3859,6 +3859,8 @@ public static class PptxPackageWriter
         if (cell.Borders?.Right  is { } br) tcPr.Add(new XElement(A + "lnR",   BuildBorderAttrs(br)));
         if (cell.Borders?.Top    is { } bt) tcPr.Add(new XElement(A + "lnT",   BuildBorderAttrs(bt)));
         if (cell.Borders?.Bottom is { } bb) tcPr.Add(new XElement(A + "lnB",   BuildBorderAttrs(bb)));
+        if (cell.Borders?.DiagonalDown is { } bd) tcPr.Add(new XElement(A + "lnTlToBr", BuildBorderAttrs(bd)));
+        if (cell.Borders?.DiagonalUp is { } bu) tcPr.Add(new XElement(A + "lnBlToTr", BuildBorderAttrs(bu)));
 
         // Explicit fill
         if (cell.Fill is not null)

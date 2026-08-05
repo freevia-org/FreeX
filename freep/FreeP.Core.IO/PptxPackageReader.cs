@@ -4482,11 +4482,14 @@ public static class PptxPackageReader
                 Left   = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnL"), scheme),
                 Right  = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnR"), scheme),
                 Top    = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnT"), scheme),
-                Bottom = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnB"), scheme)
+                Bottom = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnB"), scheme),
+                DiagonalDown = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnTlToBr"), scheme),
+                DiagonalUp = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnBlToTr"), scheme)
             };
 
             if (borders.Left is not null || borders.Right is not null ||
-                borders.Top is not null  || borders.Bottom is not null)
+                borders.Top is not null  || borders.Bottom is not null ||
+                borders.DiagonalDown is not null || borders.DiagonalUp is not null)
                 cell.Borders = borders;
         }
 
