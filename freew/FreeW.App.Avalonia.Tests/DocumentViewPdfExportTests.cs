@@ -2072,11 +2072,68 @@ public sealed class DocumentViewPdfExportTests
             imageOp.Opacity.Should().BeApproximately(0.75, 0.001);
             imageOp.RotationDegrees.Should().BeApproximately(18, 0.001);
             imageOp.Width.Should().BeApproximately(view.InlineImageRects.Single().Width / (96.0 / 72.0), 0.001);
+            ops.OfType<PdfEffectGroup>().Should().BeEmpty("pictures without reflection must retain the direct image path");
             imageIndex.Should().BeGreaterThan(0, "table surfaces must remain before the inline image");
             ops.Take(imageIndex).Any(op => op is PdfFillRect or PdfStrokeRect or PdfLine)
                 .Should().BeTrue("table surfaces must remain before the inline image");
             ops.Skip(imageIndex + 1).Any(op => op is PdfText)
                 .Should().BeTrue("the image pass must precede body text");
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_ExportsPictureReflectionBeforeSourceAndBorderThroughSharedEffectGroup() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var image = new InlineImage(SolidPng(SKColors.Red), 72, 36)
+            {
+                ImportedEffects = new ShapeEffectLst
+                {
+                    HasReflection = true,
+                    ReflectionStartAlpha = 45000,
+                    ReflectionStartPosition = 12000,
+                    ReflectionEndAlpha = 5000,
+                    ReflectionEndPosition = 90000,
+                    ReflectionDist = 19050,
+                },
+                BorderColorHex = "#C00000",
+                BorderWidthPt = 2.25,
+                RotationAngle = 17,
+                FlipH = true,
+            };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromImage(image));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var transform = pdf.Pages.Single().Ops.OfType<PdfRotationGroup>().Single();
+            transform.RotationDegrees.Should().BeApproximately(17, 0.001);
+            transform.FlipH.Should().BeTrue();
+            transform.Ops.Should().HaveCount(3);
+
+            var reflection = transform.Ops[0].Should().BeOfType<PdfEffectGroup>().Which;
+            reflection.Kind.Should().Be(PdfEffectKind.Reflection);
+            reflection.Parameters.Opacity.Should().BeApproximately(0.45, 0.001);
+            reflection.Parameters.ReflectionEndOpacity.Should().BeApproximately(0.05, 0.001);
+            reflection.Parameters.ReflectionStartPosition.Should().BeApproximately(0.12, 0.001);
+            reflection.Parameters.ReflectionEndPosition.Should().BeApproximately(0.9, 0.001);
+            reflection.Parameters.ReflectionGap.Should().BeApproximately(1.5, 0.001);
+            reflection.Parameters.ReflectionDirectionDegrees.Should().Be(90);
+            reflection.Parameters.ReflectionScaleY.Should().Be(-1);
+
+            var reflectedImage = reflection.Ops.Should().ContainSingle().Which.Should().BeOfType<PdfImage>().Which;
+            var sourceImage = transform.Ops[1].Should().BeOfType<PdfImage>().Which;
+            reflectedImage.Should().BeSameAs(sourceImage);
+            sourceImage.RotationDegrees.Should().Be(0);
+            transform.Ops[2].Should().BeOfType<PdfStrokeRect>();
+
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+            SkiaPdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+            SkiaPdfWriter.RenderPagesToPng(pdf).Single().Length.Should().BeGreaterThan(100);
         }, CancellationToken.None);
 
     [Fact]

@@ -218,7 +218,7 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
         {
             ControlHeight = 20,
             TextBoxHeight = 20,
-            ButtonHeight = 21,
+            ButtonHeight = 26,
             ButtonPadding = new Thickness(10, 1),
         };
 

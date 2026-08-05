@@ -905,6 +905,58 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task ClipboardCopyTransfer_PublishesXamlPackageAlongsidePrivatePayloadAndRtf()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run { Text = "portable ", Bold = true },
+                    new Run
+                    {
+                        Text = "rich",
+                        Italic = true,
+                        Hyperlink = new Hyperlink { Url = "https://example.com" },
+                    },
+                },
+            });
+            var payload = new InCanvasRichClipboardPayload(
+                body,
+                InCanvasTextEditPlanner.ExtractPlainText(body));
+
+            using var transfer = AvaloniaRichTextEditor.BuildRichTextDataTransfer(payload);
+            var privateBytes = await transfer.TryGetValueAsync(
+                OperatingSystem.IsWindows()
+                    ? AvaloniaRichTextEditor.RichTextPlatformFormat
+                    : AvaloniaRichTextEditor.RichTextFormat);
+            var rtf = await transfer.TryGetValueAsync(
+                OperatingSystem.IsWindows()
+                    ? AvaloniaRichTextEditor.ExternalRtfWindowsFormat
+                    : AvaloniaRichTextEditor.ExternalRtfLinuxFormat);
+            var xaml = await transfer.TryGetValueAsync(
+                OperatingSystem.IsWindows()
+                    ? AvaloniaRichTextEditor.ExternalXamlPackageWindowsFormat
+                    : AvaloniaRichTextEditor.ExternalXamlPackageLinuxFormat);
+
+            InCanvasRichClipboardPlanner.Deserialize(privateBytes).Should().NotBeNull();
+            ExternalRichTextClipboardPlanner.TryParseRtf(rtf).Should().NotBeNull();
+            xaml.Should().NotBeNull();
+            var restored = ExternalXamlClipboardPlanner.TryParseXamlPackage(xaml);
+            restored.Should().NotBeNull();
+            restored!.PlainText.Should().Be("portable rich");
+            restored.Body.Paragraphs.Single().Runs.Should().Contain(run =>
+                run.Text == "portable " && run.Bold);
+            restored.Body.Paragraphs.Single().Runs.Should().Contain(run =>
+                run.Text == "rich"
+                && run.Italic
+                && run.Hyperlink!.Url == "https://example.com");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ClipboardPaste_CustomPayloadPrecedesXamlPackageRtfAndPlainText()
     {
         await Session.Dispatch(async () =>

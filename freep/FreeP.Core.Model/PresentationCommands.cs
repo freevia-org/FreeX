@@ -702,10 +702,62 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
 {
     private readonly bool _oldUseSlideTimings;
     private readonly bool _oldShowWithAnimation;
+    private readonly bool _oldShowWithNarration;
     private readonly bool _oldLoopUntilStopped;
+    private readonly PresentationShowType _oldShowType;
+    private readonly bool _oldShowBrowseScrollbar;
+    private readonly uint? _oldKioskRestartAfterMilliseconds;
+    private readonly bool _oldShowMediaControls;
+    private readonly bool _oldShowMasterShapes;
     private readonly bool _newUseSlideTimings;
     private readonly bool _newShowWithAnimation;
+    private readonly bool _newShowWithNarration;
     private readonly bool _newLoopUntilStopped;
+    private readonly PresentationShowType _newShowType;
+    private readonly bool _newShowBrowseScrollbar;
+    private readonly uint? _newKioskRestartAfterMilliseconds;
+    private readonly bool _newShowMediaControls;
+    private readonly bool _newShowMasterShapes;
+
+    public SetSlideShowSettingsCommand(
+        bool oldUseSlideTimings,
+        bool oldShowWithAnimation,
+        bool oldLoopUntilStopped,
+        PresentationShowType oldShowType,
+        bool oldShowBrowseScrollbar,
+        uint? oldKioskRestartAfterMilliseconds,
+        bool oldShowWithNarration,
+        bool newUseSlideTimings,
+        bool newShowWithAnimation,
+        bool newLoopUntilStopped,
+        PresentationShowType newShowType,
+        bool newShowBrowseScrollbar,
+        uint? newKioskRestartAfterMilliseconds,
+        bool newShowWithNarration,
+        bool oldShowMediaControls = true,
+        bool newShowMediaControls = true,
+        bool oldShowMasterShapes = true,
+        bool newShowMasterShapes = true)
+    {
+        _oldUseSlideTimings = oldUseSlideTimings;
+        _oldShowWithAnimation = oldShowWithAnimation;
+        _oldLoopUntilStopped = oldLoopUntilStopped;
+        _oldShowType = oldShowType;
+        _oldShowBrowseScrollbar = oldShowBrowseScrollbar;
+        _oldKioskRestartAfterMilliseconds = oldKioskRestartAfterMilliseconds;
+        _oldShowWithNarration = oldShowWithNarration;
+        _oldShowMediaControls = oldShowMediaControls;
+        _oldShowMasterShapes = oldShowMasterShapes;
+        _newUseSlideTimings = newUseSlideTimings;
+        _newShowWithAnimation = newShowWithAnimation;
+        _newLoopUntilStopped = newLoopUntilStopped;
+        _newShowType = newShowType;
+        _newShowBrowseScrollbar = newShowBrowseScrollbar;
+        _newKioskRestartAfterMilliseconds = newKioskRestartAfterMilliseconds;
+        _newShowWithNarration = newShowWithNarration;
+        _newShowMediaControls = newShowMediaControls;
+        _newShowMasterShapes = newShowMasterShapes;
+    }
 
     public SetSlideShowSettingsCommand(
         bool oldUseSlideTimings,
@@ -714,13 +766,49 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
         bool newUseSlideTimings,
         bool newShowWithAnimation,
         bool newLoopUntilStopped)
+        : this(
+            oldUseSlideTimings,
+            oldShowWithAnimation,
+            oldLoopUntilStopped,
+            PresentationShowType.PresentedBySpeaker,
+            true,
+            null,
+            true,
+            newUseSlideTimings,
+            newShowWithAnimation,
+            newLoopUntilStopped,
+            PresentationShowType.PresentedBySpeaker,
+            true,
+            null,
+            true)
     {
-        _oldUseSlideTimings = oldUseSlideTimings;
-        _oldShowWithAnimation = oldShowWithAnimation;
-        _oldLoopUntilStopped = oldLoopUntilStopped;
-        _newUseSlideTimings = newUseSlideTimings;
-        _newShowWithAnimation = newShowWithAnimation;
-        _newLoopUntilStopped = newLoopUntilStopped;
+    }
+
+    public SetSlideShowSettingsCommand(
+        bool oldUseSlideTimings,
+        bool oldShowWithAnimation,
+        bool oldLoopUntilStopped,
+        PresentationShowType oldShowType,
+        bool newUseSlideTimings,
+        bool newShowWithAnimation,
+        bool newLoopUntilStopped,
+        PresentationShowType newShowType)
+        : this(
+            oldUseSlideTimings,
+            oldShowWithAnimation,
+            oldLoopUntilStopped,
+            oldShowType,
+            true,
+            null,
+            true,
+            newUseSlideTimings,
+            newShowWithAnimation,
+            newLoopUntilStopped,
+            newShowType,
+            true,
+            null,
+            true)
+    {
     }
 
     public string Label => "Set Slide Show Settings";
@@ -728,20 +816,38 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
     public bool HasEffect(Presentation p) =>
         p.UseSlideTimings != _newUseSlideTimings ||
         p.ShowWithAnimation != _newShowWithAnimation ||
-        p.LoopUntilStopped != _newLoopUntilStopped;
+        p.ShowWithNarration != _newShowWithNarration ||
+        p.ShowMediaControls != _newShowMediaControls ||
+        p.ShowMasterShapes != _newShowMasterShapes ||
+        p.LoopUntilStopped != _newLoopUntilStopped ||
+        p.ShowType != _newShowType ||
+        p.ShowBrowseScrollbar != _newShowBrowseScrollbar ||
+        p.KioskRestartAfterMilliseconds != _newKioskRestartAfterMilliseconds;
 
     public void Apply(Presentation p)
     {
         p.UseSlideTimings = _newUseSlideTimings;
         p.ShowWithAnimation = _newShowWithAnimation;
+        p.ShowWithNarration = _newShowWithNarration;
+        p.ShowMediaControls = _newShowMediaControls;
+        p.ShowMasterShapes = _newShowMasterShapes;
         p.LoopUntilStopped = _newLoopUntilStopped;
+        p.ShowType = _newShowType;
+        p.ShowBrowseScrollbar = _newShowBrowseScrollbar;
+        p.KioskRestartAfterMilliseconds = _newKioskRestartAfterMilliseconds;
     }
 
     public void Revert(Presentation p)
     {
         p.UseSlideTimings = _oldUseSlideTimings;
         p.ShowWithAnimation = _oldShowWithAnimation;
+        p.ShowWithNarration = _oldShowWithNarration;
+        p.ShowMediaControls = _oldShowMediaControls;
+        p.ShowMasterShapes = _oldShowMasterShapes;
         p.LoopUntilStopped = _oldLoopUntilStopped;
+        p.ShowType = _oldShowType;
+        p.ShowBrowseScrollbar = _oldShowBrowseScrollbar;
+        p.KioskRestartAfterMilliseconds = _oldKioskRestartAfterMilliseconds;
     }
 }
 

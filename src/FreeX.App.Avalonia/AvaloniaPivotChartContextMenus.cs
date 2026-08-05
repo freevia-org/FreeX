@@ -1,5 +1,6 @@
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Input;
 using FreeX.App.Services.Ribbon;
 
 namespace FreeX.App.Avalonia;
@@ -24,6 +25,7 @@ internal static class AvaloniaPivotFieldContextMenu
             {
                 Header = resolveHeader(command.ResourceKey),
                 IsEnabled = command.IsEnabled,
+                InputGesture = KeyGesture.Parse(command.KeyTip),
                 Tag = command.Action,
             };
             AutomationProperties.SetName(item, command.CommandName);

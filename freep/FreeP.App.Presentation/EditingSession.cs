@@ -676,19 +676,46 @@ public sealed class EditingSession
     }
 
     /// <summary>Sets the presentation-wide slideshow playback settings through the undo bus.</summary>
-    public bool SetSlideShowSettings(bool useSlideTimings, bool showWithAnimation, bool loopUntilStopped)
+    public bool SetSlideShowSettings(
+        bool useSlideTimings,
+        bool showWithAnimation,
+        bool loopUntilStopped,
+        PresentationShowType showType = PresentationShowType.PresentedBySpeaker,
+        bool showBrowseScrollbar = true,
+        uint? kioskRestartAfterMilliseconds = null,
+        bool showWithNarration = true,
+        bool showMediaControls = true,
+        bool showMasterShapes = true)
     {
         Bus.Execute(new SetSlideShowSettingsCommand(
             Presentation.UseSlideTimings,
             Presentation.ShowWithAnimation,
             Presentation.LoopUntilStopped,
+            Presentation.ShowType,
+            Presentation.ShowBrowseScrollbar,
+            Presentation.KioskRestartAfterMilliseconds,
+            Presentation.ShowWithNarration,
             useSlideTimings,
             showWithAnimation,
-            loopUntilStopped));
+            loopUntilStopped,
+            showType,
+            showBrowseScrollbar,
+            kioskRestartAfterMilliseconds,
+            showWithNarration,
+            Presentation.ShowMediaControls,
+            showMediaControls,
+            Presentation.ShowMasterShapes,
+            showMasterShapes));
 
         return Presentation.UseSlideTimings == useSlideTimings &&
             Presentation.ShowWithAnimation == showWithAnimation &&
-            Presentation.LoopUntilStopped == loopUntilStopped;
+            Presentation.ShowWithNarration == showWithNarration &&
+            Presentation.LoopUntilStopped == loopUntilStopped &&
+            Presentation.ShowType == showType &&
+            Presentation.ShowBrowseScrollbar == showBrowseScrollbar &&
+            Presentation.KioskRestartAfterMilliseconds == kioskRestartAfterMilliseconds &&
+            Presentation.ShowMediaControls == showMediaControls &&
+            Presentation.ShowMasterShapes == showMasterShapes;
     }
 
     /// <summary>Toggles the current slide's hidden/show state.</summary>

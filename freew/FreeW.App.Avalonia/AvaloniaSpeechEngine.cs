@@ -8,7 +8,7 @@ namespace FreeW.App.Avalonia;
 /// <summary>
 /// Local, dependency-free speech adapter for the Avalonia host. It uses an installed OS speech command
 /// when one is available and otherwise completes each segment asynchronously as a deterministic no-op.
-/// Unix command-line backends are paused by signalling the exact owned child process (SIGSTOP/SIGCONT).
+/// Speech backends are paused by suspending or signalling the exact owned child process.
 /// Backends without that capability remain honest and report it as unsupported.
 /// </summary>
 public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
@@ -278,7 +278,7 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
                     ["-NoProfile", "-NonInteractive", "-Command",
                         "$s=New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak([Console]::In.ReadToEnd())"],
                     WriteTextToStandardInput: true,
-                    SupportsPause: false);
+                    SupportsPause: true);
         }
 
         var speechDispatcher = FindExecutable("spd-say");
@@ -398,6 +398,8 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
     private sealed class PlatformSpeechProcess : IPlatformSpeechProcess
     {
         private readonly Process _process;
+        private readonly object _pauseGate = new();
+        private bool _isPaused;
 
         public PlatformSpeechProcess(ProcessStartInfo startInfo, Action onExited, bool supportsPause = false)
         {
@@ -453,24 +455,34 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
             }
         }
 
-        public bool TryPause() => Signal(
-            RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? MacStopSignal : UnixStopSignal);
+        public bool TryPause() => SetPaused(paused: true);
 
-        public bool TryResume() => Signal(
-            RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? MacContinueSignal : UnixContinueSignal);
+        public bool TryResume() => SetPaused(paused: false);
 
-        private bool Signal(int signal)
+        private bool SetPaused(bool paused)
         {
-            if (!SupportsPause || !IsUnixSignalPlatform || HasExited)
-                return false;
+            lock (_pauseGate)
+            {
+                if (!SupportsPause || _isPaused == paused || HasExited)
+                    return false;
 
-            try
-            {
-                return UnixKill(_process.Id, signal) == 0;
-            }
-            catch (Exception)
-            {
-                return false;
+                try
+                {
+                    var succeeded = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                        ? (paused ? NtSuspendProcess(_process.Handle) : NtResumeProcess(_process.Handle)) >= 0
+                        : IsUnixSignalPlatform && UnixKill(
+                            _process.Id,
+                            paused
+                                ? RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? MacStopSignal : UnixStopSignal
+                                : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? MacContinueSignal : UnixContinueSignal) == 0;
+                    if (succeeded)
+                        _isPaused = paused;
+                    return succeeded;
+                }
+                catch (Exception)
+                {
+                    return false;
+                }
             }
         }
 
@@ -487,5 +499,11 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
 
         [DllImport("libc", EntryPoint = "kill", SetLastError = true)]
         private static extern int UnixKill(int processId, int signal);
+
+        [DllImport("ntdll.dll")]
+        private static extern int NtSuspendProcess(IntPtr processHandle);
+
+        [DllImport("ntdll.dll")]
+        private static extern int NtResumeProcess(IntPtr processHandle);
     }
 }

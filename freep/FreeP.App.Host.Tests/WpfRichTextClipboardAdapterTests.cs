@@ -338,6 +338,154 @@ public sealed class WpfRichTextClipboardAdapterTests
         data.GetDataPresent(DataFormats.XamlPackage, autoConvert: false).Should().BeTrue();
         data.GetData(PresentationClipboardFormats.RichText, autoConvert: false)
             .Should().BeOfType<System.IO.MemoryStream>();
+
+    }
+
+    [StaFact]
+    public void BuildDataObject_NativeXamlPackageIsReadableBySharedRichPlanner()
+    {
+        var source = new TextBody();
+        source.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run { Text = "native ", Bold = true },
+                new Run
+                {
+                    Text = "xaml",
+                    Italic = true,
+                    Hyperlink = new Hyperlink { Url = "https://example.com/native" },
+                },
+            },
+        });
+        var box = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(source, 12));
+        box.SelectAll();
+        var payload = InCanvasRichClipboardPlanner.Capture(
+            source,
+            new InCanvasEditorTextSelection(0, InCanvasTextEditPlanner.ExtractPlainText(source).Length));
+
+        var data = WpfRichTextClipboardAdapter.BuildDataObject(box, payload);
+        var bytes = ((MemoryStream)data.GetData(DataFormats.XamlPackage, autoConvert: false)!).ToArray();
+        var restored = ExternalXamlClipboardPlanner.TryParseXamlPackage(bytes);
+
+        restored.Should().NotBeNull();
+        restored!.PlainText.Should().Be("native xaml");
+        restored.Body.Paragraphs.Single().Runs.Should().Contain(run =>
+            run.Text == "native " && run.Bold);
+        restored.Body.Paragraphs.Single().Runs.Should().Contain(run =>
+            run.Text == "xaml"
+            && run.Italic
+            && run.Hyperlink!.Url == "https://example.com/native");
+    }
+
+    [StaFact]
+    public void SharedXamlPackage_IsAcceptedByNativeWpfTextRangeLoader()
+    {
+        var source = new TextBody();
+        source.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run { Text = "sixteen", FontSizePt = 16, Bold = true },
+                new Run { Text = " point" },
+            },
+        });
+        var payload = new InCanvasRichClipboardPayload(
+            source,
+            InCanvasTextEditPlanner.ExtractPlainText(source));
+        var packageBytes = ExternalXamlClipboardPlanner.SerializeXamlPackage(payload);
+
+        using (var package = new ZipArchive(
+                   new MemoryStream(packageBytes, writable: false),
+                   ZipArchiveMode.Read))
+        {
+            package.Entries.Select(entry => entry.FullName)
+                .Should().Contain("Xaml/Document.xaml");
+        }
+
+        var document = new System.Windows.Documents.FlowDocument();
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        new System.Windows.Documents.TextRange(document.ContentStart, document.ContentEnd)
+            .Load(stream, DataFormats.XamlPackage);
+
+        new System.Windows.Documents.TextRange(document.ContentStart, document.ContentEnd).Text
+            .Should().Be("sixteen point\r\n");
+        var run = document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>().First();
+        run.Text.Should().Be("sixteen");
+        run.FontWeight.Should().Be(FontWeights.Bold);
+        run.FontSize.Should().BeApproximately(16 / 0.75, 0.01);
+    }
+
+    [StaFact]
+    public void SharedXamlPackage_WithInlineTable_IsAcceptedByNativeWpfTextRangeLoader()
+    {
+        var table = new TableShape();
+        table.ColumnWidthsEmu.AddRange([914_400, 914_400]);
+        var row = new TableRow { HeightEmu = 304_800 };
+        row.Cells.Add(new TableCell
+        {
+            TextBody = InCanvasRichClipboardPayload.FromPlainText("Cell A").Body,
+            Fill = new ShapeFill.Solid(new SrgbColor(0x20, 0x40, 0x60)),
+            Anchor = TableCellAnchor.Middle,
+            InsetLeftPt = 3,
+            Borders = new TableCellBorders
+            {
+                Left = new ShapeOutline.Visible(new SrgbColor(0x10, 0x20, 0x30), 1),
+            },
+        });
+        row.Cells.Add(new TableCell
+        {
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cell B", Bold = true, FontSizePt = 16 } },
+                    },
+                },
+            },
+        });
+        table.Rows.Add(row);
+        var source = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run { Text = "Before " },
+                        new Run { Text = "\uFFFC", InlineTable = new InlineTableInfo { Table = table } },
+                        new Run { Text = " after" },
+                    },
+                },
+            },
+        };
+        var payload = new InCanvasRichClipboardPayload(
+            source,
+            InCanvasTextEditPlanner.ExtractPlainText(source));
+        var packageBytes = ExternalXamlClipboardPlanner.SerializeXamlPackage(payload);
+
+        var document = new System.Windows.Documents.FlowDocument();
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        new System.Windows.Documents.TextRange(document.ContentStart, document.ContentEnd)
+            .Load(stream, DataFormats.XamlPackage);
+
+        var blocks = document.Blocks.Cast<System.Windows.Documents.Block>().ToArray();
+        blocks.Should().HaveCount(3);
+        new System.Windows.Documents.TextRange(blocks[0].ContentStart, blocks[0].ContentEnd)
+            .Text.Should().Be("Before ");
+        var nativeTable = blocks[1].Should().BeOfType<System.Windows.Documents.Table>().Subject;
+        var nativeCells = nativeTable.RowGroups.Single().Rows.Single().Cells;
+        nativeCells.Should().HaveCount(2);
+        new System.Windows.Documents.TextRange(nativeCells[0].ContentStart, nativeCells[0].ContentEnd)
+            .Text.Should().Be("Cell A");
+        new System.Windows.Documents.TextRange(nativeCells[1].ContentStart, nativeCells[1].ContentEnd)
+            .Text.Should().Be("Cell B");
+        new System.Windows.Documents.TextRange(blocks[2].ContentStart, blocks[2].ContentEnd)
+            .Text.Should().Be(" after");
     }
 
     [StaFact]

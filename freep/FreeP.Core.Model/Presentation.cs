@@ -106,14 +106,49 @@ public sealed class Presentation
     /// </summary>
     public bool ShowMediaControls { get; set; } = true;
 
+    /// <summary>
+    /// Whether slideshow playback includes non-placeholder shapes authored on the slide master.
+    /// PresentationML defaults this policy to enabled when the showPr attribute is omitted.
+    /// </summary>
+    public bool ShowMasterShapes { get; set; } = true;
+
+    /// <summary>
+    /// Whether PowerPoint shows date, footer, and slide-number placeholders on title slides.
+    /// PresentationML omits <c>showSpecialPlsOnTitleSld</c> when this policy is disabled.
+    /// </summary>
+    public bool ShowSpecialPlaceholdersOnTitleSlide { get; set; }
+
     /// <summary>Whether slideshow playback honors authored per-slide transition timings.</summary>
     public bool UseSlideTimings { get; set; } = true;
 
     /// <summary>Whether slideshow playback runs authored shape animations.</summary>
     public bool ShowWithAnimation { get; set; } = true;
 
+    /// <summary>Whether slideshow playback plays authored narration/audio tracks.</summary>
+    public bool ShowWithNarration { get; set; } = true;
+
     /// <summary>Whether slideshow playback loops back to its first slide after the last slide.</summary>
     public bool LoopUntilStopped { get; set; }
+
+    /// <summary>How PowerPoint presents the slide show window.</summary>
+    public PresentationShowType ShowType { get; set; } = PresentationShowType.PresentedBySpeaker;
+
+    /// <summary>Whether a browsed-by-individual show requests a scroll bar.</summary>
+    public bool ShowBrowseScrollbar { get; set; } = true;
+
+    /// <summary>
+    /// Optional kiosk restart interval from the authored p:kiosk restart value.
+    /// PresentationML stores this duration in milliseconds.
+    /// </summary>
+    public uint? KioskRestartAfterMilliseconds { get; set; }
+
+    /// <summary>Compatibility alias for the initial misnamed projection.</summary>
+    [Obsolete("Use KioskRestartAfterMilliseconds; PresentationML stores restart in milliseconds.")]
+    public uint? KioskRestartAfterMinutes
+    {
+        get => KioskRestartAfterMilliseconds;
+        set => KioskRestartAfterMilliseconds = value;
+    }
 
     /// <summary>Core document properties (title, author, subject, …).</summary>
     public DocumentProperties Properties { get; } = new();

@@ -119,6 +119,7 @@ public sealed class HeaderFooterCommandRoutingTests
         HfFlags? titleFlags = null;
         HfFlags? contentFlags = null;
         HeaderFooterApplyPlan? plan = null;
+        bool? showSpecialPlaceholders = null;
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
@@ -143,6 +144,7 @@ public sealed class HeaderFooterCommandRoutingTests
             plan = dialog.LastApplyPlan;
             titleFlags = window.Editor.Presentation.Slides[0].HfVisibility;
             contentFlags = window.Editor.Presentation.Slides[1].HfVisibility;
+            showSpecialPlaceholders = window.Editor.Presentation.ShowSpecialPlaceholdersOnTitleSlide;
         });
 
         if (!ran) return;
@@ -153,6 +155,7 @@ public sealed class HeaderFooterCommandRoutingTests
         contentFlags!.ShowDate.Should().BeTrue();
         contentFlags.ShowFooter.Should().BeTrue();
         contentFlags.ShowSlideNum.Should().BeTrue();
+        showSpecialPlaceholders.Should().BeFalse();
     }
 
     [Fact]

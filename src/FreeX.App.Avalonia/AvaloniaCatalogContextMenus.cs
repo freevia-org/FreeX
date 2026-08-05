@@ -2,6 +2,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using FreeX.App.Services.Ribbon;
 
@@ -42,9 +43,27 @@ internal static class AvaloniaManagedContextMenu
         menu.Closed += (_, _) => Dispatcher.UIThread.Post(() => anchor.Focus());
         menu.KeyDown += (_, args) =>
         {
-            if (args.Key != Key.Escape)
+            if (args.Key == Key.Escape)
+            {
+                menu.Close();
+                args.Handled = true;
+                return;
+            }
+
+            if (args.Handled || args.Source is not Control)
                 return;
 
+            var item = menu.Items
+                .OfType<MenuItem>()
+                .FirstOrDefault(candidate =>
+                    candidate.IsEnabled &&
+                    candidate.InputGesture is KeyGesture gesture &&
+                    gesture.Key == args.Key &&
+                    gesture.KeyModifiers == args.KeyModifiers);
+            if (item is null)
+                return;
+
+            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, item));
             menu.Close();
             args.Handled = true;
         };

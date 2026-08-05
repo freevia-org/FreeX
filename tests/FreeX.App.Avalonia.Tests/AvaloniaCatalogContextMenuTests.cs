@@ -124,6 +124,89 @@ public sealed class AvaloniaCatalogContextMenuTests
     });
 
     [Fact]
+    public Task PivotField_UsesPlannerKeyTipsAsMenuGesturesForAvailableAndBucketItems() => RunOnUiThread(() =>
+    {
+        var expected = PivotFieldContextMenuPlanner.BuildPivotFieldCommands(includeRemove: true)
+            .Where(command => !command.IsSeparator)
+            .Select(command => KeyGesture.Parse(command.KeyTip).Key)
+            .ToArray();
+
+        var available = AvaloniaPivotFieldContextMenu.BuildItems(false, key => key, _ => { })
+            .OfType<MenuItem>()
+            .Select(item => Assert.IsType<KeyGesture>(item.InputGesture).Key)
+            .ToArray();
+        var bucket = AvaloniaPivotFieldContextMenu.BuildItems(true, key => key, _ => { })
+            .OfType<MenuItem>()
+            .Select(item => Assert.IsType<KeyGesture>(item.InputGesture).Key)
+            .ToArray();
+
+        available.Should().Equal(expected[..^1]);
+        bucket.Should().Equal(expected);
+    });
+
+    [Fact]
+    public Task PivotField_KeyTipInvokesPlannerActionOnlyInsideOpenContextMenu() => RunOnUiThread(() =>
+    {
+        var anchor = new Button();
+        var window = new Window { Content = anchor };
+        var actions = new List<PivotFieldContextMenuAction>();
+        var menu = AvaloniaManagedContextMenu.Attach(
+            anchor,
+            () => AvaloniaPivotFieldContextMenu.BuildItems(false, key => key, actions.Add));
+
+        window.Show();
+        menu.Open(anchor);
+        menu.IsOpen.Should().BeTrue();
+        var menuItems = menu.Items.OfType<MenuItem>().ToArray();
+        var sortAscending = menuItems
+            .Single(item => Assert.IsType<KeyGesture>(item.InputGesture).Key == Key.S);
+        var focusedItem = menuItems.First(item => item != sortAscending && item.IsEnabled);
+        focusedItem.Focus().Should().BeTrue();
+        focusedItem.IsFocused.Should().BeTrue();
+
+        var keyDown = new KeyEventArgs
+        {
+            RoutedEvent = InputElement.KeyDownEvent,
+            Key = Key.S,
+            KeyModifiers = KeyModifiers.None,
+            Source = focusedItem,
+        };
+        focusedItem.RaiseEvent(keyDown);
+
+        keyDown.Handled.Should().BeTrue();
+        actions.Should().Equal(PivotFieldContextMenuAction.SortAscending);
+        menu.IsOpen.Should().BeFalse();
+
+        menu.Open(anchor);
+        menu.IsOpen.Should().BeTrue();
+        var escapeItem = menu.Items.OfType<MenuItem>().First(item => item.IsEnabled);
+        escapeItem.Focus();
+        var escape = new KeyEventArgs
+        {
+            RoutedEvent = InputElement.KeyDownEvent,
+            Key = Key.Escape,
+            KeyModifiers = KeyModifiers.None,
+            Source = escapeItem,
+        };
+        escapeItem.RaiseEvent(escape);
+
+        escape.Handled.Should().BeTrue();
+        menu.IsOpen.Should().BeFalse();
+
+        var outsideMenuKeyDown = new KeyEventArgs
+        {
+            RoutedEvent = InputElement.KeyDownEvent,
+            Key = Key.S,
+            KeyModifiers = KeyModifiers.None,
+            Source = anchor,
+        };
+        anchor.RaiseEvent(outsideMenuKeyDown);
+
+        actions.Should().Equal(PivotFieldContextMenuAction.SortAscending);
+        window.Close();
+    });
+
+    [Fact]
     public Task PivotChart_RendersFilterAndNoFilterVariantsWithPlannerEnablement() => RunOnUiThread(() =>
     {
         var filtered = AvaloniaPivotChartFieldContextMenu.BuildItems(

@@ -370,7 +370,25 @@ public static class PptxPackageReader
 
         presentation.UseSlideTimings = ReadBooleanOrDefault(showPr.Attribute("useTimings")?.Value, defaultValue: true);
         presentation.ShowWithAnimation = ReadBooleanOrDefault(showPr.Attribute("showAnimation")?.Value, defaultValue: true);
+        presentation.ShowWithNarration = ReadBooleanOrDefault(showPr.Attribute("showNarration")?.Value, defaultValue: true);
         presentation.LoopUntilStopped = ReadBooleanOrDefault(showPr.Attribute("loop")?.Value, defaultValue: false);
+        presentation.ShowMasterShapes = ReadBooleanOrDefault(showPr.Attribute("showMasterSp")?.Value, defaultValue: true);
+        presentation.ShowSpecialPlaceholdersOnTitleSlide = ReadBooleanOrDefault(
+            showPr.Attribute("showSpecialPlsOnTitleSld")?.Value,
+            defaultValue: false);
+        var browse = showPr.Element(P + "browse");
+        var kiosk = showPr.Element(P + "kiosk");
+        presentation.ShowType = browse is not null
+            ? PresentationShowType.BrowsedByIndividual
+            : kiosk is not null
+                ? PresentationShowType.BrowsedAtKiosk
+                : PresentationShowType.PresentedBySpeaker;
+        presentation.ShowBrowseScrollbar = browse is null ||
+            ReadBooleanOrDefault(browse.Attribute("showScrollbar")?.Value, defaultValue: true);
+        presentation.KioskRestartAfterMilliseconds = kiosk?.Attribute("restart") is { } restart &&
+            uint.TryParse(restart.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var restartMinutes)
+                ? restartMinutes
+                : null;
 
         var mediaControls = showPr.Element(P14 + "showMediaCtrls")
             ?? showPr.Element(P + "extLst")?

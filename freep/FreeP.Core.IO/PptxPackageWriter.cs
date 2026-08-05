@@ -2923,15 +2923,41 @@ public static class PptxPackageWriter
             root.AddFirst(showPr);
         }
 
-        foreach (var attributeName in new[] { "useTimings", "showAnimation", "loop" })
+        foreach (var attributeName in new[]
+                 {
+                     "useTimings", "showAnimation", "showNarration", "loop", "showMasterSp",
+                     "showSpecialPlsOnTitleSld"
+                 })
             showPr.Attribute(attributeName)?.Remove();
 
         if (!presentation.UseSlideTimings)
             showPr.Add(new XAttribute("useTimings", "0"));
         if (!presentation.ShowWithAnimation)
             showPr.Add(new XAttribute("showAnimation", "0"));
+        if (!presentation.ShowWithNarration)
+            showPr.Add(new XAttribute("showNarration", "0"));
         if (presentation.LoopUntilStopped)
             showPr.Add(new XAttribute("loop", "1"));
+        if (!presentation.ShowMasterShapes)
+            showPr.Add(new XAttribute("showMasterSp", "0"));
+        if (presentation.ShowSpecialPlaceholdersOnTitleSlide)
+            showPr.Add(new XAttribute("showSpecialPlsOnTitleSld", "1"));
+
+        foreach (var element in showPr.Elements(P + "present").Concat(showPr.Elements(P + "browse")).Concat(showPr.Elements(P + "kiosk")).ToArray())
+            element.Remove();
+        var showMode = presentation.ShowType switch
+        {
+            PresentationShowType.BrowsedByIndividual => new XElement(
+                P + "browse",
+                presentation.ShowBrowseScrollbar ? null : new XAttribute("showScrollbar", "0")),
+            PresentationShowType.BrowsedAtKiosk => new XElement(
+                P + "kiosk",
+                presentation.KioskRestartAfterMilliseconds is uint restart
+                    ? new XAttribute("restart", restart.ToString(CultureInfo.InvariantCulture))
+                    : null),
+            _ => new XElement(P + "present"),
+        };
+        showPr.Add(showMode);
 
         foreach (var element in showPr.Elements(P14 + "showMediaCtrls").ToArray())
             element.Remove();

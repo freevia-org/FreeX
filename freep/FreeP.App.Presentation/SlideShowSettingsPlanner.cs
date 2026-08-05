@@ -11,20 +11,44 @@ public static class SlideShowSettingsPlanner
         new(
             presentation.UseSlideTimings,
             presentation.ShowWithAnimation,
-            presentation.LoopUntilStopped);
+            presentation.LoopUntilStopped,
+            presentation.ShowType,
+            presentation.ShowBrowseScrollbar,
+            presentation.KioskRestartAfterMilliseconds,
+            presentation.ShowWithNarration,
+            presentation.ShowMediaControls,
+            presentation.ShowMasterShapes);
 
     public static bool TryApply(
         EditingSession editor,
         bool useSlideTimings,
         bool showWithAnimation,
-        bool loopUntilStopped) =>
+        bool loopUntilStopped,
+        PresentationShowType showType = PresentationShowType.PresentedBySpeaker,
+        bool showBrowseScrollbar = true,
+        uint? kioskRestartAfterMilliseconds = null,
+        bool showWithNarration = true,
+        bool showMediaControls = true,
+        bool showMasterShapes = true) =>
         editor.SetSlideShowSettings(
             useSlideTimings,
             showWithAnimation,
-            loopUntilStopped);
+            loopUntilStopped,
+            showType,
+            showBrowseScrollbar,
+            kioskRestartAfterMilliseconds,
+            showWithNarration,
+            showMediaControls,
+            showMasterShapes);
 }
 
 public sealed record SlideShowSettingsState(
     bool UseSlideTimings,
     bool ShowWithAnimation,
-    bool LoopUntilStopped);
+    bool LoopUntilStopped,
+    PresentationShowType ShowType = PresentationShowType.PresentedBySpeaker,
+    bool ShowBrowseScrollbar = true,
+    uint? KioskRestartAfterMilliseconds = null,
+    bool ShowWithNarration = true,
+    bool ShowMediaControls = true,
+    bool ShowMasterShapes = true);

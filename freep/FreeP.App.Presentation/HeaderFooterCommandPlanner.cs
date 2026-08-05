@@ -41,7 +41,8 @@ public sealed record HeaderFooterState(
     bool IsTitleSlide = false,
     HeaderFooterDateTimeMode DateTimeMode = HeaderFooterDateTimeMode.AutoUpdate,
     string DateTimeFieldType = "datetime1",
-    string FixedDateTimeText = "");
+    string FixedDateTimeText = "",
+    bool SuppressOnTitleSlide = false);
 
 public sealed record HeaderFooterApplyOptions(
     bool ShowDateTime,
@@ -98,6 +99,7 @@ public static class HeaderFooterCommandPlanner
         var hasSlideNumber = HasHeaderFooterShape(slide, HeaderFooterFieldKind.SlideNumber);
         var flags = slide.HfVisibility;
         var dateSettings = FindDateTimeSettings(slide);
+        var isTitleSlide = IsTitleSlide(presentation, slide);
 
         return new(
             flags?.ShowDate ?? hasDate,
@@ -107,17 +109,18 @@ public static class HeaderFooterCommandPlanner
             hasDate,
             hasFooter,
             hasSlideNumber,
-            IsTitleSlide(presentation, slide),
+            isTitleSlide,
             dateSettings.Mode,
             dateSettings.FieldType,
-            dateSettings.FixedText);
+            dateSettings.FixedText,
+            isTitleSlide && !presentation.ShowSpecialPlaceholdersOnTitleSlide);
     }
 
     public static HeaderFooterApplyOptions BuildDefaultOptions(
         HeaderFooterState state,
         HeaderFooterCommandFocus focus)
     {
-        return focus switch
+        HeaderFooterApplyOptions options = focus switch
         {
             HeaderFooterCommandFocus.DateTime => new(
                 ShowDateTime: true,
@@ -156,6 +159,8 @@ public static class HeaderFooterCommandPlanner
                 DateTimeFieldType: state.DateTimeFieldType,
                 FixedDateTimeText: state.FixedDateTimeText)
         };
+
+        return options with { SuppressOnTitleSlide = state.SuppressOnTitleSlide };
     }
 
     public static HeaderFooterApplyPlan BuildApplyPlan(
@@ -706,10 +711,21 @@ public static class HeaderFooterCommandPlanner
         public string Label => "Apply Header and Footer";
 
         public bool HasEffect(Presentation presentation) =>
-            _plan.TargetSlideIndexes.Any(index => index >= 0 && index < presentation.Slides.Count);
+            _plan.TargetSlideIndexes.Any(index => index >= 0 && index < presentation.Slides.Count) ||
+            (_plan.Options.Scope == HeaderFooterApplyScope.AllSlides &&
+             presentation.ShowSpecialPlaceholdersOnTitleSlide != !_plan.Options.SuppressOnTitleSlide);
+
+        private bool _capturedSpecialPlaceholderPolicy;
+        private bool _oldShowSpecialPlaceholdersOnTitleSlide;
 
         public void Apply(Presentation presentation)
         {
+            if (_plan.Options.Scope == HeaderFooterApplyScope.AllSlides && !_capturedSpecialPlaceholderPolicy)
+            {
+                _oldShowSpecialPlaceholdersOnTitleSlide = presentation.ShowSpecialPlaceholdersOnTitleSlide;
+                _capturedSpecialPlaceholderPolicy = true;
+            }
+
             foreach (var index in _plan.TargetSlideIndexes)
             {
                 if (index < 0 || index >= presentation.Slides.Count)
@@ -727,6 +743,9 @@ public static class HeaderFooterCommandPlanner
 
                 presentation.Slides[index] = SlideCloner.CloneSlidePreservingIdentity(_after[index]);
             }
+
+            if (_plan.Options.Scope == HeaderFooterApplyScope.AllSlides)
+                presentation.ShowSpecialPlaceholdersOnTitleSlide = !_plan.Options.SuppressOnTitleSlide;
         }
 
         public void Revert(Presentation presentation)
@@ -738,6 +757,9 @@ public static class HeaderFooterCommandPlanner
                     presentation.Slides[index] = SlideCloner.CloneSlidePreservingIdentity(slide);
                 }
             }
+
+            if (_capturedSpecialPlaceholderPolicy)
+                presentation.ShowSpecialPlaceholdersOnTitleSlide = _oldShowSpecialPlaceholdersOnTitleSlide;
         }
     }
 

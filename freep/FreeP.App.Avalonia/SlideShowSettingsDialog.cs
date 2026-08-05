@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -5,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
@@ -15,7 +17,13 @@ internal sealed class SlideShowSettingsDialog : Window
     private readonly EditingSession _editor;
     private readonly CheckBox _useTimingsCheck;
     private readonly CheckBox _showAnimationCheck;
+    private readonly CheckBox _showNarrationCheck;
+    private readonly CheckBox _showMediaControlsCheck;
+    private readonly CheckBox _showMasterShapesCheck;
     private readonly CheckBox _loopCheck;
+    private readonly ComboBox _showTypeCombo;
+    private readonly CheckBox _showScrollbarCheck;
+    private readonly TextBox _kioskRestartText;
 
     internal SlideShowSettingsState InitialState { get; }
 
@@ -26,7 +34,7 @@ internal sealed class SlideShowSettingsDialog : Window
 
         Title = "Set Up Slide Show";
         Width = 345.3333333333333;
-        Height = 190;
+        Height = 240;
         CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -42,13 +50,43 @@ internal sealed class SlideShowSettingsDialog : Window
             Content = "Show without animation",
             IsChecked = !InitialState.ShowWithAnimation,
         };
+        _showNarrationCheck = new CheckBox
+        {
+            Content = "Play narration",
+            IsChecked = InitialState.ShowWithNarration,
+        };
+        _showMediaControlsCheck = new CheckBox
+        {
+            Content = "Show media controls",
+            IsChecked = InitialState.ShowMediaControls,
+        };
+        _showMasterShapesCheck = new CheckBox
+        {
+            Content = "Show master graphics",
+            IsChecked = InitialState.ShowMasterShapes,
+        };
         _loopCheck = new CheckBox
         {
             Content = "Loop until stopped",
             IsChecked = InitialState.LoopUntilStopped,
         };
+        _showTypeCombo = new ComboBox
+        {
+            ItemsSource = new[] { "Presented by a speaker", "Browsed by an individual", "Browsed at a kiosk" },
+            SelectedIndex = (int)InitialState.ShowType,
+        };
+        _showScrollbarCheck = new CheckBox
+        {
+            Content = "Show scrollbar when browsing",
+            IsChecked = InitialState.ShowBrowseScrollbar,
+        };
+        _kioskRestartText = new TextBox
+        {
+            Text = InitialState.KioskRestartAfterMilliseconds?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            MinWidth = 76,
+        };
 
-        foreach (var check in new[] { _useTimingsCheck, _showAnimationCheck, _loopCheck })
+        foreach (var check in new[] { _useTimingsCheck, _showAnimationCheck, _showNarrationCheck, _showMediaControlsCheck, _showMasterShapesCheck, _loopCheck })
         {
             AvaloniaCompactDialogChrome.ApplyCheckBox(check, DialogChromeStyle);
             check.Height = 22;
@@ -72,7 +110,14 @@ internal sealed class SlideShowSettingsDialog : Window
         var panel = new StackPanel { Margin = new Thickness(14), Spacing = 4 };
         panel.Children.Add(_useTimingsCheck);
         panel.Children.Add(_showAnimationCheck);
+        panel.Children.Add(_showNarrationCheck);
+        panel.Children.Add(_showMediaControlsCheck);
+        panel.Children.Add(_showMasterShapesCheck);
         panel.Children.Add(_loopCheck);
+        panel.Children.Add(_showTypeCombo);
+        panel.Children.Add(_showScrollbarCheck);
+        panel.Children.Add(new TextBlock { Text = "Kiosk restart milliseconds (optional)" });
+        panel.Children.Add(_kioskRestartText);
 
         var ok = BuildButton("OK", () => Apply(), isDefault: true);
         var cancel = BuildButton("Cancel", () => Close(false), isCancel: true);
@@ -96,11 +141,26 @@ internal sealed class SlideShowSettingsDialog : Window
         return button;
     }
 
-    internal bool ApplyForTests(bool useSlideTimings, bool showWithAnimation, bool loopUntilStopped)
+    internal bool ApplyForTests(
+        bool useSlideTimings,
+        bool showWithAnimation,
+        bool loopUntilStopped,
+        PresentationShowType showType = PresentationShowType.PresentedBySpeaker,
+        bool showBrowseScrollbar = true,
+        uint? kioskRestartAfterMilliseconds = null,
+        bool showWithNarration = true,
+        bool showMediaControls = true,
+        bool showMasterShapes = true)
     {
         _useTimingsCheck.IsChecked = useSlideTimings;
         _showAnimationCheck.IsChecked = !showWithAnimation;
         _loopCheck.IsChecked = loopUntilStopped;
+        _showNarrationCheck.IsChecked = showWithNarration;
+        _showMediaControlsCheck.IsChecked = showMediaControls;
+        _showMasterShapesCheck.IsChecked = showMasterShapes;
+        _showTypeCombo.SelectedIndex = (int)showType;
+        _showScrollbarCheck.IsChecked = showBrowseScrollbar;
+        _kioskRestartText.Text = kioskRestartAfterMilliseconds?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
         return Apply();
     }
 
@@ -110,9 +170,20 @@ internal sealed class SlideShowSettingsDialog : Window
             _editor,
             _useTimingsCheck.IsChecked == true,
             _showAnimationCheck.IsChecked != true,
-            _loopCheck.IsChecked == true);
+            _loopCheck.IsChecked == true,
+            (PresentationShowType)Math.Clamp(_showTypeCombo.SelectedIndex, 0, 2),
+            _showScrollbarCheck.IsChecked == true,
+            ParseRestartMilliseconds(),
+            _showNarrationCheck.IsChecked == true,
+            _showMediaControlsCheck.IsChecked == true,
+            _showMasterShapesCheck.IsChecked == true);
         if (applied && IsVisible)
             Close(true);
         return applied;
     }
+
+    private uint? ParseRestartMilliseconds() =>
+        uint.TryParse(_kioskRestartText.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var milliseconds)
+            ? milliseconds
+            : null;
 }

@@ -99,6 +99,11 @@ public sealed class BordersAndShadingDialogVisualParityTests
                 dialog.ParagraphWidthForTest.SelectionStart.Should().Be(0);
                 dialog.ParagraphWidthForTest.SelectionEnd.Should().Be(dialog.ParagraphWidthForTest.Text?.Length ?? 0);
                 dialog.ParagraphWidthForTest.Height.Should().Be(20);
+                dialog.GetLogicalDescendants()
+                    .OfType<Button>()
+                    .Where(button => AutomationProperties.GetAutomationId(button) is "BordersAndShadingOkButton" or "BordersAndShadingCancelButton")
+                    .Select(button => button.Bounds.Height)
+                    .Should().Equal(26, 26);
 
                 dialog.TabsForTest.SelectedIndex = 1;
                 dialog.UpdateLayout();

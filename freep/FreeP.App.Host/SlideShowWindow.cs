@@ -62,6 +62,7 @@ public sealed class SlideShowWindow : Window
     private readonly SlideShowSessionController _session;
     private readonly Action<int, string?>? _setSlideNotesText;
     private readonly DispatcherTimer  _autoAdvanceTimer;
+    private readonly DispatcherTimer  _kioskRestartTimer;
     private PresenterViewWindow? _presenterViewWindow;
     private bool _zoomShowBackgroundForTransition = true;
     private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
@@ -194,13 +195,21 @@ public sealed class SlideShowWindow : Window
         _slideDipW = metrics.WidthDip;
         _slideDipH = metrics.HeightDip;
 
-        // Window chrome
-        WindowStyle  = WindowStyle.None;
-        WindowState  = WindowState.Maximized;
-        Topmost      = true;
+        // PowerPoint's speaker and kiosk modes use a borderless presentation window;
+        // individual browsing remains a normal, resizable window for document-style review.
+        var isBrowseWindow = _presentation.ShowType == PresentationShowType.BrowsedByIndividual;
+        WindowStyle  = isBrowseWindow ? WindowStyle.SingleBorderWindow : WindowStyle.None;
+        WindowState  = isBrowseWindow ? WindowState.Normal : WindowState.Maximized;
+        Topmost      = !isBrowseWindow;
+        if (isBrowseWindow)
+        {
+            Width = Math.Min(1024, SystemParameters.WorkArea.Width * 0.85);
+            Height = Math.Min(768, SystemParameters.WorkArea.Height * 0.85);
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        }
         Background   = Brushes.Black;
         Focusable    = true;
-        ResizeMode   = ResizeMode.NoResize;
+        ResizeMode   = isBrowseWindow ? ResizeMode.CanResize : ResizeMode.NoResize;
 
         // ── Visual tree ────────────────────────────────────────────────────────
 
@@ -279,7 +288,29 @@ public sealed class SlideShowWindow : Window
         // Media controller: created now; EnterSlide is called per-slide in DisplayCurrentSlide.
         _mediaController = new SlideShowMediaController(_mediaOverlay);
 
-        _root.Children.Add(stage);
+        if (isBrowseWindow)
+        {
+            stage.Width = _slideDipW;
+            stage.Height = _slideDipH;
+            var browser = new ScrollViewer
+            {
+                Background = Brushes.Black,
+                HorizontalScrollBarVisibility = _presentation.ShowBrowseScrollbar
+                    ? ScrollBarVisibility.Auto
+                    : ScrollBarVisibility.Disabled,
+                VerticalScrollBarVisibility = _presentation.ShowBrowseScrollbar
+                    ? ScrollBarVisibility.Auto
+                    : ScrollBarVisibility.Disabled,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Content = stage,
+            };
+            _root.Children.Add(browser);
+        }
+        else
+        {
+            _root.Children.Add(stage);
+        }
 
         Content = _root;
 
@@ -290,13 +321,24 @@ public sealed class SlideShowWindow : Window
         };
         _autoAdvanceTimer.Tick += (_, _) => DoAdvance();
 
+        _kioskRestartTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            IsEnabled = false,
+        };
+        _kioskRestartTimer.Tick += (_, _) => RestartKioskShow();
+
         // ── Event wiring ───────────────────────────────────────────────────────
         KeyDown              += OnKeyDown;
         MouseLeftButtonDown  += OnMouseLeftButtonDown;
         MouseLeftButtonUp    += OnMouseLeftButtonUp;
         MouseMove            += OnMouseMove;
         SizeChanged          += (_, _) => SyncMediaOverlayLayout();
-        Loaded               += (_, _) => { Focus(); DisplayCurrentSlide(animated: false); };
+        Loaded               += (_, _) =>
+        {
+            Focus();
+            DisplayCurrentSlide(animated: false);
+            StartKioskRestartTimer();
+        };
         Closed               += (_, _) => Teardown();
     }
 
@@ -1035,7 +1077,8 @@ public sealed class SlideShowWindow : Window
             preferredCaptionTrackIndex: _preferredCaptionTrackIndex,
             captionSlideIndex: captionSlideIndex,
             preferredCaptionSlideIndex: _preferredCaptionSlideIndex,
-            showMediaControls: _presentation.ShowMediaControls);
+            showMediaControls: _presentation.ShowMediaControls,
+            showNarration: _presentation.ShowWithNarration);
 
         // Apply transition if requested.
         if (plan.Transition is { } t)
@@ -1053,6 +1096,30 @@ public sealed class SlideShowWindow : Window
     }
 
     private SlideShowSlideMetrics CurrentSlideMetrics() => new(_slideDipW, _slideDipH);
+
+    private void StartKioskRestartTimer()
+    {
+        _kioskRestartTimer.Stop();
+        if (!SlideShowKioskRestartPlanner.TryGetInterval(
+                _presentation,
+                out var interval))
+            return;
+
+        _kioskRestartTimer.Interval = interval;
+        _kioskRestartTimer.Start();
+    }
+
+    private void RestartKioskShow()
+    {
+        if (_session.IsClosed)
+            return;
+
+        ApplyHostCommand(SlideShowHostPlanner.PlanIntent(
+            SlideShowHostIntent.FirstSlide,
+            _controller,
+            _playbackRoute.Slides,
+            stopAutoAdvance: true));
+    }
 
     private void SyncMediaOverlayLayout()
     {
@@ -6065,6 +6132,7 @@ public sealed class SlideShowWindow : Window
         var now = nowUtc ?? DateTimeOffset.UtcNow;
         _session.Close(now);
         _autoAdvanceTimer.Stop();
+        _kioskRestartTimer.Stop();
         foreach (var sb in _pendingStoryboards)
         {
             try { sb.Stop(); } catch { /* ignore */ }
