@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Threading;
 using Avalonia;
 using Avalonia.Headless;
@@ -350,6 +351,61 @@ public sealed class ReadAloudParityTests
         process.WasDisposed.Should().BeTrue();
     }
 
+    [Fact]
+    public void Avalonia_process_runner_pauses_and_resumes_its_owned_Windows_child()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return;
+
+        var powershell = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.System),
+            "WindowsPowerShell",
+            "v1.0",
+            "powershell.exe");
+        File.Exists(powershell).Should().BeTrue();
+
+        var outputPath = Path.Combine(Path.GetTempPath(), $"freew-read-aloud-{Guid.NewGuid():N}.txt");
+        var backend = new AvaloniaSpeechEngine.SpeechBackend(
+            powershell,
+            [
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$p=[Console]::In.ReadToEnd(); 1..500 | ForEach-Object { " +
+                "[IO.File]::AppendAllText($p, 'x'); Start-Sleep -Milliseconds 20 }",
+            ],
+            WriteTextToStandardInput: true,
+            SupportsPause: true);
+        var runner = new AvaloniaSpeechEngine.ProcessSpeechRunner();
+        using var process = runner.Start(backend, outputPath, () => { });
+
+        try
+        {
+            SpinWait.SpinUntil(() => FileLength(outputPath) >= 5, TimeSpan.FromSeconds(5))
+                .Should().BeTrue("the owned PowerShell child must begin producing output");
+
+            process.TryPause().Should().BeTrue();
+            var pausedLength = FileLength(outputPath);
+            Thread.Sleep(300);
+            FileLength(outputPath).Should().Be(pausedLength,
+                "suspending the exact owned process must stop its observable work");
+
+            process.TryResume().Should().BeTrue();
+            SpinWait.SpinUntil(() => FileLength(outputPath) > pausedLength, TimeSpan.FromSeconds(5))
+                .Should().BeTrue("resuming the exact owned process must allow work to continue");
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.TryResume();
+                process.Kill();
+            }
+
+            DeleteFileWithRetry(outputPath);
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -518,6 +574,34 @@ public sealed class ReadAloudParityTests
             return SupportsPause && ResumeResult;
         }
         public void Dispose() => WasDisposed = true;
+    }
+
+    private static long FileLength(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? new FileInfo(path).Length : 0;
+        }
+        catch (IOException)
+        {
+            return 0;
+        }
+    }
+
+    private static void DeleteFileWithRetry(string path)
+    {
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            try
+            {
+                File.Delete(path);
+                return;
+            }
+            catch (IOException) when (attempt < 4)
+            {
+                Thread.Sleep(50);
+            }
+        }
     }
 
     private sealed class FailingInputProcess : AvaloniaSpeechEngine.IPlatformSpeechProcess
