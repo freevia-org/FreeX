@@ -10,7 +10,7 @@ namespace Free.Shared.Ribbon.Wpf;
 /// <see cref="CommandName"/> is supplied, the glyph the host resolver maps that command id to (falling
 /// back to <see cref="Kind"/>, then the generic glyph). Ported from FreeX's app-neutral RibbonIcon.
 /// </summary>
-public sealed class RibbonIcon : Viewbox
+public class RibbonIcon : Viewbox
 {
     public static readonly DependencyProperty KindProperty =
         DependencyProperty.Register(
