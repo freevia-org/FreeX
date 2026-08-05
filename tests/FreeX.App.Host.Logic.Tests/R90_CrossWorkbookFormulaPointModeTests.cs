@@ -24,7 +24,13 @@ public sealed class R90_CrossWorkbookFormulaPointModeTests
             .Should()
             .BeTrue();
 
-        owner.Selections.Should().ContainSingle().Which.Should().Be(selection);
+        owner.EditSelections.Should().ContainSingle().Which.Should().Be(
+            new FormulaPointModeEditSelection(
+                "Input Data",
+                range,
+                "Source.xlsx",
+                FormulaPointModeSelectionMode.Replace,
+                ExtendSelection: false));
         source.LastSourceSelection.Should().Be(range);
     }
 
@@ -34,8 +40,14 @@ public sealed class R90_CrossWorkbookFormulaPointModeTests
         var owner = new FakeFormulaPointWindow("Owner.xlsx", active: true);
         var source = new FakeFormulaPointWindow("Source.xlsx", active: false);
 
-        FormulaPointModeWorkbookResolver.TryRouteCommit([owner, source], source).Should().BeTrue();
-        FormulaPointModeWorkbookResolver.TryRouteCancel([owner, source], source).Should().BeTrue();
+        FormulaPointModeWorkbookResolver.TryRouteCommand(
+            [owner, source],
+            source,
+            FormulaPointModeCommand.Commit).Should().BeTrue();
+        FormulaPointModeWorkbookResolver.TryRouteCommand(
+            [owner, source],
+            source,
+            FormulaPointModeCommand.Cancel).Should().BeTrue();
         owner.CommitCount.Should().Be(1);
         owner.CancelCount.Should().Be(1);
     }
@@ -45,10 +57,102 @@ public sealed class R90_CrossWorkbookFormulaPointModeTests
     {
         var source = new FakeFormulaPointWindow("Source.xlsx", active: false);
 
-        FormulaPointModeWorkbookResolver.TryRouteReferenceCycle([source], source)
+        FormulaPointModeWorkbookResolver.TryRouteCommand(
+                [source],
+                source,
+                FormulaPointModeCommand.CycleReference)
             .Should()
             .BeFalse();
         source.CycleCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void Resolver_PreparesExternalAppendSelectionForTheEditOwner()
+    {
+        var owner = new FakeFormulaPointWindow("Owner.xlsx", active: true);
+        var source = new FakeFormulaPointWindow("Source.xlsx", active: false);
+        var range = Range(SheetId.New(), 2, 2, 4, 3);
+
+        FormulaPointModeWorkbookResolver.TryRouteSelection(
+                [owner, source],
+                source,
+                new FormulaPointModeSelection(
+                    source.DocumentId,
+                    source.WorkbookName,
+                    "Input Data",
+                    range),
+                append: true,
+                extendSelection: true)
+            .Should()
+            .BeTrue();
+
+        owner.EditSelections.Should().ContainSingle().Which.Should().Be(
+            new FormulaPointModeEditSelection(
+                "Input Data",
+                range,
+                "Source.xlsx",
+                FormulaPointModeSelectionMode.Append,
+                ExtendSelection: true));
+    }
+
+    [Fact]
+    public void Resolver_OmitsWorkbookQualifierForSelectionOwnedByTheSameWorkbook()
+    {
+        var owner = new FakeFormulaPointWindow("Owner.xlsx", active: true);
+        var range = Range(SheetId.New(), 2, 2, 4, 3);
+
+        FormulaPointModeWorkbookResolver.TryRouteSelection(
+                [owner],
+                owner,
+                new FormulaPointModeSelection(
+                    owner.DocumentId,
+                    owner.WorkbookName,
+                    "Input Data",
+                    range))
+            .Should()
+            .BeTrue();
+
+        owner.EditSelections.Should().ContainSingle().Which.Should().Be(
+            new FormulaPointModeEditSelection(
+                "Input Data",
+                range,
+                null,
+                FormulaPointModeSelectionMode.Replace,
+                ExtendSelection: false));
+    }
+
+    [Fact]
+    public void Resolver_CreatesSourceSelectionFromTheOwningWorkbookAndRange()
+    {
+        var workbook = new Workbook("Source.xlsx");
+        var sheet = workbook.AddSheet("Input Data");
+        var range = Range(sheet.Id, 2, 2, 4, 3);
+
+        FormulaPointModeWorkbookResolver.TryCreateSelection(workbook, range, out var selection)
+            .Should()
+            .BeTrue();
+
+        selection.Should().Be(new FormulaPointModeSelection(
+            workbook.Id,
+            "Source.xlsx",
+            "Input Data",
+            range));
+    }
+
+    [Theory]
+    [InlineData(true, true, true, true)]
+    [InlineData(false, true, true, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(true, true, false, false)]
+    public void Resolver_RequiresEditorPointModeAndEditCellForActiveOwnership(
+        bool hasEditor,
+        bool pointMode,
+        bool hasEditCell,
+        bool expected)
+    {
+        FormulaPointModeWorkbookResolver.IsActive(hasEditor, pointMode, hasEditCell)
+            .Should()
+            .Be(expected);
     }
 
     [Fact]
@@ -100,18 +204,15 @@ public sealed class R90_CrossWorkbookFormulaPointModeTests
         public WorkbookId DocumentId { get; } = new(Guid.NewGuid());
         public string WorkbookName { get; } = name;
         public bool HasActiveFormulaPointMode => active;
-        public List<FormulaPointModeSelection> Selections { get; } = [];
+        public List<FormulaPointModeEditSelection> EditSelections { get; } = [];
         public GridRange? LastSourceSelection { get; private set; }
         public int CommitCount { get; private set; }
         public int CancelCount { get; private set; }
         public int CycleCount { get; private set; }
 
-        public bool AcceptFormulaPointModeSelection(
-            FormulaPointModeSelection selection,
-            bool append,
-            bool extendSelection)
+        public bool AcceptFormulaPointModeSelection(FormulaPointModeEditSelection selection)
         {
-            Selections.Add(selection);
+            EditSelections.Add(selection);
             return true;
         }
 
