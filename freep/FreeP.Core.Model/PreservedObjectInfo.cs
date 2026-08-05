@@ -53,7 +53,9 @@ public sealed record ZoomObjectProperties(
     ZoomFrameBorderGradient? FrameBorderGradient = null,
     ZoomFrameBorderPattern? FrameBorderPattern = null,
     bool? FrameBorderNoFill = null,
-    ThemeColorSlot? FrameBorderThemeColor = null)
+    ThemeColorSlot? FrameBorderThemeColor = null,
+    ZoomFrameBorderShadow? FrameBorderShadow = null,
+    bool? FrameBorderShadowEnabled = null)
 {
     public bool IsEmpty => ReturnToParent is null
         && ImageType is null
@@ -70,8 +72,22 @@ public sealed record ZoomObjectProperties(
         && FrameBorderGradient is null
         && FrameBorderPattern is null
         && FrameBorderNoFill is null
-        && FrameBorderThemeColor is null;
+        && FrameBorderThemeColor is null
+        && FrameBorderShadow is null
+        && FrameBorderShadowEnabled is null;
 }
+
+/// <summary>
+/// A supported native DrawingML outer shadow on a Zoom frame outline.
+/// Alpha and direction use the OOXML integer units: alpha is 0..100000 and
+/// direction is 1/60000 of a degree. Blur and distance are EMU values.
+/// </summary>
+public sealed record ZoomFrameBorderShadow(
+    string Color,
+    int Alpha = 50000,
+    long BlurRadiusEmu = 50800,
+    long DistanceEmu = 38100,
+    int Direction = 2700000);
 
 /// <summary>
 /// Payload for a preserved modern object (SlideShapeKind.Zoom / Ink / Model3d / PreservedObject).
