@@ -101,6 +101,9 @@ public sealed class SlideShowController
     /// <summary>Whether advancing can return from the current Zoom target to its parent.</summary>
     public bool HasZoomReturnPath => _zoomReturnStack.Count > 0;
 
+    /// <summary>Whether slide transitions and object animations should play during playback.</summary>
+    public bool ShowWithAnimation => _showWithAnimation;
+
     // ── Navigation ────────────────────────────────────────────────────────────────
 
     /// <summary>
