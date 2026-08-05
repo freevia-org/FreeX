@@ -29,7 +29,8 @@ public sealed record SlideShowCustomShowSessionPlan(
     bool CanDelete,
     bool CanStart,
     bool CanMoveUp,
-    bool CanMoveDown);
+    bool CanMoveDown,
+    bool CanRemove);
 
 public static class SlideShowCustomShowSessionPlanner
 {
@@ -81,7 +82,8 @@ public static class SlideShowCustomShowSessionPlanner
             hasSelection,
             selectedShow?.SlideIds.Count > 0,
             selectedSlideIndex > 0,
-            selectedSlideIndex >= 0 && selectedSlideIndex < selectedSlides.Length - 1);
+            selectedSlideIndex >= 0 && selectedSlideIndex < selectedSlides.Length - 1,
+            selectedSlideIndex >= 0);
     }
 
     public static SlideShowCustomShowSessionState SelectShow(int customShowIndex) =>

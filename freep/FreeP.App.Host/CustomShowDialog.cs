@@ -9,6 +9,7 @@ namespace FreeP.App.Host;
 public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly MainWindow _host;
+    private readonly SlideShowCustomShowDialogSession _session;
     private readonly ListBox _showList = new();
     private readonly TextBox _nameBox = new();
     private readonly ListBox _customShowSlideList = new();
@@ -22,13 +23,17 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly Button _moveDownButton;
     private readonly Button _removeButton;
     private readonly List<CheckBox> _slideCheckBoxes = new();
-    private IReadOnlyList<SlideShowCustomShowSlideOption> _availableSlides = Array.Empty<SlideShowCustomShowSlideOption>();
     private Point? _customShowSlideDragStartPoint;
     private int _customShowSlideDragSourceIndex = -1;
 
     public CustomShowDialog(MainWindow host)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
+        _session = new SlideShowCustomShowDialogSession(
+            new SlideShowCustomShowDialogSessionCallbacks(
+                _host.BuildCustomShowSessionPlan,
+                _host.ApplyCustomShowDialogMutation,
+                name => _host.TryStartCustomSlideShow(name)));
 
         Title = "Custom Shows";
         Width = 640;
@@ -39,13 +44,14 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         _showList.Margin = new Thickness(0, 0, 10, 0);
-        _showList.SelectionChanged += (_, _) => ApplySelectedShowToFields();
+        _showList.SelectionChanged += (_, _) => OnSelectedShowChanged();
 
         _nameBox.MinWidth = 260;
         _nameBox.Margin = new Thickness(0, 0, 0, 8);
 
         _customShowSlideList.MinHeight = 92;
-        _customShowSlideList.SelectionChanged += (_, _) => UpdateMoveButtons();
+        _customShowSlideList.SelectionChanged += (_, _) =>
+            ApplyTransition(_session.SelectSlide(_customShowSlideList.SelectedIndex));
         _customShowSlideList.AllowDrop = true;
         _customShowSlideList.PreviewMouseLeftButtonDown += OnCustomShowSlideListMouseLeftButtonDown;
         _customShowSlideList.PreviewMouseMove += OnCustomShowSlideListMouseMove;
@@ -65,7 +71,7 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _removeButton = MakeButton("Remove", OnRemoveSelectedSlide);
 
         Content = BuildContent();
-        Refresh(selectCustomShowIndex: 0);
+        ApplyTransition(_session.InitialTransition);
     }
 
     public int RenderedCustomShowCount => _showList.Items.Count;
@@ -199,11 +205,28 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         return root;
     }
 
-    private void Refresh(int selectCustomShowIndex, int selectedCustomShowSlideIndex = -1)
+    private void ApplyTransition(SlideShowCustomShowDialogSessionTransition transition)
     {
-        var plan = _host.BuildCustomShowSessionPlan(
-            new SlideShowCustomShowSessionState(selectCustomShowIndex, selectedCustomShowSlideIndex));
-        _availableSlides = plan.AvailableSlides;
+        switch (transition.RenderScope)
+        {
+            case SlideShowCustomShowDialogRenderScope.Full:
+                RenderFullPlan(transition.Plan);
+                break;
+            case SlideShowCustomShowDialogRenderScope.SelectedShow:
+                RenderSelectedShowPlan(transition.Plan);
+                break;
+            case SlideShowCustomShowDialogRenderScope.SlideSelection:
+                ApplySlideSelection(transition.Plan);
+                break;
+        }
+
+        SetValidation(transition.ValidationMessage);
+        if (transition.ShouldClose)
+            Close();
+    }
+
+    private void RenderFullPlan(SlideShowCustomShowSessionPlan plan)
+    {
         _showList.ItemsSource = plan.CustomShows
             .Select(show => new CustomShowListItem(
                 show.Index,
@@ -216,16 +239,9 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         var selected = _showList.Items
             .OfType<CustomShowListItem>()
-            .FirstOrDefault(item => item.Index == selectCustomShowIndex);
+            .FirstOrDefault(item => item.Index == plan.SelectedShow?.Index);
         _showList.SelectedItem = selected ?? _showList.Items.OfType<CustomShowListItem>().FirstOrDefault();
-        ApplySelectedShowToFields();
-        if (selectedCustomShowSlideIndex >= 0 && _customShowSlideList.Items.Count > 0)
-        {
-            _customShowSlideList.SelectedIndex = Math.Clamp(
-                selectedCustomShowSlideIndex,
-                0,
-                _customShowSlideList.Items.Count - 1);
-        }
+        RenderSelectedShowPlan(plan);
     }
 
     private void RebuildSlides(IReadOnlyList<SlideShowCustomShowSlideOption> slides)
@@ -252,116 +268,60 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         }
     }
 
-    private void ApplySelectedShowToFields()
+    private void OnSelectedShowChanged()
     {
         var selected = SelectedShow;
-        var session = _host.BuildCustomShowSessionPlan(
-            selected is null
-                ? new SlideShowCustomShowSessionState(-1)
-                : SlideShowCustomShowSessionPlanner.SelectShow(selected.Index));
-        _nameBox.Text = session.SelectedShow?.Name ?? string.Empty;
+        ApplyTransition(_session.SelectShow(selected?.Index ?? -1));
+    }
+
+    private void RenderSelectedShowPlan(SlideShowCustomShowSessionPlan plan)
+    {
+        _nameBox.Text = plan.SelectedShow?.Name ?? string.Empty;
 
         foreach (var checkBox in _slideCheckBoxes)
         {
-            checkBox.IsChecked = checkBox.Tag is string slideId && session.SelectedSlideIds.Contains(slideId);
+            checkBox.IsChecked = checkBox.Tag is string slideId && plan.SelectedSlideIds.Contains(slideId);
         }
 
-        RebuildCustomShowSlides(session.SelectedSlides);
-        _renameButton.IsEnabled = session.CanRename;
-        _updateButton.IsEnabled = session.CanUpdateSlides;
-        _deleteButton.IsEnabled = session.CanDelete;
-        _startButton.IsEnabled = session.CanStart;
-        UpdateMoveButtons();
-        SetValidation(null);
+        RebuildCustomShowSlides(plan.SelectedSlides);
+        _renameButton.IsEnabled = plan.CanRename;
+        _updateButton.IsEnabled = plan.CanUpdateSlides;
+        _deleteButton.IsEnabled = plan.CanDelete;
+        _startButton.IsEnabled = plan.CanStart;
+        ApplySlideSelection(plan);
     }
 
-    private void OnCreate()
+    private void ApplySlideSelection(SlideShowCustomShowSessionPlan plan)
     {
-        var result = _host.CreateCustomShow(_nameBox.Text, SelectedSlideIds());
-        ApplyMutationResult(result);
+        var selectedIndex = plan.SelectedSlideIndex >= 0 &&
+            plan.SelectedSlideIndex < _customShowSlideList.Items.Count
+                ? plan.SelectedSlideIndex
+                : -1;
+        if (_customShowSlideList.SelectedIndex != selectedIndex)
+            _customShowSlideList.SelectedIndex = selectedIndex;
+
+        _moveUpButton.IsEnabled = plan.CanMoveUp;
+        _moveDownButton.IsEnabled = plan.CanMoveDown;
+        _removeButton.IsEnabled = plan.CanRemove;
     }
 
-    private void OnRename()
-    {
-        if (SelectedShow is null)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
-            return;
-        }
+    private void OnCreate() =>
+        ApplyTransition(_session.Create(_nameBox.Text, SelectedSlideIds()));
 
-        ApplyMutationResult(_host.RenameCustomShow(SelectedShow.Index, _nameBox.Text));
-    }
+    private void OnRename() =>
+        ApplyTransition(_session.Rename(_nameBox.Text));
 
-    private void OnUpdateSlides()
-    {
-        if (SelectedShow is null)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
-            return;
-        }
+    private void OnUpdateSlides() =>
+        ApplyTransition(_session.UpdateSlides(SelectedSlideIds()));
 
-        ApplyMutationResult(_host.UpdateCustomShowSlides(SelectedShow.Index, SelectedSlideIds()));
-    }
+    private void AddSlideOccurrence(string slideId) =>
+        ApplyTransition(_session.AddSlideOccurrence(slideId));
 
-    private void AddSlideOccurrence(string slideId)
-    {
-        if (SelectedShow is null)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
-            return;
-        }
+    private void OnRemoveSelectedSlide() =>
+        ApplyTransition(_session.RemoveSelectedSlide());
 
-        var session = _host.BuildCustomShowSessionPlan(
-            SlideShowCustomShowSessionPlanner.SelectShow(SelectedShow.Index));
-        var result = _host.UpdateCustomShowSlides(
-            SelectedShow.Index,
-            session.SelectedSlideIds.Append(slideId));
-        ApplyMutationResult(result);
-        if (result.Succeeded)
-            _customShowSlideList.SelectedIndex = _customShowSlideList.Items.Count - 1;
-    }
-
-    private void OnRemoveSelectedSlide()
-    {
-        if (SelectedShow is null)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
-            return;
-        }
-
-        if (_customShowSlideList.SelectedItem is not CustomShowSlideListItem selectedSlide)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowSlideMessage);
-            return;
-        }
-
-        var session = _host.BuildCustomShowSessionPlan(
-            SlideShowCustomShowSessionPlanner.SelectShow(SelectedShow.Index));
-        var slideIds = session.SelectedSlideIds.ToList();
-        slideIds.RemoveAt(selectedSlide.Index);
-        var result = _host.UpdateCustomShowSlides(SelectedShow.Index, slideIds);
-        ApplyMutationResult(result);
-        if (result.Succeeded && _customShowSlideList.Items.Count > 0)
-            _customShowSlideList.SelectedIndex = Math.Min(selectedSlide.Index, _customShowSlideList.Items.Count - 1);
-    }
-
-    private void OnMoveSelectedSlide(int offset)
-    {
-        if (SelectedShow is null)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
-            return;
-        }
-
-        if (_customShowSlideList.SelectedItem is not CustomShowSlideListItem selectedSlide)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowSlideMessage);
-            return;
-        }
-
-        var targetDropIndex = selectedSlide.Index + offset + (offset > 0 ? 1 : 0);
-        ApplyCustomShowSlideDragReorder(selectedSlide.Index, targetDropIndex);
-    }
+    private void OnMoveSelectedSlide(int offset) =>
+        ApplyTransition(_session.MoveSelectedSlide(offset));
 
     private void OnCustomShowSlideListMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -438,83 +398,16 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         int sourceSlideIndex,
         int targetDropIndex)
     {
-        var selected = SelectedShow;
-        var session = _host.BuildCustomShowSessionPlan(
-            selected is null
-                ? new SlideShowCustomShowSessionState(-1)
-                : SlideShowCustomShowSessionPlanner.SelectShow(selected.Index));
-        var plan = SlideShowCustomShowSessionPlanner.BuildDragReorderPlan(
-            session,
-            sourceSlideIndex,
-            targetDropIndex);
-
-        if (!plan.IsValid)
-        {
-            SetValidation(plan.ErrorMessage);
-            return plan;
-        }
-
-        if (!plan.ShouldApplyMutation)
-        {
-            _customShowSlideList.SelectedIndex = plan.SelectedSlideIndex;
-            SetValidation(null);
-            return plan;
-        }
-
-        ApplyMutationResult(_host.MoveCustomShowSlide(
-            selected!.Index,
-            plan.SourceSlideIndex,
-            plan.SourceSlideId,
-            plan.TargetSlideIndex));
-        return plan;
+        var transition = _session.Reorder(sourceSlideIndex, targetDropIndex);
+        ApplyTransition(transition.SessionTransition);
+        return transition.ReorderPlan;
     }
 
-    private void OnDelete()
-    {
-        if (SelectedShow is null)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
-            return;
-        }
+    private void OnDelete() =>
+        ApplyTransition(_session.Delete());
 
-        var deletedIndex = SelectedShow.Index;
-        var result = _host.DeleteCustomShow(deletedIndex);
-        if (!result.Succeeded)
-        {
-            SetValidation(result.ErrorMessage);
-            return;
-        }
-
-        Refresh(Math.Max(0, deletedIndex - 1));
-    }
-
-    private void OnStartShow()
-    {
-        if (SelectedShow is null)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
-            return;
-        }
-
-        if (!_host.TryStartCustomSlideShow(SelectedShow.Name))
-        {
-            SetValidation(SlideShowCustomShowPlanner.EmptyCustomShowMessage);
-            return;
-        }
-
-        Close();
-    }
-
-    private void ApplyMutationResult(SlideShowCustomShowMutationResult result)
-    {
-        if (!result.Succeeded)
-        {
-            SetValidation(result.ErrorMessage);
-            return;
-        }
-
-        Refresh(result.CustomShowIndex, result.SelectedSlideIndex);
-    }
+    private void OnStartShow() =>
+        ApplyTransition(_session.StartShow());
 
     private void RebuildCustomShowSlides(
         IReadOnlyList<SlideShowCustomShowSessionSlideItemPlan> slides)
@@ -525,18 +418,6 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 slide.SlideId,
                 slide.DisplayText))
             .ToArray();
-        if (_customShowSlideList.Items.Count > 0 && _customShowSlideList.SelectedIndex < 0)
-            _customShowSlideList.SelectedIndex = 0;
-        UpdateMoveButtons();
-    }
-
-    private void UpdateMoveButtons()
-    {
-        var selectedIndex = _customShowSlideList.SelectedIndex;
-        var hasCustomShowSlide = selectedIndex >= 0 && selectedIndex < _customShowSlideList.Items.Count;
-        _moveUpButton.IsEnabled = hasCustomShowSlide && selectedIndex > 0;
-        _moveDownButton.IsEnabled = hasCustomShowSlide && selectedIndex < _customShowSlideList.Items.Count - 1;
-        _removeButton.IsEnabled = hasCustomShowSlide;
     }
 
     private IEnumerable<string?> SelectedSlideIds() =>

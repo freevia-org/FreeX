@@ -11187,6 +11187,13 @@ public sealed partial class MainWindow : Window
             BuildCustomShowAuthoringPlan(),
             state);
 
+    internal SlideShowCustomShowMutationResult ApplyCustomShowDialogMutation(
+        SlideShowCustomShowDialogMutationRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return Editor.ApplyCustomShowMutation(request.Apply);
+    }
+
     internal SlideShowCustomShowMutationResult CreateCustomShow(
         string? name,
         IEnumerable<string?> slideIds) =>

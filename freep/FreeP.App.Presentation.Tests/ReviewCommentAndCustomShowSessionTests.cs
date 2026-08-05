@@ -156,15 +156,23 @@ public sealed class ReviewCommentAndCustomShowSessionTests
             source.Should().NotContain("BuildAddCommentPlan(");
             source.Should().NotContain("TryApplyCommentMutationPlan(");
             source.Should().Contain("BuildCustomShowSessionPlan(");
+            source.Should().Contain("ApplyCustomShowDialogMutation(");
         }
 
         foreach (var source in new[] { wpfDialog, avaloniaDialog })
         {
-            source.Should().Contain("BuildCustomShowSessionPlan(");
-            source.Should().Contain("SlideShowCustomShowSessionPlanner.BuildDragReorderPlan(");
+            source.Should().Contain("SlideShowCustomShowDialogSession");
+            source.Should().Contain("_session.Reorder(");
+            source.Should().NotContain("SlideShowCustomShowSessionPlanner.");
+            source.Should().NotContain("SlideShowCustomShowPlanner.");
             source.Should().NotContain("BuildCustomShowSlideDragReorderPlan(");
             source.Should().NotContain("FormatShowListText(");
             source.Should().NotContain("new SlideShowCustomShowDragReorderPlan(");
+            source.Should().NotContain("_host.CreateCustomShow(");
+            source.Should().NotContain("_host.RenameCustomShow(");
+            source.Should().NotContain("_host.UpdateCustomShowSlides(");
+            source.Should().NotContain("_host.DeleteCustomShow(");
+            source.Should().NotContain("_host.MoveCustomShowSlide(");
         }
     }
 
