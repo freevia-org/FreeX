@@ -260,6 +260,28 @@ public sealed class DocumentView : Control
     private readonly DocumentEditingSession _editingSession;
     private TextDocument _doc => _editingSession.Document;
     private DocumentCommandBus _bus => _editingSession.Commands;
+    private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
+
+    private static DocumentObjectTarget ObjectTarget(
+        int blockIndex,
+        int runIndex,
+        IReadOnlyList<int>? childPath = null) =>
+        new(blockIndex, runIndex, childPath);
+
+    private bool InvalidateObjectEdit(
+        DocumentObjectEditResult result,
+        string selectionKind,
+        bool relayout = false)
+    {
+        if (!result.Applied)
+            return false;
+
+        InvalidateLayoutAndVisual();
+        if (relayout)
+            Relayout(FallbackWidth);
+        RefreshSelectedFloatingRect(result.Target.BlockIndex, result.Target.RunIndex, selectionKind);
+        return true;
+    }
     private DocPosition _caret;
     private DocPosition? _selectionAnchor;
     // BZ5: pending character formatting to be applied to the NEXT typed character when the caret
@@ -13537,17 +13559,11 @@ public sealed class DocumentView : Control
     /// <summary>Converts the selected shape to editable freeform geometry through the shared undo bus.</summary>
     public void ConvertSelectedShapeToFreeform()
     {
-        if (SelectedFloatingShapeLocation() is not { } selected || selected.Shape.HasCustomGeometry)
+        if (SelectedFloatingShapeLocation() is not { } selected)
             return;
-        var geometry = selected.Shape.Kind switch
-        {
-            ShapeKind.Ellipse => CustomGeometry.EllipsePoly(),
-            ShapeKind.RoundedRectangle => CustomGeometry.RoundedRectPoly(),
-            _ => CustomGeometry.RectanglePoly()
-        };
-        _bus.Execute(new SetShapeCustomGeometryCommand(selected.BlockIndex, selected.RunIndex, geometry));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.ConvertShapeToFreeform(ObjectTarget(selected.BlockIndex, selected.RunIndex)),
+            selected.Kind);
     }
 
     /// <summary>Enters WPF-compatible vertex editing for the selected shape.</summary>
@@ -13561,19 +13577,10 @@ public sealed class DocumentView : Control
             && nestedChild is Shape nestedShape)
         {
             if (!nestedShape.HasCustomGeometry)
-            {
-                var geometry = nestedShape.Kind switch
-                {
-                    ShapeKind.Ellipse => CustomGeometry.EllipsePoly(),
-                    ShapeKind.RoundedRectangle => CustomGeometry.RoundedRectPoly(),
-                    _ => CustomGeometry.RectanglePoly()
-                };
-                _bus.Execute(new SetShapeCustomGeometryCommand(
+                ObjectEdits.ConvertShapeToFreeform(ObjectTarget(
                     selectedChild.BlockIndex,
                     selectedChild.RunIndex,
-                    geometry,
                     selectedChild.ChildPath));
-            }
 
             if (nestedShape.HasCustomGeometry)
             {
@@ -13610,13 +13617,13 @@ public sealed class DocumentView : Control
             || geometry.Segments[segmentIndex].Point is null)
             return false;
 
-        _bus.Execute(new MoveShapeEditPointCommand(
-            target.BlockIndex,
-            target.RunIndex,
+        var result = ObjectEdits.MoveShapeEditPoint(
+            ObjectTarget(target.BlockIndex, target.RunIndex, target.ChildPath),
             segmentIndex,
             x,
-            y,
-            target.ChildPath));
+            y);
+        if (!result.Applied)
+            return false;
         if (_shapeEditPointDragState is not null)
             _shapeEditPointDragChanged = true;
         InvalidateLayoutAndVisual();
@@ -13856,46 +13863,21 @@ public sealed class DocumentView : Control
     /// </summary>
     private void CommitFloatResize(int blockIndex, int runIndex, string kind, Rect baseRect, Rect newRect)
     {
-        if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count) return;
-        if (_doc.Blocks[blockIndex] is not Paragraph para) return;
-        if (runIndex < 0 || runIndex >= para.Runs.Count) return;
-        var run = para.Runs[runIndex];
-
         var newWidthPt  = newRect.Width  / PxPerPoint;
         var newHeightPt = newRect.Height / PxPerPoint;
         // Offset delta in points: how far the top-left corner moved (non-zero only for top/left handles).
         var dxPt = (newRect.Left - baseRect.Left) / PxPerPoint;
         var dyPt = (newRect.Top  - baseRect.Top)  / PxPerPoint;
-        bool anchorMoved = Math.Abs(dxPt) > 0.01 || Math.Abs(dyPt) > 0.01;
+        var result = ObjectEdits.ResizeAndMove(
+            ObjectTarget(blockIndex, runIndex),
+            newWidthPt,
+            newHeightPt,
+            dxPt,
+            dyPt);
 
-        var sizeCmd = new SetFloatingSizeCommand(blockIndex, runIndex, newWidthPt, newHeightPt);
-
-        if (!anchorMoved)
+        if (!result.Applied)
         {
-            _bus.Execute(sizeCmd);
-        }
-        else if (kind == "Image" && run.Image is { IsFloating: true } img)
-        {
-            var posCmd = new NudgeImagePositionCommand(blockIndex, runIndex,
-                img.HorizontalOffsetPt + dxPt, img.VerticalOffsetPt + dyPt);
-            _bus.Execute(new CompositeDocumentCommand("Resize",
-                new IDocumentCommand[] { sizeCmd, posCmd }));
-        }
-        else if (SetFloatingPositionCommand.GetFloatingPlacement(run) is { } pl)
-        {
-            var posCmd = new SetFloatingPositionCommand(blockIndex, runIndex,
-                pl.HorizontalOffsetPt + dxPt, pl.VerticalOffsetPt + dyPt,
-                pl.HorizontalAnchor, pl.VerticalAnchor);
-            _bus.Execute(new CompositeDocumentCommand("Resize",
-                new IDocumentCommand[] { sizeCmd, posCmd }));
-        }
-        else
-        {
-            // FB4 guard: the anchored top/left edge moved (a top/left handle was dragged), but this
-            // float has no placement to carry the position delta on (non-Image kind with no
-            // FloatingPlacement available). Committing the size-only command here would grow the object
-            // from its ORIGINAL top-left, silently sliding the anchored edge the user dragged instead of
-            // holding it fixed — so skip the commit entirely rather than apply a visually-wrong resize.
+            return;
         }
 
         InvalidateLayoutAndVisual();
@@ -14507,24 +14489,12 @@ public sealed class DocumentView : Control
         double dxPt,
         double dyPt)
     {
-        if (!TryGetRun(blockIndex, runIndex, out var run)
-            || run.DrawingGroup is not { } rootGroup
-            || !DrawingGroupChildPathResolver.TryGetChild(
-                rootGroup,
-                childPath,
-                out var owningGroup,
-                out _))
+        var result = ObjectEdits.MoveGroupChildBy(
+            ObjectTarget(blockIndex, runIndex, childPath),
+            dxPt,
+            dyPt);
+        if (!result.Applied)
             return;
-
-        var childIndex = childPath[^1];
-        SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(owningGroup, childIndex);
-        var offset = owningGroup.ChildOffsets[childIndex];
-        _bus.Execute(new SetDrawingGroupChildPositionCommand(
-            blockIndex,
-            runIndex,
-            childPath,
-            offset.X + dxPt,
-            offset.Y + dyPt));
         InvalidateLayoutAndVisual();
         Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
         RefreshSelectedFloatingRect(blockIndex, runIndex, "Group");
@@ -14537,43 +14507,18 @@ public sealed class DocumentView : Control
         DocumentFloatRect baseRect,
         DocumentFloatRect newRect)
     {
-        if (!TryGetRun(blockIndex, runIndex, out var run)
-            || run.DrawingGroup is not { } rootGroup
-            || !DrawingGroupChildPathResolver.TryGetChild(
-                rootGroup,
-                childPath,
-                out var owningGroup,
-                out _))
-            return;
-
-        var childIndex = childPath[^1];
         var newWidthPt = newRect.WidthDip / PxPerPoint;
         var newHeightPt = newRect.HeightDip / PxPerPoint;
         var dxPt = (newRect.XDip - baseRect.XDip) / PxPerPoint;
         var dyPt = (newRect.YDip - baseRect.YDip) / PxPerPoint;
-        var commands = new List<IDocumentCommand>
-        {
-            new SetDrawingGroupChildSizeCommand(
-                blockIndex,
-                runIndex,
-                childPath,
-                newWidthPt,
-                newHeightPt)
-        };
-
-        if (Math.Abs(dxPt) > 0.01 || Math.Abs(dyPt) > 0.01)
-        {
-            SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(owningGroup, childIndex);
-            var offset = owningGroup.ChildOffsets[childIndex];
-            commands.Add(new SetDrawingGroupChildPositionCommand(
-                blockIndex,
-                runIndex,
-                childPath,
-                offset.X + dxPt,
-                offset.Y + dyPt));
-        }
-
-        _bus.Execute(new CompositeDocumentCommand("Resize Group Child", commands));
+        var result = ObjectEdits.ResizeGroupChild(
+            ObjectTarget(blockIndex, runIndex, childPath),
+            newWidthPt,
+            newHeightPt,
+            dxPt,
+            dyPt);
+        if (!result.Applied)
+            return;
         InvalidateLayoutAndVisual();
         Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
         RefreshSelectedFloatingRect(blockIndex, runIndex, "Group");
@@ -14587,11 +14532,6 @@ public sealed class DocumentView : Control
     /// </summary>
     private void CommitFloatDragMove(int blockIndex, int runIndex, double dxPt, double dyPt, string kind)
     {
-        if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count) return;
-        if (_doc.Blocks[blockIndex] is not Paragraph para) return;
-        if (runIndex < 0 || runIndex >= para.Runs.Count) return;
-        var run = para.Runs[runIndex];
-
         if (_selectedFloatingGroupChild is { } child
             && child.BlockIndex == blockIndex
             && child.RunIndex == runIndex
@@ -14613,21 +14553,8 @@ public sealed class DocumentView : Control
             return;
         }
 
-        if (kind == "Image" && run.Image is { IsFloating: true } img)
-        {
-            var newH = img.HorizontalOffsetPt + dxPt;
-            var newV = img.VerticalOffsetPt   + dyPt;
-            _bus.Execute(new NudgeImagePositionCommand(blockIndex, runIndex, newH, newV));
-        }
-        else
-        {
-            var pl = SetFloatingPositionCommand.GetFloatingPlacement(run);
-            if (pl is null) return;
-            var newH = pl.HorizontalOffsetPt + dxPt;
-            var newV = pl.VerticalOffsetPt   + dyPt;
-            _bus.Execute(new SetFloatingPositionCommand(blockIndex, runIndex,
-                newH, newV, pl.HorizontalAnchor, pl.VerticalAnchor));
-        }
+        if (!ObjectEdits.MoveBy(ObjectTarget(blockIndex, runIndex), dxPt, dyPt).Applied)
+            return;
         InvalidateLayoutAndVisual();
         // Refresh selected state after re-layout (the Rect changes).
         Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
@@ -15549,15 +15476,15 @@ public sealed class DocumentView : Control
             || run.DrawingGroup is { IsValid: true };
     }
 
-    private List<(int Bi, int Ri)> SelectedGroupMemberLocations()
+    private List<DocumentObjectTarget> SelectedGroupMemberLocations()
     {
-        var members = new List<(int Bi, int Ri)>();
+        var members = new List<DocumentObjectTarget>();
         foreach (var selected in _selectedFloatingObjects)
         {
             if (!IsGroupableFloatingRun(selected.BlockIndex, selected.RunIndex))
                 continue;
 
-            var member = (selected.BlockIndex, selected.RunIndex);
+            var member = ObjectTarget(selected.BlockIndex, selected.RunIndex);
             if (!members.Contains(member))
                 members.Add(member);
         }
@@ -15613,15 +15540,13 @@ public sealed class DocumentView : Control
             && nestedChild is Shape nestedShape
             && ShapeTextFormattingPlanner.CanApplyParagraphAlignment(nestedShape))
         {
-            _bus.Execute(new SetShapeTextParagraphAlignmentCommand(
-                selectedChild.BlockIndex,
-                selectedChild.RunIndex,
-                alignment,
-                selectedChild.ChildPath));
-            InvalidateLayoutAndVisual();
-            RefreshSelectedFloatingRect(
-                selectedChild.BlockIndex,
-                selectedChild.RunIndex,
+            InvalidateObjectEdit(
+                ObjectEdits.SetShapeAlignment(
+                    ObjectTarget(
+                        selectedChild.BlockIndex,
+                        selectedChild.RunIndex,
+                        selectedChild.ChildPath),
+                    alignment),
                 "Group");
             return;
         }
@@ -15643,11 +15568,11 @@ public sealed class DocumentView : Control
         if (!applies)
             return;
 
-        _bus.Execute(new SetParagraphFormattingCommand(
-            sel.BlockIndex,
-            para.Formatting with { Alignment = alignment }));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        var target = ObjectTarget(sel.BlockIndex, sel.RunIndex);
+        var result = kind == "Image"
+            ? ObjectEdits.SetImageAlignment(target, alignment)
+            : ObjectEdits.SetShapeAlignment(target, alignment);
+        InvalidateObjectEdit(result, sel.Kind);
     }
 
     /// <summary>
@@ -15657,9 +15582,9 @@ public sealed class DocumentView : Control
     public void SetFloatingWrap(ImageWrapping wrapping)
     {
         if (_selectedFloating is not { } sel) return;
-        _bus.Execute(new SetFloatingWrapCommand(sel.BlockIndex, sel.RunIndex, wrapping));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetWrap(ObjectTarget(sel.BlockIndex, sel.RunIndex), wrapping),
+            sel.Kind);
     }
 
     /// <summary>
@@ -15675,8 +15600,14 @@ public sealed class DocumentView : Control
             && DrawingGroupChildPathResolver.TryGetChild(
                 root, selectedChild.ChildPath, out _, out var child))
         {
-            _bus.Execute(new ChangeDrawingGroupChildZOrderCommand(
-                selectedChild.BlockIndex, selectedChild.RunIndex, selectedChild.ChildPath, op));
+            var result = ObjectEdits.ChangeZOrder(
+                ObjectTarget(
+                    selectedChild.BlockIndex,
+                    selectedChild.RunIndex,
+                    selectedChild.ChildPath),
+                op);
+            if (!result.Applied)
+                return false;
             RestoreSelectedFloatingGroupChildPath(child);
             InvalidateLayoutAndVisual();
             RefreshSelectedFloatingRect(
@@ -15689,7 +15620,8 @@ public sealed class DocumentView : Control
         {
             return false;
         }
-        _bus.Execute(new ChangeZOrderCommand(sel.BlockIndex, sel.RunIndex, op));
+        if (!ObjectEdits.ChangeZOrder(ObjectTarget(sel.BlockIndex, sel.RunIndex), op).Applied)
+            return false;
         InvalidateLayoutAndVisual();
         RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
         return true;
@@ -15708,19 +15640,14 @@ public sealed class DocumentView : Control
         HorizontalAnchor hAnchor, VerticalAnchor vAnchor)
     {
         if (_selectedFloating is not { } sel) return;
-        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
-        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
-        var run = para.Runs[sel.RunIndex];
-
-        if (run.Image is { IsFloating: true })
-            _bus.Execute(new SetImagePositionCommand(sel.BlockIndex, sel.RunIndex,
-                hOffsetPt, vOffsetPt, hAnchor, vAnchor));
-        else
-            _bus.Execute(new SetFloatingPositionCommand(sel.BlockIndex, sel.RunIndex,
-                hOffsetPt, vOffsetPt, hAnchor, vAnchor));
-
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetPosition(
+                ObjectTarget(sel.BlockIndex, sel.RunIndex),
+                hOffsetPt,
+                vOffsetPt,
+                hAnchor,
+                vAnchor),
+            sel.Kind);
     }
 
     /// <summary>Return the selected direct shape position or nested shape's group-local offset.</summary>
@@ -15763,10 +15690,14 @@ public sealed class DocumentView : Control
     {
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _bus.Execute(new SetDrawingGroupChildPositionCommand(
-                nested.BlockIndex, nested.RunIndex, nested.ChildPath, hOffsetPt, vOffsetPt));
-            InvalidateLayoutAndVisual();
-            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            InvalidateObjectEdit(
+                ObjectEdits.SetShapePosition(
+                    ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                    hOffsetPt,
+                    vOffsetPt,
+                    hAnchor,
+                    vAnchor),
+                "Group");
             return;
         }
 
@@ -15781,9 +15712,9 @@ public sealed class DocumentView : Control
     public void SetFloatingSize(double widthPt, double heightPt)
     {
         if (_selectedFloating is not { } sel) return;
-        _bus.Execute(new SetFloatingSizeCommand(sel.BlockIndex, sel.RunIndex, widthPt, heightPt));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetSize(ObjectTarget(sel.BlockIndex, sel.RunIndex), widthPt, heightPt),
+            sel.Kind);
     }
 
     /// <summary>Set the selected direct or nested shape size through one undoable command.</summary>
@@ -15793,10 +15724,12 @@ public sealed class DocumentView : Control
             return;
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _bus.Execute(new SetDrawingGroupChildSizeCommand(
-                nested.BlockIndex, nested.RunIndex, nested.ChildPath, widthPt, heightPt));
-            InvalidateLayoutAndVisual();
-            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            InvalidateObjectEdit(
+                ObjectEdits.SetShapeSize(
+                    ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                    widthPt,
+                    heightPt),
+                "Group");
             return;
         }
         if (SelectedFloatingShapeLocation() is not null)
@@ -15816,13 +15749,12 @@ public sealed class DocumentView : Control
             return;
         }
 
-        _bus.Execute(new SetImageSizeCommand(
-            selected.BlockIndex,
-            selected.RunIndex,
-            widthPt,
-            heightPt));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetImageSize(
+                ObjectTarget(selected.BlockIndex, selected.RunIndex),
+                widthPt,
+                heightPt),
+            selected.Kind);
     }
 
     /// <summary>
@@ -15871,31 +15803,20 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetSelectedFloatingAltText(string? altText)
     {
-        var normalized = string.IsNullOrWhiteSpace(altText) ? null : altText.Trim();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _bus.Execute(new SetShapeAltTextCommand(
-                nested.BlockIndex, nested.RunIndex, normalized, nested.ChildPath));
-            InvalidateLayoutAndVisual();
-            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            InvalidateObjectEdit(
+                ObjectEdits.SetAltText(
+                    ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                    altText),
+                "Group");
             return;
         }
 
         if (_selectedFloating is not { } sel) return;
-        if (!TryGetRun(sel.BlockIndex, sel.RunIndex, out var run)) return;
-
-        IDocumentCommand? command = run switch
-        {
-            { Image: { IsFloating: true } } => new SetImageAltTextCommand(sel.BlockIndex, sel.RunIndex, normalized),
-            { Shape: { } } => new SetShapeAltTextCommand(sel.BlockIndex, sel.RunIndex, normalized),
-            { WordArt: { } } => new SetWordArtAltTextCommand(sel.BlockIndex, sel.RunIndex, normalized),
-            _ => null
-        };
-
-        if (command is null) return;
-        _bus.Execute(command);
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetAltText(ObjectTarget(sel.BlockIndex, sel.RunIndex), altText),
+            sel.Kind);
     }
 
     /// <summary>
@@ -15911,15 +15832,14 @@ public sealed class DocumentView : Control
             return;
         }
 
-        _bus.Execute(new SetImageCropCommand(
-            selected.BlockIndex,
-            selected.RunIndex,
-            left,
-            right,
-            top,
-            bottom));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetImageCrop(
+                ObjectTarget(selected.BlockIndex, selected.RunIndex),
+                left,
+                right,
+                top,
+                bottom),
+            selected.Kind);
     }
 
     /// <summary>Set or remove the selected picture border through the shared undoable command.</summary>
@@ -15933,14 +15853,13 @@ public sealed class DocumentView : Control
             return;
         }
 
-        _bus.Execute(new SetImageBorderCommand(
-            selected.BlockIndex,
-            selected.RunIndex,
-            colorHex,
-            widthPt,
-            dash));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetImageBorder(
+                ObjectTarget(selected.BlockIndex, selected.RunIndex),
+                colorHex,
+                widthPt,
+                dash),
+            selected.Kind);
     }
 
     /// <summary>Apply picture correction values through the shared undoable model command.</summary>
@@ -15958,15 +15877,14 @@ public sealed class DocumentView : Control
             return;
         }
 
-        _bus.Execute(new SetImageAdjustCommand(
-            selected.BlockIndex,
-            selected.RunIndex,
-            brightnessPct,
-            contrastPct,
-            saturationPct,
-            transparencyPct));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetImageAdjust(
+                ObjectTarget(selected.BlockIndex, selected.RunIndex),
+                brightnessPct,
+                contrastPct,
+                saturationPct,
+                transparencyPct),
+            selected.Kind);
     }
 
     /// <summary>Apply picture effects through the shared undoable model command.</summary>
@@ -15986,17 +15904,16 @@ public sealed class DocumentView : Control
             return;
         }
 
-        _bus.Execute(new SetImageEffectCommand(
-            selected.BlockIndex,
-            selected.RunIndex,
-            shadowPreset,
-            glowSizePt,
-            glowColorHex,
-            reflectionPreset,
-            softEdgePt,
-            bevelPreset));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetImageEffect(
+                ObjectTarget(selected.BlockIndex, selected.RunIndex),
+                shadowPreset,
+                glowSizePt,
+                glowColorHex,
+                reflectionPreset,
+                softEdgePt,
+                bevelPreset),
+            selected.Kind);
     }
 
     /// <summary>Apply a picture recolor or color-temperature preset through the shared command.</summary>
@@ -16010,13 +15927,12 @@ public sealed class DocumentView : Control
             return;
         }
 
-        _bus.Execute(new SetImageRecolorCommand(
-            selected.BlockIndex,
-            selected.RunIndex,
-            mode,
-            colorTemperature));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetImageRecolor(
+                ObjectTarget(selected.BlockIndex, selected.RunIndex),
+                mode,
+                colorTemperature),
+            selected.Kind);
     }
 
     /// <summary>Apply an artistic picture effect through the shared undoable model command.</summary>
@@ -16030,12 +15946,11 @@ public sealed class DocumentView : Control
             return;
         }
 
-        _bus.Execute(new SetImageArtisticEffectCommand(
-            selected.BlockIndex,
-            selected.RunIndex,
-            effect));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetImageArtisticEffect(
+                ObjectTarget(selected.BlockIndex, selected.RunIndex),
+                effect),
+            selected.Kind);
     }
 
     /// <summary>Apply a shared Picture Styles preset to the selected picture through one undoable command.</summary>
@@ -16050,9 +15965,9 @@ public sealed class DocumentView : Control
             return;
         }
 
-        _bus.Execute(new SetImageStyleCommand(selected.BlockIndex, selected.RunIndex, preset));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetImageStyle(ObjectTarget(selected.BlockIndex, selected.RunIndex), preset),
+            selected.Kind);
     }
 
     /// <summary>
@@ -16068,18 +15983,9 @@ public sealed class DocumentView : Control
             return;
         }
 
-        var naturalSize = ImageResetCommandPlanner.BuildNaturalSize(
-            image.OriginalPixelWidth,
-            image.OriginalPixelHeight,
-            image.WidthPt,
-            image.HeightPt);
-        _bus.Execute(new ResetImageSizeCommand(
-            selected.BlockIndex,
-            selected.RunIndex,
-            naturalSize.WidthPt,
-            naturalSize.HeightPt));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.ResetImage(ObjectTarget(selected.BlockIndex, selected.RunIndex)),
+            selected.Kind);
     }
 
     /// <summary>
@@ -16089,16 +15995,17 @@ public sealed class DocumentView : Control
     {
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _bus.Execute(new ApplyShapeStyleCommand(
-                nested.BlockIndex, nested.RunIndex, preset, nested.ChildPath));
-            InvalidateLayoutAndVisual();
-            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            InvalidateObjectEdit(
+                ObjectEdits.ApplyShapeStyle(
+                    ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                    preset),
+                "Group");
             return;
         }
         if (SelectedFloatingShapeLocation() is not { } sel) return;
-        _bus.Execute(new ApplyShapeStyleCommand(sel.BlockIndex, sel.RunIndex, preset));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.ApplyShapeStyle(ObjectTarget(sel.BlockIndex, sel.RunIndex), preset),
+            sel.Kind);
     }
 
     /// <summary>
@@ -16109,18 +16016,19 @@ public sealed class DocumentView : Control
     {
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _bus.Execute(new SetShapeKindCommand(
-                nested.BlockIndex, nested.RunIndex, kind, nested.ChildPath));
-            InvalidateLayoutAndVisual();
-            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            InvalidateObjectEdit(
+                ObjectEdits.SetShapeKind(
+                    ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                    kind),
+                "Group");
             return;
         }
         if (SelectedFloatingShapeLocation() is not { } selected)
             return;
 
-        _bus.Execute(new SetShapeKindCommand(selected.BlockIndex, selected.RunIndex, kind));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetShapeKind(ObjectTarget(selected.BlockIndex, selected.RunIndex), kind),
+            selected.Kind);
     }
 
     /// <summary>
@@ -16130,21 +16038,21 @@ public sealed class DocumentView : Control
     {
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _bus.Execute(new SetShapeEffectsCommand(
-                nested.BlockIndex, nested.RunIndex, effects, nested.ChildPath));
-            InvalidateLayoutAndVisual();
-            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            InvalidateObjectEdit(
+                ObjectEdits.SetShapeEffects(
+                    ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                    effects),
+                "Group");
             return;
         }
         if (SelectedFloatingShapeLocation() is not { } selected)
             return;
 
-        _bus.Execute(new SetShapeEffectsCommand(
-            selected.BlockIndex,
-            selected.RunIndex,
-            effects));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetShapeEffects(
+                ObjectTarget(selected.BlockIndex, selected.RunIndex),
+                effects),
+            selected.Kind);
     }
 
     /// <summary>
@@ -16155,16 +16063,17 @@ public sealed class DocumentView : Control
     {
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _bus.Execute(new SetShapeFillCommand(
-                nested.BlockIndex, nested.RunIndex, colorHex, nested.ChildPath));
-            InvalidateLayoutAndVisual();
-            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            InvalidateObjectEdit(
+                ObjectEdits.SetShapeFill(
+                    ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                    colorHex),
+                "Group");
             return;
         }
         if (SelectedFloatingShapeLocation() is not { } sel) return;
-        _bus.Execute(new SetShapeFillCommand(sel.BlockIndex, sel.RunIndex, colorHex));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetShapeFill(ObjectTarget(sel.BlockIndex, sel.RunIndex), colorHex),
+            sel.Kind);
     }
 
     /// <summary>
@@ -16175,16 +16084,17 @@ public sealed class DocumentView : Control
     {
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _bus.Execute(new SetShapeExtendedFillCommand(
-                nested.BlockIndex, nested.RunIndex, fill, nested.ChildPath));
-            InvalidateLayoutAndVisual();
-            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            InvalidateObjectEdit(
+                ObjectEdits.SetShapeExtendedFill(
+                    ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                    fill),
+                "Group");
             return;
         }
         if (SelectedFloatingShapeLocation() is not { } sel) return;
-        _bus.Execute(new SetShapeExtendedFillCommand(sel.BlockIndex, sel.RunIndex, fill));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetShapeExtendedFill(ObjectTarget(sel.BlockIndex, sel.RunIndex), fill),
+            sel.Kind);
     }
 
     /// <summary>
@@ -16204,15 +16114,13 @@ public sealed class DocumentView : Control
                 out var nestedChild)
             && nestedChild is Shape)
         {
-            _bus.Execute(new SetShapeTextDirectionCommand(
-                selectedChild.BlockIndex,
-                selectedChild.RunIndex,
-                direction,
-                selectedChild.ChildPath));
-            InvalidateLayoutAndVisual();
-            RefreshSelectedFloatingRect(
-                selectedChild.BlockIndex,
-                selectedChild.RunIndex,
+            InvalidateObjectEdit(
+                ObjectEdits.SetShapeTextDirection(
+                    ObjectTarget(
+                        selectedChild.BlockIndex,
+                        selectedChild.RunIndex,
+                        selectedChild.ChildPath),
+                    direction),
                 "Group");
             return;
         }
@@ -16220,12 +16128,11 @@ public sealed class DocumentView : Control
         if (SelectedFloatingShapeLocation() is not { } selected)
             return;
 
-        _bus.Execute(new SetShapeTextDirectionCommand(
-            selected.BlockIndex,
-            selected.RunIndex,
-            direction));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetShapeTextDirection(
+                ObjectTarget(selected.BlockIndex, selected.RunIndex),
+                direction),
+            selected.Kind);
     }
 
     /// <summary>
@@ -16236,16 +16143,23 @@ public sealed class DocumentView : Control
     {
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _bus.Execute(new SetShapeOutlineCommand(
-                nested.BlockIndex, nested.RunIndex, colorHex, widthPt, dash, nested.ChildPath));
-            InvalidateLayoutAndVisual();
-            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            InvalidateObjectEdit(
+                ObjectEdits.SetShapeOutline(
+                    ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                    colorHex,
+                    widthPt,
+                    dash),
+                "Group");
             return;
         }
         if (SelectedFloatingShapeLocation() is not { } sel) return;
-        _bus.Execute(new SetShapeOutlineCommand(sel.BlockIndex, sel.RunIndex, colorHex, widthPt, dash));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetShapeOutline(
+                ObjectTarget(sel.BlockIndex, sel.RunIndex),
+                colorHex,
+                widthPt,
+                dash),
+            sel.Kind);
     }
 
     /// <summary>
@@ -16255,40 +16169,15 @@ public sealed class DocumentView : Control
     public void RotateSelectedFloating(double angleDeg)
     {
         if (_selectedFloating is not { } sel) return;
-        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
-        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
-
-        if (_selectedFloatingGroupChild is { } child
+        var target = _selectedFloatingGroupChild is { } child
             && child.BlockIndex == sel.BlockIndex
             && child.RunIndex == sel.RunIndex
-            && para.Runs[sel.RunIndex].DrawingGroup is not null)
-        {
-            var transform = GetFloatingGroupChildRotation(
-                child.BlockIndex, child.RunIndex, child.ChildPath);
-            _bus.Execute(new SetDrawingGroupChildRotationCommand(
-                child.BlockIndex, child.RunIndex, child.ChildPath,
-                angleDeg, transform.FlipH, transform.FlipV));
-            InvalidateLayoutAndVisual();
-            Relayout(FallbackWidth);
-            RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
-            return;
-        }
-
-        var run = para.Runs[sel.RunIndex];
-        if (run.Image is { IsFloating: true } img)
-            _bus.Execute(new SetImageRotationCommand(sel.BlockIndex, sel.RunIndex,
-                angleDeg, img.FlipH, img.FlipV));
-        else if (run.Shape is { } shape)
-            _bus.Execute(new SetShapeRotationCommand(sel.BlockIndex, sel.RunIndex,
-                angleDeg, shape.FlipH, shape.FlipV));
-        else if (run.WordArt is { IsFloating: true } wordArt)
-            _bus.Execute(new SetFloatingRotationCommand(sel.BlockIndex, sel.RunIndex,
-                angleDeg, wordArt.FlipH, wordArt.FlipV));
-        else if (run.DrawingGroup is { } group)
-            _bus.Execute(new SetFloatingRotationCommand(sel.BlockIndex, sel.RunIndex,
-                angleDeg, group.FlipH, group.FlipV));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+            ? ObjectTarget(child.BlockIndex, child.RunIndex, child.ChildPath)
+            : ObjectTarget(sel.BlockIndex, sel.RunIndex);
+        InvalidateObjectEdit(
+            ObjectEdits.RotateBy(target, angleDeg),
+            sel.Kind,
+            relayout: target.IsNested);
     }
 
     /// <summary>
@@ -16298,54 +16187,15 @@ public sealed class DocumentView : Control
     public void FlipSelectedFloating(bool horizontal)
     {
         if (_selectedFloating is not { } sel) return;
-        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
-        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
-
-        if (_selectedFloatingGroupChild is { } child
+        var target = _selectedFloatingGroupChild is { } child
             && child.BlockIndex == sel.BlockIndex
             && child.RunIndex == sel.RunIndex
-            && para.Runs[sel.RunIndex].DrawingGroup is not null)
-        {
-            var transform = GetFloatingGroupChildRotation(
-                child.BlockIndex, child.RunIndex, child.ChildPath);
-            var newFlipH = horizontal ? !transform.FlipH : transform.FlipH;
-            var newFlipV = horizontal ? transform.FlipV : !transform.FlipV;
-            _bus.Execute(new SetDrawingGroupChildRotationCommand(
-                child.BlockIndex, child.RunIndex, child.ChildPath,
-                transform.Angle, newFlipH, newFlipV));
-            InvalidateLayoutAndVisual();
-            Relayout(FallbackWidth);
-            RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
-            return;
-        }
-
-        var run = para.Runs[sel.RunIndex];
-        if (run.Image is { IsFloating: true } img)
-        {
-            var newFH = horizontal ? !img.FlipH : img.FlipH;
-            var newFV = horizontal ? img.FlipV : !img.FlipV;
-            _bus.Execute(new SetImageRotationCommand(sel.BlockIndex, sel.RunIndex, img.RotationAngle, newFH, newFV));
-        }
-        else if (run.Shape is { } shape)
-        {
-            var newFH = horizontal ? !shape.FlipH : shape.FlipH;
-            var newFV = horizontal ? shape.FlipV : !shape.FlipV;
-            _bus.Execute(new SetShapeRotationCommand(sel.BlockIndex, sel.RunIndex, shape.RotationAngle, newFH, newFV));
-        }
-        else if (run.WordArt is { IsFloating: true } wordArt)
-        {
-            var newFH = horizontal ? !wordArt.FlipH : wordArt.FlipH;
-            var newFV = horizontal ? wordArt.FlipV : !wordArt.FlipV;
-            _bus.Execute(new SetFloatingRotationCommand(sel.BlockIndex, sel.RunIndex, wordArt.RotationAngle, newFH, newFV));
-        }
-        else if (run.DrawingGroup is { } group)
-        {
-            var newFH = horizontal ? !group.FlipH : group.FlipH;
-            var newFV = horizontal ? group.FlipV : !group.FlipV;
-            _bus.Execute(new SetFloatingRotationCommand(sel.BlockIndex, sel.RunIndex, group.RotationAngle, newFH, newFV));
-        }
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+            ? ObjectTarget(child.BlockIndex, child.RunIndex, child.ChildPath)
+            : ObjectTarget(sel.BlockIndex, sel.RunIndex);
+        InvalidateObjectEdit(
+            ObjectEdits.Flip(target, horizontal),
+            sel.Kind,
+            relayout: target.IsNested);
     }
 
     // ── AV-OBJGROUP: floating-object Group/Ungroup edit API ────────────────────────────────────────
@@ -16358,7 +16208,8 @@ public sealed class DocumentView : Control
         var members = SelectedGroupMemberLocations();
         if (members.Count < 2) return;
 
-        _bus.Execute(new GroupFloatingObjectsCommand(members));
+        if (!ObjectEdits.Group(members).Applied)
+            return;
         _selectedFloating = null;
         _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
@@ -16379,7 +16230,8 @@ public sealed class DocumentView : Control
         if (_selectedFloating is not { Kind: "Group" } sel) return;
         if (!IsGroupSelected) return;
 
-        _bus.Execute(new UngroupFloatingObjectsCommand(sel.BlockIndex, sel.RunIndex));
+        if (!ObjectEdits.Ungroup(ObjectTarget(sel.BlockIndex, sel.RunIndex)).Applied)
+            return;
         _selectedFloating = null;
         _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
@@ -16395,10 +16247,8 @@ public sealed class DocumentView : Control
     public bool ArrangeSelectedFloatingObjects(FloatingObjectArrangeKind kind)
     {
         var members = FloatingArrangeLocations();
-        if (ArrangeFloatingObjectsCommand.CountApplicableObjects(_doc, members) < RequiredArrangeObjectCount(kind))
+        if (!ObjectEdits.Arrange(kind, members).Applied)
             return false;
-
-        _bus.Execute(new ArrangeFloatingObjectsCommand(kind, members));
         _floatDragState = null;
 
         if (_selectedFloating is { } selected)
@@ -16411,35 +16261,29 @@ public sealed class DocumentView : Control
     }
 
     public bool CanArrangeSelectedFloatingObjects(FloatingObjectArrangeKind kind) =>
-        ArrangeFloatingObjectsCommand.CountApplicableObjects(_doc, FloatingArrangeLocations())
-            >= RequiredArrangeObjectCount(kind);
+        ObjectEdits.CanArrange(kind, FloatingArrangeLocations());
 
-    private IReadOnlyList<(int BlockIndex, int RunIndex)> FloatingArrangeLocations()
+    private IReadOnlyList<DocumentObjectTarget> FloatingArrangeLocations()
     {
         var selected = SelectedFloatingArrangeLocations();
         if (selected.Count >= 2)
             return selected;
 
-        return ArrangeFloatingObjectsCommand.CollectFloatingObjectLocations(_doc);
+        return ObjectEdits.CollectFloatingObjects();
     }
 
-    private List<(int BlockIndex, int RunIndex)> SelectedFloatingArrangeLocations()
+    private List<DocumentObjectTarget> SelectedFloatingArrangeLocations()
     {
-        var members = new List<(int BlockIndex, int RunIndex)>();
+        var members = new List<DocumentObjectTarget>();
         foreach (var selected in _selectedFloatingObjects)
         {
-            var member = (selected.BlockIndex, selected.RunIndex);
+            var member = ObjectTarget(selected.BlockIndex, selected.RunIndex);
             if (!members.Contains(member))
                 members.Add(member);
         }
 
         return members;
     }
-
-    private static int RequiredArrangeObjectCount(FloatingObjectArrangeKind kind) =>
-        kind is FloatingObjectArrangeKind.DistributeHorizontal or FloatingObjectArrangeKind.DistributeVertical
-            ? 2
-            : 1;
 
     /// <summary>
     /// AV-CHARTTAB: Change the chart kind (column/bar/line/pie/scatter/area/doughnut) of the selected
@@ -16448,9 +16292,9 @@ public sealed class DocumentView : Control
     public void SetChartType(ChartKind kind)
     {
         if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        _bus.Execute(new SetChartKindCommand(sel.BlockIndex, sel.RunIndex, kind));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetChartKind(ObjectTarget(sel.BlockIndex, sel.RunIndex), kind),
+            sel.Kind);
     }
 
     /// <summary>
@@ -16460,9 +16304,9 @@ public sealed class DocumentView : Control
     public void SetChartStyle(int styleId)
     {
         if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        _bus.Execute(new SetChartStyleCommand(sel.BlockIndex, sel.RunIndex, styleId));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetChartStyle(ObjectTarget(sel.BlockIndex, sel.RunIndex), styleId),
+            sel.Kind);
     }
 
     /// <summary>
@@ -16472,9 +16316,11 @@ public sealed class DocumentView : Control
     public void SetChartColorScheme(string? colorSchemeId)
     {
         if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        _bus.Execute(new SetChartColorSchemeCommand(sel.BlockIndex, sel.RunIndex, colorSchemeId));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetChartColorScheme(
+                ObjectTarget(sel.BlockIndex, sel.RunIndex),
+                colorSchemeId),
+            sel.Kind);
     }
 
     /// <summary>
@@ -16484,9 +16330,9 @@ public sealed class DocumentView : Control
     public void SetChartQuickLayout(ChartQuickLayout layout)
     {
         if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        _bus.Execute(new SetChartQuickLayoutCommand(sel.BlockIndex, sel.RunIndex, layout));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetChartQuickLayout(ObjectTarget(sel.BlockIndex, sel.RunIndex), layout),
+            sel.Kind);
     }
 
     /// <summary>
@@ -16496,16 +16342,9 @@ public sealed class DocumentView : Control
     public void ToggleChartLegend()
     {
         if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
-        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
-        if (para.Runs[sel.RunIndex].Chart is not { } chart) return;
-
-        var state = ChartSmartArtVisualPlanner.BuildChartElementCommandState(chart);
-        if (!state.CanToggleLegend) return;
-
-        _bus.Execute(new SetChartLegendCommand(sel.BlockIndex, sel.RunIndex, !state.IsLegendVisible));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.ToggleChartLegend(ObjectTarget(sel.BlockIndex, sel.RunIndex)),
+            sel.Kind);
     }
 
     /// <summary>
@@ -16515,15 +16354,9 @@ public sealed class DocumentView : Control
     public void ToggleChartTitle()
     {
         if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
-        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
-        if (para.Runs[sel.RunIndex].Chart is not { } chart) return;
-
-        var state = ChartSmartArtVisualPlanner.BuildChartElementCommandState(chart);
-        var title = state.HasChartTitle ? null : "Chart Title";
-        _bus.Execute(new SetChartTitleCommand(sel.BlockIndex, sel.RunIndex, title));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.ToggleChartTitle(ObjectTarget(sel.BlockIndex, sel.RunIndex)),
+            sel.Kind);
     }
 
     /// <summary>Set or clear the selected chart title through the shared undoable command.</summary>
@@ -16531,9 +16364,11 @@ public sealed class DocumentView : Control
     {
         if (_selectedFloating is not { Kind: "Chart" } selected)
             return;
-        _bus.Execute(new SetChartTitleCommand(selected.BlockIndex, selected.RunIndex, title));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetChartTitle(
+                ObjectTarget(selected.BlockIndex, selected.RunIndex),
+                title),
+            selected.Kind);
     }
 
     /// <summary>
@@ -16543,20 +16378,9 @@ public sealed class DocumentView : Control
     public void ToggleChartAxisTitles()
     {
         if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
-        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
-        if (para.Runs[sel.RunIndex].Chart is not { } chart) return;
-
-        var state = ChartSmartArtVisualPlanner.BuildChartElementCommandState(chart);
-        if (!state.CanEditAxisTitles) return;
-
-        var hasStoredAxisTitles = !string.IsNullOrWhiteSpace(chart.CategoryAxisTitle)
-                               || !string.IsNullOrWhiteSpace(chart.ValueAxisTitle);
-        var categoryTitle = hasStoredAxisTitles ? null : "Category Axis";
-        var valueTitle = hasStoredAxisTitles ? null : "Value Axis";
-        _bus.Execute(new SetChartAxisTitlesCommand(sel.BlockIndex, sel.RunIndex, categoryTitle, valueTitle));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.ToggleChartAxisTitles(ObjectTarget(sel.BlockIndex, sel.RunIndex)),
+            sel.Kind);
     }
 
     /// <summary>Set or clear the selected chart axis titles through the shared undoable command.</summary>
@@ -16564,13 +16388,12 @@ public sealed class DocumentView : Control
     {
         if (_selectedFloating is not { Kind: "Chart" } selected)
             return;
-        _bus.Execute(new SetChartAxisTitlesCommand(
-            selected.BlockIndex,
-            selected.RunIndex,
-            categoryTitle,
-            valueTitle));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetChartAxisTitles(
+                ObjectTarget(selected.BlockIndex, selected.RunIndex),
+                categoryTitle,
+                valueTitle),
+            selected.Kind);
     }
 
     /// <summary>
@@ -16580,9 +16403,11 @@ public sealed class DocumentView : Control
     public void ReplaceSelectedChartData(Chart replacement)
     {
         if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        _bus.Execute(new ReplaceChartDataCommand(sel.BlockIndex, sel.RunIndex, replacement));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.ReplaceChartData(
+                ObjectTarget(sel.BlockIndex, sel.RunIndex),
+                replacement),
+            sel.Kind);
     }
 
     /// <summary>
@@ -16602,9 +16427,9 @@ public sealed class DocumentView : Control
     public void SetSmartArtLayout(SmartArtKind kind)
     {
         if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
-        _bus.Execute(new SetSmartArtLayoutCommand(sel.BlockIndex, sel.RunIndex, kind));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetSmartArtLayout(ObjectTarget(sel.BlockIndex, sel.RunIndex), kind),
+            sel.Kind);
     }
 
     /// <summary>
@@ -16614,9 +16439,12 @@ public sealed class DocumentView : Control
     public void SetSmartArtLayout(SmartArtLayoutPreset preset)
     {
         if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
-        _bus.Execute(new SetSmartArtLayoutCommand(sel.BlockIndex, sel.RunIndex, preset.Kind, preset.Id));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetSmartArtLayout(
+                ObjectTarget(sel.BlockIndex, sel.RunIndex),
+                preset.Kind,
+                preset.Id),
+            sel.Kind);
     }
 
     /// <summary>
@@ -16626,9 +16454,11 @@ public sealed class DocumentView : Control
     public void SetSmartArtColor(string? colorSchemeId)
     {
         if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
-        _bus.Execute(new SetSmartArtColorCommand(sel.BlockIndex, sel.RunIndex, colorSchemeId));
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        InvalidateObjectEdit(
+            ObjectEdits.SetSmartArtColor(
+                ObjectTarget(sel.BlockIndex, sel.RunIndex),
+                colorSchemeId),
+            sel.Kind);
     }
 
     /// <summary>Return the currently selected floating SmartArt model, or null for another selection kind.</summary>
@@ -16643,30 +16473,32 @@ public sealed class DocumentView : Control
     /// <summary>Apply a shared structural SmartArt command and retain the floating selection.</summary>
     public void MutateSelectedSmartArt(SmartArtStructureOperation operation)
     {
-        if (_selectedFloating is not { Kind: "SmartArt" } sel
-            || !MutateSmartArtStructureCommand.CanApply(SelectedFloatingSmartArt(), operation))
-        {
+        if (_selectedFloating is not { Kind: "SmartArt" } sel)
             return;
-        }
-
-        _bus.Execute(new MutateSmartArtStructureCommand(sel.BlockIndex, sel.RunIndex, operation));
-        RefreshSelectedSmartArt(sel);
+        if (ObjectEdits.MutateSmartArt(
+                ObjectTarget(sel.BlockIndex, sel.RunIndex),
+                operation).Applied)
+            RefreshSelectedSmartArt(sel);
     }
 
     /// <summary>Replace SmartArt kind and node text through the shared undoable content command.</summary>
     public void ReplaceSelectedSmartArt(SmartArt replacement)
     {
         if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
-        _bus.Execute(new ReplaceSmartArtContentCommand(sel.BlockIndex, sel.RunIndex, replacement));
-        RefreshSelectedSmartArt(sel);
+        if (ObjectEdits.ReplaceSmartArt(
+                ObjectTarget(sel.BlockIndex, sel.RunIndex),
+                replacement).Applied)
+            RefreshSelectedSmartArt(sel);
     }
 
     /// <summary>Apply a shared SmartArt style catalog entry and retain the floating selection.</summary>
     public void SetSmartArtStyle(SmartArtStyle style)
     {
         if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
-        _bus.Execute(new SetSmartArtStyleCommand(sel.BlockIndex, sel.RunIndex, style.Id));
-        RefreshSelectedSmartArt(sel);
+        if (ObjectEdits.SetSmartArtStyle(
+                ObjectTarget(sel.BlockIndex, sel.RunIndex),
+                style.Id).Applied)
+            RefreshSelectedSmartArt(sel);
     }
 
     private void RefreshSelectedSmartArt((int BlockIndex, int RunIndex, string Kind, Rect Rect) sel)

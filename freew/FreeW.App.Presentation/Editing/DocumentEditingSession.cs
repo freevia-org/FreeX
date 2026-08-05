@@ -54,6 +54,7 @@ public sealed class DocumentEditingSession
         Document = TextDocument.CreateEmpty();
         _commands = CreateCommandBus(Document);
         Review = new DocumentReviewEditingSession(this, _revisionDateXml);
+        Objects = new DocumentObjectEditingCoordinator(this);
     }
 
     public event Action? Changed;
@@ -63,6 +64,8 @@ public sealed class DocumentEditingSession
     public DocumentCommandBus Commands => _commands;
 
     public DocumentReviewEditingSession Review { get; }
+
+    public DocumentObjectEditingCoordinator Objects { get; }
 
     /// <summary>Replaces the active document and starts a fresh undo/redo history for it.</summary>
     public void LoadDocument(TextDocument document)

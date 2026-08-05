@@ -117,6 +117,22 @@ public sealed class DocumentView : RichTextBox
     internal static int _renderHfPageCount;
 
     private DocumentCommandBus _commands => _editingSession.Commands;
+    private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
+
+    private static DocumentObjectTarget ObjectTarget(
+        int blockIndex,
+        int runIndex,
+        IReadOnlyList<int>? childPath = null) =>
+        new(blockIndex, runIndex, childPath);
+
+    private bool RenderObjectEdit(DocumentObjectEditResult result)
+    {
+        if (!result.Applied)
+            return false;
+
+        Render();
+        return true;
+    }
     private readonly ScaleTransform _zoomTransform = new(ZoomLevels.Default, ZoomLevels.Default);
     private double _zoomLevel = ZoomLevels.Default;
 
@@ -2070,16 +2086,12 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SetSelectedImageSize(double widthPt, double heightPt = 0)
     {
-        if (widthPt <= 0)
-            return;
         CommitToModel();
-        var (blockIndex, runIndex, image) = SelectedImageLocation();
-        if (image is null)
-            return;
-        var finalHeight = heightPt > 0
-            ? heightPt
-            : (image.WidthPt > 0 ? image.HeightPt / image.WidthPt : 1) * widthPt;
-        _commands.Execute(new SetImageSizeCommand(blockIndex, runIndex, widthPt, finalHeight));
+        var location = SelectedImageLocation();
+        RenderObjectEdit(ObjectEdits.SetImageSize(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            widthPt,
+            heightPt));
     }
 
     /// <summary>
@@ -2305,15 +2317,14 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetShapeKindCommand(
-                nested.BlockIndex, nested.RunIndex, kind, nested.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeKind(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                kind));
             return;
         }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeKindCommand(blockIndex, runIndex, kind));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeKind(ObjectTarget(blockIndex, runIndex), kind));
     }
 
     /// <summary>
@@ -2326,17 +2337,7 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        if (shape.HasCustomGeometry) return; // already freeform
-
-        // Build the matching freeform polygon from the current preset kind.
-        CustomGeometry poly = shape.Kind switch
-        {
-            ShapeKind.Ellipse          => CustomGeometry.EllipsePoly(),
-            ShapeKind.RoundedRectangle => CustomGeometry.RoundedRectPoly(),
-            _                          => CustomGeometry.RectanglePoly(),
-        };
-        _commands.Execute(new SetShapeCustomGeometryCommand(blockIndex, runIndex, poly));
-        Render();
+        RenderObjectEdit(ObjectEdits.ConvertShapeToFreeform(ObjectTarget(blockIndex, runIndex)));
     }
 
     /// <summary>
@@ -2358,16 +2359,9 @@ public sealed class DocumentView : RichTextBox
         {
             if (!nestedShape.HasCustomGeometry)
             {
-                CustomGeometry poly = nestedShape.Kind switch
-                {
-                    ShapeKind.Ellipse => CustomGeometry.EllipsePoly(),
-                    ShapeKind.RoundedRectangle => CustomGeometry.RoundedRectPoly(),
-                    _ => CustomGeometry.RectanglePoly(),
-                };
-                _commands.Execute(new SetShapeCustomGeometryCommand(
+                ObjectEdits.ConvertShapeToFreeform(ObjectTarget(
                     groupLocation.BlockIndex,
                     groupLocation.RunIndex,
-                    poly,
                     selectedChild.ChildPath));
             }
 
@@ -2385,15 +2379,7 @@ public sealed class DocumentView : RichTextBox
         if (shape is null) return;
 
         if (!shape.HasCustomGeometry)
-        {
-            CustomGeometry poly = shape.Kind switch
-            {
-                ShapeKind.Ellipse => CustomGeometry.EllipsePoly(),
-                ShapeKind.RoundedRectangle => CustomGeometry.RoundedRectPoly(),
-                _ => CustomGeometry.RectanglePoly(),
-            };
-            _commands.Execute(new SetShapeCustomGeometryCommand(blockIndex, runIndex, poly));
-        }
+            ObjectEdits.ConvertShapeToFreeform(ObjectTarget(blockIndex, runIndex));
 
         _shapeEditPointsTarget = new ShapeEditPointsTarget(blockIndex, runIndex, shape);
         SyncShapeEditPointsAdorner();
@@ -2415,13 +2401,11 @@ public sealed class DocumentView : RichTextBox
         if (!IsCurrentShapeEditPointsTarget(target))
             return;
 
-        _commands.Execute(new MoveShapeEditPointCommand(
-            target.BlockIndex,
-            target.RunIndex,
+        ObjectEdits.MoveShapeEditPoint(
+            ObjectTarget(target.BlockIndex, target.RunIndex, target.ChildPath),
             segmentIndex,
             x,
-            y,
-            target.ChildPath));
+            y);
     }
 
     /// <summary>
@@ -2432,15 +2416,14 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetShapeFillCommand(
-                nested.BlockIndex, nested.RunIndex, colorHex, nested.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeFill(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                colorHex));
             return;
         }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeFillCommand(blockIndex, runIndex, colorHex));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeFill(ObjectTarget(blockIndex, runIndex), colorHex));
     }
 
     /// <summary>
@@ -2451,15 +2434,20 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetShapeOutlineCommand(
-                nested.BlockIndex, nested.RunIndex, colorHex, widthPt, dash, nested.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeOutline(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                colorHex,
+                widthPt,
+                dash));
             return;
         }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeOutlineCommand(blockIndex, runIndex, colorHex, widthPt, dash));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeOutline(
+            ObjectTarget(blockIndex, runIndex),
+            colorHex,
+            widthPt,
+            dash));
     }
 
     /// <summary>
@@ -2467,19 +2455,21 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SetSelectedShapeSize(double widthPt, double heightPt)
     {
-        if (widthPt <= 0 || heightPt <= 0) return;
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetDrawingGroupChildSizeCommand(
-                nested.BlockIndex, nested.RunIndex, nested.ChildPath, widthPt, heightPt));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeSize(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                widthPt,
+                heightPt));
             return;
         }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeSizeCommand(blockIndex, runIndex, widthPt, heightPt));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeSize(
+            ObjectTarget(blockIndex, runIndex),
+            widthPt,
+            heightPt));
     }
 
     /// <summary>
@@ -2488,18 +2478,16 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedShapeAltText(string? altText)
     {
         CommitToModel();
-        var normalized = string.IsNullOrWhiteSpace(altText) ? null : altText!.Trim();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetShapeAltTextCommand(
-                nested.BlockIndex, nested.RunIndex, normalized, nested.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeAltText(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                altText));
             return;
         }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeAltTextCommand(blockIndex, runIndex, normalized));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeAltText(ObjectTarget(blockIndex, runIndex), altText));
     }
 
     /// <summary>
@@ -2518,19 +2506,20 @@ public sealed class DocumentView : RichTextBox
             && FindFloatingObjectLocation(selectedChild.RootGroup) is var groupLocation
             && groupLocation.BlockIndex >= 0)
         {
-            _commands.Execute(new SetShapeTextDirectionCommand(
-                groupLocation.BlockIndex,
-                groupLocation.RunIndex,
-                direction,
-                selectedChild.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeTextDirection(
+                ObjectTarget(
+                    groupLocation.BlockIndex,
+                    groupLocation.RunIndex,
+                    selectedChild.ChildPath),
+                direction));
             return;
         }
 
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeTextDirectionCommand(blockIndex, runIndex, direction));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeTextDirection(
+            ObjectTarget(blockIndex, runIndex),
+            direction));
     }
 
     /// <summary>
@@ -2551,22 +2540,21 @@ public sealed class DocumentView : RichTextBox
             && FindFloatingObjectLocation(selectedChild.RootGroup) is var groupLocation
             && groupLocation.BlockIndex >= 0)
         {
-            _commands.Execute(new SetShapeTextParagraphAlignmentCommand(
-                groupLocation.BlockIndex,
-                groupLocation.RunIndex,
-                alignment,
-                selectedChild.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeAlignment(
+                ObjectTarget(
+                    groupLocation.BlockIndex,
+                    groupLocation.RunIndex,
+                    selectedChild.ChildPath),
+                alignment));
             return;
         }
 
-        var (blockIndex, _, shape) = SelectedShapeLocation();
-        if (shape is null || blockIndex < 0 || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
+        var (blockIndex, runIndex, shape) = SelectedShapeLocation();
+        if (shape is null)
             return;
-        _commands.Execute(new SetParagraphFormattingCommand(
-            blockIndex,
-            paragraph.Formatting with { Alignment = alignment }));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeAlignment(
+            ObjectTarget(blockIndex, runIndex),
+            alignment));
     }
 
     // ── WordArt mutation methods (used by drawing-format contextual tab commands) ───────────────
@@ -2591,15 +2579,14 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new ApplyShapeStyleCommand(
-                nested.BlockIndex, nested.RunIndex, preset, nested.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.ApplyShapeStyle(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                preset));
             return;
         }
         var (blockIndex, runIndex, _) = SelectedShapeLocation();
         if (blockIndex < 0) return;
-        _commands.Execute(new ApplyShapeStyleCommand(blockIndex, runIndex, preset));
-        Render();
+        RenderObjectEdit(ObjectEdits.ApplyShapeStyle(ObjectTarget(blockIndex, runIndex), preset));
     }
 
     /// <summary>
@@ -2610,15 +2597,14 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetShapeExtendedFillCommand(
-                nested.BlockIndex, nested.RunIndex, fill, nested.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeExtendedFill(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                fill));
             return;
         }
         var (blockIndex, runIndex, _) = SelectedShapeLocation();
         if (blockIndex < 0) return;
-        _commands.Execute(new SetShapeExtendedFillCommand(blockIndex, runIndex, fill));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeExtendedFill(ObjectTarget(blockIndex, runIndex), fill));
     }
 
     /// <summary>
@@ -2629,15 +2615,14 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetShapeEffectsCommand(
-                nested.BlockIndex, nested.RunIndex, effects, nested.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeEffects(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                effects));
             return;
         }
         var (blockIndex, runIndex, _) = SelectedShapeLocation();
         if (blockIndex < 0) return;
-        _commands.Execute(new SetShapeEffectsCommand(blockIndex, runIndex, effects));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeEffects(ObjectTarget(blockIndex, runIndex), effects));
     }
 
     /// <summary>
@@ -2650,8 +2635,7 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeWrappingCommand(blockIndex, runIndex, wrapping));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetWrap(ObjectTarget(blockIndex, runIndex), wrapping));
     }
 
     /// <summary>
@@ -2663,8 +2647,11 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeRotationCommand(blockIndex, runIndex, angleDeg, flipH, flipV));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetRotation(
+            ObjectTarget(blockIndex, runIndex),
+            angleDeg,
+            flipH,
+            flipV));
     }
 
     /// <summary>Return the selected direct shape position or nested shape's group-local offset.</summary>
@@ -2711,19 +2698,20 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetDrawingGroupChildPositionCommand(
-                nested.BlockIndex, nested.RunIndex, nested.ChildPath,
-                horizontalOffsetPt, verticalOffsetPt));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapePosition(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                horizontalOffsetPt,
+                verticalOffsetPt,
+                horizontalAnchor,
+                verticalAnchor));
             return;
         }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapePositionCommand(
-            blockIndex, runIndex,
+        RenderObjectEdit(ObjectEdits.SetShapePosition(
+            ObjectTarget(blockIndex, runIndex),
             horizontalOffsetPt, verticalOffsetPt,
             horizontalAnchor, verticalAnchor));
-        Render();
     }
 
     /// <summary>
@@ -2763,8 +2751,9 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new SetChartKindCommand(location.BlockIndex, location.RunIndex, kind));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetChartKind(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            kind));
     }
 
     /// <summary>
@@ -2774,14 +2763,10 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         var location = SelectedChartLocation();
-        var chart = location.Chart;
-        if (chart is null)
+        if (location.Chart is null)
             return;
-        var state = ChartSmartArtVisualPlanner.BuildChartElementCommandState(chart);
-        if (!state.CanToggleLegend)
-            return;
-        _commands.Execute(new SetChartLegendCommand(location.BlockIndex, location.RunIndex, !state.IsLegendVisible));
-        Render();
+        RenderObjectEdit(ObjectEdits.ToggleChartLegend(
+            ObjectTarget(location.BlockIndex, location.RunIndex)));
     }
 
     /// <summary>
@@ -2794,8 +2779,9 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new SetChartTitleCommand(location.BlockIndex, location.RunIndex, title));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetChartTitle(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            title));
     }
 
     /// <summary>
@@ -2808,12 +2794,10 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new SetChartAxisTitlesCommand(
-            location.BlockIndex,
-            location.RunIndex,
+        RenderObjectEdit(ObjectEdits.SetChartAxisTitles(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
             categoryAxisTitle,
             valueAxisTitle));
-        Render();
     }
 
     /// <summary>
@@ -2822,18 +2806,14 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SetSelectedChartSize(double widthPt, double heightPt)
     {
-        if (widthPt <= 0 || heightPt <= 0)
-            return;
         CommitToModel();
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new SetFloatingSizeCommand(
-            location.BlockIndex,
-            location.RunIndex,
+        RenderObjectEdit(ObjectEdits.SetSize(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
             widthPt,
             heightPt));
-        Render();
     }
 
     /// <summary>
@@ -2847,11 +2827,9 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new ReplaceChartDataCommand(
-            location.BlockIndex,
-            location.RunIndex,
+        RenderObjectEdit(ObjectEdits.ReplaceChartData(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
             replacement));
-        Render();
     }
 
     /// <summary>
@@ -2879,7 +2857,9 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new SetChartStyleCommand(location.BlockIndex, location.RunIndex, style.Id));
+        RenderObjectEdit(ObjectEdits.SetChartStyle(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            style.Id));
     }
 
     /// <summary>
@@ -2892,7 +2872,9 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new SetChartColorSchemeCommand(location.BlockIndex, location.RunIndex, scheme.Id));
+        RenderObjectEdit(ObjectEdits.SetChartColorScheme(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            scheme.Id));
     }
 
     /// <summary>
@@ -2905,7 +2887,9 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new SetChartQuickLayoutCommand(location.BlockIndex, location.RunIndex, layout));
+        RenderObjectEdit(ObjectEdits.SetChartQuickLayout(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            layout));
     }
 
     // ── SmartArt selection (mirrors SelectedChart / SelectedChartLocation) ────────────────────────
@@ -3043,7 +3027,9 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var location = SelectedSmartArtLocation();
         if (location.SmartArt is null) return;
-        _commands.Execute(new ReplaceSmartArtContentCommand(location.BlockIndex, location.RunIndex, replacement));
+        RenderObjectEdit(ObjectEdits.ReplaceSmartArt(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            replacement));
     }
 
     /// <summary>
@@ -3056,12 +3042,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var location = SelectedSmartArtLocation();
         if (location.SmartArt is null) return;
-        _commands.Execute(new SetSmartArtLayoutCommand(
-            location.BlockIndex,
-            location.RunIndex,
+        RenderObjectEdit(ObjectEdits.SetSmartArtLayout(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
             preset.Kind,
             preset.Id));
-        Render();
     }
 
     /// <summary>
@@ -3074,11 +3058,9 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var location = SelectedSmartArtLocation();
         if (location.SmartArt is null) return;
-        _commands.Execute(new SetSmartArtColorCommand(
-            location.BlockIndex,
-            location.RunIndex,
+        RenderObjectEdit(ObjectEdits.SetSmartArtColor(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
             scheme.Id));
-        Render();
     }
 
     /// <summary>
@@ -3091,17 +3073,20 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var location = SelectedSmartArtLocation();
         if (location.SmartArt is null) return;
-        _commands.Execute(new SetSmartArtStyleCommand(location.BlockIndex, location.RunIndex, style.Id));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetSmartArtStyle(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            style.Id));
     }
 
     private void ExecuteSmartArtStructureCommand(SmartArtStructureOperation operation)
     {
         CommitToModel();
         var location = SelectedSmartArtLocation();
-        if (!MutateSmartArtStructureCommand.CanApply(location.SmartArt, operation))
+        if (location.SmartArt is null)
             return;
-        _commands.Execute(new MutateSmartArtStructureCommand(location.BlockIndex, location.RunIndex, operation));
+        RenderObjectEdit(ObjectEdits.MutateSmartArt(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            operation));
     }
 
     /// <summary>
@@ -3117,8 +3102,7 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null)
             return;
-        _commands.Execute(new SetImageAltTextCommand(blockIndex, runIndex, altText));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageAltText(ObjectTarget(blockIndex, runIndex), altText));
     }
 
     /// <summary>
@@ -3129,13 +3113,12 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedImageAlignment(ModelTextAlignment alignment)
     {
         CommitToModel();
-        var (blockIndex, _, image) = SelectedImageLocation();
-        if (image is null || blockIndex < 0 || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null)
             return;
-        _commands.Execute(new SetParagraphFormattingCommand(
-            blockIndex,
-            paragraph.Formatting with { Alignment = alignment }));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageAlignment(
+            ObjectTarget(blockIndex, runIndex),
+            alignment));
     }
 
     /// <summary>
@@ -3148,8 +3131,7 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null)
             return;
-        _commands.Execute(new SetFloatingWrapCommand(blockIndex, runIndex, wrapping));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetWrap(ObjectTarget(blockIndex, runIndex), wrapping));
     }
 
     /// <summary>
@@ -3161,8 +3143,11 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageRotationCommand(blockIndex, runIndex, angleDeg, flipH, flipV));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageRotation(
+            ObjectTarget(blockIndex, runIndex),
+            angleDeg,
+            flipH,
+            flipV));
     }
 
     /// <summary>
@@ -3174,8 +3159,12 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageCropCommand(blockIndex, runIndex, left, right, top, bottom));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageCrop(
+            ObjectTarget(blockIndex, runIndex),
+            left,
+            right,
+            top,
+            bottom));
     }
 
     /// <summary>
@@ -3188,8 +3177,12 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageAdjustCommand(blockIndex, runIndex, brightnessPct, contrastPct, saturationPct, transparencyPct));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageAdjust(
+            ObjectTarget(blockIndex, runIndex),
+            brightnessPct,
+            contrastPct,
+            saturationPct,
+            transparencyPct));
     }
 
     /// <summary>
@@ -3201,8 +3194,11 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageBorderCommand(blockIndex, runIndex, colorHex, widthPt, dash));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageBorder(
+            ObjectTarget(blockIndex, runIndex),
+            colorHex,
+            widthPt,
+            dash));
     }
 
     /// <summary>
@@ -3216,11 +3212,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageEffectCommand(
-            blockIndex, runIndex,
+        RenderObjectEdit(ObjectEdits.SetImageEffect(
+            ObjectTarget(blockIndex, runIndex),
             shadowPreset, glowSizePt, glowColorHex,
             reflectionPreset, softEdgePt, bevelPreset));
-        Render();
     }
 
     /// <summary>
@@ -3232,8 +3227,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageRecolorCommand(blockIndex, runIndex, mode, colorTemperature));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageRecolor(
+            ObjectTarget(blockIndex, runIndex),
+            mode,
+            colorTemperature));
     }
 
     /// <summary>
@@ -3246,8 +3243,9 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageArtisticEffectCommand(blockIndex, runIndex, effect));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageArtisticEffect(
+            ObjectTarget(blockIndex, runIndex),
+            effect));
     }
 
     /// <summary>
@@ -3261,11 +3259,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageStyleCommand(
-            blockIndex, runIndex,
+        RenderObjectEdit(ObjectEdits.SetImageStyle(
+            ObjectTarget(blockIndex, runIndex),
             stylePreset, borderColorHex, borderWidthPt, borderDash,
             shadowPreset, reflectionPreset, softEdgePt));
-        Render();
     }
 
     /// <summary>Apply a shared Picture Styles catalog preset to the selected picture.</summary>
@@ -3275,8 +3272,7 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageStyleCommand(blockIndex, runIndex, preset));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageStyle(ObjectTarget(blockIndex, runIndex), preset));
     }
 
     /// <summary>
@@ -3289,18 +3285,7 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-
-        var naturalSize = ImageResetCommandPlanner.BuildNaturalSize(
-            image.OriginalPixelWidth,
-            image.OriginalPixelHeight,
-            image.WidthPt,
-            image.HeightPt);
-        _commands.Execute(new ResetImageSizeCommand(
-            blockIndex,
-            runIndex,
-            naturalSize.WidthPt,
-            naturalSize.HeightPt));
-        Render();
+        RenderObjectEdit(ObjectEdits.ResetImage(ObjectTarget(blockIndex, runIndex)));
     }
 
     /// <summary>
@@ -3314,11 +3299,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImagePositionCommand(
-            blockIndex, runIndex,
+        RenderObjectEdit(ObjectEdits.SetPosition(
+            ObjectTarget(blockIndex, runIndex),
             horizontalOffsetPt, verticalOffsetPt,
             horizontalAnchor, verticalAnchor));
-        Render();
     }
 
     /// <summary>
@@ -7710,21 +7694,12 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0)
             return false;
 
-        if (!DrawingGroupChildPathResolver.TryGetChild(
-                selected.RootGroup,
-                selected.ChildPath,
-                out var owningGroup,
-                out _))
+        var result = ObjectEdits.MoveGroupChildBy(
+            ObjectTarget(blockIndex, runIndex, selected.ChildPath),
+            dxPt,
+            dyPt);
+        if (!result.Applied)
             return false;
-
-        SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(owningGroup, selected.ChildIndex);
-        var offset = owningGroup.ChildOffsets[selected.ChildIndex];
-        _commands.Execute(new SetDrawingGroupChildPositionCommand(
-            blockIndex,
-            runIndex,
-            selected.ChildPath,
-            offset.X + dxPt,
-            offset.Y + dyPt));
         SyncFloatingObjectsCanvas();
         return true;
     }
@@ -7744,35 +7719,14 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0)
             return false;
 
-        if (!DrawingGroupChildPathResolver.TryGetChild(
-                selected.RootGroup,
-                selected.ChildPath,
-                out var owningGroup,
-                out _))
+        var result = ObjectEdits.ResizeGroupChild(
+            ObjectTarget(blockIndex, runIndex, selected.ChildPath),
+            widthPt,
+            heightPt,
+            dxPt,
+            dyPt);
+        if (!result.Applied)
             return false;
-
-        var commands = new List<IDocumentCommand>
-        {
-            new SetDrawingGroupChildSizeCommand(
-                blockIndex,
-                runIndex,
-                selected.ChildPath,
-                widthPt,
-                heightPt)
-        };
-        if (Math.Abs(dxPt) > 0.01 || Math.Abs(dyPt) > 0.01)
-        {
-            SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(owningGroup, selected.ChildIndex);
-            var offset = owningGroup.ChildOffsets[selected.ChildIndex];
-            commands.Add(new SetDrawingGroupChildPositionCommand(
-                blockIndex,
-                runIndex,
-                selected.ChildPath,
-                offset.X + dxPt,
-                offset.Y + dyPt));
-        }
-
-        _commands.Execute(new CompositeDocumentCommand("Resize Group Child", commands));
         SyncFloatingObjectsCanvas();
         return true;
     }
@@ -7804,192 +7758,42 @@ public sealed class DocumentView : RichTextBox
     public bool RotateSelectedFloating(double angleDeg)
     {
         CommitToModel();
-
-        if (SelectedFloatingGroupChildTransform() is { } child)
-        {
-            _commands.Execute(new SetDrawingGroupChildRotationCommand(
-                child.BlockIndex,
-                child.RunIndex,
-                child.ChildPath,
-                AddRotation(child.Angle, angleDeg),
-                child.FlipH,
-                child.FlipV));
-            Render();
-            return true;
-        }
-
-        if (SelectedImageLocation() is { Image: { } image } imageLocation)
-        {
-            _commands.Execute(new SetImageRotationCommand(
-                imageLocation.BlockIndex,
-                imageLocation.RunIndex,
-                AddRotation(image.RotationAngle, angleDeg),
-                image.FlipH,
-                image.FlipV));
-            Render();
-            return true;
-        }
-
-        if (SelectedShapeLocation() is { Shape: { } shape } shapeLocation)
-        {
-            _commands.Execute(new SetShapeRotationCommand(
-                shapeLocation.BlockIndex,
-                shapeLocation.RunIndex,
-                AddRotation(shape.RotationAngle, angleDeg),
-                shape.FlipH,
-                shape.FlipV));
-            Render();
-            return true;
-        }
-
-        if (SelectedFloatingObjectTransform() is not { } selected)
-            return false;
-
-        return TrySetSelectedFloatingRotation(
-            AddRotation(selected.Angle, angleDeg),
-            flipH: null,
-            flipV: null);
+        return SelectedFloatingObjectTarget() is { } target
+            && RenderObjectEdit(ObjectEdits.RotateBy(target, angleDeg));
     }
 
     /// <summary>Flip the selected floating object through the same shared transform route as rotation.</summary>
     public bool FlipSelectedFloating(bool horizontal)
     {
         CommitToModel();
-
-        if (SelectedFloatingGroupChildTransform() is { } child)
-        {
-            _commands.Execute(new SetDrawingGroupChildRotationCommand(
-                child.BlockIndex,
-                child.RunIndex,
-                child.ChildPath,
-                child.Angle,
-                horizontal ? !child.FlipH : child.FlipH,
-                horizontal ? child.FlipV : !child.FlipV));
-            Render();
-            return true;
-        }
-
-        if (SelectedImageLocation() is { Image: { } image } imageLocation)
-        {
-            _commands.Execute(new SetImageRotationCommand(
-                imageLocation.BlockIndex,
-                imageLocation.RunIndex,
-                image.RotationAngle,
-                horizontal ? !image.FlipH : image.FlipH,
-                horizontal ? image.FlipV : !image.FlipV));
-            Render();
-            return true;
-        }
-
-        if (SelectedShapeLocation() is { Shape: { } shape } shapeLocation)
-        {
-            _commands.Execute(new SetShapeRotationCommand(
-                shapeLocation.BlockIndex,
-                shapeLocation.RunIndex,
-                shape.RotationAngle,
-                horizontal ? !shape.FlipH : shape.FlipH,
-                horizontal ? shape.FlipV : !shape.FlipV));
-            Render();
-            return true;
-        }
-
-        if (SelectedFloatingObjectTransform() is { } selected)
-        {
-            return TrySetSelectedFloatingRotation(
-                selected.Angle,
-                horizontal ? !selected.FlipH : selected.FlipH,
-                horizontal ? selected.FlipV : !selected.FlipV);
-        }
-
-        return false;
+        return SelectedFloatingObjectTarget() is { } target
+            && RenderObjectEdit(ObjectEdits.Flip(target, horizontal));
     }
 
-    private bool TrySetSelectedFloatingRotation(double angleDeg, bool? flipH, bool? flipV)
+    private DocumentObjectTarget? SelectedFloatingObjectTarget()
     {
-        if (SelectedFloatingObjectTransform() is not { } selected)
-            return false;
+        if (_selectedFloatingGroupChild is { } child)
+        {
+            var groupLocation = FindFloatingObjectLocation(child.RootGroup);
+            if (groupLocation.BlockIndex >= 0)
+                return ObjectTarget(
+                    groupLocation.BlockIndex,
+                    groupLocation.RunIndex,
+                    child.ChildPath);
+        }
 
-        _commands.Execute(new SetFloatingRotationCommand(
-            selected.BlockIndex,
-            selected.RunIndex,
-            angleDeg,
-            flipH ?? selected.FlipH,
-            flipV ?? selected.FlipV));
-        Render();
-        return true;
-    }
+        var imageLocation = SelectedImageLocation();
+        if (imageLocation.Image is not null)
+            return ObjectTarget(imageLocation.BlockIndex, imageLocation.RunIndex);
 
-    private (int BlockIndex, int RunIndex, IReadOnlyList<int> ChildPath,
-        double Angle, bool FlipH, bool FlipV)? SelectedFloatingGroupChildTransform()
-    {
-        if (_selectedFloatingGroupChild is not { } selected)
-            return null;
-
-        var location = FindFloatingObjectLocation(selected.RootGroup);
-        if (location.BlockIndex < 0
-            || !DrawingGroupChildPathResolver.TryGetChild(
-                selected.RootGroup,
-                selected.ChildPath,
-                out _,
-                out var child))
-            return null;
-
-        var transform = GetDrawingGroupChildTransform(child);
-        return (
-            location.BlockIndex,
-            location.RunIndex,
-            selected.ChildPath,
-            transform.Angle,
-            transform.FlipH,
-            transform.FlipV);
-    }
-
-    private (int BlockIndex, int RunIndex, double Angle, bool FlipH, bool FlipV)? SelectedFloatingObjectTransform()
-    {
         if (_selectedFloatingObject is null)
             return null;
 
         var location = FindFloatingObjectLocation(_selectedFloatingObject);
-        if (location.BlockIndex < 0
-            || location.BlockIndex >= _model.Blocks.Count
-            || _model.Blocks[location.BlockIndex] is not ModelParagraph paragraph
-            || location.RunIndex < 0
-            || location.RunIndex >= paragraph.Runs.Count)
-            return null;
-
-        var run = paragraph.Runs[location.RunIndex];
-        var transform = run.Image is { } image && ReferenceEquals(image, _selectedFloatingObject)
-            ? (image.RotationAngle, image.FlipH, image.FlipV)
-            : run.Shape is { } shape && ReferenceEquals(shape, _selectedFloatingObject)
-                ? (shape.RotationAngle, shape.FlipH, shape.FlipV)
-                : run.Chart is { } chart && ReferenceEquals(chart, _selectedFloatingObject)
-                    ? (chart.RotationAngle, chart.FlipH, chart.FlipV)
-                    : run.SmartArt is { } smartArt && ReferenceEquals(smartArt, _selectedFloatingObject)
-                        ? (smartArt.RotationAngle, smartArt.FlipH, smartArt.FlipV)
-                        : run.WordArt is { } wordArt && ReferenceEquals(wordArt, _selectedFloatingObject)
-                            ? (wordArt.RotationAngle, wordArt.FlipH, wordArt.FlipV)
-                            : run.DrawingGroup is { } group && ReferenceEquals(group, _selectedFloatingObject)
-                                ? (group.RotationAngle, group.FlipH, group.FlipV)
-                                : (double.NaN, false, false);
-
-        return double.IsNaN(transform.Item1)
-            ? null
-            : (location.BlockIndex, location.RunIndex, transform.Item1, transform.Item2, transform.Item3);
+        return location.BlockIndex >= 0
+            ? ObjectTarget(location.BlockIndex, location.RunIndex)
+            : null;
     }
-
-    private static (double Angle, bool FlipH, bool FlipV) GetDrawingGroupChildTransform(object child) => child switch
-    {
-        InlineImage image => (image.RotationAngle, image.FlipH, image.FlipV),
-        Shape shape => (shape.RotationAngle, shape.FlipH, shape.FlipV),
-        Chart chart => (chart.RotationAngle, chart.FlipH, chart.FlipV),
-        SmartArt smartArt => (smartArt.RotationAngle, smartArt.FlipH, smartArt.FlipV),
-        WordArt wordArt => (wordArt.RotationAngle, wordArt.FlipH, wordArt.FlipV),
-        FreeW.Core.Model.DrawingGroup group => (group.RotationAngle, group.FlipH, group.FlipV),
-        _ => (0, false, false)
-    };
-
-    private static double AddRotation(double currentAngle, double delta) =>
-        (currentAngle + delta + 360) % 360;
 
     /// <summary>
     /// Adds z-order commands to the method set. Called by the host via the ribbon command bus.
@@ -8007,8 +7811,11 @@ public sealed class DocumentView : RichTextBox
             var (groupBlockIndex, groupRunIndex) = FindFloatingObjectLocation(selectedChild.RootGroup);
             if (groupBlockIndex < 0)
                 return false;
-            _commands.Execute(new ChangeDrawingGroupChildZOrderCommand(
-                groupBlockIndex, groupRunIndex, selectedChild.ChildPath, operation));
+            var result = ObjectEdits.ChangeZOrder(
+                ObjectTarget(groupBlockIndex, groupRunIndex, selectedChild.ChildPath),
+                operation);
+            if (!result.Applied)
+                return false;
             RestoreSelectedFloatingGroupChildPath(child);
             SyncFloatingObjectsCanvas();
             return true;
@@ -8017,7 +7824,8 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is { IsFloating: true })
         {
-            _commands.Execute(new ChangeZOrderCommand(blockIndex, runIndex, operation));
+            if (!ObjectEdits.ChangeZOrder(ObjectTarget(blockIndex, runIndex), operation).Applied)
+                return false;
             SyncFloatingObjectsCanvas();
             return true;
         }
@@ -8026,7 +7834,8 @@ public sealed class DocumentView : RichTextBox
             var (bi, ri) = FindFloatingObjectLocation(_selectedFloatingObject);
             if (bi >= 0)
             {
-                _commands.Execute(new ChangeZOrderCommand(bi, ri, operation));
+                if (!ObjectEdits.ChangeZOrder(ObjectTarget(bi, ri), operation).Applied)
+                    return false;
                 SyncFloatingObjectsCanvas();
                 return true;
             }
@@ -8048,24 +7857,25 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
 
         // Collect (blockIndex, runIndex) for each selected floating object.
-        var members = new List<(int Bi, int Ri)>();
+        var members = new List<DocumentObjectTarget>();
         foreach (var obj in _selectedFloatingObjects)
         {
             if (obj is InlineImage img)
             {
                 var (bi, ri, _) = SelectedImageLocationForObject(img);
-                if (bi >= 0) members.Add((bi, ri));
+                if (bi >= 0) members.Add(ObjectTarget(bi, ri));
             }
             else
             {
                 var (bi, ri) = FindFloatingObjectLocation(obj);
-                if (bi >= 0) members.Add((bi, ri));
+                if (bi >= 0) members.Add(ObjectTarget(bi, ri));
             }
         }
 
         if (members.Count < 2) return;
 
-        _commands.Execute(new GroupFloatingObjectsCommand(members));
+        if (!ObjectEdits.Group(members).Applied)
+            return;
         _selectedFloatingObjects.Clear();
         _selectedFloatingGroupChild = null;
         _selectedFloatingImage = null;
@@ -8085,7 +7895,8 @@ public sealed class DocumentView : RichTextBox
         var (bi, ri) = FindFloatingObjectLocation(group);
         if (bi < 0) return;
 
-        _commands.Execute(new UngroupFloatingObjectsCommand(bi, ri));
+        if (!ObjectEdits.Ungroup(ObjectTarget(bi, ri)).Applied)
+            return;
         _selectedFloatingObjects.Clear();
         _selectedFloatingGroupChild = null;
         _selectedFloatingImage = null;
@@ -8102,26 +7913,24 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
 
         var members = FloatingArrangeLocations();
-        if (ArrangeFloatingObjectsCommand.CountApplicableObjects(_model, members) < RequiredArrangeObjectCount(kind))
+        if (!ObjectEdits.Arrange(kind, members).Applied)
             return false;
-
-        _commands.Execute(new ArrangeFloatingObjectsCommand(kind, members));
         SyncFloatingObjectsCanvas();
         return true;
     }
 
-    private IReadOnlyList<(int BlockIndex, int RunIndex)> FloatingArrangeLocations()
+    private IReadOnlyList<DocumentObjectTarget> FloatingArrangeLocations()
     {
         var selected = SelectedFloatingArrangeLocations();
         if (selected.Count >= 2)
             return selected;
 
-        return ArrangeFloatingObjectsCommand.CollectFloatingObjectLocations(_model);
+        return ObjectEdits.CollectFloatingObjects();
     }
 
-    private List<(int BlockIndex, int RunIndex)> SelectedFloatingArrangeLocations()
+    private List<DocumentObjectTarget> SelectedFloatingArrangeLocations()
     {
-        var members = new List<(int BlockIndex, int RunIndex)>();
+        var members = new List<DocumentObjectTarget>();
         foreach (var obj in _selectedFloatingObjects)
         {
             (int BlockIndex, int RunIndex) location = obj is InlineImage image
@@ -8130,17 +7939,16 @@ public sealed class DocumentView : RichTextBox
                     : (-1, -1)
                 : FindFloatingObjectLocation(obj);
 
-            if (location.BlockIndex >= 0 && !members.Contains(location))
-                members.Add(location);
+            if (location.BlockIndex >= 0)
+            {
+                var target = ObjectTarget(location.BlockIndex, location.RunIndex);
+                if (!members.Contains(target))
+                    members.Add(target);
+            }
         }
 
         return members;
     }
-
-    private static int RequiredArrangeObjectCount(FloatingObjectArrangeKind kind) =>
-        kind is FloatingObjectArrangeKind.DistributeHorizontal or FloatingObjectArrangeKind.DistributeVertical
-            ? 2
-            : 1;
 
     private (int BlockIndex, int RunIndex, InlineImage? Image) SelectedImageLocationForObject(InlineImage target)
     {
