@@ -798,6 +798,14 @@ public sealed class ChartShape
     public bool HasAutomaticTitle { get; set; }
 
     /// <summary>
+    /// True when an authoring command explicitly changed or removed a native
+    /// ChartEx title. A false value lets preserved native XML remain authoritative
+    /// when the high-level model has not materialized that component yet.
+    /// </summary>
+    public bool ChartExTitleEditRequested { get; set; }
+
+
+    /// <summary>
     /// Default chart text properties from <c>c:chartSpace/c:txPr</c>. These apply to
     /// chart-owned text such as axes, legends, and data labels when no more-specific
     /// text properties are authored.
@@ -836,6 +844,13 @@ public sealed class ChartShape
 
     /// <summary>Optional independent formatting for legend text.</summary>
     public ChartTextStyle? LegendTextStyle { get; set; }
+
+    /// <summary>
+    /// True when an authoring command explicitly changed or removed a native
+    /// ChartEx legend. A false value preserves an untouched native legend node.
+    /// </summary>
+    public bool ChartExLegendEditRequested { get; set; }
+
 
     /// <summary>True when OOXML <c>c:varyColors</c> asks chart points to use independent fallback colors.</summary>
     public bool VaryColors { get; set; }
