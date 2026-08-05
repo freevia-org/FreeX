@@ -7,12 +7,11 @@ namespace FreeP.App.Host;
 /// <summary>WPF-only writer for the shared presentation-pane accessibility contract.</summary>
 internal sealed class PresentationPaneAccessibilityAdapter
 {
-    private readonly Dictionary<string, PresentationPaneAccessibilityState> _states = new(StringComparer.Ordinal);
+    private readonly PresentationPaneAccessibilitySession _session = new();
 
     public void ApplyPane(FrameworkElement control, string paneId, bool isVisible, int itemCount = 0, int selectedIndex = -1)
     {
-        ApplyPaneMetadata(control, paneId, isVisible, itemCount, selectedIndex);
-        _states[paneId] = new PresentationPaneAccessibilityState(paneId, isVisible, itemCount, selectedIndex);
+        ApplyPaneProjection(control, _session.UpdatePane(paneId, isVisible, itemCount, selectedIndex));
     }
 
     public static void ApplyPaneMetadata(
@@ -22,11 +21,9 @@ internal sealed class PresentationPaneAccessibilityAdapter
         int itemCount = 0,
         int selectedIndex = -1)
     {
-        var descriptor = PresentationPaneAccessibilityPlanner.Get(paneId);
-        AutomationProperties.SetAutomationId(control, descriptor.AutomationId);
-        AutomationProperties.SetName(control, descriptor.Name);
-        AutomationProperties.SetHelpText(control, descriptor.HelpText);
-        AutomationProperties.SetItemStatus(control, FormatStatus(isVisible, descriptor.Order));
+        ApplyPaneProjection(
+            control,
+            PresentationPaneAccessibilityPlanner.ProjectPane(paneId, isVisible, itemCount, selectedIndex));
     }
 
     public static void ApplyItem(
@@ -37,24 +34,26 @@ internal sealed class PresentationPaneAccessibilityAdapter
         string? state = null,
         string? stableKey = null)
     {
-        var item = PresentationPaneAccessibilityPlanner.Item(paneId, index, name, state, stableKey);
+        var item = PresentationPaneAccessibilityPlanner.ProjectItem(paneId, index, name, state, stableKey);
         AutomationProperties.SetAutomationId(control, item.AutomationId);
         AutomationProperties.SetName(control, item.Name);
         AutomationProperties.SetHelpText(control, item.HelpText);
-        AutomationProperties.SetItemStatus(control, FormatItemStatus(item));
+        AutomationProperties.SetItemStatus(control, item.ItemStatus);
     }
 
     public IReadOnlyList<PresentationPaneAccessibilitySnapshotEntry> BuildSnapshot() =>
-        PresentationPaneAccessibilityPlanner.BuildSnapshot(_states.Values);
+        _session.BuildSnapshot();
 
     public string SerializeSnapshot() =>
-        PresentationPaneAccessibilityPlanner.SerializeSnapshot(_states.Values);
+        _session.SerializeSnapshot();
 
-    private static string FormatStatus(bool isVisible, int order) =>
-        $"{(isVisible ? "Visible" : "Hidden")}; Order {order + 1}";
-
-    private static string FormatItemStatus(PresentationPaneAccessibilityItemDescriptor item) =>
-        string.IsNullOrWhiteSpace(item.State)
-            ? $"Order {item.Order + 1}"
-            : $"{item.State}; Order {item.Order + 1}";
+    private static void ApplyPaneProjection(
+        FrameworkElement control,
+        PresentationPaneAccessibilityPaneProjection pane)
+    {
+        AutomationProperties.SetAutomationId(control, pane.AutomationId);
+        AutomationProperties.SetName(control, pane.Name);
+        AutomationProperties.SetHelpText(control, pane.HelpText);
+        AutomationProperties.SetItemStatus(control, pane.ItemStatus);
+    }
 }

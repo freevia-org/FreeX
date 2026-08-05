@@ -58,6 +58,38 @@ public static class PresentationPaneAccessibilityPlanner
             state ?? string.Empty);
     }
 
+    public static PresentationPaneAccessibilityPaneProjection ProjectPane(
+        string paneId,
+        bool isVisible,
+        int itemCount = 0,
+        int selectedIndex = -1)
+    {
+        var descriptor = Get(paneId);
+        return new(
+            new PresentationPaneAccessibilityState(paneId, isVisible, itemCount, selectedIndex),
+            descriptor.AutomationId,
+            descriptor.Name,
+            descriptor.HelpText,
+            FormatPaneStatus(isVisible, descriptor.Order),
+            isVisible,
+            descriptor.Order + 1);
+    }
+
+    public static PresentationPaneAccessibilityItemProjection ProjectItem(
+        string paneId,
+        int index,
+        string name,
+        string? state = null,
+        string? stableKey = null)
+    {
+        var item = Item(paneId, index, name, state, stableKey);
+        return new(
+            item.AutomationId,
+            item.Name,
+            item.HelpText,
+            FormatItemStatus(item));
+    }
+
     public static IReadOnlyList<PresentationPaneAccessibilitySnapshotEntry> BuildSnapshot(
         IEnumerable<PresentationPaneAccessibilityState> states)
     {
@@ -93,6 +125,14 @@ public static class PresentationPaneAccessibilityPlanner
             Environment.NewLine,
             BuildSnapshot(states).Select(entry =>
                 $"{entry.Order:D2}|{entry.PaneId}|{entry.AutomationId}|{entry.Name}|{entry.HelpText}|{entry.State}|{entry.ItemCount}|{entry.SelectedIndex}"));
+
+    private static string FormatPaneStatus(bool isVisible, int order) =>
+        $"{(isVisible ? "Visible" : "Hidden")}; Order {order + 1}";
+
+    private static string FormatItemStatus(PresentationPaneAccessibilityItemDescriptor item) =>
+        string.IsNullOrWhiteSpace(item.State)
+            ? $"Order {item.Order + 1}"
+            : $"{item.State}; Order {item.Order + 1}";
 }
 
 public sealed record PresentationPaneAccessibilityDescriptor(
@@ -108,6 +148,21 @@ public sealed record PresentationPaneAccessibilityItemDescriptor(
     string HelpText,
     int Order,
     string State);
+
+public sealed record PresentationPaneAccessibilityPaneProjection(
+    PresentationPaneAccessibilityState State,
+    string AutomationId,
+    string Name,
+    string HelpText,
+    string ItemStatus,
+    bool IsKeyboardNavigationEnabled,
+    int KeyboardOrder);
+
+public sealed record PresentationPaneAccessibilityItemProjection(
+    string AutomationId,
+    string Name,
+    string HelpText,
+    string ItemStatus);
 
 public sealed record PresentationPaneAccessibilityState(
     string PaneId,
