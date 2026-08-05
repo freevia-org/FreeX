@@ -8,7 +8,7 @@ using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.QuickAnalysis;
-using FreeX.Core.Commands;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
@@ -182,58 +182,39 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var operation = _quickAnalysisSession.PlanSelection(item);
-        if (operation is null)
-            return;
+        await _quickAnalysisSession.ExecuteSelectionAsync(
+            item,
+            CreateQuickAnalysisOperationHandlers());
+    }
 
-        switch (operation.Kind)
-        {
-            case QuickAnalysisHostOperationKind.OpenConditionalFormatDialog
-                when operation.ConditionalFormat is { } conditionalFormat:
-                await ShowQuickAnalysisConditionalFormatDialogAsync(conditionalFormat);
-                break;
+    private QuickAnalysisOperationHandlers CreateQuickAnalysisOperationHandlers() =>
+        new(
+            OpenConditionalFormatDialogAsync: (command, _) =>
+                ShowQuickAnalysisConditionalFormatDialogAsync(command),
+            ApplyConditionalFormatAsync: preset =>
+                ExecuteQuickAnalysisAction(() => ApplyConditionalFormatPreset(preset)),
+            ClearConditionalFormattingAsync: () =>
+                ExecuteQuickAnalysisAction(ClearConditionalFormatsFromSelection),
+            InsertChartAsync: chartType =>
+                ExecuteQuickAnalysisAction(() => InsertChartFromSelection(chartType)),
+            OpenChartPickerAsync: OpenQuickAnalysisChartPickerAsync,
+            ExecuteTotalAsync: ExecuteQuickAnalysisTotalAsync,
+            CreateTableAsync: InsertTableFromSelectionAsync,
+            CreatePivotTableAsync: ShowInsertPivotTableDialogAsync,
+            InsertSparklineAsync: ExecuteQuickAnalysisSparklinesAsync,
+            ShowDeferredAsync: note =>
+                ExecuteQuickAnalysisAction(() => RefreshShell(note)));
 
-            case QuickAnalysisHostOperationKind.ApplyConditionalFormat
-                when operation.ConditionalFormatPreset is { } preset:
-                ApplyConditionalFormatPreset(preset);
-                break;
+    private static Task ExecuteQuickAnalysisAction(Action action)
+    {
+        action();
+        return Task.CompletedTask;
+    }
 
-            case QuickAnalysisHostOperationKind.ClearConditionalFormatting:
-                ClearConditionalFormatsFromSelection();
-                break;
-
-            case QuickAnalysisHostOperationKind.InsertAggregateTotalFormula
-                or QuickAnalysisHostOperationKind.InsertPercentTotalFormula
-                or QuickAnalysisHostOperationKind.InsertRunningTotalFormula:
-                InsertQuickAnalysisTotalFormulas(operation);
-                break;
-
-            case QuickAnalysisHostOperationKind.InsertSparkline
-                when operation.SparklineKind is not null:
-                InsertQuickAnalysisSparklines(operation);
-                break;
-
-            case QuickAnalysisHostOperationKind.InsertChart when operation.ChartType is { } chartType:
-                InsertChartFromSelection(chartType);
-                break;
-
-            case QuickAnalysisHostOperationKind.OpenChartPicker:
-                if (await ShowChartTypePickerAsync(ChartType.Column) is { } pickedChartType)
-                    InsertChartFromSelection(pickedChartType);
-                break;
-
-            case QuickAnalysisHostOperationKind.CreateTable:
-                await InsertTableFromSelectionAsync();
-                break;
-
-            case QuickAnalysisHostOperationKind.CreatePivotTable:
-                await ShowInsertPivotTableDialogAsync();
-                break;
-
-            case QuickAnalysisHostOperationKind.Deferred:
-                RefreshShell(operation.DeferredNote ?? UiText.Get("TableLoc_QaSuggestionNotAvailable"));
-                break;
-        }
+    private async Task OpenQuickAnalysisChartPickerAsync()
+    {
+        if (await ShowChartTypePickerAsync(ChartType.Column) is { } pickedChartType)
+            InsertChartFromSelection(pickedChartType);
     }
 
     private async Task ShowQuickAnalysisConditionalFormatDialogAsync(
@@ -251,50 +232,43 @@ public sealed partial class MainWindow
             UiText.Format("InsertLoc_CfAppliedRule", FormatRangeReference(built.AppliesTo)));
     }
 
-    private void InsertQuickAnalysisTotalFormulas(QuickAnalysisHostOperation operation)
+    private Task ExecuteQuickAnalysisTotalAsync(QuickAnalysisHostOperation operation)
     {
-        var range = _session.SelectedRange;
-        if (!QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(operation, range, out var edits))
-            return;
-
-        var result = _session.ExecuteReviewCommand(new EditCellsCommand(_session.ActiveSheet.Id, edits));
+        var result = _session.ExecuteQuickAnalysisTotal(operation);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? operation.TotalCommandTitle ?? "Quick Analysis total failed.");
-            return;
+            ShowEditIssue(result.ErrorMessage ?? result.CommandTitle);
+            return Task.CompletedTask;
         }
 
-        _session.SelectCell(edits[^1].Address);
-        RefreshShell(operation.TotalCommandTitle ?? "Quick Analysis Total");
+        if (!result.IsNoOp)
+            RefreshShell(result.CommandTitle);
+        return Task.CompletedTask;
     }
 
     /// <summary>
     /// Inserts one sparkline per data row beside the selection through the shared session command path,
     /// reusing the Core <see cref="AddSparklineCommand"/> the sparkline renderer already paints.
     /// </summary>
-    private void InsertQuickAnalysisSparklines(QuickAnalysisHostOperation operation)
+    private Task ExecuteQuickAnalysisSparklinesAsync(QuickAnalysisHostOperation operation)
     {
-        var range = _session.SelectedRange;
-        if (!QuickAnalysisHostOperationPlanner.TryBuildSparklineCommands(
-            operation,
-            _session.ActiveSheet,
-            range,
-            out var commands))
+        var result = _session.ExecuteQuickAnalysisSparklines(operation);
+        if (result.Failure == QuickAnalysisWorkbookOperationFailure.InvalidSparklineSelection)
         {
             ShowEditIssue(UiText.Get("TableLoc_QaSparklinesNeedTwoColumns"));
-            return;
+            return Task.CompletedTask;
         }
 
-        foreach (var command in commands)
+        if (!result.Success)
         {
-            var result = _session.ExecuteReviewCommand(command);
-            if (!result.Success)
-            {
-                ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_QaInsertSparklineFailed"));
-                return;
-            }
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_QaInsertSparklineFailed"));
+            return Task.CompletedTask;
         }
 
-        RefreshShell(UiText.Format("TableLoc_QaInsertedSparklines", commands.Count, FormatRangeReference(range)));
+        RefreshShell(UiText.Format(
+            "TableLoc_QaInsertedSparklines",
+            result.AppliedItemCount,
+            FormatRangeReference(result.SourceRange)));
+        return Task.CompletedTask;
     }
 }

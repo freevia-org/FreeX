@@ -4,7 +4,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using FreeX.App.Presentation.QuickAnalysis;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FreeX.App.UI;
 
@@ -129,71 +128,73 @@ public partial class MainWindow
         Keyboard.Focus(firstEnabledItem);
     }
 
-    private void QuickAnalysisMenuItem_Click(object sender, RoutedEventArgs e)
+    private async void QuickAnalysisMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item })
             return;
 
-        var operation = _quickAnalysisSession.PlanSelection(item);
-        if (operation is null)
-            return;
+        await _quickAnalysisSession.ExecuteSelectionAsync(
+            item,
+            CreateQuickAnalysisOperationHandlers(sender, e));
+    }
 
-        switch (operation.Kind)
+    private QuickAnalysisOperationHandlers CreateQuickAnalysisOperationHandlers(
+        object sender,
+        RoutedEventArgs eventArgs) =>
+        new(
+            OpenConditionalFormatDialogAsync: (_, title) =>
+                string.IsNullOrWhiteSpace(title)
+                    ? Task.CompletedTask
+                    : ExecuteQuickAnalysisAction(() => ShowCfDialog(title)),
+            ApplyConditionalFormatAsync: null,
+            ClearConditionalFormattingAsync: () =>
+                ExecuteQuickAnalysisAction(() => CfClearRulesMenuItem_Click(sender, eventArgs)),
+            InsertChartAsync: chartType =>
+                ExecuteQuickAnalysisAction(() => InsertChartOfType(chartType)),
+            OpenChartPickerAsync: () =>
+                ExecuteQuickAnalysisAction(() => InsertChartPickerBtn_Click(sender, eventArgs)),
+            ExecuteTotalAsync: ExecuteQuickAnalysisTotalAsync,
+            CreateTableAsync: () =>
+                ExecuteQuickAnalysisAction(() => TableBtn_Click(sender, eventArgs)),
+            CreatePivotTableAsync: () =>
+                ExecuteQuickAnalysisAction(() => PivotTableBtn_Click(sender, eventArgs)),
+            InsertSparklineAsync: operation =>
+                string.IsNullOrWhiteSpace(operation.SparklineDialogKind)
+                    ? Task.CompletedTask
+                    : ExecuteQuickAnalysisAction(() => InsertSparkline(operation.SparklineDialogKind)),
+            ShowDeferredAsync: note =>
+                ExecuteQuickAnalysisAction(() => StatusReadyText.Text = note));
+
+    private static Task ExecuteQuickAnalysisAction(Action action)
+    {
+        action();
+        return Task.CompletedTask;
+    }
+
+    private Task ExecuteQuickAnalysisTotalAsync(QuickAnalysisHostOperation operation)
+    {
+        SynchronizeWorkbookSessionSelection();
+        var result = _session.ExecuteQuickAnalysisTotal(operation);
+        RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
         {
-            case QuickAnalysisHostOperationKind.OpenConditionalFormatDialog
-                when operation.ConditionalFormatDialogTitle is { } title:
-                ShowCfDialog(title);
-                break;
-            case QuickAnalysisHostOperationKind.ClearConditionalFormatting:
-                CfClearRulesMenuItem_Click(sender, e);
-                break;
-            case QuickAnalysisHostOperationKind.InsertChart when operation.ChartType is { } chartType:
-                InsertChartOfType(chartType);
-                break;
-            case QuickAnalysisHostOperationKind.OpenChartPicker:
-                InsertChartPickerBtn_Click(sender, e);
-                break;
-            case QuickAnalysisHostOperationKind.InsertAggregateTotalFormula:
-            case QuickAnalysisHostOperationKind.InsertPercentTotalFormula:
-            case QuickAnalysisHostOperationKind.InsertRunningTotalFormula:
-                InsertQuickAnalysisTotalFormulas(operation);
-                break;
-            case QuickAnalysisHostOperationKind.CreateTable:
-                TableBtn_Click(sender, e);
-                break;
-            case QuickAnalysisHostOperationKind.CreatePivotTable:
-                PivotTableBtn_Click(sender, e);
-                break;
-            case QuickAnalysisHostOperationKind.InsertSparkline when operation.SparklineDialogKind is { } sparklineDialogKind:
-                InsertQuickAnalysisSparkline(sparklineDialogKind);
-                break;
-            case QuickAnalysisHostOperationKind.Deferred when operation.DeferredNote is { } note:
-                StatusReadyText.Text = note;
-                break;
+            ["command"] = result.CommandTitle,
+            ["status"] = result.Success ? "succeeded" : "failed"
+        });
+        if (!result.Success)
+        {
+            ShowCommandError(ToCommandOutcome(result.EditResult), result.CommandTitle);
+            return Task.CompletedTask;
         }
-    }
 
-    private void InsertQuickAnalysisSparkline(string dialogKind)
-    {
-        InsertSparkline(dialogKind);
-    }
+        if (result.IsNoOp)
+            return Task.CompletedTask;
 
-    private void InsertQuickAnalysisTotalFormulas(QuickAnalysisHostOperation operation)
-    {
-        if (SheetGrid.SelectedRange is not { } range)
-            return;
-
-        if (!QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(operation, range, out var edits))
-            return;
-
-        var title = operation.TotalCommandTitle ?? "Quick Analysis Total";
-        if (!TryExecuteRepeatableCommand(
-                () => new EditCellsCommand(_currentSheetId, edits),
-                title,
-                out _))
-            return;
-        SetActiveCell(edits[^1].Address);
+        InvalidateNavigationCaches();
+        ApplyWorkbookSessionSelectionToRenderer();
+        SyncWindowViewState([_currentSheetId]);
+        NotifyOtherWindowsOfWorkbookChange();
         UpdateViewport();
+        return Task.CompletedTask;
     }
 
     private void QuickAnalysisMenuItem_MouseEnter(object sender, MouseEventArgs e)

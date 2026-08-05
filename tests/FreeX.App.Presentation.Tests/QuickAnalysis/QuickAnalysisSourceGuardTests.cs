@@ -48,12 +48,9 @@ public sealed class QuickAnalysisSourceGuardTests
         AssertShellUsesSharedQuickAnalysisSession(hostSource);
         AssertShellUsesSharedQuickAnalysisSession(avaloniaSource);
         avaloniaSource.Should().Contain("QuickAnalysisShellCapabilities.DialogBacked");
-        avaloniaSource.Should().Contain("QuickAnalysisHostOperationKind.OpenConditionalFormatDialog");
-        avaloniaSource.Should().Contain("QuickAnalysisHostOperationKind.ClearConditionalFormatting");
-        avaloniaSource.Should().Contain("QuickAnalysisHostOperationKind.OpenChartPicker");
-        avaloniaSource.Should().Contain("QuickAnalysisHostOperationKind.InsertPercentTotalFormula");
-        avaloniaSource.Should().Contain("QuickAnalysisHostOperationKind.InsertRunningTotalFormula");
-        avaloniaSource.Should().Contain("QuickAnalysisHostOperationKind.CreatePivotTable");
+        avaloniaSource.Should().Contain("CreateQuickAnalysisOperationHandlers()");
+        avaloniaSource.Should().Contain("_session.ExecuteQuickAnalysisTotal(operation)");
+        avaloniaSource.Should().Contain("_session.ExecuteQuickAnalysisSparklines(operation)");
         avaloniaSource.Should().Contain("try");
         avaloniaSource.Should().Contain("catch (Exception exception)");
         avaloniaSource.Should().Contain("ShowEditIssue(exception.Message)");
@@ -74,12 +71,18 @@ public sealed class QuickAnalysisSourceGuardTests
         shellSources.Should().NotContain("item.HoverPreview");
         shellSources.Should().NotContain("item.PreviewVisual");
         shellSources.Should().NotContain("QuickAnalysisHostOperationPlanner.Plan(item)");
+        shellSources.Should().NotContain("switch (operation.Kind)");
+        shellSources.Should().NotContain("QuickAnalysisHostOperationKind.");
+        shellSources.Should().NotContain("QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(");
+        shellSources.Should().NotContain("QuickAnalysisHostOperationPlanner.TryBuildSparklineCommands(");
+        shellSources.Should().NotContain("new EditCellsCommand(");
         shellSources.Should().NotContain("QuickAnalysisShellRequestPlanner.Build(");
         shellSources.Should().NotContain("QuickAnalysisShellOpenPlanner.Plan(request)");
 
         sessionSource.Should().Contain("QuickAnalysisShellRequestPlanner.Build(sheet, selection, capabilities)");
         sessionSource.Should().Contain("QuickAnalysisShellOpenPlanner.Plan(request)");
         sessionSource.Should().Contain("QuickAnalysisHostOperationPlanner.Plan(item)");
+        sessionSource.Should().Contain("QuickAnalysisOperationExecutor.ExecuteAsync(operation, handlers)");
         sessionSource.Should().Contain("var preview = item.HoverPreview");
         shellPlannerSource.Should().Contain("QuickAnalysisPreviewIconPlan PreviewIcon");
         shellPlannerSource.Should().NotContain("QuickAnalysisDisplayItem DisplayItem");
@@ -106,7 +109,7 @@ public sealed class QuickAnalysisSourceGuardTests
     {
         source.Should().Contain("private readonly QuickAnalysisShellSession _quickAnalysisSession = new();");
         source.Should().Contain("_quickAnalysisSession.PlanOpen(");
-        source.Should().Contain("_quickAnalysisSession.PlanSelection(item)");
+        source.Should().Contain("_quickAnalysisSession.ExecuteSelectionAsync(");
     }
 
     private static string ReadSource(params string[] parts) =>

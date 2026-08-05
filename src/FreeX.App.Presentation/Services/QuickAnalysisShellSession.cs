@@ -13,7 +13,8 @@ public sealed record QuickAnalysisPreviewPresentationPlan(
 
 /// <summary>
 /// Owns the renderer-neutral Quick Analysis shell lifecycle. Native hosts retain popup controls, focus,
-/// status controls, and command execution while this session owns support, selection, preview, and status state.
+/// status controls, dialogs, and visual aftermath while this session owns support, selection, operation
+/// dispatch, preview, and status state.
 /// </summary>
 public sealed class QuickAnalysisShellSession
 {
@@ -39,6 +40,18 @@ public sealed class QuickAnalysisShellSession
 
         _preserveOpenIssueStatus = false;
         return QuickAnalysisHostOperationPlanner.Plan(item);
+    }
+
+    public async Task<bool> ExecuteSelectionAsync(
+        QuickAnalysisShellItemPlan item,
+        QuickAnalysisOperationHandlers handlers)
+    {
+        var operation = PlanSelection(item);
+        if (operation is null)
+            return false;
+
+        await QuickAnalysisOperationExecutor.ExecuteAsync(operation, handlers);
+        return true;
     }
 
     public QuickAnalysisPreviewPresentationPlan PlanPreview(QuickAnalysisShellItemPlan item)

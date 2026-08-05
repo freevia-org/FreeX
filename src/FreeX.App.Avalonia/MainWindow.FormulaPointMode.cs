@@ -38,12 +38,9 @@ public sealed partial class MainWindow
 
     public void ShowFormulaPointModeSourceSelection(GridRange range)
     {
-        if (_session.Workbook.GetSheet(range.Start.Sheet) is null)
+        if (!_session.SelectFormulaPointModeSourceRange(range))
             return;
 
-        if (_session.ActiveSheet.Id != range.Start.Sheet)
-            _session.SelectSheet(range.Start.Sheet);
-        _session.SelectRange(range);
         RefreshShell("Ready");
     }
 

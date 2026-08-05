@@ -134,19 +134,28 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             "FreeX.App.Presentation",
             "QuickAnalysis",
             "QuickAnalysisHostOperationPlanner.cs"));
+        var operationExecutorSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisOperationExecutor.cs"));
 
-        source.Should().Contain("var operation = _quickAnalysisSession.PlanSelection(item);");
+        source.Should().Contain("_quickAnalysisSession.ExecuteSelectionAsync(");
+        source.Should().Contain("CreateQuickAnalysisOperationHandlers()");
         source.Should().NotContain("QuickAnalysisHostOperationPlanner.Plan(item)");
         source.Should().NotContain("QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DirectApplyLimited)");
-        source.Should().Contain("operation.ConditionalFormatPreset is { } preset");
         source.Should().NotContain("TryMapQuickAnalysisConditionalFormatPreset(");
-        source.Should().Contain("QuickAnalysisHostOperationKind.ApplyConditionalFormat");
-        source.Should().Contain("QuickAnalysisHostOperationKind.Deferred");
+        source.Should().NotContain("switch (operation.Kind)");
+        source.Should().NotContain("QuickAnalysisHostOperationKind.");
+        source.Should().NotContain("QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(");
+        source.Should().NotContain("QuickAnalysisHostOperationPlanner.TryBuildSparklineCommands(");
         source.Should().NotContain("IsQuickAnalysisAutoSumFunction(");
         source.Should().NotContain("QuickAnalysisCommandKind.PivotTable");
         actionPlannerSource.Should().Contain("This total is not yet available on {capabilities.DeferredPlatformName}.");
         actionPlannerSource.Should().Contain("Converting to a PivotTable is not yet available on {capabilities.DeferredPlatformName}.");
         operationPlannerSource.Should().Contain("QuickAnalysisHostOperationKind.ApplyConditionalFormat");
+        operationExecutorSource.Should().Contain("QuickAnalysisHostOperationKind.ApplyConditionalFormat");
+        operationExecutorSource.Should().Contain("QuickAnalysisHostOperationKind.Deferred");
     }
 
     [Fact]

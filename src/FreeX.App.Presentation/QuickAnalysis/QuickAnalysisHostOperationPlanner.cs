@@ -5,9 +5,9 @@ using FreeX.Core.Model;
 namespace FreeX.App.Presentation.QuickAnalysis;
 
 /// <summary>
-/// Host execution plan for a Quick Analysis menu item. Renderers still own the native command calls,
-/// dialogs, and async surfaces; this keeps the action payload and stable command titles out of WPF and
-/// platform switch statements.
+/// Host execution plan for a Quick Analysis menu item. Renderers retain native dialogs and async
+/// surfaces; the portable operation executor owns dispatch, and WorkbookSession owns portable mutations.
+/// This keeps action payloads and stable command titles out of platform switch statements.
 /// </summary>
 public enum QuickAnalysisHostOperationKind
 {

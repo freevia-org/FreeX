@@ -36,22 +36,26 @@ public partial class MainWindow
 
     public void ShowFormulaPointModeSourceSelection(GridRange range)
     {
-        if (_workbook.GetSheet(range.Start.Sheet) is null)
+        SynchronizeWorkbookSessionSelection();
+        var previousSheetId = _currentSheetId;
+        if (!_session.SelectFormulaPointModeSourceRange(range))
             return;
 
-        if (_currentSheetId != range.Start.Sheet)
+        _currentSheetId = _session.ActiveSheet.Id;
+        if (!previousSheetId.Equals(_currentSheetId))
         {
-            _currentSheetId = range.Start.Sheet;
             SelectSingleSheetTab(_currentSheetId);
             UpdateViewport();
             RefreshSheetTabs();
         }
 
-        _selectionAnchor = range.Start;
-        _selectionCursor = range.End;
+        _selectionAnchor = _session.ActiveCell;
+        _selectionCursor = _session.SelectedRange.End;
         SetSelectedRangesIfChanged(null);
-        SheetGrid.SelectedRange = range;
-        CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
+        SheetGrid.SelectedRange = _session.SelectedRange;
+        CellAddressBox.Text = FormatRangeReference(
+            _session.SelectedRange.Start,
+            _session.SelectedRange.End);
         RefreshStatusBar();
         SheetGrid.Focus();
     }

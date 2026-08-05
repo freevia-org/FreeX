@@ -4,8 +4,8 @@ using FreeX.Core.Model;
 namespace FreeX.App.Presentation.QuickAnalysis;
 
 /// <summary>
-/// Host-facing Quick Analysis action plan. Renderers still execute native commands and own controls; this
-/// keeps the route-to-shell-action decision and small label/kind mappings in shared code.
+/// Host-facing Quick Analysis action plan. Renderers still own controls and native effects; shared
+/// sessions dispatch the action and keep route, label, and kind decisions in portable code.
 /// </summary>
 public enum QuickAnalysisShellActionKind
 {

@@ -1,5 +1,6 @@
 using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -805,6 +806,28 @@ public sealed class WorkbookSession : IDisposable
     }
 
     /// <summary>
+    /// Projects a range selected in a second formula-point workbook window into that source
+    /// window's portable selection state. Native hosts retain sheet-tab, grid, focus, and status
+    /// rendering after this transition.
+    /// </summary>
+    public bool SelectFormulaPointModeSourceRange(GridRange range)
+    {
+        if (!range.Start.Sheet.Equals(range.End.Sheet) ||
+            Workbook.GetSheet(range.Start.Sheet) is null)
+        {
+            return false;
+        }
+
+        if (!ActiveSheet.Id.Equals(range.Start.Sheet))
+            SelectSheet(range.Start.Sheet);
+        if (!ActiveSheet.Id.Equals(range.Start.Sheet))
+            return false;
+
+        SelectRange(range);
+        return true;
+    }
+
+    /// <summary>
     /// Selects a range while a formula is being edited, keeping the formula's source cell
     /// separate from the pointed-to worksheet selection. This is the state Excel exposes while
     /// formula point mode is active: the grid highlights the reference range, but Enter still
@@ -1204,6 +1227,122 @@ public sealed class WorkbookSession : IDisposable
         ApplySuccessfulEditResult(result, fallbackAddress ?? ActiveCell);
         return result;
     }
+
+    public QuickAnalysisWorkbookOperationResult ExecuteQuickAnalysisTotal(
+        QuickAnalysisHostOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        var range = SelectedRange;
+        var title = operation.TotalCommandTitle ?? "Quick Analysis Total";
+        if (operation.Kind is not (
+                QuickAnalysisHostOperationKind.InsertAggregateTotalFormula or
+                QuickAnalysisHostOperationKind.InsertPercentTotalFormula or
+                QuickAnalysisHostOperationKind.InsertRunningTotalFormula) ||
+            !QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(operation, range, out var edits))
+        {
+            return QuickAnalysisOperationFailure(
+                range,
+                title,
+                QuickAnalysisWorkbookOperationFailure.InvalidOperation,
+                "The Quick Analysis operation is not a total formula operation.");
+        }
+
+        var result = ExecuteRepeatableCommandPreservingSelection(
+            () => new EditCellsCommand(ActiveSheet.Id, edits));
+        if (!result.Success || result.IsNoOp)
+        {
+            return new QuickAnalysisWorkbookOperationResult(
+                result,
+                result.Success
+                    ? QuickAnalysisWorkbookOperationFailure.None
+                    : QuickAnalysisWorkbookOperationFailure.CommandFailed,
+                AppliedItemCount: 0,
+                range,
+                SelectedCell: null,
+                title);
+        }
+
+        var selectedCell = edits[^1].Address;
+        SelectCell(selectedCell);
+        return new QuickAnalysisWorkbookOperationResult(
+            result,
+            QuickAnalysisWorkbookOperationFailure.None,
+            edits.Count,
+            range,
+            selectedCell,
+            title);
+    }
+
+    public QuickAnalysisWorkbookOperationResult ExecuteQuickAnalysisSparklines(
+        QuickAnalysisHostOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        var range = SelectedRange;
+        const string title = "Quick Analysis Sparklines";
+        if (!QuickAnalysisHostOperationPlanner.TryBuildSparklineCommands(
+                operation,
+                ActiveSheet,
+                range,
+                out var commands))
+        {
+            return QuickAnalysisOperationFailure(
+                range,
+                title,
+                QuickAnalysisWorkbookOperationFailure.InvalidSparklineSelection,
+                "Quick Analysis sparklines require a supported multi-column selection.");
+        }
+
+        var appliedCount = 0;
+        foreach (var command in commands)
+        {
+            var result = ExecuteReviewCommand(command);
+            if (!result.Success)
+            {
+                return new QuickAnalysisWorkbookOperationResult(
+                    result,
+                    QuickAnalysisWorkbookOperationFailure.CommandFailed,
+                    appliedCount,
+                    range,
+                    SelectedCell: null,
+                    title);
+            }
+
+            if (!result.IsNoOp)
+                appliedCount++;
+        }
+
+        return new QuickAnalysisWorkbookOperationResult(
+            new WorkbookCellEditResult(
+                Success: true,
+                ErrorMessage: null,
+                AffectedCells: [],
+                RecalcReport: null,
+                IsNoOp: appliedCount == 0),
+            QuickAnalysisWorkbookOperationFailure.None,
+            appliedCount,
+            range,
+            SelectedCell: null,
+            title);
+    }
+
+    private static QuickAnalysisWorkbookOperationResult QuickAnalysisOperationFailure(
+        GridRange range,
+        string title,
+        QuickAnalysisWorkbookOperationFailure failure,
+        string errorMessage) =>
+        new(
+            new WorkbookCellEditResult(
+                Success: false,
+                ErrorMessage: errorMessage,
+                AffectedCells: [],
+                RecalcReport: null),
+            failure,
+            AppliedItemCount: 0,
+            range,
+            SelectedCell: null,
+            title);
 
     /// <summary>
     /// Executes an undoable workbook command while preserving the renderer-synchronized cell
