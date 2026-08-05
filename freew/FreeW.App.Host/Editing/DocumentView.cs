@@ -8499,7 +8499,7 @@ public sealed class DocumentView : RichTextBox
     /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressAutoHyphensIsSet = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressAutoHyphensIsSet = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null, ComplexField? SpanningFieldStart = null, ComplexField? SpanningFieldOwner = null, bool EndsSpanningField = false);
 
     private sealed record RenderedBookmarkBoundary(BookmarkBoundary Boundary);
 
@@ -8755,7 +8755,10 @@ public sealed class DocumentView : RichTextBox
             // are preserved across edits via the paragraph Tag (see ParagraphTag).
             StyleId = tag?.StyleId is { Length: > 0 } styleId ? styleId : null,
             SectionBreak = tag?.SectionBreak,
-            DropCap = tag?.DropCap
+            DropCap = tag?.DropCap,
+            SpanningFieldStart = tag?.SpanningFieldStart,
+            SpanningFieldOwner = tag?.SpanningFieldOwner,
+            EndsSpanningField = tag?.EndsSpanningField ?? false
         };
         if (tag?.BookmarkNames is { Count: > 0 } bookmarkNames)
             modelParagraph.BookmarkNames.AddRange(bookmarkNames);
@@ -10664,7 +10667,10 @@ public sealed class DocumentView : RichTextBox
             paragraph.DropCap,
             paraFmt.ListKind != ListKind.None ? paraFmt.ListKind : null,
             paraFmt.KeepLinesTogether,
-            paraFmt.ListStartOverride);
+            paraFmt.ListStartOverride,
+            paragraph.SpanningFieldStart,
+            paragraph.SpanningFieldOwner,
+            paragraph.EndsSpanningField);
 
         var runs = paragraph.Runs;
         var dropCapPlan = !inTableCell

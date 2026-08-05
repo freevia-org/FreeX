@@ -139,6 +139,10 @@ public sealed class NumericCitationEditorTests
             .Cast<Paragraph>()
             .Select(paragraph => paragraph.PlainText)
             .Should().Contain("Source Heading\t1").And.NotContain("Old Heading\t9");
+        var generated = view.Model.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.SpanningFieldOwner is { Keyword: "TOC" });
+        generated.SpanningFieldStart!.Instruction.Should().Be(TableOfContents.NativeFieldInstruction);
+        generated.EndsSpanningField.Should().BeTrue();
     }
 
     [StaFact]
