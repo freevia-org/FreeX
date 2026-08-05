@@ -174,7 +174,7 @@ public partial class MainWindow
         // specifically enumerates for CSV (skipping plain Text) still gets a payload. Re-parse the
         // already-built TSV/newline `text` (same field values/escaping semantics as ClipboardSerializer
         // production, just re-delimited) and re-emit it RFC4180-quoted with commas.
-        var csv = BuildCsvClipboardText(text);
+        var csv = ClipboardCsvTextRenderer.Render(text);
         if (!string.IsNullOrEmpty(csv))
             data.SetData(System.Windows.DataFormats.CommaSeparatedValue, csv);
 
@@ -1984,68 +1984,6 @@ public partial class MainWindow
     private static string? BuildHtmlClipboardFragment(
         ViewportModel viewport, Sheet? sheet, GridRange range, WorkbookTheme theme) =>
         ClipboardHtmlSerializer.Serialize(viewport, sheet, range, theme)?.CfHtml;
-
-    /// <summary>
-    /// R57-services-clipboard-formats-5-3: re-delimits the tab/CRLF-separated <paramref name="tsvText"/>
-    /// (as produced by <see cref="ClipboardSerializer.Serialize"/>) into RFC4180-quoted comma-separated
-    /// text, for placing on the "CSV" clipboard format alongside Text/HTML. Re-parses via
-    /// <see cref="ClipboardSerializer.Deserialize"/> (the same reader ExecutePaste's external-clipboard
-    /// fallback already relies on) rather than re-implementing TSV parsing here.
-    /// </summary>
-    private static string BuildCsvClipboardText(string tsvText)
-    {
-        if (string.IsNullOrEmpty(tsvText))
-            return string.Empty;
-
-        var rows = ClipboardSerializer.Deserialize(tsvText);
-        var sb = new StringBuilder(tsvText.Length + 16);
-        for (var r = 0; r < rows.Length; r++)
-        {
-            if (r > 0)
-                sb.Append("\r\n");
-
-            var row = rows[r];
-            for (var c = 0; c < row.Length; c++)
-            {
-                if (c > 0)
-                    sb.Append(',');
-
-                AppendCsvField(sb, row[c]);
-            }
-        }
-
-        return sb.ToString();
-    }
-
-    private static void AppendCsvField(StringBuilder sb, string field)
-    {
-        var requiresQuoting = false;
-        foreach (var ch in field)
-        {
-            if (ch is ',' or '"' or '\r' or '\n')
-            {
-                requiresQuoting = true;
-                break;
-            }
-        }
-
-        if (!requiresQuoting)
-        {
-            sb.Append(field);
-            return;
-        }
-
-        sb.Append('"');
-        foreach (var ch in field)
-        {
-            if (ch == '"')
-                sb.Append("\"\"");
-            else
-                sb.Append(ch);
-        }
-
-        sb.Append('"');
-    }
 
     /// <summary>
     /// R91-io-clipboard-image-formats-5-3: renders a simple bordered-grid Bitmap of a copied range's
