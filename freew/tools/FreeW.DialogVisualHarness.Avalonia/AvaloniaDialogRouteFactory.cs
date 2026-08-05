@@ -307,7 +307,7 @@ internal static class AvaloniaDialogRouteFactory
             Array.Empty<Free.Shared.AppServices.Printing.PrinterInfo>(),
             null,
             "No printers are installed or available.")!;
-        var planner = typeof(FreeW.App.Presentation.Printing.PrintSelectionPlanner);
+        var planner = typeof(Free.Shared.AppServices.Printing.PrintSelectionPlanner);
         var plan = planner.GetMethod("Build")!.Invoke(null, [discovery, null])!;
         var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
             .Single(candidate => candidate.GetParameters().Length == 1);

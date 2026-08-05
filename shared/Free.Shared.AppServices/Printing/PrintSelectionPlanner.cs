@@ -1,7 +1,9 @@
-using Free.Shared.AppServices.Printing;
+namespace Free.Shared.AppServices.Printing;
 
-namespace FreeP.App.Compositor.Printing;
-
+/// <summary>
+/// Converts printer discovery plus a requested selection into the renderer-neutral state consumed by
+/// the WPF/Avalonia print dialogs.
+/// </summary>
 public static class PrintSelectionPlanner
 {
     public static PrintDialogPlan Build(

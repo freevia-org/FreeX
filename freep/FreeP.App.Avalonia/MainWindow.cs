@@ -26,7 +26,6 @@ using Free.Shared.Theme;
 using FreeP.App.Avalonia.Backstage;
 using FreeP.App.Avalonia.Printing;
 using FreeP.App.Compositor;
-using FreeP.App.Compositor.Printing;
 using FreeP.App.Recording;
 #if FREEP_WINDOWS_CAPTURE
 using FreeP.App.Recording.Windows;

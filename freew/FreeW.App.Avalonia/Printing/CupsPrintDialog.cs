@@ -6,7 +6,6 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Free.Shared.AppServices.Printing;
 using Free.Shared.Shell.Avalonia;
-using FreeW.App.Presentation.Printing;
 
 namespace FreeW.App.Avalonia.Printing;
 
