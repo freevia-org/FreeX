@@ -957,6 +957,48 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task ClipboardCopyTransfer_PublishesNativeNestedListsInXamlPackage()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var body = new TextBody
+            {
+                Paragraphs =
+                {
+                    Numbered("Outer", AutoNumType.AlphaUcPeriod, startAt: 3, startSpecified: true),
+                    new Paragraph
+                    {
+                        Level = 1,
+                        BulletKind = BulletKind.Char,
+                        BulletChar = "\u25E6",
+                        Runs = { new Run { Text = "Child" } },
+                    },
+                    Numbered("Next", AutoNumType.AlphaUcPeriod, startAt: 1),
+                },
+            };
+            var payload = new InCanvasRichClipboardPayload(
+                body,
+                InCanvasTextEditPlanner.ExtractPlainText(body));
+
+            using var transfer = AvaloniaRichTextEditor.BuildRichTextDataTransfer(payload);
+            var xaml = await transfer.TryGetValueAsync(
+                OperatingSystem.IsWindows()
+                    ? AvaloniaRichTextEditor.ExternalXamlPackageWindowsFormat
+                    : AvaloniaRichTextEditor.ExternalXamlPackageLinuxFormat);
+
+            xaml.Should().NotBeNull();
+            var restored = ExternalXamlClipboardPlanner.TryParseXamlPackage(xaml);
+            restored.Should().NotBeNull();
+            restored!.Body.Paragraphs.Select(paragraph => paragraph.Level)
+                .Should().Equal(0, 1, 0);
+            restored.Body.Paragraphs[0].AutoNumType.Should().Be(AutoNumType.AlphaUcPeriod);
+            restored.Body.Paragraphs[0].AutoNumStartAt.Should().Be(3);
+            restored.Body.Paragraphs[0].AutoNumStartAtSpecified.Should().BeTrue();
+            restored.Body.Paragraphs[1].BulletChar.Should().Be("\u25E6");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ClipboardCopyTransfer_WithInlineImage_PreservesAllProductionFormats()
     {
         await Session.Dispatch(async () =>
