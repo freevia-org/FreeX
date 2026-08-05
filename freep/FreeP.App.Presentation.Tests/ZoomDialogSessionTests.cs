@@ -188,7 +188,7 @@ public sealed class ZoomDialogSessionTests
                 ValidInput() with { SummaryScale = "invalid" },
                 out var validation)
             .Should().BeFalse();
-        validation!.Field.Should().Be(ZoomObjectPropertiesDialogField.SummaryTileLayout);
+        validation!.Field.Should().Be(ZoomObjectPropertiesDialogField.SummaryScale);
 
         session.TryAccept(
                 ValidInput() with { ApplySummaryPropertiesToAllTiles = true },
@@ -236,6 +236,111 @@ public sealed class ZoomDialogSessionTests
     }
 
     [Fact]
+    public void Properties_session_dispatches_live_field_state_and_exclusive_border_modes()
+    {
+        var session = new ZoomObjectPropertiesDialogSession(new ZoomObjectProperties());
+
+        session.State[ZoomObjectPropertiesDialogField.TransitionDuration].IsEnabled
+            .Should().BeFalse();
+        session.Dispatch(new ZoomObjectPropertiesDialogAction(
+            ZoomObjectPropertiesDialogField.TransitionEnabled,
+            true));
+        session.Dispatch(new ZoomObjectPropertiesDialogAction(
+            ZoomObjectPropertiesDialogField.TransitionDuration,
+            " 01250 "));
+        session.Dispatch(new ZoomObjectPropertiesDialogAction(
+            ZoomObjectPropertiesDialogField.FrameBorderEnabled,
+            true));
+        var pattern = session.Dispatch(new ZoomObjectPropertiesDialogAction(
+            ZoomObjectPropertiesDialogField.FrameBorderPatternEnabled,
+            true));
+
+        pattern[ZoomObjectPropertiesDialogField.TransitionDuration].IsEnabled.Should().BeTrue();
+        pattern[ZoomObjectPropertiesDialogField.FrameBorderColor].IsEnabled.Should().BeFalse();
+        pattern[ZoomObjectPropertiesDialogField.FrameBorderPatternPreset].IsEnabled.Should().BeTrue();
+        pattern[ZoomObjectPropertiesDialogField.FrameBorderGradientEnabled].Value.Should().Be(false);
+        pattern[ZoomObjectPropertiesDialogField.FrameBorderThemeEnabled].Value.Should().Be(false);
+
+        var theme = session.Dispatch(new ZoomObjectPropertiesDialogAction(
+            ZoomObjectPropertiesDialogField.FrameBorderThemeEnabled,
+            true));
+        theme[ZoomObjectPropertiesDialogField.FrameBorderPatternEnabled].Value.Should().Be(false);
+        theme[ZoomObjectPropertiesDialogField.FrameBorderThemeEnabled].Value.Should().Be(true);
+        theme[ZoomObjectPropertiesDialogField.FrameBorderThemeColor].IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Properties_session_owns_summary_target_transition_and_commit_plan()
+    {
+        var targets = new[]
+        {
+            Target(),
+            new SummaryZoomTarget("section-b", "Section B", string.Empty,
+                1000, 2000, 90000, 80000),
+        };
+        var session = new ZoomObjectPropertiesDialogSession(
+            new ZoomObjectProperties(ImageType: "preview"),
+            targets,
+            [
+                new ZoomObjectProperties(ImageType: "preview"),
+                new ZoomObjectProperties(ImageType: "cover", ShowBackground: false),
+            ]);
+
+        session.FieldCatalog.Should().HaveCount(43);
+        session.FieldCatalog.Single(control =>
+                control.Field == ZoomObjectPropertiesDialogField.SummaryTile)
+            .Options.Should().Equal(session.SummaryTargetOptions.Cast<object>());
+
+        var state = session.Dispatch(new ZoomObjectPropertiesDialogAction(
+            ZoomObjectPropertiesDialogField.SummaryTile,
+            session.SummaryTargetOptions[1]));
+        state.SelectedSummaryTileIndex.Should().Be(1);
+        state[ZoomObjectPropertiesDialogField.ImageType].Value.Should().Be("cover");
+        state[ZoomObjectPropertiesDialogField.ShowBackground].Value.Should().Be(false);
+        state[ZoomObjectPropertiesDialogField.SummaryOffset].Value.Should().Be("1, 2");
+
+        session.Dispatch(new ZoomObjectPropertiesDialogAction(
+            ZoomObjectPropertiesDialogField.SummaryOffset,
+            "3, 4"));
+        session.Dispatch(new ZoomObjectPropertiesDialogAction(
+            ZoomObjectPropertiesDialogField.ApplySummaryPropertiesToAllTiles,
+            false));
+
+        session.TryAccept(out var validation).Should().BeTrue();
+        validation.Should().BeNull();
+        session.CommitPlan.SummaryTileLayout!.SectionId.Should().Be("section-b");
+        session.CommitPlan.SummaryTileLayout.OffsetFactorX.Should().Be(3000);
+        session.CommitPlan.SummaryTileProperties!.SectionId.Should().Be("section-b");
+        session.CommitPlan.Properties.ImageType.Should().Be("cover");
+    }
+
+    [Fact]
+    public void Properties_session_preserves_untouched_unknown_import_tokens()
+    {
+        var session = new ZoomObjectPropertiesDialogSession(new ZoomObjectProperties(
+            ImageType: "vendorPreview",
+            FrameGeometry: "vendorHexagon"));
+
+        session.State[ZoomObjectPropertiesDialogField.ImageType].Value.Should().Be("preview");
+        session.State[ZoomObjectPropertiesDialogField.FrameGeometry].Value.Should().Be("rect");
+
+        session.TryAccept(out var validation).Should().BeTrue();
+        validation.Should().BeNull();
+        session.CommitPlan.Properties.ImageType.Should().Be("vendorPreview");
+        session.CommitPlan.Properties.FrameGeometry.Should().Be("vendorHexagon");
+
+        session.Dispatch(new ZoomObjectPropertiesDialogAction(
+            ZoomObjectPropertiesDialogField.ImageType,
+            "preview"));
+        session.Dispatch(new ZoomObjectPropertiesDialogAction(
+            ZoomObjectPropertiesDialogField.FrameGeometry,
+            "rect"));
+        session.TryAccept(out validation).Should().BeTrue();
+        session.CommitPlan.Properties.ImageType.Should().Be("preview");
+        session.CommitPlan.Properties.FrameGeometry.Should().Be("rect");
+    }
+
+    [Fact]
     public void Properties_surface_plan_owns_localized_chrome_text_and_shared_metrics()
     {
         var originalCulture = CultureInfo.CurrentCulture;
@@ -262,6 +367,14 @@ public sealed class ZoomDialogSessionTests
             surface.Text.ApplyToAllSummaryTilesLabel
                 .Should().Be("Apply format to all Summary Zoom tiles");
             surface.ImageTypeOptions.Should().Equal("preview", "cover");
+            surface.FieldCatalog.Should().HaveCount(43);
+            surface.FieldCatalog.Select(control => control.Field).Should().OnlyHaveUniqueItems();
+            surface.FieldCatalog.First().Field.Should().Be(ZoomObjectPropertiesDialogField.ImageType);
+            surface.FieldCatalog.Last().Field.Should().Be(ZoomObjectPropertiesDialogField.ShowBackground);
+            surface.FieldCatalog.Single(control =>
+                    control.Field == ZoomObjectPropertiesDialogField.FrameBorderDash)
+                .Options.Should().Equal(
+                    ZoomObjectPropertiesPlanner.FrameBorderDashOptions.Cast<object>());
 
             var pseudo = CultureInfo.GetCultureInfo(Loc.PseudoLocalizationCultureName);
             CultureInfo.CurrentCulture = pseudo;

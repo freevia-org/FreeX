@@ -13,41 +13,24 @@ public sealed class ZoomAuthoringParityTests
             "ZoomObjectPropertiesDialog.cs"));
 
         source.Should().Contain("ZoomObjectPropertiesDialogSession");
-        source.Should().Contain("ZoomObjectPropertiesDialogSurfacePlanner.BuildSurfacePlan()");
-        source.Should().Contain("new ZoomObjectPropertiesDialogInput(");
-        source.Should().Contain("_session.TryAccept(input, out var validation)");
-        source.Should().Contain("ZoomObjectPropertiesDialogSession.BuildEnablement(");
-        source.Should().Contain("ZoomObjectPropertiesDialogSession.SelectExclusiveBorderMode(");
+        source.Should().Contain("_surface = _session.Surface");
+        source.Should().Contain("foreach (var plan in _session.FieldCatalog)");
+        source.Should().Contain("ZoomObjectPropertiesDialogControlKind.Toggle");
+        source.Should().Contain("new ZoomObjectPropertiesDialogAction(field, value)");
+        source.Should().Contain("_session.TryAccept(out var validation)");
+        source.Should().Contain("ApplyState(_session.State)");
+        source.Should().Contain("FocusValidationField(validation.Field)");
+        source.Should().Contain("AvaloniaUserMessageDialog.ShowWarningAsync(");
+
+        source.Should().NotContain("new ZoomObjectPropertiesDialogInput(");
+        source.Should().NotContain("ZoomObjectPropertiesDialogSurfacePlanner.BuildSurfacePlan()");
+        source.Should().NotContain("ZoomObjectPropertiesDialogSession.BuildEnablement(");
+        source.Should().NotContain("ZoomObjectPropertiesDialogSession.SelectExclusiveBorderMode(");
+        source.Should().NotContain("ZoomObjectPropertiesPlanner.FrameBorder");
         source.Should().NotContain("ZoomObjectPropertiesPlanner.TryParse");
-        source.Should().Contain("_transitionEnabled.IsChecked == true");
-        source.Should().Contain("_transitionDuration.IsEnabled");
-        source.Should().Contain("text.UseZoomTransitionLabel");
-        source.Should().Contain("text.UseZoomBorderLabel");
-        source.Should().Contain("text.UseGradientBorderLabel");
-        source.Should().Contain("text.UsePatternBorderLabel");
-        source.Should().Contain("text.UseNoFillBorderLabel");
-        source.Should().Contain("text.UseThemeBorderColorLabel");
-        source.Should().Contain("text.UseOuterBorderShadowLabel");
-        source.Should().Contain("text.UseBorderGlowLabel");
-        source.Should().Contain("text.UseBorderSoftEdgeLabel");
-        source.Should().Contain("text.UseBorderReflectionLabel");
-        source.Should().Contain("FrameBorderThemeColor");
-        source.Should().Contain("FrameBorderShadowEnabled:");
-        source.Should().Contain("FrameBorderGlowEnabled:");
-        source.Should().Contain("FrameBorderSoftEdgeEnabled:");
-        source.Should().Contain("FrameBorderReflectionEnabled:");
-        source.Should().Contain("text.FrameShapeLabel");
-        source.Should().Contain("_frameBorderColor.IsEnabled");
-        source.Should().Contain("text.ApplyToAllSummaryTilesLabel");
-        source.Should().Contain("ApplySummaryPropertiesToAllTiles");
-        source.Should().NotContain("\"Use Zoom transition\"");
-        source.Should().NotContain("\"Frame shape:\"");
-        source.Should().NotContain("\"Apply format to all Summary Zoom tiles\"");
-        source.Should().NotContain("\"Use border glow\"");
-        source.Should().NotContain("\"Use border soft edge\"");
-        source.Should().NotContain("\"Use border reflection\"");
-        source.Should().NotContain("Width = 440");
-        source.Should().NotContain("MinWidth = 180");
+        source.Should().NotContain("LoadSummaryTileFields");
+        source.Should().NotContain("SyncFrameBorderState");
+        source.Should().NotContain("private readonly CheckBox _returnToParent");
     }
 
     [Fact]
