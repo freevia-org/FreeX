@@ -67,7 +67,8 @@ public sealed class Wave161AvaloniaPivotChartContextMenuKeyTipParityTests
 
             var sortAscending = FindItem(menu, PivotChartFieldContextMenuAction.SortAscending);
             var sortKey = Assert.IsType<KeyGesture>(sortAscending.InputGesture).Key;
-            var keyDown = RaiseKey(menu, sortKey);
+            sortAscending.Focus().Should().BeTrue();
+            var keyDown = RaiseKey(sortAscending, sortKey);
 
             keyDown.Handled.Should().BeTrue();
             actions.Should().Equal(PivotChartFieldContextMenuAction.SortAscending);
@@ -89,7 +90,9 @@ public sealed class Wave161AvaloniaPivotChartContextMenuKeyTipParityTests
             actions.Should().Equal(PivotChartFieldContextMenuAction.SortAscending);
             menu.IsOpen.Should().BeTrue();
 
-            var escape = RaiseKey(menu, Key.Escape);
+            var escapeItem = menu.Items.OfType<MenuItem>().First(item => item.IsEnabled);
+            escapeItem.Focus().Should().BeTrue();
+            var escape = RaiseKey(escapeItem, Key.Escape);
             escape.Handled.Should().BeTrue();
             menu.IsOpen.Should().BeFalse();
 
