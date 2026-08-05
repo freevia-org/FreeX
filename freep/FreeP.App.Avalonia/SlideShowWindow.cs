@@ -528,13 +528,13 @@ public sealed class SlideShowWindow : Window
     }
 
     public SlideShowInkExecutionResult BeginPresenterInkStroke(double canvasX, double canvasY) =>
-        ApplyInkExecution(_session.BeginInkStroke(MapPresenterInkPoint(canvasX, canvasY)));
+        ApplyInkExecution(_session.BeginPointerInk(CreateCanvasPointer(canvasX, canvasY)));
 
     public SlideShowInkExecutionResult AppendPresenterInkStroke(double canvasX, double canvasY) =>
-        ApplyInkExecution(_session.AppendInkStroke(MapPresenterInkPoint(canvasX, canvasY)));
+        ApplyInkExecution(_session.AppendPointerInk(CreateCanvasPointer(canvasX, canvasY)));
 
     public SlideShowInkExecutionResult EndPresenterInkStroke(double canvasX, double canvasY) =>
-        ApplyInkExecution(_session.EndInkStroke(MapPresenterInkPoint(canvasX, canvasY)));
+        ApplyInkExecution(_session.EndPointerInk(CreateCanvasPointer(canvasX, canvasY)));
 
     public SlideShowInkExecutionResult ClearPresenterInkStrokes() =>
         ApplyInkExecution(_session.ClearInkStrokes());
@@ -576,33 +576,10 @@ public sealed class SlideShowWindow : Window
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.P && e.KeyModifiers.HasFlag(KeyModifiers.Control))
-        {
-            TogglePresenterView();
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.H)
-        {
-            ExecuteHiddenSlideReveal();
-            e.Handled = true;
-            return;
-        }
-
-        var plan = _session.PlanKeyboardInput(e.Key.ToString());
-        if (plan.ScreenMode is { } screenMode)
-        {
-            SetScreenMode(screenMode);
-            e.Handled = true;
-            return;
-        }
-
-        if (plan.ShouldExecuteHostCommand)
-        {
-            ApplyHostCommand(plan.HostCommand);
-        }
-
+        var plan = _session.PlanKeyboardInput(
+            e.Key.ToString(),
+            controlPressed: e.KeyModifiers.HasFlag(KeyModifiers.Control));
+        _session.ExecuteInputPlan(plan, CreateInputExecutionCallbacks());
         e.Handled = plan.IsHandled;
     }
 
@@ -635,34 +612,9 @@ public sealed class SlideShowWindow : Window
             return;
         }
 
-        var pointerIntent = _session.PlanPointerClick(
-            new SlideShowCanvasPointer(
-                pt.X,
-                pt.Y,
-                _slideCanvas.Bounds.Width,
-                _slideCanvas.Bounds.Height,
-                CurrentSlideMetrics()));
-        switch (pointerIntent.Kind)
-        {
-            case SlideShowPointerClickIntentKind.Trigger when pointerIntent.TriggerShapeId is uint triggerShapeId:
-                PlayTriggerGroup(triggerShapeId);
-                break;
-            case SlideShowPointerClickIntentKind.Zoom when pointerIntent.TargetSlideIndex is int targetSlideIndex:
-                ApplyHostCommand(_session.PlanZoomNavigation(
-                    targetSlideIndex,
-                    pointerIntent.ReturnToParent,
-                    pointerIntent.TransitionDurationMs,
-                    pointerIntent.ShowBackground));
-                break;
-            case SlideShowPointerClickIntentKind.Hyperlink when pointerIntent.Hyperlink is not null:
-                ActivateHyperlink(pointerIntent.Hyperlink);
-                break;
-            case SlideShowPointerClickIntentKind.Advance:
-                DoAdvance();
-                break;
-        }
-
-        e.Handled = pointerIntent.IsHandled;
+        var plan = _session.PlanPointerInput(CreateCanvasPointer(pt.X, pt.Y));
+        _session.ExecuteInputPlan(plan, CreateInputExecutionCallbacks());
+        e.Handled = plan.IsHandled;
     }
 
     private void OnPointerMoved(object? sender, PointerEventArgs e)
@@ -699,14 +651,7 @@ public sealed class SlideShowWindow : Window
     /// Returns the first matching hyperlink, or null.
     /// </summary>
     internal Hyperlink? HitTestHyperlink(Slide slide, double canvasX, double canvasY)
-        => SlideShowPointerInteractionPlanner.HitTestHyperlink(
-            slide,
-            new SlideShowCanvasPointer(
-                canvasX,
-                canvasY,
-                _slideCanvas.Bounds.Width,
-                _slideCanvas.Bounds.Height,
-                CurrentSlideMetrics()));
+        => _session.HitTestHyperlink(slide, CreateCanvasPointer(canvasX, canvasY));
 
     /// <summary>
     /// Activates a hyperlink: external → open URL or local file;
@@ -714,22 +659,8 @@ public sealed class SlideShowWindow : Window
     /// </summary>
     internal void ActivateHyperlink(Hyperlink hlink)
     {
-        if (hlink.IsExternal)
-        {
-            OpenExternalUrl(hlink.Url!);
-        }
-        else if (hlink.TargetSlideId is not null)
-        {
-            ApplyHostCommand(_session.PlanInternalSlideJump(hlink.TargetSlideId));
-            var postconditionPath = Environment.GetEnvironmentVariable("FREEP_PHYSICAL_HYPERLINK_POSTCONDITION");
-            if (!string.IsNullOrWhiteSpace(postconditionPath))
-            {
-                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(postconditionPath)!);
-                File.WriteAllText(
-                    postconditionPath,
-                    $"activation=internal-slide-hyperlink\ntargetSlideId={hlink.TargetSlideId}\ncurrentSlideIndex={_session.Controller.CurrentSlideIndex}\n");
-            }
-        }
+        var plan = _session.PlanHyperlinkActivation(hlink);
+        _session.ExecuteInputPlan(plan, CreateInputExecutionCallbacks());
     }
 
     /// <summary>
@@ -745,13 +676,36 @@ public sealed class SlideShowWindow : Window
 
     // ── Trigger shape hit-testing ─────────────────────────────────────────────────
 
-    private SlideShowInkPoint MapPresenterInkPoint(double canvasX, double canvasY)
-        => SlideShowPointerInteractionPlanner.MapInkPoint(new SlideShowCanvasPointer(
+    private SlideShowSessionInputExecutionCallbacks CreateInputExecutionCallbacks() =>
+        new(
+            TogglePresenterView,
+            () => ExecuteHiddenSlideReveal(),
+            SetScreenMode,
+            command => ApplyHostCommand(command),
+            hyperlink => OpenExternalUrl(hyperlink.Url!),
+            RecordInternalHyperlinkNavigation);
+
+    private void RecordInternalHyperlinkNavigation(Hyperlink hyperlink)
+    {
+        var postconditionPath = Environment.GetEnvironmentVariable("FREEP_PHYSICAL_HYPERLINK_POSTCONDITION");
+        if (string.IsNullOrWhiteSpace(postconditionPath))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(postconditionPath)!);
+        File.WriteAllText(
+            postconditionPath,
+            $"activation=internal-slide-hyperlink\ntargetSlideId={hyperlink.TargetSlideId}\ncurrentSlideIndex={_session.Controller.CurrentSlideIndex}\n");
+    }
+
+    private SlideShowCanvasPointer CreateCanvasPointer(double canvasX, double canvasY) =>
+        new(
             canvasX,
             canvasY,
             _slideCanvas.Bounds.Width,
             _slideCanvas.Bounds.Height,
-            CurrentSlideMetrics()));
+            CurrentSlideMetrics());
 
     private SlideShowInkExecutionResult ApplyInkExecution(SlideShowInkExecutionResult result)
     {
@@ -869,11 +823,6 @@ public sealed class SlideShowWindow : Window
             SlideShowPresenterPointerMode.Eraser => new Cursor(StandardCursorType.Cross),
             _ => Cursor.Default
         };
-
-    private void PlayTriggerGroup(uint triggerShapeId)
-    {
-        ApplyHostCommand(_session.PlanTrigger(triggerShapeId));
-    }
 
     // ── Navigation helpers ────────────────────────────────────────────────────────
 

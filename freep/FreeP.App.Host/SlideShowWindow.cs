@@ -514,13 +514,13 @@ public sealed class SlideShowWindow : Window
     }
 
     public SlideShowInkExecutionResult BeginPresenterInkStroke(double canvasX, double canvasY) =>
-        ApplyInkExecution(_session.BeginInkStroke(MapPresenterInkPoint(canvasX, canvasY)));
+        ApplyInkExecution(_session.BeginPointerInk(CreateCanvasPointer(canvasX, canvasY)));
 
     public SlideShowInkExecutionResult AppendPresenterInkStroke(double canvasX, double canvasY) =>
-        ApplyInkExecution(_session.AppendInkStroke(MapPresenterInkPoint(canvasX, canvasY)));
+        ApplyInkExecution(_session.AppendPointerInk(CreateCanvasPointer(canvasX, canvasY)));
 
     public SlideShowInkExecutionResult EndPresenterInkStroke(double canvasX, double canvasY) =>
-        ApplyInkExecution(_session.EndInkStroke(MapPresenterInkPoint(canvasX, canvasY)));
+        ApplyInkExecution(_session.EndPointerInk(CreateCanvasPointer(canvasX, canvasY)));
 
     public SlideShowInkExecutionResult ClearPresenterInkStrokes() =>
         ApplyInkExecution(_session.ClearInkStrokes());
@@ -541,34 +541,10 @@ public sealed class SlideShowWindow : Window
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.P &&
-            (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
-        {
-            TogglePresenterView();
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.H)
-        {
-            ExecuteHiddenSlideReveal();
-            e.Handled = true;
-            return;
-        }
-
-        var plan = _session.PlanKeyboardInput(e.Key.ToString());
-        if (plan.ScreenMode is { } screenMode)
-        {
-            SetScreenMode(screenMode);
-            e.Handled = true;
-            return;
-        }
-
-        if (plan.ShouldExecuteHostCommand)
-        {
-            ApplyHostCommand(plan.HostCommand);
-        }
-
+        var plan = _session.PlanKeyboardInput(
+            e.Key.ToString(),
+            controlPressed: (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control);
+        _session.ExecuteInputPlan(plan, CreateInputExecutionCallbacks());
         e.Handled = plan.IsHandled;
     }
 
@@ -598,34 +574,9 @@ public sealed class SlideShowWindow : Window
             }
         }
 
-        var pointerIntent = _session.PlanPointerClick(
-            new SlideShowCanvasPointer(
-                clickPt.X,
-                clickPt.Y,
-                _slideCanvas.ActualWidth,
-                _slideCanvas.ActualHeight,
-                CurrentSlideMetrics()));
-        switch (pointerIntent.Kind)
-        {
-            case SlideShowPointerClickIntentKind.Trigger when pointerIntent.TriggerShapeId is uint triggerShapeId:
-                PlayTriggerGroup(triggerShapeId);
-                break;
-            case SlideShowPointerClickIntentKind.Zoom when pointerIntent.TargetSlideIndex is int targetSlideIndex:
-                ApplyHostCommand(_session.PlanZoomNavigation(
-                    targetSlideIndex,
-                    pointerIntent.ReturnToParent,
-                    pointerIntent.TransitionDurationMs,
-                    pointerIntent.ShowBackground));
-                break;
-            case SlideShowPointerClickIntentKind.Hyperlink when pointerIntent.Hyperlink is not null:
-                ActivateHyperlink(pointerIntent.Hyperlink);
-                break;
-            case SlideShowPointerClickIntentKind.Advance:
-                DoAdvance();
-                break;
-        }
-
-        e.Handled = pointerIntent.IsHandled;
+        var plan = _session.PlanPointerInput(CreateCanvasPointer(clickPt.X, clickPt.Y));
+        _session.ExecuteInputPlan(plan, CreateInputExecutionCallbacks());
+        e.Handled = plan.IsHandled;
     }
 
     private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -664,14 +615,7 @@ public sealed class SlideShowWindow : Window
     /// Recurses into group children (BB2 fix) so hyperlinks on grouped shapes are reachable.
     /// </summary>
     internal Hyperlink? HitTestHyperlink(Slide slide, double canvasX, double canvasY)
-        => SlideShowPointerInteractionPlanner.HitTestHyperlink(
-            slide,
-            new SlideShowCanvasPointer(
-                canvasX,
-                canvasY,
-                _slideCanvas.ActualWidth,
-                _slideCanvas.ActualHeight,
-                CurrentSlideMetrics()));
+        => _session.HitTestHyperlink(slide, CreateCanvasPointer(canvasX, canvasY));
 
     /// <summary>
     /// Activates a hyperlink: external → open URL or local file;
@@ -679,14 +623,8 @@ public sealed class SlideShowWindow : Window
     /// </summary>
     internal void ActivateHyperlink(Hyperlink hlink)
     {
-        if (hlink.IsExternal)
-        {
-            OpenExternalUrl(hlink.Url!);
-        }
-        else if (hlink.TargetSlideId is not null)
-        {
-            ApplyHostCommand(_session.PlanInternalSlideJump(hlink.TargetSlideId));
-        }
+        var plan = _session.PlanHyperlinkActivation(hlink);
+        _session.ExecuteInputPlan(plan, CreateInputExecutionCallbacks());
     }
 
     /// <summary>
@@ -703,17 +641,21 @@ public sealed class SlideShowWindow : Window
             }));
     }
 
-    /// <summary>
-    /// Hit-tests the click point (in slide-canvas DIP coords) against trigger shapes on the slide.
-    /// Returns the TriggerShapeId if a trigger shape was hit, null otherwise.
-    /// </summary>
-    private SlideShowInkPoint MapPresenterInkPoint(double canvasX, double canvasY)
-        => SlideShowPointerInteractionPlanner.MapInkPoint(new SlideShowCanvasPointer(
+    private SlideShowSessionInputExecutionCallbacks CreateInputExecutionCallbacks() =>
+        new(
+            TogglePresenterView,
+            () => ExecuteHiddenSlideReveal(),
+            SetScreenMode,
+            command => ApplyHostCommand(command),
+            hyperlink => OpenExternalUrl(hyperlink.Url!));
+
+    private SlideShowCanvasPointer CreateCanvasPointer(double canvasX, double canvasY) =>
+        new(
             canvasX,
             canvasY,
             _slideCanvas.ActualWidth,
             _slideCanvas.ActualHeight,
-            CurrentSlideMetrics()));
+            CurrentSlideMetrics());
 
     private SlideShowInkExecutionResult ApplyInkExecution(SlideShowInkExecutionResult result)
     {
@@ -831,16 +773,6 @@ public sealed class SlideShowWindow : Window
             SlideShowPresenterPointerMode.Eraser => Cursors.Cross,
             _ => Cursors.Arrow
         };
-
-    /// <summary>
-    /// Advances the interactive sequence for <paramref name="triggerShapeId"/> by ONE step,
-    /// mirroring how the main sequence advances one click-step at a time.
-    /// Subsequent clicks on the same trigger shape advance further through its step list.
-    /// </summary>
-    private void PlayTriggerGroup(uint triggerShapeId)
-    {
-        ApplyHostCommand(_session.PlanTrigger(triggerShapeId));
-    }
 
     private void DoAdvance()
     {

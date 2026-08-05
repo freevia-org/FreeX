@@ -81,6 +81,102 @@ public sealed class SlideShowPresenterSessionDedupTests
     }
 
     [Fact]
+    public void Session_RoutesPresenterHiddenSlideAndScreenKeysThroughPortableActions()
+    {
+        var presentation = MakePresentation(2);
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        var started = new DateTimeOffset(2026, 8, 5, 11, 30, 0, TimeSpan.Zero);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            SlideShowHostCapabilityRecordingCaptureBackend.Deferred("portable input test"));
+        var events = new List<string>();
+        var callbacks = new SlideShowSessionInputExecutionCallbacks(
+            () => events.Add("presenter"),
+            () => events.Add("hidden-slide"),
+            mode => events.Add($"screen:{mode}"),
+            command => events.Add($"command:{command.Kind}"),
+            hyperlink => events.Add($"external:{hyperlink.Url}"));
+
+        var presenter = session.PlanKeyboardInput("P", controlPressed: true);
+        presenter.ActionKind.Should().Be(SlideShowSessionInputActionKind.TogglePresenterView);
+        presenter.IsHandled.Should().BeTrue();
+        session.ExecuteInputPlan(presenter, callbacks);
+
+        var hiddenSlide = session.PlanKeyboardInput("H");
+        hiddenSlide.ActionKind.Should().Be(SlideShowSessionInputActionKind.RevealHiddenSlide);
+        hiddenSlide.IsHandled.Should().BeTrue();
+        session.ExecuteInputPlan(hiddenSlide, callbacks);
+
+        var blackout = session.PlanKeyboardInput("B");
+        blackout.ActionKind.Should().Be(SlideShowSessionInputActionKind.SetScreenMode);
+        blackout.ScreenMode.Should().Be(SlideShowScreenMode.Black);
+        session.ExecuteInputPlan(blackout, callbacks);
+
+        events.Should().Equal("presenter", "hidden-slide", "screen:Black");
+    }
+
+    [Fact]
+    public void Session_RoutesZoomAndHyperlinkClicksWithoutNativePolicyBranches()
+    {
+        var presentation = MakePresentation(2);
+        presentation.Slides[0].NumericId = 256;
+        presentation.Slides[1].NumericId = 257;
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 42,
+            Kind = SlideShapeKind.Zoom,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+            PreservedObject = new PreservedObjectInfo
+            {
+                ObjectKind = PreservedObjectKind.Zoom,
+                ZoomTargetSlideNumericId = 257,
+                ZoomProperties = new ZoomObjectProperties(
+                    TransitionDuration: "1200",
+                    ShowBackground: false),
+            },
+        });
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            new DateTimeOffset(2026, 8, 5, 11, 45, 0, TimeSpan.Zero),
+            SlideShowHostCapabilityRecordingCaptureBackend.Deferred("portable input test"));
+
+        var zoom = session.PlanPointerInput(new SlideShowCanvasPointer(
+            48,
+            48,
+            960,
+            540,
+            new SlideShowSlideMetrics(960, 540)));
+
+        zoom.ActionKind.Should().Be(SlideShowSessionInputActionKind.ExecuteHostCommand);
+        zoom.IsHandled.Should().BeTrue();
+        zoom.HostCommand.Kind.Should().Be(SlideShowHostCommandKind.NavigateToSlide);
+        zoom.HostCommand.SlideIndex.Should().Be(1);
+        zoom.HostCommand.TransitionDurationMs.Should().Be(1200);
+        zoom.HostCommand.UseDestinationBackground.Should().BeFalse();
+
+        var external = new Hyperlink { Url = "https://example.com" };
+        var externalPlan = session.PlanHyperlinkActivation(external);
+        externalPlan.ActionKind.Should().Be(SlideShowSessionInputActionKind.OpenExternalHyperlink);
+        externalPlan.Hyperlink.Should().BeSameAs(external);
+
+        var events = new List<string>();
+        session.ExecuteInputPlan(
+            externalPlan,
+            new SlideShowSessionInputExecutionCallbacks(
+                () => { },
+                () => { },
+                _ => { },
+                _ => events.Add("host-command"),
+                hyperlink => events.Add($"external:{hyperlink.Url}")));
+        events.Should().Equal("external:https://example.com");
+    }
+
+    [Fact]
     public void PresenterViewSession_CommitsNotesBeforeJumpAndOwnsToolToggles()
     {
         var presentation = MakePresentation(2);
@@ -151,6 +247,9 @@ public sealed class SlideShowPresenterSessionDedupTests
         foreach (var source in slideShowFiles)
         {
             source.Should().Contain("_session.PlanKeyboardInput(");
+            source.Should().Contain("_session.PlanPointerInput(");
+            source.Should().Contain("_session.PlanHyperlinkActivation(");
+            source.Should().Contain("_session.ExecuteInputPlan(");
             source.Should().Contain("_session.ExecuteHostCommand(");
             source.Should().Contain("_session.BuildDisplayPlan(");
             source.Should().Contain("_session.DisplaySlide");
@@ -161,6 +260,9 @@ public sealed class SlideShowPresenterSessionDedupTests
             source.Should().NotContain("private SlideShowScreenMode _screenMode");
             source.Should().NotContain("SlideShowScreenModePlanner.TryPlanKey(");
             source.Should().NotContain("SlideShowHostPlanner.PlanSlideNumberJump(");
+            source.Should().NotContain("case SlideShowPointerClickIntentKind.");
+            source.Should().NotContain("if (e.Key == Key.P");
+            source.Should().NotContain("if (hlink.IsExternal)");
         }
     }
 
