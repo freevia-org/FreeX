@@ -757,10 +757,25 @@ public sealed class ReferencesTabTests
 
         dialog.Width.Should().Be(MarkIndexEntryDialogPlanner.DialogWidth);
         dialog.CrossReferenceEnabledForTests.Should().BeFalse();
+        dialog.PageNumberFormattingEnabledForTests.Should().BeTrue();
         dialog.SetForTests(" Animals ", " Cats ", true, " See Pet care ");
         dialog.CrossReferenceEnabledForTests.Should().BeTrue();
+        dialog.PageNumberFormattingEnabledForTests.Should().BeFalse();
         dialog.AcceptForTests().Should().BeTrue();
         dialog.Mark.Should().Be(new IndexMark("Animals", "Cats", "See Pet care"));
+    });
+
+    [Fact]
+    public Task MarkIndexEntry_dialog_carries_bold_and_italic_page_number_format() => RunOnUiThread(() =>
+    {
+        var dialog = new MarkIndexEntryDialog("Alpha");
+        dialog.SetForTests("Alpha", null, false, null, boldPageNumber: true, italicPageNumber: true);
+
+        dialog.AcceptForTests().Should().BeTrue();
+        dialog.Mark.Should().Be(new IndexMark(
+            "Alpha",
+            BoldPageNumber: true,
+            ItalicPageNumber: true));
     });
 
     [Fact]
