@@ -231,7 +231,12 @@ internal static class PptxChartWriter
     {
         XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
         if (chart.Legend is not { } position)
+        {
+            // Clearing the legend is an explicit authoring edit. Remove the
+            // preserved native node instead of leaving it visible on save.
+            document.Root?.Element(cx + "chart")?.Element(cx + "legend")?.Remove();
             return;
+        }
 
         var chartElement = document.Root?.Element(cx + "chart");
         if (chartElement is null)
