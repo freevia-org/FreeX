@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Editing;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 using Xunit;
@@ -46,22 +47,32 @@ public sealed class OutlineViewTests
             "OutlineView.cs"));
 
         source.Should().Contain("using FreeW.App.Presentation.Editing;");
-        source.Should().Contain("new OutlineViewController(GetCommittedDocument, _editor.SetHeadingLevel, _editor.MoveHeading)");
+        source.Should().Contain("new OutlineViewController(new OutlineViewOperations(");
+        source.Should().Contain("getDocument: GetCommittedDocument");
         source.Should().Contain("_controller.RowsChanged += RenderRows;");
         source.Should().Contain("_controller.Refresh();");
-        source.Should().Contain("_controller.Apply(_editor.PromoteHeading)");
-        source.Should().Contain("_controller.Move(moveUp: true)");
-        source.Should().Contain("_controller.Move(moveUp: false)");
+        source.Should().Contain("OutlineViewPlanner.ShowLevelOptions");
+        source.Should().Contain("OutlineViewPlanner.OutlineLevelOptions");
+        source.Should().Contain("OutlineViewPlanner.CommandPlans");
+        source.Should().Contain("_controller.Execute(command.Command)");
         source.Should().Contain("_controller.SelectBlock(blockIndex)");
         source.Should().Contain("_controller.SetShowLevel(level)");
         source.Should().Contain("_controller.SetFirstLineOnly(firstLineOnly)");
         source.Should().Contain("_controller.SetOutlineLevel(level)");
         source.Should().Contain("_controller.CurrentOutlineLevel");
         source.Should().Contain("_controller.VisibleRows");
+        source.Should().Contain("_controller.ProjectedRows");
+        source.Should().Contain("OutlineViewPlanner.FormatRow(projectedRow, RowMarkers)");
         source.Should().Contain("private TextDocument GetCommittedDocument()");
         source.Should().Contain("_editor.CommitToModel();", "WPF must still commit native edits before shared refresh");
         source.Should().Contain("\"⊞ \"").And.Contain("\"▢ \"", "WPF owns its visual marker glyphs");
         source.Should().NotContain("OutlineViewModel.Build(");
+        source.Should().NotContain("class ShowLevelItem");
+        source.Should().NotContain("class OutlineLevelItem");
+        source.Should().NotContain("_controller.Apply(");
+        source.Should().NotContain("_controller.Move(");
+        source.Should().NotContain("new string(' '");
+        source.Should().NotContain("(untitled heading)");
         source.Should().NotContain("_selectedShowLevel");
         source.Should().NotContain("_firstLineOnly");
     }
@@ -104,10 +115,31 @@ public sealed class OutlineViewTests
 
         // Promote "Section A" (Heading 2, block index 4) — it should become Heading 1.
         outline.SelectBlockIndex(4);
-        view.PromoteHeading(4);
-        outline.Refresh();
+        outline.ExecuteForTests(OutlineCommand.Promote);
 
         outline.VisibleRows.Single(r => r.Text == "Section A").Level.Should().Be(1);
+    }
+
+    [StaFact]
+    public void Native_row_markers_and_move_reselection_survive_portable_command_dispatch()
+    {
+        var view = new DocumentView();
+        view.LoadModel(Sample());
+        var outline = new OutlineView(view);
+        outline.Refresh();
+
+        outline.RowDisplayTextForTests(2).Should().Contain("▢ Chapter One");
+        outline.SelectBlockIndex(2);
+        outline.ExecuteForTests(OutlineCommand.Collapse);
+        view.IsHeadingCollapsed(2).Should().BeTrue();
+        outline.RowDisplayTextForTests(2).Should().Contain("⊞ Chapter One");
+        outline.ExecuteForTests(OutlineCommand.Expand);
+        outline.RowDisplayTextForTests(2).Should().Contain("▢ Chapter One");
+
+        outline.SelectBlockIndex(6);
+        outline.ExecuteForTests(OutlineCommand.MoveUp);
+        outline.SelectedBlockIndex.Should().Be(2);
+        outline.VisibleRows.Single(row => row.BlockIndex == 2).Text.Should().Be("Chapter Two");
     }
 
     [StaFact]

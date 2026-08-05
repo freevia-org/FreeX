@@ -19,6 +19,8 @@ namespace FreeW.App.Host.Editing;
 /// </summary>
 internal sealed class OutlineView : Border
 {
+    private static readonly OutlineRowMarkers RowMarkers = new("▢ ", "⊞ ", "    ");
+
     private readonly DocumentView _editor;
     private readonly OutlineViewController _controller;
     private readonly ListBox _list;
@@ -29,7 +31,16 @@ internal sealed class OutlineView : Border
     public OutlineView(DocumentView editor)
     {
         _editor = editor;
-        _controller = new OutlineViewController(GetCommittedDocument, _editor.SetHeadingLevel, _editor.MoveHeading);
+        _controller = new OutlineViewController(new OutlineViewOperations(
+            getDocument: GetCommittedDocument,
+            setHeadingLevel: _editor.SetHeadingLevel,
+            moveHeading: _editor.MoveHeading,
+            promoteToHeading1: _editor.PromoteHeadingToHeading1,
+            promote: _editor.PromoteHeading,
+            demote: _editor.DemoteHeading,
+            expand: _editor.ExpandHeading,
+            collapse: _editor.CollapseHeading,
+            isHeadingCollapsed: _editor.IsHeadingCollapsed));
 
         Background = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF));
 
@@ -57,8 +68,7 @@ internal sealed class OutlineView : Border
         Child = grid;
     }
 
-    // The "Outlining" mini-toolbar: the Show-Level box plus the outline restructuring buttons, all wired
-    // straight to the editor's existing reversible heading commands so the outline and the document agree.
+    // Native WPF control construction for the portable outline toolbar plan.
     private UIElement BuildToolbar()
     {
         var bar = new WrapPanel
@@ -84,18 +94,17 @@ internal sealed class OutlineView : Border
 
         bar.Children.Add(new TextBlock
         {
-            Text = "Show Level:",
+            Text = OutlineViewPlanner.ShowLevelLabel,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 0)
         });
 
-        _showLevel.Items.Add(new ShowLevelItem("All Levels", OutlineViewModel.ShowAllLevels));
-        for (var level = OutlineViewModel.MinShowLevel; level <= OutlineViewModel.MaxShowLevel; level++)
-            _showLevel.Items.Add(new ShowLevelItem($"Level {level}", level));
+        foreach (var option in OutlineViewPlanner.ShowLevelOptions)
+            _showLevel.Items.Add(option);
         _showLevel.SelectedIndex = 0;
         _showLevel.SelectionChanged += (_, _) =>
         {
-            if (_showLevel.SelectedItem is ShowLevelItem item)
+            if (_showLevel.SelectedItem is OutlineLevelOption item)
             {
                 _controller.SetShowLevel(item.Level);
             }
@@ -105,29 +114,27 @@ internal sealed class OutlineView : Border
         bar.Children.Add(Spacer());
         bar.Children.Add(new TextBlock
         {
-            Text = "Outline Level:",
+            Text = OutlineViewPlanner.OutlineLevelLabel,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 0)
         });
         bar.Children.Add(_outlineLevelCombo);
 
         bar.Children.Add(Spacer());
-        bar.Children.Add(ToolButton("⟪", "Promote to Heading 1", () => _controller.Apply(_editor.PromoteHeadingToHeading1)));
-        bar.Children.Add(ToolButton("◄", "Promote", () => _controller.Apply(_editor.PromoteHeading)));
-        bar.Children.Add(ToolButton("►", "Demote", () => _controller.Apply(_editor.DemoteHeading)));
-
-        bar.Children.Add(Spacer());
-        bar.Children.Add(ToolButton("▲", "Move Up", () => _controller.Move(moveUp: true)));
-        bar.Children.Add(ToolButton("▼", "Move Down", () => _controller.Move(moveUp: false)));
-
-        bar.Children.Add(Spacer());
-        bar.Children.Add(ToolButton("+", "Expand", () => _controller.Apply(_editor.ExpandHeading)));
-        bar.Children.Add(ToolButton("−", "Collapse", () => _controller.Apply(_editor.CollapseHeading)));
+        foreach (var command in OutlineViewPlanner.CommandPlans)
+        {
+            if (command.StartsGroup)
+                bar.Children.Add(Spacer());
+            bar.Children.Add(ToolButton(
+                CommandContent(command.Command),
+                command.Label,
+                () => _controller.Execute(command.Command)));
+        }
 
         bar.Children.Add(Spacer());
         var firstLine = new CheckBox
         {
-            Content = "Show First Line Only",
+            Content = OutlineViewPlanner.ShowFirstLineOnlyLabel,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(4, 0, 0, 0)
         };
@@ -147,14 +154,12 @@ internal sealed class OutlineView : Border
     private ComboBox BuildOutlineLevelCombo()
     {
         var combo = new ComboBox { Width = 130, VerticalAlignment = VerticalAlignment.Center };
-        combo.Items.Add(new OutlineLevelItem("Body Text", -1));
-        combo.Items.Add(new OutlineLevelItem("Title", 0));
-        for (var lvl = 1; lvl <= OutlineTools.MaxHeadingLevel; lvl++)
-            combo.Items.Add(new OutlineLevelItem($"Level {lvl}", lvl));
+        foreach (var option in OutlineViewPlanner.OutlineLevelOptions)
+            combo.Items.Add(option);
         combo.SelectedIndex = 0;
         combo.SelectionChanged += (_, _) =>
         {
-            if (!_updatingLevelCombo && combo.SelectedItem is OutlineLevelItem item)
+            if (!_updatingLevelCombo && combo.SelectedItem is OutlineLevelOption item)
                 _controller.SetOutlineLevel(item.Level);
         };
         return combo;
@@ -165,16 +170,8 @@ internal sealed class OutlineView : Border
         _updatingLevelCombo = true;
         try
         {
-            var targetLevel = _controller.CurrentOutlineLevel;
-            foreach (var item in _outlineLevelCombo.Items.OfType<OutlineLevelItem>())
-            {
-                if (item.Level == targetLevel)
-                {
-                    _outlineLevelCombo.SelectedItem = item;
-                    return;
-                }
-            }
-            _outlineLevelCombo.SelectedIndex = 0;
+            _outlineLevelCombo.SelectedIndex =
+                OutlineViewPlanner.OutlineLevelOptionIndex(_controller.CurrentOutlineLevel);
         }
         finally
         {
@@ -185,10 +182,22 @@ internal sealed class OutlineView : Border
     private static UIElement Spacer() =>
         new Border { Width = 10 };
 
+    private static string CommandContent(OutlineCommand command) => command switch
+    {
+        OutlineCommand.PromoteToHeading1 => "⟪",
+        OutlineCommand.Promote => "◄",
+        OutlineCommand.Demote => "►",
+        OutlineCommand.MoveUp => "▲",
+        OutlineCommand.MoveDown => "▼",
+        OutlineCommand.Expand => "+",
+        OutlineCommand.Collapse => "−",
+        _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
+    };
+
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_list.SelectedItem is OutlineRowItem selected)
-            _controller.SelectBlock(selected.Row.BlockIndex);
+            _controller.SelectBlock(selected.Row.BlockIndex, navigate: true);
         else
             _controller.ClearSelection();
 
@@ -210,9 +219,10 @@ internal sealed class OutlineView : Border
         {
             _list.Items.Clear();
             OutlineRowItem? toSelect = null;
-            foreach (var row in _controller.VisibleRows)
+            foreach (var projectedRow in _controller.ProjectedRows)
             {
-                var item = new OutlineRowItem(row, _editor.IsHeadingCollapsed(row.BlockIndex));
+                var row = projectedRow.Row;
+                var item = new OutlineRowItem(projectedRow);
                 _list.Items.Add(item);
                 if (row.BlockIndex == _controller.SelectedBlockIndex)
                     toSelect = item;
@@ -261,36 +271,24 @@ internal sealed class OutlineView : Border
     /// </summary>
     internal void SetOutlineLevel(int level) => _controller.SetOutlineLevel(level);
 
+    internal void ExecuteForTests(OutlineCommand command) => _controller.Execute(command);
+
+    internal int? SelectedBlockIndex => _controller.SelectedBlockIndex;
+
+    internal string? RowDisplayTextForTests(int blockIndex) =>
+        _list.Items.OfType<OutlineRowItem>()
+            .FirstOrDefault(item => item.Row.BlockIndex == blockIndex)
+            ?.ToString();
+
     /// <summary>The level currently shown in the Outline Level combo (-1 = Body Text / 0 = Title / 1–N = HeadingN). For tests.</summary>
     internal int CurrentOutlineLevel => _controller.CurrentOutlineLevel;
 
-    private sealed class ShowLevelItem(string label, int level)
-    {
-        public int Level { get; } = level;
-        private readonly string _label = label;
-        public override string ToString() => _label;
-    }
-
-    private sealed class OutlineLevelItem(string label, int level)
-    {
-        public int Level { get; } = level;
-        private readonly string _label = label;
-        public override string ToString() => _label;
-    }
-
     // One outline row: indents the text by its outline level, prefixes a heading marker (collapsed
     // headings get a "+"), and remembers the source row so a command can map back to the model block index.
-    private sealed class OutlineRowItem(OutlineRow row, bool collapsed)
+    private sealed class OutlineRowItem(OutlineProjectedRow projectedRow)
     {
-        public OutlineRow Row { get; } = row;
-        private readonly bool _collapsed = collapsed;
+        public OutlineRow Row => projectedRow.Row;
 
-        public override string ToString()
-        {
-            var indent = new string(' ', Row.Level * 4);
-            var marker = Row.IsHeading ? (_collapsed ? "⊞ " : "▢ ") : "    ";
-            var text = Row.Text.Length > 0 ? Row.Text : (Row.IsHeading ? "(untitled heading)" : string.Empty);
-            return indent + marker + text;
-        }
+        public override string ToString() => OutlineViewPlanner.FormatRow(projectedRow, RowMarkers);
     }
 }
