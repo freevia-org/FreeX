@@ -96,6 +96,71 @@ public sealed class HeaderFooterPagePlannerTests
         HeaderFooterPagePlanner.UsesDifferentOddEvenPages(document).Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(SectionBreakKind.NextPage, 2, false)]
+    [InlineData(SectionBreakKind.Continuous, 2, false)]
+    [InlineData(SectionBreakKind.EvenPage, 2, false)]
+    [InlineData(SectionBreakKind.OddPage, 3, true)]
+    public void BuildPhysicalPagePlan_ExpandsFirstSectionTransitionToRequestedParity(
+        SectionBreakKind breakKind,
+        int expectedPhysicalPages,
+        bool expectsBlank)
+    {
+        var sections = new[]
+        {
+            new Section(new PageSettings { WidthPt = 500 }, breakKind),
+            new Section(new PageSettings { WidthPt = 600 })
+        };
+        var bodyPages = new[]
+        {
+            PagePlan(sectionIndex: 0, sectionRelativePage: 1, sections[0]),
+            PagePlan(sectionIndex: 1, sectionRelativePage: 1, sections[1])
+        };
+
+        var physical = HeaderFooterPagePlanner.BuildPhysicalPagePlan(bodyPages, sections);
+
+        physical.Should().HaveCount(expectedPhysicalPages);
+        physical.Count(page => page.IsParityBlank).Should().Be(expectsBlank ? 1 : 0);
+        physical.Where(page => !page.IsParityBlank)
+            .Select(page => page.BodyPageIndex)
+            .Should().Equal(0, 1);
+        if (expectsBlank)
+        {
+            physical[1].BodyPageIndex.Should().BeNull();
+            physical[1].PageSection.SectionIndex.Should().Be(0);
+            physical[1].PageSection.PageSettings.Should().BeSameAs(sections[0].Page);
+            physical[2].PhysicalPageIndex.Should().Be(2);
+        }
+    }
+
+    [Theory]
+    [InlineData(SectionBreakKind.EvenPage, 4, true)]
+    [InlineData(SectionBreakKind.OddPage, 3, false)]
+    public void BuildPhysicalPagePlan_UsesActualCandidateParityAfterOverflowPages(
+        SectionBreakKind breakKind,
+        int expectedPhysicalPages,
+        bool expectsBlank)
+    {
+        var sections = new[]
+        {
+            new Section(new PageSettings(), breakKind),
+            new Section(new PageSettings())
+        };
+        var bodyPages = new[]
+        {
+            PagePlan(0, 1, sections[0]),
+            PagePlan(0, 2, sections[0]),
+            PagePlan(1, 1, sections[1])
+        };
+
+        var physical = HeaderFooterPagePlanner.BuildPhysicalPagePlan(bodyPages, sections);
+
+        physical.Should().HaveCount(expectedPhysicalPages);
+        physical.Count(page => page.IsParityBlank).Should().Be(expectsBlank ? 1 : 0);
+        physical[^1].BodyPageIndex.Should().Be(2);
+        physical[^1].PhysicalPageIndex.Should().Be(expectedPhysicalPages - 1);
+    }
+
     [Fact]
     public void MapPagesToSections_UsesOwningSectionAndSectionRelativePageNumbers()
     {
@@ -144,4 +209,13 @@ public sealed class HeaderFooterPagePlannerTests
         pages[2].SectionIndex.Should().Be(1);
         pages[2].HeadersFooters.Should().BeSameAs(document.FinalSectionHeadersFooters);
     }
+
+    private static HeaderFooterPageSectionPlan PagePlan(
+        int sectionIndex,
+        int sectionRelativePage,
+        Section section) => new(
+        sectionIndex,
+        section.HeadersFooters,
+        sectionRelativePage,
+        section.Page);
 }
