@@ -3134,6 +3134,86 @@ public sealed class SlideCompositorTests
             "pie chart must still expand one color per point (regression guard)");
     }
 
+    [Fact]
+    public void Compose_IncludesMasterAndLayoutDecorationButNotPlaceholderDefinitions()
+    {
+        var presentation = PresentationModel.CreateEmpty();
+        var master = new SlideMaster { Id = "m1" };
+        master.Placeholders.Add(new SlideShape
+        {
+            Id = 10,
+            Name = "Master logo",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 100,
+            OffsetYEmu = 200,
+            ExtentCxEmu = 1000,
+            ExtentCyEmu = 600,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0x33))),
+        });
+        master.Placeholders.Add(new SlideShape
+        {
+            Id = 11,
+            Name = "Master title placeholder",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            Placeholder = new Placeholder { Type = PlaceholderType.Title },
+        });
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        layout.Placeholders.Add(new SlideShape
+        {
+            Id = 12,
+            Name = "Layout footer decoration",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 120,
+            OffsetYEmu = 800,
+            ExtentCxEmu = 900,
+            ExtentCyEmu = 300,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x44, 0x55, 0x66))),
+        });
+
+        presentation.Masters.Add(master);
+        presentation.Layouts.Add(layout);
+        var slide = new Slide { Id = "s1", LayoutId = "l1" };
+        presentation.Slides.Add(slide);
+
+        var shapes = SlideCompositor.Compose(presentation, slide)
+            .OfType<DrawOp.Shape>()
+            .ToArray();
+
+        shapes.Should().HaveCount(2);
+        shapes.Select(shape => shape.ShapeId).Should().Equal(10u, 12u);
+    }
+
+    [Fact]
+    public void Compose_HidesMasterDecorationWhenShowMasterShapesIsFalse()
+    {
+        var presentation = PresentationModel.CreateEmpty();
+        presentation.ShowMasterShapes = false;
+        var master = new SlideMaster { Id = "m1" };
+        master.Placeholders.Add(new SlideShape
+        {
+            Id = 10,
+            Name = "Master logo",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 100,
+            OffsetYEmu = 200,
+            ExtentCxEmu = 1000,
+            ExtentCyEmu = 600,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0x33))),
+        });
+        presentation.Masters.Add(master);
+        var slide = new Slide { Id = "s1" };
+        presentation.Slides.Add(slide);
+
+        SlideCompositor.Compose(presentation, slide)
+            .OfType<DrawOp.Shape>()
+            .Should().BeEmpty();
+    }
+
     private static SlideShape CreateTextPlaceholder(
         uint id,
         PlaceholderType type,

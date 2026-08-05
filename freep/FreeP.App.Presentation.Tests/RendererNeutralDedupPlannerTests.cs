@@ -325,6 +325,34 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void ShowMasterShapes_RoundTripsShowPrDefaultAndDisabledValue()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.ShowMasterShapes = false;
+
+        using var output = new MemoryStream();
+        PptxPackageWriter.Write(presentation, output);
+        var bytes = output.ToArray();
+        var reopened = PptxPackageReader.Read(new MemoryStream(bytes));
+
+        reopened.ShowMasterShapes.Should().BeFalse();
+        using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        using var properties = archive.GetEntry("ppt/presProps.xml")!.Open();
+        var showPr = XDocument.Load(properties).Descendants(XName.Get(
+            "showPr", "http://schemas.openxmlformats.org/presentationml/2006/main")).Single();
+        showPr.Attribute("showMasterSp")!.Value.Should().Be("0");
+
+        var defaultPresentation = Presentation.CreateEmpty();
+        using var defaultOutput = new MemoryStream();
+        PptxPackageWriter.Write(defaultPresentation, defaultOutput);
+        using var defaultArchive = new ZipArchive(new MemoryStream(defaultOutput.ToArray()), ZipArchiveMode.Read);
+        using var defaultProperties = defaultArchive.GetEntry("ppt/presProps.xml")!.Open();
+        var defaultShowPr = XDocument.Load(defaultProperties).Descendants(XName.Get(
+            "showPr", "http://schemas.openxmlformats.org/presentationml/2006/main")).Single();
+        defaultShowPr.Attribute("showMasterSp").Should().BeNull();
+    }
+
+    [Fact]
     public void BevelGeometryHelper_MapsSurfaceDimensionsToVisibleFootprint()
     {
         var dimensions = BevelGeometryHelper.GetRenderDimensions(

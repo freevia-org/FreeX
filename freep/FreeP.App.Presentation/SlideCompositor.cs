@@ -89,7 +89,21 @@ public static class SlideCompositor
             ops.Add(new DrawOp.Background { Fill = bgFill, BoundsDip = slideBounds });
         }
 
-        // 2. Shapes in z-order (back to front)
+        // 2. Master/layout decoration in z-order. Placeholder roots remain inheritance-only;
+        // showMasterSp controls authored master decoration without hiding the background.
+        if (presentation.ShowMasterShapes && master is not null)
+        {
+            foreach (var shape in master.Placeholders.Where(shape => shape.Placeholder is null))
+                ComposeShape(shape, slide, presentation, theme, ops, slideIndex, effectiveClrMap);
+        }
+
+        if (layout is not null)
+        {
+            foreach (var shape in layout.Placeholders.Where(shape => shape.Placeholder is null))
+                ComposeShape(shape, slide, presentation, theme, ops, slideIndex, effectiveClrMap);
+        }
+
+        // 3. Shapes in z-order (back to front)
         foreach (var shape in slide.Shapes)
             ComposeShape(shape, slide, presentation, theme, ops, slideIndex, effectiveClrMap);
 
