@@ -85,6 +85,7 @@ public sealed partial class MainWindow
         _ribbonKeyTipsVisible = visible;
         if (_ribbonControl is not null)
             AvaloniaRibbonRenderer.SetTopLevelKeyTipsVisible(_ribbonControl, visible);
+        RefreshAvaloniaQuickAccessKeyTipBadges();
     }
 
     private static string? ToRibbonKeyTipToken(Key key)
