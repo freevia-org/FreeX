@@ -1405,6 +1405,38 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void ChartExLegendRemoval_RemovesPreservedNativeLegendOnWrite()
+    {
+        var chart = new ChartShape
+        {
+            IsChartEx = true,
+            Legend = null,
+            PreservedChartExXml = """
+                <cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex">
+                  <cx:chart>
+                    <cx:legend pos="r" overlay="1" />
+                    <cx:plotArea><cx:plotAreaRegion><cx:series layoutId="column" /></cx:plotAreaRegion></cx:plotArea>
+                  </cx:chart>
+                  <cx:preservedExtension value="must-survive" />
+                </cx:chartSpace>
+                """
+        };
+
+        using var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+            PptxChartWriter.WriteChartExPart(archive, chart, 1);
+
+        package.Position = 0;
+        using var readArchive = new ZipArchive(package, ZipArchiveMode.Read);
+        using var reader = new StreamReader(readArchive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var xml = reader.ReadToEnd();
+
+        xml.Should().NotContain("<cx:legend");
+        xml.Should().Contain("preservedExtension");
+        xml.Should().Contain("must-survive");
+    }
+
+    [Fact]
     public void SetChartDisplayOptions_WaterfallConnectorLines_RoundTripsAndUndo()
     {
         var (p, bus, id) = MakeChartPresentation();
