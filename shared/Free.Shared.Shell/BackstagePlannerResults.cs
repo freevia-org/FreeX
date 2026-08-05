@@ -19,4 +19,9 @@ public sealed record BackstageActionGroup(
 public sealed record BackstageActionRow(
     string Label,
     string Description,
-    Action Invoke);
+    Action Invoke)
+{
+    public string? AutomationId { get; init; }
+
+    public bool IsEnabled { get; init; } = true;
+}

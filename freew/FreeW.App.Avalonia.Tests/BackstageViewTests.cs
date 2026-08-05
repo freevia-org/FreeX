@@ -520,7 +520,13 @@ public class BackstageViewTests
         source.Should().Contain("SisterBackstageInfoPanePlanner.Build(");
         source.Should().Contain("BackstageInfoPaneSpec plan");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");
-        source.Should().Contain("ApplicationOptionsSummaryPlanner.Build(");
+        source.Should().Contain("SisterBackstagePaneSpecPlanner");
+        source.Should().Contain("PaneSpecs.BuildNewPaneSpec(");
+        source.Should().Contain("PaneSpecs.BuildOptionsPaneSpec(");
+        source.Should().Contain("SisterBackstageAccountPaneContextPlanner.BuildLocal(");
+        source.Should().NotContain("ApplicationOptionsSummaryPlanner.Build(");
+        source.Should().NotContain("new SisterBackstageAccountPaneContext(");
+        source.Should().NotContain("SafeEnvironment(");
         source.Should().Contain("var document = _callbacks.GetDocument()");
         source.Should().Contain("DismissThen(_callbacks.MarkAsFinal)");
         source.Should().Contain("DismissThen(_callbacks.RestrictEditing)");

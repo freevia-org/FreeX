@@ -251,10 +251,13 @@ public sealed class BackstagePaneComposer
             Margin = new Thickness(0, 0, 0, 10)
         };
         button.Click += (_, _) => action.Invoke();
+        button.IsEnabled = action.IsEnabled;
         // The action label is the shared semantic contract. Keep it on the
         // button even though the visual content is a two-line StackPanel so
         // accessibility clients and the parity harness see the same action.
         AutomationProperties.SetName(button, action.Label);
+        if (!string.IsNullOrWhiteSpace(action.AutomationId))
+            AutomationProperties.SetAutomationId(button, action.AutomationId);
 
         var stack = new StackPanel();
         stack.Children.Add(new TextBlock
@@ -285,7 +288,10 @@ public sealed class BackstagePaneComposer
         var row = new StackPanel { Margin = ToThickness(BackstageVisualContract.Pane.ActionRowMargin) };
         var button = _kit.LinkButton(action.Label, action.Invoke);
         button.FontSize = BackstageVisualContract.Pane.ActionFontSize;
+        button.IsEnabled = action.IsEnabled;
         AutomationProperties.SetName(button, action.Label);
+        if (!string.IsNullOrWhiteSpace(action.AutomationId))
+            AutomationProperties.SetAutomationId(button, action.AutomationId);
         row.Children.Add(button);
 
         if (!string.IsNullOrWhiteSpace(action.Description))
@@ -306,33 +312,4 @@ public sealed class BackstagePaneComposer
     private static Thickness ToThickness(BackstageVisualThickness thickness) =>
         new(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
 }
-
-public sealed record BackstageRecentPaneSpec(
-    IReadOnlyList<string> Paths,
-    string EmptyText,
-    Action<string> OpenPath);
-
-public sealed record BackstageTemplatePaneSpec(
-    string Heading,
-    string TileCaption,
-    string FooterText,
-    Action Create);
-
-public sealed record BackstageOptionsPaneSpec(
-    string Description,
-    IReadOnlyList<BackstageFieldRow> Fields,
-    string? EditText = null,
-    Action? Edit = null);
-
-public sealed record BackstageAccountPaneSpec(
-    string Heading,
-    string Description,
-    IReadOnlyList<SisterBackstageAccountFieldGroup> Groups,
-    string? OptionsText = null,
-    Action? OpenOptions = null);
-
-public sealed record BackstageActionPaneSpec(
-    string Heading,
-    string Description,
-    IReadOnlyList<BackstageActionGroup> Groups);
 

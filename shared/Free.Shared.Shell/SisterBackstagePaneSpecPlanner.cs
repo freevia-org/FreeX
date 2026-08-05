@@ -1,8 +1,7 @@
 using Free.Shared.AppServices;
 using Free.Shared.Localization;
-using Free.Shared.Shell;
 
-namespace Free.Shared.Shell.Wpf;
+namespace Free.Shared.Shell;
 
 public sealed record SisterBackstageExportPaneTextSpec(
     string Heading,
@@ -103,7 +102,7 @@ public sealed record SisterBackstagePaneTextSpec(
 }
 
 /// <summary>
-/// Builds common Backstage pane specs for WPF sister apps from app-specific text presets and host callbacks.
+/// Builds renderer-neutral Backstage pane specs for sister apps from app text and live callbacks.
 /// </summary>
 public sealed class SisterBackstagePaneSpecPlanner
 {
@@ -114,6 +113,8 @@ public sealed class SisterBackstagePaneSpecPlanner
         ArgumentNullException.ThrowIfNull(text);
         _text = text;
     }
+
+    public SisterBackstagePaneTextSpec Text => _text;
 
     public BackstageRecentPaneSpec BuildRecentPaneSpec(
         IEnumerable<string> recentPaths,
@@ -204,5 +205,27 @@ public sealed class SisterBackstagePaneSpecPlanner
             export.Heading,
             export.Description,
             groups);
+    }
+}
+
+public static class BackstageApplicationOptionsPanePlanner
+{
+    public static BackstageOptionsPaneSpec Build(
+        string description,
+        IApplicationOptionsSummarySource options,
+        string dataFolder,
+        string? editText = null,
+        Action? edit = null)
+    {
+        ArgumentNullException.ThrowIfNull(description);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(dataFolder);
+
+        var summary = ApplicationOptionsSummaryPlanner.Build(options, dataFolder);
+        return new BackstageOptionsPaneSpec(
+            description,
+            summary.Rows.Select(row => new BackstageFieldRow(row.Label, row.Value)).ToArray(),
+            editText,
+            edit);
     }
 }

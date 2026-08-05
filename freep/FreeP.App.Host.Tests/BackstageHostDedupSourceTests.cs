@@ -29,39 +29,67 @@ public sealed class BackstageHostDedupSourceTests
     }
 
     [Fact]
-    public void BackstageView_DelegatesHostLifecycleAndActionsToSharedController()
+    public void BackstageViews_DelegatePaneAndWorkflowSemanticsToPortablePlanners()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
-        var source = File.ReadAllText(Path.Combine(
+        var wpfSource = File.ReadAllText(Path.Combine(
             root,
             "freep",
             "FreeP.App.Host",
             "Backstage",
             "BackstageView.cs"));
+        var avaloniaSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Avalonia",
+            "Backstage",
+            "BackstageView.cs"));
 
-        source.Should().Contain("SisterBackstageHostController");
-        source.Should().Contain("new SisterBackstageHostSpec(");
-        source.Should().Contain("Chrome = BackstageRibbonChrome.Create()");
-        source.Should().Contain("public void Show() => _backstage.Show();");
-        source.Should().Contain("public void Hide() => _backstage.Hide();");
-        source.Should().Contain("backstage.FrameCommand(_actions.New)");
-        source.Should().Contain("PresentationExportPlanner.BuildBackstageExportPlan(");
-        source.Should().Contain("videoExportAvailable: _actions.CanExportVideo())");
-        source.Should().Contain("Func<bool> CanExportVideo");
-        source.Should().Contain("_backstage.HideThen(ResolveExportAction(action.CommandId))");
-        source.Should().Contain("PresentationExportPlanner.PdfExportCommandId => _actions.ExportPdf");
-        source.Should().Contain("PresentationExportPlanner.NotesPagePdfExportCommandId => _actions.ExportNotesPagePdf");
-        source.Should().Contain("PresentationExportPlanner.ImageExportCommandId => _actions.ExportImages");
-        source.Should().Contain("PresentationExportPlanner.VideoExportCommandId => _actions.ExportVideo");
-        source.Should().Contain("ExportNotesPagePdf");
-        source.Should().Contain("plan.Options.DisplaySummary");
-        source.Should().Contain("plan.OutputOptionChoices");
-        source.Should().Contain("plan.DeferredActions.Where(action =>");
-        source.Should().Contain("_backstage.ShowPane(\"Options\")");
-        source.Should().NotContain("new BackstageViewShell(");
-        source.Should().NotContain("SisterBackstageEntryBuilder.Build(");
-        source.Should().NotContain("Hide(); _actions");
-        source.Should().NotContain("_shell.Show");
+        wpfSource.Should().Contain("SisterBackstageHostController");
+        wpfSource.Should().Contain("new SisterBackstageHostSpec(");
+        wpfSource.Should().Contain("Chrome = BackstageRibbonChrome.Create()");
+        wpfSource.Should().Contain("public void Show() => _backstage.Show();");
+        wpfSource.Should().Contain("public void Hide() => _backstage.Hide();");
+        wpfSource.Should().Contain("backstage.FrameCommand(_actions.New)");
+        wpfSource.Should().Contain("PresentationBackstagePanePlanner");
+        wpfSource.Should().Contain("PresentationBackstagePrintSurfacePlanner.Build(plan)");
+        wpfSource.Should().Contain("PanePlans.BuildInfoPane(");
+        wpfSource.Should().Contain("PanePlans.BuildExportPane(");
+        wpfSource.Should().Contain("PanePlans.BuildRecentPane(");
+        wpfSource.Should().Contain("PanePlans.BuildNewPane(");
+        wpfSource.Should().Contain("PanePlans.BuildOptionsPane(");
+        wpfSource.Should().Contain("PanePlans.BuildAccountPane(");
+        wpfSource.Should().Contain("PresentationBackstageExportActions(");
+
+        avaloniaSource.Should().Contain("PresentationBackstagePanePlanner");
+        avaloniaSource.Should().Contain("PresentationBackstagePrintSurfacePlanner.Build(plan)");
+        avaloniaSource.Should().Contain("AvaloniaBackstagePaneComposer");
+        avaloniaSource.Should().Contain("Panes.BuildInfoPane(");
+        avaloniaSource.Should().Contain("Panes.BuildRecentPane(");
+        avaloniaSource.Should().Contain("Panes.BuildTemplatePane(");
+        avaloniaSource.Should().Contain("Panes.BuildOptionsPane(");
+        avaloniaSource.Should().Contain("Panes.BuildAccountPane(");
+        avaloniaSource.Should().Contain("Panes.BuildActionPane(");
+
+        foreach (var source in new[] { wpfSource, avaloniaSource })
+        {
+            source.Should().NotContain("PresentationExportPlanner.BuildBackstageExportPlan(");
+            source.Should().NotContain("PresentationExportPlanner.PdfExportCommandId");
+            source.Should().NotContain("SisterBackstageInfoPanePlanner.Build(");
+            source.Should().NotContain("SisterBackstageAccountPanePlanner.Build(");
+            source.Should().NotContain("ApplicationOptionsSummaryPlanner.Build(");
+            source.Should().NotContain("plan.OutputOptionChoices");
+            source.Should().NotContain("plan.LayoutChoices");
+            source.Should().NotContain("plan.RangeChoices");
+            source.Should().NotContain("plan.NativePrintHandoff.Can");
+            source.Should().NotContain("new SisterBackstageAccountPaneContext(");
+            source.Should().NotContain("SafeEnvironment(");
+        }
+
+        wpfSource.Should().NotContain("new BackstageViewShell(");
+        wpfSource.Should().NotContain("SisterBackstageEntryBuilder.Build(");
+        wpfSource.Should().NotContain("Hide(); _actions");
+        wpfSource.Should().NotContain("_shell.Show");
     }
 
 }

@@ -1,5 +1,6 @@
 using System.Windows.Media;
 using Free.Shared.AppServices;
+using Free.Shared.Shell;
 
 namespace Free.Shared.Shell.Wpf;
 

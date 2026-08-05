@@ -31,7 +31,7 @@ internal sealed class BackstageView : UserControl
         BackstageStrings.Current.Get);
     private static BackstageVisualKit Kit => BackstageResources.Kit;
     private static BackstagePaneComposer Panes => BackstageResources.Panes;
-    private static SisterBackstagePaneSpecPlanner PaneSpecs => BackstageResources.PaneSpecs;
+    private static readonly PresentationBackstagePanePlanner PanePlans = new(BackstageStrings.Current.Get);
 
     private readonly Func<Presentation> _getModel;
     private readonly FileCommands _file;
@@ -107,89 +107,56 @@ internal sealed class BackstageView : UserControl
     private UIElement BuildPrintPane()
     {
         var plan = _file.BuildPrintBackstagePlan(_printRequest);
+        var surface = PresentationBackstagePrintSurfacePlanner.Build(plan);
         var panel = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Kit.HeadingText(plan.Heading));
+        panel.Children.Add(Kit.HeadingText(surface.Heading));
         panel.Children.Add(new TextBlock
         {
-            Text = plan.Description,
+            Text = surface.Description,
             Foreground = Kit.Muted,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
         });
 
         panel.Children.Add(Kit.SubHeading("Settings"));
-        panel.Children.Add(Kit.Field("Layout", plan.SelectedLayout.Layout.DisplayName));
-        panel.Children.Add(Kit.Field("Slides", plan.SlideRangeSummary));
-        panel.Children.Add(Kit.Field("Pages", plan.PageCount.ToString()));
-        panel.Children.Add(Kit.Field("Preview", plan.PreviewPlan.PageCountText));
-        panel.Children.Add(Kit.Field("Hidden slides", plan.PrintHiddenSlides ? "Included" : "Not included"));
-        panel.Children.Add(Kit.Field("Options", plan.Options.DisplaySummary));
-        panel.Children.Add(Kit.Field("Native printer handoff", plan.NativePrintHandoff.StatusText));
+        foreach (var field in surface.Settings)
+            panel.Children.Add(Kit.Field(field.Label, field.Value));
 
-        panel.Children.Add(Kit.SubHeading("Output Options"));
-        foreach (var choice in plan.OutputOptionChoices)
-            panel.Children.Add(PrintChoiceRow(
-                $"{choice.Group}: {choice.DisplayName}",
-                choice.Description,
-                choice.IsSelected,
-                choice.IsAvailable));
+        foreach (var group in surface.ChoiceGroups)
+        {
+            panel.Children.Add(Kit.SubHeading(group.Heading));
+            foreach (var choice in group.Choices)
+                panel.Children.Add(PrintChoiceRow(choice));
+        }
 
-        panel.Children.Add(Kit.SubHeading("Preview"));
-        foreach (var page in plan.PreviewPlan.Pages)
-            panel.Children.Add(PrintChoiceRow(
-                page.ThumbnailLabel,
-                page.Detail,
-                page.PageNumber == 1));
-
-        panel.Children.Add(Kit.SubHeading("Layouts"));
-        foreach (var choice in plan.LayoutChoices)
-            panel.Children.Add(PrintChoiceRow(
-                choice.Layout.DisplayName,
-                choice.PackagePlan.LayoutSummary,
-                choice.IsSelected));
-
-        panel.Children.Add(Kit.SubHeading("Slide Range"));
-        foreach (var choice in plan.RangeChoices)
-            panel.Children.Add(PrintChoiceRow(
-                choice.DisplayName,
-                choice.Description,
-                choice.Kind == plan.SelectedRange.Kind,
-                choice.IsAvailable));
-
-        panel.Children.Add(Kit.SubHeading("Custom Range"));
+        panel.Children.Add(Kit.SubHeading(surface.CustomRangeHeading));
         panel.Children.Add(new TextBlock
         {
-            Text = "Enter slide numbers and ranges, for example 2,4-6.",
+            Text = surface.CustomRangeDescription,
             Foreground = Kit.Muted,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 4),
         });
         _customRangeInput = new TextBox
         {
-            Text = _printRequest?.SlideRange?.CustomRangeText ?? string.Empty,
+            Text = surface.CustomRangeText,
             MinWidth = 240,
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 6),
         };
-        AutomationProperties.SetAutomationId(_customRangeInput, "FreePPrintCustomRangeInput");
+        AutomationProperties.SetAutomationId(_customRangeInput, surface.CustomRangeInputAutomationId);
         _customRangeApplyButton = new Button
         {
-            Content = "Apply range",
+            Content = surface.CustomRangeApplyLabel,
             HorizontalAlignment = HorizontalAlignment.Left,
             Padding = new Thickness(12, 6, 12, 6),
             ToolTip = "Apply the custom slide range to the print preview and output.",
         };
-        AutomationProperties.SetAutomationId(_customRangeApplyButton, "FreePPrintCustomRangeApply");
+        AutomationProperties.SetAutomationId(_customRangeApplyButton, surface.CustomRangeApplyAutomationId);
         _customRangeApplyButton.Click += (_, _) =>
         {
-            var text = _customRangeInput.Text.Trim();
-            _printRequest = string.IsNullOrWhiteSpace(text)
-                ? null
-                : new PresentationPrintRequest(
-                    PresentationPrintLayoutKind.FullPageSlides,
-                    new PresentationSlideRangeRequest(
-                        PresentationSlideRangeKind.CustomRange,
-                        CustomRangeText: text));
+            _printRequest = PresentationBackstagePrintSurfacePlanner.BuildCustomRangeRequest(
+                _customRangeInput.Text);
             _backstage.Show("Print");
         };
         panel.Children.Add(_customRangeInput);
@@ -197,35 +164,30 @@ internal sealed class BackstageView : UserControl
 
         panel.Children.Add(new TextBlock
         {
-            Text = plan.DisabledReason ?? plan.NativePrintHandoff.Reason,
+            Text = surface.StatusText,
             Foreground = Kit.Muted,
             FontStyle = FontStyles.Italic,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 8, 0, 0)
         });
 
-        panel.Children.Add(Kit.SubHeading("Print"));
-        foreach (var choice in plan.LayoutChoices)
+        panel.Children.Add(Kit.SubHeading(surface.PrintHeading));
+        foreach (var action in surface.PrintActions)
         {
-            var printRequest = new PresentationPrintRequest(
-                choice.Layout.Layout,
-                plan.SelectedRange.Request,
-                HandoutSlidesPerPage: choice.Layout.SlidesPerPage);
             var printButton = new Button
             {
-                Content = $"Print {choice.Layout.DisplayName}",
+                Content = action.Label,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Margin = new Thickness(0, 0, 0, 8),
                 Padding = new Thickness(12, 6, 12, 6),
-                IsEnabled = choice.PackagePlan.CanBuildPackage && plan.NativePrintHandoff.CanOpenNativePrintDialog,
-                ToolTip = plan.NativePrintHandoff.CanOpenNativePrintDialog
-                    ? choice.PackagePlan.LayoutSummary
-                    : plan.NativePrintHandoff.Reason,
+                IsEnabled = action.IsEnabled,
+                ToolTip = action.HelpText,
             };
+            AutomationProperties.SetAutomationId(printButton, action.AutomationId);
             printButton.Click += (_, _) =>
             {
                 _backstage.Hide();
-                _actions.Print(printRequest);
+                _actions.Print(action.Request);
             };
             panel.Children.Add(printButton);
         }
@@ -233,18 +195,14 @@ internal sealed class BackstageView : UserControl
         return Kit.Scroll(panel);
     }
 
-    private static UIElement PrintChoiceRow(
-        string label,
-        string description,
-        bool isSelected,
-        bool isAvailable = true)
+    private static UIElement PrintChoiceRow(PresentationBackstagePrintChoiceRow choice)
     {
-        var prefix = isSelected ? "Selected: " : string.Empty;
-        var availability = isAvailable ? string.Empty : " (unavailable)";
+        var prefix = choice.IsSelected ? "Selected: " : string.Empty;
+        var availability = choice.IsAvailable ? string.Empty : " (unavailable)";
         return new TextBlock
         {
-            Text = $"{prefix}{label}{availability}\n{description}",
-            Foreground = isAvailable ? Kit.Muted : Brushes.Gray,
+            Text = $"{prefix}{choice.Label}{availability}\n{choice.Description}",
+            Foreground = choice.IsAvailable ? Kit.Muted : Brushes.Gray,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8)
         };
@@ -252,61 +210,35 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildExportPane()
     {
-        var plan = PresentationExportPlanner.BuildBackstageExportPlan(
-            videoExportAvailable: _actions.CanExportVideo());
-        var fixedLayoutAdditionalActions = plan.FixedLayoutActions
-            .Where(action => action.CommandId != PresentationExportPlanner.PdfExportCommandId);
-        var additionalGroups = fixedLayoutAdditionalActions
-            .Concat(plan.DeferredActions.Where(action => action.IsEnabled))
-            .GroupBy(action => action.Format is PresentationExportFormat.NotesPagePdf
-                ? plan.FixedLayoutGroupHeading
-                : plan.DeferredGroupHeading)
-            .Select(group => new BackstageActionGroup(
-                group.Key,
-                group
-                    .Select(action => new BackstageActionRow(
-                        action.Label,
-                        action.Description,
-                        _backstage.HideThen(ResolveExportAction(action.CommandId))))
-                    .ToArray()))
-            .ToArray();
-
-        return Panes.BuildActionPane(PaneSpecs.BuildExportPaneSpec(
-            _backstage.HideThen(_actions.ExportPdf),
-            additionalGroups: additionalGroups));
+        return Panes.BuildActionPane(PanePlans.BuildExportPane(
+            _actions.CanExportVideo(),
+            new PresentationBackstageExportActions(
+                _backstage.HideThen(_actions.ExportPdf),
+                _backstage.HideThen(_actions.ExportNotesPagePdf),
+                _backstage.HideThen(_actions.ExportImages),
+                _backstage.HideThen(_actions.ExportVideo))));
     }
 
     private UIElement BuildInfoPane()
     {
         var model = _getModel();
-        var properties = model.Properties;
-
-        return Panes.BuildInfoPane(SisterBackstageInfoPanePlanner.Build(new SisterBackstageInfoPaneContext(
-            DocumentKindLabel: "Presentation",
-            DisplayName: _file.DisplayName,
-            IsDirty: _file.IsDirty,
-            Location: _file.CurrentPath,
-            CoreProperties: new BackstageCoreProperties(
-                properties.Title,
-                properties.Author,
-                properties.Subject,
-                properties.Keywords),
-            Statistics:
-            [
-                new("Slides", model.Slides.Count.ToString()),
-            ])));
+        return Panes.BuildInfoPane(PanePlans.BuildInfoPane(
+            model,
+            _file.DisplayName,
+            _file.IsDirty,
+            _file.CurrentPath));
     }
 
     private UIElement BuildRecentPane()
     {
-        return Panes.BuildRecentPane(PaneSpecs.BuildRecentPaneSpec(
-            _file.RecentEntries.Select(entry => entry.Path),
+        return Panes.BuildRecentPane(PanePlans.BuildRecentPane(
+            _file.RecentEntries,
             _backstage.HideThen<string>(_actions.OpenPath)));
     }
 
     private UIElement BuildNewPane()
     {
-        return Panes.BuildTemplatePane(PaneSpecs.BuildNewPaneSpec(
+        return Panes.BuildTemplatePane(PanePlans.BuildNewPane(
             _backstage.HideThen(_actions.New)));
     }
 
@@ -314,32 +246,19 @@ internal sealed class BackstageView : UserControl
     {
         var options = _actions.CurrentOptions();
 
-        return Panes.BuildOptionsPane(PaneSpecs.BuildOptionsPaneSpec(
+        return Panes.BuildOptionsPane(PanePlans.BuildOptionsPane(
             options,
             _actions.DataFolder()));
     }
 
     private UIElement BuildAccountPane()
     {
-        return Panes.BuildAccountPane(PaneSpecs.BuildAccountPaneSpec(
-            new SisterBackstageAccountPaneContext(
-                AppProduct.Current.ProductName,
-                EntryAssemblyVersion.Resolve(),
-                Environment.UserName,
-                Environment.MachineName,
-                _actions.DataFolder()),
+        return Panes.BuildAccountPane(PanePlans.BuildAccountPane(
+            AppProduct.Current.ProductName,
+            EntryAssemblyVersion.Resolve(),
+            _actions.DataFolder(),
             _backstage.ShowPane("Options")));
     }
-
-    private Action ResolveExportAction(string commandId) =>
-        commandId switch
-        {
-            PresentationExportPlanner.PdfExportCommandId => _actions.ExportPdf,
-            PresentationExportPlanner.NotesPagePdfExportCommandId => _actions.ExportNotesPagePdf,
-            PresentationExportPlanner.ImageExportCommandId => _actions.ExportImages,
-            PresentationExportPlanner.VideoExportCommandId => _actions.ExportVideo,
-            _ => throw new InvalidOperationException($"Unsupported FreeP export command '{commandId}'."),
-        };
 }
 
 internal sealed record BackstageActions(

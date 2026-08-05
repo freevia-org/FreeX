@@ -9,6 +9,7 @@
   <ItemGroup>
     <!-- BackstageRecentFileListPlanner consumes the neutral RecentFileEntry record. -->
     <ProjectReference Include="..\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="..\Free.Shared.Localization\Free.Shared.Localization.csproj" />
   </ItemGroup>
 
   <ItemGroup>

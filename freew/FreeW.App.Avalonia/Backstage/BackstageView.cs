@@ -50,6 +50,8 @@ internal sealed class BackstageView : Window
     private static readonly SisterBackstagePalette Palette = SisterBackstagePalette.FreeW;
     private static readonly SisterBackstagePaneTextDescriptor PaneText =
         SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW);
+    private static readonly SisterBackstagePaneSpecPlanner PaneSpecs = new(
+        SisterBackstagePaneTextSpec.FromDescriptor(PaneText));
 
     private readonly BackstageCallbacks _callbacks;
     private readonly AvaloniaBackstageFrame _frame;
@@ -184,16 +186,17 @@ internal sealed class BackstageView : Window
 
     private Control BuildNewPane()
     {
+        var spec = PaneSpecs.BuildNewPaneSpec(DismissThen(_callbacks.NewDocument));
         var content = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        content.Children.Add(CreateHeading(PaneText.TemplateHeading.FallbackText));
+        content.Children.Add(CreateHeading(spec.Heading));
         content.Children.Add(CreateTemplateTile(
-            PaneText.TemplateTileCaption.FallbackText,
-            DismissThen(_callbacks.NewDocument)));
-        if (!string.IsNullOrWhiteSpace(PaneText.TemplateFooterText.FallbackText))
+            spec.TileCaption,
+            spec.Create));
+        if (!string.IsNullOrWhiteSpace(spec.FooterText))
         {
             content.Children.Add(new TextBlock
             {
-                Text = PaneText.TemplateFooterText.FallbackText,
+                Text = spec.FooterText,
                 Foreground = SecondaryInk,
                 Margin = new Thickness(0, 18, 0, 0),
             });
@@ -544,11 +547,9 @@ internal sealed class BackstageView : Window
     {
         var version = typeof(BackstageView).Assembly.GetName().Version?.ToString() ?? "1.0.0";
         var surface = BackstagePaneSurfacePlanner.BuildAccountPane(
-            new SisterBackstageAccountPaneContext(
+            SisterBackstageAccountPaneContextPlanner.BuildLocal(
                 BackstageViewTextResources.ProductName,
                 version,
-                SafeEnvironment(() => Environment.UserName),
-                SafeEnvironment(() => Environment.MachineName),
                 _callbacks.GetDataFolder()),
             openOptions: DismissThen(_callbacks.OpenOptions));
 
@@ -586,20 +587,27 @@ internal sealed class BackstageView : Window
 
     private Control BuildOptionsPane()
     {
+        var spec = PaneSpecs.BuildOptionsPaneSpec(
+            _callbacks.GetCurrentOptions(),
+            _callbacks.GetDataFolder(),
+            edit: DismissThen(_callbacks.OpenOptions));
         var content = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
         content.Children.Add(CreateHeading("Options"));
         content.Children.Add(new TextBlock
         {
-            Text = PaneText.OptionsDescription.FallbackText,
+            Text = spec.Description,
             Foreground = SecondaryInk,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16),
         });
-        content.Children.Add(BuildOptionsSummaryGrid());
+        var summaryGrid = CreateDetailGrid();
+        foreach (var field in spec.Fields)
+            AddDetailRow(summaryGrid, field.Label, field.Value, "Options_" + field.Label.Replace(' ', '_'));
+        content.Children.Add(summaryGrid);
 
         var edit = CreateLinkButton(
-            PaneText.OptionsEditText?.FallbackText ?? "Edit options\u2026",
-            DismissThen(_callbacks.OpenOptions));
+            spec.EditText ?? "Edit options\u2026",
+            spec.Edit);
         edit.Margin = new Thickness(0, 14, 0, 0);
         AutomationProperties.SetAutomationId(edit, "BackstageEditOptions");
         content.Children.Add(edit);
@@ -607,18 +615,6 @@ internal sealed class BackstageView : Window
     }
 
     // ── Generic action-group renderer ────────────────────────────────────────
-
-    private Control BuildOptionsSummaryGrid()
-    {
-        var summary = ApplicationOptionsSummaryPlanner.Build(
-            _callbacks.GetCurrentOptions(),
-            _callbacks.GetDataFolder());
-        var grid = CreateDetailGrid();
-        foreach (var row in summary.Rows)
-            AddDetailRow(grid, row.Label, row.Value, "Options_" + row.Label.Replace(' ', '_'));
-
-        return grid;
-    }
 
     private Control BuildActionGroupContent(
         string title,
@@ -1401,10 +1397,4 @@ internal sealed class BackstageView : Window
         return baseName + normalized;
     }
 
-    private static string SafeEnvironment(Func<string> read)
-    {
-        try { return read(); }
-        catch (InvalidOperationException) { return string.Empty; }
-        catch (PlatformNotSupportedException) { return string.Empty; }
-    }
 }

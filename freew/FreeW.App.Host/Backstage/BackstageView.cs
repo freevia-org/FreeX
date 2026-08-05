@@ -426,11 +426,9 @@ internal sealed class BackstageView : UserControl
     private UIElement BuildAccountPane()
     {
         var surface = BackstagePaneSurfacePlanner.BuildAccountPane(
-            new SisterBackstageAccountPaneContext(
+            SisterBackstageAccountPaneContextPlanner.BuildLocal(
                 BackstageViewTextResources.ProductName,
                 EntryAssemblyVersion.Resolve(),
-                Environment.UserName,
-                Environment.MachineName,
                 _actions.DataFolder()),
             _backstage.HideThen(_actions.EditOptions));
 

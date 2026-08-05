@@ -19,7 +19,6 @@ public sealed class BackstagePaneDedupSourceTests
 
         source.Should().Contain("BackstagePaneComposer");
         source.Should().Contain("SisterBackstageTheme.");
-        source.Should().Contain("SisterBackstagePaneSpecPlanner");
         source.Should().Contain("SisterBackstagePaneResources");
         source.Should().Contain("SisterBackstagePaneResources.ForApp(");
         source.Should().Contain($"SisterBackstageAppKind.{(appFolder == "freew" ? "FreeW" : "FreeP")}");
@@ -31,17 +30,18 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("public void Hide() => _backstage.Hide();");
         source.Should().Contain("backstage.FrameCommand(_actions.New)");
         source.Should().Contain("_backstage.HideThen");
-        source.Should().Contain("Panes.BuildInfoPane(");
-        source.Should().Contain("SisterBackstageInfoPanePlanner.Build(");
-        source.Should().Contain("Panes.BuildRecentPane(");
-        source.Should().Contain("PaneSpecs.BuildRecentPaneSpec(");
-        source.Should().Contain("Panes.BuildTemplatePane(");
-        source.Should().Contain("PaneSpecs.BuildNewPaneSpec(");
-        source.Should().Contain("Panes.BuildOptionsPane(");
-        source.Should().Contain("PaneSpecs.BuildOptionsPaneSpec(");
 
         if (appFolder == "freew")
         {
+            source.Should().Contain("SisterBackstagePaneSpecPlanner");
+            source.Should().Contain("Panes.BuildInfoPane(");
+            source.Should().Contain("SisterBackstageInfoPanePlanner.Build(");
+            source.Should().Contain("Panes.BuildRecentPane(");
+            source.Should().Contain("PaneSpecs.BuildRecentPaneSpec(");
+            source.Should().Contain("Panes.BuildTemplatePane(");
+            source.Should().Contain("PaneSpecs.BuildNewPaneSpec(");
+            source.Should().Contain("Panes.BuildOptionsPane(");
+            source.Should().Contain("PaneSpecs.BuildOptionsPaneSpec(");
             source.Should().Contain("BuildHomePane = BuildHomePane");
             source.Should().Contain("UseNewPane = true");
             source.Should().Contain("Close = backstage.FrameCommand(_actions.Close)");
@@ -101,8 +101,14 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().NotContain("BuildHomePane = BuildHomePane");
             source.Should().NotContain("UseNewPane = true");
             source.Should().Contain("BuildAccountPane = BuildAccountPane");
-            source.Should().Contain("PaneSpecs.BuildAccountPaneSpec(");
-            source.Should().Contain("PaneSpecs.BuildExportPaneSpec(");
+            source.Should().Contain("PresentationBackstagePanePlanner");
+            source.Should().Contain("PresentationBackstagePrintSurfacePlanner");
+            source.Should().Contain("PanePlans.BuildAccountPane(");
+            source.Should().Contain("PanePlans.BuildExportPane(");
+            source.Should().Contain("PanePlans.BuildInfoPane(");
+            source.Should().Contain("PanePlans.BuildRecentPane(");
+            source.Should().Contain("PanePlans.BuildNewPane(");
+            source.Should().Contain("PanePlans.BuildOptionsPane(");
             source.Should().Contain("Panes.BuildAccountPane(");
         }
 
@@ -162,6 +168,27 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("BackstagePrintEvidenceKind.PrintPreviewFidelity");
         source.Should().Contain("BackstagePrintEvidenceStatus.HostBacked");
         source.Should().Contain("FormatRequirement");
+    }
+
+    [Fact]
+    public void FreeW_Avalonia_UsesPortableStandardPaneAndAccountSpecs()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+            "freew",
+            "FreeW.App.Avalonia",
+            "Backstage",
+            "BackstageView.cs"));
+
+        source.Should().Contain("SisterBackstagePaneSpecPlanner");
+        source.Should().Contain("PaneSpecs.BuildNewPaneSpec(");
+        source.Should().Contain("PaneSpecs.BuildOptionsPaneSpec(");
+        source.Should().Contain("SisterBackstageAccountPaneContextPlanner.BuildLocal(");
+        source.Should().NotContain("ApplicationOptionsSummaryPlanner.Build(");
+        source.Should().NotContain("new SisterBackstageAccountPaneContext(");
+        source.Should().NotContain("SafeEnvironment(");
+        source.Should().NotContain("PaneText.TemplateHeading");
+        source.Should().NotContain("PaneText.OptionsDescription");
     }
 
     [Fact]
