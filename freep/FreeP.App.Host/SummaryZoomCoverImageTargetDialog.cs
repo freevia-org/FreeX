@@ -7,20 +7,27 @@ namespace FreeP.App.Host;
 
 internal sealed class SummaryZoomCoverImageTargetDialog : DialogWindow
 {
+    private readonly ZoomSingleTargetDialogSession _session;
     private readonly ComboBox _target;
 
-    internal string? SelectedTargetSectionId { get; private set; }
+    internal string? SelectedTargetSectionId => _session.SelectedTargetId;
 
     internal SummaryZoomCoverImageTargetDialog(IReadOnlyList<(string Id, string DisplayName)> options)
     {
+        _session = new ZoomSingleTargetDialogSession(options);
         Title = ZoomCoverImagePlanner.DialogTitle;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-        var items = options.Select(option => new TargetOption(option.Id, option.DisplayName)).ToArray();
-        _target = new ComboBox { ItemsSource = items, SelectedIndex = items.Length == 0 ? -1 : 0, MinWidth = 230 };
+        _target = new ComboBox
+        {
+            ItemsSource = _session.Options,
+            DisplayMemberPath = nameof(ZoomTargetOption.DisplayName),
+            SelectedIndex = _session.InitialSelectedIndex,
+            MinWidth = 230,
+        };
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -38,7 +45,7 @@ internal sealed class SummaryZoomCoverImageTargetDialog : DialogWindow
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 14, 0, 0),
         };
-        var ok = new Button { Content = "OK", IsDefault = true, IsEnabled = items.Length > 0, MinWidth = 75, Margin = new Thickness(0, 0, 8, 0) };
+        var ok = new Button { Content = "OK", IsDefault = true, IsEnabled = _session.CanAccept, MinWidth = 75, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) => Apply();
         buttons.Children.Add(ok);
         buttons.Children.Add(new Button { Content = "Cancel", IsCancel = true, MinWidth = 75 });
@@ -49,12 +56,9 @@ internal sealed class SummaryZoomCoverImageTargetDialog : DialogWindow
 
     private void Apply()
     {
-        if (_target.SelectedItem is TargetOption option)
+        if (_session.TryAccept(_target.SelectedIndex))
         {
-            SelectedTargetSectionId = option.Id;
             DialogResult = true;
         }
     }
-
-    private sealed record TargetOption(string Id, string DisplayName);
 }

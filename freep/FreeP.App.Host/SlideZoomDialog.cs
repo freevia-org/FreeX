@@ -6,16 +6,17 @@ namespace FreeP.App.Host;
 
 internal sealed class SlideZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly ZoomSingleTargetDialogSession _session;
     private readonly ComboBox _targetCombo;
 
-    internal string? SelectedTargetSlideId { get; private set; }
+    internal string? SelectedTargetSlideId => _session.SelectedTargetId;
 
     internal SlideZoomDialog(
         IReadOnlyList<(string Id, string DisplayName)> options,
         string? title = null,
         string? selectedTargetId = null)
     {
-        ArgumentNullException.ThrowIfNull(options);
+        _session = new ZoomSingleTargetDialogSession(options, selectedTargetId);
         Title = title ?? SlideZoomInsertionPlanner.DialogTitle;
         Width = 420;
         SizeToContent = SizeToContent.Height;
@@ -24,9 +25,9 @@ internal sealed class SlideZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         _targetCombo = new ComboBox
         {
-            ItemsSource = options.Select(option => new TargetOption(option.Id, option.DisplayName)).ToArray(),
-            DisplayMemberPath = nameof(TargetOption.DisplayName),
-            SelectedIndex = FindSelectedIndex(options, selectedTargetId),
+            ItemsSource = _session.Options,
+            DisplayMemberPath = nameof(ZoomTargetOption.DisplayName),
+            SelectedIndex = _session.InitialSelectedIndex,
             MinWidth = 260,
         };
 
@@ -49,7 +50,7 @@ internal sealed class SlideZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 14, 0, 0),
         };
-        var ok = new Button { Content = "OK", IsDefault = true, IsEnabled = options.Count > 0, MinWidth = 75, Margin = new Thickness(0, 0, 8, 0) };
+        var ok = new Button { Content = "OK", IsDefault = true, IsEnabled = _session.CanAccept, MinWidth = 75, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) => Apply();
         var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 75 };
         buttons.Children.Add(ok);
@@ -63,22 +64,7 @@ internal sealed class SlideZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Apply()
     {
-        SelectedTargetSlideId = (_targetCombo.SelectedItem as TargetOption)?.Id;
-        if (!string.IsNullOrWhiteSpace(SelectedTargetSlideId))
+        if (_session.TryAccept(_targetCombo.SelectedIndex))
             DialogResult = true;
     }
-
-    private static int FindSelectedIndex(
-        IReadOnlyList<(string Id, string DisplayName)> options,
-        string? selectedTargetId)
-    {
-        if (options.Count == 0)
-            return -1;
-        for (var index = 0; index < options.Count; index++)
-            if (string.Equals(options[index].Id, selectedTargetId, StringComparison.OrdinalIgnoreCase))
-                return index;
-        return 0;
-    }
-
-    private sealed record TargetOption(string Id, string DisplayName);
 }

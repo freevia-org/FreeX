@@ -7,25 +7,25 @@ namespace FreeP.App.Host;
 
 internal sealed class SummaryZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly SummaryZoomDialogSession _session;
     private readonly ListBox _targetList;
-    private readonly ObservableCollection<TargetOption> _items;
+    private readonly ObservableCollection<ZoomTargetOption> _items;
 
-    internal IReadOnlyList<string> SelectedTargetSectionIds { get; private set; } = Array.Empty<string>();
+    internal IReadOnlyList<string> SelectedTargetSectionIds => _session.SelectedTargetIds;
 
     internal SummaryZoomDialog(
         IReadOnlyList<(string Id, string DisplayName)> options,
         string? title = null,
         IReadOnlyCollection<string>? selectedTargetIds = null)
     {
-        ArgumentNullException.ThrowIfNull(options);
+        _session = new SummaryZoomDialogSession(options, selectedTargetIds);
         Title = title ?? SummaryZoomInsertionPlanner.DialogTitle;
         Width = 460;
         Height = 360;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-        _items = new ObservableCollection<TargetOption>(
-            options.Select(option => new TargetOption(option.Id, option.DisplayName)));
+        _items = new ObservableCollection<ZoomTargetOption>(_session.Options);
         _targetList = new ListBox
         {
             ItemsSource = _items,
@@ -33,7 +33,7 @@ internal sealed class SummaryZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             MinHeight = 180,
         };
         foreach (var item in _items)
-            if (selectedTargetIds?.Contains(item.Id, StringComparer.OrdinalIgnoreCase) == true)
+            if (_session.InitialSelectedTargetIds.Contains(item.Id, StringComparer.OrdinalIgnoreCase))
                 _targetList.SelectedItems.Add(item);
 
         var moveUp = new Button { Content = "Move Up", MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
@@ -69,7 +69,7 @@ internal sealed class SummaryZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 14, 0, 0),
         };
-        var ok = new Button { Content = "OK", IsDefault = true, IsEnabled = options.Count >= 2, MinWidth = 75, Margin = new Thickness(0, 0, 8, 0) };
+        var ok = new Button { Content = "OK", IsDefault = true, IsEnabled = _session.CanAccept, MinWidth = 75, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) => Apply();
         buttons.Children.Add(ok);
         buttons.Children.Add(new Button { Content = "Cancel", IsCancel = true, MinWidth = 75 });
@@ -80,30 +80,24 @@ internal sealed class SummaryZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Apply()
     {
-        var selectedIds = _targetList.SelectedItems.OfType<TargetOption>().Select(option => option.Id).ToArray();
-        var selected = SummaryZoomTargetPlanner.SelectOrderedTargets(
-            _items.Select(item => item.Id), selectedIds);
-        if (selected.Count >= 2)
-        {
-            SelectedTargetSectionIds = selected;
+        var selectedIds = _targetList.SelectedItems
+            .OfType<ZoomTargetOption>()
+            .Select(option => option.Id)
+            .ToArray();
+        if (_session.TryAccept(selectedIds))
             DialogResult = true;
-        }
     }
 
-    private void MoveSelected(ObservableCollection<TargetOption> items, int delta)
+    private void MoveSelected(ObservableCollection<ZoomTargetOption> items, int delta)
     {
-        var selected = _targetList.SelectedItems.OfType<TargetOption>().ToArray();
-        if (selected.Length != 1)
+        var selectedIds = _targetList.SelectedItems
+            .OfType<ZoomTargetOption>()
+            .Select(option => option.Id)
+            .ToArray();
+        if (!_session.TryMoveSelected(selectedIds, delta, out var plan))
             return;
 
-        var index = items.IndexOf(selected[0]);
-        var targetIndex = index + delta;
-        if (index < 0 || targetIndex < 0 || targetIndex >= items.Count)
-            return;
-
-        items.Move(index, targetIndex);
-        _targetList.SelectedItem = selected[0];
+        items.Move(plan!.FromIndex, plan.ToIndex);
+        _targetList.SelectedItem = items[plan.ToIndex];
     }
-
-    private sealed record TargetOption(string Id, string DisplayName);
 }

@@ -1,37 +1,34 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
-using Avalonia.Media;
-using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
 internal sealed class SummaryZoomCoverImageTargetDialog : Window
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private readonly ZoomSingleTargetDialogSession _session;
     private readonly ComboBox _target;
-    private readonly IReadOnlyList<(string Id, string DisplayName)> _options;
 
-    internal string? SelectedTargetSectionId { get; private set; }
+    internal string? SelectedTargetSectionId => _session.SelectedTargetId;
 
     internal SummaryZoomCoverImageTargetDialog(IReadOnlyList<(string Id, string DisplayName)> options)
     {
-        _options = options;
+        _session = new ZoomSingleTargetDialogSession(options);
         Title = ZoomCoverImagePlanner.DialogTitle;
         Width = 420;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        AvaloniaCompactDialogChrome.ApplyWindow(this, DialogChromeStyle);
+        ZoomDialogChrome.Apply(this);
 
         _target = new ComboBox
         {
-            ItemsSource = options.Select(option => option.DisplayName).ToArray(),
-            SelectedIndex = options.Count == 0 ? -1 : 0,
+            ItemsSource = _session.Options,
+            SelectedIndex = _session.InitialSelectedIndex,
             MinWidth = 230,
         };
-        var ok = MakeButton("OK", true, Apply);
-        ok.IsEnabled = options.Count > 0;
+        var ok = ZoomDialogChrome.MakeButton("OK", true, Apply);
+        ok.IsEnabled = _session.CanAccept;
         Content = new StackPanel
         {
             Margin = new Thickness(14),
@@ -45,7 +42,7 @@ internal sealed class SummaryZoomCoverImageTargetDialog : Window
                     Orientation = Orientation.Horizontal,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     Spacing = 8,
-                    Children = { ok, MakeButton("Cancel", false, () => Close(false)) },
+                    Children = { ok, ZoomDialogChrome.MakeButton("Cancel", false, () => Close(false)) },
                 },
             },
         };
@@ -53,19 +50,7 @@ internal sealed class SummaryZoomCoverImageTargetDialog : Window
 
     private void Apply()
     {
-        var index = _target.SelectedIndex;
-        if (index >= 0 && index < _options.Count)
-        {
-            SelectedTargetSectionId = _options[index].Id;
+        if (_session.TryAccept(_target.SelectedIndex))
             Close(true);
-        }
-    }
-
-    private static Button MakeButton(string label, bool isDefault, Action action)
-    {
-        var button = new Button { Content = label, IsDefault = isDefault, MinWidth = 80 };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
-        button.Click += (_, _) => action();
-        return button;
     }
 }
