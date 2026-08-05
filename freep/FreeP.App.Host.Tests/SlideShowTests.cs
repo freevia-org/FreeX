@@ -2452,6 +2452,28 @@ public sealed class SlideShowMediaControllerTests
     }
 
     [StaFact]
+    public void TrySeekToBookmark_UsesNamedMediaBookmark()
+    {
+        var overlay = new System.Windows.Controls.Canvas();
+        var ctrl = new SlideShowMediaController(overlay, new TempMediaFileWriter());
+        var shape = MakeMediaShape();
+        shape.Media!.Bookmarks.Add(new MediaBookmarkInfo
+        {
+            Name = "Cue",
+            TimeMilliseconds = 2000,
+        });
+        var slide = SlideWithMedia(shape);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720);
+
+        ctrl.TrySeekToBookmark(shape.Id, " cue ").Should().BeTrue();
+        var element = overlay.Children.OfType<System.Windows.Controls.MediaElement>().Single();
+        element.Position.Should().Be(TimeSpan.FromSeconds(2));
+        ctrl.TrySeekToBookmark(shape.Id, "missing").Should().BeFalse();
+        ctrl.Teardown();
+    }
+
+    [StaFact]
     public void TrySetVolume_ClampsToSharedZeroToHundredRange()
     {
         var overlay = new System.Windows.Controls.Canvas();
