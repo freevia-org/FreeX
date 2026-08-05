@@ -733,6 +733,60 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void Index_commands_preserve_subentry_and_cross_reference_semantics()
+    {
+        var view = ViewWith(new Paragraph("Transport"));
+
+        view.MarkIndexEntry(new IndexMark("Transportation", "Rail", "See Trains"));
+        view.InsertIndex();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(DocumentIndex.IsIndexParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Transportation", "Rail. See Trains");
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(DocumentIndex.MarkedEntry)
+            .Should().Contain(new IndexMark("Transportation", "Rail", "See Trains"));
+    }
+
+    [Fact]
+    public Task MarkIndexEntry_dialog_builds_hierarchy_and_cross_reference() => RunOnUiThread(() =>
+    {
+        var dialog = new MarkIndexEntryDialog("Animals");
+
+        dialog.Width.Should().Be(MarkIndexEntryDialogPlanner.DialogWidth);
+        dialog.CrossReferenceEnabledForTests.Should().BeFalse();
+        dialog.SetForTests(" Animals ", " Cats ", true, " See Pet care ");
+        dialog.CrossReferenceEnabledForTests.Should().BeTrue();
+        dialog.AcceptForTests().Should().BeTrue();
+        dialog.Mark.Should().Be(new IndexMark("Animals", "Cats", "See Pet care"));
+    });
+
+    [Fact]
+    public void Index_mark_ribbon_command_uses_owner_dialog_callback_when_available()
+    {
+        var view = ViewWith(new Paragraph("Transport"));
+        var calls = 0;
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks() with
+        {
+            OpenMarkIndexEntryDialog = () =>
+            {
+                calls++;
+                view.MarkIndexEntry(new IndexMark("Transportation", "Rail", "See Trains"));
+            }
+        });
+
+        Execute(registry, "freew.index-mark");
+
+        calls.Should().Be(1);
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(DocumentIndex.MarkedEntry)
+            .Should().Contain(new IndexMark("Transportation", "Rail", "See Trains"));
+    }
+
+    [Fact]
     public void Index_refresh_aggregates_logical_pages_from_xe_occurrences()
     {
         var view = ViewWith(

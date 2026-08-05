@@ -16294,25 +16294,32 @@ public sealed class DocumentView : RichTextBox
     /// change visible flow and is undoable through the shared command bus.
     /// </summary>
     public void MarkIndexEntry(string term)
+        => MarkIndexEntry(new IndexMark(term ?? string.Empty));
+
+    /// <summary>Marks a structured main/subentry or cross-reference index entry at the caret.</summary>
+    public void MarkIndexEntry(IndexMark mark)
     {
+        ArgumentNullException.ThrowIfNull(mark);
         CommitToModel();
-        var trimmed = term?.Trim() ?? string.Empty;
-        if (trimmed.Length == 0)
+        var markRun = DocumentIndex.MarkRun(mark);
+        if (DocumentIndex.MarkedEntry(markRun) is not { MainEntry.Length: > 0 } normalized)
             return;
         if (!TryGetCurrentBodyCaretTarget(out var paragraphIndex, out var textOffset)
             || _model.Blocks[paragraphIndex] is not ModelParagraph paragraph
-            || paragraph.Runs.Any(run => string.Equals(
-                DocumentIndex.MarkedTerm(run),
-                trimmed,
-                StringComparison.OrdinalIgnoreCase)))
+            || paragraph.Runs.Any(run => SameIndexMark(DocumentIndex.MarkedEntry(run), normalized)))
         {
             return;
         }
 
         _commands.Execute(new ReplaceParagraphRunsCommand(paragraphIndex, target =>
-            RevisionEditPlanner.InsertRunAtOffset(target, textOffset, DocumentIndex.MarkRun(trimmed))));
+            RevisionEditPlanner.InsertRunAtOffset(target, textOffset, markRun)));
         PlaceCaretAtModelTextOffset(paragraphIndex, textOffset);
     }
+
+    private static bool SameIndexMark(IndexMark? left, IndexMark right) =>
+        left is not null
+        && string.Equals(left.EntryText, right.EntryText, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(left.CrossReference, right.CrossReference, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Insert an index generated from the document's marked <see cref="TextDocument.IndexEntries"/> at the
