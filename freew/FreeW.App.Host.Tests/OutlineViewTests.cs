@@ -1,3 +1,4 @@
+using System.IO;
 using System.Linq;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
@@ -31,6 +32,38 @@ public sealed class OutlineViewTests
         doc.Blocks.Add(new Paragraph("section body"));
         doc.Blocks.Add(H(1, "Chapter Two"));
         return doc;
+    }
+
+    [Fact]
+    public void Renderer_delegates_outline_state_and_operations_to_presentation_controller()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Host",
+            "Editing",
+            "OutlineView.cs"));
+
+        source.Should().Contain("using FreeW.App.Presentation.Editing;");
+        source.Should().Contain("new OutlineViewController(GetCommittedDocument, _editor.SetHeadingLevel, _editor.MoveHeading)");
+        source.Should().Contain("_controller.RowsChanged += RenderRows;");
+        source.Should().Contain("_controller.Refresh();");
+        source.Should().Contain("_controller.Apply(_editor.PromoteHeading)");
+        source.Should().Contain("_controller.Move(moveUp: true)");
+        source.Should().Contain("_controller.Move(moveUp: false)");
+        source.Should().Contain("_controller.SelectBlock(blockIndex)");
+        source.Should().Contain("_controller.SetShowLevel(level)");
+        source.Should().Contain("_controller.SetFirstLineOnly(firstLineOnly)");
+        source.Should().Contain("_controller.SetOutlineLevel(level)");
+        source.Should().Contain("_controller.CurrentOutlineLevel");
+        source.Should().Contain("_controller.VisibleRows");
+        source.Should().Contain("private TextDocument GetCommittedDocument()");
+        source.Should().Contain("_editor.CommitToModel();", "WPF must still commit native edits before shared refresh");
+        source.Should().Contain("\"⊞ \"").And.Contain("\"▢ \"", "WPF owns its visual marker glyphs");
+        source.Should().NotContain("OutlineViewModel.Build(");
+        source.Should().NotContain("_selectedShowLevel");
+        source.Should().NotContain("_firstLineOnly");
     }
 
     [StaFact]

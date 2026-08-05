@@ -1,3 +1,4 @@
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -36,6 +37,38 @@ public sealed class OutlineViewParityTests
         document.Blocks.Add(new Paragraph("section body"));
         document.Blocks.Add(Heading(1, "Chapter Two"));
         return document;
+    }
+
+    [Fact]
+    public void Renderer_delegates_outline_state_and_operations_to_presentation_controller()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "Editing",
+            "OutlineView.cs"));
+
+        source.Should().Contain("using FreeW.App.Presentation.Editing;");
+        source.Should().Contain("new OutlineViewController(() => _editor.Document, _editor.SetHeadingLevel, _editor.MoveHeading)");
+        source.Should().Contain("_controller.RowsChanged += RenderRows;");
+        source.Should().Contain("_controller.Refresh();");
+        source.Should().Contain("_controller.Apply(_editor.PromoteHeading)");
+        source.Should().Contain("_controller.Move(moveUp)");
+        source.Should().Contain("_controller.SelectBlock(blockIndex)");
+        source.Should().Contain("_controller.SetShowLevel(level)");
+        source.Should().Contain("_controller.SetFirstLineOnly(firstLineOnly)");
+        source.Should().Contain("_controller.SetOutlineLevel(level)");
+        source.Should().Contain("_controller.CurrentOutlineLevel");
+        source.Should().Contain("_controller.VisibleRows");
+        source.Should().Contain("_editor.MoveCaretToBlock(selected.Row.BlockIndex, 0);",
+            "Avalonia keeps caret navigation in its native selection event adapter");
+        source.Should().Contain("\"[+] \"").And.Contain("\"[-] \"", "Avalonia owns its visual marker glyphs");
+        source.Should().NotContain("OutlineViewModel.Build(");
+        source.Should().NotContain("_selectedShowLevel");
+        source.Should().NotContain("_firstLineOnly");
+        source.Should().NotContain("CommitToModel");
     }
 
     [Fact]

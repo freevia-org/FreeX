@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using FreeW.App.Presentation.Editing;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Editing;
@@ -12,23 +13,23 @@ namespace FreeW.App.Host.Editing;
 /// <see cref="DocumentView"/> model — every restructuring command reuses the editor's reversible heading
 /// operations (<see cref="DocumentView.PromoteHeading"/>, <see cref="DocumentView.DemoteHeading"/>,
 /// <see cref="DocumentView.MoveHeading"/>, <see cref="DocumentView.CollapseHeading"/>,
-/// <see cref="DocumentView.ExpandHeading"/>) and the rows come from the pure
-/// <see cref="OutlineViewModel.Build"/>. Nothing here mutates the model directly, so toggling back to
-/// Print Layout restores the normal editing surface untouched.
+/// <see cref="DocumentView.ExpandHeading"/>). Shared state transitions and row projection live in
+/// <see cref="OutlineViewController"/>. Nothing here mutates the model directly, so toggling back to Print
+/// Layout restores the normal editing surface untouched.
 /// </summary>
 internal sealed class OutlineView : Border
 {
     private readonly DocumentView _editor;
+    private readonly OutlineViewController _controller;
     private readonly ListBox _list;
     private readonly ComboBox _showLevel;
     private ComboBox _outlineLevelCombo = null!;
     private bool _updatingLevelCombo;
-    private int _selectedShowLevel = OutlineViewModel.ShowAllLevels;
-    private bool _firstLineOnly;
 
     public OutlineView(DocumentView editor)
     {
         _editor = editor;
+        _controller = new OutlineViewController(GetCommittedDocument, _editor.SetHeadingLevel, _editor.MoveHeading);
 
         Background = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF));
 
@@ -39,7 +40,8 @@ internal sealed class OutlineView : Border
             FontFamily = new FontFamily("Calibri"),
             FontSize = 15
         };
-        _list.SelectionChanged += (_, _) => UpdateOutlineLevelCombo();
+        _controller.RowsChanged += RenderRows;
+        _list.SelectionChanged += OnSelectionChanged;
 
         _showLevel = new ComboBox { Width = 120, VerticalAlignment = VerticalAlignment.Center };
         _outlineLevelCombo = BuildOutlineLevelCombo();
@@ -95,14 +97,12 @@ internal sealed class OutlineView : Border
         {
             if (_showLevel.SelectedItem is ShowLevelItem item)
             {
-                _selectedShowLevel = item.Level;
-                Refresh();
+                _controller.SetShowLevel(item.Level);
             }
         };
         bar.Children.Add(_showLevel);
 
         bar.Children.Add(Spacer());
-        // Outline Level combo: set the heading level of the selected paragraph directly.
         bar.Children.Add(new TextBlock
         {
             Text = "Outline Level:",
@@ -112,20 +112,17 @@ internal sealed class OutlineView : Border
         bar.Children.Add(_outlineLevelCombo);
 
         bar.Children.Add(Spacer());
-        // Promote to Heading 1, Promote, Demote — Word's outline left/right arrows.
-        bar.Children.Add(ToolButton("⟪", "Promote to Heading 1", () => Apply(i => _editor.PromoteHeadingToHeading1(i))));
-        bar.Children.Add(ToolButton("◄", "Promote", () => Apply(i => _editor.PromoteHeading(i))));
-        bar.Children.Add(ToolButton("►", "Demote", () => Apply(i => _editor.DemoteHeading(i))));
+        bar.Children.Add(ToolButton("⟪", "Promote to Heading 1", () => _controller.Apply(_editor.PromoteHeadingToHeading1)));
+        bar.Children.Add(ToolButton("◄", "Promote", () => _controller.Apply(_editor.PromoteHeading)));
+        bar.Children.Add(ToolButton("►", "Demote", () => _controller.Apply(_editor.DemoteHeading)));
 
         bar.Children.Add(Spacer());
-        // Move Up / Move Down — relocate the heading subtree (reuses MoveHeading / OutlineTools.MoveSubtree).
-        bar.Children.Add(ToolButton("▲", "Move Up", () => Move(moveUp: true)));
-        bar.Children.Add(ToolButton("▼", "Move Down", () => Move(moveUp: false)));
+        bar.Children.Add(ToolButton("▲", "Move Up", () => _controller.Move(moveUp: true)));
+        bar.Children.Add(ToolButton("▼", "Move Down", () => _controller.Move(moveUp: false)));
 
         bar.Children.Add(Spacer());
-        // Expand / Collapse the selected heading's body (view-only, reuses CollapseHeading / ExpandHeading).
-        bar.Children.Add(ToolButton("+", "Expand", () => Apply(i => _editor.ExpandHeading(i))));
-        bar.Children.Add(ToolButton("−", "Collapse", () => Apply(i => _editor.CollapseHeading(i))));
+        bar.Children.Add(ToolButton("+", "Expand", () => _controller.Apply(_editor.ExpandHeading)));
+        bar.Children.Add(ToolButton("−", "Collapse", () => _controller.Apply(_editor.CollapseHeading)));
 
         bar.Children.Add(Spacer());
         var firstLine = new CheckBox
@@ -134,8 +131,8 @@ internal sealed class OutlineView : Border
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(4, 0, 0, 0)
         };
-        firstLine.Checked += (_, _) => { _firstLineOnly = true; Refresh(); };
-        firstLine.Unchecked += (_, _) => { _firstLineOnly = false; Refresh(); };
+        firstLine.Checked += (_, _) => _controller.SetFirstLineOnly(true);
+        firstLine.Unchecked += (_, _) => _controller.SetFirstLineOnly(false);
         bar.Children.Add(firstLine);
 
         return new Border
@@ -147,7 +144,6 @@ internal sealed class OutlineView : Border
         };
     }
 
-    // Build the "Outline Level" combo (Body Text / Level 1–MaxHeadingLevel).
     private ComboBox BuildOutlineLevelCombo()
     {
         var combo = new ComboBox { Width = 130, VerticalAlignment = VerticalAlignment.Center };
@@ -159,33 +155,17 @@ internal sealed class OutlineView : Border
         combo.SelectionChanged += (_, _) =>
         {
             if (!_updatingLevelCombo && combo.SelectedItem is OutlineLevelItem item)
-                ApplyOutlineLevel(item.Level);
+                _controller.SetOutlineLevel(item.Level);
         };
         return combo;
     }
-
-    // Apply the chosen heading level to the currently selected outline row.
-    private void ApplyOutlineLevel(int level)
-    {
-        if (_list.SelectedItem is not OutlineRowItem selected)
-            return;
-        _editor.SetHeadingLevel(selected.Row.BlockIndex, level);
-        Refresh();
-    }
-
-    // Sync the Outline Level combo to the currently selected row's actual level.
     private void UpdateOutlineLevelCombo()
     {
         if (_outlineLevelCombo is null) return;
         _updatingLevelCombo = true;
         try
         {
-            if (_list.SelectedItem is not OutlineRowItem selected)
-            {
-                _outlineLevelCombo.SelectedIndex = 0;
-                return;
-            }
-            var targetLevel = selected.Row.IsHeading ? selected.Row.Level : -1;
+            var targetLevel = _controller.CurrentOutlineLevel;
             foreach (var item in _outlineLevelCombo.Items.OfType<OutlineLevelItem>())
             {
                 if (item.Level == targetLevel)
@@ -205,51 +185,52 @@ internal sealed class OutlineView : Border
     private static UIElement Spacer() =>
         new Border { Width = 10 };
 
-    // Rebuild the outline rows from the editor's committed model, honouring the current Show-Level filter
-    // and First-Line-Only preference, then repopulate the list while preserving the selected block index.
-    public void Refresh()
+    private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_list.SelectedItem is OutlineRowItem selected)
+            _controller.SelectBlock(selected.Row.BlockIndex);
+        else
+            _controller.ClearSelection();
+
+        UpdateOutlineLevelCombo();
+    }
+
+    private TextDocument GetCommittedDocument()
     {
         _editor.CommitToModel();
-        var selectedBlock = (_list.SelectedItem as OutlineRowItem)?.Row.BlockIndex ?? -1;
+        return _editor.Model;
+    }
 
-        var rows = OutlineViewModel.Build(_editor.Model, _selectedShowLevel, _firstLineOnly);
+    public void Refresh() => _controller.Refresh();
 
-        _list.Items.Clear();
-        OutlineRowItem? toSelect = null;
-        foreach (var row in rows)
+    private void RenderRows()
+    {
+        _list.SelectionChanged -= OnSelectionChanged;
+        try
         {
-            var item = new OutlineRowItem(row, _editor.IsHeadingCollapsed(row.BlockIndex));
-            _list.Items.Add(item);
-            if (row.BlockIndex == selectedBlock)
-                toSelect = item;
+            _list.Items.Clear();
+            OutlineRowItem? toSelect = null;
+            foreach (var row in _controller.VisibleRows)
+            {
+                var item = new OutlineRowItem(row, _editor.IsHeadingCollapsed(row.BlockIndex));
+                _list.Items.Add(item);
+                if (row.BlockIndex == _controller.SelectedBlockIndex)
+                    toSelect = item;
+            }
+            _list.SelectedItem = toSelect;
         }
-        _list.SelectedItem = toSelect;
+        finally
+        {
+            _list.SelectionChanged += OnSelectionChanged;
+        }
+        UpdateOutlineLevelCombo();
     }
 
-    // Run a heading command against the selected row's block index, then refresh so promoted/demoted
-    // levels and collapse markers update. A no-op when nothing is selected.
-    private void Apply(Action<int> command)
-    {
-        if (_list.SelectedItem is not OutlineRowItem selected)
-            return;
-        command(selected.Row.BlockIndex);
-        Refresh();
-    }
-
-    // Move the selected heading subtree one sibling position, then re-select it at its new index so it
-    // stays highlighted (mirrors the nav-pane Move Up / Move Down behaviour).
-    private void Move(bool moveUp)
-    {
-        if (_list.SelectedItem is not OutlineRowItem selected)
-            return;
-        var newIndex = _editor.MoveHeading(selected.Row.BlockIndex, moveUp);
-        Refresh();
-        SelectBlock(newIndex);
-    }
-
-    // Select the row mapping to the given model block index (no-op when it is not currently shown).
     private void SelectBlock(int blockIndex)
     {
+        if (!_controller.SelectBlock(blockIndex))
+            return;
+
         foreach (var listItem in _list.Items)
         {
             if (listItem is OutlineRowItem item && item.Row.BlockIndex == blockIndex)
@@ -263,37 +244,26 @@ internal sealed class OutlineView : Border
     // --- Test seams (FreeW.App.Host.Tests has InternalsVisibleTo) -------------------------------------
 
     /// <summary>The block indices currently shown in the outline (document order). For tests.</summary>
-    internal IReadOnlyList<OutlineRow> VisibleRows =>
-        _list.Items.OfType<OutlineRowItem>().Select(item => item.Row).ToList();
+    internal IReadOnlyList<OutlineRow> VisibleRows => _controller.VisibleRows;
 
     /// <summary>Select the row mapping to <paramref name="blockIndex"/> (test seam for command targeting).</summary>
     internal void SelectBlockIndex(int blockIndex) => SelectBlock(blockIndex);
 
     /// <summary>Choose a "Show Level" (1..9 or <see cref="OutlineViewModel.ShowAllLevels"/>) and refresh. For tests.</summary>
-    internal void SetShowLevel(int level)
-    {
-        _selectedShowLevel = level;
-        Refresh();
-    }
+    internal void SetShowLevel(int level) => _controller.SetShowLevel(level);
 
     /// <summary>Toggle "Show First Line Only" and refresh. For tests.</summary>
-    internal void SetFirstLineOnly(bool firstLineOnly)
-    {
-        _firstLineOnly = firstLineOnly;
-        Refresh();
-    }
+    internal void SetFirstLineOnly(bool firstLineOnly) => _controller.SetFirstLineOnly(firstLineOnly);
 
     /// <summary>
     /// Apply an outline level (-1 = Body Text, 0 = Title, 1..MaxHeadingLevel = Heading) to the
     /// currently selected row. For tests.
     /// </summary>
-    internal void SetOutlineLevel(int level) => ApplyOutlineLevel(level);
+    internal void SetOutlineLevel(int level) => _controller.SetOutlineLevel(level);
 
     /// <summary>The level currently shown in the Outline Level combo (-1 = Body Text / 0 = Title / 1–N = HeadingN). For tests.</summary>
-    internal int CurrentOutlineLevel =>
-        _outlineLevelCombo.SelectedItem is OutlineLevelItem item ? item.Level : -1;
+    internal int CurrentOutlineLevel => _controller.CurrentOutlineLevel;
 
-    // A Show-Level dropdown entry: a label plus the level it selects (or ShowAllLevels).
     private sealed class ShowLevelItem(string label, int level)
     {
         public int Level { get; } = level;
@@ -301,7 +271,6 @@ internal sealed class OutlineView : Border
         public override string ToString() => _label;
     }
 
-    // An Outline Level combo entry: a label plus the heading level it selects (-1 = Body Text, 0 = Title).
     private sealed class OutlineLevelItem(string label, int level)
     {
         public int Level { get; } = level;
