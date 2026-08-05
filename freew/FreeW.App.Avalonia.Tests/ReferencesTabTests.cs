@@ -704,11 +704,11 @@ public sealed class ReferencesTabTests
             .Where(DocumentIndex.IsIndexParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Equal("Index", "Alpha, 1", "Beta, 1");
+            .Equal("A", "Alpha, 1", "B", "Beta, 1");
         view.Document.Blocks.OfType<Paragraph>()
             .Count(paragraph => paragraph.StyleId == DocumentIndex.HeadingStyleId)
             .Should()
-            .Be(1);
+            .Be(2);
     }
 
     [Fact]
@@ -732,12 +732,12 @@ public sealed class ReferencesTabTests
             .Where(block => DocumentIndex.IsIndexParagraph(block, identifier: null))
             .Cast<Paragraph>()
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Index", "Alpha, 1");
+            .Should().Equal("A", "Alpha, 1");
         view.Document.Blocks
             .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
             .Cast<Paragraph>()
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Index", "Ada, 1");
+            .Should().Equal("A", "Ada, 1");
         view.Document.Blocks
             .Should().NotContain(block => DocumentIndex.IsIndexParagraph(block, "Places"));
     }
@@ -789,7 +789,7 @@ public sealed class ReferencesTabTests
             .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
             .Cast<Paragraph>()
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Index", "Ada, 1");
+            .Should().Equal("A", "Ada, 1");
         view.Document.Blocks.Should().NotContain(block =>
             DocumentIndex.IsIndexParagraph(block, identifier: null)
             || DocumentIndex.IsIndexParagraph(block, "Places"));
@@ -815,7 +815,7 @@ public sealed class ReferencesTabTests
             .Where(block => DocumentIndex.IsIndexParagraph(block, identifier: null))
             .Cast<Paragraph>()
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Index", "Alpha, 1");
+            .Should().Equal("A", "Alpha, 1");
         view.Document.Blocks.Should().NotContain(block =>
             DocumentIndex.IsIndexParagraph(block, "People"));
     }
@@ -861,7 +861,7 @@ public sealed class ReferencesTabTests
             .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
             .Cast<Paragraph>()
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Index", "Ada, 1", "Grace, 1");
+            .Should().Equal("A", "Ada, 1", "G", "Grace, 1");
     }
 
     [Fact]
@@ -897,7 +897,7 @@ public sealed class ReferencesTabTests
             .Where(block => DocumentIndex.IsIndexParagraph(block, identifier: null))
             .Cast<Paragraph>()
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Index", "Alpha, 1", "Beta, 1");
+            .Should().Equal("A", "Alpha, 1", "B", "Beta, 1");
         view.Document.Blocks
             .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
             .Should().Equal(peopleRegion);
@@ -947,7 +947,7 @@ public sealed class ReferencesTabTests
             .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
             .Cast<Paragraph>()
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Index", "Ada, 1", "Grace, 1");
+            .Should().Equal("A", "Ada, 1", "G", "Grace, 1");
         view.Document.Blocks
             .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
             .Should().NotContain(peopleHeading)
@@ -986,7 +986,7 @@ public sealed class ReferencesTabTests
         view.Document.Blocks.OfType<Paragraph>()
             .Where(DocumentIndex.IsIndexParagraph)
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Index", "Transportation", "Rail. See Trains");
+            .Should().Equal("T", "Transportation", "Rail. See Trains");
         view.Document.Blocks.OfType<Paragraph>()
             .SelectMany(paragraph => paragraph.Runs)
             .Select(DocumentIndex.MarkedEntry)
@@ -1163,7 +1163,7 @@ public sealed class ReferencesTabTests
         view.Document.Blocks.OfType<Paragraph>()
             .Where(DocumentIndex.IsIndexParagraph)
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Index", "Alpha, IV, V", "Beta, V");
+            .Should().Equal("A", "Alpha, IV, V", "B", "Beta, V");
     }
 
     [Fact]
