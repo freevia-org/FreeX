@@ -1,4 +1,4 @@
-using FreeX.Core.Commands;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -34,9 +34,9 @@ public sealed partial class MainWindow
             return;
         }
 
-        var command = new AddPivotChartCommand(
+        var command = ChartCommandWorkflowPlanner.BuildAddPivotChartCommand(
             _session.ActiveSheet.Id,
-            pivot.Name,
+            pivot,
             ChartType.Column);
         var result = _session.ExecuteReviewCommand(command);
 

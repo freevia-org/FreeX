@@ -93,6 +93,68 @@ public sealed class ChartCommandWorkflowPlannerTests
     }
 
     [Fact]
+    public void InsertionAndOptionsFactories_PreserveChartCommandSemantics()
+    {
+        var workbook = new Workbook("Chart workflow");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new TestCommandContext(workbook);
+        var sourceRange = Range(sheet.Id, 1, 1, 4, 3);
+
+        var insertion = ChartCommandWorkflowPlanner.BuildEmbeddedChartCommand(
+            sheet,
+            sourceRange,
+            ChartType.Column,
+            "Sales");
+        insertion.Apply(context).Success.Should().BeTrue();
+
+        var chart = sheet.Charts.Should().ContainSingle().Subject;
+        chart.Id.Should().Be(insertion.ChartId);
+        chart.DataRange.Should().Be(sourceRange);
+        chart.Title.Should().Be("Sales");
+
+        ChartCommandWorkflowPlanner.BuildHiddenEmptyCellsCommand(
+                sheet.Id,
+                chart,
+                ChartBlankDisplayMode.Zero,
+                showDataInHiddenRowsAndColumns: true)
+            .Apply(context).Success.Should().BeTrue();
+        chart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Zero);
+        chart.ShowDataInHiddenRowsAndColumns.Should().BeTrue();
+
+        chart.IsPivotChart = true;
+        chart.PivotTableName = "PivotTable1";
+        ChartCommandWorkflowPlanner.BuildChangePivotChartTypeCommand(sheet.Id, chart, ChartType.Line)
+            .Apply(context).Success.Should().BeTrue();
+        ChartCommandWorkflowPlanner.BuildPivotChartOptionsCommand(
+                sheet.Id,
+                chart,
+                PivotChartOptionsPlanner.CreateResult(
+                    chartStyleId: 17,
+                    showFieldButtons: false,
+                    showReportFilterButtons: false,
+                    showAxisFieldButtons: true,
+                    showValueFieldButtons: false,
+                    showDataTable: true,
+                    showDataTableLegendKeys: true,
+                    roundedCorners: true,
+                    showHiddenData: false,
+                    blankDisplayMode: ChartBlankDisplayMode.Span))
+            .Apply(context).Success.Should().BeTrue();
+
+        chart.Type.Should().Be(ChartType.Line);
+        chart.ChartStyleId.Should().Be(17);
+        chart.ShowPivotChartFieldButtons.Should().BeFalse();
+        chart.ShowPivotChartReportFilterButtons.Should().BeFalse();
+        chart.ShowPivotChartAxisFieldButtons.Should().BeTrue();
+        chart.ShowPivotChartValueFieldButtons.Should().BeFalse();
+        chart.DataTable.Should().NotBeNull();
+        chart.DataTable!.ShowLegendKeys.Should().BeTrue();
+        chart.RoundedCorners.Should().BeTrue();
+        chart.ShowDataInHiddenRowsAndColumns.Should().BeFalse();
+        chart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Span);
+    }
+
+    [Fact]
     public void PlanMoveCommand_ResolvesExistingAndNewSheetTransitions()
     {
         var (workbook, source, chart) = NewChartWorkbook(ChartType.Column);
@@ -133,9 +195,9 @@ public sealed class ChartCommandWorkflowPlannerTests
         var sources = new[] { "FreeX.App.Host", "FreeX.App.Avalonia" }
             .SelectMany(project => Directory.EnumerateFiles(
                 Path.Combine(srcRoot, project),
-                "MainWindow*.cs",
+                "*.cs",
                 SearchOption.AllDirectories))
-            .Where(path => !Path.GetFileName(path).StartsWith("MainWindow.ScreenshotTour", StringComparison.Ordinal))
+            .Where(path => !IsChartEvidenceHarness(Path.GetFileName(path)))
             .Select(File.ReadAllText)
             .ToArray();
         var combined = string.Join(Environment.NewLine, sources);
@@ -152,10 +214,35 @@ public sealed class ChartCommandWorkflowPlannerTests
                      "SetChartLayoutCommand",
                      "SetChartBoundsCommand",
                      "SetChartStyleCommand",
+                     "AddPivotChartCommand",
+                     "ChangePivotChartTypeCommand",
+                     "ConfigurePivotChartOptionsCommand",
+                     "ConfigureChartHiddenEmptyCellsCommand",
+                     "RemoveChartSeriesCommand",
                  })
         {
             combined.Should().NotContain($"new {commandType}(");
         }
+    }
+
+    [Fact]
+    public void ProductionRenderers_DoNotConstructAddChartCommandsDirectly()
+    {
+        var srcRoot = RepositoryFileLocator.FindDirectory("src");
+        var offenders = new[] { "FreeX.App.Host", "FreeX.App.Avalonia" }
+            .SelectMany(project => Directory.EnumerateFiles(
+                Path.Combine(srcRoot, project),
+                "*.cs",
+                SearchOption.AllDirectories))
+            .Where(path => !IsChartEvidenceHarness(Path.GetFileName(path)))
+            .Where(path => System.Text.RegularExpressions.Regex.IsMatch(
+                File.ReadAllText(path),
+                @"\bnew\s+AddChartCommand\s*\("))
+            .Select(path => Path.GetRelativePath(srcRoot, path))
+            .ToArray();
+
+        offenders.Should().BeEmpty(
+            "live WPF and Avalonia chart insertion must be owned by ChartCommandWorkflowPlanner");
     }
 
     [Fact]
@@ -199,4 +286,10 @@ public sealed class ChartCommandWorkflowPlannerTests
         new(
             new CellAddress(sheetId, startRow, startCol),
             new CellAddress(sheetId, endRow, endCol));
+
+    private static bool IsChartEvidenceHarness(string fileName) =>
+        fileName.StartsWith("MainWindow.ScreenshotTour", StringComparison.Ordinal) ||
+        fileName is "MainWindow.ParityCapture.cs" or
+            "MainWindow.RibbonInteractionValidation.cs" or
+            "MainWindow.ContextMenuInteractionValidation.cs";
 }

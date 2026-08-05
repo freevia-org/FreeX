@@ -1012,7 +1012,7 @@ public sealed partial class MainWindowSourceHygieneTests
         ribbon.Should().Contain(".Medium(\"Pie Chart\", \"Pie\"");
         source.Should().Contain("private void InsertChartOfType(ChartType type)");
         source.Should().Contain("ChartAuthoringPlanner.CanAuthor(type)");
-        source.Should().Contain("ChartInsertionPlanner.CreateEmbeddedChartPlan(");
+        source.Should().Contain("ChartCommandWorkflowPlanner.CreateEmbeddedChartPlan(");
         source.Should().Contain("UpdateViewport();");
     }
 

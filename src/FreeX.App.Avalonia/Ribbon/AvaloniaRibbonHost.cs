@@ -5,6 +5,7 @@ using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Model;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Theme;
@@ -497,7 +498,10 @@ internal sealed class InsertChartRibbonCommand : IRibbonCommand
         if (_session() is not { } session)
             return;
 
-        var command = InsertChartCommandFactory.Build(session.ActiveSheet, session.SelectedRange, _chartType);
+        var command = ChartCommandWorkflowPlanner.BuildEmbeddedChartCommand(
+            session.ActiveSheet,
+            session.SelectedRange,
+            _chartType);
         var result = session.ExecuteReviewCommand(command);
         _setStatus(result.Success
             ? $"Inserted {_chartType} chart"
@@ -735,7 +739,7 @@ internal static class AvaloniaRibbonComposition
 
     /// <summary>
     /// Wires the Insert chart-type buttons and their chart-type menu items to
-    /// <see cref="InsertChartCommandFactory"/>. Any canonical command id the factory maps to a
+    /// <see cref="ChartCommandWorkflowPlanner"/>. Any canonical command id the workflow maps to a
     /// <see cref="ChartType"/> gets an <see cref="InsertChartRibbonCommand"/>; unmapped ids keep their
     /// no-op registration. The factory recognizes the shared definition's descriptive chart labels
     /// (e.g. <c>Column Chart</c>, <c>Line Chart</c>) directly.
@@ -747,7 +751,7 @@ internal static class AvaloniaRibbonComposition
     {
         foreach (var id in EnumerateCommandIds(BuildDefinition()))
         {
-            if (InsertChartCommandFactory.ChartTypeForRibbonCommand(id.Value) is not { } chartType)
+            if (ChartCommandWorkflowPlanner.ChartTypeForRibbonCommand(id.Value) is not { } chartType)
                 continue;
             registry.Register(id, new InsertChartRibbonCommand(session, chartType, setStatus));
         }

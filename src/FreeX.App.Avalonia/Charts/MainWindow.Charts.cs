@@ -7,6 +7,7 @@ using Avalonia.Media;
 
 using FreeX.App.Avalonia.Charts;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.Core.Model;
 
@@ -212,7 +213,10 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        var command = InsertChartCommandFactory.Build(_session.ActiveSheet, range, chartType);
+        var command = ChartCommandWorkflowPlanner.BuildEmbeddedChartCommand(
+            _session.ActiveSheet,
+            range,
+            chartType);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {

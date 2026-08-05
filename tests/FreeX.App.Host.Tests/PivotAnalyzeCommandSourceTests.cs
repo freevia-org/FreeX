@@ -43,10 +43,13 @@ public sealed class PivotAnalyzeCommandSourceTests
         advancedSource.Should().Contain("new ConfigurePivotTableCalculatedItemsCommand(");
 
         chartSource.Should().Contain("new PivotChartTypeDialog(ChartType.Column)");
-        chartSource.Should().Contain("new AddPivotChartCommand(_currentSheetId, pivotTable.Name, dialog.Result.ChartType");
-        chartSource.Should().Contain("new ChangePivotChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType)");
+        chartSource.Should().Contain("ChartCommandWorkflowPlanner.BuildAddPivotChartCommand(");
+        chartSource.Should().NotContain("new AddPivotChartCommand(");
+        chartSource.Should().Contain("ChartCommandWorkflowPlanner.BuildChangePivotChartTypeCommand(");
+        chartSource.Should().NotContain("new ChangePivotChartTypeCommand(");
         chartSource.Should().Contain("new PivotChartOptionsDialog(chart)");
-        chartSource.Should().Contain("new ConfigurePivotChartOptionsCommand(");
+        chartSource.Should().Contain("ChartCommandWorkflowPlanner.BuildPivotChartOptionsCommand(");
+        chartSource.Should().NotContain("new ConfigurePivotChartOptionsCommand(");
     }
 
     [Fact]

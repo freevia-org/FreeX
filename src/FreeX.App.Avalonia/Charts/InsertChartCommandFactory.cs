@@ -1,4 +1,5 @@
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -22,13 +23,13 @@ public static class InsertChartCommandFactory
     /// a wired chart control.
     /// </summary>
     public static ChartType? ChartTypeForRibbonCommand(string commandId) =>
-        ChartInsertionPlanner.ChartTypeForRibbonCommand(commandId);
+        ChartCommandWorkflowPlanner.ChartTypeForRibbonCommand(commandId);
 
     /// <summary>
     /// Builds a default-placement chart insertion command for callers that already resolved the data range.
     /// </summary>
     public static AddChartCommand Build(SheetId sheetId, GridRange selection, ChartType chartType) =>
-        ChartInsertionPlanner.BuildEmbeddedChartCommand(
+        ChartCommandWorkflowPlanner.BuildEmbeddedChartCommand(
             sheetId,
             selection,
             chartType,
@@ -40,5 +41,5 @@ public static class InsertChartCommandFactory
     /// shared current-region/table rules.
     /// </summary>
     public static AddChartCommand Build(Sheet sheet, GridRange selection, ChartType chartType) =>
-        ChartInsertionPlanner.BuildEmbeddedChartCommand(sheet, selection, chartType);
+        ChartCommandWorkflowPlanner.BuildEmbeddedChartCommand(sheet, selection, chartType);
 }

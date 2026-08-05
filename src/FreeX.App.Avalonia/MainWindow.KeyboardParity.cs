@@ -5,6 +5,7 @@ using Avalonia.Input;
 
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.Editing;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -525,7 +526,7 @@ public sealed partial class MainWindow
             return;
 
         var sheet = _session.ActiveSheet;
-        var command = ChartInsertionPlanner.BuildChartSheetCommand(
+        var command = ChartCommandWorkflowPlanner.BuildChartSheetCommand(
             sheet,
             sheet.Id,
             _session.SelectedRange,

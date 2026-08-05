@@ -46,7 +46,10 @@ public sealed partial class MainWindow
             return;
 
         var result = _session.ExecuteReviewCommand(
-            new ChangePivotChartTypeCommand(_session.ActiveSheet.Id, chart!.Id, plan.AppliedType!.Value));
+            ChartCommandWorkflowPlanner.BuildChangePivotChartTypeCommand(
+                _session.ActiveSheet.Id,
+                chart!,
+                plan.AppliedType!.Value));
         RefreshShell(result.Success
             ? UiText.Format("PivotChart_TypeChanged", ChartTypeChangePlanner.DisplayName(plan.AppliedType!.Value))
             : result.ErrorMessage ?? UiText.Get("PivotChart_ChangeTypeInsertFirst"));
@@ -168,19 +171,10 @@ public sealed partial class MainWindow
             showHiddenData.IsChecked == true,
             blankDisplayMode);
 
-        var command = new ConfigurePivotChartOptionsCommand(
+        var command = ChartCommandWorkflowPlanner.BuildPivotChartOptionsCommand(
             _session.ActiveSheet.Id,
-            chart!.Id,
-            chartStyleId: input.ChartStyleId,
-            showFieldButtons: input.ShowFieldButtons,
-            showReportFilterButtons: input.ShowReportFilterButtons,
-            showAxisFieldButtons: input.ShowAxisFieldButtons,
-            showValueFieldButtons: input.ShowValueFieldButtons,
-            showDataTable: input.ShowDataTable,
-            showDataTableLegendKeys: input.ShowDataTableLegendKeys,
-            roundedCorners: input.RoundedCorners,
-            showHiddenData: input.ShowHiddenData,
-            blankDisplayMode: input.BlankDisplayMode);
+            chart!,
+            input);
 
         var result = _session.ExecuteReviewCommand(command);
         RefreshShell(result.Success

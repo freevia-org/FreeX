@@ -23,7 +23,7 @@ public partial class MainWindow
         {
             var currentRange = SheetGrid.SelectedRange ?? range;
             var sheet = _workbook.GetSheet(_currentSheetId);
-            command = ChartInsertionPlanner.BuildChartSheetCommand(
+            command = ChartCommandWorkflowPlanner.BuildChartSheetCommand(
                 sheet,
                 _currentSheetId,
                 currentRange,
@@ -63,13 +63,13 @@ public partial class MainWindow
                 {
                     var sheet = _workbook.GetSheet(_currentSheetId);
                     var plan = sheet is null
-                        ? ChartInsertionPlanner.CreateEmbeddedChartPlan(
+                        ? ChartCommandWorkflowPlanner.CreateEmbeddedChartPlan(
                             _currentSheetId,
                             currentRange,
                             type,
                             "Chart",
                             ChartInsertionPlanner.DefaultPlacement)
-                        : ChartInsertionPlanner.CreateEmbeddedChartPlan(
+                        : ChartCommandWorkflowPlanner.CreateEmbeddedChartPlan(
                             sheet,
                             currentRange,
                             type,
@@ -176,7 +176,11 @@ public partial class MainWindow
         if (dialog.Result.PendingSeriesRemovals is { Count: > 0 } pendingRemovals)
         {
             foreach (var seriesIndex in pendingRemovals)
-                TryExecuteCommand(new RemoveChartSeriesCommand(_currentSheetId, chart.Id, seriesIndex), command.Label);
+            {
+                TryExecuteCommand(
+                    ChartCommandWorkflowPlanner.BuildRemoveSeriesCommand(_currentSheetId, chart, seriesIndex),
+                    command.Label);
+            }
         }
 
         // R92-app-chart-data-edit-5-3: only issue a Hidden/Empty Cell Settings undo step when the
@@ -186,9 +190,9 @@ public partial class MainWindow
             dialog.Result.ShowDataInHiddenRowsAndColumns != chart.ShowDataInHiddenRowsAndColumns)
         {
             TryExecuteCommand(
-                new ConfigureChartHiddenEmptyCellsCommand(
+                ChartCommandWorkflowPlanner.BuildHiddenEmptyCellsCommand(
                     _currentSheetId,
-                    chart.Id,
+                    chart,
                     dialog.Result.BlankDisplayMode,
                     dialog.Result.ShowDataInHiddenRowsAndColumns),
                 command.Label);

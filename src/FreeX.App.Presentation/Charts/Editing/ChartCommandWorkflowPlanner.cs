@@ -39,6 +39,113 @@ public sealed record ChartMoveCommandPlan(
 /// </summary>
 public static class ChartCommandWorkflowPlanner
 {
+    public static ChartType? ChartTypeForRibbonCommand(string commandId) =>
+        ChartInsertionPlanner.ChartTypeForRibbonCommand(commandId);
+
+    public static ChartInsertionPlan CreateEmbeddedChartPlan(
+        Sheet sheet,
+        GridRange selectedRange,
+        ChartType chartType,
+        ChartInsertionViewport viewport,
+        string? title = "Chart") =>
+        ChartInsertionPlanner.CreateEmbeddedChartPlan(sheet, selectedRange, chartType, viewport, title);
+
+    public static ChartInsertionPlan CreateEmbeddedChartPlan(
+        SheetId sheetId,
+        GridRange dataRange,
+        ChartType chartType,
+        string? title,
+        ChartInsertionPlacement placement) =>
+        ChartInsertionPlanner.CreateEmbeddedChartPlan(sheetId, dataRange, chartType, title, placement);
+
+    public static AddChartCommand BuildEmbeddedChartCommand(
+        Sheet sheet,
+        GridRange selectedRange,
+        ChartType chartType,
+        string? title = null,
+        ChartInsertionPlacement? placement = null) =>
+        ChartInsertionPlanner.BuildEmbeddedChartCommand(sheet, selectedRange, chartType, title, placement);
+
+    public static AddChartCommand BuildEmbeddedChartCommand(
+        SheetId sheetId,
+        GridRange dataRange,
+        ChartType chartType,
+        string? title,
+        ChartInsertionPlacement placement) =>
+        ChartInsertionPlanner.BuildEmbeddedChartCommand(sheetId, dataRange, chartType, title, placement);
+
+    public static AddChartSheetCommand BuildChartSheetCommand(
+        Sheet? sheet,
+        SheetId sheetId,
+        GridRange selectedRange,
+        ChartType chartType,
+        string title) =>
+        ChartInsertionPlanner.BuildChartSheetCommand(sheet, sheetId, selectedRange, chartType, title);
+
+    public static RemoveChartSeriesCommand BuildRemoveSeriesCommand(
+        SheetId sheetId,
+        ChartModel chart,
+        int seriesIndex)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+        return new RemoveChartSeriesCommand(sheetId, chart.Id, seriesIndex);
+    }
+
+    public static ConfigureChartHiddenEmptyCellsCommand BuildHiddenEmptyCellsCommand(
+        SheetId sheetId,
+        ChartModel chart,
+        ChartBlankDisplayMode blankDisplayMode,
+        bool showDataInHiddenRowsAndColumns)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+        return new ConfigureChartHiddenEmptyCellsCommand(
+            sheetId,
+            chart.Id,
+            blankDisplayMode,
+            showDataInHiddenRowsAndColumns);
+    }
+
+    public static AddPivotChartCommand BuildAddPivotChartCommand(
+        SheetId sheetId,
+        PivotTableModel pivotTable,
+        ChartType chartType,
+        string? title = null)
+    {
+        ArgumentNullException.ThrowIfNull(pivotTable);
+        return new AddPivotChartCommand(sheetId, pivotTable.Name, chartType, title);
+    }
+
+    public static ChangePivotChartTypeCommand BuildChangePivotChartTypeCommand(
+        SheetId sheetId,
+        ChartModel chart,
+        ChartType chartType)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+        return new ChangePivotChartTypeCommand(sheetId, chart.Id, chartType);
+    }
+
+    public static ConfigurePivotChartOptionsCommand BuildPivotChartOptionsCommand(
+        SheetId sheetId,
+        ChartModel chart,
+        PivotChartOptionsInput input)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+        ArgumentNullException.ThrowIfNull(input);
+        return new ConfigurePivotChartOptionsCommand(
+            sheetId,
+            chart.Id,
+            input.ChartStyleId,
+            input.ShowFieldButtons,
+            input.ShowReportFilterButtons,
+            input.ShowAxisFieldButtons,
+            input.ShowValueFieldButtons,
+            input.ShowDataTable,
+            input.ShowDataTableLegendKeys,
+            input.RoundedCorners,
+            input.ShowHiddenData,
+            input.BlankDisplayMode);
+    }
+
     public static ChartLayoutCommandPlan PlanLayoutCommand(
         SheetId sheetId,
         Sheet? sheet,

@@ -18,8 +18,8 @@ public sealed class ChartCommandSourceTests
         source.Should().Contain("private void InsertChartOfType(ChartType type)");
         source.Should().Contain("ChartAuthoringPlanner.CanAuthor(type)");
         source.Should().Contain("ShowDeferredChartFamilyMessage();");
-        source.Should().Contain("ChartInsertionPlanner.CreateEmbeddedChartPlan(");
-        source.Should().Contain("ChartInsertionPlanner.BuildChartSheetCommand(");
+        source.Should().Contain("ChartCommandWorkflowPlanner.CreateEmbeddedChartPlan(");
+        source.Should().Contain("ChartCommandWorkflowPlanner.BuildChartSheetCommand(");
         source.Should().NotContain("new AddChartCommand(");
         source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferred\")");
         source.Should().Contain("private void ChangeChartTypeBtn_Click(object sender, RoutedEventArgs e)");
@@ -32,6 +32,10 @@ public sealed class ChartCommandSourceTests
         source.Should().Contain("ChartInputParser.TryParseDataRange(dialog.Result.SourceRangeText, _currentSheetId, ResolveSheetIdByName, out var dataRange)");
         source.Should().Contain("ChartCommandWorkflowPlanner.BuildChangeSourceCommand(");
         source.Should().NotContain("new ChangeChartSourceCommand(");
+        source.Should().Contain("ChartCommandWorkflowPlanner.BuildRemoveSeriesCommand(");
+        source.Should().NotContain("new RemoveChartSeriesCommand(");
+        source.Should().Contain("ChartCommandWorkflowPlanner.BuildHiddenEmptyCellsCommand(");
+        source.Should().NotContain("new ConfigureChartHiddenEmptyCellsCommand(");
         // The dialog's Switch Row/Column checkbox must reach the command (and reflect the
         // chart's current orientation when the dialog opens) — not be a silent no-op.
         source.Should().Contain("switchRowColumn: chart.SeriesInRows");

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -28,7 +29,11 @@ public partial class MainWindow
             return;
 
         if (!TryExecuteCommand(
-                new AddPivotChartCommand(_currentSheetId, pivotTable.Name, dialog.Result.ChartType, $"{pivotTable.Name} Chart"),
+                ChartCommandWorkflowPlanner.BuildAddPivotChartCommand(
+                    _currentSheetId,
+                    pivotTable,
+                    dialog.Result.ChartType,
+                    $"{pivotTable.Name} Chart"),
                 "Insert PivotChart"))
             return;
 
@@ -58,7 +63,12 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!TryExecuteCommand(new ChangePivotChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType), "Change PivotChart Type"))
+        if (!TryExecuteCommand(
+                ChartCommandWorkflowPlanner.BuildChangePivotChartTypeCommand(
+                    _currentSheetId,
+                    chart,
+                    dialog.Result.ChartType),
+                "Change PivotChart Type"))
             return;
 
         UpdateViewport();
@@ -87,20 +97,19 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
+        var input = PivotChartOptionsPlanner.CreateResult(
+            dialog.Result.ChartStyleId,
+            dialog.Result.ShowFieldButtons,
+            dialog.Result.ShowReportFilterButtons,
+            dialog.Result.ShowAxisFieldButtons,
+            dialog.Result.ShowValueFieldButtons,
+            dialog.Result.ShowDataTable,
+            dialog.Result.ShowDataTableLegendKeys,
+            dialog.Result.RoundedCorners,
+            dialog.Result.ShowHiddenData,
+            dialog.Result.BlankDisplayMode);
         if (!TryExecuteCommand(
-                new ConfigurePivotChartOptionsCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    dialog.Result.ChartStyleId,
-                    dialog.Result.ShowFieldButtons,
-                    dialog.Result.ShowReportFilterButtons,
-                    dialog.Result.ShowAxisFieldButtons,
-                    dialog.Result.ShowValueFieldButtons,
-                    dialog.Result.ShowDataTable,
-                    dialog.Result.ShowDataTableLegendKeys,
-                    dialog.Result.RoundedCorners,
-                    dialog.Result.ShowHiddenData,
-                    dialog.Result.BlankDisplayMode),
+                ChartCommandWorkflowPlanner.BuildPivotChartOptionsCommand(_currentSheetId, chart, input),
                 "PivotChart Options"))
             return;
 
