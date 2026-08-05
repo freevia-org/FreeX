@@ -278,6 +278,10 @@ internal static class PptxChartReader
                 series.Values.AddRange(ReadChartExValues(valueLevel));
             }
 
+            var seriesShapeProperties = seriesElement.Element(Cx + "spPr");
+            if (seriesShapeProperties is not null)
+                ReadSeriesShapeProperties(seriesShapeProperties, scheme, series);
+
             series.ValueColorScale = ReadChartExValueColorScale(seriesElement, scheme);
             ReadChartExDataPoints(seriesElement, scheme, series);
             ReadChartExDataLabels(seriesElement.Element(Cx + "dataLabels"), scheme, series);
