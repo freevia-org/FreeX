@@ -1,16 +1,44 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
+public interface IOleActivationTempFile : IDisposable
+{
+    string Path { get; }
+    byte[] ReadAllBytes();
+}
+
+public interface IOleActivationTempFileStore
+{
+    IOleActivationTempFile Materialize(OleActivationPlan plan);
+}
+
+public interface IOleActivationProcess : IDisposable
+{
+    Task ExitTask { get; }
+    bool SupportsEditBack { get; }
+}
+
+public interface IOleActivationLauncher
+{
+    IOleActivationProcess Launch(string path);
+}
+
 /// <summary>
-/// Materializes an embedded OLE payload so the operating system can activate it
-/// in its registered host application.
+/// Materializes a packaged OLE payload and opens it through the host OS file service.
+/// Native in-place OLE activation remains a Windows-only renderer concern; this workflow
+/// deliberately handles the portable packaged-file boundary shared by WPF and Avalonia.
 /// </summary>
 public static class OleActivationService
 {
+    /// <summary>Maximum lifetime for a detached OS handoff payload.</summary>
+    public static readonly TimeSpan DetachedPayloadRetention = TimeSpan.FromMinutes(10);
+
     private static readonly ConcurrentDictionary<int, OleActivationSession> ActiveSessions = new();
+    private static int _nextSessionId;
 
     private static readonly IReadOnlyDictionary<string, string> ContentTypeExtensions =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -23,242 +51,212 @@ public static class OleActivationService
             ["application/vnd.ms-powerpoint"] = "ppt",
         };
 
-    /// <summary>
-    /// Writes the embedded payload to a unique temporary file and asks the OS to
-    /// open it. Returns false when the object has no usable payload or no host can
-    /// be started.
-    /// </summary>
-    public static bool TryActivate(OleObjectInfo? oleObject)
-    {
-        if (oleObject is null)
-            return false;
+    public static bool TryActivate(OleObjectInfo? oleObject) =>
+        TryActivate(OleActivationPlanner.TryBuild(oleObject),
+            bytes => { if (oleObject is not null) oleObject.EmbeddedBytes = bytes; });
 
-        return BeginActivation(
-            oleObject.EmbeddedBytes,
-            ResolveExtension(oleObject),
-            updatedBytes => oleObject.EmbeddedBytes = updatedBytes) is not null;
-    }
-
-    /// <summary>
-    /// Activates an embedded object carried by a rich-text replacement run. The
-    /// same temporary-file lifecycle as slide OLE objects is used, and edits made
-    /// by the external application are written back to the inline payload.
-    /// </summary>
     public static bool TryActivate(
         InlineOleObjectInfo? inlineObject,
-        Action<byte[]>? onPayloadUpdated = null)
+        Action<byte[]>? onPayloadUpdated = null) =>
+        TryActivate(OleActivationPlanner.TryBuild(inlineObject), bytes =>
+        {
+            if (inlineObject is null) return;
+            inlineObject.EmbeddedBytes = bytes;
+            onPayloadUpdated?.Invoke(bytes);
+        });
+
+    internal static bool TryActivate(
+        OleActivationPlan? plan,
+        Action<byte[]> updatePayload,
+        IOleActivationTempFileStore tempStore,
+        IOleActivationLauncher launcher)
     {
-        if (inlineObject is null)
+        ArgumentNullException.ThrowIfNull(updatePayload);
+        ArgumentNullException.ThrowIfNull(tempStore);
+        ArgumentNullException.ThrowIfNull(launcher);
+        if (plan is null || plan.Payload.Length == 0 || IsBlockedExtension(plan.Extension))
             return false;
 
-        return BeginActivation(
-            inlineObject.EmbeddedBytes,
-            ResolveExtension(inlineObject),
-            updatedBytes =>
-            {
-                inlineObject.EmbeddedBytes = updatedBytes;
-                onPayloadUpdated?.Invoke(updatedBytes);
-            }) is not null;
-    }
-
-    private static OleActivationSession? BeginActivation(
-        IReadOnlyList<byte> embeddedBytes,
-        string extension,
-        Action<byte[]> updatePayload)
-    {
-        if (embeddedBytes.Count == 0)
-            return null;
-
-        string directory = Path.Combine(Path.GetTempPath(), "FreeP", "Ole");
-        string path = Path.Combine(directory, $"embedded-{Guid.NewGuid():N}.{extension}");
-        byte[] originalBytes = embeddedBytes.ToArray();
-
+        IOleActivationTempFile? tempFile = null;
         try
         {
-            Directory.CreateDirectory(directory);
-            File.WriteAllBytes(path, originalBytes);
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = path,
-                UseShellExecute = true,
-            };
-            var process = new Process { StartInfo = startInfo };
-            if (!process.Start())
-            {
-                process.Dispose();
-                TryDelete(path);
-                return null;
-            }
-
-            var session = new OleActivationSession(
-                process,
-                path,
-                originalBytes,
-                updatePayload,
-                CompleteSession);
-            ActiveSessions[process.Id] = session;
-            session.StartWatching();
-            return session;
-        }
-        catch (Exception)
-        {
-            TryDelete(path);
-            return null;
-        }
-    }
-
-    internal static bool TryCommitEditedPayload(
-        OleObjectInfo oleObject,
-        string path,
-        IReadOnlyList<byte> originalBytes)
-    {
-        return TryCommitEditedPayload(
-            path,
-            originalBytes,
-            updatedBytes => oleObject.EmbeddedBytes = updatedBytes);
-    }
-
-    internal static bool TryCommitEditedPayload(
-        InlineOleObjectInfo inlineObject,
-        string path,
-        IReadOnlyList<byte> originalBytes)
-    {
-        return TryCommitEditedPayload(
-            path,
-            originalBytes,
-            updatedBytes => inlineObject.EmbeddedBytes = updatedBytes);
-    }
-
-    private static bool TryCommitEditedPayload(
-        string path,
-        IReadOnlyList<byte> originalBytes,
-        Action<byte[]> updatePayload)
-    {
-        try
-        {
-            if (!File.Exists(path))
-                return false;
-
-            byte[] updatedBytes = File.ReadAllBytes(path);
-            if (updatedBytes.Length == 0
-                || updatedBytes.SequenceEqual(originalBytes))
-                return false;
-
-            updatePayload(updatedBytes);
+            tempFile = tempStore.Materialize(plan);
+            var process = launcher.Launch(tempFile.Path);
+            var session = new OleActivationSession(process, tempFile, plan.Payload, updatePayload);
+            ActiveSessions[session.Id] = session;
+            _ = CompleteSessionAsync(session);
             return true;
         }
         catch
         {
+            tempFile?.Dispose();
             return false;
         }
     }
 
-    private static void CompleteSession(OleActivationSession session)
+    private static bool TryActivate(OleActivationPlan? plan, Action<byte[]> updatePayload) =>
+        TryActivate(plan, updatePayload, new DefaultTempFileStore(), new DefaultLauncher());
+
+    internal static bool TryCommitEditedPayload(OleObjectInfo oleObject, string path, IReadOnlyList<byte> originalBytes) =>
+        TryCommitEditedPayload(path, originalBytes, bytes => oleObject.EmbeddedBytes = bytes);
+
+    internal static bool TryCommitEditedPayload(InlineOleObjectInfo inlineObject, string path, IReadOnlyList<byte> originalBytes) =>
+        TryCommitEditedPayload(path, originalBytes, bytes => inlineObject.EmbeddedBytes = bytes);
+
+    private static bool TryCommitEditedPayload(string path, IReadOnlyList<byte> originalBytes, Action<byte[]> updatePayload)
     {
         try
         {
-            TryCommitEditedPayload(
-                session.Path,
-                session.OriginalBytes,
-                session.UpdatePayload);
+            if (!File.Exists(path)) return false;
+            var updatedBytes = File.ReadAllBytes(path);
+            if (updatedBytes.Length == 0 || updatedBytes.SequenceEqual(originalBytes)) return false;
+            updatePayload(updatedBytes);
+            return true;
         }
+        catch { return false; }
+    }
+
+    private static async Task CompleteSessionAsync(OleActivationSession session)
+    {
+        try
+        {
+            await session.Process.ExitTask.ConfigureAwait(false);
+            if (session.Process.SupportsEditBack)
+                TryCommitEditedPayload(session.TempFile.Path, session.OriginalBytes, session.UpdatePayload);
+        }
+        catch { }
         finally
         {
-            ActiveSessions.TryRemove(session.ProcessId, out _);
-            TryDelete(session.Path);
-            session.DisposeProcess();
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { File.Delete(path); } catch { }
-    }
-
-    private sealed class OleActivationSession
-    {
-        private readonly Process _process;
-        private readonly Action<OleActivationSession> _complete;
-        private int _completed;
-
-        public string Path { get; }
-        public byte[] OriginalBytes { get; }
-        public Action<byte[]> UpdatePayload { get; }
-        public int ProcessId => _process.Id;
-
-        public OleActivationSession(
-            Process process,
-            string path,
-            byte[] originalBytes,
-            Action<byte[]> updatePayload,
-            Action<OleActivationSession> complete)
-        {
-            _process = process;
-            Path = path;
-            OriginalBytes = originalBytes;
-            UpdatePayload = updatePayload;
-            _complete = complete;
-        }
-
-        public void StartWatching()
-        {
-            _process.EnableRaisingEvents = true;
-            _process.Exited += OnExited;
-            if (_process.HasExited)
-                Complete();
-        }
-
-        private void OnExited(object? sender, EventArgs e) => Complete();
-
-        private void Complete()
-        {
-            if (Interlocked.Exchange(ref _completed, 1) == 0)
-                _complete(this);
-        }
-
-        public void DisposeProcess()
-        {
-            _process.Exited -= OnExited;
-            _process.Dispose();
+            ActiveSessions.TryRemove(session.Id, out _);
+            session.Dispose();
         }
     }
 
     public static string ResolveExtension(OleObjectInfo oleObject)
     {
-        string extension = NormalizeExtension(oleObject.EmbeddedExtension);
-        if (extension != "bin")
-            return extension;
-
-        if (ContentTypeExtensions.TryGetValue(oleObject.EmbeddedContentType, out var contentExtension))
-            return contentExtension;
-
-        return "bin";
+        var extension = NormalizeExtension(oleObject.EmbeddedExtension);
+        return extension != "bin" ? extension :
+            ContentTypeExtensions.TryGetValue(oleObject.EmbeddedContentType, out var value) ? value : "bin";
     }
 
     public static string ResolveExtension(InlineOleObjectInfo inlineObject)
     {
-        string extension = NormalizeExtension(Path.GetExtension(inlineObject.FileName));
-        if (extension != "bin")
-            return extension;
-
+        var extension = NormalizeExtension(Path.GetExtension(inlineObject.FileName));
+        if (extension != "bin") return extension;
         return inlineObject.ClassName?.Trim().ToLowerInvariant() switch
         {
-            "excel.sheet.12" => "xlsx",
-            "excel.sheetmacroenabled.12" => "xlsm",
-            "excel.sheet.8" => "xls",
-            "word.document.12" => "docx",
-            "word.document.8" => "doc",
-            "powerpoint.show.12" => "pptx",
-            "powerpoint.show.8" => "ppt",
-            _ => "bin",
+            "excel.sheet.12" => "xlsx", "excel.sheetmacroenabled.12" => "xlsm", "excel.sheet.8" => "xls",
+            "word.document.12" => "docx", "word.document.8" => "doc",
+            "powerpoint.show.12" => "pptx", "powerpoint.show.8" => "ppt", _ => "bin"
         };
     }
 
     private static string NormalizeExtension(string? extension)
     {
-        string candidate = (extension ?? string.Empty).Trim().TrimStart('.');
+        var candidate = (extension ?? string.Empty).Trim().TrimStart('.');
         return candidate.Length > 0 && candidate.All(char.IsLetterOrDigit)
-            ? candidate.ToLowerInvariant()
-            : "bin";
+            ? candidate.ToLowerInvariant() : "bin";
+    }
+
+    private static bool IsBlockedExtension(string extension) => extension.ToLowerInvariant() switch
+    {
+        "exe" or "com" or "msi" or "dll" or "so" or "dylib" or
+        "bat" or "cmd" or "ps1" or "sh" or "bash" or "zsh" or
+        "js" or "jse" or "vbs" or "vbe" or "wsf" or "wsh" => true,
+        _ => false,
+    };
+
+    private sealed class OleActivationSession : IDisposable
+    {
+        public OleActivationSession(IOleActivationProcess process, IOleActivationTempFile tempFile, byte[] originalBytes, Action<byte[]> updatePayload)
+        { Process = process; TempFile = tempFile; OriginalBytes = originalBytes; UpdatePayload = updatePayload; Id = Interlocked.Increment(ref _nextSessionId); }
+        public int Id { get; }
+        public IOleActivationProcess Process { get; }
+        public IOleActivationTempFile TempFile { get; }
+        public byte[] OriginalBytes { get; }
+        public Action<byte[]> UpdatePayload { get; }
+        public void Dispose() { Process.Dispose(); TempFile.Dispose(); }
+    }
+
+    private sealed class DefaultTempFileStore : IOleActivationTempFileStore
+    {
+        public IOleActivationTempFile Materialize(OleActivationPlan plan)
+        {
+            var root = Path.Combine(Path.GetTempPath(), "FreeP", "Ole");
+            CleanupStale(root);
+            var directory = Path.Combine(root, Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            var path = Path.Combine(directory, plan.FileName);
+            File.WriteAllBytes(path, plan.Payload);
+            return new DefaultTempFile(path, directory);
+        }
+
+        private static void CleanupStale(string root)
+        {
+            if (!Directory.Exists(root))
+                return;
+
+            var activeDirectories = ActiveSessions.Values
+                .Select(session => Path.GetDirectoryName(session.TempFile.Path))
+                .Where(path => path is not null)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var directory in Directory.EnumerateDirectories(root))
+            {
+                if (activeDirectories.Contains(directory)
+                    || DateTime.UtcNow - Directory.GetLastWriteTimeUtc(directory) < DetachedPayloadRetention)
+                    continue;
+                try { Directory.Delete(directory, recursive: true); } catch { }
+            }
+        }
+    }
+
+    private sealed class DefaultTempFile : IOleActivationTempFile
+    {
+        private readonly string _directory;
+        public DefaultTempFile(string path, string directory) { Path = path; _directory = directory; }
+        public string Path { get; }
+        public byte[] ReadAllBytes() => File.ReadAllBytes(Path);
+        public void Dispose() { try { Directory.Delete(_directory, true); } catch { } }
+    }
+
+    private sealed class DefaultLauncher : IOleActivationLauncher
+    {
+        public IOleActivationProcess Launch(string path)
+        {
+            var info = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                ? new ProcessStartInfo { FileName = path, UseShellExecute = true }
+                : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                    ? new ProcessStartInfo { FileName = "open", UseShellExecute = false }
+                : new ProcessStartInfo
+                {
+                    FileName = "xdg-open",
+                    UseShellExecute = false,
+                };
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                info.ArgumentList.Add("-W");
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                info.ArgumentList.Add(path);
+            var process = Process.Start(info) ?? throw new InvalidOperationException("The host OS file service did not start.");
+            return new DefaultProcess(
+                process,
+                supportsEditBack: !RuntimeInformation.IsOSPlatform(OSPlatform.Linux),
+                exitTask: RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
+                    ? Task.Delay(DetachedPayloadRetention)
+                    : process.WaitForExitAsync());
+        }
+    }
+
+    private sealed class DefaultProcess : IOleActivationProcess
+    {
+        private readonly Process _process;
+        public DefaultProcess(Process process, bool supportsEditBack, Task exitTask)
+        {
+            _process = process;
+            SupportsEditBack = supportsEditBack;
+            ExitTask = exitTask;
+        }
+        public Task ExitTask { get; }
+        public bool SupportsEditBack { get; }
+        public void Dispose() => _process.Dispose();
     }
 }

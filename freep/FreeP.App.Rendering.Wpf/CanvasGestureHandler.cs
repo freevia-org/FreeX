@@ -31,6 +31,7 @@ public sealed class CanvasGestureHandler : IDisposable
     private readonly SlideCanvas       _canvas;
     private readonly EditingSession    _editor;
     private readonly Func<SlideShape, bool>? _tryOpenOleInPlace;
+    private readonly Func<OleObjectInfo?, bool>? _tryActivateOleExternally;
     private readonly Action<ChartPointHit>? _onChartPointDoubleClick;
     private readonly SelectionAdorner  _adorner;
     private readonly AdornerLayer?     _adornerLayer;
@@ -102,12 +103,14 @@ public sealed class CanvasGestureHandler : IDisposable
         SlideCanvas canvas,
         EditingSession editor,
         Func<SlideShape, bool>? tryOpenOleInPlace = null,
-        Action<ChartPointHit>? onChartPointDoubleClick = null)
+        Action<ChartPointHit>? onChartPointDoubleClick = null,
+        Func<OleObjectInfo?, bool>? tryActivateOleExternally = null)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _tryOpenOleInPlace = tryOpenOleInPlace;
         _onChartPointDoubleClick = onChartPointDoubleClick;
+        _tryActivateOleExternally = tryActivateOleExternally;
 
         // Add adorner to the adorner layer
         _adornerLayer = AdornerLayer.GetAdornerLayer(_canvas);
@@ -211,8 +214,7 @@ public sealed class CanvasGestureHandler : IDisposable
                 : null;
             if (shape?.Kind == SlideShapeKind.Ole)
             {
-                if (!(_tryOpenOleInPlace?.Invoke(shape) ?? false))
-                    OleActivationService.TryActivate(shape.OleObject);
+                HandleOleDoubleClick(shape);
                 e.Handled = true;
                 return;
             }
@@ -383,6 +385,18 @@ public sealed class CanvasGestureHandler : IDisposable
                 PreviewMarquee(pt, xf);
                 break;
         }
+    }
+
+    internal bool HandleOleDoubleClickForTests(SlideShape shape) => HandleOleDoubleClick(shape);
+
+    private bool HandleOleDoubleClick(SlideShape shape)
+    {
+        if (shape.Kind != SlideShapeKind.Ole)
+            return false;
+        if (_tryOpenOleInPlace?.Invoke(shape) == true)
+            return true;
+        return _tryActivateOleExternally?.Invoke(shape.OleObject)
+            ?? OleActivationService.TryActivate(shape.OleObject);
     }
 
     // ── Mouse up ──────────────────────────────────────────────────────────────────────────────

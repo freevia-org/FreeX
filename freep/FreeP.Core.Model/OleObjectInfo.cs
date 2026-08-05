@@ -29,6 +29,9 @@ public enum OleObjectLayout
 /// </summary>
 public sealed class OleObjectInfo
 {
+    /// <summary>Original package filename hint used when the payload is opened externally.</summary>
+    public string FileName { get; set; } = "Embedded.bin";
+
     // ── Embedded object part ───────────────────────────────────────────────────────
 
     /// <summary>
