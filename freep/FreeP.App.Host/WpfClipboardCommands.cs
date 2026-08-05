@@ -6,13 +6,20 @@ internal static class WpfClipboardCommands
 {
     public static void Copy(EditingSession editor, OsClipboardService? osClipboard)
     {
-        editor.CopySelectedShapes();
-        osClipboard?.PlaceSelectionOnOsClipboard(editor);
+        ArgumentNullException.ThrowIfNull(editor);
+        var request = osClipboard?.PrepareWrite(editor)
+            ?? PresentationClipboardWorkflow.PrepareInternalWrite(editor);
+        PresentationClipboardWorkflow.CommitCopy(request);
+        _ = osClipboard?.TryWrite(request);
     }
 
     public static void Cut(EditingSession editor, OsClipboardService? osClipboard)
     {
-        Copy(editor, osClipboard);
-        editor.DeleteSelected();
+        ArgumentNullException.ThrowIfNull(editor);
+        var request = osClipboard?.PrepareWrite(editor)
+            ?? PresentationClipboardWorkflow.PrepareInternalWrite(editor);
+        PresentationClipboardWorkflow.CommitCut(
+            request,
+            osClipboard is null ? null : () => osClipboard.TryWrite(request));
     }
 }

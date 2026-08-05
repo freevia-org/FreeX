@@ -288,16 +288,10 @@ public sealed class OsClipboardService
 {
     private readonly IOsClipboard _clipboard;
     private readonly IShapeRenderer _renderer;
-    private string? _lastOwnerToken;
-    private uint _ownCopyGeneration;
-    private uint _lastPlacedGeneration;
-    private long _lastPlacedSequence = -1;
+    private readonly PresentationClipboardOwnershipTracker _ownership = new();
 
     internal bool OwnCopyIsCurrentOnOs =>
-        _ownCopyGeneration > 0
-        && _ownCopyGeneration == _lastPlacedGeneration
-        && _lastPlacedSequence > 0
-        && _clipboard.SequenceNumber == _lastPlacedSequence;
+        _ownership.HasCurrentPlatformIdentity(CurrentSequenceIdentity());
 
     public int RenderWidthPx { get; set; } = 1280;
     public int RenderHeightPx { get; set; } = 720;
@@ -315,8 +309,11 @@ public sealed class OsClipboardService
     internal bool TryPlaceSelectionOnOsClipboard(EditingSession editor)
     {
         ArgumentNullException.ThrowIfNull(editor);
-        var ownerToken = Guid.NewGuid().ToString("N");
-        var content = PresentationClipboardContentFactory.CreateSelection(
+        return TryWrite(PrepareWrite(editor));
+    }
+
+    internal PresentationClipboardWriteRequest PrepareWrite(EditingSession editor) =>
+        PresentationClipboardWorkflow.PrepareWrite(
             editor,
             (presentation, slide, shapes) => _renderer.RenderShapesToPng(
                 presentation,
@@ -324,23 +321,23 @@ public sealed class OsClipboardService
                 shapes,
                 RenderWidthPx,
                 RenderHeightPx),
-            ownerToken);
-        if (content is null)
+            Guid.NewGuid().ToString("N"));
+
+    internal bool TryWrite(PresentationClipboardWriteRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Content is null)
             return false;
 
         try
         {
-            _clipboard.Write(content);
-            _lastOwnerToken = ownerToken;
-            _ownCopyGeneration++;
-            _lastPlacedGeneration = _ownCopyGeneration;
-            var sequence = _clipboard.SequenceNumber;
-            _lastPlacedSequence = sequence > 0 ? sequence : -1;
+            _clipboard.Write(request.Content);
+            _ownership.RecordSuccessfulWrite(request.Content, CurrentSequenceIdentity());
             return true;
         }
         catch
         {
-            InvalidateOwnCopy();
+            _ownership.Invalidate();
             return false;
         }
     }
@@ -365,130 +362,12 @@ public sealed class OsClipboardService
         }
 
         var ownCopy = preferOsClipboard
-            && editor.CanPaste
-            && OwnCopyIsCurrentOnOs
-            && !string.IsNullOrEmpty(_lastOwnerToken)
-            && string.Equals(content.OwnerToken, _lastOwnerToken, StringComparison.Ordinal);
-        var source = !preferOsClipboard && editor.CanPaste
-            ? PresentationClipboardPasteSource.Internal
-            : PresentationClipboardPastePlanner.Decide(
-                content.HasSelection,
-                content.HasImage,
-                content.HasText,
-                editor.CanPaste,
-                ownCopy,
-                content.HasRichText,
-                content.HasXamlPackage);
-
-        if (source == PresentationClipboardPasteSource.NativeSelection)
-        {
-            try
-            {
-                var shapes = PresentationClipboardSelectionCodec.Deserialize(content.SelectionBytes!);
-                if (shapes.Count > 0)
-                {
-                    editor.PasteExternalShapes(shapes);
-                    return source;
-                }
-            }
-            catch
-            {
-                // Continue through the shared image/text/internal fallback order.
-            }
-
-            source = PresentationClipboardPastePlanner.Decide(
-                hasNativeSelection: false,
-                hasImage: content.HasImage,
-                hasText: content.HasText,
-                internalHasData: editor.CanPaste,
-                ownCopyIsCurrent: false,
-                hasRichText: content.HasRichText,
-                hasXamlPackage: content.HasXamlPackage);
-        }
-
-        if (source == PresentationClipboardPasteSource.RichText)
-        {
-            var payload = InCanvasRichClipboardPlanner.Deserialize(content.RichTextBytes)
-                ?? ExternalRichTextClipboardPlanner.TryParseRtf(content.RtfBytes);
-            if (payload is not null)
-            {
-                foreach (var image in payload.GetImagePayloads())
-                    editor.InsertPicture(image.Bytes, image.ContentType, image.WidthEmu, image.HeightEmu);
-                foreach (var obj in payload.GetObjectPayloads())
-                    editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
-                var slideBody = payload.GetImagePayloads().Count > 0
-                    || payload.GetObjectPayloads().Count > 0
-                    ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
-                    : payload.Body;
-                var table = payload.ContainsTable
-                    ? editor.InsertTableFromClipboard(
-                        slideBody,
-                        payload.TableColumnWidthsEmu,
-                        payload.TableCellStyles)
-                    : null;
-                if (table is null
-                    && !string.IsNullOrWhiteSpace(InCanvasTextEditPlanner.ExtractPlainText(slideBody)))
-                    editor.InsertTextBox(slideBody);
-                return source;
-            }
-
-            source = PresentationClipboardPastePlanner.Decide(
-                hasNativeSelection: false,
-                hasImage: content.HasImage,
-                hasText: content.HasText,
-                internalHasData: editor.CanPaste,
-                ownCopyIsCurrent: false,
-                hasRichText: false,
-                hasXamlPackage: content.HasXamlPackage);
-        }
-
-        if (source == PresentationClipboardPasteSource.XamlPackage)
-        {
-            var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(content.XamlPackageBytes);
-            if (payload is not null)
-            {
-                foreach (var image in payload.GetImagePayloads())
-                    editor.InsertPicture(image.Bytes, image.ContentType, image.WidthEmu, image.HeightEmu);
-                foreach (var obj in payload.GetObjectPayloads())
-                    editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
-                var slideBody = payload.GetImagePayloads().Count > 0
-                    || payload.GetObjectPayloads().Count > 0
-                    ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
-                    : payload.Body;
-                var table = payload.ContainsTable
-                    ? editor.InsertTableFromClipboard(
-                        slideBody,
-                        payload.TableColumnWidthsEmu,
-                        payload.TableCellStyles)
-                    : null;
-                if (table is null
-                    && !string.IsNullOrWhiteSpace(InCanvasTextEditPlanner.ExtractPlainText(slideBody)))
-                    editor.InsertTextBox(slideBody);
-                return source;
-            }
-
-            source = PresentationClipboardPastePlanner.Decide(
-                hasNativeSelection: false,
-                hasImage: content.HasImage,
-                hasText: content.HasText,
-                internalHasData: editor.CanPaste,
-                ownCopyIsCurrent: false);
-        }
-
-        switch (source)
-        {
-            case PresentationClipboardPasteSource.Image:
-                editor.InsertPicture(content.PngBytes!, "image/png");
-                break;
-            case PresentationClipboardPasteSource.Text:
-                editor.InsertTextBox(content.Text!);
-                break;
-            case PresentationClipboardPasteSource.Internal:
-                editor.Paste();
-                break;
-        }
-
-        return source;
+            && _ownership.IsCurrent(content, CurrentSequenceIdentity(), editor.CanPaste);
+        return PresentationClipboardWorkflow.ApplyPaste(
+            PresentationClipboardWorkflow.PreparePaste(editor),
+            content,
+            ownCopy,
+            preferOsClipboard);
     }
 
     internal DataObject BuildDataObject(
@@ -496,34 +375,18 @@ public sealed class OsClipboardService
         Slide slide,
         IReadOnlyList<SlideShape> shapes)
     {
-        byte[]? selection = null;
-        byte[]? png = null;
-        try
-        {
-            selection = PresentationClipboardSelectionCodec.Serialize(presentation, slide, shapes);
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            png = _renderer.RenderShapesToPng(
-                presentation,
-                slide,
-                shapes,
+        var content = PresentationClipboardContentFactory.CreateSelection(
+            presentation,
+            slide,
+            shapes,
+            (sourcePresentation, sourceSlide, sourceShapes) => _renderer.RenderShapesToPng(
+                sourcePresentation,
+                sourceSlide,
+                sourceShapes,
                 RenderWidthPx,
-                RenderHeightPx);
-        }
-        catch
-        {
-        }
-
-        return WpfOsClipboard.BuildDataObject(new PresentationClipboardContent(
-            selection,
-            png,
-            PresentationClipboardContentFactory.ExtractText(shapes),
-            Guid.NewGuid().ToString("N")));
+                RenderHeightPx),
+            Guid.NewGuid().ToString("N"));
+        return WpfOsClipboard.BuildDataObject(content);
     }
 
     public static PasteAction DecidePasteAction(
@@ -559,11 +422,12 @@ public sealed class OsClipboardService
     internal static string ExtractText(IEnumerable<SlideShape> shapes) =>
         PresentationClipboardContentFactory.ExtractText(shapes) ?? string.Empty;
 
-    private void InvalidateOwnCopy()
+    private string? CurrentSequenceIdentity()
     {
-        _lastOwnerToken = null;
-        _lastPlacedGeneration = 0;
-        _lastPlacedSequence = -1;
+        var sequence = _clipboard.SequenceNumber;
+        return sequence > 0
+            ? sequence.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : null;
     }
 }
 

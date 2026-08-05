@@ -270,13 +270,6 @@ internal sealed class AvaloniaRichTextEditor : Grid
         richBytes ??= await TryGetValueAsync(
             transfer,
             OperatingSystem.IsWindows() ? RichTextFormat : RichTextPlatformFormat);
-        var payload = InCanvasRichClipboardPlanner.Deserialize(richBytes);
-        if (payload is not null)
-        {
-            _buffer.ApplyClipboardPayload(payload, Selection, out var caret);
-            ApplyBufferText(caret);
-            return true;
-        }
 
         byte[]? xamlBytes = await TryGetValueAsync(
             transfer,
@@ -288,13 +281,6 @@ internal sealed class AvaloniaRichTextEditor : Grid
             OperatingSystem.IsWindows()
                 ? ExternalXamlPackageLinuxFormat
                 : ExternalXamlPackageWindowsFormat);
-        var xamlPayload = ExternalXamlClipboardPlanner.TryParseXamlPackage(xamlBytes);
-        if (xamlPayload is not null)
-        {
-            _buffer.ApplyClipboardPayload(xamlPayload, Selection, out var xamlCaret);
-            ApplyBufferText(xamlCaret);
-            return true;
-        }
 
         byte[]? rtfBytes = await TryGetValueAsync(
             transfer,
@@ -302,22 +288,25 @@ internal sealed class AvaloniaRichTextEditor : Grid
         rtfBytes ??= await TryGetValueAsync(
             transfer,
             OperatingSystem.IsWindows() ? ExternalRtfLinuxFormat : ExternalRtfWindowsFormat);
-        var externalPayload = ExternalRichTextClipboardPlanner.TryParseRtf(rtfBytes);
-        if (externalPayload is not null)
-        {
-            _buffer.ApplyClipboardPayload(externalPayload, Selection, out var rtfCaret);
-            ApplyBufferText(rtfCaret);
-            return true;
-        }
 
         string? text = null;
         try { text = await transfer.TryGetTextAsync(); }
         catch { }
-        if (text is null)
+        var resolution = InCanvasRichClipboardFormatResolver.Resolve(
+            new PresentationClipboardContent(
+                Text: text,
+                RichTextBytes: richBytes,
+                XamlPackageBytes: xamlBytes,
+                RtfBytes: rtfBytes));
+        if (resolution.Payload is null)
             return false;
 
-        _buffer.ReplaceSelectionWithPlainText(Selection, text, out var textCaret);
-        ApplyBufferText(textCaret);
+        int caret;
+        if (resolution.Source == PresentationClipboardPasteSource.Text)
+            _buffer.ReplaceSelectionWithPlainText(Selection, text!, out caret);
+        else
+            _buffer.ApplyClipboardPayload(resolution.Payload, Selection, out caret);
+        ApplyBufferText(caret);
         return true;
     }
 

@@ -183,7 +183,7 @@ public sealed partial class MainWindow : Window
     private Func<FileSavePickerPlan, Task<string?>>? _savePickerOverrideForTests;
     internal Func<FileSavePickerPlan, Task<VideoPickerSelectionForTests?>>? VideoPickerOverrideForTests { get; set; }
     private int _ownerFocusRestoreCount;
-    private Task _clipboardOperation = Task.CompletedTask;
+    private readonly PresentationClipboardOperationQueue _clipboardOperationQueue = new();
     private readonly FreePOptions _options;
     private LinuxNativeOutputCapabilities _nativeOutputCapabilities;
     private ILinuxNativePrintHandoffAdapter _nativePrintAdapter;
@@ -416,7 +416,7 @@ public sealed partial class MainWindow : Window
     internal bool HasWindowIconForTests => Icon is not null;
     internal int OwnerFocusRestoreCountForTests => _ownerFocusRestoreCount;
     internal void RaiseKeyDownForTests(KeyEventArgs args) => MainWindow_KeyDown(this, args);
-    internal Task ClipboardOperationForTests => _clipboardOperation;
+    internal Task ClipboardOperationForTests => _clipboardOperationQueue.Completion;
     internal int SlidePaneSlideItemCount => _slidePaneList.Items
         .OfType<ListBoxItem>()
         .Count(item => item.Tag is int);
@@ -10501,21 +10501,7 @@ public sealed partial class MainWindow : Window
     private void QueueClipboardOperation(Func<Task> operation)
     {
         ArgumentNullException.ThrowIfNull(operation);
-        _clipboardOperation = RunClipboardOperationAsync(_clipboardOperation, operation);
-    }
-
-    private static async Task RunClipboardOperationAsync(Task preceding, Func<Task> operation)
-    {
-        try
-        {
-            await preceding;
-        }
-        catch
-        {
-            // A failed adapter operation must not prevent later clipboard commands.
-        }
-
-        await operation();
+        _clipboardOperationQueue.Enqueue(operation);
     }
 
     private bool TryHandleRibbonKeyTips(KeyEventArgs args)

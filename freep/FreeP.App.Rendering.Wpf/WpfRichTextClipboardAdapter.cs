@@ -77,41 +77,21 @@ internal static class WpfRichTextClipboardAdapter
         out TextBody? updatedBody)
     {
         updatedBody = null;
-        byte[]? bytes;
+        PresentationClipboardContent content;
         try
         {
-            bytes = ReadBytes(data, PresentationClipboardFormats.RichText);
+            content = new PresentationClipboardContent(
+                Text: ReadPlainText(data),
+                RichTextBytes: ReadBytes(data, PresentationClipboardFormats.RichText),
+                XamlPackageBytes: ReadBytes(data, DataFormats.XamlPackage),
+                RtfBytes: ReadBytes(data, DataFormats.Rtf));
         }
         catch
         {
             return false;
         }
 
-        var payload = InCanvasRichClipboardPlanner.Deserialize(bytes);
-        if (payload is null)
-        {
-            payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
-                ReadBytes(data, DataFormats.XamlPackage));
-        }
-
-        if (payload is null)
-        {
-            // WPF's native RTF loader is authoritative for the control itself. FreeP's
-            // TextBody has no inline table node, however, so use the shared bounded planner
-            // before plain-text fallback to preserve the same logical tab/row projection in
-            // both hosts without making the shared parser a platform fork.
-            try
-            {
-                var externalPayload = ExternalRichTextClipboardPlanner.TryParseRtf(
-                    ReadBytes(data, DataFormats.Rtf));
-                payload = externalPayload ?? ReadPlainTextPayload(data);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
+        var payload = InCanvasRichClipboardFormatResolver.Resolve(content).Payload;
         if (payload is null)
             return false;
 
@@ -179,14 +159,12 @@ internal static class WpfRichTextClipboardAdapter
         };
     }
 
-    private static InCanvasRichClipboardPayload? ReadPlainTextPayload(IDataObject? data)
+    private static string? ReadPlainText(IDataObject? data)
     {
         if (data is null || !data.GetDataPresent(DataFormats.UnicodeText, autoConvert: false))
             return null;
 
-        return data.GetData(DataFormats.UnicodeText, autoConvert: false) is string text
-            ? InCanvasRichClipboardPayload.FromPlainText(text)
-            : null;
+        return data.GetData(DataFormats.UnicodeText, autoConvert: false) as string;
     }
 
     private static byte[]? ReadStream(Stream stream)
