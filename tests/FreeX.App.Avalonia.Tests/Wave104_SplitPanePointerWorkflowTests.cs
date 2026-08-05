@@ -190,13 +190,7 @@ public sealed class Wave104_SplitPanePointerWorkflowTests
                 ],
                 [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64)]));
 
-    private static string FindRepositoryFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, "src")))
-            directory = directory.Parent;
-
-        directory.Should().NotBeNull("the focused source guard must run from the repository test output");
-        return Path.Combine(new[] { directory!.FullName }.Concat(parts).ToArray());
-    }
+    private static string FindRepositoryFile(params string[] parts) =>
+        Path.Combine(
+            [Directory.GetParent(TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory("src"))!.FullName, .. parts]);
 }

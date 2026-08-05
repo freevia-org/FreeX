@@ -34,15 +34,6 @@ public class WpfHandlerIdSnapshotParityTests
             "docs/parity/wpf-handler-ids.txt must list exactly FreeXRibbonHandlerMap.Handlers.Keys (sorted ordinal)");
     }
 
-    private static string SnapshotPath()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "FreeX.slnx")))
-                return Path.Combine(dir.FullName, "docs", "parity", "wpf-handler-ids.txt");
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("Could not locate repo root from " + AppContext.BaseDirectory);
-    }
+    private static string SnapshotPath() =>
+        TestWorkspaceFileLocator.FindFromWorkspaceRoot("docs", "parity", "wpf-handler-ids.txt");
 }

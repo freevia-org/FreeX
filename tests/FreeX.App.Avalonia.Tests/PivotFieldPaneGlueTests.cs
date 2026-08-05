@@ -274,14 +274,6 @@ public sealed class PivotFieldPaneGlueTests
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-
-        public Sheet GetSheet(SheetId sheetId) =>
-            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
-    }
-
     private static PivotFieldDragValidator NumericAwareValidator(Workbook workbook, PivotTableModel pivot) =>
         new(sourceFieldIndex => PivotSourceContext.IsNumericSourceColumn(workbook, pivot, sourceFieldIndex));
 

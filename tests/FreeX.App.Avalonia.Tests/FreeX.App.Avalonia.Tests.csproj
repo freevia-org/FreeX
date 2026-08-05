@@ -27,6 +27,10 @@
     <Using Include="Free.Shared.Drawing" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\CommandTestInfrastructure\TestCommandContext.cs" Link="TestCommandContext.cs" />
+  </ItemGroup>
+
   <PropertyGroup>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>

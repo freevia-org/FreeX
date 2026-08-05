@@ -13,14 +13,6 @@ namespace FreeX.App.Avalonia.Tests;
 /// </summary>
 public sealed class InsertChartCommandFactoryTests
 {
-    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-
-        public Sheet GetSheet(SheetId sheetId) =>
-            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
-    }
-
     [Theory]
     [InlineData("insert.column", ChartType.Column)]
     [InlineData("insert.colClustered", ChartType.Column)]

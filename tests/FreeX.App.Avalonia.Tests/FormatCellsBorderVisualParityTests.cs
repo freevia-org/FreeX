@@ -231,15 +231,9 @@ public sealed class FormatCellsBorderVisualParityTests
         }, CancellationToken.None);
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, "src")))
-            directory = directory.Parent;
-
-        directory.Should().NotBeNull("the test must run inside the repository checkout");
-        return Path.Combine(new[] { directory!.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine(
+            [Directory.GetParent(TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory("src"))!.FullName, .. parts]);
 
     private static void AssertFullyInside(Control root, string automationId)
     {

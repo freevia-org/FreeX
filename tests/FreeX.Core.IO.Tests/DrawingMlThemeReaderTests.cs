@@ -118,18 +118,8 @@ public sealed class DrawingMlThemeReaderTests
         writer.Write(text);
     }
 
-    private static string FindRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return directory.FullName;
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the FreeX repository root.");
-    }
+    private static string FindRepositoryRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
     private const string RepresentativeThemeXml = """
         <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Contract Theme">

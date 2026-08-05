@@ -24,12 +24,6 @@ public sealed class ShapeGradientParitySourceTests
         dialogSource.Should().Contain("ButtonHeight = 22");
     }
 
-    private static string RepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new DirectoryNotFoundException("FreeX repository root was not found.");
-    }
+    private static string RepoRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }

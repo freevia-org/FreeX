@@ -5,13 +5,6 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
 
-file sealed class TestCommandContext(Workbook workbook) : ICommandContext
-{
-    public Workbook Workbook { get; } = workbook;
-    public Sheet GetSheet(SheetId sheetId) =>
-        Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
-}
-
 /// <summary>
 /// Behavioral tests for the form-control interaction logic wired into the Avalonia shell:
 /// tests that the shared <see cref="FormControlInteractionService"/> produces the expected

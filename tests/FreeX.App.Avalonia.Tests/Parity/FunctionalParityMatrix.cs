@@ -74,15 +74,6 @@ public static class FunctionalParityMatrix
     public static string WpfHandlerIdsPath => Path.Combine(RepoRoot(), "docs", "parity", "wpf-handler-ids.txt");
 
     /// <summary>Walks up from the test assembly location to the repo root (the dir holding <c>FreeX.slnx</c>).</summary>
-    public static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "FreeX.slnx")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("Could not locate repo root (no FreeX.slnx found walking up from " + AppContext.BaseDirectory + ").");
-    }
+    public static string RepoRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }

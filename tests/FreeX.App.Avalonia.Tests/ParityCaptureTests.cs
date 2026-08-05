@@ -883,15 +883,8 @@ public sealed class ParityCaptureTests
         return starts;
     }
 
-    private static string ReadLinuxParityCaptureHarnessSource()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        directory.Should().NotBeNull("the test output should remain inside the repository");
-        return File.ReadAllText(Path.Combine(directory!.FullName, "tools", "Run-LinuxParityCapture.ps1"));
-    }
+    private static string ReadLinuxParityCaptureHarnessSource() =>
+        TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("tools", "Run-LinuxParityCapture.ps1");
 
     private static void TryDeleteDirectory(string path)
     {

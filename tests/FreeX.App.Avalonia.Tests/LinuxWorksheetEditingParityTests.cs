@@ -270,12 +270,6 @@ public sealed class LinuxWorksheetEditingParityTests
     private static string RepoFile(params string[] parts) =>
         Path.Combine(FindRepoRoot(), Path.Combine(parts));
 
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FreeX.slnx")))
-            dir = dir.Parent;
-
-        return dir?.FullName ?? throw new InvalidOperationException("Could not locate repository root.");
-    }
+    private static string FindRepoRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }

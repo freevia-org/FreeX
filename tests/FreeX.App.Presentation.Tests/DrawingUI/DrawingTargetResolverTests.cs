@@ -478,17 +478,6 @@ public sealed class DrawingTargetResolverTests
         source.Should().Contain("for (var index = items.Count - 1; index >= 0; index--)");
     }
 
-    private static string FindRepositoryFile(params string[] relativeParts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(relativeParts));
-    }
+    private static string FindRepositoryFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.FindFileFromBaseDirectory(relativeParts);
 }

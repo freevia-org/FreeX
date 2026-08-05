@@ -72,17 +72,6 @@ public sealed class DataTableDialogParitySourceTests
         return source[start..end];
     }
 
-    private static string ReadSource(params string[] parts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return File.ReadAllText(candidate);
-        }
-
-        throw new FileNotFoundException("Could not locate repository source.", Path.Combine(parts));
-    }
+    private static string ReadSource(params string[] parts) =>
+        File.ReadAllText(TestWorkspaceFileLocator.FindFileFromBaseDirectory(parts));
 }
