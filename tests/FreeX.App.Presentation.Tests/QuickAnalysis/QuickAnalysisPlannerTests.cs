@@ -211,7 +211,8 @@ public sealed class QuickAnalysisPlannerTests
         dataBars.Label.Should().Be("Data Bars");
         dataBars.ToolTip.Should().Be("Preview data bars across the selected values.");
         dataBars.AutomationId.Should().Be("QuickAnalysis_format.databars");
-        dataBars.PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.DataBars);
+        dataBars.HoverPreview.PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.DataBars);
+        dataBars.PreviewIcon.Glyph.Should().Be(QuickAnalysisPreviewIconGlyph.HorizontalBars);
         dataBars.Action.Kind.Should().Be(QuickAnalysisShellActionKind.OpenConditionalFormatDialog);
         dataBars.Action.ConditionalFormatDialogTitle.Should().Be("Data Bar");
         dataBars.HoverPreview.Range.Should().Be(selection);

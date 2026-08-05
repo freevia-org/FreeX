@@ -21,18 +21,20 @@ public sealed class QuickAnalysisPreviewIconFactoryTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.QuickAnalysis.cs"));
         var factorySource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "QuickAnalysisPreviewIconFactory.cs"));
 
-        source.Should().Contain("QuickAnalysisPreviewIconFactory.Create(item.PreviewVisual)");
+        source.Should().Contain("QuickAnalysisPreviewIconFactory.Create(item.PreviewIcon)");
         source.Should().Contain("ToolTip.SetTip(button, item.ToolTip)");
         source.Should().Contain("Content = CreateQuickAnalysisItemButtonContent(item)");
         source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([closeButton]");
         source.Should().NotContain("QuickAnalysisPreviewIconPlanner.Plan(");
         source.Should().NotContain("QuickAnalysisPreviewVisualKind.");
 
-        factorySource.Should().Contain("QuickAnalysisPreviewIconRenderPlanner.Render(visual, renderer)");
-        factorySource.Should().Contain("QuickAnalysisPreviewIconRenderAdapter<Canvas, Control>");
+        factorySource.Should().Contain("QuickAnalysisPreviewIconRenderAdapter<Canvas, Control>.Render(");
+        factorySource.Should().Contain("QuickAnalysisPreviewIconPlan plan");
         factorySource.Should().Contain("private sealed class AvaloniaQuickAnalysisPreviewIconRenderPrimitives");
         factorySource.Should().NotContain("IQuickAnalysisPreviewIconRenderSink");
         factorySource.Should().NotContain("RootCanvas");
+        factorySource.Should().NotContain("QuickAnalysisPreviewVisual visual");
+        factorySource.Should().NotContain("QuickAnalysisPreviewIconRenderPlanner.Render(");
         factorySource.Should().NotContain("QuickAnalysisPreviewIconPlanner.Plan(visual)");
         factorySource.Should().NotContain("foreach (var element in plan.Elements)");
         factorySource.Should().NotContain("switch (element)");
@@ -45,7 +47,7 @@ public sealed class QuickAnalysisPreviewIconFactoryTests
     public Task Create_DataBarsRendersSharedHorizontalBarGlyph() => RunOnUiThread(() =>
     {
         var icon = QuickAnalysisPreviewIconFactory.Create(
-            new QuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind.DataBars));
+            QuickAnalysisPreviewIconPlanner.Plan(QuickAnalysisPreviewVisualKind.DataBars));
 
         var canvas = icon.Should().BeOfType<Canvas>().Subject;
         canvas.Width.Should().Be(34);
@@ -58,7 +60,7 @@ public sealed class QuickAnalysisPreviewIconFactoryTests
     public Task Create_ClearFormatRendersGridWithSlash() => RunOnUiThread(() =>
     {
         var icon = QuickAnalysisPreviewIconFactory.Create(
-            new QuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind.ClearFormat));
+            QuickAnalysisPreviewIconPlanner.Plan(QuickAnalysisPreviewVisualKind.ClearFormat));
 
         var canvas = icon.Should().BeOfType<Canvas>().Subject;
         canvas.Children.OfType<Rectangle>().Should().HaveCount(6);

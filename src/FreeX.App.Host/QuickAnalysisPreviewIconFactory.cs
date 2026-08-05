@@ -8,13 +8,10 @@ namespace FreeX.App.Host;
 
 public static class QuickAnalysisPreviewIconFactory
 {
-    public static FrameworkElement Create(QuickAnalysisPreviewVisual visual)
-    {
-        var renderer = new QuickAnalysisPreviewIconRenderAdapter<Canvas, UIElement>(
+    public static FrameworkElement Create(QuickAnalysisPreviewIconPlan plan) =>
+        QuickAnalysisPreviewIconRenderAdapter<Canvas, UIElement>.Render(
+            plan,
             new WpfQuickAnalysisPreviewIconRenderPrimitives());
-        QuickAnalysisPreviewIconRenderPlanner.Render(visual, renderer);
-        return renderer.Root;
-    }
 
     private sealed class WpfQuickAnalysisPreviewIconRenderPrimitives
         : IQuickAnalysisPreviewIconRenderPrimitives<Canvas, UIElement>

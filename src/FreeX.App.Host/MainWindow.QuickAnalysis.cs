@@ -13,17 +13,16 @@ namespace FreeX.App.Host;
 public partial class MainWindow
 {
     private ContextMenu? _quickAnalysisMenu;
-    private bool _suppressNextQuickAnalysisClosedStatusReset;
-    private bool _preserveQuickAnalysisUnsupportedStatus;
+    private readonly QuickAnalysisShellSession _quickAnalysisSession = new();
 
     private void ShowQuickAnalysisMenu()
     {
+        CloseQuickAnalysisMenu();
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var request = QuickAnalysisShellRequestPlanner.Build(
+        var openPlan = _quickAnalysisSession.PlanOpen(
             sheet,
             SheetGrid.SelectedRange,
             QuickAnalysisShellCapabilities.DialogBacked);
-        var openPlan = QuickAnalysisShellOpenPlanner.Plan(request);
         if (!openPlan.CanOpen || openPlan.Selection is not { } range)
         {
             ShowQuickAnalysisUnavailableStatus(openPlan);
@@ -31,8 +30,6 @@ public partial class MainWindow
         }
 
         var shellPlan = openPlan.ShellPlan;
-        _preserveQuickAnalysisUnsupportedStatus = false;
-        CloseQuickAnalysisMenu();
         var menu = new ContextMenu
         {
             PlacementTarget = SheetGrid,
@@ -55,8 +52,7 @@ public partial class MainWindow
         {
             if (ReferenceEquals(_quickAnalysisMenu, menu))
                 _quickAnalysisMenu = null;
-            ClearQuickAnalysisPreview(resetStatus: !_suppressNextQuickAnalysisClosedStatusReset);
-            _suppressNextQuickAnalysisClosedStatusReset = false;
+            ClearQuickAnalysisPreview();
         };
 
         foreach (var group in shellPlan.Groups)
@@ -77,7 +73,8 @@ public partial class MainWindow
                     Header = item.Label,
                     Tag = item,
                     ToolTip = item.ToolTip,
-                    Icon = QuickAnalysisPreviewIconFactory.Create(item.PreviewVisual)
+                    IsEnabled = item.IsEnabled,
+                    Icon = QuickAnalysisPreviewIconFactory.Create(item.PreviewIcon)
                 };
                 menuItem.MouseEnter += QuickAnalysisMenuItem_MouseEnter;
                 menuItem.MouseLeave += QuickAnalysisMenuItem_MouseLeave;
@@ -101,9 +98,6 @@ public partial class MainWindow
 
     private void ShowQuickAnalysisUnavailableStatus(QuickAnalysisShellOpenPlan openPlan)
     {
-        _preserveQuickAnalysisUnsupportedStatus = true;
-        _suppressNextQuickAnalysisClosedStatusReset = true;
-        CloseQuickAnalysisMenu();
         ClearQuickAnalysisPreview(resetStatus: false);
         StatusReadyText.Text = QuickAnalysisShellOpenPlanner.FormatIssueText(
             openPlan,
@@ -140,7 +134,10 @@ public partial class MainWindow
         if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item })
             return;
 
-        var operation = QuickAnalysisHostOperationPlanner.Plan(item);
+        var operation = _quickAnalysisSession.PlanSelection(item);
+        if (operation is null)
+            return;
+
         switch (operation.Kind)
         {
             case QuickAnalysisHostOperationKind.OpenConditionalFormatDialog
@@ -226,24 +223,22 @@ public partial class MainWindow
 
     private void ShowQuickAnalysisPreview(object sender)
     {
-        if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item } ||
-            SheetGrid.SelectedRange is null)
-        {
+        if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item })
             return;
-        }
 
-        var preview = item.HoverPreview;
-        _preserveQuickAnalysisUnsupportedStatus = false;
+        var preview = _quickAnalysisSession.PlanPreview(item);
         ApplyQuickAnalysisPreview(
             preview.Range,
-            preview.PreviewVisual.Kind);
-        StatusReadyText.Text = preview.StatusText;
+            preview.Visual);
+        if (preview.StatusText is { } statusText)
+            StatusReadyText.Text = statusText;
     }
 
     private void ClearQuickAnalysisPreview(bool resetStatus = true)
     {
-        ApplyQuickAnalysisPreview(null, QuickAnalysisPreviewVisualKind.None);
-        if (resetStatus && !_preserveQuickAnalysisUnsupportedStatus)
+        var preview = _quickAnalysisSession.PlanPreviewClear(resetStatus);
+        ApplyQuickAnalysisPreview(preview.Range, preview.Visual);
+        if (preview.ShouldResetStatus)
             StatusReadyText.Text = UiText.Get("MainWindow_Text_Ready");
     }
 

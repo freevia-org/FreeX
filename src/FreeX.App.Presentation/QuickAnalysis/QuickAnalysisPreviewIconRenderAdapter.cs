@@ -12,6 +12,18 @@ public sealed class QuickAnalysisPreviewIconRenderAdapter<TRoot, TElement>(
             ? _root
             : throw new InvalidOperationException("Quick Analysis icon rendering was not initialized.");
 
+    public static TRoot Render(
+        QuickAnalysisPreviewIconPlan plan,
+        IQuickAnalysisPreviewIconRenderPrimitives<TRoot, TElement> renderPrimitives)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(renderPrimitives);
+
+        var renderer = new QuickAnalysisPreviewIconRenderAdapter<TRoot, TElement>(renderPrimitives);
+        QuickAnalysisPreviewIconRenderPlanner.Render(plan, renderer);
+        return renderer.Root;
+    }
+
     public void Begin(QuickAnalysisPreviewIconPlan plan)
     {
         _root = primitives.CreateRoot(plan);

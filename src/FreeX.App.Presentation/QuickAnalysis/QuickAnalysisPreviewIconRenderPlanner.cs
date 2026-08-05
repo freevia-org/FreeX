@@ -8,11 +8,16 @@ public static class QuickAnalysisPreviewIconRenderPlanner
 {
     public static QuickAnalysisPreviewIconPlan Render(
         QuickAnalysisPreviewVisual visual,
+        IQuickAnalysisPreviewIconRenderSink sink) =>
+        Render(QuickAnalysisPreviewIconPlanner.Plan(visual), sink);
+
+    public static QuickAnalysisPreviewIconPlan Render(
+        QuickAnalysisPreviewIconPlan plan,
         IQuickAnalysisPreviewIconRenderSink sink)
     {
+        ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(sink);
 
-        var plan = QuickAnalysisPreviewIconPlanner.Plan(visual);
         sink.Begin(plan);
 
         foreach (var element in plan.Elements)

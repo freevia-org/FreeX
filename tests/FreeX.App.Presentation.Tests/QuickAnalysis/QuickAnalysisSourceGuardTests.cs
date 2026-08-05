@@ -9,8 +9,12 @@ public sealed class QuickAnalysisSourceGuardTests
     public void QuickAnalysisPresentationPlanners_DoNotReferencePlatformUiAssemblies()
     {
         var directory = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation", "QuickAnalysis");
+        var sources = Directory.EnumerateFiles(directory, "*.cs")
+            .Append(Path.Combine(
+                RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation", "Services"),
+                "QuickAnalysisShellSession.cs"));
 
-        foreach (var file in Directory.EnumerateFiles(directory, "*.cs"))
+        foreach (var file in sources)
         {
             var source = File.ReadAllText(file);
 
@@ -28,11 +32,21 @@ public sealed class QuickAnalysisSourceGuardTests
         var avaloniaSource = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.QuickAnalysis.cs");
         var hostIconFactorySource = ReadSource("src", "FreeX.App.Host", "QuickAnalysisPreviewIconFactory.cs");
         var avaloniaIconFactorySource = ReadSource("src", "FreeX.App.Avalonia", "QuickAnalysisPreviewIconFactory.cs");
+        var sessionSource = ReadSource(
+            "src",
+            "FreeX.App.Presentation",
+            "Services",
+            "QuickAnalysisShellSession.cs");
+        var shellPlannerSource = ReadSource(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisShellPlanner.cs");
         var shellSources = string.Join(Environment.NewLine, hostSource, avaloniaSource);
         var iconFactorySources = string.Join(Environment.NewLine, hostIconFactorySource, avaloniaIconFactorySource);
 
-        AssertShellUsesSharedQuickAnalysisPlanning(hostSource);
-        AssertShellUsesSharedQuickAnalysisPlanning(avaloniaSource);
+        AssertShellUsesSharedQuickAnalysisSession(hostSource);
+        AssertShellUsesSharedQuickAnalysisSession(avaloniaSource);
         avaloniaSource.Should().Contain("QuickAnalysisShellCapabilities.DialogBacked");
         avaloniaSource.Should().Contain("QuickAnalysisHostOperationKind.OpenConditionalFormatDialog");
         avaloniaSource.Should().Contain("QuickAnalysisHostOperationKind.ClearConditionalFormatting");
@@ -57,13 +71,29 @@ public sealed class QuickAnalysisSourceGuardTests
         shellSources.Should().NotContain("QuickAnalysisCommandKind.");
         shellSources.Should().NotContain("QuickAnalysisSelectionReader.Describe(");
         shellSources.Should().NotContain("QuickAnalysisSparklinePlanner.BuildCommands(");
+        shellSources.Should().NotContain("item.HoverPreview");
+        shellSources.Should().NotContain("item.PreviewVisual");
+        shellSources.Should().NotContain("QuickAnalysisHostOperationPlanner.Plan(item)");
+        shellSources.Should().NotContain("QuickAnalysisShellRequestPlanner.Build(");
+        shellSources.Should().NotContain("QuickAnalysisShellOpenPlanner.Plan(request)");
+
+        sessionSource.Should().Contain("QuickAnalysisShellRequestPlanner.Build(sheet, selection, capabilities)");
+        sessionSource.Should().Contain("QuickAnalysisShellOpenPlanner.Plan(request)");
+        sessionSource.Should().Contain("QuickAnalysisHostOperationPlanner.Plan(item)");
+        sessionSource.Should().Contain("var preview = item.HoverPreview");
+        shellPlannerSource.Should().Contain("QuickAnalysisPreviewIconPlan PreviewIcon");
+        shellPlannerSource.Should().NotContain("QuickAnalysisDisplayItem DisplayItem");
 
         hostSource.Should().Contain("QuickAnalysisMenuPlacementPlanner.BuildAnchor(");
         hostSource.Should().NotContain("FindLastVisibleRowInSelection");
         hostSource.Should().NotContain("FindLastVisibleColumnInSelection");
         hostSource.Should().NotContain("QuickAnalysisPlanner.BuildHoverPreview(");
 
-        iconFactorySources.Should().Contain("QuickAnalysisPreviewIconRenderPlanner.Render(visual, renderer)");
+        iconFactorySources.Should().Contain("QuickAnalysisPreviewIconRenderAdapter<Canvas,");
+        iconFactorySources.Should().Contain(".Render(");
+        iconFactorySources.Should().Contain("QuickAnalysisPreviewIconPlan plan");
+        iconFactorySources.Should().NotContain("QuickAnalysisPreviewVisual visual");
+        iconFactorySources.Should().NotContain("QuickAnalysisPreviewIconRenderPlanner.Render(");
         iconFactorySources.Should().NotContain("QuickAnalysisPreviewIconPlanner.Plan(visual)");
         iconFactorySources.Should().NotContain("foreach (var element in plan.Elements)");
         iconFactorySources.Should().NotContain("switch (element)");
@@ -72,11 +102,11 @@ public sealed class QuickAnalysisSourceGuardTests
         iconFactorySources.Should().NotContain("QuickAnalysisPreviewIconGlyph.");
     }
 
-    private static void AssertShellUsesSharedQuickAnalysisPlanning(string source)
+    private static void AssertShellUsesSharedQuickAnalysisSession(string source)
     {
-        source.Should().Contain("QuickAnalysisShellRequestPlanner.Build(");
-        source.Should().Contain("QuickAnalysisShellOpenPlanner.Plan(request)");
-        source.Should().Contain("QuickAnalysisHostOperationPlanner.Plan(item)");
+        source.Should().Contain("private readonly QuickAnalysisShellSession _quickAnalysisSession = new();");
+        source.Should().Contain("_quickAnalysisSession.PlanOpen(");
+        source.Should().Contain("_quickAnalysisSession.PlanSelection(item)");
     }
 
     private static string ReadSource(params string[] parts) =>

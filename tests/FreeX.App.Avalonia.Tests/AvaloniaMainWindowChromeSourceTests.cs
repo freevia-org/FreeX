@@ -98,8 +98,9 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             "QuickAnalysis",
             "QuickAnalysisShellOpenPlanner.cs"));
 
-        source.Should().Contain("QuickAnalysisShellRequestPlanner.Build(");
-        source.Should().Contain("QuickAnalysisShellOpenPlanner.Plan(request)");
+        source.Should().Contain("_quickAnalysisSession.PlanOpen(");
+        source.Should().NotContain("QuickAnalysisShellRequestPlanner.Build(");
+        source.Should().NotContain("QuickAnalysisShellOpenPlanner.Plan(request)");
         source.Should().NotContain("request.Status is QuickAnalysisShellRequestStatus");
         source.Should().NotContain("if (!request.CanOpen)");
         source.Should().Contain("QuickAnalysisShellOpenPlanner.FormatIssueText(");
@@ -134,7 +135,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             "QuickAnalysis",
             "QuickAnalysisHostOperationPlanner.cs"));
 
-        source.Should().Contain("var operation = QuickAnalysisHostOperationPlanner.Plan(item);");
+        source.Should().Contain("var operation = _quickAnalysisSession.PlanSelection(item);");
+        source.Should().NotContain("QuickAnalysisHostOperationPlanner.Plan(item)");
         source.Should().NotContain("QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DirectApplyLimited)");
         source.Should().Contain("operation.ConditionalFormatPreset is { } preset");
         source.Should().NotContain("TryMapQuickAnalysisConditionalFormatPreset(");

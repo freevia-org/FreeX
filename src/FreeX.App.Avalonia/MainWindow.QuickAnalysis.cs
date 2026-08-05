@@ -18,6 +18,7 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     private Flyout? _quickAnalysisFlyout;
+    private readonly QuickAnalysisShellSession _quickAnalysisSession = new();
     private Action<ConditionalFormatRuleDialogSmokeProbe>? _interactionValidationConditionalFormatRuleProbe;
 
     /// <summary>
@@ -31,12 +32,11 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return Task.CompletedTask;
 
-        var selection = _session.SelectedRange;
-        var request = QuickAnalysisShellRequestPlanner.Build(
+        _quickAnalysisFlyout?.Hide();
+        var openPlan = _quickAnalysisSession.PlanOpen(
             _session.ActiveSheet,
-            selection,
+            _session.SelectedRange,
             QuickAnalysisShellCapabilities.DialogBacked);
-        var openPlan = QuickAnalysisShellOpenPlanner.Plan(request);
         if (!openPlan.CanOpen || openPlan.Selection is not { } range)
         {
             ShowQuickAnalysisOpenIssue(openPlan);
@@ -44,7 +44,6 @@ public sealed partial class MainWindow
         }
 
         var shellPlan = openPlan.ShellPlan;
-        _quickAnalysisFlyout?.Hide();
         var flyout = new Flyout
         {
             Placement = PlacementMode.BottomEdgeAlignedRight,
@@ -126,6 +125,7 @@ public sealed partial class MainWindow
             MinWidth = 150,
             Margin = new Thickness(0, 0, 8, 8),
             Padding = new Thickness(8, 5),
+            IsEnabled = item.IsEnabled,
         };
         AutomationProperties.SetAutomationId(button, item.AutomationId);
         ToolTip.SetTip(button, item.ToolTip);
@@ -152,7 +152,7 @@ public sealed partial class MainWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Children =
             {
-                QuickAnalysisPreviewIconFactory.Create(item.PreviewVisual),
+                QuickAnalysisPreviewIconFactory.Create(item.PreviewIcon),
                 new TextBlock
                 {
                     Text = item.Label,
@@ -182,7 +182,10 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var operation = QuickAnalysisHostOperationPlanner.Plan(item);
+        var operation = _quickAnalysisSession.PlanSelection(item);
+        if (operation is null)
+            return;
+
         switch (operation.Kind)
         {
             case QuickAnalysisHostOperationKind.OpenConditionalFormatDialog

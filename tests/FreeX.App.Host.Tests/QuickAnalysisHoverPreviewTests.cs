@@ -17,8 +17,8 @@ public sealed class QuickAnalysisHoverPreviewTests
         source.Should().Contain("ClearQuickAnalysisPreview();");
         source.Should().Contain("ApplyQuickAnalysisPreview(");
         source.Should().Contain("preview.Range");
-        source.Should().Contain("var preview = item.HoverPreview");
-        source.Should().Contain("ApplyQuickAnalysisPreview(null, QuickAnalysisPreviewVisualKind.None)");
+        source.Should().Contain("var preview = _quickAnalysisSession.PlanPreview(item)");
+        source.Should().Contain("var preview = _quickAnalysisSession.PlanPreviewClear(resetStatus)");
         source.Should().Contain("if (SheetGrid.QuickAnalysisPreviewRange != range)");
         source.Should().NotContain("QuickAnalysisPlanner.BuildHoverPreview(range, item)");
     }
@@ -28,8 +28,8 @@ public sealed class QuickAnalysisHoverPreviewTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
 
-        source.Should().Contain("preview.PreviewVisual.Kind");
-        source.Should().Contain("ApplyQuickAnalysisPreview(null, QuickAnalysisPreviewVisualKind.None)");
+        source.Should().Contain("preview.Visual");
+        source.Should().Contain("_quickAnalysisSession.PlanPreviewClear(resetStatus)");
         source.Should().Contain("if (SheetGrid.QuickAnalysisPreviewVisual != visual)");
         source.Should().NotContain("MapQuickAnalysisPreviewVisual(");
     }

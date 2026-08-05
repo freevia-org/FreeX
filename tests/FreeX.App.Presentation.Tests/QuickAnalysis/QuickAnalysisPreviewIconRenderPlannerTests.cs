@@ -44,6 +44,19 @@ public sealed class QuickAnalysisPreviewIconRenderPlannerTests
             "line");
     }
 
+    [Fact]
+    public void RenderAdapter_StaticEntryPointCreatesRootFromPreplannedIcon()
+    {
+        var plan = QuickAnalysisPreviewIconPlanner.Plan(QuickAnalysisPreviewVisualKind.LineChart);
+
+        var root = QuickAnalysisPreviewIconRenderAdapter<RecordingRoot, string>.Render(
+            plan,
+            new RecordingPrimitives());
+
+        root.Plan.Should().BeSameAs(plan);
+        root.Children.Should().Equal("line", "line", "line");
+    }
+
     private sealed class RecordingSink : IQuickAnalysisPreviewIconRenderSink
     {
         public QuickAnalysisPreviewIconPlan? BeginPlan { get; private set; }
