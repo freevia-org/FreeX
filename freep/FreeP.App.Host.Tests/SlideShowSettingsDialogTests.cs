@@ -21,15 +21,24 @@ public sealed class SlideShowSettingsDialogTests
         dialog.ApplyForTests(
             useSlideTimings: false,
             showWithAnimation: false,
-            loopUntilStopped: true).Should().BeTrue();
+            loopUntilStopped: true,
+            showType: PresentationShowType.BrowsedByIndividual,
+            showBrowseScrollbar: false,
+            kioskRestartAfterMinutes: 12).Should().BeTrue();
         editor.Presentation.UseSlideTimings.Should().BeFalse();
         editor.Presentation.ShowWithAnimation.Should().BeFalse();
         editor.Presentation.LoopUntilStopped.Should().BeTrue();
+        editor.Presentation.ShowType.Should().Be(PresentationShowType.BrowsedByIndividual);
+        editor.Presentation.ShowBrowseScrollbar.Should().BeFalse();
+        editor.Presentation.KioskRestartAfterMinutes.Should().Be(12);
 
         editor.Undo();
         editor.Presentation.UseSlideTimings.Should().BeTrue();
         editor.Presentation.ShowWithAnimation.Should().BeTrue();
         editor.Presentation.LoopUntilStopped.Should().BeFalse();
+        editor.Presentation.ShowType.Should().Be(PresentationShowType.PresentedBySpeaker);
+        editor.Presentation.ShowBrowseScrollbar.Should().BeTrue();
+        editor.Presentation.KioskRestartAfterMinutes.Should().BeNull();
     }
 
     [StaFact]

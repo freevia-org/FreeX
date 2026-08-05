@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using FreeP.App.Compositor;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
@@ -10,6 +12,9 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly CheckBox _useTimingsCheck;
     private readonly CheckBox _showAnimationCheck;
     private readonly CheckBox _loopCheck;
+    private readonly ComboBox _showTypeCombo;
+    private readonly CheckBox _showScrollbarCheck;
+    private readonly TextBox _kioskRestartText;
 
     internal SlideShowSettingsState InitialState { get; }
 
@@ -42,11 +47,33 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             IsChecked = InitialState.LoopUntilStopped,
             Margin = new Thickness(0, 0, 0, 12),
         };
+        _showTypeCombo = new ComboBox
+        {
+            ItemsSource = new[] { "Presented by a speaker", "Browsed by an individual", "Browsed at a kiosk" },
+            SelectedIndex = (int)InitialState.ShowType,
+            Margin = new Thickness(0, 0, 0, 12),
+        };
+        _showScrollbarCheck = new CheckBox
+        {
+            Content = "Show scrollbar when browsing",
+            IsChecked = InitialState.ShowBrowseScrollbar,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        _kioskRestartText = new TextBox
+        {
+            Text = InitialState.KioskRestartAfterMinutes?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            MinWidth = 76,
+            Margin = new Thickness(0, 0, 0, 12),
+        };
 
         var panel = new StackPanel { Margin = new Thickness(14) };
         panel.Children.Add(_useTimingsCheck);
         panel.Children.Add(_showAnimationCheck);
         panel.Children.Add(_loopCheck);
+        panel.Children.Add(_showTypeCombo);
+        panel.Children.Add(_showScrollbarCheck);
+        panel.Children.Add(new Label { Content = "Kiosk restart minutes (optional)" });
+        panel.Children.Add(_kioskRestartText);
         panel.Children.Add(BuildButtonRow());
         Content = panel;
     }
@@ -77,11 +104,20 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         return button;
     }
 
-    internal bool ApplyForTests(bool useSlideTimings, bool showWithAnimation, bool loopUntilStopped)
+    internal bool ApplyForTests(
+        bool useSlideTimings,
+        bool showWithAnimation,
+        bool loopUntilStopped,
+        PresentationShowType showType = PresentationShowType.PresentedBySpeaker,
+        bool showBrowseScrollbar = true,
+        uint? kioskRestartAfterMinutes = null)
     {
         _useTimingsCheck.IsChecked = useSlideTimings;
         _showAnimationCheck.IsChecked = !showWithAnimation;
         _loopCheck.IsChecked = loopUntilStopped;
+        _showTypeCombo.SelectedIndex = (int)showType;
+        _showScrollbarCheck.IsChecked = showBrowseScrollbar;
+        _kioskRestartText.Text = kioskRestartAfterMinutes?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
         return Apply();
     }
 
@@ -91,9 +127,17 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             _editor,
             _useTimingsCheck.IsChecked == true,
             _showAnimationCheck.IsChecked != true,
-            _loopCheck.IsChecked == true);
+            _loopCheck.IsChecked == true,
+            (PresentationShowType)Math.Clamp(_showTypeCombo.SelectedIndex, 0, 2),
+            _showScrollbarCheck.IsChecked == true,
+            ParseRestartMinutes());
         if (applied && IsLoaded)
             DialogResult = true;
         return applied;
     }
+
+    private uint? ParseRestartMinutes() =>
+        uint.TryParse(_kioskRestartText.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var minutes)
+            ? minutes
+            : null;
 }

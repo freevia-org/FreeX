@@ -115,6 +115,15 @@ public sealed class Presentation
     /// <summary>Whether slideshow playback loops back to its first slide after the last slide.</summary>
     public bool LoopUntilStopped { get; set; }
 
+    /// <summary>How PowerPoint presents the slide show window.</summary>
+    public PresentationShowType ShowType { get; set; } = PresentationShowType.PresentedBySpeaker;
+
+    /// <summary>Whether a browsed-by-individual show requests a scroll bar.</summary>
+    public bool ShowBrowseScrollbar { get; set; } = true;
+
+    /// <summary>Optional kiosk restart interval in minutes from the authored p:kiosk restart value.</summary>
+    public uint? KioskRestartAfterMinutes { get; set; }
+
     /// <summary>Core document properties (title, author, subject, …).</summary>
     public DocumentProperties Properties { get; } = new();
 

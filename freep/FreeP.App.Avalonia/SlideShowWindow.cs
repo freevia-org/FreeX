@@ -204,13 +204,21 @@ public sealed class SlideShowWindow : Window
         _slideDipW = metrics.WidthDip;
         _slideDipH = metrics.HeightDip;
 
-        // Window chrome — fullscreen borderless.
-        WindowState        = WindowState.FullScreen;
-        ExtendClientAreaToDecorationsHint = true;
-        Topmost            = true;
+        // Speaker and kiosk modes are fullscreen; individual browsing is a normal window.
+        var isBrowseWindow = _presentation.ShowType == PresentationShowType.BrowsedByIndividual;
+        WindowState        = isBrowseWindow ? WindowState.Normal : WindowState.FullScreen;
+        ExtendClientAreaToDecorationsHint = !isBrowseWindow;
+        Topmost            = !isBrowseWindow;
+        if (isBrowseWindow)
+        {
+            Width = 1024;
+            Height = 768;
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            ShowInTaskbar = true;
+        }
         Background         = Brushes.Black;
         Focusable          = true;
-        CanResize          = false;
+        CanResize          = isBrowseWindow;
 
         // ── Visual tree ────────────────────────────────────────────────────────
 

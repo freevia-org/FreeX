@@ -2933,6 +2933,22 @@ public static class PptxPackageWriter
         if (presentation.LoopUntilStopped)
             showPr.Add(new XAttribute("loop", "1"));
 
+        foreach (var element in showPr.Elements(P + "present").Concat(showPr.Elements(P + "browse")).Concat(showPr.Elements(P + "kiosk")).ToArray())
+            element.Remove();
+        var showMode = presentation.ShowType switch
+        {
+            PresentationShowType.BrowsedByIndividual => new XElement(
+                P + "browse",
+                presentation.ShowBrowseScrollbar ? null : new XAttribute("showScrollbar", "0")),
+            PresentationShowType.BrowsedAtKiosk => new XElement(
+                P + "kiosk",
+                presentation.KioskRestartAfterMinutes is uint restart
+                    ? new XAttribute("restart", restart.ToString(CultureInfo.InvariantCulture))
+                    : null),
+            _ => new XElement(P + "present"),
+        };
+        showPr.Add(showMode);
+
         foreach (var element in showPr.Elements(P14 + "showMediaCtrls").ToArray())
             element.Remove();
 
