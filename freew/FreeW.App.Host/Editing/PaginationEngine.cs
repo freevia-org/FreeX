@@ -387,19 +387,44 @@ internal static class PaginationEngine
 
     internal static void ApplySectionBreakFlags(DocumentView editor, FlowDocument flow)
     {
-        var modelBlocks = editor.Model.Blocks;
-        var scratchBlocks = flow.Blocks.ToArray();
+        var modelParagraphs = editor.Model.Blocks.OfType<FreeW.Core.Model.Paragraph>().ToList();
+        var renderedParagraphs = EnumerateRenderedBodyParagraphs(flow.Blocks).ToList();
 
-        for (int i = 0; i < modelBlocks.Count - 1 && i < scratchBlocks.Length - 1; i++)
+        // Lists coalesce several model paragraphs into one top-level WPF List, while hidden or
+        // unsupported blocks can remove/introduce rendered paragraphs. Apply boundaries only when
+        // the paragraph sequence is complete; an uncertain mapping must not move a section break.
+        if (modelParagraphs.Count != renderedParagraphs.Count)
+            return;
+
+        for (int i = 0; i < modelParagraphs.Count - 1; i++)
         {
-            if (modelBlocks[i] is FreeW.Core.Model.Paragraph { SectionBreak: { } sec }
+            if (modelParagraphs[i] is { SectionBreak: { } sec }
                 && sec.BreakKind is SectionBreakKind.NextPage
                                  or SectionBreakKind.EvenPage
                                  or SectionBreakKind.OddPage)
             {
-                if (scratchBlocks[i + 1] is System.Windows.Documents.Paragraph nextWpf)
-                    nextWpf.BreakPageBefore = true;
+                renderedParagraphs[i + 1].BreakPageBefore = true;
             }
+        }
+    }
+
+    private static IEnumerable<System.Windows.Documents.Paragraph> EnumerateRenderedBodyParagraphs(
+        IEnumerable<System.Windows.Documents.Block> blocks)
+    {
+        foreach (var block in blocks)
+        {
+            if (block is System.Windows.Documents.Paragraph paragraph)
+            {
+                yield return paragraph;
+                continue;
+            }
+
+            if (block is not System.Windows.Documents.List list)
+                continue;
+
+            foreach (var item in list.ListItems)
+                foreach (var nestedParagraph in EnumerateRenderedBodyParagraphs(item.Blocks))
+                    yield return nestedParagraph;
         }
     }
 }
