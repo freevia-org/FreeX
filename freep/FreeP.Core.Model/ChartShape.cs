@@ -760,7 +760,8 @@ public sealed class ChartShape
     public string? Title { get; set; }
 
     /// <summary>
-    /// Explicit PowerPoint chart-title overlay state from <c>c:title/c:overlay</c>.
+    /// Explicit PowerPoint chart-title overlay state from <c>c:title/c:overlay</c>
+    /// or native ChartEx <c>cx:title/@overlay</c>.
     /// Null means the source did not author the token; false is the normal above-plot
     /// placement and true places the title over the plot area.
     /// </summary>

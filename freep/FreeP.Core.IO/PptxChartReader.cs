@@ -262,6 +262,7 @@ internal static class PptxChartReader
                 .OrderBy(index => index)
                 .ToList(),
             Title = ReadChartExTitle(chartExTitle),
+            TitleOverlay = ParseNullableBoolAttr(chartExTitle?.Attribute("overlay")?.Value),
             TitleStyle = ReadChartTextStyle(chartExTitle?.Element(Cx + "txPr"), scheme),
         };
         var legend = chart.Element(Cx + "legend");

@@ -171,6 +171,9 @@ internal static class PptxChartWriter
         {
             document.Root?.Element(cx + "chart")?.AddFirst(
                 new XElement(cx + "title",
+                    chart.TitleOverlay is { } overlay
+                        ? new XAttribute("overlay", overlay ? "1" : "0")
+                        : null,
                     new XElement(cx + "tx",
                         new XElement(cx + "txData",
                             new XElement(cx + "v", chart.Title))),
@@ -253,6 +256,9 @@ internal static class PptxChartWriter
         if (title is null)
         {
             chartElement.AddFirst(new XElement(cx + "title",
+                chart.TitleOverlay is { } overlay
+                    ? new XAttribute("overlay", overlay ? "1" : "0")
+                    : null,
                 new XElement(cx + "tx",
                     new XElement(cx + "txData",
                         new XElement(cx + "v", chart.Title))),
@@ -281,6 +287,9 @@ internal static class PptxChartWriter
                     txData.Add(new XElement(cx + "v", chart.Title));
             }
         }
+
+        if (chart.TitleOverlay is { } overlayValue)
+            title.SetAttributeValue("overlay", overlayValue ? "1" : "0");
 
         if (chart.TitleStyle is not null)
         {
