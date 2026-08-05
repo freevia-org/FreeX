@@ -37,6 +37,7 @@ public static class GridResizePreviewPlanner
     public static (uint Start, uint End) GetSelectedColumnResizeRange(GridRange? selectedRange, uint column)
     {
         if (selectedRange is { } range &&
+            range.RowCount == CellAddress.MaxRow &&
             column >= range.Start.Col &&
             column <= range.End.Col &&
             range.Start.Col != range.End.Col)
@@ -50,6 +51,7 @@ public static class GridResizePreviewPlanner
     public static (uint Start, uint End) GetSelectedRowResizeRange(GridRange? selectedRange, uint row)
     {
         if (selectedRange is { } range &&
+            range.ColCount == CellAddress.MaxCol &&
             row >= range.Start.Row &&
             row <= range.End.Row &&
             range.Start.Row != range.End.Row)
