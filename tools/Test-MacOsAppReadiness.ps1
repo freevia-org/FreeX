@@ -2974,6 +2974,7 @@ function Test-SourceWiring {
         @{
             Path = "shared\Free.Shared.AppServices\LocalFilePath.cs"
             Markers = @(
+                "using Free.Shared.IO;",
                 "public static class LocalFilePath",
                 "public static bool TryNormalize(string? candidate, out string normalizedPath)",
                 "TryCreateExplicitUri(path, out var uri)",
@@ -2981,7 +2982,7 @@ function Test-SourceWiring {
                 "path = uri.LocalPath;",
                 "path.Contains('\0', StringComparison.Ordinal)",
                 "IsUnixAbsolutePath(path)",
-                "Path.GetFullPath(path)",
+                "FilePathPolicy.TryGetFullPath(path, out normalizedPath)",
                 "private static bool TryCreateExplicitUri(string candidate, out Uri uri)",
                 "Uri.TryCreate(candidate, UriKind.Absolute, out var parsed)",
                 "IsWindowsDrivePath(candidate, parsed.Scheme)",
