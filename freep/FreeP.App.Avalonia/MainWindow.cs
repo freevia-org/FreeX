@@ -204,6 +204,7 @@ public sealed partial class MainWindow : Window
     // ── Editing session ────────────────────────────────────────────────────────
 
     internal EditingSession Editor { get; private set; } = null!;
+    private PresentationApplicationFrameSession? _applicationFrameSession;
 
     // ── UI elements ────────────────────────────────────────────────────────────
 
@@ -913,6 +914,68 @@ public sealed partial class MainWindow : Window
                 UpdateHost: UpdateStatus,
                 RefreshPane: RefreshVisibleMediaCaptionPaneFromFields));
 
+        _applicationFrameSession = new PresentationApplicationFrameSession(
+            new PresentationApplicationFrameCallbacks
+            {
+                BeforeEditorChanged = () =>
+                    _startupDirtyTrace?.Record("editor-changed-before-mark", _fileWorkflow),
+                MarkDirty = () => _fileWorkflow.MarkDirty(),
+                AfterEditorMarkedDirty = () =>
+                    _startupDirtyTrace?.Record("editor-changed", _fileWorkflow),
+                RefreshCommandStates = SyncRibbonCommandStates,
+                RefreshSlidePane = RefreshSlidePane,
+                RefreshCanvas = RefreshCanvas,
+                RefreshNotesPane = RefreshNotesPane,
+                RefreshReviewWorkflowPlans = RefreshReviewWorkflowPlans,
+                IsSmartArtPaneVisible = () => IsSmartArtTextPaneVisible,
+                RefreshSmartArtPane = () => ShowSmartArtTextPane(),
+                RefreshAnimationPaneAfterEditorChanged = () =>
+                    RefreshVisibleAnimationPane(_selectedAnimationIndex),
+                RefreshAnimationPaneAfterNavigation = () => RefreshVisibleAnimationPane(),
+                RefreshAnimationPaneAfterSelection = () => RefreshVisibleAnimationPane(),
+                RefreshSelectionPane = () => _selectionPane?.Refresh(),
+                RefreshAccessibilityMetadata = RefreshPaneAccessibilityMetadata,
+                RefreshDocumentStatusAfterReview = UpdateStatus,
+                BeforeCurrentSlideChanged = () =>
+                {
+                    _startupDirtyTrace?.Record("current-slide-changed", _fileWorkflow);
+                    _slidePaneSessionState = SlidePanePlanner.SetSelectedSlide(
+                        _slidePaneSessionState,
+                        Editor.CurrentSlideIndex);
+                },
+                ClearReviewSelection = () => _reviewWorkflowSession.SelectedCommentIndex = null,
+                ResetAnimationSelection = () => _selectedAnimationIndex = -1,
+                ClearMediaSelection = _mediaPaneSession.ClearCaptionSelection,
+                SyncSlidePaneSelection = SyncSlidePaneSelectionFromEditor,
+                RefreshSlidePaneChrome = UpdateSlidePaneItemChrome,
+                RefreshReviewPaneAfterPlans = RefreshVisibleReviewCommentsPane,
+                RefreshVisibleMediaPane = RefreshVisibleMediaCaptionPaneFromFields,
+                RefreshCurrentSlideStatus = UpdateStatus,
+                RefreshAltTextRequest = RefreshAltTextRequestPlan,
+                RefreshReadingOrder = () => _reviewWorkflowSession.RefreshReadingOrderPlan(),
+                IsAltTextPaneVisible = () => IsAltTextPaneVisible,
+                RefreshAltTextPane = () => ShowAltTextPane(),
+            },
+            new PresentationApplicationCommandCallbacks(
+                NewPresentation: FileNew,
+                OpenPresentation: () => _ = FileOpenAsync(),
+                SavePresentation: () => _ = FileSaveAsync(),
+                SavePresentationAs: () => _ = FileSaveAsAsync(),
+                PrintPresentation: ShowPrintBackstage,
+                Undo: () => Editor.Undo(),
+                Redo: () => Editor.Redo(),
+                DeleteSelectedShapes: () => Editor.DeleteSelected(),
+                DuplicateCurrentSlide: () => Editor.DuplicateCurrentSlide(),
+                StartSlideShowFromBeginning: () => StartSlideShow(fromStart: true),
+                StartSlideShowFromCurrentSlide: () => StartSlideShow(fromStart: false),
+                Copy: QueueClipboardCopy,
+                Cut: QueueClipboardCut,
+                Paste: QueueClipboardPaste,
+                Find: OpenFindDialog,
+                Replace: OpenFindReplaceDialog,
+                SelectAll: () => Editor.SelectAll()));
+        _applicationFrameSession.Attach(Editor);
+
         // ── Root layout ───────────────────────────────────────────────────────
 
         var ribbon = BuildRibbon();
@@ -1217,11 +1280,7 @@ public sealed partial class MainWindow : Window
         var bus = new PresentationCommandBus(_presentation);
         Editor  = new EditingSession(_presentation, bus);
         _selectionPane?.SetEditor(Editor);
-
-        Editor.Changed             += OnEditorChanged;
-        Editor.CurrentSlideChanged += OnCurrentSlideChanged;
-        Editor.SelectionChanged    += OnEditorSelectionChanged;
-        Editor.ActiveTableCellChanged += OnEditorActiveTableCellChanged;
+        _applicationFrameSession?.Attach(Editor);
     }
 
     private void RebuildEditorAndRewireInteraction()
@@ -10056,50 +10115,11 @@ public sealed partial class MainWindow : Window
 
     // ── Event handlers ─────────────────────────────────────────────────────────
 
-    private void OnEditorChanged()
+    private void SyncSlidePaneSelectionFromEditor()
     {
-        _startupDirtyTrace?.Record("editor-changed-before-mark", _fileWorkflow);
-        _fileWorkflow.MarkDirty();
-        _startupDirtyTrace?.Record("editor-changed", _fileWorkflow);
-        SyncRibbonCommandStates();
-        RefreshSlidePane();
-        RefreshCanvas(); // refresh canvas so shape moves/resizes are reflected immediately
-        RefreshNotesPane();
-        RefreshReviewWorkflowPlans();
-        if (IsSmartArtTextPaneVisible)
-            ShowSmartArtTextPane();
-        RefreshVisibleAnimationPane(_selectedAnimationIndex);
-        _selectionPane?.Refresh();
-        RefreshPaneAccessibilityMetadata();
-        UpdateStatus();
-    }
-
-    private void OnCurrentSlideChanged(object? sender, EventArgs e)
-    {
-        _startupDirtyTrace?.Record("current-slide-changed", _fileWorkflow);
-        _slidePaneSessionState = SlidePanePlanner.SetSelectedSlide(
-            _slidePaneSessionState,
-            Editor.CurrentSlideIndex);
-        _reviewWorkflowSession.SelectedCommentIndex = null;
-        _selectedAnimationIndex = -1;
-        _mediaPaneSession.ClearCaptionSelection();
-        SyncRibbonCommandStates();
-
-        // Sync slide-pane selection without re-triggering OnSlidePaneSelectionChanged.
         _slidePaneRefreshing = true;
         try { SelectSlidePaneItem(Editor.CurrentSlideIndex); }
         finally { _slidePaneRefreshing = false; }
-
-        UpdateSlidePaneItemChrome();
-        RefreshCanvas();
-        RefreshNotesPane();
-        RefreshReviewWorkflowPlans();
-        RefreshVisibleReviewCommentsPane();
-        RefreshVisibleMediaCaptionPaneFromFields();
-        RefreshVisibleAnimationPane();
-        _selectionPane?.Refresh();
-        RefreshPaneAccessibilityMetadata();
-        UpdateStatus();
     }
 
     private void SyncRibbonCommandStates()
@@ -10113,24 +10133,6 @@ public sealed partial class MainWindow : Window
                 _ribbonStateStore);
         }
     }
-
-    private void OnEditorSelectionChanged(object? sender, EventArgs e)
-    {
-        SyncRibbonCommandStates();
-        RefreshAltTextRequestPlan();
-        _reviewWorkflowSession.RefreshReadingOrderPlan();
-        if (IsAltTextPaneVisible)
-            ShowAltTextPane();
-        if (IsSmartArtTextPaneVisible)
-            ShowSmartArtTextPane();
-        RefreshVisibleMediaCaptionPaneFromFields();
-        RefreshVisibleAnimationPane();
-        _selectionPane?.Refresh();
-        RefreshPaneAccessibilityMetadata();
-    }
-
-    private void OnEditorActiveTableCellChanged(object? sender, EventArgs e) =>
-        SyncRibbonCommandStates();
 
     private static string FormatNotesText(TextBody? notes) => notes is null
         ? string.Empty
@@ -10174,7 +10176,7 @@ public sealed partial class MainWindow : Window
             FreePKeyboardShortcutCatalog.TryDispatch(
                 key,
                 ToKeyboardModifiers(e.KeyModifiers),
-                ExecuteKeyboardCommand))
+                _applicationFrameSession!.ExecuteCommand))
         {
             e.Handled = true;
             return;
@@ -10231,37 +10233,6 @@ public sealed partial class MainWindow : Window
         }
 
         return false;
-    }
-
-    private void ExecuteKeyboardCommand(FreePKeyboardCommand command)
-    {
-        switch (command)
-        {
-            case FreePKeyboardCommand.NewPresentation: FileNew(); break;
-            case FreePKeyboardCommand.OpenPresentation: _ = FileOpenAsync(); break;
-            case FreePKeyboardCommand.SavePresentation: _ = FileSaveAsync(); break;
-            case FreePKeyboardCommand.SavePresentationAs: _ = FileSaveAsAsync(); break;
-            case FreePKeyboardCommand.PrintPresentation: ShowPrintBackstage(); break;
-            case FreePKeyboardCommand.Undo: Editor.Undo(); break;
-            case FreePKeyboardCommand.Redo: Editor.Redo(); break;
-            case FreePKeyboardCommand.DeleteSelectedShapes: Editor.DeleteSelected(); break;
-            case FreePKeyboardCommand.DuplicateCurrentSlide: Editor.DuplicateCurrentSlide(); break;
-            case FreePKeyboardCommand.StartSlideShowFromBeginning: StartSlideShow(fromStart: true); break;
-            case FreePKeyboardCommand.StartSlideShowFromCurrentSlide: StartSlideShow(fromStart: false); break;
-            case FreePKeyboardCommand.Copy:
-                QueueClipboardCopy();
-                break;
-            case FreePKeyboardCommand.Cut:
-                QueueClipboardCut();
-                break;
-            case FreePKeyboardCommand.Paste:
-                QueueClipboardPaste();
-                break;
-            case FreePKeyboardCommand.Find: OpenFindDialog(); break;
-            case FreePKeyboardCommand.Replace: OpenFindReplaceDialog(); break;
-            case FreePKeyboardCommand.SelectAll: Editor.SelectAll(); break;
-            default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
-        }
     }
 
     private void QueueClipboardCopy()

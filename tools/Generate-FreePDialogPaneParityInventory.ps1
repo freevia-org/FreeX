@@ -13,9 +13,11 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $wpfMainPath = Join-Path $repoRoot "freep\FreeP.App.Host\MainWindow.cs"
 $wpfCommandsPath = Join-Path $repoRoot "freep\FreeP.App.Host\FreePRibbonCommands.cs"
 $avaloniaMainPath = Join-Path $repoRoot "freep\FreeP.App.Avalonia\MainWindow.cs"
+$applicationFramePath = Join-Path $repoRoot "freep\FreeP.App.Presentation\PresentationApplicationFrameSession.cs"
 $wpfMain = Get-Content -LiteralPath $wpfMainPath -Raw
 $wpfCommands = Get-Content -LiteralPath $wpfCommandsPath -Raw
 $avaloniaMain = Get-Content -LiteralPath $avaloniaMainPath -Raw
+$applicationFrame = Get-Content -LiteralPath $applicationFramePath -Raw
 
 function New-Route {
     param(
@@ -37,7 +39,8 @@ function New-Route {
         [string]$Status = "behavior-aligned",
         [string]$Notes = "",
         [string[]]$RequiredWpfTokens = @(),
-        [string[]]$RequiredAvaloniaTokens = @()
+        [string[]]$RequiredAvaloniaTokens = @(),
+        [string[]]$RequiredApplicationFrameTokens = @()
     )
 
     foreach ($token in $RequiredWpfTokens) {
@@ -48,6 +51,11 @@ function New-Route {
     foreach ($token in $RequiredAvaloniaTokens) {
         if (-not $avaloniaMain.Contains($token)) {
             throw "Avalonia semantic trigger token '$token' is missing for route '$Id'."
+        }
+    }
+    foreach ($token in $RequiredApplicationFrameTokens) {
+        if (-not $applicationFrame.Contains($token)) {
+            throw "Shared application-frame token '$token' is missing for route '$Id'."
         }
     }
 
@@ -156,13 +164,14 @@ $routes = @(
         -Lifecycle "One instance is reused and switched between Find/Replace modes; Close, Escape, owner close, and presentation replacement close it." `
         -Validation "Shared policy disables empty-query search/replace and reports no-match/no-replacement status." `
         -ResultApplication "EditingSession.FindAll/NavigateTo/ReplaceOne/ReplaceAll; host refresh callback updates canvas and slide pane." `
-        -SharedPolicy "FindReplaceDialogPlanner; FindReplaceDialogPolicy" `
+        -SharedPolicy "PresentationApplicationFrameSession; FindReplaceDialogPlanner; FindReplaceDialogPolicy" `
         -WpfSources @("freep/FreeP.App.Host/FindReplaceDialog.cs", "freep/FreeP.App.Host/MainWindow.cs") `
         -AvaloniaSources @("freep/FreeP.App.Avalonia/FindReplaceDialog.cs", "freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/FindReplaceDialogPolicySourceTests.cs", "freep/FreeP.App.Host.Tests/DialogLifecycleParityTests.cs", "freep/FreeP.App.Avalonia.Tests/DialogLifecycleParityTests.cs", "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs", "freep/FreeP.App.Avalonia.Tests/KeyboardContextParityTests.cs") `
         -VisualEvidenceStatus "none; Find and Replace mode screenshots remain" `
-        -RequiredWpfTokens @("FreePKeyboardCommand.Find", "OpenFindReplaceDialog", "_findReplaceDialog?.Close();") `
-        -RequiredAvaloniaTokens @("FreePKeyboardCommand.Find", "OpenFindReplaceDialog", "_findReplaceDialog?.Close();")
+        -RequiredWpfTokens @("Find: OpenFindDialog", "Replace: OpenFindReplaceDialog", "_findReplaceDialog?.Close();") `
+        -RequiredAvaloniaTokens @("Find: OpenFindDialog", "Replace: OpenFindReplaceDialog", "_findReplaceDialog?.Close();") `
+        -RequiredApplicationFrameTokens @("FreePKeyboardCommand.Find", "FreePKeyboardCommand.Replace")
 
     New-Route -Id "insert.hyperlink" -Area "Insert or edit hyperlink" `
         -Triggers @("freep.insert-link") `
@@ -311,7 +320,9 @@ $routes = @(
         -ExistingVisualEvidence @("docs/parity/freep-print-output-option-choice-ui-2026-07-03.md", "docs/parity/freep-export-backstage-evidence-2026-07-05.md") `
         -VisualEvidenceStatus "package/workflow evidence only; paired app-pane screenshots remain" `
         -Status "behavior-aligned-host-shape-differs" -Notes "Avalonia has an additional compact print-options pane for direct command/keyboard routing; shared option and result policy is the same." `
-        -RequiredWpfTokens @("FreePKeyboardCommand.PrintPresentation", "RefreshPrintBackstagePlan") -RequiredAvaloniaTokens @("FreePKeyboardCommand.PrintPresentation", "ShowPrintOptionsPane")
+        -RequiredWpfTokens @("PrintPresentation: ShowPrintBackstage", "RefreshPrintBackstagePlan") `
+        -RequiredAvaloniaTokens @("PrintPresentation: ShowPrintBackstage", "ShowPrintOptionsPane") `
+        -RequiredApplicationFrameTokens @("FreePKeyboardCommand.PrintPresentation")
 
     New-Route -Id "file.open-picker" -Area "Open presentation" `
         -Triggers @("File > Open", "freep.file.open", "Ctrl+O") `
@@ -324,7 +335,9 @@ $routes = @(
         -AvaloniaSources @("freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/FileLifecycleTests.cs", "freep/FreeP.App.Avalonia.Tests/FileLifecycleWorkflowSourceTests.cs", "freep/FreeP.App.Presentation.Tests/PresentationFileDialogPlannerTests.cs") `
         -VisualEvidenceStatus "native platform visual; exact cross-platform pixel parity is not applicable" `
-        -RequiredWpfTokens @("FreePKeyboardCommand.OpenPresentation") -RequiredAvaloniaTokens @("FreePKeyboardCommand.OpenPresentation")
+        -RequiredWpfTokens @("OpenPresentation: () => _file.Open()") `
+        -RequiredAvaloniaTokens @("OpenPresentation: () => _ = FileOpenAsync()") `
+        -RequiredApplicationFrameTokens @("FreePKeyboardCommand.OpenPresentation")
 
     New-Route -Id "file.save-as-picker" -Area "Save presentation as" `
         -Triggers @("File > Save As", "freep.file.save-as", "Ctrl+Shift+S") `
@@ -337,7 +350,9 @@ $routes = @(
         -AvaloniaSources @("freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/FileLifecycleTests.cs", "freep/FreeP.App.Avalonia.Tests/FileLifecycleWorkflowSourceTests.cs", "freep/FreeP.App.Presentation.Tests/PresentationFileDialogPlannerTests.cs") `
         -VisualEvidenceStatus "native platform visual; exact cross-platform pixel parity is not applicable" `
-        -RequiredWpfTokens @("FreePKeyboardCommand.SavePresentationAs") -RequiredAvaloniaTokens @("FreePKeyboardCommand.SavePresentationAs")
+        -RequiredWpfTokens @("SavePresentationAs: () => _file.SaveAs()") `
+        -RequiredAvaloniaTokens @("SavePresentationAs: () => _ = FileSaveAsAsync()") `
+        -RequiredApplicationFrameTokens @("FreePKeyboardCommand.SavePresentationAs")
 )
 
 $pairedEvidencePath = "docs/parity/freep-dialog-pane-visual-evidence/report.md"

@@ -137,8 +137,12 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("Open: () => _file.Open()");
         source.Should().Contain("Save: () => _file.Save()");
         source.Should().Contain("SaveAs: () => _file.SaveAs()");
-        source.Should().Contain("case FreePKeyboardCommand.Undo: Editor.Undo(); break;");
-        source.Should().Contain("case FreePKeyboardCommand.Redo: Editor.Redo(); break;");
+        source.Should().Contain("new PresentationApplicationCommandCallbacks(");
+        source.Should().Contain("Undo: () => Editor.Undo(),");
+        source.Should().Contain("Redo: () => Editor.Redo(),");
+        source.Should().Contain("(_, _) => _applicationFrameSession!.ExecuteCommand(command)");
+        source.Should().NotContain("private void ExecuteKeyboardCommand(");
+        source.Should().NotContain("case FreePKeyboardCommand.");
         source.Should().Contain("foreach (var shortcut in FreePKeyboardShortcutCatalog.All)");
         source.Should().NotContain("ApplicationCommands.New");
         source.Should().NotContain("ApplicationCommands.Open");

@@ -84,6 +84,7 @@ public sealed partial class MainWindow : Window
     /// Rebuilt on every file new/open — subscribers re-attach after LoadModel.
     /// </summary>
     internal EditingSession Editor { get; private set; } = null!;
+    private PresentationApplicationFrameSession? _applicationFrameSession;
 
     // ── Shell chrome ──────────────────────────────────────────────────────────────
 
@@ -501,6 +502,51 @@ public sealed partial class MainWindow : Window
             getPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1,
             nativePrintCapability: nativePrintCapability);
 
+        _applicationFrameSession = new PresentationApplicationFrameSession(
+            new PresentationApplicationFrameCallbacks
+            {
+                MarkDirty = () => _file.MarkDirty(),
+                RefreshCanvas = RefreshCanvas,
+                RefreshNotesPane = RefreshNotesPane,
+                RefreshDocumentStatusBeforeReview = () =>
+                {
+                    UpdateSlideCount();
+                    UpdateTitle();
+                },
+                RefreshReviewWorkflowPlans = RefreshReviewWorkflowPlans,
+                IsSmartArtPaneVisible = () => IsSmartArtTextPaneVisible,
+                RefreshSmartArtPane = () => ShowSmartArtTextPane(),
+                RefreshSelectionPane = () => _selectionPane?.Refresh(),
+                RefreshAccessibilityMetadata = RefreshPaneAccessibilityMetadata,
+                ClearReviewSelection = () => _reviewWorkflowSession.SelectedCommentIndex = null,
+                ClearMediaSelection = _mediaPaneSession.ClearCaptionSelection,
+                RefreshReviewPaneBeforePlans = RefreshCommentPane,
+                RefreshVisibleMediaPane = RefreshVisibleMediaCaptionPaneFromFields,
+                RefreshAltTextRequest = RefreshAltTextRequestPlan,
+                RefreshReadingOrder = () => _reviewWorkflowSession.RefreshReadingOrderPlan(),
+                IsAltTextPaneVisible = () => IsAltTextPaneVisible,
+                RefreshAltTextPane = () => ShowAltTextPane(),
+            },
+            new PresentationApplicationCommandCallbacks(
+                NewPresentation: () => _file.New(),
+                OpenPresentation: () => _file.Open(),
+                SavePresentation: () => _file.Save(),
+                SavePresentationAs: () => _file.SaveAs(),
+                PrintPresentation: ShowPrintBackstage,
+                Undo: () => Editor.Undo(),
+                Redo: () => Editor.Redo(),
+                DeleteSelectedShapes: () => Editor.DeleteSelected(),
+                DuplicateCurrentSlide: () => Editor.DuplicateCurrentSlide(),
+                StartSlideShowFromBeginning: () => StartSlideShow(fromStart: true),
+                StartSlideShowFromCurrentSlide: () => StartSlideShow(fromStart: false),
+                Copy: () => WpfClipboardCommands.Copy(Editor, _osClipboard),
+                Cut: () => WpfClipboardCommands.Cut(Editor, _osClipboard),
+                Paste: () => _osClipboard.Paste(Editor, preferOsClipboard: true),
+                Find: OpenFindDialog,
+                Replace: OpenFindReplaceDialog,
+                SelectAll: () => Editor.SelectAll()));
+        _applicationFrameSession.Attach(Editor);
+
         // Title bar.
         var titleBar = ShellChrome.BuildTitleBar(this, chromeOptions);
         _titleBar = titleBar.Root;
@@ -647,33 +693,7 @@ public sealed partial class MainWindow : Window
         var bus = new PresentationCommandBus(_presentation);
         Editor  = new EditingSession(_presentation, bus);
         _selectionPane?.SetEditor(Editor);
-
-        Editor.Changed           += () =>
-        {
-            _file.MarkDirty();
-            RefreshCanvas();
-            RefreshNotesPane();
-            UpdateSlideCount();
-            UpdateTitle();
-            RefreshReviewWorkflowPlans();
-            if (IsSmartArtTextPaneVisible)
-                ShowSmartArtTextPane();
-            _selectionPane?.Refresh();
-            RefreshPaneAccessibilityMetadata();
-        };
-        Editor.CurrentSlideChanged += (_, _) => { _reviewWorkflowSession.SelectedCommentIndex = null; _mediaPaneSession.ClearCaptionSelection(); RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); RefreshVisibleMediaCaptionPaneFromFields(); _selectionPane?.Refresh(); RefreshPaneAccessibilityMetadata(); };
-        Editor.SelectionChanged += (_, _) =>
-        {
-            RefreshAltTextRequestPlan();
-            _reviewWorkflowSession.RefreshReadingOrderPlan();
-            if (IsAltTextPaneVisible)
-                ShowAltTextPane();
-            if (IsSmartArtTextPaneVisible)
-                ShowSmartArtTextPane();
-            RefreshVisibleMediaCaptionPaneFromFields();
-            _selectionPane?.Refresh();
-            RefreshPaneAccessibilityMetadata();
-        };
+        _applicationFrameSession?.Attach(Editor);
 
         // Re-attach editing layer whenever the editor is rebuilt (file open/new).
         // Guard: SlideCanvas is null during initial construction; BuildBody calls
@@ -4365,7 +4385,7 @@ public sealed partial class MainWindow : Window
         {
             CommandBindings.Add(new CommandBinding(
                 routedCommand,
-                (_, _) => ExecuteKeyboardCommand(command)));
+                (_, _) => _applicationFrameSession!.ExecuteCommand(command)));
         }
 
         foreach (var shortcut in FreePKeyboardShortcutCatalog.All)
@@ -4373,37 +4393,6 @@ public sealed partial class MainWindow : Window
             InputBindings.Add(new KeyBinding(
                 commands[shortcut.Command],
                 new KeyGesture(ToWpfKey(shortcut.Key), ToWpfModifiers(shortcut.Modifiers))));
-        }
-    }
-
-    private void ExecuteKeyboardCommand(FreePKeyboardCommand command)
-    {
-        switch (command)
-        {
-            case FreePKeyboardCommand.NewPresentation: _file.New(); break;
-            case FreePKeyboardCommand.OpenPresentation: _file.Open(); break;
-            case FreePKeyboardCommand.SavePresentation: _file.Save(); break;
-            case FreePKeyboardCommand.SavePresentationAs: _file.SaveAs(); break;
-            case FreePKeyboardCommand.PrintPresentation: ShowPrintBackstage(); break;
-            case FreePKeyboardCommand.Undo: Editor.Undo(); break;
-            case FreePKeyboardCommand.Redo: Editor.Redo(); break;
-            case FreePKeyboardCommand.DeleteSelectedShapes: Editor.DeleteSelected(); break;
-            case FreePKeyboardCommand.DuplicateCurrentSlide: Editor.DuplicateCurrentSlide(); break;
-            case FreePKeyboardCommand.StartSlideShowFromBeginning: StartSlideShow(fromStart: true); break;
-            case FreePKeyboardCommand.StartSlideShowFromCurrentSlide: StartSlideShow(fromStart: false); break;
-            case FreePKeyboardCommand.Copy:
-                WpfClipboardCommands.Copy(Editor, _osClipboard);
-                break;
-            case FreePKeyboardCommand.Cut:
-                WpfClipboardCommands.Cut(Editor, _osClipboard);
-                break;
-            case FreePKeyboardCommand.Paste:
-                _osClipboard.Paste(Editor, preferOsClipboard: true);
-                break;
-            case FreePKeyboardCommand.Find: OpenFindDialog(); break;
-            case FreePKeyboardCommand.Replace: OpenFindReplaceDialog(); break;
-            case FreePKeyboardCommand.SelectAll: Editor.SelectAll(); break;
-            default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
         }
     }
 
