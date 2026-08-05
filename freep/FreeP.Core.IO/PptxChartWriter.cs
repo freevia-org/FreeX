@@ -274,7 +274,12 @@ internal static class PptxChartWriter
 
         var title = chartElement.Element(cx + "title");
         if (chart.Title is null)
+        {
+            // An empty title is an explicit authoring edit. Do not leave the
+            // preserved native title visible just because the model has no text.
+            title?.Remove();
             return;
+        }
 
         if (title is null)
         {
