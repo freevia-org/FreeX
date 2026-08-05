@@ -87,6 +87,173 @@ public sealed class DocumentEditingSessionTests
         session.Commands.CanUndo.Should().BeFalse();
     }
 
+    [Fact]
+    public void ReplaceTrackedBodyText_NormalizesSelectionAndKeepsOneUndoEntry()
+    {
+        var document = DocumentWith("abcdef");
+        var session = DeterministicTrackedSession();
+        session.LoadDocument(document);
+        var changed = 0;
+        session.Changed += () => changed++;
+
+        var applied = session.TryReplaceTrackedBodyText(
+            new DocumentTextRange(
+                new DocumentTextPosition(0, 5),
+                new DocumentTextPosition(0, 2)),
+            "Z",
+            formatting: null,
+            out var result);
+
+        applied.Should().BeTrue();
+        result.Caret.Should().Be(new DocumentTextPosition(0, 3));
+        result.KeptDeletedText.Should().BeTrue();
+        var paragraph = (Paragraph)document.Blocks[0];
+        paragraph.PlainText.Should().Be("abZcdef");
+        paragraph.Runs.Should().Contain(run =>
+            run.Text == "Z"
+            && run.Revision == RevisionKind.Inserted
+            && run.RevisionAuthor == "Ada"
+            && run.RevisionDateXml == "2026-08-05T10:20:30Z");
+        paragraph.Runs.Should().Contain(run =>
+            run.Text == "cde"
+            && run.Revision == RevisionKind.Deleted
+            && run.RevisionAuthor == "Ada");
+        changed.Should().Be(1);
+
+        session.Commands.Undo().Should().BeTrue();
+        paragraph.PlainText.Should().Be("abcdef");
+        paragraph.Runs.Should().OnlyContain(run => run.Revision == RevisionKind.None);
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void InsertTrackedBodyText_PreservesRendererFormattingAndExplicitLinkPolicy()
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("link", RunFormatting.Default)
+        {
+            HyperlinkUrl = "https://example.test",
+        });
+        var document = new TextDocument();
+        document.Blocks.Add(paragraph);
+        var session = DeterministicTrackedSession();
+        session.LoadDocument(document);
+        var formatting = RunFormatting.Default with { Bold = true };
+
+        session.TryInsertTrackedBodyText(
+                new DocumentTextPosition(0, 2),
+                "X",
+                formatting,
+                hyperlink: null,
+                out var result)
+            .Should().BeTrue();
+
+        result.Caret.Should().Be(new DocumentTextPosition(0, 3));
+        var inserted = paragraph.Runs.Single(run => run.Text == "X");
+        inserted.Formatting.Should().Be(formatting);
+        inserted.Revision.Should().Be(RevisionKind.Inserted);
+        inserted.HyperlinkUrl.Should().BeNull();
+    }
+
+    [Fact]
+    public void InsertTrackedBodyText_CanInheritThePreviousModelLink()
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("link", RunFormatting.Default)
+        {
+            HyperlinkUrl = "https://example.test",
+            HyperlinkTooltip = "Example",
+        });
+        var document = new TextDocument();
+        document.Blocks.Add(paragraph);
+        var session = DeterministicTrackedSession();
+        session.LoadDocument(document);
+
+        session.TryInsertTrackedBodyText(
+                new DocumentTextPosition(0, 4),
+                "X",
+                formatting: null,
+                out _)
+            .Should().BeTrue();
+
+        var inserted = paragraph.Runs.Single(run => run.Text == "X");
+        inserted.HyperlinkUrl.Should().Be("https://example.test");
+        inserted.HyperlinkTooltip.Should().Be("Example");
+    }
+
+    [Fact]
+    public void DeleteTrackedBodyText_ReportsForwardAndCollapsedCaretOutcomes()
+    {
+        var document = DocumentWith("abc");
+        var session = DeterministicTrackedSession();
+        session.LoadDocument(document);
+
+        session.TryDeleteTrackedBodyText(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 0),
+                    new DocumentTextPosition(0, 1)),
+                advancePastKeptText: true,
+                out var retained)
+            .Should().BeTrue();
+
+        retained.KeptDeletedText.Should().BeTrue();
+        retained.Caret.Should().Be(new DocumentTextPosition(0, 1));
+        ((Paragraph)document.Blocks[0]).PlainText.Should().Be("abc");
+
+        var ownInsertion = new Paragraph();
+        ownInsertion.Runs.Add(new Run("X", RunFormatting.Default)
+        {
+            Revision = RevisionKind.Inserted,
+            RevisionAuthor = "Ada",
+        });
+        var ownDocument = new TextDocument();
+        ownDocument.Blocks.Add(ownInsertion);
+        session.LoadDocument(ownDocument);
+
+        session.TryDeleteTrackedBodyText(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 0),
+                    new DocumentTextPosition(0, 1)),
+                advancePastKeptText: true,
+                out var collapsed)
+            .Should().BeTrue();
+
+        collapsed.KeptDeletedText.Should().BeFalse();
+        collapsed.Caret.Should().Be(new DocumentTextPosition(0, 0));
+        ownInsertion.PlainText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TrackedBodyTextOperations_RejectCrossParagraphAndCollapsedDeleteTargets()
+    {
+        var document = DocumentWith("first", "second");
+        var session = DeterministicTrackedSession();
+        session.LoadDocument(document);
+
+        session.TryReplaceTrackedBodyText(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 2),
+                    new DocumentTextPosition(1, 2)),
+                "X",
+                formatting: null,
+                out _)
+            .Should().BeFalse();
+        session.TryDeleteTrackedBodyText(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 99),
+                    new DocumentTextPosition(0, 99)),
+                advancePastKeptText: false,
+                out _)
+            .Should().BeFalse();
+
+        document.Blocks.Cast<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().Equal("first", "second");
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    private static DocumentEditingSession DeterministicTrackedSession() =>
+        new(() => "Ada", () => "2026-08-05T10:20:30Z");
+
     private static TextDocument DocumentWith(params string[] paragraphs)
     {
         var document = new TextDocument();
@@ -112,10 +279,21 @@ public sealed class DocumentEditingSessionSourceOwnershipTests
             source.Should().Contain("_editingSession.InsertBlocksAfter(");
             source.Should().Contain("_editingSession.InsertDocumentAfter(");
             source.Should().Contain("_editingSession.RemoveBookmark(name)");
+            source.Should().Contain("new DocumentTextPosition(");
+            source.Should().Contain("_editingSession.TryDeleteTrackedBodyText(");
             source.Should().NotContain("new DocumentCommandBus(");
             source.Should().NotContain("new RemoveBookmarkCommand(");
             source.Should().NotContain("class ViewContext");
         }
+
+        wpf.Should().Contain("_editingSession.TryReplaceTrackedBodyText(");
+        wpf.Should().NotContain("RevisionEditPlanner.DeleteRangeAsRevision(");
+        wpf.Should().NotContain("RevisionEditPlanner.InsertText(");
+        avalonia.Should().Contain("_editingSession.TryInsertTrackedBodyText(");
+        System.Text.RegularExpressions.Regex.Matches(
+                avalonia,
+                "_editingSession\\.TryDeleteTrackedBodyText\\(")
+            .Count.Should().BeGreaterThanOrEqualTo(3);
     }
 
     [Fact]
@@ -127,6 +305,8 @@ public sealed class DocumentEditingSessionSourceOwnershipTests
         source.Should().NotContain("using Avalonia");
         source.Should().NotContain("using System.Windows");
         source.Should().NotContain("DocumentView");
+        source.Should().NotContain("TextPointer");
+        source.Should().NotContain("DocPosition");
     }
 
     private static string ReadSource(params string[] parts)

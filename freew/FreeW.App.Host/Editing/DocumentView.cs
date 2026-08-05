@@ -14896,40 +14896,25 @@ public sealed class DocumentView : RichTextBox
         if (!TrackChangesEnabled
             || string.IsNullOrEmpty(text)
             || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
-            || !TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
+            || !TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out _))
         {
             return false;
         }
 
-        var insertOffset = Math.Min(startOffset, endOffset);
-        var author = CurrentRevisionAuthor();
-        var dateXml = CurrentRevisionDateXml();
-
         CommitToModel();
-        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph)
-            return false;
-
-        _commands.Execute(new ReplaceParagraphRunsCommand(paragraphIndex, paragraph =>
-        {
-            if (hasSelection)
-                RevisionEditPlanner.DeleteRangeAsRevision(paragraph, startOffset, endOffset, author, dateXml);
-
-            var formatting = RevisionEditPlanner.FormattingAtOffset(paragraph, insertOffset);
-            var link = RevisionEditPlanner.LinkAtOffset(paragraph, insertOffset);
-            RevisionEditPlanner.InsertText(
-                paragraph,
-                insertOffset,
+        var range = new DocumentTextRange(
+            new DocumentTextPosition(paragraphIndex, startOffset),
+            new DocumentTextPosition(paragraphIndex, endOffset));
+        if (!_editingSession.TryReplaceTrackedBodyText(
+                range,
                 text,
-                formatting,
-                new RevisionEditPlanner.InsertOptions(
-                    RevisionKind.Inserted,
-                    author,
-                    dateXml,
-                    link.HyperlinkUrl,
-                    link.HyperlinkAnchor,
-                    link.HyperlinkTooltip));
-        }));
-        PlaceCaretAtModelTextOffset(paragraphIndex, insertOffset + text.Length);
+                formatting: null,
+                out var result))
+        {
+            return false;
+        }
+
+        PlaceCaretAtModelTextOffset(result.Caret.BlockIndex, result.Caret.Offset);
         return true;
     }
 
@@ -14964,23 +14949,19 @@ public sealed class DocumentView : RichTextBox
 
     private bool TryRecordTrackedDeletion(int paragraphIndex, int startOffset, int endOffset, bool placeAfterKeptForwardDelete)
     {
-        var author = CurrentRevisionAuthor();
-        var dateXml = CurrentRevisionDateXml();
-        RevisionEditPlanner.DeleteResult result = default;
-
         CommitToModel();
-        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph)
-            return false;
-
-        _commands.Execute(new ReplaceParagraphRunsCommand(paragraphIndex, paragraph =>
+        var range = new DocumentTextRange(
+            new DocumentTextPosition(paragraphIndex, startOffset),
+            new DocumentTextPosition(paragraphIndex, endOffset));
+        if (!_editingSession.TryDeleteTrackedBodyText(
+                range,
+                placeAfterKeptForwardDelete,
+                out var result))
         {
-            result = RevisionEditPlanner.DeleteRangeAsRevision(paragraph, startOffset, endOffset, author, dateXml);
-        }));
+            return false;
+        }
 
-        var caretOffset = placeAfterKeptForwardDelete && result.KeptDeletedText
-            ? Math.Max(startOffset, endOffset)
-            : result.CaretOffset;
-        PlaceCaretAtModelTextOffset(paragraphIndex, caretOffset);
+        PlaceCaretAtModelTextOffset(result.Caret.BlockIndex, result.Caret.Offset);
         return true;
     }
 

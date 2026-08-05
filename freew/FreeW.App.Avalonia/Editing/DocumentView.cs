@@ -17948,20 +17948,37 @@ public sealed class DocumentView : Control
         // AV-LINK: typing strictly inside a hyperlink span extends that link (Word's behaviour); typing at a
         // link's edge or outside a link inserts plain (un-linked) text.
         var insLink = ActiveLink(paragraph, bodyOffset);
+        if (TrackChangesEnabled)
+        {
+            var hyperlink = insLink is { } activeLink
+                ? new DocumentTextHyperlink(activeLink.Url, activeLink.Anchor, activeLink.Tooltip)
+                : (DocumentTextHyperlink?)null;
+            if (_editingSession.TryInsertTrackedBodyText(
+                    new DocumentTextPosition(block, bodyOffset),
+                    text,
+                    bodyFmt,
+                    hyperlink,
+                    out var result))
+            {
+                _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
+                _selectionAnchor = _caret;
+            }
+            return;
+        }
+
         _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
         {
             // BE4 (body parity): insert at an incrementing position so multi-char text (paste / IME /
             // model inserts like a citation string) keeps its order — a fixed insert index would reverse it.
-            // Cells carry the tracked-insertion revision tags when Track Changes is on (null otherwise).
             RevisionEditPlanner.InsertText(
                 p,
                 bodyOffset,
                 text,
                 bodyFmt,
                 new RevisionEditPlanner.InsertOptions(
-                    TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None,
-                    TrackChangesEnabled ? RevisionAuthor : null,
-                    TrackChangesEnabled ? CurrentRevisionDateXml() : null,
+                    RevisionKind.None,
+                    null,
+                    null,
                     insLink?.Url,
                     insLink?.Anchor,
                     insLink?.Tooltip));
@@ -18373,13 +18390,17 @@ public sealed class DocumentView : Control
             var offset = _caret.Offset;
             if (TrackChangesEnabled)
             {
-                // AV-TRACKEDIT: a tracked deletion keeps the character (struck) unless it is this author's own
-                // still-pending insertion, which is removed outright. MarkCellsDeleted applies that rule.
-                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                var range = new DocumentTextRange(
+                    new DocumentTextPosition(block, offset - 1),
+                    new DocumentTextPosition(block, offset));
+                if (!_editingSession.TryDeleteTrackedBodyText(
+                        range,
+                        advancePastKeptText: false,
+                        out var result))
                 {
-                    var (cells, _) = MarkCellsDeleted(ParaCells(p), offset - 1, offset);
-                    SetRuns(p, cells);
-                }));
+                    return;
+                }
+                _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
             }
             else
             {
@@ -18390,8 +18411,8 @@ public sealed class DocumentView : Control
                         cells.RemoveAt(offset - 1);
                     SetRuns(p, cells);
                 }));
+                _caret = new DocPosition(block, offset - 1);
             }
-            _caret = new DocPosition(block, offset - 1);
             _selectionAnchor = _caret;
         }
         else
@@ -18498,22 +18519,15 @@ public sealed class DocumentView : Control
             var offset = _caret.Offset;
             if (TrackChangesEnabled)
             {
-                // AV-TRACKEDIT: forward-delete records a tracked deletion (keeps the struck char) unless it is
-                // this author's own pending insertion (removed outright). When kept-struck, advance the caret
-                // past the struck character so a repeated Delete keeps progressing (Word behaviour); when the
-                // char collapsed away, leave the caret in place (the next char shifted into its position).
-                var before = ParaCells(paragraph);
-                var ownInsertion = offset < before.Count
-                    && before[offset].Revision == RevisionKind.Inserted
-                    && string.Equals(before[offset].RevisionAuthor, RevisionAuthor, StringComparison.Ordinal);
-                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                var range = new DocumentTextRange(
+                    new DocumentTextPosition(block, offset),
+                    new DocumentTextPosition(block, offset + 1));
+                if (_editingSession.TryDeleteTrackedBodyText(
+                        range,
+                        advancePastKeptText: true,
+                        out var result))
                 {
-                    var (cells, _) = MarkCellsDeleted(ParaCells(p), offset, offset + 1);
-                    SetRuns(p, cells);
-                }));
-                if (!ownInsertion)
-                {
-                    _caret = new DocPosition(block, offset + 1);
+                    _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
                     _selectionAnchor = _caret;
                 }
             }
@@ -19030,13 +19044,18 @@ public sealed class DocumentView : Control
             }
             if (TrackChangesEnabled)
             {
-                // AV-TRACKEDIT: a tracked deletion keeps the selected text (struck), except this author's own
-                // pending insertions which are removed outright. Caret collapses to the selection start.
-                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                var range = new DocumentTextRange(
+                    new DocumentTextPosition(block, a),
+                    new DocumentTextPosition(block, b));
+                if (!_editingSession.TryDeleteTrackedBodyText(
+                        range,
+                        advancePastKeptText: false,
+                        out var result))
                 {
-                    var (cells, _) = MarkCellsDeleted(ParaCells(p), Math.Min(a, b), Math.Max(a, b));
-                    SetRuns(p, cells);
-                }));
+                    _selectionAnchor = _caret;
+                    return;
+                }
+                _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
             }
             else
             {
@@ -19048,8 +19067,8 @@ public sealed class DocumentView : Control
                     cells.RemoveRange(lo, Math.Max(0, hi - lo));
                     SetRuns(p, cells);
                 }));
+                _caret = new DocPosition(block, Math.Min(a, b));
             }
-            _caret = new DocPosition(block, Math.Min(a, b));
         }
         else if (_doc.Blocks[sel.Start.Block] is Paragraph startPara && _doc.Blocks[sel.End.Block] is Paragraph endPara)
         {
