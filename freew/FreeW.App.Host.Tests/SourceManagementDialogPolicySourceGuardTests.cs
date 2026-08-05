@@ -71,6 +71,18 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().Contain("docList.MouseDoubleClick += (_, _) => EditDocSource();");
     }
 
+    [Fact]
+    public void FreeWRibbonCommands_DefinesManageSourcesSizingAndCopyControlAuthority()
+    {
+        var source = ReadHostRibbonSource();
+
+        source.Should().Contain("SizeToContent = SizeToContent.WidthAndHeight,");
+        source.Should().Contain("Content = \"Copy →\",  MinWidth = 72");
+        source.Should().Contain("Content = \"Copy <-\", MinWidth = 72");
+        source.Should().Contain("MinWidth = 220,");
+        source.Should().Contain("MinHeight = 180,");
+    }
+
     private static string ReadHostRibbonSource()
     {
         var path = Path.Combine(
