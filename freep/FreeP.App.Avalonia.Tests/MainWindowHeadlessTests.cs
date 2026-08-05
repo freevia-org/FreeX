@@ -2089,6 +2089,58 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_table_cell_fill_commits_active_inline_editor_before_cell_command()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            try
+            {
+                window.Show();
+                var shape = window.Editor.InsertTable(1, 1);
+                shape.Table!.Rows[0].Cells[0].TextBody = new TextBody
+                {
+                    Paragraphs =
+                    {
+                        new Paragraph { Runs = { new Run { Text = "Before" } } },
+                    },
+                };
+                window.Editor.Select(shape.Id);
+                window.Editor.SetActiveTableCell(0, 0);
+                window.ActivateTableCellEditForTests(shape.Id, 0, 0).Should().BeTrue();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+                window.GetVisualDescendants()
+                    .OfType<TextBox>()
+                    .Single(control => control.Classes.Contains("freep-table-cell-rich-editor"))
+                    .Text = "Committed before fill";
+
+                var registry = window.BuildCommandRegistry();
+                registry.TryGet("freep.table-cell-fill", out var fill).Should().BeTrue();
+                fill!.Execute(RibbonCommandContext.ForSelectedValue("#123456"));
+
+                window.IsTableCellEditActiveForTests.Should().BeFalse();
+                InCanvasTextEditPlanner.ExtractPlainText(shape.Table.Rows[0].Cells[0].TextBody)
+                    .Should().Be("Committed before fill");
+                shape.Table.Rows[0].Cells[0].Fill.Should().BeOfType<ShapeFill.Solid>()
+                    .Subject.Color.Resolved.Should().Be(SrgbColor.FromRgb(0x123456));
+
+                // The child text command is below the cell-style command in the undo stack.
+                window.Editor.Undo();
+                shape.Table.Rows[0].Cells[0].Fill.Should().BeNull();
+                InCanvasTextEditPlanner.ExtractPlainText(shape.Table.Rows[0].Cells[0].TextBody)
+                    .Should().Be("Committed before fill");
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        if (!ran) return;
+    }
+
+    [Fact]
     public async Task Ribbon_table_row_height_command_routes_selected_value_to_editor()
     {
         var found = false;
