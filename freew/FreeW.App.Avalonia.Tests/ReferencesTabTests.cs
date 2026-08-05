@@ -441,7 +441,9 @@ public sealed class ReferencesTabTests
                     new Run("See page "),
                     Run.CrossReferenceFieldRun(
                         new CrossReferenceField(CrossRefFieldKind.PageRef, "_Ref2", CrossRefInsertAs.PageNumber, Hyperlink: false),
-                        "9")
+                        "9"),
+                    new Run(" and imported "),
+                    Run.ComplexFieldRun(" PAGEREF _Ref2 ", "9")
                 }
             },
             DocumentOps.CreatePageBreak(),
@@ -449,13 +451,19 @@ public sealed class ReferencesTabTests
             {
                 BookmarkName = "_Ref2",
             });
+        view.Document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        view.Document.Page.PageNumberStartAt = 4;
 
         view.UpdateFields();
 
         view.Document.Blocks.OfType<Paragraph>()
             .SelectMany(paragraph => paragraph.Runs)
             .Single(run => run.CrossReference is not null)
-            .Text.Should().Be("2");
+            .Text.Should().Be("V");
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.ComplexField?.Keyword == "PAGEREF")
+            .Text.Should().Be("V");
     }
 
     [Fact]

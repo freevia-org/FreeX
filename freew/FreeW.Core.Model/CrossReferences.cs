@@ -260,12 +260,17 @@ public static class CrossReferences
     /// Optional page-number resolver mapping a target body block index to its 1-based page. Null, or a
     /// null return, keeps the model default of page 1 because the core model has no pagination.
     /// </param>
+    /// <param name="pageTextOf">
+    /// Optional display-text resolver for the target page. Hosts use this for section restarts, Roman or
+    /// letter formats, and chapter prefixes. A null or empty result falls back to <paramref name="pageOf"/>.
+    /// </param>
     public static string ResolveField(
         TextDocument doc,
         CrossReferenceField field,
         string cached,
         int sourceBlockIndex,
-        Func<int, int?>? pageOf = null)
+        Func<int, int?>? pageOf = null,
+        Func<int, string?>? pageTextOf = null)
     {
         ArgumentNullException.ThrowIfNull(doc);
         ArgumentNullException.ThrowIfNull(field);
@@ -273,7 +278,7 @@ public static class CrossReferences
         return field.Kind switch
         {
             CrossRefFieldKind.Ref => ResolveBookmarkedRef(doc, field, cached, sourceBlockIndex),
-            CrossRefFieldKind.PageRef => ResolveBookmarkedPageRef(doc, field, cached, pageOf),
+            CrossRefFieldKind.PageRef => ResolveBookmarkedPageRef(doc, field, cached, pageOf, pageTextOf),
             CrossRefFieldKind.NoteRef => ResolveNoteRef(doc, field, cached),
             _ => cached
         };
@@ -449,10 +454,17 @@ public static class CrossReferences
     }
 
     private static string ResolveBookmarkedPageRef(
-        TextDocument doc, CrossReferenceField field, string cached, Func<int, int?>? pageOf)
+        TextDocument doc,
+        CrossReferenceField field,
+        string cached,
+        Func<int, int?>? pageOf,
+        Func<int, string?>? pageTextOf)
     {
         if (FindBookmarkBlock(doc, field.Target) is not { } targetBlock)
             return cached;
+
+        if (pageTextOf?.Invoke(targetBlock) is { Length: > 0 } pageText)
+            return pageText;
 
         var page = pageOf?.Invoke(targetBlock) ?? 1;
         return Math.Max(1, page).ToString(CultureInfo.InvariantCulture);

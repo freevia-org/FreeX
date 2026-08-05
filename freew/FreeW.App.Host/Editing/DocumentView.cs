@@ -12877,9 +12877,15 @@ public sealed class DocumentView : RichTextBox
         var crossReferencePageResolver = blocks
             .OfType<ModelParagraph>()
             .SelectMany(paragraph => paragraph.Runs)
-            .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef)
+            .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef
+                || run.ComplexField?.Keyword == "PAGEREF")
                 ? BuildCrossReferencePageResolver()
                 : null;
+        var crossReferencePageTextResolver = crossReferencePageResolver is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
+                _model,
+                crossReferencePageResolver);
         for (var b = 0; b < blocks.Count; b++)
         {
             if (blocks[b] is not ModelParagraph paragraph)
@@ -12894,7 +12900,8 @@ public sealed class DocumentView : RichTextBox
                         crossReference,
                         r.Text,
                         b,
-                        crossReferencePageResolver);
+                        crossReferencePageResolver,
+                        crossReferencePageTextResolver);
                     if (resolved.Length > 0)
                         r.Text = resolved;
                 }
@@ -12906,7 +12913,12 @@ public sealed class DocumentView : RichTextBox
                     // REF/PAGEREF/SEQ re-evaluate against current bookmarks/sequences; the rest reuse the
                     // live DATE/AUTHOR/… resolver (PAGE/NUMPAGES keep their cached value here).
                     var resolved = ComplexFieldEngine.CanRecompute(cf)
-                        ? ComplexFieldEngine.Recompute(_model, b, i)
+                        ? ComplexFieldEngine.Recompute(
+                            _model,
+                            b,
+                            i,
+                            crossReferencePageResolver,
+                            crossReferencePageTextResolver)
                         : ResolveFieldText(ComplexFieldDisplayPlanner.ResolveLiveKind(cf.Keyword), r.Text, _model, CurrentFileName);
                     if (resolved.Length > 0)
                         r.Text = resolved;

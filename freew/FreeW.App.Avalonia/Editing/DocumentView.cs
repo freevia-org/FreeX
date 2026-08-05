@@ -22172,9 +22172,15 @@ public sealed class DocumentView : Control
         var crossReferencePageResolver = _doc.Blocks
             .OfType<Paragraph>()
             .SelectMany(paragraph => paragraph.Runs)
-            .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef)
+            .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef
+                || run.ComplexField?.Keyword == "PAGEREF")
                 ? BuildCrossReferencePageResolver()
                 : null;
+        var crossReferencePageTextResolver = crossReferencePageResolver is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
+                _doc,
+                crossReferencePageResolver);
         for (var b = 0; b < _doc.Blocks.Count; b++)
         {
             if (_doc.Blocks[b] is not Paragraph paragraph)
@@ -22190,7 +22196,8 @@ public sealed class DocumentView : Control
                         crossReference,
                         run.Text,
                         b,
-                        crossReferencePageResolver);
+                        crossReferencePageResolver,
+                        crossReferencePageTextResolver);
                     if (!string.IsNullOrEmpty(resolved))
                         run.Text = resolved;
                 }
@@ -22200,7 +22207,12 @@ public sealed class DocumentView : Control
                         continue;
 
                     var resolved = ComplexFieldEngine.CanRecompute(complexField)
-                        ? ComplexFieldEngine.Recompute(_doc, b, r)
+                        ? ComplexFieldEngine.Recompute(
+                            _doc,
+                            b,
+                            r,
+                            crossReferencePageResolver,
+                            crossReferencePageTextResolver)
                         : ResolveComplexField(complexField, run.Text);
                     if (!string.IsNullOrEmpty(resolved))
                         run.Text = resolved;
