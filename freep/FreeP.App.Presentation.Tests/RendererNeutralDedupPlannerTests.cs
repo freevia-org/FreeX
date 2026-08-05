@@ -1,6 +1,9 @@
 using System.IO;
+using System.IO.Compression;
+using System.Xml.Linq;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
+using FreeP.Core.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor.Tests;
@@ -161,6 +164,54 @@ public sealed class RendererNeutralDedupPlannerTests
 
         initial.Bounds.Should().Be(new LayoutRect(0, 0, 10, 10));
         resized.Bounds.Should().Be(new LayoutRect(5, 0, 10, 10));
+    }
+
+    [Fact]
+    public void SlideShowMediaInteractionPlanner_CarriesPresentationMediaControlPolicy()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(MediaShape(8, 0, 0, 4, 4, embedded: true));
+
+        SlideShowMediaInteractionPlanner.BuildSlidePlan(slide, 10, 10, 10, 10, showMediaControls: false)
+            .Should().ContainSingle(plan => plan.ShowMediaControls == false);
+
+        SlideShowMediaInteractionPlanner.PlanClick(slide, 10, 10, 10, 10, 2, 2, showMediaControls: false)
+            .Media!.ShowMediaControls.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ShowMediaControlsCommand_IsUndoableAndDefaultsOn()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.ShowMediaControls.Should().BeTrue();
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetShowMediaControlsCommand(true, false));
+        presentation.ShowMediaControls.Should().BeFalse();
+        bus.Undo();
+        presentation.ShowMediaControls.Should().BeTrue();
+        bus.Redo();
+        presentation.ShowMediaControls.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ShowMediaControls_Disabled_RoundTripsThroughPresentationProperties()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.ShowMediaControls = false;
+        using var output = new MemoryStream();
+        PptxPackageWriter.Write(presentation, output);
+
+        var packageBytes = output.ToArray();
+        var reopened = PptxPackageReader.Read(new MemoryStream(packageBytes));
+        reopened.ShowMediaControls.Should().BeFalse();
+
+        using var archive = new ZipArchive(new MemoryStream(packageBytes), ZipArchiveMode.Read);
+        using var properties = archive.GetEntry("ppt/presProps.xml")!.Open();
+        var document = XDocument.Load(properties);
+        document.Descendants(XName.Get("showMediaCtrls", "http://schemas.microsoft.com/office/powerpoint/2010/main"))
+            .Single()
+            .Attribute("val")!.Value.Should().Be("0");
     }
 
     [Fact]

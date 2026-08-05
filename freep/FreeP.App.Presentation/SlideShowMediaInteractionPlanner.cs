@@ -9,7 +9,8 @@ public sealed record SlideShowMediaShapePlan(
     LayoutRect Bounds,
     bool HasSource,
     string SourceKind,
-    string PlaybackCapabilityNote);
+    string PlaybackCapabilityNote,
+    bool ShowMediaControls);
 
 public sealed record SlideShowMediaClickPlan(
     bool IsHandled,
@@ -34,13 +35,14 @@ public static class SlideShowMediaInteractionPlanner
         double slideDipW,
         double slideDipH,
         double canvasW,
-        double canvasH)
+        double canvasH,
+        bool showMediaControls = true)
     {
         ArgumentNullException.ThrowIfNull(slide);
 
         return EnumerateShapes(slide.Shapes)
             .Where(shape => shape.Kind == SlideShapeKind.Media && shape.Media is not null)
-            .Select(shape => BuildShapePlan(shape, slideDipW, slideDipH, canvasW, canvasH))
+            .Select(shape => BuildShapePlan(shape, slideDipW, slideDipH, canvasW, canvasH, showMediaControls))
             .ToArray();
     }
 
@@ -51,9 +53,10 @@ public static class SlideShowMediaInteractionPlanner
         double canvasW,
         double canvasH,
         double canvasX,
-        double canvasY)
+        double canvasY,
+        bool showMediaControls = true)
     {
-        foreach (var media in BuildSlidePlan(slide, slideDipW, slideDipH, canvasW, canvasH).Reverse())
+        foreach (var media in BuildSlidePlan(slide, slideDipW, slideDipH, canvasW, canvasH, showMediaControls).Reverse())
         {
             if (canvasX >= media.Bounds.Left && canvasX <= media.Bounds.Right &&
                 canvasY >= media.Bounds.Top && canvasY <= media.Bounds.Bottom)
@@ -101,7 +104,8 @@ public static class SlideShowMediaInteractionPlanner
         double slideDipW,
         double slideDipH,
         double canvasW,
-        double canvasH)
+        double canvasH,
+        bool showMediaControls)
     {
         var media = shape.Media!;
         var hasEmbeddedSource = media.Bytes is { Length: > 0 };
@@ -114,7 +118,8 @@ public static class SlideShowMediaInteractionPlanner
             ComputeMediaBounds(shape, slideDipW, slideDipH, canvasW, canvasH),
             hasEmbeddedSource || hasLinkedSource,
             hasEmbeddedSource ? "embedded" : hasLinkedSource ? "http-link" : "missing",
-            PlaybackBackendCapabilityNote);
+            PlaybackBackendCapabilityNote,
+            showMediaControls);
     }
 
     private static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)

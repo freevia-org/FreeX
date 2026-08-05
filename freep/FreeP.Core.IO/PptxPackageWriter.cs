@@ -180,6 +180,7 @@ public static class PptxPackageWriter
     private static readonly XNamespace P159 = "http://schemas.microsoft.com/office/powerpoint/2015/09/main";
     private static readonly XNamespace MC   = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private const string SectionExtUri = "{521415D9-36F7-43E2-AB2F-B90AF26B5E84}";
+    private const string ShowMediaControlsExtUri = "{2FDB2607-1784-4EEB-B798-7EB5836EED8A}";
 
     // EB1/EB3: transition kinds that belong in the p14: namespace (not classic p: namespace).
     // Classic p: kinds (ECMA-376 CT_SlideTransition schema): fade, cut, push, wipe, cover, uncover,
@@ -455,7 +456,7 @@ public static class PptxPackageWriter
             WriteEntry(archive, "ppt/theme/theme2.xml", BuildThemeXml(presentation.Theme));
 
         // --- 5. presProps, viewProps, tableStyles ---
-        WriteEntry(archive, "ppt/presProps.xml", BuildPresPropsXml(packageSnapshot));
+        WriteEntry(archive, "ppt/presProps.xml", BuildPresPropsXml(presentation, packageSnapshot));
         WriteEntry(archive, "ppt/viewProps.xml", BuildViewPropsXml(packageSnapshot));
         WriteEntry(archive, "ppt/tableStyles.xml", BuildTableStylesXml());
 
@@ -2901,12 +2902,64 @@ public static class PptxPackageWriter
 
     // ── Stub XML parts ────────────────────────────────────────────────────────────
 
-    private static XDocument BuildPresPropsXml(PptxPackageSnapshot? packageSnapshot) =>
-        TryReadPreservedXmlPart(packageSnapshot, "ppt/presProps.xml", P + "presentationPr", out var preserved)
+    private static XDocument BuildPresPropsXml(
+        Presentation presentation,
+        PptxPackageSnapshot? packageSnapshot)
+    {
+        var document = TryReadPreservedXmlPart(packageSnapshot, "ppt/presProps.xml", P + "presentationPr", out var preserved)
             ? preserved
             : new XDocument(
                 new XDeclaration("1.0", "UTF-8", "yes"),
                 new XElement(P + "presentationPr", NsAttr("p", P), NsAttr("a", A)));
+
+        var root = document.Root ?? new XElement(P + "presentationPr", NsAttr("p", P), NsAttr("a", A));
+        if (document.Root is null)
+            document.Add(root);
+
+        var showPr = root.Element(P + "showPr");
+        if (showPr is null)
+        {
+            showPr = new XElement(P + "showPr");
+            root.AddFirst(showPr);
+        }
+
+        foreach (var element in showPr.Elements(P14 + "showMediaCtrls").ToArray())
+            element.Remove();
+
+        var extLst = showPr.Element(P + "extLst");
+        foreach (var ext in extLst?.Elements(P + "ext").ToArray() ?? Array.Empty<XElement>())
+        {
+            foreach (var element in ext.Elements(P14 + "showMediaCtrls").ToArray())
+                element.Remove();
+            if (!ext.Nodes().Any())
+                ext.Remove();
+        }
+
+        if (!presentation.ShowMediaControls)
+        {
+            extLst ??= new XElement(P + "extLst");
+            if (extLst.Parent is null)
+                showPr.Add(extLst);
+
+            var ext = extLst.Elements(P + "ext")
+                .FirstOrDefault(candidate => string.Equals(
+                    candidate.Attribute("uri")?.Value,
+                    ShowMediaControlsExtUri,
+                    StringComparison.OrdinalIgnoreCase));
+            if (ext is null)
+            {
+                ext = new XElement(P + "ext", new XAttribute("uri", ShowMediaControlsExtUri));
+                extLst.Add(ext);
+            }
+
+            ext.Add(new XElement(
+                P14 + "showMediaCtrls",
+                new XAttribute("val", "0"),
+                new XAttribute(XNamespace.Xmlns + "p14", P14.NamespaceName)));
+        }
+
+        return document;
+    }
 
     private static XDocument BuildViewPropsXml(PptxPackageSnapshot? packageSnapshot) =>
         TryReadPreservedXmlPart(packageSnapshot, "ppt/viewProps.xml", P + "viewPr", out var preserved)
