@@ -16,6 +16,7 @@ using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Dialogs;
@@ -190,6 +191,7 @@ public sealed class MainWindow : Window
     private FrameworkElement _viewSwitchItem = null!;
     private FrameworkElement _zoomItem = null!;
     private readonly FreeWEditorInteractionSession _editorInteraction = new();
+    private FreeWApplicationCommandRouter _applicationCommands = null!;
 
     // Status-bar view-switch toggle buttons for the three mutually-exclusive print-family view modes
     // (Print Layout / Web Layout / Draft). They mirror the same state as the View ribbon's Views group;
@@ -341,6 +343,25 @@ public sealed class MainWindow : Window
             onOpenMailMergeErrorReport: OpenMailMergeErrorReport,
             onPrintMailMergeDocument: PrintMailMergeDocument);
         _file = new FileCommands(this, editor, UpdateTitle, _options, messageService: _messageService);
+        _applicationCommands = new FreeWApplicationCommandRouter(new FreeWApplicationCommandActions(
+            NewDocument: () => _file.New(),
+            OpenDocument: () => _file.Open(),
+            SaveDocument: () => _file.Save(),
+            SaveDocumentAs: () => _file.SaveAs(),
+            PrintDocument: Print,
+            Find: () => OpenFindReplace(FindReplaceDialogOpenMode.Find),
+            Replace: () => OpenFindReplace(FindReplaceDialogOpenMode.Replace),
+            Cut: () => ExecuteEditingCommand(ApplicationCommands.Cut),
+            Copy: () => ExecuteEditingCommand(ApplicationCommands.Copy),
+            Paste: () => ExecuteEditingCommand(ApplicationCommands.Paste),
+            PasteTextOnly: _editor.PastePlainText,
+            SelectAll: () => ExecuteEditingCommand(ApplicationCommands.SelectAll),
+            Undo,
+            Redo,
+            RevealFormatting: ToggleRevealFormatting,
+            Thesaurus: ToggleThesaurusPane,
+            ToggleFieldCodes: _editor.ToggleFieldCodes,
+            UpdateFields: _editor.UpdateFields));
         editor.TextChanged += (_, _) =>
         {
             _file.MarkDirty();
@@ -531,12 +552,22 @@ public sealed class MainWindow : Window
         // Keep the Reveal Formatting pane (when shown) reflecting the caret's current formatting.
         editor.SelectionChanged += (_, _) => RefreshRevealFormatting();
 
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.New, (_, _) => _file.New()));
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.Open, (_, _) => _file.Open()));
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.Save, (_, _) => _file.Save()));
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.SaveAs, (_, _) => _file.SaveAs()));
+        CommandBindings.Add(new CommandBinding(
+            ApplicationCommands.New,
+            (_, _) => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument)));
+        CommandBindings.Add(new CommandBinding(
+            ApplicationCommands.Open,
+            (_, _) => _applicationCommands.Execute(FreeWKeyboardCommand.OpenDocument)));
+        CommandBindings.Add(new CommandBinding(
+            ApplicationCommands.Save,
+            (_, _) => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument)));
+        CommandBindings.Add(new CommandBinding(
+            ApplicationCommands.SaveAs,
+            (_, _) => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocumentAs)));
 
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.Print, (_, _) => Print()));
+        CommandBindings.Add(new CommandBinding(
+            ApplicationCommands.Print,
+            (_, _) => _applicationCommands.Execute(FreeWKeyboardCommand.PrintDocument)));
         InstallSharedKeyboardShortcuts();
 
         UpdateTitle();
@@ -551,22 +582,27 @@ public sealed class MainWindow : Window
         // The Word-style Backstage (File screen) is a full-window overlay above the document. It is
         // hidden by default; the File button (title bar) shows it, a back arrow / Esc hides it. It reuses
         // the host's existing File commands — no file IO is reimplemented in the backstage.
-        _backstage = new BackstageView(_editor, _file, new BackstageActions(
-            New: () => _file.New(),
-            Open: () => _file.Open(),
-            ImportPdfText: () => _file.ImportPdfText(),
-            OpenPath: path => _file.OpenRecentPath(path),
+        _backstage = new BackstageView(new BackstageCallbacks(
+            DisplayName: _file.DisplayName,
+            CurrentPath: _file.CurrentPath,
+            GetRecentEntries: () => _file.RecentEntries,
+            GetFileFormats: () => _file.SaveFormats,
+            GetPageSettings: () => CurrentBackstageDocument().Page,
+            GetCurrentOptions: () => _options,
+            GetDataFolder: ResolveDataFolderLabel,
+            GetDocument: CurrentBackstageDocument,
+            GetIsDirty: () => _file.IsDirty,
+            NewDocument: () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument),
+            OpenRecent: path => _file.OpenRecentPath(path),
             OpenFolder: folder => _file.OpenFromFolder(folder),
-            Save: () => _file.Save(),
-            SaveAs: () => _file.SaveAs(),
-            SaveAsType: extension => _file.SaveAs(extension),
-            SaveAsSuggested: (fileName, extension) => _file.SaveAsSuggested(fileName, extension),
-            SaveCopy: () => _file.SaveCopy(),
+            Browse: () => _applicationCommands.Execute(FreeWKeyboardCommand.OpenDocument),
             RecoverUnsaved: () => _autosave.RecoverUnsavedDocuments(this),
+            ImportPdfText: () => _file.ImportPdfText(),
+            Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
+            SaveAs: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocumentAs),
+            SaveAsFormat: (extension, _) => _file.SaveAs(extension),
+            SaveCopy: () => _file.SaveCopy(),
             OpenContainingFolder: OpenContainingFolder,
-            Close: CloseDocument,
-            Print: Print,
-            PrintPreview: OpenPrintPreview,
             ExportPdf: ExportToPdf,
             ExportXps: ExportToXps,
             EditProperties: OpenProperties,
@@ -574,10 +610,14 @@ public sealed class MainWindow : Window
             RestrictEditing: OpenRestrictEditing,
             InspectDocument: InspectDocument,
             CheckAccessibility: CheckAccessibility,
-            EditOptions: OpenOptions,
-            CurrentOptions: () => _options,
+            OpenOptions: OpenOptions,
+            CloseDocument: CloseDocument,
+            Print: () => _applicationCommands.Execute(FreeWKeyboardCommand.PrintDocument),
+            PrintPreview: OpenPrintPreview,
+            SaveAsSuggested: (fileName, extension) => _file.SaveAsSuggested(fileName, extension),
             OnClosed: () => SetEditorAdornersVisible(true),
-            DataFolder: ResolveDataFolderLabel));
+            GetDisplayName: () => _file.DisplayName,
+            GetCurrentPath: () => _file.CurrentPath));
 
         // Compose the window. The title bar occupies its own top row of the OUTER grid, always above the
         // Backstage; `belowTitle` stacks the Backstage overlay over the 3-row body (ribbon + document +
@@ -602,7 +642,7 @@ public sealed class MainWindow : Window
         {
             CommandBindings.Add(new CommandBinding(
                 routedCommand,
-                (_, _) => ExecuteKeyboardCommand(command)));
+                (_, _) => _applicationCommands.Execute(command)));
         }
 
         foreach (var shortcut in FreeWKeyboardShortcutCatalog.All)
@@ -610,32 +650,6 @@ public sealed class MainWindow : Window
             InputBindings.Add(new KeyBinding(
                 commands[shortcut.Command],
                 new KeyGesture(ToWpfKey(shortcut.Key), ToWpfModifiers(shortcut.Modifiers))));
-        }
-    }
-
-    private void ExecuteKeyboardCommand(FreeWKeyboardCommand command)
-    {
-        switch (command)
-        {
-            case FreeWKeyboardCommand.NewDocument: _file.New(); break;
-            case FreeWKeyboardCommand.OpenDocument: _file.Open(); break;
-            case FreeWKeyboardCommand.SaveDocument: _file.Save(); break;
-            case FreeWKeyboardCommand.SaveDocumentAs: _file.SaveAs(); break;
-            case FreeWKeyboardCommand.PrintDocument: Print(); break;
-            case FreeWKeyboardCommand.Find: OpenFindReplace(FindReplaceDialogOpenMode.Find); break;
-            case FreeWKeyboardCommand.Replace: OpenFindReplace(FindReplaceDialogOpenMode.Replace); break;
-            case FreeWKeyboardCommand.Cut: ExecuteEditingCommand(ApplicationCommands.Cut); break;
-            case FreeWKeyboardCommand.Copy: ExecuteEditingCommand(ApplicationCommands.Copy); break;
-            case FreeWKeyboardCommand.Paste: ExecuteEditingCommand(ApplicationCommands.Paste); break;
-            case FreeWKeyboardCommand.PasteTextOnly: _editor.PastePlainText(); break;
-            case FreeWKeyboardCommand.SelectAll: ExecuteEditingCommand(ApplicationCommands.SelectAll); break;
-            case FreeWKeyboardCommand.Undo: Undo(); break;
-            case FreeWKeyboardCommand.Redo: Redo(); break;
-            case FreeWKeyboardCommand.RevealFormatting: ToggleRevealFormatting(); break;
-            case FreeWKeyboardCommand.Thesaurus: ToggleThesaurusPane(); break;
-            case FreeWKeyboardCommand.ToggleFieldCodes: _editor.ToggleFieldCodes(); break;
-            case FreeWKeyboardCommand.UpdateFields: _editor.UpdateFields(); break;
-            default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
         }
     }
 
@@ -686,6 +700,12 @@ public sealed class MainWindow : Window
         // layer is hidden. Collapse it here and restore it in the backstage OnClosed callback.
         SetEditorAdornersVisible(false);
         _backstage.Show();
+    }
+
+    private TextDocument CurrentBackstageDocument()
+    {
+        _editor.CommitToModel();
+        return _editor.Model;
     }
 
     private void CloseDocument()
@@ -788,9 +808,9 @@ public sealed class MainWindow : Window
             host,
             this,
             new SisterQuickAccessToolbarActions(
-                Save: () => _file.Save(),
-                Undo,
-                Redo));
+                Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
+                Undo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Undo),
+                Redo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Redo)));
 
     private void UpdateTitle()
     {

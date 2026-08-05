@@ -61,6 +61,16 @@ public static class BackstageSaveAsFileTypePlanner
         return new BackstageSaveAsInlinePlan(suggestedFileName, selectedExtension, choices);
     }
 
+    public static string ReplaceFileNameExtension(string? fileName, string extension)
+    {
+        var normalized = DocumentFileFormatResolver.NormalizeExtension(extension);
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        if (string.IsNullOrWhiteSpace(baseName))
+            baseName = DocumentPersistenceWorkflow.DefaultFallbackDisplayName;
+
+        return baseName + normalized;
+    }
+
     internal static IReadOnlyList<BackstageFileTypeActionRow<SaveAsFileTypeCategory>> BuildRows(
         IEnumerable<FileFormatDescriptor> formats)
     {

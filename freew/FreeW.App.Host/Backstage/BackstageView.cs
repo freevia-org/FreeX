@@ -41,23 +41,27 @@ internal sealed class BackstageView : UserControl
     private static BackstagePaneComposer Panes => BackstageResources.Panes;
     private static SisterBackstagePaneSpecPlanner PaneSpecs => BackstageResources.PaneSpecs;
 
-    private readonly DocumentView _editor;
-    private readonly FileCommands _file;
-    private readonly BackstageActions _actions;
+    private readonly BackstageCallbacks _callbacks;
+    private readonly FreeWBackstageSession _session;
     private readonly SisterBackstageHostController _backstage;
 
-    public BackstageView(DocumentView editor, FileCommands file, BackstageActions actions)
+    public BackstageView(BackstageCallbacks callbacks)
     {
-        _editor = editor;
-        _file = file;
-        _actions = actions;
+        _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
+        _session = new FreeWBackstageSession(
+            callbacks,
+            new FreeWBackstageActionBinder(
+                HideThen,
+                HideThen,
+                HideThen,
+                HideThen));
 
         _backstage = new SisterBackstageHostController(
             this,
             new SisterBackstageHostSpec(
                 Theme,
                 BuildEntries,
-                _actions.OnClosed)
+                _callbacks.OnClosed ?? (() => { }))
             {
                 Chrome = BackstageRibbonChrome.Create()
             });
@@ -67,25 +71,43 @@ internal sealed class BackstageView : UserControl
 
     public void Hide() => _backstage.Hide();
 
+    private Action HideThen(Action action) => () =>
+    {
+        _backstage.Hide();
+        action();
+    };
+
+    private Action<T> HideThen<T>(Action<T> action) => value =>
+    {
+        _backstage.Hide();
+        action(value);
+    };
+
+    private Action<T1, T2> HideThen<T1, T2>(Action<T1, T2> action) => (first, second) =>
+    {
+        _backstage.Hide();
+        action(first, second);
+    };
+
     private SisterBackstageEntrySpec BuildEntries(SisterBackstageHostController backstage)
     {
         return new SisterBackstageEntrySpec(
             BuildInfoPane,
-            backstage.FrameCommand(_actions.New),
-            backstage.FrameCommand(_actions.Open),
-            backstage.FrameCommand(_actions.Save),
-            backstage.FrameCommand(_actions.SaveAs),
+            backstage.FrameCommand(_callbacks.NewDocument),
+            backstage.FrameCommand(_callbacks.Browse),
+            backstage.FrameCommand(_callbacks.Save),
+            backstage.FrameCommand(_callbacks.SaveAs),
             BuildRecentPane,
             BuildNewPane,
             BuildOptionsPane)
         {
-            SaveCopy = backstage.FrameCommand(_actions.SaveCopy),
-            Close = backstage.FrameCommand(_actions.Close),
-            Print = backstage.FrameCommand(_actions.Print),
+            SaveCopy = backstage.FrameCommand(_callbacks.SaveCopy),
+            Close = backstage.FrameCommand(_callbacks.CloseDocument),
+            Print = _callbacks.Print is { } print ? backstage.FrameCommand(print) : null,
             BuildHomePane = BuildHomePane,
             UseNewPane = true,
             BuildOpenPane = BuildOpenPane,
-            ImportPdfText = backstage.FrameCommand(_actions.ImportPdfText),
+            ImportPdfText = backstage.FrameCommand(_callbacks.ImportPdfText),
             BuildSharePane = BuildSharePane,
             BuildSaveAsPane = BuildSaveAsPane,
             BuildPrintPane = BuildPrintPane,
@@ -99,31 +121,7 @@ internal sealed class BackstageView : UserControl
     // Document path + properties + statistics, an Edit-properties link, plus cheap doc actions.
     private UIElement BuildInfoPane()
     {
-        _editor.CommitToModel();
-        var model = _editor.Model;
-        var properties = model.Properties;
-        var safetySurface = BackstagePaneSurfacePlanner.BuildInfoPane(
-            [],
-            _backstage.HideThen(_actions.MarkAsFinal),
-            _backstage.HideThen(_actions.RestrictEditing),
-            _backstage.HideThen(_actions.InspectDocument),
-            _backstage.HideThen(_actions.CheckAccessibility),
-            document: model);
-
-        return Panes.BuildInfoPane(SisterBackstageInfoPanePlanner.Build(new SisterBackstageInfoPaneContext(
-            DocumentKindLabel: "Document",
-            DisplayName: _file.DisplayName,
-            IsDirty: _file.IsDirty,
-            Location: _file.CurrentPath,
-            CoreProperties: new BackstageCoreProperties(
-                properties.Title,
-                properties.Author,
-                properties.Subject,
-                properties.Keywords),
-            Statistics: BackstageInfoStatisticsPlanner.Build(model),
-            EditPropertiesText: "Edit document properties\u2026",
-            EditProperties: _backstage.HideThen(_actions.EditProperties),
-            ActionGroups: ToActionGroups(safetySurface.SafetyGroups))));
+        return Panes.BuildInfoPane(_session.BuildInfoPane());
     }
 
     private UIElement BuildExportPane()
@@ -131,24 +129,14 @@ internal sealed class BackstageView : UserControl
         var exportText = BackstageExportPaneSurfaceText.FromDescriptor(
             SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW).Export,
             BackstageStrings.Current.Get);
-        var surface = BackstagePaneSurfacePlanner.BuildExportPane(
-            _file.SaveFormats,
-            _backstage.HideThen(_actions.ExportPdf),
-            _backstage.HideThen(_actions.ExportXps),
-            _backstage.HideThen<string>(_actions.SaveAsType),
-            exportText);
+        var surface = _session.BuildExportPane(exportText);
 
         return BackstagePaneRenderer.BuildActionPane(Kit, surface);
     }
 
     private UIElement BuildPrintPane()
     {
-        _editor.CommitToModel();
-        var surface = BackstagePaneSurfacePlanner.BuildPrintPane(
-            _file.DisplayName,
-            _editor.Model.Page,
-            _backstage.HideThen(_actions.Print),
-            _backstage.HideThen(_actions.PrintPreview));
+        var surface = _session.BuildPrintPane();
 
         var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(Kit.HeadingText(surface.Title));
@@ -273,25 +261,14 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildSharePane()
     {
-        var surface = BackstagePaneSurfacePlanner.BuildSharePane(
-            _file.CurrentPath,
-            File.Exists,
-            _backstage.HideThen(_actions.SaveAs),
-            _backstage.HideThen<string>(_actions.OpenContainingFolder),
-            _backstage.HideThen(_actions.SaveCopy),
-            _backstage.HideThen(_actions.ExportPdf));
+        var surface = _session.BuildSharePane();
 
         return BackstagePaneRenderer.BuildActionPane(Kit, surface);
     }
 
     private UIElement BuildHomePane()
     {
-        var surface = BackstagePaneSurfacePlanner.BuildHomePane(
-            _file.RecentEntries,
-            _backstage.HideThen(_actions.New),
-            _backstage.HideThen<string>(_actions.OpenPath),
-            _backstage.HideThen(_actions.Open),
-            _backstage.ShowPane("Open"));
+        var surface = _session.BuildHomePane(_backstage.ShowPane("Open"));
 
         var metrics = surface.VisualMetrics;
         var panel = new StackPanel
@@ -375,12 +352,7 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildSaveAsPane()
     {
-        var surface = BackstagePaneSurfacePlanner.BuildSaveAsPane(
-            _file.SaveFormats,
-            _file.DisplayName,
-            _file.CurrentPath,
-            _backstage.HideThen(_actions.SaveAs),
-            _backstage.HideThen<string>(_actions.SaveAsType));
+        var surface = _session.BuildSaveAsPane();
 
         var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(Kit.HeadingText(surface.Title));
@@ -402,56 +374,28 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildRecentPane()
     {
-        return Panes.BuildRecentPane(PaneSpecs.BuildRecentPaneSpec(
-            _file.RecentEntries.Select(entry => entry.Path),
-            _backstage.HideThen<string>(_actions.OpenPath)));
+        return Panes.BuildRecentPane(_session.BuildRecentPaneSpec(PaneSpecs));
     }
 
     private UIElement BuildNewPane()
     {
-        return Panes.BuildTemplatePane(PaneSpecs.BuildNewPaneSpec(
-            _backstage.HideThen(_actions.New)));
+        return Panes.BuildTemplatePane(_session.BuildNewPaneSpec(PaneSpecs));
     }
 
     private UIElement BuildOptionsPane()
     {
-        var options = _actions.CurrentOptions();
-
-        return Panes.BuildOptionsPane(PaneSpecs.BuildOptionsPaneSpec(
-            options,
-            _actions.DataFolder(),
-            edit: _backstage.HideThen(_actions.EditOptions)));
+        return Panes.BuildOptionsPane(_session.BuildOptionsPaneSpec(PaneSpecs));
     }
 
     private UIElement BuildAccountPane()
     {
-        var surface = BackstagePaneSurfacePlanner.BuildAccountPane(
-            SisterBackstageAccountPaneContextPlanner.BuildLocal(
-                BackstageViewTextResources.ProductName,
-                EntryAssemblyVersion.Resolve(),
-                _actions.DataFolder()),
-            _backstage.HideThen(_actions.EditOptions));
+        var surface = _session.BuildAccountPane(EntryAssemblyVersion.Resolve());
 
         return BackstagePaneRenderer.BuildAccountPane(Kit, surface);
     }
 
     private BackstageOpenPaneSurfaceSpec BuildOpenSurface(string? filter) =>
-        BackstagePaneSurfacePlanner.BuildOpenPane(
-            _file.RecentEntries,
-            filter,
-            _backstage.HideThen<string>(_actions.OpenPath),
-            _backstage.HideThen<string>(_actions.OpenFolder),
-            _backstage.HideThen(_actions.Open),
-            _backstage.HideThen(_actions.RecoverUnsaved));
-
-    private static IReadOnlyList<BackstageActionGroup> ToActionGroups(
-        IReadOnlyList<BackstageSurfaceActionGroup> groups) =>
-        groups.Select(group => new BackstageActionGroup(
-            group.Heading,
-            group.Actions
-                .Where(action => action.Invoke is not null)
-                .Select(action => new BackstageActionRow(action.Label, action.Description, action.Invoke!))
-                .ToArray())).ToArray();
+        _session.BuildOpenPane(filter);
 
     private UIElement SurfaceActionRow(BackstageSurfaceActionRow action)
     {
@@ -493,8 +437,8 @@ internal sealed class BackstageView : UserControl
 
         typeCombo.SelectionChanged += (_, _) =>
         {
-            if (typeCombo.SelectedValue is string extension)
-                fileNameBox.Text = ReplaceFileNameExtension(fileNameBox.Text, extension);
+            if (typeCombo.SelectedItem is BackstageSaveAsFileTypeChoice choice)
+                fileNameBox.Text = _session.ChangeInlineFileType(fileNameBox.Text, choice.PrimaryExtension);
         };
 
         var saveButton = new Button
@@ -508,11 +452,12 @@ internal sealed class BackstageView : UserControl
             Padding = new Thickness(14, 5, 14, 5),
             FontWeight = FontWeights.SemiBold
         };
-        var saveSuggested = _backstage.HideThen<string?, string?>(_actions.SaveAsSuggested);
         saveButton.Click += (_, _) =>
         {
-            var extension = typeCombo.SelectedValue as string ?? plan.SelectedExtension;
-            saveSuggested(fileNameBox.Text, extension);
+            _session.SaveInline(
+                fileNameBox.Text,
+                typeCombo.SelectedItem as BackstageSaveAsFileTypeChoice,
+                plan.SelectedExtension);
         };
 
         var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
@@ -595,40 +540,4 @@ internal sealed class BackstageView : UserControl
     private static Thickness ToThickness(BackstageThickness thickness) =>
         new(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
 
-    private static string ReplaceFileNameExtension(string fileName, string extension)
-    {
-        var normalized = DocumentFileFormatResolver.NormalizeExtension(extension);
-        var baseName = Path.GetFileNameWithoutExtension(fileName);
-        if (string.IsNullOrWhiteSpace(baseName))
-            baseName = "Document";
-        return baseName + normalized;
-    }
 }
-
-internal sealed record BackstageActions(
-    Action New,
-    Action Open,
-    Action ImportPdfText,
-    Action<string> OpenPath,
-    Action<string> OpenFolder,
-    Action Save,
-    Action SaveAs,
-    Action<string> SaveAsType,
-    Action<string?, string?> SaveAsSuggested,
-    Action SaveCopy,
-    Action RecoverUnsaved,
-    Action<string> OpenContainingFolder,
-    Action Close,
-    Action Print,
-    Action PrintPreview,
-    Action ExportPdf,
-    Action ExportXps,
-    Action EditProperties,
-    Action MarkAsFinal,
-    Action RestrictEditing,
-    Action InspectDocument,
-    Action CheckAccessibility,
-    Action EditOptions,
-    Func<FreeWOptions> CurrentOptions,
-    Action OnClosed,
-    Func<string> DataFolder);

@@ -132,6 +132,7 @@ public sealed partial class MainWindow : Window
     private double _zoomScale = 1.0;
     private bool _updatingZoomSlider;
     private readonly FreeWEditorInteractionSession _editorInteraction = new();
+    private readonly FreeWApplicationCommandRouter _applicationCommands;
     private bool _pagedEditMode;
     // Avalonia's PrintLayout is already the live, multi-page editing surface used by Page Edit.
     // Keep the prior continuous view so entering the alias does not change the user's view when it
@@ -215,6 +216,25 @@ public sealed partial class MainWindow : Window
             promptSaveChangesAsync: promptSaveChangesAsync,
             showFileCommandErrorAsync: showFileCommandErrorAsync,
             restoreOwnerFocus: RestoreOwnerFocus);
+        _applicationCommands = new FreeWApplicationCommandRouter(new FreeWApplicationCommandActions(
+            NewDocument: NewDocument,
+            OpenDocument: () => _ = OpenAsync(),
+            SaveDocument: () => _ = SaveAsync(),
+            SaveDocumentAs: () => _ = SaveAsAsync(),
+            PrintDocument: () => _ = PrintAsync(),
+            Find: () => OpenFindReplaceDialog(FindReplaceDialogOpenMode.Find),
+            Replace: () => OpenFindReplaceDialog(FindReplaceDialogOpenMode.Replace),
+            Cut: () => _ = CutAsync(),
+            Copy: () => _ = CopyAsync(),
+            Paste: () => _ = PasteAsync(),
+            PasteTextOnly: () => _ = PastePlainTextAsync(),
+            SelectAll: _editor.SelectAll,
+            Undo: _editor.Undo,
+            Redo: _editor.Redo,
+            RevealFormatting: ToggleRevealFormatting,
+            Thesaurus: ToggleThesaurusPane,
+            ToggleFieldCodes: _editor.ToggleFieldCodes,
+            UpdateFields: _editor.UpdateFields));
         _autosave = new AutosaveAdapter(_editor, _fileWorkflow.Workflow);
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
             confirmCloseAllowedAsync: ConfirmCloseAllowedAndStopAutosaveAsync,
@@ -339,9 +359,9 @@ public sealed partial class MainWindow : Window
         _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
             windowFrame.QatHost,
             new SisterQuickAccessToolbarActions(
-                Save: () => _ = SaveAsync(),
-                Undo: _editor.Undo,
-                Redo: _editor.Redo),
+                Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
+                Undo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Undo),
+                Redo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Redo)),
             ResolveThemeBrush("FreeWWhiteBrush", Brushes.White));
 
         Content = windowFrame.Root;
@@ -1759,19 +1779,19 @@ public sealed partial class MainWindow : Window
     private Control BuildRibbon()
     {
         var callbacks = new RibbonHostCallbacks(
-            Open: () => _ = OpenAsync(),
-            Save: () => _ = SaveAsync(),
+            Open: () => _applicationCommands.Execute(FreeWKeyboardCommand.OpenDocument),
+            Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
             ImportPdfText: () => _ = ImportPdfTextAsync(),
-            Cut: () => _ = CutAsync(),
-            Copy: () => _ = CopyAsync(),
-            Paste: () => _ = PasteAsync(),
-            PastePlainText: () => _ = PastePlainTextAsync(),
+            Cut: () => _applicationCommands.Execute(FreeWKeyboardCommand.Cut),
+            Copy: () => _applicationCommands.Execute(FreeWKeyboardCommand.Copy),
+            Paste: () => _applicationCommands.Execute(FreeWKeyboardCommand.Paste),
+            PastePlainText: () => _applicationCommands.Execute(FreeWKeyboardCommand.PasteTextOnly),
             PasteMergeFormatting: () => _ = PasteMergeFormattingAsync(),
             OpenPasteSpecial: () => _ = OpenPasteSpecialAsync(),
             OpenNewStyleDialog: () => _ = StyleDialog.ShowNewAndApplyAsync(this, _editor),
             OpenManageStylesDialog: () => _ = ManageStylesDialog.ShowAndApplyAsync(this, _editor),
             Backstage: () => _ = ShowBackstageAsync(),
-            NewDocument: NewDocument,
+            NewDocument: () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument),
             ToggleNavigationPane: ToggleNavigationPane,
             ToggleReviewingPane: ToggleReviewingPane,
             AcceptThisChange: AcceptSelectedRevision,
@@ -2810,7 +2830,7 @@ public sealed partial class MainWindow : Window
             FreeWKeyboardShortcutCatalog.TryDispatch(
                 key,
                 ToKeyboardModifiers(e.KeyModifiers),
-                ExecuteKeyboardCommand))
+                _applicationCommands.Execute))
         {
             e.Handled = true;
             return;
@@ -2882,32 +2902,6 @@ public sealed partial class MainWindow : Window
         if (name.Length == 2 && name[0] == 'D' && char.IsAsciiDigit(name[1]))
             return name[1].ToString();
         return null;
-    }
-
-    private void ExecuteKeyboardCommand(FreeWKeyboardCommand command)
-    {
-        switch (command)
-        {
-            case FreeWKeyboardCommand.NewDocument: NewDocument(); break;
-            case FreeWKeyboardCommand.OpenDocument: _ = OpenAsync(); break;
-            case FreeWKeyboardCommand.SaveDocument: _ = SaveAsync(); break;
-            case FreeWKeyboardCommand.SaveDocumentAs: _ = SaveAsAsync(); break;
-            case FreeWKeyboardCommand.PrintDocument: _ = PrintAsync(); break;
-            case FreeWKeyboardCommand.Find: OpenFindReplaceDialog(FindReplaceDialogOpenMode.Find); break;
-            case FreeWKeyboardCommand.Replace: OpenFindReplaceDialog(FindReplaceDialogOpenMode.Replace); break;
-            case FreeWKeyboardCommand.Cut: _ = CutAsync(); break;
-            case FreeWKeyboardCommand.Copy: _ = CopyAsync(); break;
-            case FreeWKeyboardCommand.Paste: _ = PasteAsync(); break;
-            case FreeWKeyboardCommand.PasteTextOnly: _ = PastePlainTextAsync(); break;
-            case FreeWKeyboardCommand.SelectAll: _editor.SelectAll(); break;
-            case FreeWKeyboardCommand.Undo: _editor.Undo(); break;
-            case FreeWKeyboardCommand.Redo: _editor.Redo(); break;
-            case FreeWKeyboardCommand.RevealFormatting: ToggleRevealFormatting(); break;
-            case FreeWKeyboardCommand.Thesaurus: ToggleThesaurusPane(); break;
-            case FreeWKeyboardCommand.ToggleFieldCodes: _editor.ToggleFieldCodes(); break;
-            case FreeWKeyboardCommand.UpdateFields: _editor.UpdateFields(); break;
-            default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
-        }
     }
 
     private static FreeWKeyboardModifiers ToKeyboardModifiers(KeyModifiers modifiers)
@@ -4178,7 +4172,7 @@ public sealed partial class MainWindow : Window
             GetDocument: () => _editor.Document,
             GetIsDirty: () => _fileWorkflow.IsDirty,
 
-            NewDocument: NewDocument,
+            NewDocument: () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument),
             OpenRecent: path =>
             {
                 // Run the dirty-gate synchronously through the shared Avalonia workflow.
@@ -4192,11 +4186,11 @@ public sealed partial class MainWindow : Window
                 }
             },
             OpenFolder: OpenFolderInShell,
-            Browse: () => _ = OpenAsync(),
+            Browse: () => _applicationCommands.Execute(FreeWKeyboardCommand.OpenDocument),
             RecoverUnsaved: () => _ = _autosave.OfferRecoveryAsync(this),
             ImportPdfText: () => _ = ImportPdfTextAsync(),
-            Save: () => _ = SaveAsync(),
-            SaveAs: () => _ = SaveAsAsync(),
+            Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
+            SaveAs: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocumentAs),
             SaveAsFormat: (ext, filterIndex) => _ = SaveAsWithFormatAsync(ext, filterIndex),
             SaveCopy: () => _ = SaveCopyAsync(),
             OpenContainingFolder: path =>
@@ -4215,7 +4209,9 @@ public sealed partial class MainWindow : Window
             OpenOptions: () => _ = OpenOptionsAsync(),
             CloseDocument: Close,
             DirectPrintCapability: DirectPrintCapability,
-            Print: DirectPrintCapability.IsAvailable ? () => _ = PrintAsync() : null,
+            Print: DirectPrintCapability.IsAvailable
+                ? () => _applicationCommands.Execute(FreeWKeyboardCommand.PrintDocument)
+                : null,
             PrintPreview: () => _ = OpenPrintPreviewAsync());
 
     private async Task SaveCopyAsync()
