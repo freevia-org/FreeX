@@ -137,14 +137,12 @@ public sealed class WorkbookSession : IDisposable
     private readonly IViewportService _viewportService;
     private readonly bool _includeObjects;
     private readonly WorkbookSession? _sharedDocumentStateOwner;
+    private readonly WorkbookDocumentState _documentState;
     private int _siblingViewCount;
     private int _isDisposed;
     private int _documentRetired;
-    private string? _currentFilePath;
     private WorkbookFileAccessIdentity? _currentFileAccessIdentity;
     private XlsxFeatureReport? _currentXlsxFeatureReport;
-    private bool _isDirty;
-    private int _dirtyGeneration;
     private readonly WorkbookSelectionStatsCache _selectionStatsCache = new();
     private readonly WorksheetSelectionStore _worksheetSelections = new();
     private readonly HashSet<SheetId> _groupedSheetIds = [];
@@ -256,47 +254,6 @@ public sealed class WorkbookSession : IDisposable
     private FindResult? _lastFindResult;
     private FindResult? _lastReplaceResult;
 
-    /// <summary>
-    /// The undo-stack depth at the time the workbook was last saved, or <c>-1</c> when no save
-    /// point has been recorded yet (never saved this session). Mirrors the WPF host's
-    /// <c>WorkbookDocumentState.SavedUndoDepth</c> so <see cref="UndoLastEdit"/>/<see cref="RedoLastEdit"/>
-    /// can clear <see cref="IsDirty"/> when the stack returns to this depth, instead of leaving it
-    /// permanently true after any edit-then-undo-to-save-point sequence.
-    /// </summary>
-    private int _savedUndoDepth = -1;
-
-    /// <summary>
-    /// The undo stack's monotonic version token at the last save point, or <c>null</c> when no
-    /// save point has been recorded. Used alongside <see cref="_savedUndoDepth"/> as a robust
-    /// identity check immune to depth-cap trim/refill aliasing (mirrors
-    /// <c>WorkbookDocumentState.SavedUndoStackVersion</c>).
-    /// </summary>
-    private long? _savedUndoStackVersion;
-
-    private int SavedUndoDepth
-    {
-        get => _sharedDocumentStateOwner?.SavedUndoDepth ?? _savedUndoDepth;
-        set
-        {
-            if (_sharedDocumentStateOwner is { } owner)
-                owner.SavedUndoDepth = value;
-            else
-                _savedUndoDepth = value;
-        }
-    }
-
-    private long? SavedUndoStackVersion
-    {
-        get => _sharedDocumentStateOwner?.SavedUndoStackVersion ?? _savedUndoStackVersion;
-        set
-        {
-            if (_sharedDocumentStateOwner is { } owner)
-                owner.SavedUndoStackVersion = value;
-            else
-                _savedUndoStackVersion = value;
-        }
-    }
-
     internal WorkbookSession(
         StartupWorkbookLoadResult source,
         IReadOnlyList<IFileAdapter> adapters,
@@ -323,11 +280,12 @@ public sealed class WorkbookSession : IDisposable
         _viewportWidth = NormalizeViewportDimension(viewportWidth, fallback: 1);
         _includeObjects = includeObjects;
         _sharedDocumentStateOwner = sharedDocumentStateOwner;
+        _documentState = sharedDocumentStateOwner?._documentState ?? new WorkbookDocumentState();
 
         Workbook = source.Workbook;
         if (sharedDocumentStateOwner is null)
         {
-            CurrentFilePath = source.OpenedAsTemplate ? null : source.SourcePath;
+            _documentState.SetCurrentFilePath(source.OpenedAsTemplate ? null : source.SourcePath);
             CurrentFileAccessIdentity = ResolveCurrentFileAccessIdentity(source);
             CurrentXlsxFeatureReport = source.FeatureReport;
         }
@@ -675,14 +633,8 @@ public sealed class WorkbookSession : IDisposable
 
     public string? CurrentFilePath
     {
-        get => _sharedDocumentStateOwner?.CurrentFilePath ?? _currentFilePath;
-        private set
-        {
-            if (_sharedDocumentStateOwner is { } owner)
-                owner.CurrentFilePath = value;
-            else
-                _currentFilePath = value;
-        }
+        get => _documentState.CurrentFilePath;
+        private set => _documentState.SetCurrentFilePath(value);
     }
 
     public WorkbookFileAccessIdentity? CurrentFileAccessIdentity
@@ -709,34 +661,14 @@ public sealed class WorkbookSession : IDisposable
         }
     }
 
-    public bool IsDirty
-    {
-        get => _sharedDocumentStateOwner?.IsDirty ?? _isDirty;
-        private set
-        {
-            if (_sharedDocumentStateOwner is { } owner)
-                owner.IsDirty = value;
-            else
-                _isDirty = value;
-        }
-    }
+    public bool IsDirty => _documentState.IsDirty;
 
     /// <summary>
     /// Monotonically-increasing counter, incremented with every transition to dirty.
-    /// The async save path captures this before awaiting and compares afterwards to detect
-    /// edits that arrived mid-save — the same pattern used by <see cref="WorkbookDocumentState"/>.
+    /// The async save path captures the shared <see cref="WorkbookDocumentState"/> generation
+    /// before awaiting and compares afterwards to detect edits that arrived mid-save.
     /// </summary>
-    public int DirtyGeneration
-    {
-        get => _sharedDocumentStateOwner?.DirtyGeneration ?? _dirtyGeneration;
-        private set
-        {
-            if (_sharedDocumentStateOwner is { } owner)
-                owner.DirtyGeneration = value;
-            else
-                _dirtyGeneration = value;
-        }
-    }
+    public int DirtyGeneration => _documentState.DirtyGeneration;
 
     public bool IsFallback => _source.IsFallback;
 
@@ -4559,7 +4491,6 @@ public sealed class WorkbookSession : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
         var resolvedIdentity = ResolveSavedFileAccessIdentity(path, fileAccessIdentity);
-        IsDirty = false;
         CurrentFilePath = path;
         CurrentFileAccessIdentity = resolvedIdentity;
         CurrentXlsxFeatureReport = null;
@@ -4612,10 +4543,7 @@ public sealed class WorkbookSession : IDisposable
         ArgumentNullException.ThrowIfNull(plan);
 
         if (plan.MarkSaved)
-        {
-            IsDirty = false;
             RecordUndoSavePoint();
-        }
 
         if (plan.ApplyFileContext && plan.FileContext is { } fileContext)
         {
@@ -5722,8 +5650,7 @@ public sealed class WorkbookSession : IDisposable
 
     private void MarkDirty()
     {
-        IsDirty = true;
-        DirtyGeneration++;
+        _documentState.MarkDirty();
         NotifyWorkbookChanged();
     }
 
@@ -5732,37 +5659,28 @@ public sealed class WorkbookSession : IDisposable
     /// <summary>Captures the undo stack's current depth/version as the "clean" save point.</summary>
     private void RecordUndoSavePoint()
     {
-        SavedUndoDepth = _cellEditService.GetUndoStackDepth(Workbook.Id);
-        SavedUndoStackVersion = _cellEditService.GetUndoStackVersion(Workbook.Id);
+        _documentState.MarkSavedAtUndoDepth(
+            _cellEditService.GetUndoStackDepth(Workbook.Id),
+            _cellEditService.GetUndoStackVersion(Workbook.Id));
     }
 
     /// <summary>
     /// If the undo stack has returned to the recorded save point (matching both depth and, when
-    /// recorded, version), clears <see cref="IsDirty"/> and returns <c>true</c>. Called after
-    /// Undo/Redo — which unconditionally routes through <see cref="MarkDirty"/> via
-    /// <see cref="ApplySuccessfulHistoryResult"/> — to restore the clean state the WPF host already
-    /// restores via <c>WorkbookDocumentState.TryMarkCleanIfAtSavePoint</c>. Leaves
-    /// <see cref="IsDirty"/> untouched (i.e. still <c>true</c>) when no save point was recorded or
-    /// the stack has not returned to it.
+    /// recorded, version), asks the shared document state to clear <see cref="IsDirty"/> and returns
+    /// <c>true</c>. Called after Undo/Redo, which routes through <see cref="MarkDirty"/> via
+    /// <see cref="ApplySuccessfulHistoryResult"/>. Leaves <see cref="IsDirty"/> untouched when no
+    /// save point was recorded or the stack has not returned to it.
     /// </summary>
     private bool TryMarkCleanIfAtSavePoint()
     {
-        if (SavedUndoDepth < 0)
-            return false;
-
         var currentUndoDepth = _cellEditService.GetUndoStackDepth(Workbook.Id);
-        if (currentUndoDepth != SavedUndoDepth)
-            return false;
-
-        if (SavedUndoStackVersion is { } savedVersion &&
-            _cellEditService.GetUndoStackVersion(Workbook.Id) != savedVersion)
-            return false;
-
         var wasDirty = IsDirty;
-        IsDirty = false;
-        if (wasDirty)
+        var isAtSavePoint = _documentState.TryMarkCleanIfAtSavePoint(
+            currentUndoDepth,
+            _cellEditService.GetUndoStackVersion(Workbook.Id));
+        if (isAtSavePoint && wasDirty)
             NotifyWorkbookChanged();
-        return true;
+        return isAtSavePoint;
     }
 
     /// <summary>

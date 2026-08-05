@@ -5,6 +5,52 @@ namespace FreeX.App.Services.Tests;
 public sealed class FileWorkflowDedupSourceTests
 {
     [Fact]
+    public void FreeXHostsShareWorkbookDocumentStateOwnership()
+    {
+        var documentStateSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "shared",
+            "Free.Shared.AppServices",
+            "WorkbookDocumentState.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookSession.cs"));
+        var wpfWindowSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.xaml.cs"));
+        var avaloniaWindowSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.cs"));
+
+        documentStateSource.Should().Contain("public sealed class WorkbookDocumentState");
+        documentStateSource.Should().Contain("public void MarkDirty()");
+        documentStateSource.Should().Contain("public void MarkSavedAtUndoDepth(int undoDepthAtSave, long undoStackVersionAtSave)");
+        documentStateSource.Should().Contain("public bool TryMarkCleanIfAtSavePoint(int currentUndoDepth, long currentUndoStackVersion)");
+
+        sessionSource.Should().Contain("private readonly WorkbookDocumentState _documentState;");
+        sessionSource.Should().Contain("sharedDocumentStateOwner?._documentState ?? new WorkbookDocumentState()");
+        sessionSource.Should().Contain("_documentState.MarkDirty();");
+        sessionSource.Should().Contain("_documentState.MarkSavedAtUndoDepth(");
+        sessionSource.Should().Contain("_documentState.TryMarkCleanIfAtSavePoint(");
+        sessionSource.Should().NotContain("private bool _isDirty;");
+        sessionSource.Should().NotContain("private int _dirtyGeneration;");
+        sessionSource.Should().NotContain("private string? _currentFilePath;");
+        sessionSource.Should().NotContain("private int _savedUndoDepth");
+        sessionSource.Should().NotContain("private long? _savedUndoStackVersion");
+
+        wpfWindowSource.Should().Contain("private WorkbookDocumentState _documentState;");
+        wpfWindowSource.Should().Contain("private bool _workbookDirty => _documentState.IsDirty;");
+        wpfWindowSource.Should().Contain("private int _workbookDirtyGeneration => _documentState.DirtyGeneration;");
+
+        avaloniaWindowSource.Should().Contain("isDirty: _session.IsDirty");
+        avaloniaWindowSource.Should().Contain("var generationAtSaveStart = _session.DirtyGeneration;");
+        avaloniaWindowSource.Should().NotContain("private bool _workbookDirty;");
+        avaloniaWindowSource.Should().NotContain("private int _workbookDirtyGeneration;");
+    }
+
+    [Fact]
     public void RecentFileRegistrationDecision_StaysInSharedService()
     {
         var serviceSource = File.ReadAllText(RepositoryFileLocator.Find(
