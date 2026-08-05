@@ -2,6 +2,11 @@ using System.Globalization;
 
 namespace FreeP.App.Compositor;
 
+public sealed record SlideSizeDialogState(
+    int PresetIndex,
+    SlideSizeDialogUnit Unit,
+    SlideSizeDialogDisplayState Display);
+
 public sealed class SlideSizeDialogSession
 {
     private readonly EditingSession _editor;
@@ -14,12 +19,15 @@ public sealed class SlideSizeDialogSession
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _culture = culture;
-        Unit = initialUnit;
         InitialState = SlideSizeDialogPlanner.BuildInitialState(
             editor.Presentation.SlideSizeCxEmu,
             editor.Presentation.SlideSizeCyEmu,
-            Unit,
+            initialUnit,
             culture);
+        State = new(
+            PresetIndex(InitialState.Preset),
+            initialUnit,
+            InitialState.Display);
     }
 
     public static IReadOnlyList<string> PresetNames { get; } =
@@ -31,9 +39,11 @@ public sealed class SlideSizeDialogSession
 
     public SlideSizeDialogInitialState InitialState { get; }
 
+    public SlideSizeDialogState State { get; private set; }
+
     public int InitialPresetIndex => PresetIndex(InitialState.Preset);
 
-    public SlideSizeDialogUnit Unit { get; private set; }
+    public SlideSizeDialogUnit Unit => State.Unit;
 
     public SlideSizeDialogResultPlan? LastResultPlan { get; private set; }
 
@@ -52,12 +62,21 @@ public sealed class SlideSizeDialogSession
     };
 
     public SlideSizeDialogDisplayState? SelectPreset(int selectedIndex)
-        => SlideSizeDialogPlanner.BuildPresetSelectionDisplay(
-            PresetFromIndex(selectedIndex),
-            Unit,
+    {
+        var preset = PresetFromIndex(selectedIndex);
+        var display = SlideSizeDialogPlanner.BuildPresetSelectionDisplay(
+            preset,
+            State.Unit,
             _culture);
+        State = State with
+        {
+            PresetIndex = PresetIndex(preset),
+            Display = display ?? State.Display,
+        };
+        return display;
+    }
 
-    public SlideSizeDialogDisplayState ChangeUnit(
+    public SlideSizeDialogState ChangeUnit(
         string? widthText,
         string? heightText,
         SlideSizeDialogUnit newUnit)
@@ -65,43 +84,60 @@ public sealed class SlideSizeDialogSession
         var display = SlideSizeDialogPlanner.BuildUnitChangeDisplay(
             widthText ?? string.Empty,
             heightText ?? string.Empty,
-            Unit,
+            State.Unit,
             newUnit,
             _culture);
-        Unit = newUnit;
-        return display;
+        State = State with { Unit = newUnit, Display = display };
+        return State;
     }
 
-    public SlideSizeDialogDisplayState SetInputUnit(
+    public SlideSizeDialogState SetInputUnit(
         string? widthText,
         string? heightText,
         SlideSizeDialogUnit unit)
     {
-        Unit = unit;
-        return new(
-            widthText ?? string.Empty,
-            heightText ?? string.Empty,
-            unit == SlideSizeDialogUnit.Inches ? "in" : "cm");
+        State = State with
+        {
+            Unit = unit,
+            Display = SlideSizeDialogPlanner.BuildInputDisplay(widthText, heightText, unit),
+        };
+        return State;
+    }
+
+    public SlideSizeDialogState SetInput(string? widthText, string? heightText)
+    {
+        State = State with
+        {
+            Display = SlideSizeDialogPlanner.BuildInputDisplay(
+                widthText,
+                heightText,
+                State.Unit),
+        };
+        return State;
     }
 
     public SlideSizeDialogParsePlan TryParse(string? widthText, string? heightText)
-        => SlideSizeDialogPlanner.TryParsePositiveSize(
-            widthText ?? string.Empty,
-            heightText ?? string.Empty,
-            Unit,
+    {
+        SetInput(widthText, heightText);
+        return SlideSizeDialogPlanner.TryParsePositiveSize(
+            State.Display.WidthText,
+            State.Display.HeightText,
+            State.Unit,
             _culture);
+    }
 
     public SlideSizeDialogResultPlan BuildResult(string? widthText, string? heightText)
     {
+        SetInput(widthText, heightText);
         LastResultPlan = SlideSizeDialogPlanner.BuildOkResult(
-            widthText ?? string.Empty,
-            heightText ?? string.Empty,
-            Unit,
+            State.Display.WidthText,
+            State.Display.HeightText,
+            State.Unit,
             _culture);
         return LastResultPlan;
     }
 
-    public bool TryApply(string? widthText, string? heightText)
+    public bool TryCommit(string? widthText, string? heightText)
         => SlideSizeDialogPlanner.TryApplyResult(
             _editor,
             BuildResult(widthText, heightText));

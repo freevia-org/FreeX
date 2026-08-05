@@ -139,10 +139,10 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _suppressPresetRefresh = true;
         try
         {
-            var display = _session.SetInputUnit(widthText, heightText, unit);
+            var state = _session.SetInputUnit(widthText, heightText, unit);
             _inchesRadio.IsChecked = unit == SlideSizeDialogUnit.Inches;
             _cmRadio.IsChecked = unit == SlideSizeDialogUnit.Centimeters;
-            ApplyDisplay(display);
+            ApplyDisplay(state.Display);
         }
         finally
         {
@@ -157,14 +157,14 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _suppressPresetRefresh = true;
         try
         {
-            _presetCombo.SelectedIndex = _session.InitialPresetIndex;
+            _presetCombo.SelectedIndex = _session.State.PresetIndex;
         }
         finally
         {
             _suppressPresetRefresh = false;
         }
 
-        ApplyDisplay(_session.InitialState.Display);
+        ApplyDisplay(_session.State.Display);
     }
 
     private void OnPresetChanged(object sender, SelectionChangedEventArgs e)
@@ -190,16 +190,16 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             ? SlideSizeDialogUnit.Inches
             : SlideSizeDialogUnit.Centimeters;
 
-        if (_session.Unit == newUnit)
+        if (_session.State.Unit == newUnit)
         {
             return;
         }
 
-        var display = _session.ChangeUnit(
+        var state = _session.ChangeUnit(
             _widthBox.Text,
             _heightBox.Text,
             newUnit);
-        ApplyDisplay(display);
+        ApplyDisplay(state.Display);
     }
 
     private void OnOk()
@@ -207,7 +207,7 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private bool Apply(bool showValidationDialog)
     {
-        if (!_session.TryApply(_widthBox.Text, _heightBox.Text))
+        if (!_session.TryCommit(_widthBox.Text, _heightBox.Text))
         {
             var validation = LastResultPlan!.Validation!;
             if (showValidationDialog)

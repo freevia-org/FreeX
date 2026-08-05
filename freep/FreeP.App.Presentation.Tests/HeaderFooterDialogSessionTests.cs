@@ -97,12 +97,45 @@ public sealed class HeaderFooterDialogSessionTests
             dateFormatIndex: 2,
             fixedDateTimeText: string.Empty);
 
-        session.TryApply(input, HeaderFooterApplyScope.CurrentSlide).Should().BeTrue();
+        var state = session.SetInput(input);
+        var plan = session.BuildCommitPlan(HeaderFooterApplyScope.CurrentSlide);
+
+        state.Input.Should().Be(input);
+        plan.Options.DateTimeFieldType.Should().Be("datetime3");
+        (editor.Presentation.Slides[0].HfVisibility?.ShowFooter ?? false).Should().BeFalse();
+        session.TryCommit(HeaderFooterApplyScope.CurrentSlide).Should().BeTrue();
 
         session.LastApplyPlan.Should().NotBeNull();
         session.LastApplyPlan!.Options.DateTimeFieldType.Should().Be("datetime3");
         session.LastApplyPlan.Options.FooterText.Should().Be("Layout footer");
         editor.Presentation.Slides[0].HfVisibility!.ShowFooter.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SetInput_NormalizesUnknownOptionsAndOwnsEnabledStateTransitions()
+    {
+        var session = new HeaderFooterDialogSession(
+            MakeEditor(),
+            HeaderFooterCommandFocus.HeaderFooter);
+        var input = new HeaderFooterDialogInputState(
+            ShowDateTime: true,
+            ShowFooter: true,
+            ShowSlideNumber: false,
+            FooterText: "Imported footer",
+            SuppressOnTitleSlide: false,
+            UseFixedDateTime: true,
+            DateFormatIndex: 99,
+            FixedDateTimeText: "Imported fixed date");
+
+        var state = session.SetInput(input);
+
+        state.Input.DateFormatIndex.Should().Be(0);
+        state.Input.FooterText.Should().Be("Imported footer");
+        state.Enabled.IsDateFormatEnabled.Should().BeFalse();
+        state.Enabled.IsDateTimeModeEnabled.Should().BeTrue();
+        state.Enabled.IsFixedDateTimeTextEnabled.Should().BeTrue();
+        state.Enabled.IsFooterTextEnabled.Should().BeTrue();
+        state.DateFormatOptions.Should().BeSameAs(HeaderFooterDialogSession.DateFormatOptions);
     }
 
     private static EditingSession MakeEditor()

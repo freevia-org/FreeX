@@ -160,6 +160,15 @@ public static class SlideSizeDialogPlanner
         return FormatSize(cxEmu, cyEmu, newUnit, culture);
     }
 
+    public static SlideSizeDialogDisplayState BuildInputDisplay(
+        string? widthText,
+        string? heightText,
+        SlideSizeDialogUnit unit) =>
+        new(
+            widthText ?? string.Empty,
+            heightText ?? string.Empty,
+            UnitLabel(unit));
+
     public static SlideSizeDialogParsePlan TryParsePositiveSize(
         string widthText,
         string heightText,

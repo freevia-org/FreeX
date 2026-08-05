@@ -23,7 +23,8 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     public HeaderFooterDialog(EditingSession editor, HeaderFooterCommandFocus focus)
     {
         _session = new HeaderFooterDialogSession(editor, focus);
-        var defaults = _session.InitialInput;
+        var initial = _session.State;
+        var defaults = initial.Input;
 
         Title = "Header and Footer";
         Width = 360;
@@ -44,7 +45,7 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         };
         _dateFormatCombo = new ComboBox
         {
-            ItemsSource = HeaderFooterDialogSession.DateFormatOptions,
+            ItemsSource = initial.DateFormatOptions,
             DisplayMemberPath = nameof(HeaderFooterDateFormatOption.DisplayName),
             SelectedIndex = defaults.DateFormatIndex,
             Margin = new Thickness(20, 0, 0, 4),
@@ -143,7 +144,12 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void UpdateEnabledState()
     {
-        var enabled = HeaderFooterDialogSession.BuildEnabledState(ReadInput());
+        var enabled = _session.SetInput(ReadInput()).Enabled;
+        ApplyEnabledState(enabled);
+    }
+
+    private void ApplyEnabledState(HeaderFooterDialogEnabledState enabled)
+    {
         _dateFormatCombo.IsEnabled = enabled.IsDateFormatEnabled;
         _fixedDateCheck.IsEnabled = enabled.IsDateTimeModeEnabled;
         _fixedDateBox.IsEnabled = enabled.IsFixedDateTimeTextEnabled;
@@ -169,7 +175,8 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Apply(HeaderFooterApplyScope scope)
     {
-        if (_session.TryApply(ReadInput(), scope))
+        _session.SetInput(ReadInput());
+        if (_session.TryCommit(scope))
         {
             if (IsLoaded)
             {
@@ -212,7 +219,7 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         string dateTimeFieldType = "datetime1",
         string fixedDateTimeText = "")
     {
-        ApplyInput(HeaderFooterDialogSession.CreateInput(
+        var state = _session.SetInput(
             showDateTime,
             showFooter,
             showSlideNumber,
@@ -220,11 +227,12 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             suppressOnTitleSlide,
             dateTimeMode,
             dateTimeFieldType,
-            fixedDateTimeText));
+            fixedDateTimeText);
+        ApplyInput(state.Input);
     }
 
     private HeaderFooterDialogInputState ReadInput() =>
-        HeaderFooterDialogSession.CreateInput(
+        new(
             _dateTimeCheck.IsChecked == true,
             _footerCheck.IsChecked == true,
             _slideNumberCheck.IsChecked == true,

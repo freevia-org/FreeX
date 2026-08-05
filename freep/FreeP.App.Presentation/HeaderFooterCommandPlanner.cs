@@ -190,6 +190,15 @@ public static class HeaderFooterCommandPlanner
     {
         ArgumentNullException.ThrowIfNull(editor);
         plan = BuildApplyPlan(editor.Presentation, editor.CurrentSlideIndex, options);
+        return TryApply(editor, plan);
+    }
+
+    public static bool TryApply(
+        EditingSession editor,
+        HeaderFooterApplyPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(plan);
         if (!plan.ShouldApply)
         {
             return false;

@@ -29,7 +29,7 @@ internal sealed class SlideSizeDialog : Window
     internal string WidthText => _widthBox.Text ?? string.Empty;
     internal string HeightText => _heightBox.Text ?? string.Empty;
     internal string ValidationText => _validationText.Text ?? string.Empty;
-    internal SlideSizeDialogUnit Unit => _session.Unit;
+    internal SlideSizeDialogUnit Unit => _session.State.Unit;
 
     public SlideSizeDialog(EditingSession editor)
     {
@@ -109,10 +109,10 @@ internal sealed class SlideSizeDialog : Window
         _suppressSelectionRefresh = true;
         try
         {
-            var display = _session.SetInputUnit(widthText, heightText, unit);
+            var state = _session.SetInputUnit(widthText, heightText, unit);
             _inchesRadio.IsChecked = unit == SlideSizeDialogUnit.Inches;
             _centimetersRadio.IsChecked = unit == SlideSizeDialogUnit.Centimeters;
-            ApplyDisplay(display);
+            ApplyDisplay(state.Display);
         }
         finally
         {
@@ -172,8 +172,8 @@ internal sealed class SlideSizeDialog : Window
         _suppressSelectionRefresh = true;
         try
         {
-            _presetCombo.SelectedIndex = _session.InitialPresetIndex;
-            ApplyDisplay(_session.InitialState.Display);
+            _presetCombo.SelectedIndex = _session.State.PresetIndex;
+            ApplyDisplay(_session.State.Display);
         }
         finally
         {
@@ -199,19 +199,19 @@ internal sealed class SlideSizeDialog : Window
         var newUnit = _centimetersRadio.IsChecked == true
             ? SlideSizeDialogUnit.Centimeters
             : SlideSizeDialogUnit.Inches;
-        if (newUnit == _session.Unit)
+        if (newUnit == _session.State.Unit)
             return;
 
-        var display = _session.ChangeUnit(
+        var state = _session.ChangeUnit(
             _widthBox.Text,
             _heightBox.Text,
             newUnit);
-        ApplyDisplay(display);
+        ApplyDisplay(state.Display);
     }
 
     private bool Apply(bool showValidation = true)
     {
-        if (!_session.TryApply(_widthBox.Text, _heightBox.Text))
+        if (!_session.TryCommit(_widthBox.Text, _heightBox.Text))
         {
             var validation = LastResultPlan!.Validation!;
             _validationText.Text = validation.Message;

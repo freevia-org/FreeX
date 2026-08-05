@@ -16,6 +16,11 @@ public sealed record HeaderFooterDialogEnabledState(
     bool IsFixedDateTimeTextEnabled,
     bool IsFooterTextEnabled);
 
+public sealed record HeaderFooterDialogViewState(
+    HeaderFooterDialogInputState Input,
+    HeaderFooterDialogEnabledState Enabled,
+    IReadOnlyList<HeaderFooterDateFormatOption> DateFormatOptions);
+
 public sealed class HeaderFooterDialogSession
 {
     private readonly EditingSession _editor;
@@ -29,11 +34,14 @@ public sealed class HeaderFooterDialogSession
         InitialState = HeaderFooterCommandPlanner.BuildState(editor);
         InitialInput = FromOptions(
             HeaderFooterCommandPlanner.BuildDefaultOptions(InitialState, requestedFocus));
+        State = BuildViewState(InitialInput);
     }
 
     public HeaderFooterState InitialState { get; }
 
     public HeaderFooterDialogInputState InitialInput { get; }
+
+    public HeaderFooterDialogViewState State { get; private set; }
 
     public HeaderFooterCommandFocus RequestedFocus { get; }
 
@@ -106,6 +114,40 @@ public sealed class HeaderFooterDialogSession
     public static HeaderFooterDateFormatOption DateFormatOption(int selectedIndex)
         => DateFormatOptions[NormalizeDateFormatIndex(selectedIndex)];
 
+    public HeaderFooterDialogViewState SetInput(HeaderFooterDialogInputState input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        State = BuildViewState(CreateInput(
+            input.ShowDateTime,
+            input.ShowFooter,
+            input.ShowSlideNumber,
+            input.FooterText,
+            input.SuppressOnTitleSlide,
+            input.UseFixedDateTime,
+            input.DateFormatIndex,
+            input.FixedDateTimeText));
+        return State;
+    }
+
+    public HeaderFooterDialogViewState SetInput(
+        bool showDateTime,
+        bool showFooter,
+        bool showSlideNumber,
+        string? footerText,
+        bool suppressOnTitleSlide,
+        HeaderFooterDateTimeMode dateTimeMode,
+        string? dateTimeFieldType,
+        string? fixedDateTimeText) =>
+        SetInput(CreateInput(
+            showDateTime,
+            showFooter,
+            showSlideNumber,
+            footerText,
+            suppressOnTitleSlide,
+            dateTimeMode,
+            dateTimeFieldType,
+            fixedDateTimeText));
+
     public HeaderFooterApplyOptions BuildApplyOptions(
         HeaderFooterDialogInputState input,
         HeaderFooterApplyScope scope)
@@ -125,14 +167,16 @@ public sealed class HeaderFooterDialogSession
             input.FixedDateTimeText ?? string.Empty);
     }
 
-    public bool TryApply(
-        HeaderFooterDialogInputState input,
-        HeaderFooterApplyScope scope)
+    public HeaderFooterApplyPlan BuildCommitPlan(HeaderFooterApplyScope scope)
+        => HeaderFooterCommandPlanner.BuildApplyPlan(
+            _editor.Presentation,
+            _editor.CurrentSlideIndex,
+            BuildApplyOptions(State.Input, scope));
+
+    public bool TryCommit(HeaderFooterApplyScope scope)
     {
-        if (!HeaderFooterCommandPlanner.TryApply(
-                _editor,
-                BuildApplyOptions(input, scope),
-                out var plan))
+        var plan = BuildCommitPlan(scope);
+        if (!HeaderFooterCommandPlanner.TryApply(_editor, plan))
         {
             return false;
         }
@@ -152,6 +196,13 @@ public sealed class HeaderFooterDialogSession
             options.DateTimeMode,
             options.DateTimeFieldType,
             options.FixedDateTimeText);
+
+    private static HeaderFooterDialogViewState BuildViewState(
+        HeaderFooterDialogInputState input) =>
+        new(
+            input,
+            BuildEnabledState(input),
+            DateFormatOptions);
 
     private static int NormalizeDateFormatIndex(int index)
         => index >= 0 && index < DateFormatOptions.Count ? index : 0;
