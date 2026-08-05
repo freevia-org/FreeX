@@ -683,7 +683,8 @@ public sealed class EditingSession
         PresentationShowType showType = PresentationShowType.PresentedBySpeaker,
         bool showBrowseScrollbar = true,
         uint? kioskRestartAfterMilliseconds = null,
-        bool showWithNarration = true)
+        bool showWithNarration = true,
+        bool showMediaControls = true)
     {
         Bus.Execute(new SetSlideShowSettingsCommand(
             Presentation.UseSlideTimings,
@@ -699,7 +700,9 @@ public sealed class EditingSession
             showType,
             showBrowseScrollbar,
             kioskRestartAfterMilliseconds,
-            showWithNarration));
+            showWithNarration,
+            Presentation.ShowMediaControls,
+            showMediaControls));
 
         return Presentation.UseSlideTimings == useSlideTimings &&
             Presentation.ShowWithAnimation == showWithAnimation &&
@@ -707,7 +710,8 @@ public sealed class EditingSession
             Presentation.LoopUntilStopped == loopUntilStopped &&
             Presentation.ShowType == showType &&
             Presentation.ShowBrowseScrollbar == showBrowseScrollbar &&
-            Presentation.KioskRestartAfterMilliseconds == kioskRestartAfterMilliseconds;
+            Presentation.KioskRestartAfterMilliseconds == kioskRestartAfterMilliseconds &&
+            Presentation.ShowMediaControls == showMediaControls;
     }
 
     /// <summary>Toggles the current slide's hidden/show state.</summary>
