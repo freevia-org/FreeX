@@ -8,6 +8,7 @@ public sealed class SetChartTitleCommand : IPresentationCommand
     private readonly string _newTitle;
     private string? _oldTitle;
     private bool _oldAutomaticTitle;
+    private bool _oldChartExTitleEditRequested;
 
     public SetChartTitleCommand(int slideIndex, uint shapeId, string title)
     {
@@ -26,7 +27,9 @@ public sealed class SetChartTitleCommand : IPresentationCommand
 
         _oldTitle = chart.Title;
         _oldAutomaticTitle = chart.HasAutomaticTitle;
+        _oldChartExTitleEditRequested = chart.ChartExTitleEditRequested;
         chart.Title = _newTitle;
+        chart.ChartExTitleEditRequested = true;
         chart.HasAutomaticTitle = false;
     }
 
@@ -38,6 +41,7 @@ public sealed class SetChartTitleCommand : IPresentationCommand
 
         chart.Title = _oldTitle;
         chart.HasAutomaticTitle = _oldAutomaticTitle;
+        chart.ChartExTitleEditRequested = _oldChartExTitleEditRequested;
     }
 }
 
@@ -71,6 +75,8 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
     private int? _oldStyleId;
     private ChartExTitlePosition? _oldChartExTitlePosition;
     private ChartExTitleAlignment? _oldChartExTitleAlignment;
+    private bool _oldChartExTitleEditRequested;
+    private bool _oldChartExLegendEditRequested;
 
     public SetChartDisplayOptionsCommand(
         int slideIndex,
@@ -115,8 +121,11 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         _oldStyleId = chart.StyleId;
         _oldChartExTitlePosition = chart.ChartExTitlePosition;
         _oldChartExTitleAlignment = chart.ChartExTitleAlignment;
+        _oldChartExTitleEditRequested = chart.ChartExTitleEditRequested;
+        _oldChartExLegendEditRequested = chart.ChartExLegendEditRequested;
 
         chart.Title = string.IsNullOrWhiteSpace(_newOptions.Title) ? null : _newOptions.Title;
+        chart.ChartExTitleEditRequested = true;
         chart.HasAutomaticTitle = false;
         if (_newOptions.TitleOverlay.HasValue)
             chart.TitleOverlay = _newOptions.TitleOverlay;
@@ -125,6 +134,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         if (_newOptions.RoundedCorners.HasValue)
             chart.RoundedCorners = _newOptions.RoundedCorners;
         chart.Legend = _newOptions.Legend;
+        chart.ChartExLegendEditRequested = true;
         chart.CategoryAxis.HasMajorGridlines = _newOptions.CategoryGridlines;
         chart.ValueAxis.HasMajorGridlines = _newOptions.ValueGridlines;
         chart.BarGapWidthPercent = Normalize(_newOptions.BarGapWidthPercent, 0, 500);
@@ -220,6 +230,8 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         chart.StyleId = _oldStyleId;
         chart.ChartExTitlePosition = _oldChartExTitlePosition;
         chart.ChartExTitleAlignment = _oldChartExTitleAlignment;
+        chart.ChartExTitleEditRequested = _oldChartExTitleEditRequested;
+        chart.ChartExLegendEditRequested = _oldChartExLegendEditRequested;
         if (chart.ChartType == ChartType.Stock && _oldHighLowLines.HasValue)
             chart.HasHighLowLines = _oldHighLowLines.Value;
         if (chart.ChartType == ChartType.Waterfall && _oldWaterfallConnectorLines.HasValue)

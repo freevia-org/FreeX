@@ -1377,6 +1377,7 @@ public sealed class ChartDataCommandTests
         {
             IsChartEx = true,
             Title = null,
+            ChartExTitleEditRequested = true,
             PreservedChartExXml = """
                 <cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex">
                   <cx:chart>
@@ -1411,6 +1412,7 @@ public sealed class ChartDataCommandTests
         {
             IsChartEx = true,
             Legend = null,
+            ChartExLegendEditRequested = true,
             PreservedChartExXml = """
                 <cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex">
                   <cx:chart>
