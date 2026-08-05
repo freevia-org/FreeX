@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Editing;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 
 namespace FreeX.App.Avalonia;
@@ -13,8 +14,8 @@ public sealed partial class MainWindow
     private static AvaloniaCompactDialogChromeStyle InsertDeleteCellsDialogChromeStyle => new(FormulaBarFontFamily);
 
     // Home ▸ Cells ▸ Insert Cells / Delete Cells (parity gap: the ribbon buttons were no-ops). A small
-    // shift-direction dialog mirrors Excel's prompt; the structural edit runs through the generic
-    // review-command executor (undo/redo). Kept in the Avalonia shell to avoid WorkbookSession churn.
+    // shift-direction dialog mirrors Excel's prompt; WorkbookSession owns portable command
+    // construction, grouped-sheet targeting, repeat behavior, and selection preservation.
     //
     // R79-commands-insert-delete-shift-5-2: a whole-row/whole-column selection must route to
     // InsertRowsCommand/InsertColumnsCommand (and their Delete- counterparts) exactly as the WPF
@@ -30,16 +31,18 @@ public sealed partial class MainWindow
         var range = _session.SelectedRange;
         if (SelectionRangeService.IsWholeRowSelection(range))
         {
-            var rowResult = _session.ExecuteReviewCommand(
-                new InsertRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
-            RefreshShell(rowResult.Success ? "Inserted rows" : rowResult.ErrorMessage ?? "Could not insert rows.");
+            ApplyWorksheetStructureResult(
+                _session.InsertSelectedRows(),
+                "Inserted rows",
+                "Could not insert rows.");
             return;
         }
         if (SelectionRangeService.IsWholeColumnSelection(range))
         {
-            var colResult = _session.ExecuteReviewCommand(
-                new InsertColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
-            RefreshShell(colResult.Success ? "Inserted columns" : colResult.ErrorMessage ?? "Could not insert columns.");
+            ApplyWorksheetStructureResult(
+                _session.InsertSelectedColumns(),
+                "Inserted columns",
+                "Could not insert columns.");
             return;
         }
 
@@ -47,10 +50,10 @@ public sealed partial class MainWindow
         if (choice is null)
             return;
         var direction = choice == 0 ? InsertCellsShiftDirection.Right : InsertCellsShiftDirection.Down;
-        var result = _session.ExecuteReviewCommand(new InsertCellsCommand(_session.ActiveSheet.Id, range, direction));
-        RefreshShell(result.Success
-            ? $"Inserted cells ({(direction == InsertCellsShiftDirection.Right ? "shift right" : "shift down")})"
-            : result.ErrorMessage ?? "Could not insert cells.");
+        ApplyWorksheetStructureResult(
+            _session.InsertSelectedCells(direction),
+            $"Inserted cells ({(direction == InsertCellsShiftDirection.Right ? "shift right" : "shift down")})",
+            "Could not insert cells.");
     }
 
     private async Task ShowDeleteCellsDialogAsync()
@@ -58,16 +61,18 @@ public sealed partial class MainWindow
         var range = _session.SelectedRange;
         if (SelectionRangeService.IsWholeRowSelection(range))
         {
-            var rowResult = _session.ExecuteReviewCommand(
-                new DeleteRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
-            RefreshShell(rowResult.Success ? "Deleted rows" : rowResult.ErrorMessage ?? "Could not delete rows.");
+            ApplyWorksheetStructureResult(
+                _session.DeleteSelectedRows(),
+                "Deleted rows",
+                "Could not delete rows.");
             return;
         }
         if (SelectionRangeService.IsWholeColumnSelection(range))
         {
-            var colResult = _session.ExecuteReviewCommand(
-                new DeleteColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
-            RefreshShell(colResult.Success ? "Deleted columns" : colResult.ErrorMessage ?? "Could not delete columns.");
+            ApplyWorksheetStructureResult(
+                _session.DeleteSelectedColumns(),
+                "Deleted columns",
+                "Could not delete columns.");
             return;
         }
 
@@ -75,10 +80,36 @@ public sealed partial class MainWindow
         if (choice is null)
             return;
         var direction = choice == 0 ? DeleteCellsShiftDirection.Left : DeleteCellsShiftDirection.Up;
-        var result = _session.ExecuteReviewCommand(new DeleteCellsCommand(_session.ActiveSheet.Id, range, direction));
+        ApplyWorksheetStructureResult(
+            _session.DeleteSelectedCells(direction),
+            $"Deleted cells ({(direction == DeleteCellsShiftDirection.Left ? "shift left" : "shift up")})",
+            "Could not delete cells.");
+    }
+
+    private void ApplyWorksheetStructureResult(
+        WorkbookWorksheetStructureResult result,
+        string successStatus,
+        string failureStatus,
+        bool recalculateWorkbook = false)
+    {
+        if (result.Success && !result.IsNoOp)
+        {
+            if (result.InvalidatesFormulaTraceArrows)
+                ClearFormulaTraceArrowsAfterStructuralEdit();
+            SetClipboardMarquee(null, isCut: false);
+
+            if (result.ViewportRowDelta != 0)
+                ShiftScrollOriginForRowEdit(result.TargetRange.Start.Row, result.ViewportRowDelta);
+            if (result.ViewportColumnDelta != 0)
+                ShiftScrollOriginForColEdit(result.TargetRange.Start.Col, result.ViewportColumnDelta);
+
+            if (recalculateWorkbook)
+                _session.RecalculateWorkbook();
+        }
+
         RefreshShell(result.Success
-            ? $"Deleted cells ({(direction == DeleteCellsShiftDirection.Left ? "shift left" : "shift up")})"
-            : result.ErrorMessage ?? "Could not delete cells.");
+            ? successStatus
+            : result.ErrorMessage ?? failureStatus);
     }
 
     /// <summary>Two-option shift-direction prompt. Returns 0 (first), 1 (second), or null if cancelled.</summary>

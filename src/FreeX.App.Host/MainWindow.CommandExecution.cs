@@ -100,6 +100,35 @@ public partial class MainWindow
         return false;
     }
 
+    private bool TryExecuteWorksheetStructure(
+        Func<WorkbookWorksheetStructureResult> execute,
+        out WorkbookWorksheetStructureResult result)
+    {
+        SynchronizeWorkbookSessionSelection();
+        result = execute();
+        var outcome = ToCommandOutcome(result.EditResult);
+        RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
+        {
+            ["command"] = result.CommandTitle,
+            ["status"] = outcome.Success ? "succeeded" : "failed"
+        });
+        if (outcome.Success)
+        {
+            if (outcome.IsNoOp)
+                return true;
+
+            _repeatPostAction = null;
+            InvalidateNavigationCaches();
+            ApplyWorkbookSessionSelectionToRenderer();
+            SyncWindowViewState([_currentSheetId]);
+            NotifyOtherWindowsOfWorkbookChange();
+            return true;
+        }
+
+        ShowCommandError(outcome, result.CommandTitle);
+        return false;
+    }
+
     private IReadOnlyList<SheetId> CurrentGroupedEditSheetIds()
     {
         var groupedVisibleSheets = _workbook.Sheets

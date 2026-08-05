@@ -1377,6 +1377,124 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
+    // Worksheet structure edits
+
+    public WorkbookWorksheetStructureResult InsertSelectedCells(InsertCellsShiftDirection direction) =>
+        ExecuteSelectedWorksheetStructureOperation(direction == InsertCellsShiftDirection.Right
+            ? WorkbookWorksheetStructureOperation.InsertCellsShiftRight
+            : WorkbookWorksheetStructureOperation.InsertCellsShiftDown);
+
+    public WorkbookWorksheetStructureResult DeleteSelectedCells(DeleteCellsShiftDirection direction) =>
+        ExecuteSelectedWorksheetStructureOperation(direction == DeleteCellsShiftDirection.Left
+            ? WorkbookWorksheetStructureOperation.DeleteCellsShiftLeft
+            : WorkbookWorksheetStructureOperation.DeleteCellsShiftUp);
+
+    public WorkbookWorksheetStructureResult InsertSelectedRows() =>
+        ExecuteSelectedWorksheetStructureOperation(WorkbookWorksheetStructureOperation.InsertRows);
+
+    public WorkbookWorksheetStructureResult InsertSelectedColumns() =>
+        ExecuteSelectedWorksheetStructureOperation(WorkbookWorksheetStructureOperation.InsertColumns);
+
+    public WorkbookWorksheetStructureResult DeleteSelectedRows() =>
+        ExecuteSelectedWorksheetStructureOperation(WorkbookWorksheetStructureOperation.DeleteRows);
+
+    public WorkbookWorksheetStructureResult DeleteSelectedColumns() =>
+        ExecuteSelectedWorksheetStructureOperation(WorkbookWorksheetStructureOperation.DeleteColumns);
+
+    public WorkbookWorksheetStructureResult InsertRows(uint beforeRow, uint count = 1) =>
+        ExecuteExplicitWorksheetStructureOperation(
+            WorkbookWorksheetStructureOperation.InsertRows,
+            CreateWholeRowRange(beforeRow, count));
+
+    public WorkbookWorksheetStructureResult InsertColumns(uint beforeColumn, uint count = 1) =>
+        ExecuteExplicitWorksheetStructureOperation(
+            WorkbookWorksheetStructureOperation.InsertColumns,
+            CreateWholeColumnRange(beforeColumn, count));
+
+    public WorkbookWorksheetStructureResult DeleteRows(uint startRow, uint count = 1) =>
+        ExecuteExplicitWorksheetStructureOperation(
+            WorkbookWorksheetStructureOperation.DeleteRows,
+            CreateWholeRowRange(startRow, count));
+
+    public WorkbookWorksheetStructureResult DeleteColumns(uint startColumn, uint count = 1) =>
+        ExecuteExplicitWorksheetStructureOperation(
+            WorkbookWorksheetStructureOperation.DeleteColumns,
+            CreateWholeColumnRange(startColumn, count));
+
+    private WorkbookWorksheetStructureResult ExecuteSelectedWorksheetStructureOperation(
+        WorkbookWorksheetStructureOperation operation)
+    {
+        var targetRange = SelectedRange;
+        var result = ExecuteRepeatableCommandPreservingSelection(
+            () => CreateWorksheetStructureCommand(operation, SelectedRange));
+        return new WorkbookWorksheetStructureResult(result, operation, targetRange);
+    }
+
+    private WorkbookWorksheetStructureResult ExecuteExplicitWorksheetStructureOperation(
+        WorkbookWorksheetStructureOperation operation,
+        GridRange targetRange)
+    {
+        var result = ExecuteRepeatableCommandPreservingSelection(
+            () => CreateWorksheetStructureCommand(
+                operation,
+                RemapRangeToSheet(targetRange, ActiveSheet.Id)));
+        return new WorkbookWorksheetStructureResult(result, operation, targetRange);
+    }
+
+    private IWorkbookCommand CreateWorksheetStructureCommand(
+        WorkbookWorksheetStructureOperation operation,
+        GridRange range)
+    {
+        var title = WorkbookWorksheetStructureResult.GetCommandTitle(operation);
+        return CreateGroupedSheetCommand(
+            title,
+            sheetId => CreateWorksheetStructureCommand(
+                operation,
+                RemapRangeToSheet(range, sheetId),
+                sheetId));
+    }
+
+    private static IWorkbookCommand CreateWorksheetStructureCommand(
+        WorkbookWorksheetStructureOperation operation,
+        GridRange range,
+        SheetId sheetId) =>
+        operation switch
+        {
+            WorkbookWorksheetStructureOperation.InsertCellsShiftRight =>
+                new InsertCellsCommand(sheetId, range, InsertCellsShiftDirection.Right),
+            WorkbookWorksheetStructureOperation.InsertCellsShiftDown =>
+                new InsertCellsCommand(sheetId, range, InsertCellsShiftDirection.Down),
+            WorkbookWorksheetStructureOperation.InsertRows =>
+                new InsertRowsCommand(sheetId, range.Start.Row, range.RowCount),
+            WorkbookWorksheetStructureOperation.InsertColumns =>
+                new InsertColumnsCommand(sheetId, range.Start.Col, range.ColCount),
+            WorkbookWorksheetStructureOperation.DeleteCellsShiftLeft =>
+                new DeleteCellsCommand(sheetId, range, DeleteCellsShiftDirection.Left),
+            WorkbookWorksheetStructureOperation.DeleteCellsShiftUp =>
+                new DeleteCellsCommand(sheetId, range, DeleteCellsShiftDirection.Up),
+            WorkbookWorksheetStructureOperation.DeleteRows =>
+                new DeleteRowsCommand(sheetId, range.Start.Row, range.RowCount),
+            _ => new DeleteColumnsCommand(sheetId, range.Start.Col, range.ColCount),
+        };
+
+    private GridRange CreateWholeRowRange(uint startRow, uint count)
+    {
+        ArgumentOutOfRangeException.ThrowIfZero(count);
+        var endRow = checked(startRow + count - 1);
+        return new GridRange(
+            new CellAddress(ActiveSheet.Id, startRow, 1),
+            new CellAddress(ActiveSheet.Id, endRow, CellAddress.MaxCol));
+    }
+
+    private GridRange CreateWholeColumnRange(uint startColumn, uint count)
+    {
+        ArgumentOutOfRangeException.ThrowIfZero(count);
+        var endColumn = checked(startColumn + count - 1);
+        return new GridRange(
+            new CellAddress(ActiveSheet.Id, 1, startColumn),
+            new CellAddress(ActiveSheet.Id, CellAddress.MaxRow, endColumn));
+    }
+
     public WorkbookGoalSeekResult ExecuteGoalSeek(GoalSeekRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);

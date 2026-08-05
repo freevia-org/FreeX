@@ -1,5 +1,3 @@
-using FreeX.Core.Commands;
-
 namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
@@ -14,19 +12,11 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var result = _session.ExecuteReviewCommand(
-            new InsertRowsCommand(_session.ActiveSheet.Id, beforeRow));
-        if (result.Success)
-        {
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-            SetClipboardMarquee(null, isCut: false);
-            ShiftScrollOriginForRowEdit(beforeRow, 1);
-            _session.RecalculateWorkbook();
-        }
-
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_InsertedSheetRows")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_InsertSheetRowsFailed"));
+        ApplyWorksheetStructureResult(
+            _session.InsertRows(beforeRow),
+            UiText.Get("RibbonWire_InsertedSheetRows"),
+            UiText.Get("RibbonWire_InsertSheetRowsFailed"),
+            recalculateWorkbook: true);
     }
 
     private void InsertContextColumn(uint beforeColumn)
@@ -34,18 +24,10 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var result = _session.ExecuteReviewCommand(
-            new InsertColumnsCommand(_session.ActiveSheet.Id, beforeColumn));
-        if (result.Success)
-        {
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-            SetClipboardMarquee(null, isCut: false);
-            ShiftScrollOriginForColEdit(beforeColumn, 1);
-            _session.RecalculateWorkbook();
-        }
-
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_InsertedSheetColumns")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_InsertSheetColumnsFailed"));
+        ApplyWorksheetStructureResult(
+            _session.InsertColumns(beforeColumn),
+            UiText.Get("RibbonWire_InsertedSheetColumns"),
+            UiText.Get("RibbonWire_InsertSheetColumnsFailed"),
+            recalculateWorkbook: true);
     }
 }

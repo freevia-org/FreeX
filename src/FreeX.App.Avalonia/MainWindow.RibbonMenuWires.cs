@@ -155,62 +155,34 @@ public sealed partial class MainWindow
     // ── Home ▸ Cells ▸ Insert / Delete sheet rows & columns ──────────────────────
     private void InsertSheetRows()
     {
-        var range = _session.SelectedRange;
-        var result = _session.ExecuteReviewCommand(
-            new InsertRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
-        if (result.Success)
-        {
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-            ShiftScrollOriginForRowEdit(range.Start.Row, (int)range.RowCount);
-        }
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_InsertedSheetRows")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_InsertSheetRowsFailed"));
+        ApplyWorksheetStructureResult(
+            _session.InsertSelectedRows(),
+            UiText.Get("RibbonWire_InsertedSheetRows"),
+            UiText.Get("RibbonWire_InsertSheetRowsFailed"));
     }
 
     private void InsertSheetColumns()
     {
-        var range = _session.SelectedRange;
-        var result = _session.ExecuteReviewCommand(
-            new InsertColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
-        if (result.Success)
-        {
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-            ShiftScrollOriginForColEdit(range.Start.Col, (int)range.ColCount);
-        }
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_InsertedSheetColumns")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_InsertSheetColumnsFailed"));
+        ApplyWorksheetStructureResult(
+            _session.InsertSelectedColumns(),
+            UiText.Get("RibbonWire_InsertedSheetColumns"),
+            UiText.Get("RibbonWire_InsertSheetColumnsFailed"));
     }
 
     private void DeleteSheetRows()
     {
-        var range = _session.SelectedRange;
-        var result = _session.ExecuteReviewCommand(
-            new DeleteRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
-        if (result.Success)
-        {
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-            ShiftScrollOriginForRowEdit(range.Start.Row, -(int)range.RowCount);
-        }
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_DeletedSheetRows")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_DeleteSheetRowsFailed"));
+        ApplyWorksheetStructureResult(
+            _session.DeleteSelectedRows(),
+            UiText.Get("RibbonWire_DeletedSheetRows"),
+            UiText.Get("RibbonWire_DeleteSheetRowsFailed"));
     }
 
     private void DeleteSheetColumns()
     {
-        var range = _session.SelectedRange;
-        var result = _session.ExecuteReviewCommand(
-            new DeleteColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
-        if (result.Success)
-        {
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-            ShiftScrollOriginForColEdit(range.Start.Col, -(int)range.ColCount);
-        }
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_DeletedSheetColumns")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_DeleteSheetColumnsFailed"));
+        ApplyWorksheetStructureResult(
+            _session.DeleteSelectedColumns(),
+            UiText.Get("RibbonWire_DeletedSheetColumns"),
+            UiText.Get("RibbonWire_DeleteSheetColumnsFailed"));
     }
 
     // Mirrors the WPF host's ClearFormulaTraceArrowsAfterStructuralEdit invalidation:

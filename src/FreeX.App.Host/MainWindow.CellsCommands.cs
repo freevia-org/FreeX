@@ -38,44 +38,19 @@ public partial class MainWindow
         if (!TryShowCellShiftDialog(CellShiftDialogMode.Insert, out var choice))
             return;
 
-        CommandOutcome outcome;
-        var success = choice switch
-        {
-            KeyboardInsertDeleteDialogChoice.ShiftDown => TryExecuteRepeatableCurrentRangeCommand(
-                "Insert Cells",
-                range,
-                currentRange => new InsertCellsCommand(_currentSheetId, currentRange, InsertCellsShiftDirection.Down),
-                out outcome),
-            KeyboardInsertDeleteDialogChoice.EntireRow => TryExecuteRepeatableCurrentRangeCommand(
-                "Insert Row",
-                range,
-                currentRange => new InsertRowsCommand(_currentSheetId, currentRange.Start.Row, currentRange.RowCount),
-                out outcome),
-            KeyboardInsertDeleteDialogChoice.EntireColumn => TryExecuteRepeatableCurrentRangeCommand(
-                "Insert Column",
-                range,
-                currentRange => new InsertColumnsCommand(_currentSheetId, currentRange.Start.Col, currentRange.ColCount),
-                out outcome),
-            _ => TryExecuteRepeatableCurrentRangeCommand(
-                "Insert Cells",
-                range,
-                currentRange => new InsertCellsCommand(_currentSheetId, currentRange, InsertCellsShiftDirection.Right),
-                out outcome)
-        };
-        if (!success) return;
+        if (!TryExecuteWorksheetStructure(
+                () => choice switch
+                {
+                    KeyboardInsertDeleteDialogChoice.ShiftDown =>
+                        _session.InsertSelectedCells(InsertCellsShiftDirection.Down),
+                    KeyboardInsertDeleteDialogChoice.EntireRow => _session.InsertSelectedRows(),
+                    KeyboardInsertDeleteDialogChoice.EntireColumn => _session.InsertSelectedColumns(),
+                    _ => _session.InsertSelectedCells(InsertCellsShiftDirection.Right)
+                },
+                out var result))
+            return;
 
-        if (choice is KeyboardInsertDeleteDialogChoice.EntireRow or KeyboardInsertDeleteDialogChoice.EntireColumn)
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-        ClearClipboardMarqueeAfterStructuralEdit();
-
-        // R76-render-freeze-scroll-4-1: an EntireRow/EntireColumn insert renumbers every row/col
-        // at or below it, so keep the same content on screen if the edit is at/above the view.
-        if (choice == KeyboardInsertDeleteDialogChoice.EntireRow)
-            ShiftScrollOriginForRowEdit(range.Start.Row, (int)range.RowCount);
-        else if (choice == KeyboardInsertDeleteDialogChoice.EntireColumn)
-            ShiftScrollOriginForColEdit(range.Start.Col, (int)range.ColCount);
-
-        UpdateViewport();
+        CompleteWorksheetStructureEdit(result);
     }
 
     /// <summary>
@@ -94,6 +69,27 @@ public partial class MainWindow
         }
     }
 
+    private void CompleteWorksheetStructureEdit(
+        WorkbookWorksheetStructureResult result,
+        bool recalculateWorkbook = false)
+    {
+        if (!result.IsNoOp)
+        {
+            if (result.InvalidatesFormulaTraceArrows)
+                ClearFormulaTraceArrowsAfterStructuralEdit();
+            ClearClipboardMarqueeAfterStructuralEdit();
+
+            if (result.ViewportRowDelta != 0)
+                ShiftScrollOriginForRowEdit(result.TargetRange.Start.Row, result.ViewportRowDelta);
+            if (result.ViewportColumnDelta != 0)
+                ShiftScrollOriginForColEdit(result.TargetRange.Start.Col, result.ViewportColumnDelta);
+        }
+
+        if (recalculateWorkbook)
+            RecalculateWorkbook();
+        UpdateViewport();
+    }
+
     private void InsertSheetMenuItem_Click(object sender, RoutedEventArgs e)   { AddSheetButton_Click(sender, e); }
     private void DeleteCellsMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -102,44 +98,19 @@ public partial class MainWindow
         if (!TryShowCellShiftDialog(CellShiftDialogMode.Delete, out var choice))
             return;
 
-        CommandOutcome outcome;
-        var success = choice switch
-        {
-            KeyboardInsertDeleteDialogChoice.ShiftUp => TryExecuteRepeatableCurrentRangeCommand(
-                "Delete Cells",
-                range,
-                currentRange => new DeleteCellsCommand(_currentSheetId, currentRange, DeleteCellsShiftDirection.Up),
-                out outcome),
-            KeyboardInsertDeleteDialogChoice.EntireRow => TryExecuteRepeatableCurrentRangeCommand(
-                "Delete Row",
-                range,
-                currentRange => new DeleteRowsCommand(_currentSheetId, currentRange.Start.Row, currentRange.RowCount),
-                out outcome),
-            KeyboardInsertDeleteDialogChoice.EntireColumn => TryExecuteRepeatableCurrentRangeCommand(
-                "Delete Column",
-                range,
-                currentRange => new DeleteColumnsCommand(_currentSheetId, currentRange.Start.Col, currentRange.ColCount),
-                out outcome),
-            _ => TryExecuteRepeatableCurrentRangeCommand(
-                "Delete Cells",
-                range,
-                currentRange => new DeleteCellsCommand(_currentSheetId, currentRange, DeleteCellsShiftDirection.Left),
-                out outcome)
-        };
-        if (!success) return;
+        if (!TryExecuteWorksheetStructure(
+                () => choice switch
+                {
+                    KeyboardInsertDeleteDialogChoice.ShiftUp =>
+                        _session.DeleteSelectedCells(DeleteCellsShiftDirection.Up),
+                    KeyboardInsertDeleteDialogChoice.EntireRow => _session.DeleteSelectedRows(),
+                    KeyboardInsertDeleteDialogChoice.EntireColumn => _session.DeleteSelectedColumns(),
+                    _ => _session.DeleteSelectedCells(DeleteCellsShiftDirection.Left)
+                },
+                out var result))
+            return;
 
-        if (choice is KeyboardInsertDeleteDialogChoice.EntireRow or KeyboardInsertDeleteDialogChoice.EntireColumn)
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-        ClearClipboardMarqueeAfterStructuralEdit();
-
-        // R76-render-freeze-scroll-4-1: an EntireRow/EntireColumn delete renumbers every row/col
-        // at or below it, so keep the same content on screen if the edit is at/above the view.
-        if (choice == KeyboardInsertDeleteDialogChoice.EntireRow)
-            ShiftScrollOriginForRowEdit(range.Start.Row, -(int)range.RowCount);
-        else if (choice == KeyboardInsertDeleteDialogChoice.EntireColumn)
-            ShiftScrollOriginForColEdit(range.Start.Col, -(int)range.ColCount);
-
-        UpdateViewport();
+        CompleteWorksheetStructureEdit(result);
     }
 
     private void DeleteSheetMenuItem_Click(object sender, RoutedEventArgs e)
@@ -417,70 +388,36 @@ public partial class MainWindow
 
     private void InsertRows(uint beforeRow)
     {
-        if (!TryExecuteRepeatableGroupedSheetCommand("Insert Row", sheetId => new InsertRowsCommand(sheetId, beforeRow)))
+        if (!TryExecuteWorksheetStructure(() => _session.InsertRows(beforeRow), out var result))
             return;
 
-        ClearFormulaTraceArrowsAfterStructuralEdit();
-        ClearClipboardMarqueeAfterStructuralEdit();
-        ShiftScrollOriginForRowEdit(beforeRow, 1);
-        RecalculateWorkbook();
-        UpdateViewport();
+        CompleteWorksheetStructureEdit(result, recalculateWorkbook: true);
     }
 
     private void InsertColumns(uint beforeCol)
     {
-        if (!TryExecuteRepeatableGroupedSheetCommand("Insert Column", sheetId => new InsertColumnsCommand(sheetId, beforeCol)))
+        if (!TryExecuteWorksheetStructure(() => _session.InsertColumns(beforeCol), out var result))
             return;
 
-        ClearFormulaTraceArrowsAfterStructuralEdit();
-        ClearClipboardMarqueeAfterStructuralEdit();
-        ShiftScrollOriginForColEdit(beforeCol, 1);
-        RecalculateWorkbook();
-        UpdateViewport();
+        CompleteWorksheetStructureEdit(result, recalculateWorkbook: true);
     }
 
     private void DeleteSelectedRows()
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        var startRow = range.Start.Row;
-        var rowCount = range.End.Row - range.Start.Row + 1;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Delete Row",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    var count = currentRange.End.Row - currentRange.Start.Row + 1;
-                    return new DeleteRowsCommand(sheetId, currentRange.Start.Row, count);
-                }))
+        if (SheetGrid.SelectedRange is null ||
+            !TryExecuteWorksheetStructure(_session.DeleteSelectedRows, out var result))
             return;
 
-        ClearFormulaTraceArrowsAfterStructuralEdit();
-        ClearClipboardMarqueeAfterStructuralEdit();
-        ShiftScrollOriginForRowEdit(startRow, -(int)rowCount);
-        RecalculateWorkbook();
-        UpdateViewport();
+        CompleteWorksheetStructureEdit(result, recalculateWorkbook: true);
     }
 
     private void DeleteSelectedColumns()
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        var startCol = range.Start.Col;
-        var colCount = range.End.Col - range.Start.Col + 1;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Delete Column",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    var count = currentRange.End.Col - currentRange.Start.Col + 1;
-                    return new DeleteColumnsCommand(sheetId, currentRange.Start.Col, count);
-                }))
+        if (SheetGrid.SelectedRange is null ||
+            !TryExecuteWorksheetStructure(_session.DeleteSelectedColumns, out var result))
             return;
 
-        ClearFormulaTraceArrowsAfterStructuralEdit();
-        ClearClipboardMarqueeAfterStructuralEdit();
-        ShiftScrollOriginForColEdit(startCol, -(int)colCount);
-        RecalculateWorkbook();
-        UpdateViewport();
+        CompleteWorksheetStructureEdit(result, recalculateWorkbook: true);
     }
 
     private void ApplyNumberFormatShortcut(NumberFormatShortcut shortcut) =>
@@ -544,164 +481,80 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
 
+        WorkbookWorksheetStructureResult result;
         var plan = KeyboardInsertDeletePlanner.PlanInsert(range);
-        if (plan == KeyboardInsertDeletePlan.Rows)
+        var success = plan switch
         {
-            if (!TryExecuteRepeatableGroupedSheetCommand(
-                    "Insert Row",
-                    sheetId =>
-                    {
-                        var currentRange = SheetGrid.SelectedRange ?? range;
-                        return new InsertRowsCommand(sheetId, currentRange.Start.Row, currentRange.RowCount);
-                    }))
-                return;
-
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-        }
-        else if (plan == KeyboardInsertDeletePlan.Columns)
-        {
-            if (!TryExecuteRepeatableGroupedSheetCommand(
-                    "Insert Column",
-                    sheetId =>
-                    {
-                        var currentRange = SheetGrid.SelectedRange ?? range;
-                        return new InsertColumnsCommand(sheetId, currentRange.Start.Col, currentRange.ColCount);
-                    }))
-                return;
-
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-        }
-        else if (!ExecuteKeyboardInsertCellsWithPrompt(range))
-        {
+            KeyboardInsertDeletePlan.Rows =>
+                TryExecuteWorksheetStructure(_session.InsertSelectedRows, out result),
+            KeyboardInsertDeletePlan.Columns =>
+                TryExecuteWorksheetStructure(_session.InsertSelectedColumns, out result),
+            _ => ExecuteKeyboardInsertCellsWithPrompt(out result)
+        };
+        if (!success)
             return;
-        }
 
-        ClearClipboardMarqueeAfterStructuralEdit();
-        RecalculateWorkbook();
-        UpdateViewport();
+        CompleteWorksheetStructureEdit(result, recalculateWorkbook: true);
     }
 
     private void ExecuteKeyboardDelete()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
 
+        WorkbookWorksheetStructureResult result;
         var plan = KeyboardInsertDeletePlanner.PlanDelete(range);
-        if (plan == KeyboardInsertDeletePlan.Rows)
+        var success = plan switch
         {
-            if (!TryExecuteRepeatableGroupedSheetCommand(
-                    "Delete Row",
-                    sheetId =>
-                    {
-                        var currentRange = SheetGrid.SelectedRange ?? range;
-                        return new DeleteRowsCommand(sheetId, currentRange.Start.Row, currentRange.RowCount);
-                    }))
-                return;
-
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-        }
-        else if (plan == KeyboardInsertDeletePlan.Columns)
-        {
-            if (!TryExecuteRepeatableGroupedSheetCommand(
-                    "Delete Column",
-                    sheetId =>
-                    {
-                        var currentRange = SheetGrid.SelectedRange ?? range;
-                        return new DeleteColumnsCommand(sheetId, currentRange.Start.Col, currentRange.ColCount);
-                    }))
-                return;
-
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-        }
-        else if (!ExecuteKeyboardDeleteCellsWithPrompt(range))
-        {
+            KeyboardInsertDeletePlan.Rows =>
+                TryExecuteWorksheetStructure(_session.DeleteSelectedRows, out result),
+            KeyboardInsertDeletePlan.Columns =>
+                TryExecuteWorksheetStructure(_session.DeleteSelectedColumns, out result),
+            _ => ExecuteKeyboardDeleteCellsWithPrompt(out result)
+        };
+        if (!success)
             return;
-        }
 
-        ClearClipboardMarqueeAfterStructuralEdit();
-        RecalculateWorkbook();
-        UpdateViewport();
+        CompleteWorksheetStructureEdit(result, recalculateWorkbook: true);
     }
 
-    private bool ExecuteKeyboardInsertCellsWithPrompt(GridRange range)
+    private bool ExecuteKeyboardInsertCellsWithPrompt(out WorkbookWorksheetStructureResult result)
     {
         if (!TryShowCellShiftDialog(CellShiftDialogMode.Insert, out var choice))
-            return false;
-
-        var success = choice switch
         {
-            KeyboardInsertDeleteDialogChoice.ShiftDown => TryExecuteRepeatableGroupedSheetCommand(
-                "Insert Cells",
-                sheetId => new InsertCellsCommand(
-                    sheetId,
-                    GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
-                    InsertCellsShiftDirection.Down)),
-            KeyboardInsertDeleteDialogChoice.EntireRow => TryExecuteRepeatableGroupedSheetCommand(
-                "Insert Row",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    return new InsertRowsCommand(sheetId, currentRange.Start.Row, currentRange.RowCount);
-                }),
-            KeyboardInsertDeleteDialogChoice.EntireColumn => TryExecuteRepeatableGroupedSheetCommand(
-                "Insert Column",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    return new InsertColumnsCommand(sheetId, currentRange.Start.Col, currentRange.ColCount);
-                }),
-            _ => TryExecuteRepeatableGroupedSheetCommand(
-                "Insert Cells",
-                sheetId => new InsertCellsCommand(
-                    sheetId,
-                    GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
-                    InsertCellsShiftDirection.Right))
-        };
+            result = null!;
+            return false;
+        }
 
-        if (success && choice is KeyboardInsertDeleteDialogChoice.EntireRow or KeyboardInsertDeleteDialogChoice.EntireColumn)
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-
-        return success;
+        return TryExecuteWorksheetStructure(
+            () => choice switch
+            {
+                KeyboardInsertDeleteDialogChoice.ShiftDown =>
+                    _session.InsertSelectedCells(InsertCellsShiftDirection.Down),
+                KeyboardInsertDeleteDialogChoice.EntireRow => _session.InsertSelectedRows(),
+                KeyboardInsertDeleteDialogChoice.EntireColumn => _session.InsertSelectedColumns(),
+                _ => _session.InsertSelectedCells(InsertCellsShiftDirection.Right)
+            },
+            out result);
     }
 
-    private bool ExecuteKeyboardDeleteCellsWithPrompt(GridRange range)
+    private bool ExecuteKeyboardDeleteCellsWithPrompt(out WorkbookWorksheetStructureResult result)
     {
         if (!TryShowCellShiftDialog(CellShiftDialogMode.Delete, out var choice))
-            return false;
-
-        var success = choice switch
         {
-            KeyboardInsertDeleteDialogChoice.ShiftUp => TryExecuteRepeatableGroupedSheetCommand(
-                "Delete Cells",
-                sheetId => new DeleteCellsCommand(
-                    sheetId,
-                    GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
-                    DeleteCellsShiftDirection.Up)),
-            KeyboardInsertDeleteDialogChoice.EntireRow => TryExecuteRepeatableGroupedSheetCommand(
-                "Delete Row",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    return new DeleteRowsCommand(sheetId, currentRange.Start.Row, currentRange.RowCount);
-                }),
-            KeyboardInsertDeleteDialogChoice.EntireColumn => TryExecuteRepeatableGroupedSheetCommand(
-                "Delete Column",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    return new DeleteColumnsCommand(sheetId, currentRange.Start.Col, currentRange.ColCount);
-                }),
-            _ => TryExecuteRepeatableGroupedSheetCommand(
-                "Delete Cells",
-                sheetId => new DeleteCellsCommand(
-                    sheetId,
-                    GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
-                    DeleteCellsShiftDirection.Left))
-        };
+            result = null!;
+            return false;
+        }
 
-        if (success && choice is KeyboardInsertDeleteDialogChoice.EntireRow or KeyboardInsertDeleteDialogChoice.EntireColumn)
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-
-        return success;
+        return TryExecuteWorksheetStructure(
+            () => choice switch
+            {
+                KeyboardInsertDeleteDialogChoice.ShiftUp =>
+                    _session.DeleteSelectedCells(DeleteCellsShiftDirection.Up),
+                KeyboardInsertDeleteDialogChoice.EntireRow => _session.DeleteSelectedRows(),
+                KeyboardInsertDeleteDialogChoice.EntireColumn => _session.DeleteSelectedColumns(),
+                _ => _session.DeleteSelectedCells(DeleteCellsShiftDirection.Left)
+            },
+            out result);
     }
 
     private bool TryShowCellShiftDialog(CellShiftDialogMode mode, out KeyboardInsertDeleteDialogChoice choice)

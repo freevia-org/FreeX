@@ -6,7 +6,7 @@ public sealed class HomeCellsCommandSourceTests
 {
 
     [Fact]
-    public void CellsCommandHandlers_RouteThroughInsertDeleteDimensionAndFormatCellsCommands()
+    public void CellsCommandHandlers_RouteInsertDeleteThroughWorkbookSession()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
 
@@ -14,15 +14,22 @@ public sealed class HomeCellsCommandSourceTests
             .Should().Contain("InsertCellsMenuItem_Click(sender, e);");
         SourceMethodExtractor.ExtractMethodSource(source, "private void DeletePickerBtn_Click(")
             .Should().Contain("DeleteCellsMenuItem_Click(sender, e);");
-        source.Should().Contain("new InsertCellsCommand(_currentSheetId, currentRange, InsertCellsShiftDirection.Down)");
-        source.Should().Contain("new InsertCellsCommand(_currentSheetId, currentRange, InsertCellsShiftDirection.Right)");
-        source.Should().Contain("new InsertRowsCommand(_currentSheetId, currentRange.Start.Row, currentRange.RowCount)");
-        source.Should().Contain("new InsertColumnsCommand(_currentSheetId, currentRange.Start.Col, currentRange.ColCount)");
+        source.Should().Contain("_session.InsertSelectedCells(InsertCellsShiftDirection.Down)");
+        source.Should().Contain("_session.InsertSelectedCells(InsertCellsShiftDirection.Right)");
+        source.Should().Contain("_session.InsertSelectedRows()");
+        source.Should().Contain("_session.InsertSelectedColumns()");
         source.Should().Contain("private void InsertSheetMenuItem_Click(object sender, RoutedEventArgs e)   { AddSheetButton_Click(sender, e); }");
-        source.Should().Contain("new DeleteCellsCommand(_currentSheetId, currentRange, DeleteCellsShiftDirection.Up)");
-        source.Should().Contain("new DeleteCellsCommand(_currentSheetId, currentRange, DeleteCellsShiftDirection.Left)");
-        source.Should().Contain("new DeleteRowsCommand(_currentSheetId, currentRange.Start.Row, currentRange.RowCount)");
-        source.Should().Contain("new DeleteColumnsCommand(_currentSheetId, currentRange.Start.Col, currentRange.ColCount)");
+        source.Should().Contain("_session.DeleteSelectedCells(DeleteCellsShiftDirection.Up)");
+        source.Should().Contain("_session.DeleteSelectedCells(DeleteCellsShiftDirection.Left)");
+        source.Should().Contain("_session.DeleteSelectedRows()");
+        source.Should().Contain("_session.DeleteSelectedColumns()");
+        source.Should().Contain("CompleteWorksheetStructureEdit(result");
+        source.Should().NotContain("new InsertRowsCommand");
+        source.Should().NotContain("new InsertColumnsCommand");
+        source.Should().NotContain("new InsertCellsCommand");
+        source.Should().NotContain("new DeleteRowsCommand");
+        source.Should().NotContain("new DeleteColumnsCommand");
+        source.Should().NotContain("new DeleteCellsCommand");
         source.Should().Contain("new RemoveSheetCommand(_currentSheetId)");
         source.Should().Contain("RowColumnSizingPlanner.CreateRowHeightCommand(sheetId, currentRange, dialog.Result.Height)");
         source.Should().Contain("RowColumnSizingPlanner.CreateColumnWidthCommand(sheetId, currentRange, dialog.Result.Width)");
