@@ -81,13 +81,19 @@ public sealed class ThesaurusPaneParityTests
         var wpf = File.ReadAllText(RepoFile("freew", "FreeW.App.Host", "ThesaurusPane.cs"));
 
         pane.Should().Contain("Content = \"↵\"");
+        pane.Should().Contain("ThesaurusPaneSession _session");
+        pane.Should().Contain("_session.CompleteReplacement");
         pane.Should().Contain("action.InsertToolTip");
         pane.Should().Contain("TopLevel.GetTopLevel(this)?.Clipboard");
         pane.Should().Contain("return false;");
         pane.Should().NotContain("Content = \"Replace\"");
+        pane.Should().NotContain("ThesaurusPresentationPlanner.Lookup");
         wpf.Should().Contain("Content = \"↵\"");
+        wpf.Should().Contain("ThesaurusPaneSession _session");
+        wpf.Should().Contain("_session.CompleteReplacement");
         wpf.Should().Contain("action.InsertToolTip");
         wpf.Should().NotContain("action.ReplaceToolTip");
+        wpf.Should().NotContain("ThesaurusPresentationPlanner.Lookup");
     }
 
     private static DocumentView NewEditor(string text)
