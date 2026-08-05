@@ -601,6 +601,12 @@ public abstract class DrawOp
         /// </summary>
         public bool IsMedia { get; init; }
 
+        /// <summary>
+        /// When true, fill the destination frame by cropping the source image as needed.
+        /// Explicit Crop* values remain authoritative when present.
+        /// </summary>
+        public bool IsCover { get; init; }
+
         // ── 18A: Crop + colour effects ────────────────────────────────────────────
 
         /// <summary>
