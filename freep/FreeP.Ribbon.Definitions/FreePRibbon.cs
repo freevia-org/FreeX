@@ -319,6 +319,8 @@ public static class FreePRibbon
             RibbonCommandIconKind.Watch, FreePRibbonText.SlideShowRehearseTimingsKeyTip);
         group.Medium("freep.slideshow.record-timings", FreePRibbonText.SlideShowRecordTimingsLabel,
             RibbonCommandIconKind.Watch, FreePRibbonText.SlideShowRecordTimingsKeyTip);
+        group.Medium("freep.slideshow.setup", FreePRibbonText.SlideShowSetupLabel,
+            RibbonCommandIconKind.More, FreePRibbonText.SlideShowSetupKeyTip);
         group.Medium("freep.slideshow.custom-shows", FreePRibbonText.SlideShowCustomShowsLabel,
             RibbonCommandIconKind.List, FreePRibbonText.SlideShowCustomShowsKeyTip);
     }

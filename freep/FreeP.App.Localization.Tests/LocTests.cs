@@ -171,7 +171,9 @@ public sealed class LocTests
             "Ribbon_Command_SlideShowRehearseTimings_Label",
             "Ribbon_Command_SlideShowRehearseTimings_KeyTip",
             "Ribbon_Command_SlideShowRecordTimings_Label",
-            "Ribbon_Command_SlideShowRecordTimings_KeyTip"
+            "Ribbon_Command_SlideShowRecordTimings_KeyTip",
+            "Ribbon_Command_SlideShowSetup_Label",
+            "Ribbon_Command_SlideShowSetup_KeyTip"
         ]);
     }
 
