@@ -19,6 +19,7 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
     private const double LinuxTopInsetAdjustment = 2;
     private const double LinuxRightInsetAdjustment = -1;
     private const double LinuxActionTopAdjustment = 2;
+    private readonly FootnoteEndnoteOptionsDialogSession _session;
     private readonly ComboBox _footnoteFormat;
     private readonly TextBox _footnoteStart;
     private readonly ComboBox _footnoteRestart;
@@ -29,7 +30,8 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
 
     internal FootnoteEndnoteOptionsDialog(NoteNumberingOptions footnote, NoteNumberingOptions endnote)
     {
-        var state = FootnoteEndnoteOptionsDialogPlanner.BuildInitialState(footnote, endnote, CultureInfo.CurrentCulture);
+        _session = FootnoteEndnoteOptionsDialogPlanner.CreateSession(footnote, endnote, CultureInfo.CurrentCulture);
+        var state = _session.InitialState;
         Title = FootnoteEndnoteOptionsDialogPlanner.Title;
         Width = FootnoteEndnoteOptionsDialogPlanner.DialogWidth;
         SizeToContent = SizeToContent.Height;
@@ -37,12 +39,18 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
         CanResize = false;
         ShowInTaskbar = false;
 
-        _footnoteFormat = Combo(FootnoteEndnoteOptionsDialogPlanner.FormatItems.Select(item => item.Label), state.FootnoteFormatIndex);
+        _footnoteFormat = Combo(_session.FormatItems.Select(item => item.Label), state.FootnoteFormatIndex);
         _footnoteStart = TextBox(state.FootnoteStartAtText);
-        _footnoteRestart = Combo(FootnoteEndnoteOptionsDialogPlanner.FootnoteRestartItems.Select(item => item.Label), state.FootnoteRestartIndex);
-        _endnoteFormat = Combo(FootnoteEndnoteOptionsDialogPlanner.FormatItems.Select(item => item.Label), state.EndnoteFormatIndex);
+        _footnoteRestart = Combo(_session.FootnoteRestartItems.Select(item => item.Label), state.FootnoteRestartIndex);
+        _endnoteFormat = Combo(_session.FormatItems.Select(item => item.Label), state.EndnoteFormatIndex);
         _endnoteStart = TextBox(state.EndnoteStartAtText);
-        _endnoteRestart = Combo(FootnoteEndnoteOptionsDialogPlanner.EndnoteRestartItems.Select(item => item.Label), state.EndnoteRestartIndex);
+        _endnoteRestart = Combo(_session.EndnoteRestartItems.Select(item => item.Label), state.EndnoteRestartIndex);
+        _footnoteFormat.SelectionChanged += (_, _) => _session.UpdateFootnoteFormat(_footnoteFormat.SelectedIndex);
+        _footnoteStart.TextChanged += (_, _) => _session.UpdateFootnoteStartAt(_footnoteStart.Text);
+        _footnoteRestart.SelectionChanged += (_, _) => _session.UpdateFootnoteRestart(_footnoteRestart.SelectedIndex);
+        _endnoteFormat.SelectionChanged += (_, _) => _session.UpdateEndnoteFormat(_endnoteFormat.SelectedIndex);
+        _endnoteStart.TextChanged += (_, _) => _session.UpdateEndnoteStartAt(_endnoteStart.Text);
+        _endnoteRestart.SelectionChanged += (_, _) => _session.UpdateEndnoteRestart(_endnoteRestart.SelectedIndex);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome, new Thickness(0, 6, 0, 0));
 
         var panel = new StackPanel
@@ -90,20 +98,23 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
         new FootnoteEndnoteOptionsDialog(footnote, endnote)
             .ShowDialog<FootnoteEndnoteOptionsDialogResult?>(owner);
 
-    internal FootnoteEndnoteOptionsDialogResult? BuildResultForTest() =>
-        FootnoteEndnoteOptionsDialogPlanner.TryBuildResult(
-            Input(), CultureInfo.CurrentCulture, out var result, out _) ? result : null;
+    internal FootnoteEndnoteOptionsDialogResult? BuildResultForTest()
+    {
+        SynchronizeSession();
+        return _session.PlanAcceptance().Result;
+    }
 
     private void Accept()
     {
-        if (FootnoteEndnoteOptionsDialogPlanner.TryBuildResult(
-                Input(), CultureInfo.CurrentCulture, out var result, out var validation))
+        SynchronizeSession();
+        var acceptance = _session.PlanAcceptance();
+        if (acceptance.IsAccepted)
         {
-            Close(result);
+            Close(acceptance.Result);
             return;
         }
-        _status.Text = validation?.Message ?? FootnoteEndnoteOptionsDialogPlanner.PositiveStartAtMessage;
-        var target = validation?.Field == FootnoteEndnoteOptionsDialogField.EndnoteStartAt ? _endnoteStart : _footnoteStart;
+        _status.Text = acceptance.Validation?.Message ?? FootnoteEndnoteOptionsDialogPlanner.PositiveStartAtMessage;
+        var target = acceptance.Validation?.Field == FootnoteEndnoteOptionsDialogField.EndnoteStartAt ? _endnoteStart : _footnoteStart;
         AvaloniaCompactDialogChrome.FocusAndSelect(target);
     }
 
@@ -111,9 +122,15 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
     // replacing the captured dialog with a second warning window.
     internal void ValidateForTest() => Accept();
 
-    private FootnoteEndnoteOptionsDialogInput Input() => new(
-        _footnoteFormat.SelectedIndex, _footnoteStart.Text, _footnoteRestart.SelectedIndex,
-        _endnoteFormat.SelectedIndex, _endnoteStart.Text, _endnoteRestart.SelectedIndex);
+    private void SynchronizeSession()
+    {
+        _session.UpdateFootnoteFormat(_footnoteFormat.SelectedIndex);
+        _session.UpdateFootnoteStartAt(_footnoteStart.Text);
+        _session.UpdateFootnoteRestart(_footnoteRestart.SelectedIndex);
+        _session.UpdateEndnoteFormat(_endnoteFormat.SelectedIndex);
+        _session.UpdateEndnoteStartAt(_endnoteStart.Text);
+        _session.UpdateEndnoteRestart(_endnoteRestart.SelectedIndex);
+    }
 
     private static void AddSection(StackPanel panel, string heading, ComboBox format, TextBox start, ComboBox restart)
     {

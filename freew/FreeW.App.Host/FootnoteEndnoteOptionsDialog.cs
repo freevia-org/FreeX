@@ -13,6 +13,7 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly FootnoteEndnoteOptionsDialogSession _session;
     private readonly ComboBox _footnoteFormatBox;
     private readonly TextBox _footnoteStartBox;
     private readonly ComboBox _footnoteRestartBox;
@@ -31,25 +32,38 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var state = FootnoteEndnoteOptionsDialogPlanner.BuildInitialState(
+        _session = FootnoteEndnoteOptionsDialogPlanner.CreateSession(
             footnote,
             endnote,
             CultureInfo.CurrentCulture);
+        var state = _session.InitialState;
 
         _footnoteFormatBox = ChoiceCombo(
-            FootnoteEndnoteOptionsDialogPlanner.FormatItems,
+            _session.FormatItems,
             state.FootnoteFormatIndex);
         _footnoteStartBox = StartBox(state.FootnoteStartAtText);
         _footnoteRestartBox = ChoiceCombo(
-            FootnoteEndnoteOptionsDialogPlanner.FootnoteRestartItems,
+            _session.FootnoteRestartItems,
             state.FootnoteRestartIndex);
         _endnoteFormatBox = ChoiceCombo(
-            FootnoteEndnoteOptionsDialogPlanner.FormatItems,
+            _session.FormatItems,
             state.EndnoteFormatIndex);
         _endnoteStartBox = StartBox(state.EndnoteStartAtText);
         _endnoteRestartBox = ChoiceCombo(
-            FootnoteEndnoteOptionsDialogPlanner.EndnoteRestartItems,
+            _session.EndnoteRestartItems,
             state.EndnoteRestartIndex);
+        _footnoteFormatBox.SelectionChanged += (_, _) =>
+            _session.UpdateFootnoteFormat(_footnoteFormatBox.SelectedIndex);
+        _footnoteStartBox.TextChanged += (_, _) =>
+            _session.UpdateFootnoteStartAt(_footnoteStartBox.Text);
+        _footnoteRestartBox.SelectionChanged += (_, _) =>
+            _session.UpdateFootnoteRestart(_footnoteRestartBox.SelectedIndex);
+        _endnoteFormatBox.SelectionChanged += (_, _) =>
+            _session.UpdateEndnoteFormat(_endnoteFormatBox.SelectedIndex);
+        _endnoteStartBox.TextChanged += (_, _) =>
+            _session.UpdateEndnoteStartAt(_endnoteStartBox.Text);
+        _endnoteRestartBox.SelectionChanged += (_, _) =>
+            _session.UpdateEndnoteRestart(_endnoteRestartBox.SelectedIndex);
 
         var outerStack = new StackPanel
         {
@@ -124,7 +138,11 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
         Grid.SetRow(field, row);
         Grid.SetColumn(field, 1);
         if (field is FrameworkElement fe)
-            fe.Margin = new Thickness(0, 4, 0, 4);
+            fe.Margin = new Thickness(
+                0,
+                FootnoteEndnoteOptionsDialogPlanner.FieldVerticalMargin,
+                0,
+                FootnoteEndnoteOptionsDialogPlanner.FieldVerticalMargin);
         grid.Children.Add(field);
     }
 
@@ -144,16 +162,18 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
 
     private void Accept()
     {
-        if (!TryBuildInput(out var result, out var validation))
+        SynchronizeSession();
+        var acceptance = _session.PlanAcceptance();
+        if (!acceptance.IsAccepted)
         {
             DialogMessageHelper.ShowWarning(
                 this,
-                validation?.Message ?? FootnoteEndnoteOptionsDialogPlanner.PositiveStartAtMessage);
-            FocusFailure(validation?.Field);
+                acceptance.Validation?.Message ?? FootnoteEndnoteOptionsDialogPlanner.PositiveStartAtMessage);
+            FocusFailure(acceptance.Validation?.Field);
             return;
         }
 
-        _result = result;
+        _result = acceptance.Result;
         Close();
     }
 
@@ -161,27 +181,19 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
     // attempted OK click without opening a second warning window during a static capture.
     internal void ValidateForTest()
     {
-        _ = TryBuildInput(out _, out var validation);
-        FocusFailure(validation?.Field);
+        SynchronizeSession();
+        var acceptance = _session.PlanAcceptance();
+        FocusFailure(acceptance.Validation?.Field);
     }
 
-    private bool TryBuildInput(
-        out FootnoteEndnoteOptionsDialogResult? result,
-        out FootnoteEndnoteOptionsValidation? validation)
+    private void SynchronizeSession()
     {
-        var input = new FootnoteEndnoteOptionsDialogInput(
-            _footnoteFormatBox.SelectedIndex,
-            _footnoteStartBox.Text,
-            _footnoteRestartBox.SelectedIndex,
-            _endnoteFormatBox.SelectedIndex,
-            _endnoteStartBox.Text,
-            _endnoteRestartBox.SelectedIndex);
-
-        return FootnoteEndnoteOptionsDialogPlanner.TryBuildResult(
-            input,
-            CultureInfo.CurrentCulture,
-            out result,
-            out validation);
+        _session.UpdateFootnoteFormat(_footnoteFormatBox.SelectedIndex);
+        _session.UpdateFootnoteStartAt(_footnoteStartBox.Text);
+        _session.UpdateFootnoteRestart(_footnoteRestartBox.SelectedIndex);
+        _session.UpdateEndnoteFormat(_endnoteFormatBox.SelectedIndex);
+        _session.UpdateEndnoteStartAt(_endnoteStartBox.Text);
+        _session.UpdateEndnoteRestart(_endnoteRestartBox.SelectedIndex);
     }
 
     private void FocusFailure(FootnoteEndnoteOptionsDialogField? field)

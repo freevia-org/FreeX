@@ -142,20 +142,16 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.align-center",     new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Center)));
         r.Register("freew.align-right",      new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Right)));
         r.Register("freew.align-justify",    new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Justify)));
-        r.Register("freew.multilevel-list", new ActionRibbonCommand(() => ApplyMultiLevelList(editor)));
+        r.Register("freew.multilevel-list", new ActionRibbonCommand(() =>
+            editor.ApplyMultiLevelListDefinition(MultilevelListDialogPlanner.DefaultDefinition)));
         r.Register("freew.multilevel-demote", new ActionRibbonCommand(() => ChangeListLevel(editor, demote: true)));
         r.Register("freew.multilevel-promote", new ActionRibbonCommand(() => ChangeListLevel(editor, demote: false)));
-        r.Register("freew.multilevel-preset-0", new ActionRibbonCommand(() =>
-            ApplyMultiLevelPreset(editor, MultiLevelListFormat.DecimalNumberFormats)));
-        r.Register("freew.multilevel-preset-1", new ActionRibbonCommand(() =>
-            ApplyMultiLevelPreset(editor, MultiLevelListFormat.DecimalLowerLetterLowerRomanNumberFormats)));
-        r.Register("freew.multilevel-preset-2", new ActionRibbonCommand(() =>
-            editor.ApplyMultiLevelListDefinition(new MultilevelListDefinition(
-                MultiLevelListFormat.LevelCount,
-                null,
-                null,
-                MultiLevelListFormat.DecimalNumberFormats,
-                LinkToHeadingStyles: true))));
+        foreach (var preset in MultilevelListDialogPlanner.Presets)
+        {
+            var capturedPreset = preset;
+            r.Register(capturedPreset.CommandId, new ActionRibbonCommand(() =>
+                editor.ApplyMultiLevelListDefinition(capturedPreset.Definition)));
+        }
         r.Register("freew.multilevel-define", new ActionRibbonCommand(
             callbacks.OpenMultilevelListDialog ?? (() =>
             {
@@ -628,24 +624,6 @@ internal static class FreeWAvaloniaRibbonCommands
     }
 
     private const double ParagraphSpacingTogglePoints = 12.0;
-
-    private static void ApplyMultiLevelList(DocumentView editor)
-    {
-        editor.ApplyMultiLevelListDefinition(new MultilevelListDefinition(
-            MultiLevelListFormat.LevelCount,
-            null,
-            null,
-            MultiLevelListFormat.DecimalNumberFormats));
-    }
-
-    private static void ApplyMultiLevelPreset(DocumentView editor, IReadOnlyList<ListNumberFormat> numberFormats)
-    {
-        editor.ApplyMultiLevelListDefinition(new MultilevelListDefinition(
-            MultiLevelListFormat.LevelCount,
-            null,
-            null,
-            numberFormats));
-    }
 
     private static void ChangeListLevel(DocumentView editor, bool demote)
     {
@@ -1404,10 +1382,11 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.table-of-authorities", new ActionRibbonCommand(
             callbacks.ShowTableOfAuthoritiesDialog ?? (() =>
             {
-                var options = callbacks.OpenTableOfAuthoritiesDialog?.Invoke();
-                if (options is null && callbacks.OpenTableOfAuthoritiesDialog is not null)
-                    return;
-                editor.InsertTableOfAuthorities(options ?? ToaOptions.Default);
+                var commit = TableOfAuthoritiesDialogPlanner.PlanCommit(
+                    callbacks.OpenTableOfAuthoritiesDialog?.Invoke(),
+                    useDefaultsWhenUnavailable: callbacks.OpenTableOfAuthoritiesDialog is null);
+                if (commit.ShouldInsert)
+                    editor.InsertTableOfAuthorities(commit.Options!);
             })));
         r.Register("freew.table-of-authorities-refresh", new ActionRibbonCommand(editor.RefreshTableOfAuthorities));
     }

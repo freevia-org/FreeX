@@ -146,10 +146,12 @@ public sealed class TableOfAuthoritiesDialogSourceOwnershipTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("TableOfAuthoritiesDialogPlanner.PlanAcceptance(");
-            source.Should().Contain("new TableOfAuthoritiesDialogInput(");
+            source.Should().Contain("TableOfAuthoritiesDialogPlanner.CreateSession(");
+            source.Should().Contain("_session.PlanAcceptance()");
             source.Should().NotContain("new TableOfAuthoritiesDialogState(");
             source.Should().NotContain("TableOfAuthoritiesDialogPlanner.BuildOptions(");
+            source.Should().NotContain("new TableOfAuthoritiesDialogInput(");
+            source.Should().NotContain("TableOfAuthoritiesDialogPlanner.PlanAcceptance(");
             source.Should().NotContain("?.Leader ?? ToaTabLeader.Dots");
         }
     }

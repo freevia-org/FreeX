@@ -44,6 +44,9 @@ public sealed record TableOfAuthoritiesDialogAcceptance(
 public static class TableOfAuthoritiesDialogPlanner
 {
     public const string Title = "Table of Authorities";
+    public const int DialogWidth = 380;
+    public const int OuterMargin = 16;
+    public const int ButtonWidth = 80;
     public const string CategoryLabel = "Category:";
     public const string UsePassimLabel = "Use passim";
     public const string KeepOriginalFormattingLabel = "Keep original formatting";
@@ -66,6 +69,14 @@ public static class TableOfAuthoritiesDialogPlanner
             KeepOriginalFormatting: true,
             CategoryFilter: CitationCategory.Statutes,
             TabLeader: ToaTabLeader.Dashes);
+
+    public static TableOfAuthoritiesDialogSession CreateSession(ToaOptions options) =>
+        new(options);
+
+    public static TableOfAuthoritiesCommitPlan PlanCommit(
+        ToaOptions? options,
+        bool useDefaultsWhenUnavailable = false) =>
+        new(options ?? (useDefaultsWhenUnavailable ? ToaOptions.Default : null));
 
     /// <summary>
     /// Returns the shared options seed for a dialog evidence state. The validation-error route has

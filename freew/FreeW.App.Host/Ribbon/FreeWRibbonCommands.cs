@@ -288,22 +288,17 @@ internal static class FreeWRibbonCommands
         // The top-level "freew.multilevel-list" id applies the first (standard decimal) preset directly
         // (clicking the button face vs. the dropdown arrow follows the same pattern as Word's gallery).
         registry.Register("freew.multilevel-list", new ActionRibbonCommand(() =>
-            editor.ApplyMultiLevelListDefinition(new MultilevelListDefinition(
-                MultiLevelListFormat.LevelCount,
-                null,
-                null,
-                MultiLevelListFormat.DecimalNumberFormats))));
+            editor.ApplyMultiLevelListDefinition(MultilevelListDialogPlanner.DefaultDefinition)));
         registry.Register("freew.multilevel-demote", new ActionRibbonCommand(() => editor.ChangeListLevel(+1)));
         registry.Register("freew.multilevel-promote", new ActionRibbonCommand(() => editor.ChangeListLevel(-1)));
         // Predefined multilevel list preset commands — three Word-parity presets shown in the gallery.
-        for (var pi = 0; pi < MultilevelListDialog.Presets.Length; pi++)
+        foreach (var preset in MultilevelListDialogPlanner.Presets)
         {
-            var preset = MultilevelListDialog.Presets[pi];
-            var capturedPreset = preset; // capture for lambda
-            registry.Register($"freew.multilevel-preset-{pi}", new ActionRibbonCommand(() =>
+            var capturedPreset = preset;
+            registry.Register(capturedPreset.CommandId, new ActionRibbonCommand(() =>
             {
                 editor.Focus();
-                capturedPreset.Apply(editor);
+                editor.ApplyMultiLevelListDefinition(capturedPreset.Definition);
             }));
         }
         // "Define New Multilevel List" dialog: captures backed options (number of levels, start-at, and
@@ -2313,11 +2308,14 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var def = MultilevelListDialog.Prompt(Window.GetWindow(editor), editor.Model.MultiLevelList.NumberFormats);
-            if (def is null)
+            var commit = MultilevelListDialogPlanner.PlanCommit(
+                MultilevelListDialog.Prompt(
+                    Window.GetWindow(editor),
+                    editor.Model.MultiLevelList.NumberFormats));
+            if (!commit.ShouldApply)
                 return;
             editor.Focus();
-            editor.ApplyMultiLevelListDefinition(def);
+            editor.ApplyMultiLevelListDefinition(commit.Definition!);
         }
     }
 
@@ -4398,20 +4396,14 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             var owner = Window.GetWindow(editor);
             var model = editor.Model;
-            var result = FootnoteEndnoteOptionsDialog.Prompt(owner, model.FootnoteNumbering, model.EndnoteNumbering);
-            if (result is null)
+            var commit = FootnoteEndnoteOptionsDialogPlanner.PlanCommit(
+                FootnoteEndnoteOptionsDialog.Prompt(
+                    owner,
+                    model.FootnoteNumbering,
+                    model.EndnoteNumbering));
+            if (!commit.ShouldApply)
                 return;
-
-            // Apply the chosen numbering options. The model properties are mutable; we mutate in-place
-            // and commit via ApplyPageSettings (a page-settings no-op) so the editor commits pending
-            // edits, re-renders (marking the document dirty) and the settings round-trip on next save.
-            model.FootnoteNumbering.NumberFormat = result.FootnoteFormat;
-            model.FootnoteNumbering.StartAt = result.FootnoteStartAt;
-            model.FootnoteNumbering.NumberRestart = result.FootnoteRestart;
-            model.EndnoteNumbering.NumberFormat = result.EndnoteFormat;
-            model.EndnoteNumbering.StartAt = result.EndnoteStartAt;
-            model.EndnoteNumbering.NumberRestart = result.EndnoteRestart;
-            editor.ApplyPageSettings(_ => { });  // commits pending edits + marks document dirty
+            editor.ApplyFootnoteEndnoteOptions(commit.Result!);
         }
     }
 
@@ -5217,10 +5209,10 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             var owner = Window.GetWindow(editor);
-            var picked = TableOfAuthoritiesDialog.Prompt(owner);
-            if (picked is null)
-                return; // cancelled
-            editor.InsertTableOfAuthorities(picked.Options);
+            var commit = TableOfAuthoritiesDialogPlanner.PlanCommit(
+                TableOfAuthoritiesDialog.Prompt(owner));
+            if (commit.ShouldInsert)
+                editor.InsertTableOfAuthorities(commit.Options!);
         }
     }
 

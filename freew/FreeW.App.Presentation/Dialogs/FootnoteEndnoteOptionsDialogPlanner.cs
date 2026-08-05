@@ -84,6 +84,16 @@ public static class FootnoteEndnoteOptionsDialogPlanner
         new("Restart each section", NoteNumberRestart.EachSection),
     ];
 
+    public static FootnoteEndnoteOptionsDialogSession CreateSession(
+        NoteNumberingOptions footnote,
+        NoteNumberingOptions endnote,
+        CultureInfo culture) =>
+        new(footnote, endnote, culture);
+
+    public static FootnoteEndnoteOptionsCommitPlan PlanCommit(
+        FootnoteEndnoteOptionsDialogResult? result) =>
+        new(result);
+
     public static FootnoteEndnoteOptionsInitialState BuildInitialState(
         NoteNumberingOptions footnote,
         NoteNumberingOptions endnote,

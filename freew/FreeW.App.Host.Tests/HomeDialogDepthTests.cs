@@ -408,8 +408,8 @@ public sealed class HomeDialogDepthTests
     [Fact]
     public void MultilevelListDialog_HasThreePresets()
     {
-        MultilevelListDialog.Presets.Should().HaveCount(3);
-        MultilevelListDialog.Presets.Select(p => p.Name).Should().OnlyHaveUniqueItems();
+        MultilevelListDialogPlanner.Presets.Should().HaveCount(3);
+        MultilevelListDialogPlanner.Presets.Select(p => p.Name).Should().OnlyHaveUniqueItems();
     }
 
     [StaFact]
@@ -419,7 +419,7 @@ public sealed class HomeDialogDepthTests
         var view = ViewWith(doc);
         SelectAllParagraphs(view);
 
-        MultilevelListDialog.Presets[1].Apply(view);
+        view.ApplyMultiLevelListDefinition(MultilevelListDialogPlanner.Presets[1].Definition);
 
         doc.MultiLevelList.NumberFormats.Take(3).Should().Equal(
             ListNumberFormat.Decimal,

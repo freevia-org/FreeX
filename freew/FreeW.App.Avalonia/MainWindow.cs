@@ -805,24 +805,27 @@ public sealed partial class MainWindow : Window
             this,
             _editor.Document.FootnoteNumbering,
             _editor.Document.EndnoteNumbering);
-        if (result is not null)
-            _editor.ApplyFootnoteEndnoteOptions(result);
+        var commit = FootnoteEndnoteOptionsDialogPlanner.PlanCommit(result);
+        if (commit.ShouldApply)
+            _editor.ApplyFootnoteEndnoteOptions(commit.Result!);
         _editor.Focus();
     }
 
     private async Task OpenMultilevelListDialogAsync()
     {
         var result = await MultilevelListDialog.ShowAsync(this, _editor.Document.MultiLevelList.NumberFormats);
-        if (result is not null)
-            _editor.ApplyMultiLevelListDefinition(result);
+        var commit = MultilevelListDialogPlanner.PlanCommit(result);
+        if (commit.ShouldApply)
+            _editor.ApplyMultiLevelListDefinition(commit.Definition!);
         _editor.Focus();
     }
 
     private async Task OpenTableOfAuthoritiesDialogAsync()
     {
         var options = await TableOfAuthoritiesDialog.ShowAsync(this);
-        if (options is not null)
-            _editor.InsertTableOfAuthorities(options);
+        var commit = TableOfAuthoritiesDialogPlanner.PlanCommit(options);
+        if (commit.ShouldInsert)
+            _editor.InsertTableOfAuthorities(commit.Options!);
         _editor.Focus();
     }
 
