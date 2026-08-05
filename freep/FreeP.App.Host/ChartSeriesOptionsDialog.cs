@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using FreeP.App.Compositor;
@@ -9,8 +8,7 @@ namespace FreeP.App.Host;
 /// <summary>Small PowerPoint-style per-series chart formatting dialog.</summary>
 public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly EditingSession _editor;
-    private readonly ChartSeriesOptionsPlanner _planner;
+    private readonly ChartSeriesOptionsDialogSession _session;
     private readonly ComboBox _seriesCombo;
     private readonly ComboBox _seriesChartTypeCombo;
     private readonly CheckBox _smoothLineCheck;
@@ -56,11 +54,9 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     public ChartSeriesOptionsDialog(EditingSession editor, int? initialSeriesIndex = null)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        var chart = editor.SelectedChart
-            ?? throw new InvalidOperationException("No chart is currently selected.");
-        _planner = ChartSeriesOptionsPlanner.FromChart(chart);
-        var surface = ChartSeriesOptionsPlanner.BuildSurfacePlan();
+        _session = new ChartSeriesOptionsDialogSession(editor, initialSeriesIndex);
+        var surface = _session.Surface;
+        var state = _session.State;
 
         Title = surface.Title;
         Width = ChartSeriesOptionsPlanner.DefaultDialogWidth;
@@ -68,34 +64,24 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
-        var selectedSeriesIndex = initialSeriesIndex ?? _planner.SeriesIndex;
-        if (_planner.SeriesOptions.Count > 0)
-            selectedSeriesIndex = Math.Clamp(selectedSeriesIndex, 0, _planner.SeriesOptions.Count - 1);
-        else
-            selectedSeriesIndex = 0;
-
         _seriesCombo = new ComboBox
         {
-            ItemsSource = _planner.SeriesOptions,
+            ItemsSource = state.SeriesOptions,
             DisplayMemberPath = nameof(ChartSeriesOption.Label),
-            SelectedIndex = selectedSeriesIndex,
+            SelectedIndex = state.SeriesIndex,
             MinWidth = 200,
         };
         _seriesCombo.SelectionChanged += (_, _) =>
         {
             if (_seriesCombo.SelectedItem is ChartSeriesOption option)
-            {
-                _planner.SetSeriesIndex(option.Index);
-                LoadControls();
-            }
+                LoadControls(_session.SelectSeries(option.Index));
         };
-        _planner.SetSeriesIndex(_seriesCombo.SelectedIndex);
         _smoothLineCheck = new CheckBox { Content = surface.SmoothLineLabel };
         _secondaryAxisCheck = new CheckBox { Content = surface.SecondaryAxisLabel };
         _invertIfNegativeCheck = new CheckBox { Content = surface.InvertIfNegativeLabel };
         _seriesChartTypeCombo = new ComboBox
         {
-            ItemsSource = ChartSeriesOptionsPlanner.SeriesChartTypeOptions,
+            ItemsSource = state.SeriesChartTypeOptions,
             DisplayMemberPath = nameof(ChartSeriesChartTypeOption.Label),
             MinWidth = 200,
         };
@@ -103,7 +89,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _lineColorBox = new TextBox { MinWidth = 140 };
         _lineDashCombo = new ComboBox
         {
-            ItemsSource = ChartSeriesOptionsPlanner.DashOptions,
+            ItemsSource = _session.DashOptions,
             DisplayMemberPath = nameof(ChartDashOption.Label),
             MinWidth = 150,
         };
@@ -116,24 +102,24 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _showSeriesLabelsCheck = new CheckBox { Content = surface.SeriesLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
         _showLegendKeysCheck = new CheckBox { Content = surface.LegendKeysLabel, Margin = new Thickness(20, 0, 0, 0) };
         _showBubbleSizeCheck = new CheckBox { Content = surface.BubbleSizeLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
-        _showLeaderLinesCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.LeaderLinesLabel, IsThreeState = true, Margin = new Thickness(20, 0, 0, 0) };
-        _errorBarsCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.ErrorBarsLabel };
-        _errorDirectionCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.ErrorDirectionOptions, DisplayMemberPath = nameof(ChartErrorDirectionOption.Label), MinWidth = 150 };
-        _errorBarTypeCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.ErrorBarTypeOptions, DisplayMemberPath = nameof(ChartErrorBarTypeOption.Label), MinWidth = 150 };
-        _errorValueTypeCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.ErrorValueTypeOptions, DisplayMemberPath = nameof(ChartErrorValueTypeOption.Label), MinWidth = 150 };
+        _showLeaderLinesCheck = new CheckBox { Content = _session.LeaderLinesLabel, IsThreeState = true, Margin = new Thickness(20, 0, 0, 0) };
+        _errorBarsCheck = new CheckBox { Content = _session.ErrorBarsLabel };
+        _errorDirectionCombo = new ComboBox { ItemsSource = _session.ErrorDirectionOptions, DisplayMemberPath = nameof(ChartErrorDirectionOption.Label), MinWidth = 150 };
+        _errorBarTypeCombo = new ComboBox { ItemsSource = _session.ErrorBarTypeOptions, DisplayMemberPath = nameof(ChartErrorBarTypeOption.Label), MinWidth = 150 };
+        _errorValueTypeCombo = new ComboBox { ItemsSource = _session.ErrorValueTypeOptions, DisplayMemberPath = nameof(ChartErrorValueTypeOption.Label), MinWidth = 150 };
         _errorValueBox = new TextBox { MinWidth = 120 };
-        _errorNoEndCapCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.ErrorNoEndCapLabel, Margin = new Thickness(20, 0, 0, 0) };
-        _trendlineCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.TrendlineLabel };
-        _trendlineTypeCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.TrendlineTypeOptions, DisplayMemberPath = nameof(ChartTrendlineTypeOption.Label), MinWidth = 150 };
+        _errorNoEndCapCheck = new CheckBox { Content = _session.ErrorNoEndCapLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _trendlineCheck = new CheckBox { Content = _session.TrendlineLabel };
+        _trendlineTypeCombo = new ComboBox { ItemsSource = _session.TrendlineTypeOptions, DisplayMemberPath = nameof(ChartTrendlineTypeOption.Label), MinWidth = 150 };
         _trendlineOrderBox = new TextBox { MinWidth = 120 };
         _trendlinePeriodBox = new TextBox { MinWidth = 120 };
         _trendlineForwardBox = new TextBox { MinWidth = 120 };
         _trendlineBackwardBox = new TextBox { MinWidth = 120 };
-        _trendlineEquationCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.TrendlineEquationLabel, Margin = new Thickness(20, 0, 0, 0) };
-        _trendlineRSquaredCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.TrendlineRSquaredLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _trendlineEquationCheck = new CheckBox { Content = _session.TrendlineEquationLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _trendlineRSquaredCheck = new CheckBox { Content = _session.TrendlineRSquaredLabel, Margin = new Thickness(20, 0, 0, 0) };
         _labelPositionCombo = new ComboBox
         {
-            ItemsSource = ChartDisplayOptionsPlanner.LabelPositionOptions,
+            ItemsSource = _session.LabelPositionOptions,
             DisplayMemberPath = nameof(ChartDisplayLabelPositionOption.Label),
             MinWidth = 150,
         };
@@ -146,12 +132,12 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _labelColorBox = new TextBox { MinWidth = 140 };
         _markerCombo = new ComboBox
         {
-            ItemsSource = ChartSeriesOptionsPlanner.MarkerOptions,
+            ItemsSource = _session.MarkerOptions,
             DisplayMemberPath = nameof(ChartMarkerSymbolOption.Label),
             MinWidth = 150,
         };
         _markerSizeBox = new TextBox { MinWidth = 120 };
-        LoadControls();
+        LoadControls(state);
 
         var buttons = ChartOptionsDialogChrome.CreateActionRow(surface.OkLabel, OnOk, surface.CancelLabel, Close, new Thickness(8, 14, 8, 8));
 
@@ -175,17 +161,17 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         content.Children.Add(_showBubbleSizeCheck);
         content.Children.Add(_showLeaderLinesCheck);
         content.Children.Add(_errorBarsCheck);
-        content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.ErrorDirectionLabel, _errorDirectionCombo));
-        content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.ErrorBarTypeLabel, _errorBarTypeCombo));
-        content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.ErrorValueTypeLabel, _errorValueTypeCombo));
-        content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.ErrorValueLabel, _errorValueBox));
+        content.Children.Add(MakeRow(_session.ErrorDirectionLabel, _errorDirectionCombo));
+        content.Children.Add(MakeRow(_session.ErrorBarTypeLabel, _errorBarTypeCombo));
+        content.Children.Add(MakeRow(_session.ErrorValueTypeLabel, _errorValueTypeCombo));
+        content.Children.Add(MakeRow(_session.ErrorValueLabel, _errorValueBox));
         content.Children.Add(_errorNoEndCapCheck);
         content.Children.Add(_trendlineCheck);
-        content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.TrendlineTypeLabel, _trendlineTypeCombo));
-        content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.TrendlineOrderLabel, _trendlineOrderBox));
-        content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.TrendlinePeriodLabel, _trendlinePeriodBox));
-        content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.TrendlineForwardLabel, _trendlineForwardBox));
-        content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.TrendlineBackwardLabel, _trendlineBackwardBox));
+        content.Children.Add(MakeRow(_session.TrendlineTypeLabel, _trendlineTypeCombo));
+        content.Children.Add(MakeRow(_session.TrendlineOrderLabel, _trendlineOrderBox));
+        content.Children.Add(MakeRow(_session.TrendlinePeriodLabel, _trendlinePeriodBox));
+        content.Children.Add(MakeRow(_session.TrendlineForwardLabel, _trendlineForwardBox));
+        content.Children.Add(MakeRow(_session.TrendlineBackwardLabel, _trendlineBackwardBox));
         content.Children.Add(_trendlineEquationCheck);
         content.Children.Add(_trendlineRSquaredCheck);
         content.Children.Add(MakeRow(surface.LabelPositionLabel, _labelPositionCombo));
@@ -218,8 +204,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     internal ChartSeriesOptions BuildCommitPlanForTests()
     {
-        UpdatePlannerFromControls();
-        return _planner.BuildCommitPlan();
+        return _session.BuildCommitPlan(ReadInput());
     }
 
     internal void SetOptionsForTests(
@@ -266,13 +251,13 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _secondaryAxisCheck.IsChecked = onSecondaryAxis;
         if (invertIfNegative.HasValue)
             _invertIfNegativeCheck.IsChecked = invertIfNegative.Value;
-        _seriesChartTypeCombo.SelectedIndex = FindSeriesChartTypeIndex(overrideChartType);
-        _lineWidthBox.Text = Format(lineWidthPt);
+        _seriesChartTypeCombo.SelectedIndex = _session.FindSeriesChartTypeIndex(overrideChartType);
+        _lineWidthBox.Text = _session.Format(lineWidthPt);
         _lineColorBox.Text = lineColor ?? string.Empty;
-        _lineDashCombo.SelectedIndex = FindDashIndex(lineDash);
+        _lineDashCombo.SelectedIndex = _session.FindDashIndex(lineDash);
         _noLineCheck.IsChecked = noLine;
-        _markerCombo.SelectedIndex = FindMarkerIndex(markerSymbol);
-        _markerSizeBox.Text = Format(markerSizePt);
+        _markerCombo.SelectedIndex = _session.FindMarkerIndex(markerSymbol);
+        _markerSizeBox.Text = _session.Format(markerSizePt);
         _fillColorBox.Text = fillColor ?? string.Empty;
         _useSeriesDataLabelsCheck.IsChecked = useSeriesDataLabels;
         _showValueLabelsCheck.IsChecked = showValueLabels;
@@ -284,18 +269,18 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _showLeaderLinesCheck.IsChecked = showLeaderLines;
         _errorBarsCheck.IsChecked = errorBars;
         _trendlineCheck.IsChecked = trendline;
-        _trendlineTypeCombo.SelectedIndex = FindTrendlineTypeIndex(trendlineType);
-        _trendlineOrderBox.Text = Format(trendlineOrder);
-        _trendlinePeriodBox.Text = Format(trendlinePeriod);
-        _trendlineForwardBox.Text = Format(trendlineForward);
-        _trendlineBackwardBox.Text = Format(trendlineBackward);
+        _trendlineTypeCombo.SelectedIndex = _session.FindTrendlineTypeIndex(trendlineType);
+        _trendlineOrderBox.Text = _session.Format(trendlineOrder);
+        _trendlinePeriodBox.Text = _session.Format(trendlinePeriod);
+        _trendlineForwardBox.Text = _session.Format(trendlineForward);
+        _trendlineBackwardBox.Text = _session.Format(trendlineBackward);
         _trendlineEquationCheck.IsChecked = trendlineEquation;
         _trendlineRSquaredCheck.IsChecked = trendlineRSquared;
-        _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
+        _labelPositionCombo.SelectedIndex = _session.FindLabelPositionIndex(labelPosition);
         _labelNumberFormatBox.Text = labelNumberFormat ?? string.Empty;
         _labelSeparatorBox.Text = labelSeparator ?? string.Empty;
         _labelFontFamilyBox.Text = labelFontFamily ?? string.Empty;
-        _labelFontSizeBox.Text = Format(labelFontSizePt);
+        _labelFontSizeBox.Text = _session.Format(labelFontSizePt);
         _labelBoldCheck.IsChecked = labelBold;
         _labelItalicCheck.IsChecked = labelItalic;
         _labelColorBox.Text = labelColor ?? string.Empty;
@@ -303,146 +288,105 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     private void OnOk()
     {
-        try
+        var result = _session.TryCommit(ReadInput());
+        if (result.Succeeded)
         {
-            _editor.ApplyChartSeriesOptions(BuildCommitPlanForTests());
             DialogResult = true;
+            return;
         }
-        catch (FormatException ex)
-        {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
+
+        MessageBox.Show(this, result.Error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
-    private void LoadControls()
+    private void LoadControls(ChartSeriesOptionsDialogState state)
     {
-        _smoothLineCheck.IsChecked = _planner.SmoothLine;
-        _secondaryAxisCheck.IsChecked = _planner.OnSecondaryAxis;
-        _invertIfNegativeCheck.IsChecked = _planner.InvertIfNegative == true;
-        _seriesChartTypeCombo.SelectedIndex = FindSeriesChartTypeIndex(_planner.OverrideChartType);
-        _lineWidthBox.Text = Format(_planner.LineWidthPt);
-        _lineColorBox.Text = _planner.LineColorText;
-        _lineDashCombo.SelectedIndex = FindDashIndex(_planner.LineDash);
-        _noLineCheck.IsChecked = _planner.NoLine;
-        _fillColorBox.Text = _planner.FillColorText;
-        _useSeriesDataLabelsCheck.IsChecked = _planner.UseSeriesDataLabels;
-        _showValueLabelsCheck.IsChecked = _planner.ShowValueLabels;
-        _showPercentLabelsCheck.IsChecked = _planner.ShowPercentLabels;
-        _showCategoryLabelsCheck.IsChecked = _planner.ShowCategoryLabels;
-        _showSeriesLabelsCheck.IsChecked = _planner.ShowSeriesLabels;
-        _showLegendKeysCheck.IsChecked = _planner.ShowLegendKeys;
-        _showBubbleSizeCheck.IsChecked = _planner.ShowBubbleSize;
-        _showLeaderLinesCheck.IsChecked = _planner.ShowLeaderLines;
-        _errorBarsCheck.IsChecked = _planner.ErrorBarsEnabled;
-        _errorDirectionCombo.SelectedIndex = FindErrorDirectionIndex(_planner.ErrorDirection);
-        _errorBarTypeCombo.SelectedIndex = FindErrorBarTypeIndex(_planner.ErrorBarType);
-        _errorValueTypeCombo.SelectedIndex = FindErrorValueTypeIndex(_planner.ErrorValueType);
-        _errorValueBox.Text = Format(_planner.ErrorValue);
-        _errorNoEndCapCheck.IsChecked = _planner.ErrorNoEndCap;
-        _trendlineCheck.IsChecked = _planner.TrendlineEnabled;
-        _trendlineTypeCombo.SelectedIndex = FindTrendlineTypeIndex(_planner.TrendlineType);
-        _trendlineOrderBox.Text = Format(_planner.TrendlineOrder);
-        _trendlinePeriodBox.Text = Format(_planner.TrendlinePeriod);
-        _trendlineForwardBox.Text = Format(_planner.TrendlineForward);
-        _trendlineBackwardBox.Text = Format(_planner.TrendlineBackward);
-        _trendlineEquationCheck.IsChecked = _planner.TrendlineEquation;
-        _trendlineRSquaredCheck.IsChecked = _planner.TrendlineRSquared;
-        _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(_planner.LabelPosition);
-        _labelNumberFormatBox.Text = _planner.LabelNumberFormat;
-        _labelSeparatorBox.Text = _planner.LabelSeparator;
-        _labelFontFamilyBox.Text = _planner.LabelFontFamily;
-        _labelFontSizeBox.Text = Format(_planner.LabelFontSizePt);
-        _labelBoldCheck.IsChecked = _planner.LabelBold;
-        _labelItalicCheck.IsChecked = _planner.LabelItalic;
-        _labelColorBox.Text = _planner.LabelColorText;
-        _markerCombo.SelectedIndex = FindMarkerIndex(_planner.MarkerSymbol);
-        _markerSizeBox.Text = Format(_planner.MarkerSizePt);
+        _seriesChartTypeCombo.ItemsSource = state.SeriesChartTypeOptions;
+        _seriesChartTypeCombo.SelectedIndex = state.SeriesChartTypeIndex;
+        _smoothLineCheck.IsChecked = state.SmoothLine;
+        _secondaryAxisCheck.IsChecked = state.OnSecondaryAxis;
+        _invertIfNegativeCheck.IsChecked = state.InvertIfNegative;
+        _lineWidthBox.Text = state.LineWidthText;
+        _lineColorBox.Text = state.LineColorText;
+        _lineDashCombo.SelectedIndex = state.LineDashIndex;
+        _noLineCheck.IsChecked = state.NoLine;
+        _fillColorBox.Text = state.FillColorText;
+        _useSeriesDataLabelsCheck.IsChecked = state.UseSeriesDataLabels;
+        _showValueLabelsCheck.IsChecked = state.ShowValueLabels;
+        _showPercentLabelsCheck.IsChecked = state.ShowPercentLabels;
+        _showCategoryLabelsCheck.IsChecked = state.ShowCategoryLabels;
+        _showSeriesLabelsCheck.IsChecked = state.ShowSeriesLabels;
+        _showLegendKeysCheck.IsChecked = state.ShowLegendKeys;
+        _showBubbleSizeCheck.IsChecked = state.ShowBubbleSize;
+        _showLeaderLinesCheck.IsChecked = state.ShowLeaderLines;
+        _errorBarsCheck.IsChecked = state.ErrorBarsEnabled;
+        _errorDirectionCombo.SelectedIndex = state.ErrorDirectionIndex;
+        _errorBarTypeCombo.SelectedIndex = state.ErrorBarTypeIndex;
+        _errorValueTypeCombo.SelectedIndex = state.ErrorValueTypeIndex;
+        _errorValueBox.Text = state.ErrorValueText;
+        _errorNoEndCapCheck.IsChecked = state.ErrorNoEndCap;
+        _trendlineCheck.IsChecked = state.TrendlineEnabled;
+        _trendlineTypeCombo.SelectedIndex = state.TrendlineTypeIndex;
+        _trendlineOrderBox.Text = state.TrendlineOrderText;
+        _trendlinePeriodBox.Text = state.TrendlinePeriodText;
+        _trendlineForwardBox.Text = state.TrendlineForwardText;
+        _trendlineBackwardBox.Text = state.TrendlineBackwardText;
+        _trendlineEquationCheck.IsChecked = state.TrendlineEquation;
+        _trendlineRSquaredCheck.IsChecked = state.TrendlineRSquared;
+        _labelPositionCombo.SelectedIndex = state.LabelPositionIndex;
+        _labelNumberFormatBox.Text = state.LabelNumberFormat;
+        _labelSeparatorBox.Text = state.LabelSeparator;
+        _labelFontFamilyBox.Text = state.LabelFontFamily;
+        _labelFontSizeBox.Text = state.LabelFontSizeText;
+        _labelBoldCheck.IsChecked = state.LabelBold;
+        _labelItalicCheck.IsChecked = state.LabelItalic;
+        _labelColorBox.Text = state.LabelColorText;
+        _markerCombo.SelectedIndex = state.MarkerIndex;
+        _markerSizeBox.Text = state.MarkerSizeText;
     }
 
-    private void UpdatePlannerFromControls()
-    {
-        _planner.SetSmoothLine(_smoothLineCheck.IsChecked == true);
-        _planner.SetOnSecondaryAxis(_secondaryAxisCheck.IsChecked == true);
-        _planner.SetInvertIfNegative(_invertIfNegativeCheck.IsChecked == true);
-        _planner.SetOverrideChartType(ChartDialogOptionProjection.ValueAtOrDefault(ChartSeriesOptionsPlanner.SeriesChartTypeOptions, _seriesChartTypeCombo.SelectedIndex, option => option.Value, default(ChartType?)));
-        _planner.SetLineWidth(ParseOptional(_lineWidthBox.Text, "Line width"));
-        _planner.SetLineColor(_lineColorBox.Text);
-        _planner.SetLineDash(ChartDialogOptionProjection.ValueAtOrDefault(ChartSeriesOptionsPlanner.DashOptions, _lineDashCombo.SelectedIndex, option => option.Value, _planner.LineDash));
-        _planner.SetNoLine(_noLineCheck.IsChecked == true);
-        _planner.SetFillColor(_fillColorBox.Text);
-        _planner.SetUseSeriesDataLabels(_useSeriesDataLabelsCheck.IsChecked == true);
-        _planner.SetShowValueLabels(_showValueLabelsCheck.IsChecked == true);
-        _planner.SetShowPercentLabels(_showPercentLabelsCheck.IsChecked == true);
-        _planner.SetShowCategoryLabels(_showCategoryLabelsCheck.IsChecked == true);
-        _planner.SetShowSeriesLabels(_showSeriesLabelsCheck.IsChecked == true);
-        _planner.SetShowLegendKeys(_showLegendKeysCheck.IsChecked == true);
-        _planner.SetShowBubbleSize(_showBubbleSizeCheck.IsChecked == true);
-        _planner.SetShowLeaderLines(_showLeaderLinesCheck.IsChecked);
-        _planner.SetErrorBarsEnabled(_errorBarsCheck.IsChecked == true);
-        _planner.SetErrorDirection(ChartDialogOptionProjection.ValueAtOrDefault(ChartSeriesOptionsPlanner.ErrorDirectionOptions, _errorDirectionCombo.SelectedIndex, option => option.Value, _planner.ErrorDirection));
-        _planner.SetErrorBarType(ChartDialogOptionProjection.ValueAtOrDefault(ChartSeriesOptionsPlanner.ErrorBarTypeOptions, _errorBarTypeCombo.SelectedIndex, option => option.Value, _planner.ErrorBarType));
-        _planner.SetErrorValueType(ChartDialogOptionProjection.ValueAtOrDefault(ChartSeriesOptionsPlanner.ErrorValueTypeOptions, _errorValueTypeCombo.SelectedIndex, option => option.Value, _planner.ErrorValueType));
-        _planner.SetErrorValue(ParseOptional(_errorValueBox.Text, "Error bar value") ?? 0);
-        _planner.SetErrorNoEndCap(_errorNoEndCapCheck.IsChecked == true);
-        _planner.SetTrendlineEnabled(_trendlineCheck.IsChecked == true);
-        _planner.SetTrendlineType(ChartDialogOptionProjection.ValueAtOrDefault(ChartSeriesOptionsPlanner.TrendlineTypeOptions, _trendlineTypeCombo.SelectedIndex, option => option.Value, _planner.TrendlineType));
-        _planner.SetTrendlineOrder(ParseOptionalInt(_trendlineOrderBox.Text, ChartSeriesOptionsPlanner.TrendlineOrderLabel));
-        _planner.SetTrendlinePeriod(ParseOptionalInt(_trendlinePeriodBox.Text, ChartSeriesOptionsPlanner.TrendlinePeriodLabel));
-        _planner.SetTrendlineForward(ParseOptional(_trendlineForwardBox.Text, ChartSeriesOptionsPlanner.TrendlineForwardLabel));
-        _planner.SetTrendlineBackward(ParseOptional(_trendlineBackwardBox.Text, ChartSeriesOptionsPlanner.TrendlineBackwardLabel));
-        _planner.SetTrendlineEquation(_trendlineEquationCheck.IsChecked == true);
-        _planner.SetTrendlineRSquared(_trendlineRSquaredCheck.IsChecked == true);
-        _planner.SetLabelPosition(ChartDialogOptionProjection.ValueAtOrDefault(ChartDisplayOptionsPlanner.LabelPositionOptions, _labelPositionCombo.SelectedIndex, option => option.Value, _planner.LabelPosition));
-        _planner.SetLabelNumberFormat(_labelNumberFormatBox.Text);
-        _planner.SetLabelSeparator(_labelSeparatorBox.Text);
-        _planner.SetLabelFontFamily(_labelFontFamilyBox.Text);
-        _planner.SetLabelFontSize(ParseOptional(_labelFontSizeBox.Text, "Label font size"));
-        _planner.SetLabelBold(_labelBoldCheck.IsChecked);
-        _planner.SetLabelItalic(_labelItalicCheck.IsChecked);
-        _planner.SetLabelColor(_labelColorBox.Text);
-        _planner.SetMarkerSymbol(ChartDialogOptionProjection.ValueAtOrDefault(ChartSeriesOptionsPlanner.MarkerOptions, _markerCombo.SelectedIndex, option => option.Value, _planner.MarkerSymbol));
-        _planner.SetMarkerSize(ParseOptional(_markerSizeBox.Text, "Marker size"));
-    }
-
-    private static double? ParseOptional(string? text, string label)
-    {
-        return ChartDialogOptionProjection.ParseOptionalDouble(text, CultureInfo.CurrentCulture, value => double.IsFinite(value) && value >= 0, $"{label} must be a non-negative finite number or blank.");
-    }
-
-    private static string Format(double? value) =>
-        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
-
-    private static string Format(int? value) =>
-        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
-
-    private static int? ParseOptionalInt(string? text, string label)
-    {
-        return ChartDialogOptionProjection.ParseOptionalInt(text, CultureInfo.CurrentCulture, value => value >= 0, $"{label} must be a non-negative integer or blank.");
-    }
-
-    private static int FindMarkerIndex(ChartMarkerSymbol symbol) =>
-        ChartDialogOptionProjection.FindIndex(ChartSeriesOptionsPlanner.MarkerOptions, symbol, option => option.Value);
-
-    private static int FindSeriesChartTypeIndex(ChartType? value) =>
-        ChartDialogOptionProjection.FindIndex(ChartSeriesOptionsPlanner.SeriesChartTypeOptions, value, option => option.Value);
-
-    private static int FindDashIndex(OutlineDash dash) =>
-        ChartDialogOptionProjection.FindIndex(ChartSeriesOptionsPlanner.DashOptions, dash, option => option.Value);
-
-    private static int FindErrorDirectionIndex(ChartErrorDirection value) =>
-        ChartDialogOptionProjection.FindIndex(ChartSeriesOptionsPlanner.ErrorDirectionOptions, value, option => option.Value);
-
-    private static int FindErrorBarTypeIndex(ChartErrorBarType value) =>
-        ChartDialogOptionProjection.FindIndex(ChartSeriesOptionsPlanner.ErrorBarTypeOptions, value, option => option.Value);
-
-    private static int FindErrorValueTypeIndex(ChartErrorValueType value) =>
-        ChartDialogOptionProjection.FindIndex(ChartSeriesOptionsPlanner.ErrorValueTypeOptions, value, option => option.Value);
-
-    private static int FindTrendlineTypeIndex(ChartTrendlineType value) =>
-        ChartDialogOptionProjection.FindIndex(ChartSeriesOptionsPlanner.TrendlineTypeOptions, value, option => option.Value);
-
-    private static int FindLabelPositionIndex(DataLabelPosition position) =>
-        ChartDialogOptionProjection.FindIndex(ChartDisplayOptionsPlanner.LabelPositionOptions, position, option => option.Value);
+    private ChartSeriesOptionsDialogInput ReadInput() => new(
+        _seriesCombo.SelectedIndex,
+        _seriesChartTypeCombo.SelectedIndex,
+        _smoothLineCheck.IsChecked == true,
+        _secondaryAxisCheck.IsChecked == true,
+        _invertIfNegativeCheck.IsChecked,
+        _lineWidthBox.Text,
+        _lineColorBox.Text,
+        _lineDashCombo.SelectedIndex,
+        _noLineCheck.IsChecked == true,
+        _fillColorBox.Text,
+        _useSeriesDataLabelsCheck.IsChecked == true,
+        _showValueLabelsCheck.IsChecked == true,
+        _showPercentLabelsCheck.IsChecked == true,
+        _showCategoryLabelsCheck.IsChecked == true,
+        _showSeriesLabelsCheck.IsChecked == true,
+        _showLegendKeysCheck.IsChecked == true,
+        _showBubbleSizeCheck.IsChecked == true,
+        _showLeaderLinesCheck.IsChecked,
+        _errorBarsCheck.IsChecked == true,
+        _errorDirectionCombo.SelectedIndex,
+        _errorBarTypeCombo.SelectedIndex,
+        _errorValueTypeCombo.SelectedIndex,
+        _errorValueBox.Text,
+        _errorNoEndCapCheck.IsChecked == true,
+        _trendlineCheck.IsChecked == true,
+        _trendlineTypeCombo.SelectedIndex,
+        _trendlineOrderBox.Text,
+        _trendlinePeriodBox.Text,
+        _trendlineForwardBox.Text,
+        _trendlineBackwardBox.Text,
+        _trendlineEquationCheck.IsChecked == true,
+        _trendlineRSquaredCheck.IsChecked == true,
+        _labelPositionCombo.SelectedIndex,
+        _labelNumberFormatBox.Text,
+        _labelSeparatorBox.Text,
+        _labelFontFamilyBox.Text,
+        _labelFontSizeBox.Text,
+        _labelBoldCheck.IsChecked,
+        _labelItalicCheck.IsChecked,
+        _labelColorBox.Text,
+        _markerCombo.SelectedIndex,
+        _markerSizeBox.Text);
 
     private static StackPanel MakeRow(string label, Control control) =>
         ChartOptionsDialogChrome.CreateRow(label, control, 160);

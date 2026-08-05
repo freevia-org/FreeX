@@ -1,4 +1,3 @@
-using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -11,8 +10,7 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class ChartPointOptionsDialog : Window
 {
-    private readonly EditingSession _editor;
-    private readonly ChartPointOptionsPlanner _planner;
+    private readonly ChartPointOptionsDialogSession _session;
     private readonly ComboBox _seriesCombo;
     private readonly ComboBox _pointCombo;
     private readonly TextBox _fillColorBox;
@@ -43,14 +41,12 @@ internal sealed class ChartPointOptionsDialog : Window
         int? initialSeriesIndex = null,
         int? initialPointIndex = null)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        var chart = editor.SelectedChart ?? throw new InvalidOperationException("No chart is currently selected.");
-        _planner = ChartPointOptionsPlanner.FromChart(chart);
-        if (initialSeriesIndex is { } seriesIndex)
-            _planner.SetSeriesIndex(seriesIndex);
-        if (initialPointIndex is { } pointIndex)
-            _planner.SetPointIndex(pointIndex);
-        var surface = ChartPointOptionsPlanner.BuildSurfacePlan();
+        _session = new ChartPointOptionsDialogSession(
+            editor,
+            initialSeriesIndex,
+            initialPointIndex);
+        var surface = _session.Surface;
+        var state = _session.State;
 
         Title = surface.Title;
         Width = ChartPointOptionsPlanner.DefaultDialogWidth;
@@ -62,21 +58,20 @@ internal sealed class ChartPointOptionsDialog : Window
 
         _seriesCombo = new ComboBox
         {
-            ItemsSource = _planner.SeriesOptions.Select(option => option.Label).ToArray(),
-            SelectedIndex = _planner.SeriesIndex,
+            ItemsSource = state.SeriesOptions.Select(option => option.Label).ToArray(),
+            SelectedIndex = state.SeriesIndex,
             MinWidth = 220,
         };
         _seriesCombo.SelectionChanged += (_, _) =>
         {
-            _planner.SetSeriesIndex(_seriesCombo.SelectedIndex);
-            RefreshPoints();
-            LoadControls();
+            var selectedState = _session.SelectSeries(_seriesCombo.SelectedIndex);
+            RefreshPoints(selectedState);
+            LoadControls(selectedState);
         };
         _pointCombo = new ComboBox { MinWidth = 220 };
         _pointCombo.SelectionChanged += (_, _) =>
         {
-            _planner.SetPointIndex(_pointCombo.SelectedIndex);
-            LoadControls();
+            LoadControls(_session.SelectPoint(_pointCombo.SelectedIndex));
         };
         _fillColorBox = new TextBox { MinWidth = 150 };
         _strokeColorBox = new TextBox { MinWidth = 150 };
@@ -96,7 +91,7 @@ internal sealed class ChartPointOptionsDialog : Window
         };
         _labelPositionCombo = new ComboBox
         {
-            ItemsSource = ChartDisplayOptionsPlanner.LabelPositionOptions.Select(option => option.Label).ToArray(),
+            ItemsSource = _session.LabelPositionOptions.Select(option => option.Label).ToArray(),
             MinWidth = 160,
         };
         _labelNumberFormatBox = new TextBox { MinWidth = 150 };
@@ -108,13 +103,13 @@ internal sealed class ChartPointOptionsDialog : Window
         _labelColorBox = new TextBox { MinWidth = 150 };
         _markerCombo = new ComboBox
         {
-            ItemsSource = ChartPointOptionsPlanner.MarkerOptions.Select(option => option.Label).ToArray(),
+            ItemsSource = _session.MarkerOptions.Select(option => option.Label).ToArray(),
             MinWidth = 160,
         };
         _markerSizeBox = new TextBox { MinWidth = 120 };
         _explosionBox = new TextBox { MinWidth = 120 };
-        RefreshPoints();
-        LoadControls();
+        RefreshPoints(state);
+        LoadControls(state);
 
         var buttons = ChartOptionsDialogChrome.CreateActionRow(surface.OkLabel, OnOk, surface.CancelLabel, () => Close(false));
 
@@ -156,8 +151,7 @@ internal sealed class ChartPointOptionsDialog : Window
 
     internal ChartPointOptions BuildCommitPlanForTests()
     {
-        UpdatePlannerFromControls();
-        return _planner.BuildCommitPlan();
+        return _session.BuildCommitPlan(ReadInput());
     }
 
     internal void SetOptionsForTests(
@@ -187,11 +181,11 @@ internal sealed class ChartPointOptionsDialog : Window
         bool? showLeaderLines = null)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
-        RefreshPoints();
+        RefreshPoints(_session.State);
         _pointCombo.SelectedIndex = pointIndex;
         _fillColorBox.Text = fillColor ?? string.Empty;
         _strokeColorBox.Text = strokeColor ?? string.Empty;
-        _strokeWidthBox.Text = Format(strokeWidthPt);
+        _strokeWidthBox.Text = _session.Format(strokeWidthPt);
         _usePointDataLabelsCheck.IsChecked = usePointDataLabels;
         _showValueLabelsCheck.IsChecked = showValueLabels;
         _showPercentLabelsCheck.IsChecked = showPercentLabels;
@@ -200,111 +194,85 @@ internal sealed class ChartPointOptionsDialog : Window
         _showLegendKeysCheck.IsChecked = showLegendKeys;
         _showBubbleSizeCheck.IsChecked = showBubbleSize;
         _showLeaderLinesCheck.IsChecked = showLeaderLines;
-        _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
+        _labelPositionCombo.SelectedIndex = _session.FindLabelPositionIndex(labelPosition);
         _labelNumberFormatBox.Text = labelNumberFormat ?? string.Empty;
         _labelSeparatorBox.Text = labelSeparator ?? string.Empty;
         _labelFontFamilyBox.Text = labelFontFamily ?? string.Empty;
-        _labelFontSizeBox.Text = Format(labelFontSizePt);
+        _labelFontSizeBox.Text = _session.Format(labelFontSizePt);
         _labelBoldCheck.IsChecked = labelBold;
         _labelItalicCheck.IsChecked = labelItalic;
         _labelColorBox.Text = labelColor ?? string.Empty;
-        _markerCombo.SelectedIndex = FindMarkerIndex(markerSymbol);
-        _markerSizeBox.Text = Format(markerSizePt);
-        _explosionBox.Text = Format(explosionPercent);
+        _markerCombo.SelectedIndex = _session.FindMarkerIndex(markerSymbol);
+        _markerSizeBox.Text = _session.Format(markerSizePt);
+        _explosionBox.Text = _session.Format(explosionPercent);
     }
 
     private void OnOk()
     {
-        try
+        if (_session.TryCommit(ReadInput()).Succeeded)
         {
-            _editor.ApplyChartPointOptions(BuildCommitPlanForTests());
             Close(true);
+            return;
         }
-        catch (FormatException)
-        {
-            Close(false);
-        }
+
+        Close(false);
     }
 
-    private void RefreshPoints()
+    private void RefreshPoints(ChartPointOptionsDialogState state)
     {
-        _pointCombo.ItemsSource = _planner.PointOptions.Select(option => option.Label).ToArray();
-        _pointCombo.SelectedIndex = Math.Min(_planner.PointIndex, Math.Max(0, _planner.PointOptions.Count - 1));
+        _pointCombo.ItemsSource = state.PointOptions.Select(option => option.Label).ToArray();
+        _pointCombo.SelectedIndex = Math.Min(state.PointIndex, Math.Max(0, state.PointOptions.Count - 1));
     }
 
-    private void LoadControls()
+    private void LoadControls(ChartPointOptionsDialogState state)
     {
-        _fillColorBox.Text = _planner.FillColorText;
-        _strokeColorBox.Text = _planner.StrokeColorText;
-        _strokeWidthBox.Text = Format(_planner.StrokeWidthPt);
-        _usePointDataLabelsCheck.IsChecked = _planner.UsePointDataLabels;
-        _showValueLabelsCheck.IsChecked = _planner.ShowValueLabels;
-        _showPercentLabelsCheck.IsChecked = _planner.ShowPercentLabels;
-        _showCategoryLabelsCheck.IsChecked = _planner.ShowCategoryLabels;
-        _showSeriesLabelsCheck.IsChecked = _planner.ShowSeriesLabels;
-        _showLegendKeysCheck.IsChecked = _planner.ShowLegendKeys;
-        _showBubbleSizeCheck.IsChecked = _planner.ShowBubbleSize;
-        _showLeaderLinesCheck.IsChecked = _planner.ShowLeaderLines;
-        _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(_planner.LabelPosition);
-        _labelNumberFormatBox.Text = _planner.LabelNumberFormat;
-        _labelSeparatorBox.Text = _planner.LabelSeparator;
-        _labelFontFamilyBox.Text = _planner.LabelFontFamily;
-        _labelFontSizeBox.Text = Format(_planner.LabelFontSizePt);
-        _labelBoldCheck.IsChecked = _planner.LabelBold;
-        _labelItalicCheck.IsChecked = _planner.LabelItalic;
-        _labelColorBox.Text = _planner.LabelColorText;
-        _markerCombo.SelectedIndex = FindMarkerIndex(_planner.MarkerSymbol);
-        _markerSizeBox.Text = Format(_planner.MarkerSizePt);
-        _explosionBox.Text = Format(_planner.ExplosionPercent);
+        _fillColorBox.Text = state.FillColorText;
+        _strokeColorBox.Text = state.StrokeColorText;
+        _strokeWidthBox.Text = state.StrokeWidthText;
+        _usePointDataLabelsCheck.IsChecked = state.UsePointDataLabels;
+        _showValueLabelsCheck.IsChecked = state.ShowValueLabels;
+        _showPercentLabelsCheck.IsChecked = state.ShowPercentLabels;
+        _showCategoryLabelsCheck.IsChecked = state.ShowCategoryLabels;
+        _showSeriesLabelsCheck.IsChecked = state.ShowSeriesLabels;
+        _showLegendKeysCheck.IsChecked = state.ShowLegendKeys;
+        _showBubbleSizeCheck.IsChecked = state.ShowBubbleSize;
+        _showLeaderLinesCheck.IsChecked = state.ShowLeaderLines;
+        _labelPositionCombo.SelectedIndex = state.LabelPositionIndex;
+        _labelNumberFormatBox.Text = state.LabelNumberFormat;
+        _labelSeparatorBox.Text = state.LabelSeparator;
+        _labelFontFamilyBox.Text = state.LabelFontFamily;
+        _labelFontSizeBox.Text = state.LabelFontSizeText;
+        _labelBoldCheck.IsChecked = state.LabelBold;
+        _labelItalicCheck.IsChecked = state.LabelItalic;
+        _labelColorBox.Text = state.LabelColorText;
+        _markerCombo.SelectedIndex = state.MarkerIndex;
+        _markerSizeBox.Text = state.MarkerSizeText;
+        _explosionBox.Text = state.ExplosionText;
     }
 
-    private void UpdatePlannerFromControls()
-    {
-        _planner.SetFillColor(_fillColorBox.Text);
-        _planner.SetStrokeColor(_strokeColorBox.Text);
-        _planner.SetStrokeWidth(ParseOptional(_strokeWidthBox.Text, "Outline width"));
-        _planner.SetUsePointDataLabels(_usePointDataLabelsCheck.IsChecked == true);
-        _planner.SetShowValueLabels(_showValueLabelsCheck.IsChecked == true);
-        _planner.SetShowPercentLabels(_showPercentLabelsCheck.IsChecked == true);
-        _planner.SetShowCategoryLabels(_showCategoryLabelsCheck.IsChecked == true);
-        _planner.SetShowSeriesLabels(_showSeriesLabelsCheck.IsChecked == true);
-        _planner.SetShowLegendKeys(_showLegendKeysCheck.IsChecked == true);
-        _planner.SetShowBubbleSize(_showBubbleSizeCheck.IsChecked == true);
-        _planner.SetShowLeaderLines(_showLeaderLinesCheck.IsChecked);
-        _planner.SetLabelPosition(ChartDialogOptionProjection.ValueAtOrDefault(ChartDisplayOptionsPlanner.LabelPositionOptions, _labelPositionCombo.SelectedIndex, option => option.Value));
-        _planner.SetLabelNumberFormat(_labelNumberFormatBox.Text);
-        _planner.SetLabelSeparator(_labelSeparatorBox.Text);
-        _planner.SetLabelFontFamily(_labelFontFamilyBox.Text);
-        _planner.SetLabelFontSize(ParseOptional(_labelFontSizeBox.Text, "Label font size"));
-        _planner.SetLabelBold(_labelBoldCheck.IsChecked);
-        _planner.SetLabelItalic(_labelItalicCheck.IsChecked);
-        _planner.SetLabelColor(_labelColorBox.Text);
-        var marker = ChartDialogOptionProjection.ValueAtOrDefault(ChartPointOptionsPlanner.MarkerOptions, _markerCombo.SelectedIndex, option => option.Value, ChartMarkerSymbol.Auto);
-        _planner.SetMarkerSymbol(marker == ChartMarkerSymbol.Auto ? null : marker);
-        _planner.SetMarkerSize(ParseOptional(_markerSizeBox.Text, "Marker size"));
-        _planner.SetExplosionPercent(ParseOptionalInt(_explosionBox.Text, "Explosion"));
-    }
-
-    private static double? ParseOptional(string? text, string label)
-    {
-        return ChartDialogOptionProjection.ParseOptionalDouble(text, CultureInfo.CurrentCulture, value => double.IsFinite(value) && value >= 0, $"{label} must be a non-negative finite number or blank.");
-    }
-
-    private static string Format(double? value) => ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
-
-    private static string Format(int? value) => ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
-
-    private static int? ParseOptionalInt(string? text, string label)
-    {
-        return ChartDialogOptionProjection.ParseOptionalInt(text, CultureInfo.CurrentCulture, value => value is >= 0 and <= 100, $"{label} must be an integer from 0 to 100 or blank.");
-    }
-
-    private static int FindMarkerIndex(ChartMarkerSymbol? symbol)
-    {
-        var value = symbol ?? ChartMarkerSymbol.Auto;
-        return ChartDialogOptionProjection.FindIndex(ChartPointOptionsPlanner.MarkerOptions, value, option => option.Value);
-    }
-
-    private static int FindLabelPositionIndex(DataLabelPosition position) =>
-        ChartDialogOptionProjection.FindIndex(ChartDisplayOptionsPlanner.LabelPositionOptions, position, option => option.Value);
+    private ChartPointOptionsDialogInput ReadInput() => new(
+        _seriesCombo.SelectedIndex,
+        _pointCombo.SelectedIndex,
+        _fillColorBox.Text,
+        _strokeColorBox.Text,
+        _strokeWidthBox.Text,
+        _usePointDataLabelsCheck.IsChecked == true,
+        _showValueLabelsCheck.IsChecked == true,
+        _showPercentLabelsCheck.IsChecked == true,
+        _showCategoryLabelsCheck.IsChecked == true,
+        _showSeriesLabelsCheck.IsChecked == true,
+        _showLegendKeysCheck.IsChecked == true,
+        _showBubbleSizeCheck.IsChecked == true,
+        _showLeaderLinesCheck.IsChecked,
+        _labelPositionCombo.SelectedIndex,
+        _labelNumberFormatBox.Text,
+        _labelSeparatorBox.Text,
+        _labelFontFamilyBox.Text,
+        _labelFontSizeBox.Text,
+        _labelBoldCheck.IsChecked,
+        _labelItalicCheck.IsChecked,
+        _labelColorBox.Text,
+        _markerCombo.SelectedIndex,
+        _markerSizeBox.Text,
+        _explosionBox.Text);
 }

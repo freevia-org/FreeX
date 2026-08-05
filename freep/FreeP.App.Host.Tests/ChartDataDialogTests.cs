@@ -630,9 +630,11 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartSeriesOptionsDialog.cs");
 
-        source.Should().Contain("ChartSeriesOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartSeriesOptions");
+        source.Should().Contain("new ChartSeriesOptionsDialogSession(");
+        source.Should().Contain("_session.BuildCommitPlan(");
+        source.Should().Contain("_session.TryCommit(");
+        source.Should().NotContain("_planner.");
+        source.Should().NotContain("_editor.ApplyChartSeriesOptions");
         source.Should().NotContain("new SetChartSeriesOptionsCommand");
     }
 
@@ -641,9 +643,11 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartPointOptionsDialog.cs");
 
-        source.Should().Contain("ChartPointOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartPointOptions");
+        source.Should().Contain("new ChartPointOptionsDialogSession(");
+        source.Should().Contain("_session.BuildCommitPlan(");
+        source.Should().Contain("_session.TryCommit(");
+        source.Should().NotContain("_planner.");
+        source.Should().NotContain("_editor.ApplyChartPointOptions");
         source.Should().NotContain("new SetChartPointOptionsCommand");
     }
 
