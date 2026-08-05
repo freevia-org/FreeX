@@ -8893,7 +8893,9 @@ public sealed class DocumentView : Control
         IReadOnlyList<double> heights,
         double availableWidth,
         ParagraphFormatting pf,
+        PageSettings page,
         double naturalLineHeightScale,
+        string automaticHyphenationText,
         IReadOnlyDictionary<int, double> automaticHyphenWidths)
     {
         if (cells.Count == 0)
@@ -8903,6 +8905,7 @@ public sealed class DocumentView : Control
         var lineStart = 0;
         var lineWidth = 0.0;
         var lastBreak = -1;
+        var consecutiveAutomaticHyphenLines = 0;
 
         void AddLine(int from, int to)
         {
@@ -8922,10 +8925,22 @@ public sealed class DocumentView : Control
                 var spaceBreakAt = lastBreak >= lineStart ? lastBreak + 1 : -1;
                 var automaticBreak = FindLatestAutomaticHyphenBreak(
                     lineStart, index, availableWidth, measured, automaticHyphenWidths);
-                var breakAt = automaticBreak.BreakAt > spaceBreakAt
+                var useAutomaticHyphen = ShouldUseAutomaticHyphenBreak(
+                    page,
+                    consecutiveAutomaticHyphenLines,
+                    automaticHyphenationText,
+                    measured,
+                    lineStart,
+                    spaceBreakAt,
+                    automaticBreak.BreakAt,
+                    availableWidth);
+                var breakAt = useAutomaticHyphen
                     ? automaticBreak.BreakAt
                     : spaceBreakAt > lineStart ? spaceBreakAt : index;
                 AddLine(lineStart, breakAt);
+                consecutiveAutomaticHyphenLines = useAutomaticHyphen
+                    ? consecutiveAutomaticHyphenLines + 1
+                    : 0;
                 lineStart = breakAt;
                 lineWidth = 0;
                 lastBreak = -1;
@@ -8942,6 +8957,41 @@ public sealed class DocumentView : Control
 
         AddLine(lineStart, cells.Count);
         return totalHeight;
+    }
+
+    internal static bool ShouldUseAutomaticHyphenBreak(
+        PageSettings page,
+        int consecutiveHyphenatedLines,
+        string displayText,
+        IReadOnlyList<double> measured,
+        int lineStart,
+        int spaceBreakAt,
+        int automaticBreakAt,
+        double availableWidth)
+    {
+        if (automaticBreakAt <= spaceBreakAt)
+            return false;
+
+        var hasOrdinaryWordBreak = spaceBreakAt > lineStart;
+        var ordinaryVisibleEnd = spaceBreakAt;
+        while (ordinaryVisibleEnd > lineStart
+               && char.IsWhiteSpace(displayText[ordinaryVisibleEnd - 1]))
+        {
+            ordinaryVisibleEnd--;
+        }
+
+        var ordinaryVisibleWidth = 0.0;
+        for (var index = lineStart; index < ordinaryVisibleEnd; index++)
+            ordinaryVisibleWidth += measured[index];
+        var trailingWhitespacePt = hasOrdinaryWordBreak
+            ? Math.Max(0, availableWidth - ordinaryVisibleWidth) / PxPerPoint
+            : 0;
+
+        return AutomaticHyphenationDisplayPlanner.AllowsAutomaticLineBreak(
+            page,
+            consecutiveHyphenatedLines,
+            hasOrdinaryWordBreak,
+            trailingWhitespacePt);
     }
 
     private static (int BreakAt, double HyphenWidth) FindLatestAutomaticHyphenBreak(
@@ -9173,11 +9223,13 @@ public sealed class DocumentView : Control
         if (keepParagraphTogether && supportsCompleteParagraphPlanning)
         {
             var paragraphHeight = MeasurePlainParagraphHeight(
-                cells, measured, heights, availableWidth, pf, naturalLineHeightScale, automaticHyphenWidths);
+                cells, measured, heights, availableWidth, pf, _doc.Page,
+                naturalLineHeightScale, automaticHyphenationText, automaticHyphenWidths);
             ReserveCompleteParagraph(paragraphHeight);
         }
 
         var lineIndex = 0;
+        var consecutiveAutomaticHyphenLines = 0;
         var supportsSplitFloatFragments = alignment == TextAlignment.Left
             && Math.Abs(leftInset) < 0.01
             && Math.Abs(indentLeft) < 0.01
@@ -9234,7 +9286,15 @@ public sealed class DocumentView : Control
                 var spaceBreakAt = lastBreak >= lineStart ? lastBreak + 1 : -1;
                 var automaticBreak = FindLatestAutomaticHyphenBreak(
                     lineStart, i, lineAvail, measured, automaticHyphenWidths);
-                var useAutomaticHyphen = automaticBreak.BreakAt > spaceBreakAt;
+                var useAutomaticHyphen = ShouldUseAutomaticHyphenBreak(
+                    _doc.Page,
+                    consecutiveAutomaticHyphenLines,
+                    automaticHyphenationText,
+                    measured,
+                    lineStart,
+                    spaceBreakAt,
+                    automaticBreak.BreakAt,
+                    lineAvail);
                 var breakAt = useAutomaticHyphen
                     ? automaticBreak.BreakAt
                     : spaceBreakAt > lineStart ? spaceBreakAt : i;
@@ -9247,6 +9307,9 @@ public sealed class DocumentView : Control
                     automaticHyphenWidth: useAutomaticHyphen ? automaticBreak.HyphenWidth : 0,
                     automaticHyphenSourceCell: useAutomaticHyphen ? cells[breakAt - 1] : null,
                     automaticHyphenBreakOffset: useAutomaticHyphen ? breakAt : -1);
+                consecutiveAutomaticHyphenLines = useAutomaticHyphen
+                    ? consecutiveAutomaticHyphenLines + 1
+                    : 0;
                 lineIndex++;
                 lineStart = breakAt;
                 lineWidth = 0;

@@ -108,11 +108,59 @@ public sealed class AutomaticHyphenationRenderTests
         glyphCount.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void Hyphenation_zone_changes_measured_line_break_consumption()
+    {
+        const string text = "a hyphenation";
+        var measured = Enumerable.Repeat(5d, text.Length).ToArray();
+        var narrowPage = new PageSettings
+        {
+            AutoHyphenation = true,
+            HyphenationZonePt = 1,
+        };
+        var widePage = new PageSettings
+        {
+            AutoHyphenation = true,
+            HyphenationZonePt = 72,
+        };
+
+        DocumentView.ShouldUseAutomaticHyphenBreak(
+                narrowPage, 0, text, measured,
+                lineStart: 0, spaceBreakAt: 2, automaticBreakAt: 4, availableWidth: 40)
+            .Should().BeTrue();
+        DocumentView.ShouldUseAutomaticHyphenBreak(
+                widePage, 0, text, measured,
+                lineStart: 0, spaceBreakAt: 2, automaticBreakAt: 4, availableWidth: 40)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Consecutive_limit_rejects_generated_break_after_the_configured_streak()
+    {
+        var unlimitedGlyphs = -1;
+        var limitedGlyphs = -1;
+
+        await OnUiThread(() =>
+        {
+            var text = string.Join(' ', Enumerable.Repeat(LongWord, 3));
+            var (unlimitedDocument, _) = BuildDocument(true, text: text);
+            var (limitedDocument, _) = BuildDocument(true, text: text, consecutiveHyphenLimit: 1);
+
+            unlimitedGlyphs = Layout(unlimitedDocument).AutomaticHyphenGlyphs.Count;
+            limitedGlyphs = Layout(limitedDocument).AutomaticHyphenGlyphs.Count;
+        });
+
+        unlimitedGlyphs.Should().BeGreaterThan(limitedGlyphs);
+        limitedGlyphs.Should().BeGreaterThan(0);
+    }
+
     private static (TextDocument Document, Paragraph Paragraph) BuildDocument(
         bool autoHyphenation,
         bool suppressAutoHyphens = false,
         bool doNotHyphenateCaps = false,
-        string text = LongWord)
+        string text = LongWord,
+        double hyphenationZonePt = 0,
+        int consecutiveHyphenLimit = 0)
     {
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
@@ -124,6 +172,8 @@ public sealed class AutomaticHyphenationRenderTests
         document.Page.MarginBottomPt = 20;
         document.Page.AutoHyphenation = autoHyphenation;
         document.Page.DoNotHyphenateCaps = doNotHyphenateCaps;
+        document.Page.HyphenationZonePt = hyphenationZonePt;
+        document.Page.ConsecutiveHyphenLimit = consecutiveHyphenLimit;
 
         var paragraph = new Paragraph(text)
         {
