@@ -2234,6 +2234,72 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void Edit_NativeChartExLegend_RoundTripsPositionAndOverlayAttributes()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XElement(cxNs + "chartData", new XElement(cxNs + "data", new XAttribute("id", 0))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData", new XElement(cxNs + "v", "Revenue"))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0))))),
+                    new XElement(cxNs + "legend",
+                        new XAttribute("pos", "r"),
+                        new XAttribute("align", "ctr"),
+                        new XAttribute("overlay", "0")))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+        chart.Categories.AddRange(["Q1", "Q2"]);
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+
+        var importedPath = WriteToPptx(BuildPresWithChart(chart));
+        var imported = PptxPackageReader.Read(importedPath).Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        imported.Legend.Should().Be(LegendPosition.Right);
+        imported.LegendOverlay.Should().BeFalse();
+
+        imported.Legend = LegendPosition.Bottom;
+        imported.LegendOverlay = true;
+        var editedPath = WriteToPptx(BuildPresWithChart(imported));
+        using var archive = ZipFile.OpenRead(editedPath);
+        var edited = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var editedLegend = edited.Descendants(cxNs + "legend").Single();
+        editedLegend.Attribute("pos")!.Value.Should().Be("b");
+        editedLegend.Attribute("overlay")!.Value.Should().Be("1");
+        editedLegend.Attribute("align")!.Value.Should().Be("ctr");
+
+        var fresh = new ChartShape
+        {
+            ChartType = ChartType.Waterfall,
+            IsChartEx = true,
+            Legend = LegendPosition.Top,
+            LegendOverlay = false,
+        };
+        fresh.Categories.Add("Q1");
+        var freshSeries = new ChartSeries { Name = "Fresh" };
+        freshSeries.Values.Add(1);
+        fresh.Series.Add(freshSeries);
+        var freshPath = WriteToPptx(BuildPresWithChart(fresh));
+        using var freshArchive = ZipFile.OpenRead(freshPath);
+        var freshXml = XDocument.Load(freshArchive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        freshXml.Descendants(cxNs + "legend").Single().Attribute("pos")!.Value.Should().Be("t");
+    }
+
+    [Fact]
     public void Edit_NativeSingleSeriesChartEx_UpdatesDataWithoutChangingFamilyPayload()
     {
         const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";

@@ -262,6 +262,19 @@ internal static class PptxChartReader
                 .ToList(),
             Title = ReadChartExTitle(chart.Element(Cx + "title")),
         };
+        var legend = chart.Element(Cx + "legend");
+        if (legend is not null)
+        {
+            shape.Legend = legend.Attribute("pos")?.Value switch
+            {
+                "l" => LegendPosition.Left,
+                "t" => LegendPosition.Top,
+                "b" => LegendPosition.Bottom,
+                "r" => LegendPosition.Right,
+                _ => null,
+            };
+            shape.LegendOverlay = ParseNullableBoolAttr(legend.Attribute("overlay")?.Value);
+        }
         shape.Categories.AddRange(categories);
 
         foreach (var seriesElement in region.Elements(Cx + "series"))

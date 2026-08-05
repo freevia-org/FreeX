@@ -111,6 +111,7 @@ internal static class PptxChartWriter
             {
                 var preserved = XDocument.Parse(chart.PreservedChartExXml, LoadOptions.PreserveWhitespace);
                 UpdateChartExTitle(preserved, chart);
+                UpdateChartExLegend(preserved, chart);
                 UpdateChartExSeriesLayouts(preserved, chart);
                 UpdateChartExSeriesShapeProperties(preserved, chart);
                 UpdateChartExValueColorScales(preserved, chart);
@@ -156,7 +157,7 @@ internal static class PptxChartWriter
             new XElement(cx + "dataId", new XAttribute("val", 0)),
             BuildChartExLayoutPr(chart, cx));
 
-        return new XDocument(
+        var document = new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(cx + "chartSpace",
                 new XAttribute(XNamespace.Xmlns + "cx", cx.NamespaceName),
@@ -166,6 +167,48 @@ internal static class PptxChartWriter
                 new XElement(cx + "chart",
                     new XElement(cx + "plotArea",
                         new XElement(cx + "plotAreaRegion", series)))));
+        if (chart.Legend is { } position)
+            document.Root?.Element(cx + "chart")?.Add(BuildChartExLegend(position, chart.LegendOverlay, cx));
+        return document;
+    }
+
+    private static XElement BuildChartExLegend(
+        LegendPosition position,
+        bool? overlay,
+        XNamespace cx) =>
+        new(cx + "legend",
+            new XAttribute("pos", ChartExLegendPosition(position)),
+            overlay is { } value ? new XAttribute("overlay", value ? "1" : "0") : null);
+
+    private static string ChartExLegendPosition(LegendPosition position) =>
+        position switch
+        {
+            LegendPosition.Left => "l",
+            LegendPosition.Top => "t",
+            LegendPosition.Bottom => "b",
+            _ => "r",
+        };
+
+    private static void UpdateChartExLegend(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        if (chart.Legend is not { } position)
+            return;
+
+        var chartElement = document.Root?.Element(cx + "chart");
+        if (chartElement is null)
+            return;
+
+        var legend = chartElement.Element(cx + "legend");
+        if (legend is null)
+        {
+            chartElement.Add(BuildChartExLegend(position, chart.LegendOverlay, cx));
+            return;
+        }
+
+        legend.SetAttributeValue("pos", ChartExLegendPosition(position));
+        if (chart.LegendOverlay is { } overlay)
+            legend.SetAttributeValue("overlay", overlay ? "1" : "0");
     }
 
     private static void UpdateChartExTitle(XDocument document, ChartShape chart)
