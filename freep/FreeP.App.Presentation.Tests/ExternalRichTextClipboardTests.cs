@@ -1289,6 +1289,83 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void SerializeXamlPackage_RoundTripsNativeListsWithStartsAndNestedLevels()
+    {
+        var body = new TextBody
+        {
+            Paragraphs =
+            {
+                Numbered("Outer", AutoNumType.RomanUcPeriod, level: 0, startAt: 4),
+                new Paragraph
+                {
+                    Level = 1,
+                    BulletKind = BulletKind.Char,
+                    BulletChar = "\u25E6",
+                    Runs = { new Run { Text = "Child" } },
+                },
+                new Paragraph
+                {
+                    Level = 1,
+                    BulletKind = BulletKind.Char,
+                    BulletChar = "\u25AA",
+                    Runs = { new Run { Text = "Sibling" } },
+                },
+                Numbered("Next", AutoNumType.RomanUcPeriod),
+                Numbered("Restart", AutoNumType.RomanUcPeriod, startAt: 7),
+                new Paragraph { Runs = { new Run { Text = "Plain" } } },
+            },
+        };
+        var payload = new InCanvasRichClipboardPayload(
+            body,
+            InCanvasTextEditPlanner.ExtractPlainText(body));
+
+        var packageBytes = ExternalXamlClipboardPlanner.SerializeXamlPackage(payload);
+        using (var package = new ZipArchive(
+                   new MemoryStream(packageBytes, writable: false),
+                   ZipArchiveMode.Read))
+        using (var stream = package.GetEntry("Xaml/Document.xaml")!.Open())
+        using (var reader = new StreamReader(stream))
+        {
+            var xaml = reader.ReadToEnd();
+            xaml.Should().Contain("<List MarkerStyle=\"UpperRoman\" StartIndex=\"4\">");
+            xaml.Should().Contain("<List MarkerStyle=\"Circle\">");
+            xaml.Should().Contain("<List MarkerStyle=\"Square\">");
+            xaml.Should().Contain("<List MarkerStyle=\"UpperRoman\" StartIndex=\"7\">");
+        }
+
+        var restored = ExternalXamlClipboardPlanner.TryParseXamlPackage(packageBytes);
+        restored.Should().NotBeNull();
+        restored!.Body.Paragraphs.Should().HaveCount(6);
+        restored.Body.Paragraphs[0].AutoNumType.Should().Be(AutoNumType.RomanUcPeriod);
+        restored.Body.Paragraphs[0].AutoNumStartAt.Should().Be(4);
+        restored.Body.Paragraphs[0].AutoNumStartAtSpecified.Should().BeTrue();
+        restored.Body.Paragraphs[1].Level.Should().Be(1);
+        restored.Body.Paragraphs[1].BulletChar.Should().Be("\u25E6");
+        restored.Body.Paragraphs[2].BulletChar.Should().Be("\u25AA");
+        restored.Body.Paragraphs[3].Level.Should().Be(0);
+        restored.Body.Paragraphs[4].AutoNumStartAt.Should().Be(7);
+        restored.Body.Paragraphs[4].AutoNumStartAtSpecified.Should().BeTrue();
+        restored.Body.Paragraphs[5].BulletKind.Should().Be(BulletKind.None);
+    }
+
+    private static Paragraph Numbered(
+        string text,
+        AutoNumType type,
+        int level = 0,
+        int startAt = 1)
+    {
+        return new Paragraph
+        {
+            Level = level,
+            BulletKind = BulletKind.Auto,
+            AutoNumType = type,
+            AutoNumStartAt = startAt,
+            AutoNumStartAtSpecified = startAt != 1,
+            Runs = { new Run { Text = text } },
+        };
+    }
+
+    [Fact]
     public void RtfCharacterDirection_RtlchAndLtrch_PreserveMixedRunOverrides()
     {
         const string rtf =

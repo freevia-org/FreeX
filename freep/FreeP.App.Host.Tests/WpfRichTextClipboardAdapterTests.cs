@@ -486,6 +486,71 @@ public sealed class WpfRichTextClipboardAdapterTests
     }
 
     [StaFact]
+    public void SharedXamlPackage_WithNativeLists_IsAcceptedByWpfTextRangeLoader()
+    {
+        var source = new TextBody
+        {
+            Paragraphs =
+            {
+                Numbered("Outer", AutoNumType.RomanUcPeriod, startAt: 4),
+                new Paragraph
+                {
+                    Level = 1,
+                    BulletKind = BulletKind.Char,
+                    BulletChar = "\u25E6",
+                    Runs = { new Run { Text = "Child" } },
+                },
+                new Paragraph
+                {
+                    Level = 1,
+                    BulletKind = BulletKind.Char,
+                    BulletChar = "\u25E6",
+                    Runs = { new Run { Text = "Sibling" } },
+                },
+                Numbered("Next", AutoNumType.RomanUcPeriod),
+                Numbered("Restart", AutoNumType.RomanUcPeriod, startAt: 7),
+            },
+        };
+        var payload = new InCanvasRichClipboardPayload(
+            source,
+            InCanvasTextEditPlanner.ExtractPlainText(source));
+        var packageBytes = ExternalXamlClipboardPlanner.SerializeXamlPackage(payload);
+
+        var document = new System.Windows.Documents.FlowDocument();
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        new System.Windows.Documents.TextRange(document.ContentStart, document.ContentEnd)
+            .Load(stream, DataFormats.XamlPackage);
+
+        var topLists = document.Blocks
+            .OfType<System.Windows.Documents.List>()
+            .ToArray();
+        topLists.Should().HaveCount(2);
+        topLists[0].MarkerStyle.Should().Be(System.Windows.TextMarkerStyle.UpperRoman);
+        topLists[0].StartIndex.Should().Be(4);
+        topLists[0].ListItems.Should().HaveCount(2);
+        var nested = topLists[0].ListItems.Cast<System.Windows.Documents.ListItem>().First().Blocks
+            .OfType<System.Windows.Documents.List>()
+            .Should().ContainSingle()
+            .Subject;
+        nested.MarkerStyle.Should().Be(System.Windows.TextMarkerStyle.Circle);
+        nested.ListItems.Should().HaveCount(2);
+        topLists[1].MarkerStyle.Should().Be(System.Windows.TextMarkerStyle.UpperRoman);
+        topLists[1].StartIndex.Should().Be(7);
+    }
+
+    private static Paragraph Numbered(string text, AutoNumType type, int startAt = 1)
+    {
+        return new Paragraph
+        {
+            BulletKind = BulletKind.Auto,
+            AutoNumType = type,
+            AutoNumStartAt = startAt,
+            AutoNumStartAtSpecified = startAt != 1,
+            Runs = { new Run { Text = text } },
+        };
+    }
+
+    [StaFact]
     public void SharedXamlPackage_WithInlineImage_IsAcceptedByNativeWpfTextRangeLoader()
     {
         var imageBytes = Convert.FromBase64String(
