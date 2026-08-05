@@ -31,6 +31,7 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\FreeP.App.Localization\FreeP.App.Localization.csproj" />
     <ProjectReference Include="..\FreeP.App.Host\FreeP.App.Host.csproj" />
+    <ProjectReference Include="..\FreeP.App.Ole.Windows\FreeP.App.Ole.Windows.csproj" />
     <ProjectReference Include="..\FreeP.App.Rendering.Wpf\FreeP.App.Rendering.Wpf.csproj" />
     <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
   </ItemGroup>
