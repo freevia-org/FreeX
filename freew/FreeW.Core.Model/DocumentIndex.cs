@@ -1,13 +1,13 @@
 namespace FreeW.Core.Model;
 
 /// <summary>
-/// Pure, WPF-free generation of a document index from its marked entries (see
-/// <see cref="TextDocument.IndexEntries"/>). Lives in the model project so it is unit-testable without
+/// Pure, WPF-free generation of a document index from hidden body <c>XE</c> marks plus legacy
+/// <see cref="TextDocument.IndexEntries"/>. Lives in the model project so it is unit-testable without
 /// any UI, mirroring <see cref="TableOfContents"/>.
 /// <para>
 /// <see cref="Build"/> produces ordinary styled <see cref="Paragraph"/>s — an "Index" heading
-/// followed by one paragraph per distinct marked term, sorted alphabetically (case-insensitive) with
-/// duplicates collapsed. The paragraphs carry dedicated index style ids (<see cref="HeadingStyleId"/>
+/// followed by one paragraph per distinct marked term and its page list, sorted alphabetically
+/// (case-insensitive) with duplicate pages collapsed. The paragraphs carry dedicated index style ids (<see cref="HeadingStyleId"/>
 /// and <see cref="EntryStyleId"/>) so they:
 /// </para>
 /// <list type="bullet">
@@ -30,16 +30,98 @@ public static class DocumentIndex
 
     /// <summary>
     /// Builds the index paragraphs for <paramref name="document"/>: an "Index" heading
-    /// (<see cref="HeadingStyleId"/>) followed by one paragraph per distinct marked term in
-    /// <see cref="TextDocument.IndexEntries"/>, sorted alphabetically (case-insensitive) with duplicates
-    /// collapsed. A document with no marked entries yields just the heading paragraph. Deterministic and
+    /// (<see cref="HeadingStyleId"/>) followed by one paragraph per distinct hidden or legacy marked term,
+    /// sorted alphabetically with its distinct page labels. A document with no marked entries yields just
+    /// the heading paragraph. Deterministic and
     /// side-effect free — it never mutates <paramref name="document"/>.
     /// </summary>
-    public static IReadOnlyList<Paragraph> Build(TextDocument document)
+    public static IReadOnlyList<Paragraph> Build(
+        TextDocument document,
+        Func<int, string?>? pageTextOf = null)
     {
         ArgumentNullException.ThrowIfNull(document);
-        return Build(document.IndexEntries.Select(e => e.Term));
+
+        var occurrences = new List<IndexOccurrence>();
+        var bodyTerms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        {
+            if (document.Blocks[blockIndex] is not Paragraph paragraph)
+                continue;
+
+            foreach (var run in paragraph.Runs)
+            {
+                if (MarkedTerm(run) is not { Length: > 0 } term)
+                    continue;
+                occurrences.Add(new IndexOccurrence(term, blockIndex));
+                bodyTerms.Add(term);
+            }
+        }
+
+        foreach (var entry in document.IndexEntries)
+        {
+            if (entry.Term.Length > 0 && !bodyTerms.Contains(entry.Term))
+                occurrences.Add(new IndexOccurrence(entry.Term, BlockIndex: null));
+        }
+
+        var paragraphs = new List<Paragraph>
+        {
+            new(HeadingText) { StyleId = HeadingStyleId }
+        };
+        foreach (var group in occurrences
+            .GroupBy(occurrence => occurrence.Term, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(group => group.Key, StringComparer.Ordinal))
+        {
+            var pages = group
+                .Select(occurrence => ResolvePageText(document, occurrence.BlockIndex, pageTextOf))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            paragraphs.Add(new Paragraph(group.First().Term + ", " + string.Join(", ", pages))
+            {
+                StyleId = EntryStyleId
+            });
+        }
+
+        return paragraphs;
     }
+
+    /// <summary>Creates Word's hidden <c>XE</c> field mark for one index term.</summary>
+    public static Run MarkRun(string term)
+    {
+        var normalized = (term ?? string.Empty).Trim();
+        var escaped = normalized.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("\"", "\\\"", StringComparison.Ordinal);
+        return Run.ComplexFieldRun($" XE \"{escaped}\" ");
+    }
+
+    /// <summary>Returns the term carried by a hidden <c>XE</c> field run, or null for another run.</summary>
+    public static string? MarkedTerm(Run run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        if (run.ComplexField is not { Keyword: "XE" } field)
+            return null;
+
+        var term = ComplexFieldEngine.FirstArgument(field.Instruction)?.Trim();
+        return string.IsNullOrEmpty(term) ? null : term;
+    }
+
+    private static string ResolvePageText(
+        TextDocument document,
+        int? blockIndex,
+        Func<int, string?>? pageTextOf)
+    {
+        if (blockIndex is not { } index)
+            return "1";
+
+        var pageText = pageTextOf?.Invoke(index);
+        if (!string.IsNullOrEmpty(pageText))
+            return pageText;
+
+        return (CrossReferences.ExplicitPageNumberAtBlock(document, index) ?? 1)
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private sealed record IndexOccurrence(string Term, int? BlockIndex);
 
     /// <summary>
     /// Builds the index paragraphs from an arbitrary set of <paramref name="terms"/>: an "Index" heading

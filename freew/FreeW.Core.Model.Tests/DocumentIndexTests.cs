@@ -54,8 +54,48 @@ public class DocumentIndexTests
 
         index.Select(p => p.PlainText).Should().Equal(
             DocumentIndex.HeadingText,
-            "alpha",
-            "Zebra");
+            "alpha, 1",
+            "Zebra, 1");
+    }
+
+    [Fact]
+    public void Build_HiddenMarksAggregateDistinctLogicalPagesAndOverrideLegacySideStore()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("First"), DocumentIndex.MarkRun("Alpha") }
+        });
+        doc.Blocks.Add(DocumentOps.CreatePageBreak());
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Second"),
+                DocumentIndex.MarkRun("alpha"),
+                DocumentIndex.MarkRun("Beta"),
+                DocumentIndex.MarkRun("Alpha")
+            }
+        });
+        doc.IndexEntries.Add(new IndexEntry("Alpha"));
+
+        var index = DocumentIndex.Build(doc, blockIndex => blockIndex == 0 ? "iv" : "1");
+
+        index.Select(paragraph => paragraph.PlainText).Should().Equal(
+            DocumentIndex.HeadingText,
+            "Alpha, iv, 1",
+            "Beta, 1");
+    }
+
+    [Fact]
+    public void MarkRun_RoundTripsQuotedTermThroughFieldInstructionParser()
+    {
+        var mark = DocumentIndex.MarkRun("  Alpha \\\"quoted\\\"  ");
+
+        mark.Text.Should().BeEmpty();
+        mark.ComplexField!.Keyword.Should().Be("XE");
+        DocumentIndex.MarkedTerm(mark).Should().Be("Alpha \\\"quoted\\\"");
+        DocumentIndex.MarkedTerm(new Run("Alpha")).Should().BeNull();
     }
 
     [Fact]

@@ -704,7 +704,7 @@ public sealed class ReferencesTabTests
             .Where(DocumentIndex.IsIndexParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Equal("Index", "Alpha", "Beta");
+            .Equal("Index", "Alpha, 1", "Beta, 1");
         view.Document.Blocks.OfType<Paragraph>()
             .Count(paragraph => paragraph.StyleId == DocumentIndex.HeadingStyleId)
             .Should()
@@ -730,6 +730,29 @@ public sealed class ReferencesTabTests
             .Count(paragraph => paragraph.StyleId == TableOfFigures.HeadingStyleId)
             .Should()
             .Be(1);
+    }
+
+    [Fact]
+    public void Index_refresh_aggregates_logical_pages_from_xe_occurrences()
+    {
+        var view = ViewWith(
+            new Paragraph(DocumentIndex.HeadingText) { StyleId = DocumentIndex.HeadingStyleId },
+            new Paragraph("Old, 9") { StyleId = DocumentIndex.EntryStyleId },
+            new Paragraph { Runs = { new Run("First"), DocumentIndex.MarkRun("Alpha") } },
+            DocumentOps.CreatePageBreak(),
+            new Paragraph
+            {
+                Runs = { new Run("Second"), DocumentIndex.MarkRun("Alpha"), DocumentIndex.MarkRun("Beta") }
+            });
+        view.Document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        view.Document.Page.PageNumberStartAt = 4;
+
+        view.RefreshIndex();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(DocumentIndex.IsIndexParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Alpha, IV, V", "Beta, V");
     }
 
     [Fact]
@@ -1185,7 +1208,7 @@ public sealed class ReferencesTabTests
             .Where(DocumentIndex.IsIndexParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Contain("Alpha");
+            .Contain("Alpha, 1");
 
         var authoritiesView = ViewWith(new Paragraph("Brown v. Board"));
         var authoritiesRegistry = FreeWRibbon.BuildRegistry(authoritiesView, NoopCallbacks() with

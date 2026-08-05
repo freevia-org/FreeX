@@ -327,6 +327,9 @@ public static class ComplexFieldEngine
             && string.Equals(style.Name, argument, StringComparison.OrdinalIgnoreCase);
     }
 
+    internal static string? FirstArgument(string instruction) =>
+        Tokenize(instruction).FirstOrDefault(token => !token.StartsWith('\\'));
+
     // Splits a field instruction into whitespace-separated tokens, skipping the leading keyword, honouring
     // double-quoted spans (so a quoted argument with spaces stays one token) and splitting a "\x" switch
     // letter from a following value. The leading keyword is dropped so callers see only argument/switches.
