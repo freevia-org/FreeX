@@ -112,6 +112,7 @@ internal static class PptxChartWriter
                 var preserved = XDocument.Parse(chart.PreservedChartExXml, LoadOptions.PreserveWhitespace);
                 UpdateChartExTitle(preserved, chart);
                 UpdateChartExSeriesLayouts(preserved, chart);
+                UpdateChartExSeriesShapeProperties(preserved, chart);
                 UpdateChartExValueColorScales(preserved, chart);
                 UpdateChartExSeriesDataPoints(preserved, chart);
                 UpdateChartExSeriesDataLabels(preserved, chart);
@@ -351,6 +352,86 @@ internal static class PptxChartWriter
             if (positions.Elements().Any())
                 InsertBeforeOrAdd(series[index], anchor, positions);
         }
+    }
+
+    private static void UpdateChartExSeriesShapeProperties(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var series = document.Descendants(cx + "plotAreaRegion")
+            .Elements(cx + "series")
+            .ToList();
+
+        if (series.Count == 0 || series.Count != chart.Series.Count)
+            return;
+
+        for (var index = 0; index < series.Count; index++)
+        {
+            var source = chart.Series[index];
+            if (source.Fill is null && source.FillColor is null && source.LineStyle is null)
+                continue;
+
+            var shapeProperties = series[index].Element(cx + "spPr");
+            if (shapeProperties is null)
+            {
+                shapeProperties = new XElement(cx + "spPr");
+                var anchor = series[index].Elements().FirstOrDefault(element =>
+                    element.Name == cx + "valueColors"
+                    || element.Name == cx + "valueColorPositions"
+                    || element.Name == cx + "dataPt"
+                    || element.Name == cx + "dataLabels"
+                    || element.Name == cx + "dataId"
+                    || element.Name == cx + "layoutPr");
+                InsertBeforeOrAdd(series[index], anchor, shapeProperties);
+            }
+
+            if (source.Fill is not null || source.FillColor is not null)
+            {
+                foreach (var child in shapeProperties.Elements()
+                             .Where(element => element.Name == A + "noFill"
+                                || element.Name == A + "solidFill"
+                                || element.Name == A + "gradFill"
+                                || element.Name == A + "pattFill")
+                             .ToList())
+                    child.Remove();
+
+                var fill = BuildChartFillEl(source.Fill, source.FillColor);
+                if (fill is not null)
+                    shapeProperties.AddFirst(fill);
+            }
+
+            if (source.LineStyle is not null)
+                MergeChartExSeriesLine(shapeProperties, source.LineStyle);
+        }
+    }
+
+    private static void MergeChartExSeriesLine(XElement shapeProperties, ChartLineStyle style)
+    {
+        var modeled = BuildLineStyleEl(style);
+        if (modeled is null)
+            return;
+
+        var line = shapeProperties.Element(A + "ln");
+        if (line is null)
+        {
+            shapeProperties.Add(modeled);
+            return;
+        }
+
+        line.Attribute("w")?.Remove();
+        if (modeled.Attribute("w") is { } width)
+            line.Add(new XAttribute("w", width.Value));
+
+        foreach (var child in line.Elements()
+                     .Where(element => element.Name == A + "noFill"
+                        || element.Name == A + "solidFill"
+                        || element.Name == A + "gradFill"
+                        || element.Name == A + "pattFill"
+                        || element.Name == A + "prstDash")
+                     .ToList())
+            child.Remove();
+
+        foreach (var child in modeled.Elements())
+            line.Add(new XElement(child));
     }
 
     private static void AddChartExValueColor(

@@ -2162,6 +2162,78 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void Edit_NativeChartExSeriesFormatting_RoundTripsWithoutFlatteningShapeExtensions()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        const string drawingMlUri = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace cxNs = chartExUri;
+        XNamespace aNs = drawingMlUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XAttribute(XNamespace.Xmlns + "a", drawingMlUri),
+                new XElement(cxNs + "chartData", new XElement(cxNs + "data", new XAttribute("id", 0))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData", new XElement(cxNs + "v", "Revenue"))),
+                                new XElement(cxNs + "spPr",
+                                    new XElement(aNs + "solidFill",
+                                        new XElement(aNs + "srgbClr", new XAttribute("val", "FF0000"))),
+                                    new XElement(aNs + "ln",
+                                        new XAttribute("w", 12700),
+                                        new XElement(aNs + "solidFill",
+                                            new XElement(aNs + "srgbClr", new XAttribute("val", "0000FF"))),
+                                        new XElement(aNs + "prstDash", new XAttribute("val", "dash"))),
+                                    new XElement(aNs + "effectLst",
+                                        new XElement(aNs + "outerShdw", new XAttribute("blurRad", 12700)))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0))))))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+        chart.Categories.AddRange(["Q1", "Q2"]);
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+
+        var importedPath = WriteToPptx(BuildPresWithChart(chart));
+        var imported = PptxPackageReader.Read(importedPath).Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        imported.Series[0].FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xFF0000));
+        var importedLine = imported.Series[0].LineStyle!;
+        importedLine.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x0000FF));
+        importedLine.WidthPt.Should().BeApproximately(1, 3);
+        importedLine.Dash.Should().Be(OutlineDash.Dash);
+
+        imported.Series[0].FillColor = new ThemeAwareColor(SrgbColor.FromRgb(0x00AA00));
+        importedLine.Color = new ThemeAwareColor(SrgbColor.FromRgb(0xAA00AA));
+        importedLine.WidthPt = 2.25;
+        var editedPath = WriteToPptx(BuildPresWithChart(imported));
+        using var archive = ZipFile.OpenRead(editedPath);
+        var edited = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var editedSeries = edited.Descendants(cxNs + "series").Single();
+        var shapeProperties = editedSeries.Element(cxNs + "spPr")!;
+        shapeProperties.Element(aNs + "solidFill")!
+            .Element(aNs + "srgbClr")!
+            .Attribute("val")!.Value.Should().Be("00AA00");
+        shapeProperties.Element(aNs + "ln")!
+            .Element(aNs + "solidFill")!
+            .Element(aNs + "srgbClr")!
+            .Attribute("val")!.Value.Should().Be("AA00AA");
+        shapeProperties.Element(aNs + "ln")!.Attribute("w")!.Value.Should().Be("28575");
+        shapeProperties.Element(aNs + "effectLst").Should().NotBeNull();
+        editedSeries.Elements().Select(element => element.Name.LocalName)
+            .Should().ContainInOrder("tx", "spPr", "dataId");
+    }
+
+    [Fact]
     public void Edit_NativeSingleSeriesChartEx_UpdatesDataWithoutChangingFamilyPayload()
     {
         const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
