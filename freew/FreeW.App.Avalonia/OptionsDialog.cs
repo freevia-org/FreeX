@@ -160,49 +160,31 @@ internal sealed class OptionsDialog : FreeWDialogWindow
     private void Accept()
     {
         _status.IsVisible = false;
-        if (!OptionsDialogPlanner.TryParseRecentFilesCap(_recentFilesCap.Text, out var cap))
+        var input = new OptionsDialogInput(
+            _recentFilesCap.Text,
+            (_defaultFormat.SelectedItem as OptionsDialogFormatChoice)?.Extension,
+            _uiLanguage.Text,
+            CheckedToggles(),
+            _replacementEditors
+                .Select(row => new OptionsDialogReplacementInput(row.Replace.Text, row.With.Text))
+                .ToArray());
+        if (!OptionsDialogWorkflowPlanner.TryBuildResult(input, out var result, out var validation))
         {
-            _status.Text = $"Enter a whole number between {FreeWOptions.MinRecentFilesCap} and {FreeWOptions.MaxRecentFilesCap}.";
+            _status.Text = validation!.Message;
             _status.IsVisible = true;
-            _recentFilesCap.Focus();
+            if (validation.Target == OptionsDialogValidationTarget.RecentFilesCap)
+                AvaloniaCompactDialogChrome.FocusAndSelect(_recentFilesCap);
             return;
         }
 
-        var format = (_defaultFormat.SelectedItem as OptionsDialogFormatChoice)?.Extension;
-        var autoFormat = new AutoFormatOptions
-        {
-            SmartQuotes = _smartQuotes.IsChecked == true,
-            Dashes = _dashes.IsChecked == true,
-            Ellipsis = _ellipsis.IsChecked == true,
-            Symbols = _symbols.IsChecked == true,
-            Capitalization = _capitalization.IsChecked == true,
-            BulletedLists = _bulletedLists.IsChecked == true,
-            NumberedLists = _numberedLists.IsChecked == true,
-            Ordinals = _ordinals.IsChecked == true,
-            Fractions = _fractions.IsChecked == true,
-            Hyperlinks = _hyperlinks.IsChecked == true,
-        };
-        var autoCorrect = new AutoCorrectOptions
-        {
-            CorrectTwoInitialCapitals = _correctTwoInitialCaps.IsChecked == true,
-            CapitalizeDayNames = _capitalizeDayNames.IsChecked == true,
-            ReplaceText = _replaceText.IsChecked == true,
-            Replacements = _replacementEditors
-                .Select(row => new { Replace = row.Replace.Text, With = row.With.Text })
-                .Where(row => !string.IsNullOrWhiteSpace(row.Replace) && !string.IsNullOrWhiteSpace(row.With))
-                .Select(row => new AutoCorrectReplacement(row.Replace!.Trim(), row.With!))
-                .ToList(),
-        };
-
-        Result = OptionsDialogPlanner.BuildResult(
-            cap,
-            format,
-            _uiLanguage.Text,
-            _autoCorrectEnabled.IsChecked == true,
-            autoFormat,
-            autoCorrect);
+        Result = result!;
         Close();
     }
+
+    private OptionsDialogToggleKind[] CheckedToggles() =>
+        Enum.GetValues<OptionsDialogToggleKind>()
+            .Where(kind => ToggleFor(kind).IsChecked == true)
+            .ToArray();
 
     private Control BuildGeneralTab()
     {
@@ -257,7 +239,9 @@ internal sealed class OptionsDialog : FreeWDialogWindow
             Margin = new Thickness(0, OptionsDialogPlanner.ToggleTopMargin + 2, 0, 0),
         });
 
-        void SyncReplacements() => _replacements.IsEnabled = _replaceText.IsChecked == true;
+        void SyncReplacements() => _replacements.IsEnabled = OptionsDialogWorkflowPlanner.PlanEnabledState(
+            _autoCorrectEnabled.IsChecked == true,
+            _replaceText.IsChecked == true).ReplacementsEnabled;
         _replaceText.IsCheckedChanged += (_, _) => SyncReplacements();
         SyncReplacements();
         return panel;
@@ -395,8 +379,11 @@ internal sealed class OptionsDialog : FreeWDialogWindow
 
         void SyncEnabled()
         {
+            var enabledState = OptionsDialogWorkflowPlanner.PlanEnabledState(
+                _autoCorrectEnabled.IsChecked == true,
+                _replaceText.IsChecked == true);
             foreach (var box in ruleBoxes)
-                box.IsEnabled = _autoCorrectEnabled.IsChecked == true;
+                box.IsEnabled = enabledState.AutoFormatRulesEnabled;
         }
         _autoCorrectEnabled.IsCheckedChanged += (_, _) => SyncEnabled();
         SyncEnabled();

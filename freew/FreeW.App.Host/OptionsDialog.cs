@@ -156,8 +156,11 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         // disabling them with the master checkbox.
         void SyncEnabled()
         {
+            var enabledState = OptionsDialogWorkflowPlanner.PlanEnabledState(
+                _autoCorrectEnabled.IsChecked == true,
+                _replaceText.IsChecked == true);
             foreach (var box in ruleBoxes)
-                box.IsEnabled = _autoCorrectEnabled.IsChecked == true;
+                box.IsEnabled = enabledState.AutoFormatRulesEnabled;
         }
         _autoCorrectEnabled.Checked += (_, _) => SyncEnabled();
         _autoCorrectEnabled.Unchecked += (_, _) => SyncEnabled();
@@ -255,7 +258,9 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         });
 
         // The replace table only applies when "Replace text as you type" is on; mirror that in the UI.
-        void SyncTable() => _replacements.IsEnabled = _replaceText.IsChecked == true;
+        void SyncTable() => _replacements.IsEnabled = OptionsDialogWorkflowPlanner.PlanEnabledState(
+            _autoCorrectEnabled.IsChecked == true,
+            _replaceText.IsChecked == true).ReplacementsEnabled;
         _replaceText.Checked += (_, _) => SyncTable();
         _replaceText.Unchecked += (_, _) => SyncTable();
         SyncTable();
@@ -265,48 +270,33 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Commit()
     {
-        if (!OptionsDialogPlanner.TryParseRecentFilesCap(_recentFilesCap.Text, out var cap))
-        {
-            DialogMessageHelper.ShowWarning(
-                this,
-                $"Enter a whole number between {FreeWOptions.MinRecentFilesCap} and {FreeWOptions.MaxRecentFilesCap} for the recent-files count.",
-                Title);
-            DialogFocus.FocusAndSelect(_recentFilesCap);
-            return;
-        }
-
-        var format = (_defaultFormat.SelectedItem as ComboBoxItem)?.Tag as string;
-        var autoFormat = new AutoFormatOptions
-        {
-            SmartQuotes = _smartQuotes.IsChecked == true,
-            Dashes = _dashes.IsChecked == true,
-            Ellipsis = _ellipsis.IsChecked == true,
-            Symbols = _symbols.IsChecked == true,
-            Capitalization = _capitalization.IsChecked == true,
-            BulletedLists = _bulletedLists.IsChecked == true,
-            NumberedLists = _numberedLists.IsChecked == true,
-            Ordinals = _ordinals.IsChecked == true,
-            Fractions = _fractions.IsChecked == true,
-            Hyperlinks = _hyperlinks.IsChecked == true,
-        };
         // Commit any in-progress cell edit so the last-typed row is captured before we read the rows.
         _replacements.CommitEdit(DataGridEditingUnit.Row, true);
 
-        var autoCorrect = new AutoCorrectOptions
+        var input = new OptionsDialogInput(
+            _recentFilesCap.Text,
+            (_defaultFormat.SelectedItem as ComboBoxItem)?.Tag as string,
+            _uiLanguage.Text,
+            CheckedToggles(),
+            _replacementRows
+                .Select(row => new OptionsDialogReplacementInput(row.Replace, row.With))
+                .ToArray());
+        if (!OptionsDialogWorkflowPlanner.TryBuildResult(input, out var result, out var validation))
         {
-            CorrectTwoInitialCapitals = _correctTwoInitialCaps.IsChecked == true,
-            CapitalizeDayNames = _capitalizeDayNames.IsChecked == true,
-            ReplaceText = _replaceText.IsChecked == true,
-            Replacements = _replacementRows
-                .Where(r => !string.IsNullOrWhiteSpace(r.Replace) && !string.IsNullOrEmpty(r.With))
-                .Select(r => new AutoCorrectReplacement(r.Replace!.Trim(), r.With!))
-                .ToList(),
-        };
+            DialogMessageHelper.ShowWarning(this, validation!.Message, Title);
+            if (validation.Target == OptionsDialogValidationTarget.RecentFilesCap)
+                DialogFocus.FocusAndSelect(_recentFilesCap);
+            return;
+        }
 
-        Result = OptionsDialogPlanner.BuildResult(
-            cap, format, _uiLanguage.Text, _autoCorrectEnabled.IsChecked == true, autoFormat, autoCorrect);
+        Result = result!;
         DialogResult = true;
     }
+
+    private OptionsDialogToggleKind[] CheckedToggles() =>
+        Enum.GetValues<OptionsDialogToggleKind>()
+            .Where(kind => ToggleFor(kind).IsChecked == true)
+            .ToArray();
 
     // WPF can settle star columns at MinWidth while a DataGrid is measured inside a size-to-content dialog.
     // Realize the declared 1:2 weights against the current viewport once it is available, and again only

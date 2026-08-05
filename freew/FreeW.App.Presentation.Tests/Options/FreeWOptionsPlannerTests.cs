@@ -142,6 +142,81 @@ public sealed class FreeWOptionsPlannerTests
     }
 
     [Fact]
+    public void Workflow_TryBuildResult_ProjectsAllOptionGroupsAndReplacementRows()
+    {
+        var checkedToggles = new[]
+        {
+            OptionsDialogToggleKind.AutoCorrectEnabled,
+            OptionsDialogToggleKind.SmartQuotes,
+            OptionsDialogToggleKind.Ellipsis,
+            OptionsDialogToggleKind.Capitalization,
+            OptionsDialogToggleKind.NumberedLists,
+            OptionsDialogToggleKind.Fractions,
+            OptionsDialogToggleKind.CorrectTwoInitialCapitals,
+            OptionsDialogToggleKind.ReplaceText,
+        };
+        var input = new OptionsDialogInput(
+            "7",
+            FreeWOptions.DocxDefaultFormat,
+            "  uk-UA  ",
+            checkedToggles,
+            [
+                new("  teh  ", "the"),
+                new("", "ignored"),
+                new("missing-value", null),
+            ]);
+
+        OptionsDialogWorkflowPlanner.TryBuildResult(input, out var result, out var validation)
+            .Should().BeTrue();
+
+        validation.Should().BeNull();
+        result.Should().NotBeNull();
+        result!.RecentFilesCap.Should().Be(7);
+        result.UiLanguage.Should().Be("uk-UA");
+        result.AutoCorrectEnabled.Should().BeTrue();
+        result.AutoFormat.SmartQuotes.Should().BeTrue();
+        result.AutoFormat.Dashes.Should().BeFalse();
+        result.AutoFormat.Ellipsis.Should().BeTrue();
+        result.AutoFormat.Capitalization.Should().BeTrue();
+        result.AutoFormat.NumberedLists.Should().BeTrue();
+        result.AutoFormat.Fractions.Should().BeTrue();
+        result.AutoFormat.Hyperlinks.Should().BeFalse();
+        result.AutoCorrect.CorrectTwoInitialCapitals.Should().BeTrue();
+        result.AutoCorrect.CapitalizeDayNames.Should().BeFalse();
+        result.AutoCorrect.ReplaceText.Should().BeTrue();
+        result.AutoCorrect.Replacements.Should().Equal(new AutoCorrectReplacement("teh", "the"));
+    }
+
+    [Fact]
+    public void Workflow_TryBuildResult_ReportsRecentFilesValidationWithoutBuildingOptions()
+    {
+        var input = new OptionsDialogInput("not-a-number", null, null, [], []);
+
+        OptionsDialogWorkflowPlanner.TryBuildResult(input, out var result, out var validation)
+            .Should().BeFalse();
+
+        result.Should().BeNull();
+        validation.Should().Be(new OptionsDialogValidation(
+            OptionsDialogValidationTarget.RecentFilesCap,
+            OptionsDialogWorkflowPlanner.RecentFilesCapValidationMessage));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Workflow_PlanEnabledState_ProjectsIndependentControlGroups(
+        bool autoCorrectEnabled,
+        bool replaceTextEnabled)
+    {
+        var state = OptionsDialogWorkflowPlanner.PlanEnabledState(autoCorrectEnabled, replaceTextEnabled);
+
+        state.AutoFormatRulesEnabled.Should().Be(autoCorrectEnabled);
+        state.ReplacementsEnabled.Should().Be(replaceTextEnabled);
+    }
+
+    [Fact]
     public void OptionsModelAndPlanner_LiveInPresentationNotWpfHost()
     {
         var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");

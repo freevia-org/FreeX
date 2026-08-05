@@ -108,10 +108,12 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().Contain("_surface.Tabs[0].Header");
         source.Should().Contain("_surface.AutoCorrect.Header");
         source.Should().Contain("_surface.AutoFormat.Header");
-        source.Should().Contain("OptionsDialogPlanner.TryParseRecentFilesCap(");
-        source.Should().Contain("OptionsDialogPlanner.BuildResult(");
-        source.Should().Contain("new AutoCorrectOptions");
-        source.Should().Contain("new AutoFormatOptions");
+        source.Should().Contain("OptionsDialogWorkflowPlanner.TryBuildResult(");
+        source.Should().Contain("OptionsDialogWorkflowPlanner.PlanEnabledState(");
+        source.Should().NotContain("OptionsDialogPlanner.TryParseRecentFilesCap(");
+        source.Should().NotContain("OptionsDialogPlanner.BuildResult(");
+        source.Should().NotContain("new AutoCorrectOptions");
+        source.Should().NotContain("new AutoFormatOptions");
         source.Should().NotContain("Title = \"FreeW Options\"");
         source.Should().NotContain("AddRow(grid, 0, \"Recent files to keep:\"");
         source.Should().NotContain("new[] { new FormatChoice(");
