@@ -10,7 +10,7 @@ public partial class MainWindow
 
     public bool HasActiveFormulaPointMode =>
         GetFormulaRangeEntryEditor() is not null &&
-        _formulaRangeEntryMode &&
+        _formulaRangeEditingSession.PointMode &&
         _formulaEditCell is not null;
 
     public bool AcceptFormulaPointModeSelection(

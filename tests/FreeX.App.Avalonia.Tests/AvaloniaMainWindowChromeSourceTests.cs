@@ -408,8 +408,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("!IsFormulaPointModeText(text)");
         source.Should().Contain("FormulaRangeEntryPlanner.TryApplyRangeSelection(");
         source.Should().Contain("new GridRange(address, address)");
-        source.Should().Contain("_formulaReferenceStart = edit.ReferenceStart;");
-        source.Should().Contain("_formulaReferenceLength = edit.ReferenceLength;");
+        source.Should().Contain("_formulaRangeEditingSession.ApplyPlannerEdit(edit,");
         source.Should().Contain("ApplyTextBoxEdit(editor, edit.TextEdit);");
         source.Should().Contain("_sheetGridHost.Content = BuildSheetGrid();");
         source.Should().Contain("RefreshFormulaReferenceHighlights();");

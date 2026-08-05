@@ -1,0 +1,59 @@
+using FluentAssertions;
+
+namespace FreeX.App.Presentation.Tests.FormulaBar;
+
+public sealed class FormulaRangeEditingSessionSourceGuardTests
+{
+    private static readonly string[] RemovedHostFields =
+    [
+        "_formulaRangeSelectionAnchor",
+        "_formulaRangeSelectionCursor",
+        "_formulaSheetSpanEntryState",
+        "_formulaRangeEntryMode",
+        "_formulaRangeEntrySelectionMode",
+        "_formulaReferenceStart",
+        "_formulaReferenceLength"
+    ];
+
+    private static readonly string[] SessionOwnedPlannerCalls =
+    [
+        "FormulaEditInteractionPlanner.BuildTextChangePlan(",
+        "FormulaEditInteractionPlanner.BuildPointModeTogglePlan(",
+        "FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(",
+        "FormulaRangeEntryPlanner.TryToggleKeyboardSelectionMode(",
+        "FormulaSheetSpanEntryPlanner.PlanTabSelection("
+    ];
+
+    [Fact]
+    public void Session_RemainsRendererNeutral()
+    {
+        var formulaBarRoot = RepositoryFileLocator.FindDirectory(
+            "src",
+            "FreeX.App.Presentation",
+            "FormulaBar");
+        var source = File.ReadAllText(Path.Combine(formulaBarRoot, "FormulaRangeEditingSession.cs"));
+
+        source.Should().NotContain("System.Windows");
+        source.Should().NotContain("Avalonia.");
+        source.Should().NotContain("FreeX.App.Host");
+        source.Should().NotContain("FreeX.App.Avalonia");
+    }
+
+    [Theory]
+    [InlineData("FreeX.App.Host")]
+    [InlineData("FreeX.App.Avalonia")]
+    public void Hosts_DelegateFormulaRangeStateAndTransitionsToPortableSession(string projectName)
+    {
+        var hostRoot = RepositoryFileLocator.FindDirectory("src", projectName);
+        var source = string.Join(
+            Environment.NewLine,
+            Directory.EnumerateFiles(hostRoot, "MainWindow*.cs")
+                .Select(File.ReadAllText));
+
+        source.Should().Contain("FormulaRangeEditingSession _formulaRangeEditingSession = new();");
+        foreach (var removedField in RemovedHostFields)
+            source.Should().NotContain(removedField);
+        foreach (var plannerCall in SessionOwnedPlannerCalls)
+            source.Should().NotContain(plannerCall);
+    }
+}

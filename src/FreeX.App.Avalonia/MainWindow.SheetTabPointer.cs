@@ -86,8 +86,7 @@ public sealed partial class MainWindow
             return false;
         }
 
-        _formulaSheetSpanEntryState = FormulaSheetSpanEntryPlanner.PlanTabSelection(
-            _formulaSheetSpanEntryState,
+        _formulaRangeEditingSession.ApplySheetTabSelection(
             _session.ActiveSheet.Name,
             clickedSheet.Name,
             modifiers.HasFlag(KeyModifiers.Shift));

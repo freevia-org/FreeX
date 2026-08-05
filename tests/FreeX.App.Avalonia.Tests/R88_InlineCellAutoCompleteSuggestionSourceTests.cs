@@ -78,7 +78,7 @@ public sealed class R88_InlineCellAutoCompleteSuggestionSourceTests
         // end with nothing selected, then the shared portable suggester (no reinvented matching
         // logic) collects candidates and offers a suggestion.
         method.Should().Contain("EnableAutoCompleteForCellValues");
-        method.Should().Contain("_formulaRangeEntryMode");
+        method.Should().Contain("_formulaRangeEditingSession.PointMode");
         method.Should().Contain("CellValueAutoCompleteSuggester.CollectContiguousColumnTextEntries(sheet, address)");
         method.Should().Contain("CellValueAutoCompleteSuggester.Suggest(candidates, text)");
     }

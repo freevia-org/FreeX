@@ -706,7 +706,7 @@ public partial class MainWindow
     private void BeginFormulaBarFormulaEdit(string text, int? caretIndex = null)
     {
         CaptureFormulaEditCell();
-        _formulaRangeEntryMode = FormulaEditInteractionPlanner.IsFormulaText(text);
+        _formulaRangeEditingSession.SetPointModeForFormulaText(text);
         ClearFormulaReferenceEntrySpan();
         FormulaBar.Text = text;
         if (caretIndex is { } requestedCaretIndex)

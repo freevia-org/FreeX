@@ -62,11 +62,11 @@ public sealed partial class MainWindow
             formulaEditor.SelectAll();
             await RaiseEditingValidationTextInputAsync(formulaEditor, "=");
             inlinePointEditorStable = ReferenceEquals(_inlineCellEditor, formulaEditor);
-            inlinePointModeStarted = _formulaRangeEntryMode;
+            inlinePointModeStarted = _formulaRangeEditingSession.PointMode;
             await RaiseEditingValidationKeyAsync(_inlineCellEditor ?? formulaEditor, Key.F2);
-            var editMode = !_formulaRangeEntryMode;
+            var editMode = !_formulaRangeEditingSession.PointMode;
             await RaiseEditingValidationKeyAsync(_inlineCellEditor ?? formulaEditor, Key.F2);
-            inlineModeToggled = editMode && _formulaRangeEntryMode;
+            inlineModeToggled = editMode && _formulaRangeEditingSession.PointMode;
             inlinePointInserted = TryInsertFormulaPointReference(pointTarget);
             inlinePointText = _inlineCellEditor?.Text ?? _inlineCellEditText ?? "";
             if (_inlineCellEditor is { } currentFormulaEditor)
@@ -92,11 +92,11 @@ public sealed partial class MainWindow
         await SettleEditingInputAsync();
         _formulaBox.SelectAll();
         await RaiseEditingValidationTextInputAsync(_formulaBox, "=");
-        var formulaBarPointModeStarted = _formulaRangeEntryMode;
+        var formulaBarPointModeStarted = _formulaRangeEditingSession.PointMode;
         await RaiseEditingValidationKeyAsync(_formulaBox, Key.F2);
-        var formulaBarEditMode = !_formulaRangeEntryMode;
+        var formulaBarEditMode = !_formulaRangeEditingSession.PointMode;
         await RaiseEditingValidationKeyAsync(_formulaBox, Key.F2);
-        var formulaBarModeToggled = formulaBarEditMode && _formulaRangeEntryMode;
+        var formulaBarModeToggled = formulaBarEditMode && _formulaRangeEditingSession.PointMode;
         var formulaBarPointInserted = TryInsertFormulaPointReference(pointTarget);
         var formulaBarText = _formulaBox.Text ?? "";
         await RaiseEditingValidationKeyAsync(_formulaBox, Key.Enter);
@@ -131,8 +131,8 @@ public sealed partial class MainWindow
             dragPointStarted = TryInsertFormulaPointReference(dragStart);
             TrackFormulaPointDragAnchor(
                 dragStart,
-                _formulaReferenceStart,
-                _formulaReferenceLength);
+                _formulaRangeEditingSession.ReferenceSpan?.Start,
+                _formulaRangeEditingSession.ReferenceSpan?.Length);
             dragAnchorReplayConsumed = TryContinueFormulaRangeSelectionDrag(dragStart);
             dragPointExtended = TryContinueFormulaRangeSelectionDrag(dragEnd);
             dragPointText = _inlineCellEditor?.Text ?? _inlineCellEditText ?? "";

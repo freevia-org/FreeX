@@ -209,8 +209,8 @@ public partial class MainWindow
         if (_formulaEditCell is not { } formulaCell ||
             !FormulaRangeEntryPlanner.TryGetReferenceSpanForPointEntry(
                 editor.Text,
-                _formulaReferenceStart,
-                _formulaReferenceLength,
+                _formulaRangeEditingSession.ReferenceSpan?.Start,
+                _formulaRangeEditingSession.ReferenceSpan?.Length,
                 editor.CaretIndex,
                 editor.SelectionLength,
                 out var referenceStart,
@@ -231,9 +231,7 @@ public partial class MainWindow
 
         ApplyFormulaEditorTextEdit(editor, edit.TextEdit);
 
-        _formulaReferenceStart = edit.ReferenceStart;
-        _formulaReferenceLength = edit.ReferenceLength;
-        _formulaRangeSelectionAnchor = range.Start;
+        _formulaRangeEditingSession.ApplyPlannerEdit(edit, range.Start, range.End);
 
         HideValidationDropdown();
         ClearCommentPreview();
@@ -634,8 +632,7 @@ public partial class MainWindow
             {
                 _inlineEditor.Text = e.Text;
                 _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
-                var typedEntryPlan = FormulaEditInteractionPlanner.BuildTypedEntryPlan(e.Text);
-                _formulaRangeEntryMode = typedEntryPlan.PointMode;
+                var typedEntryPlan = _formulaRangeEditingSession.ApplyTypedEntry(e.Text);
                 ApplyFormulaEditStatusBarPlan(typedEntryPlan.StatusBarPlan);
                 RefreshFormulaReferenceHighlights();
             }

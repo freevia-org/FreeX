@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Services;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -282,8 +283,8 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                     "Cell_D4",
                     () =>
                     {
-                        SetPrivateField(window, "_formulaReferenceStart", null);
-                        SetPrivateField(window, "_formulaReferenceLength", null);
+                        GetField<FormulaRangeEditingSession>(window, "_formulaRangeEditingSession")
+                            .ClearReferenceSpan();
                     });
                 await DrainInputAsync();
 
@@ -594,11 +595,6 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
         window.MouseMove(endPoint!.Value, RawInputModifiers.LeftMouseButton);
         window.MouseUp(endPoint.Value, MouseButton.Left, RawInputModifiers.None);
     }
-
-    private static void SetPrivateField(MainWindow window, string name, object? value) =>
-        typeof(MainWindow)
-            .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
-            .SetValue(window, value);
 
     private static T GetField<T>(MainWindow window, string name) where T : class =>
         (T)typeof(MainWindow)

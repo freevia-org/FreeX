@@ -66,8 +66,9 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("TryContinueFormulaRangeSelectionDrag(target)");
         source.Should().Contain("if (_cellDragFormulaPointCursor == address)");
         source.Should().Contain("TrackFormulaPointDragAnchor(address, referenceStart, referenceLength);");
-        source.Should().Contain("_formulaReferenceStart = _cellDragFormulaReferenceStart;");
-        source.Should().Contain("_formulaReferenceLength = _cellDragFormulaReferenceLength;");
+        source.Should().Contain("_formulaRangeEditingSession.TrackReferenceSpan(");
+        source.Should().Contain("_cellDragFormulaReferenceStart,");
+        source.Should().Contain("_cellDragFormulaReferenceLength);");
         source.Should().Contain("SelectRangeFromAnchor(anchor, target);");
         source.Should().Contain("_cellDragSelectionPointer?.Capture(null);");
         source.Should().Contain("_session.SelectAnchoredRange(anchor, address);");

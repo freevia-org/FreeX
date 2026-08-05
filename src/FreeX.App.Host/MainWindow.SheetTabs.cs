@@ -430,8 +430,7 @@ public partial class MainWindow
         var selectionStart = formulaEditor.SelectionStart;
         var selectionLength = formulaEditor.SelectionLength;
 
-        _formulaSheetSpanEntryState = FormulaSheetSpanEntryPlanner.PlanTabSelection(
-            _formulaSheetSpanEntryState,
+        _formulaRangeEditingSession.ApplySheetTabSelection(
             activeSheet.Name,
             clickedSheet.Name,
             (modifiers & ModifierKeys.Shift) != 0);

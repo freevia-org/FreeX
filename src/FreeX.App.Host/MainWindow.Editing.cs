@@ -109,7 +109,7 @@ public partial class MainWindow
         var cell = sheet?.GetCell(addr);
         var text = FormatFormulaBarText(cell, addr);
         _formulaEditCell = addr;
-        _formulaRangeEntryMode = false;
+        _formulaRangeEditingSession.SetPointMode(false);
         _formulaEditEnteredViaEditKey = true;
         ClearFormulaReferenceEntrySpan();
 
@@ -298,7 +298,7 @@ public partial class MainWindow
     {
         if (_applyingCellValueAutoCompleteSuggestion || editor is null)
             return;
-        if (!_options.EnableAutoCompleteForCellValues || _formulaRangeEntryMode)
+        if (!_options.EnableAutoCompleteForCellValues || _formulaRangeEditingSession.PointMode)
             return;
         if (_formulaEditCell is not { } addr)
             return;
@@ -794,10 +794,7 @@ public partial class MainWindow
 
         if (e.Key == Key.F2 && Keyboard.Modifiers == ModifierKeys.None && _inlineEditor is not null)
         {
-            var togglePlan = FormulaEditInteractionPlanner.BuildPointModeTogglePlan(_inlineEditor.Text, _formulaRangeEntryMode);
-            _formulaRangeEntryMode = togglePlan.PointMode;
-            if (togglePlan.ClearReferenceSpan)
-                ClearFormulaReferenceEntrySpan();
+            var togglePlan = _formulaRangeEditingSession.TogglePointMode(_inlineEditor.Text);
             ApplyFormulaEditStatusBarPlan(togglePlan.StatusBarPlan);
             e.Handled = togglePlan.Handled;
             return;
@@ -840,10 +837,12 @@ public partial class MainWindow
         var formulaRangeEntryActive = IsFormulaRangeEntryActive(_inlineEditor);
         var inlineEditorCommitsOnArrow = FormulaEditInteractionPlanner.ShouldCommitInlineArrows(
             _inlineEditor?.Text,
-            _formulaRangeEntryMode,
+            _formulaRangeEditingSession.PointMode,
             _formulaEditEnteredViaEditKey);
         var formulaReferenceCurrent = formulaRangeEntryActive
-            ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange.Value, _selectionCursor)
+            ? FormulaRangeEntryPlanner.GetKeyboardCursor(
+                selectedRange.Value,
+                _formulaRangeEditingSession.SelectionCursor ?? _selectionCursor)
             : selectedRange.Value.Start;
         var editNavigationCurrent = _formulaEditCell ?? selectedRange.Value.Start;
         var wpfModifiers = Keyboard.Modifiers;
@@ -864,7 +863,7 @@ public partial class MainWindow
             if (TryApplyFormulaRangeEntryKeyboardSelection(
                     formulaReferenceCurrent,
                     formulaReferenceShortcutTarget,
-                    extendSelection: _formulaRangeEntrySelectionMode == ExcelSelectionMode.Extend ||
+                    extendSelection: _formulaRangeEditingSession.SelectionMode == ExcelSelectionMode.Extend ||
                         wpfModifiers.HasFlag(ModifierKeys.Shift)))
             {
                 EnsureCellVisible(formulaReferenceShortcutTarget);
@@ -910,7 +909,7 @@ public partial class MainWindow
             if (TryApplyFormulaRangeEntryKeyboardSelection(
                     formulaReferenceCurrent,
                     referenceTarget,
-                    extendSelection: _formulaRangeEntrySelectionMode == ExcelSelectionMode.Extend ||
+                    extendSelection: _formulaRangeEditingSession.SelectionMode == ExcelSelectionMode.Extend ||
                         wpfModifiers.HasFlag(ModifierKeys.Shift)))
             {
                 EnsureCellVisible(referenceTarget);
@@ -1131,10 +1130,7 @@ public partial class MainWindow
 
         if (e.Key == Key.F2 && e.KeyboardDevice.Modifiers == ModifierKeys.None)
         {
-            var togglePlan = FormulaEditInteractionPlanner.BuildPointModeTogglePlan(FormulaBar.Text, _formulaRangeEntryMode);
-            _formulaRangeEntryMode = togglePlan.PointMode;
-            if (togglePlan.ClearReferenceSpan)
-                ClearFormulaReferenceEntrySpan();
+            var togglePlan = _formulaRangeEditingSession.TogglePointMode(FormulaBar.Text);
             ApplyFormulaEditStatusBarPlan(togglePlan.StatusBarPlan);
             e.Handled = togglePlan.Handled;
         }
@@ -1168,7 +1164,9 @@ public partial class MainWindow
             var formulaRangeEntryActive = IsFormulaRangeEntryActive(FormulaBar);
             var formulaTextActive = FormulaEditInteractionPlanner.IsFormulaText(FormulaBar.Text);
             var formulaReferenceCurrent = formulaRangeEntryActive
-                ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange, _selectionCursor)
+                ? FormulaRangeEntryPlanner.GetKeyboardCursor(
+                    selectedRange,
+                    _formulaRangeEditingSession.SelectionCursor ?? _selectionCursor)
                 : selectedRange.Start;
             var editNavigationCurrent = _formulaEditCell ?? selectedRange.Start;
             int pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
@@ -1188,7 +1186,7 @@ public partial class MainWindow
                 if (TryApplyFormulaRangeEntryKeyboardSelection(
                         formulaReferenceCurrent,
                         formulaReferenceShortcutTarget,
-                        extendSelection: _formulaRangeEntrySelectionMode == ExcelSelectionMode.Extend ||
+                        extendSelection: _formulaRangeEditingSession.SelectionMode == ExcelSelectionMode.Extend ||
                             wpfModifiers.HasFlag(ModifierKeys.Shift)))
                 {
                     EnsureCellVisible(formulaReferenceShortcutTarget);
@@ -1227,7 +1225,7 @@ public partial class MainWindow
                 if (TryApplyFormulaRangeEntryKeyboardSelection(
                         formulaReferenceCurrent,
                         referenceTarget,
-                        extendSelection: _formulaRangeEntrySelectionMode == ExcelSelectionMode.Extend ||
+                        extendSelection: _formulaRangeEditingSession.SelectionMode == ExcelSelectionMode.Extend ||
                             wpfModifiers.HasFlag(ModifierKeys.Shift)))
                 {
                     EnsureCellVisible(referenceTarget);
@@ -1487,8 +1485,7 @@ public partial class MainWindow
             return false;
 
         ApplyFormulaEditorTextEdit(editor, edit);
-        _formulaReferenceStart = edit.SelectionStart;
-        _formulaReferenceLength = edit.SelectionLength;
+        _formulaRangeEditingSession.TrackReferenceSpan(edit.SelectionStart, edit.SelectionLength);
         return true;
     }
 

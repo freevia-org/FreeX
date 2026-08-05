@@ -5,6 +5,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using FluentAssertions;
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.UI;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -24,7 +25,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
         private readonly FieldInfo _workbookField;
         private readonly FieldInfo _currentSheetIdField;
         private readonly FieldInfo _formulaEditCellField;
-        private readonly FieldInfo _formulaRangeEntryModeField;
+        private readonly FieldInfo _formulaRangeEditingSessionField;
         private readonly PropertyInfo _selectionAnchorProperty;
         private readonly FieldInfo _selectionCursorField;
         private readonly FieldInfo _inlineEditorField;
@@ -66,9 +67,9 @@ public sealed partial class MainWindowFormulaBarSyncTests
             _formulaEditCellField = typeof(MainWindow)
                 .GetField("_formulaEditCell", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_formulaEditCell");
-            _formulaRangeEntryModeField = typeof(MainWindow)
-                .GetField("_formulaRangeEntryMode", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_formulaRangeEntryMode");
+            _formulaRangeEditingSessionField = typeof(MainWindow)
+                .GetField("_formulaRangeEditingSession", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_formulaRangeEditingSession");
             _selectionAnchorProperty = typeof(MainWindow)
                 .GetProperty("_selectionAnchor", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMemberException(nameof(MainWindow), "_selectionAnchor");
@@ -159,7 +160,10 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         public string FormulaBarText => ((TextBox)_window.FindName("FormulaBar")).Text;
 
-        public bool FormulaRangeEntryMode => (bool)_formulaRangeEntryModeField.GetValue(_window)!;
+        public bool FormulaRangeEntryMode => FormulaRangeEditingSession.PointMode;
+
+        private FormulaRangeEditingSession FormulaRangeEditingSession =>
+            (FormulaRangeEditingSession)_formulaRangeEditingSessionField.GetValue(_window)!;
 
         public CellAddress? SelectionAnchor => (CellAddress?)_selectionAnchorProperty.GetValue(_window);
 
@@ -359,7 +363,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
         public void ShowInlineEditor(uint row, uint col)
         {
             var sheet = Workbook.Sheets[0];
-            _showInlineEditor.Invoke(_window, [new CellAddress(sheet.Id, row, col)]);
+            _showInlineEditor.Invoke(_window, [new CellAddress(sheet.Id, row, col), null]);
             PumpDispatcher();
         }
 
@@ -549,8 +553,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         private void UpdateFormulaRangeEntryMode(string text)
         {
-            if (FormulaEditInteractionPlanner.BuildTextChangePlan(text).StartsPointMode)
-                _formulaRangeEntryModeField.SetValue(_window, true);
+            FormulaRangeEditingSession.ApplyTextChanged(text);
         }
 
         public void FocusFormulaBar()
