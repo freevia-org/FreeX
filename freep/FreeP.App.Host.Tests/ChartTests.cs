@@ -1903,6 +1903,8 @@ public sealed class ChartTests : IDisposable
                     new XElement(cxNs + "data", new XAttribute("id", 0))),
                 new XElement(cxNs + "chart",
                     new XElement(cxNs + "title",
+                        new XAttribute("pos", "r"),
+                        new XAttribute("align", "far"),
                         new XElement(cxNs + "tx",
                             new XElement(cxNs + "txData",
                                 new XElement(cxNs + "v", "Native title")))),
@@ -1932,19 +1934,27 @@ public sealed class ChartTests : IDisposable
         var reloaded = PptxPackageReader.Read(path).Slides[0].Shapes
             .First(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
         reloaded.Title.Should().Be("Native title");
+        reloaded.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Right);
+        reloaded.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Far);
 
         reloaded.Title = "Edited title";
+        reloaded.ChartExTitlePosition = ChartExTitlePosition.Bottom;
+        reloaded.ChartExTitleAlignment = ChartExTitleAlignment.Near;
         var editedPath = WriteToPptx(BuildPresWithChart(reloaded));
         using (var archive = ZipFile.OpenRead(editedPath))
         {
             var chartEx = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
-            chartEx.Descendants(cxNs + "title").Single()
-                .Descendants(cxNs + "v").Single().Value.Should().Be("Edited title");
+            var title = chartEx.Descendants(cxNs + "title").Single();
+            title.Attribute("pos")!.Value.Should().Be("b");
+            title.Attribute("align")!.Value.Should().Be("near");
+            title.Descendants(cxNs + "v").Single().Value.Should().Be("Edited title");
         }
 
         var edited = PptxPackageReader.Read(editedPath).Slides[0].Shapes
             .First(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
         edited.Title.Should().Be("Edited title");
+        edited.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Bottom);
+        edited.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Near);
     }
 
     [Fact]

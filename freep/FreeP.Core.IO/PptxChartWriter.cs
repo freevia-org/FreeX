@@ -171,6 +171,12 @@ internal static class PptxChartWriter
         {
             document.Root?.Element(cx + "chart")?.AddFirst(
                 new XElement(cx + "title",
+                    chart.ChartExTitlePosition is { } titlePosition
+                        ? new XAttribute("pos", ChartExTitlePositionToken(titlePosition))
+                        : null,
+                    chart.ChartExTitleAlignment is { } titleAlignment
+                        ? new XAttribute("align", ChartExTitleAlignmentToken(titleAlignment))
+                        : null,
                     chart.TitleOverlay is { } overlay
                         ? new XAttribute("overlay", overlay ? "1" : "0")
                         : null,
@@ -202,6 +208,23 @@ internal static class PptxChartWriter
             LegendPosition.Top => "t",
             LegendPosition.Bottom => "b",
             _ => "r",
+        };
+
+    private static string ChartExTitlePositionToken(ChartExTitlePosition position) =>
+        position switch
+        {
+            ChartExTitlePosition.Bottom => "b",
+            ChartExTitlePosition.Left => "l",
+            ChartExTitlePosition.Right => "r",
+            _ => "t",
+        };
+
+    private static string ChartExTitleAlignmentToken(ChartExTitleAlignment alignment) =>
+        alignment switch
+        {
+            ChartExTitleAlignment.Near => "near",
+            ChartExTitleAlignment.Far => "far",
+            _ => "ctr",
         };
 
     private static void UpdateChartExLegend(XDocument document, ChartShape chart)
@@ -256,6 +279,12 @@ internal static class PptxChartWriter
         if (title is null)
         {
             chartElement.AddFirst(new XElement(cx + "title",
+                chart.ChartExTitlePosition is { } titlePosition
+                    ? new XAttribute("pos", ChartExTitlePositionToken(titlePosition))
+                    : null,
+                chart.ChartExTitleAlignment is { } titleAlignment
+                    ? new XAttribute("align", ChartExTitleAlignmentToken(titleAlignment))
+                    : null,
                 chart.TitleOverlay is { } overlay
                     ? new XAttribute("overlay", overlay ? "1" : "0")
                     : null,
@@ -290,6 +319,11 @@ internal static class PptxChartWriter
 
         if (chart.TitleOverlay is { } overlayValue)
             title.SetAttributeValue("overlay", overlayValue ? "1" : "0");
+
+        if (chart.ChartExTitlePosition is { } positionValue)
+            title.SetAttributeValue("pos", ChartExTitlePositionToken(positionValue));
+        if (chart.ChartExTitleAlignment is { } alignmentValue)
+            title.SetAttributeValue("align", ChartExTitleAlignmentToken(alignmentValue));
 
         if (chart.TitleStyle is not null)
         {

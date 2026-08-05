@@ -263,6 +263,21 @@ internal static class PptxChartReader
                 .ToList(),
             Title = ReadChartExTitle(chartExTitle),
             TitleOverlay = ParseNullableBoolAttr(chartExTitle?.Attribute("overlay")?.Value),
+            ChartExTitlePosition = chartExTitle?.Attribute("pos")?.Value switch
+            {
+                "t" => ChartExTitlePosition.Top,
+                "b" => ChartExTitlePosition.Bottom,
+                "l" => ChartExTitlePosition.Left,
+                "r" => ChartExTitlePosition.Right,
+                _ => null,
+            },
+            ChartExTitleAlignment = chartExTitle?.Attribute("align")?.Value switch
+            {
+                "near" => ChartExTitleAlignment.Near,
+                "ctr" => ChartExTitleAlignment.Center,
+                "far" => ChartExTitleAlignment.Far,
+                _ => null,
+            },
             TitleStyle = ReadChartTextStyle(chartExTitle?.Element(Cx + "txPr"), scheme),
         };
         var legend = chart.Element(Cx + "legend");
