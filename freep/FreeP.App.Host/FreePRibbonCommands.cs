@@ -140,7 +140,8 @@ internal static class FreePRibbonCommands
         Action<bool>?         setEditPointsEnabled = null,
         Action?             onFormatZoom = null,
         Action?             onSetZoomCoverImage = null,
-        Action?             onResetZoomCoverImage = null)
+        Action?             onResetZoomCoverImage = null,
+        Action?             onSlideShowSettings = null)
     {
         var registry = new RibbonCommandRegistry();
         registry.Register("freep.undo",
@@ -782,6 +783,8 @@ internal static class FreePRibbonCommands
 
         registry.Register("freep.slideshow.custom-shows",
             new ActionRibbonCommand(() => onCustomShows?.Invoke()));
+        registry.Register(SlideShowSettingsPlanner.CommandId,
+            new ActionRibbonCommand(() => onSlideShowSettings?.Invoke()));
 
         // ── Wave 4C: Animations tab ──────────────────────────────────────────────
 

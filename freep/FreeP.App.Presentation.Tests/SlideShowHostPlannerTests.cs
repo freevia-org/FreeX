@@ -852,6 +852,29 @@ public sealed class SlideShowHostPlannerTests
     }
 
     [Fact]
+    public void Show_without_animation_suppresses_slide_and_zoom_transitions()
+    {
+        var presentation = MakePresentation(3);
+        var controller = new SlideShowController(
+            presentation.Slides,
+            startIndex: 0,
+            showWithAnimation: false);
+
+        var advance = SlideShowHostPlanner.PlanAdvance(controller);
+        advance.AnimateSlide.Should().BeFalse();
+
+        var zoom = SlideShowHostPlanner.PlanZoomNavigation(
+            controller,
+            presentation.Slides,
+            targetSlideIndex: 2,
+            transitionDurationMs: 1200);
+        zoom.AnimateSlide.Should().BeFalse();
+
+        var back = SlideShowHostPlanner.PlanBack(controller);
+        back.AnimateSlide.Should().BeFalse();
+    }
+
+    [Fact]
     public void PlanZoomNavigation_ReturnToParent_returns_to_parent_on_next_advance()
     {
         var presentation = MakePresentation(3);

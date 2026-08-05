@@ -74,6 +74,18 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
         source.Should().Contain("case FreeWKeyboardCommand.PrintDocument: Print(); break;");
     }
 
+    [Fact]
+    public void WpfPrintDocument_enables_and_applies_native_user_page_ranges()
+    {
+        var source = File.ReadAllText(
+            Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+                "freew", "FreeW.App.Host", "MainWindow.cs"));
+
+        source.Should().Contain("dialog.UserPageRangeEnabled = paginator.PageCount > 1;");
+        source.Should().Contain("dialog.PageRangeSelection == PageRangeSelection.UserPages");
+        source.Should().Contain("PageRangeDocumentPaginator.Create(");
+    }
+
     private static Key ToWpfKey(FreeWKeyboardKey key) =>
         Enum.Parse<Key>(key.ToString());
 

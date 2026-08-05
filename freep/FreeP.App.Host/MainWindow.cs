@@ -493,6 +493,7 @@ public sealed partial class MainWindow : Window
             onStartFromCurrent: () => StartSlideShow(false),
             onRehearseTimings:  () => StartSlideShowWithTiming(FreeP.App.Compositor.SlideShowTimingIntent.RehearseTimings),
             onRecordTimings:    () => StartSlideShowWithTiming(FreeP.App.Compositor.SlideShowTimingIntent.RecordTimings),
+            onSlideShowSettings: () => OpenSlideShowSettingsDialog(),
             onEditChartData:    () => OpenChartDataDialog(),
             onEditChartOptions: () => OpenChartDisplayOptionsDialog(),
             onEditChartAxisOptions: () => OpenChartAxisOptionsDialog(),
@@ -5041,6 +5042,14 @@ public sealed partial class MainWindow : Window
     internal void OpenHeaderFooterDialog(HeaderFooterCommandFocus focus)
     {
         var dialog = new HeaderFooterDialog(Editor, focus);
+        if (IsVisible)
+            dialog.Owner = this;
+        dialog.ShowDialog();
+    }
+
+    internal void OpenSlideShowSettingsDialog()
+    {
+        var dialog = new SlideShowSettingsDialog(Editor);
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();

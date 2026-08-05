@@ -131,6 +131,8 @@ internal static class FreePRibbonText
     public static string SlideShowRehearseTimingsKeyTip => Get("Ribbon_Command_SlideShowRehearseTimings_KeyTip");
     public static string SlideShowRecordTimingsLabel => Get("Ribbon_Command_SlideShowRecordTimings_Label");
     public static string SlideShowRecordTimingsKeyTip => Get("Ribbon_Command_SlideShowRecordTimings_KeyTip");
+    public static string SlideShowSetupLabel => Get("Ribbon_Command_SlideShowSetup_Label");
+    public static string SlideShowSetupKeyTip => Get("Ribbon_Command_SlideShowSetup_KeyTip");
 
     public static string InsertTabLabel => Get("Ribbon_Tab_Insert_Label");
     public static string InsertTabKeyTip => Get("Ribbon_Tab_Insert_KeyTip");

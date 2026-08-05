@@ -358,6 +358,12 @@
   <data name="Ribbon_Command_SlideShowRecordTimings_KeyTip" xml:space="preserve">
     <value>E</value>
   </data>
+  <data name="Ribbon_Command_SlideShowSetup_Label" xml:space="preserve">
+    <value>Set Up Slide Show</value>
+  </data>
+  <data name="Ribbon_Command_SlideShowSetup_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
   <data name="Ribbon_Tab_Insert_Label" xml:space="preserve">
     <value>Insert</value>
   </data>

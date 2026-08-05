@@ -235,6 +235,7 @@ public sealed partial class MainWindow : Window
     private UniformGrid _tablePickerPanel = null!;
     private SlideSizeDialog? _slideSizeDialog;
     private HeaderFooterDialog? _headerFooterDialog;
+    private SlideShowSettingsDialog? _slideShowSettingsDialog;
     private Border _reviewCommentsPaneHost = null!;
     private ScrollViewer _reviewCommentsPaneScrollViewer = null!;
     private StackPanel _reviewCommentsPanePanel = null!;
@@ -530,6 +531,7 @@ public sealed partial class MainWindow : Window
     internal bool IsTablePickerVisible => _tablePickerHost?.IsVisible == true;
     internal SlideSizeDialog? ActiveSlideSizeDialog => _slideSizeDialog;
     internal HeaderFooterDialog? ActiveHeaderFooterDialog => _headerFooterDialog;
+    internal SlideShowSettingsDialog? ActiveSlideShowSettingsDialog => _slideShowSettingsDialog;
     internal int TablePickerChoiceButtonCount => LastTablePickerPlan?.Choices.Count ?? 0;
     internal int TablePickerDefaultChoiceCount => LastTablePickerPlan?.Choices.Count(choice => choice.IsDefault) ?? 0;
     internal int LayoutPickerChoiceButtonCount => LastLayoutPickerPlan?.Choices.Count ?? 0;
@@ -961,6 +963,7 @@ public sealed partial class MainWindow : Window
             _findReplaceDialog?.Close();
             _slideSizeDialog?.Close(false);
             _headerFooterDialog?.Close(false);
+            _slideShowSettingsDialog?.Close(false);
         };
 
         // ── Initial content ───────────────────────────────────────────────────
@@ -3541,6 +3544,8 @@ public sealed partial class MainWindow : Window
                 FreeP.App.Compositor.SlideShowTimingIntent.RecordTimings)));
         r.Register("freep.slideshow.custom-shows",
             new ActionRibbonCommand(OpenCustomShowDialog));
+        r.Register(SlideShowSettingsPlanner.CommandId,
+            new ActionRibbonCommand(OpenSlideShowSettingsDialog));
 
         return r;
     }
@@ -3932,6 +3937,24 @@ public sealed partial class MainWindow : Window
             _headerFooterDialog = null;
         };
 
+        if (IsVisible)
+            _ = dialog.ShowDialog<bool?>(this);
+        else
+            dialog.Show();
+    }
+
+    internal void OpenSlideShowSettingsDialog()
+    {
+        if (_slideShowSettingsDialog is not null)
+        {
+            _slideShowSettingsDialog.Activate();
+            return;
+        }
+
+        var dialog = new SlideShowSettingsDialog(Editor);
+        _slideShowSettingsDialog = dialog;
+        _statusText.Text = "Set Up Slide Show";
+        dialog.Closed += (_, _) => _slideShowSettingsDialog = null;
         if (IsVisible)
             _ = dialog.ShowDialog<bool?>(this);
         else
