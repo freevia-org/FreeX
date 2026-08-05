@@ -172,6 +172,29 @@ public sealed class FileWorkflowDedupSourceTests
     }
 
     [Fact]
+    public void ResolvedSaveChoreography_StaysInSharedCoordinator()
+    {
+        var sharedSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "shared",
+            "Free.Shared.AppServices",
+            "AsyncFileLifecycleCoordinator.cs"));
+        var workbookSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookFileLifecycleCoordinator.cs"));
+
+        sharedSource.Should().Contain("FileLifecyclePlanner.PlanSave(");
+        sharedSource.Should().Contain("var target = resolveCurrentTarget();");
+        sharedSource.Should().Contain("resolvedTargetPolicy?.Invoke(target)");
+
+        workbookSource.Should().Contain("AsyncFileLifecycleCoordinator.SaveResolvedAsync(");
+        workbookSource.Should().Contain("resolvedTargetPolicy: target =>");
+        workbookSource.Should().Contain("PlanSaveTargetWrite(isDirty, currentFilePath, target)");
+        workbookSource.Should().NotContain("FileLifecyclePlanner.PlanSave(");
+        workbookSource.Should().NotContain("var target = resolveCurrentTarget();");
+    }
+
+    [Fact]
     public void FreeXWorkbookOpenSaveCompletionContext_StaysInSharedPlanner()
     {
         var completionSource = File.ReadAllText(RepositoryFileLocator.Find(

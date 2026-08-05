@@ -220,6 +220,30 @@ public sealed class WorkbookFileLifecycleCoordinatorTests
     }
 
     [Fact]
+    public async Task SaveResolved_CleanDifferentTargetWrites()
+    {
+        var currentPath = Path.Combine(Path.GetTempPath(), "Current.fxl");
+        var target = new FileSaveTarget(
+            Path.Combine(Path.GetTempPath(), "Different.fxl"),
+            new TestFileAdapter(extension: ".fxl"));
+        FileSaveTarget? savedTarget = null;
+
+        var saved = await WorkbookFileLifecycleCoordinator.SaveResolvedAsync(
+            isDirty: false,
+            currentFilePath: currentPath,
+            resolveCurrentTarget: () => target,
+            saveTargetAsync: resolvedTarget =>
+            {
+                savedTarget = resolvedTarget;
+                return Task.FromResult(true);
+            },
+            saveAsAsync: () => throw new InvalidOperationException("Save As should not be used."));
+
+        saved.Should().BeTrue();
+        savedTarget.Should().BeSameAs(target);
+    }
+
+    [Fact]
     public async Task SaveResolved_CurrentPathButNoResolvedTarget_FallsBackToSaveAs()
     {
         var savedAs = false;
@@ -260,6 +284,40 @@ public sealed class WorkbookFileLifecycleCoordinatorTests
         savedTarget.Should().NotBeNull();
         savedTarget!.Path.Should().Be(@"C:\Work\Book.fxl");
         savedTarget.Adapter.Should().BeSameAs(adapter);
+    }
+
+    [Fact]
+    public async Task SaveResolved_TargetWriteErrorPropagates()
+    {
+        var target = new FileSaveTarget(@"C:\Work\Book.fxl", new TestFileAdapter(extension: ".fxl"));
+        var expected = new InvalidOperationException("Write failed.");
+
+        Func<Task> act = async () => await WorkbookFileLifecycleCoordinator.SaveResolvedAsync(
+            isDirty: true,
+            currentFilePath: target.Path,
+            resolveCurrentTarget: () => target,
+            saveTargetAsync: _ => Task.FromException<bool>(expected),
+            saveAsAsync: () => throw new InvalidOperationException("Save As should not be used."));
+
+        (await act.Should().ThrowAsync<InvalidOperationException>())
+            .Which.Should().BeSameAs(expected);
+    }
+
+    [Fact]
+    public async Task SaveResolved_SaveAsCancellationRemainsCanceled()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        var saveTask = WorkbookFileLifecycleCoordinator.SaveResolvedAsync(
+            isDirty: true,
+            currentFilePath: null,
+            resolveCurrentTarget: () => throw new InvalidOperationException("Target should not be resolved."),
+            saveTargetAsync: _ => throw new InvalidOperationException("Save target should not be used."),
+            saveAsAsync: () => Task.FromCanceled<bool>(cancellation.Token));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => saveTask);
+        saveTask.IsCanceled.Should().BeTrue();
     }
 
     [Fact]

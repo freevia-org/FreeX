@@ -16,6 +16,15 @@ public enum DirtyGateResult
 }
 
 /// <summary>
+/// Host-owned decision for a successfully resolved save target.
+/// </summary>
+public enum ResolvedSaveTargetDecision
+{
+    Write,
+    Skip
+}
+
+/// <summary>
 /// Async file-lifecycle choreography shared by document hosts. Hosts still own prompts,
 /// dialogs, target resolution, storage, progress UI, and document-model state.
 /// </summary>
@@ -49,7 +58,8 @@ public static class AsyncFileLifecycleCoordinator
         string? currentFilePath,
         Func<TTarget?> resolveCurrentTarget,
         Func<TTarget, Task<bool>> saveTargetAsync,
-        Func<Task<bool>> saveAsAsync)
+        Func<Task<bool>> saveAsAsync,
+        Func<TTarget, ResolvedSaveTargetDecision>? resolvedTargetPolicy = null)
         where TTarget : class
     {
         ArgumentNullException.ThrowIfNull(resolveCurrentTarget);
@@ -60,8 +70,11 @@ public static class AsyncFileLifecycleCoordinator
             return await saveAsAsync();
 
         var target = resolveCurrentTarget();
-        return target is null
-            ? await saveAsAsync()
+        if (target is null)
+            return await saveAsAsync();
+
+        return resolvedTargetPolicy?.Invoke(target) == ResolvedSaveTargetDecision.Skip
+            ? true
             : await saveTargetAsync(target);
     }
 }
