@@ -10,12 +10,18 @@ public sealed record SlideShowCustomShowSessionShowItemPlan(
     int Index,
     string Name,
     int SlideCount,
-    string DisplayText);
+    string DisplayText)
+{
+    public override string ToString() => DisplayText;
+}
 
 public sealed record SlideShowCustomShowSessionSlideItemPlan(
     int Index,
     string SlideId,
-    string DisplayText);
+    string DisplayText)
+{
+    public override string ToString() => DisplayText;
+}
 
 public sealed record SlideShowCustomShowSessionPlan(
     IReadOnlyList<SlideShowCustomShowSessionShowItemPlan> CustomShows,

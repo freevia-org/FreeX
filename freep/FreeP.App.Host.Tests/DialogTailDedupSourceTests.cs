@@ -21,9 +21,21 @@ public sealed class DialogTailDedupSourceTests
 
         var slideShow = ReadHostSource("SlideShowSettingsDialog.cs");
         slideShow.Should().Contain("SlideShowSettingsDialogSession");
+        slideShow.Should().Contain("SlideShowSettingsDialogSession.ShowTypeOptions");
+        slideShow.Should().Contain("SlideShowSettingsDialogSession.CreateInput");
         slideShow.Should().NotContain("SlideShowSettingsPlanner.");
+        slideShow.Should().NotContain("new SlideShowSettingsDialogInput");
+        slideShow.Should().NotContain("\"Presented by a speaker\"");
         slideShow.Should().NotContain("Math.Clamp");
         slideShow.Should().NotContain("uint.TryParse");
+
+        var customShow = ReadHostSource("CustomShowDialog.cs");
+        customShow.Should().Contain("SlideShowCustomShowDialogSession");
+        customShow.Should().Contain("SlideShowCustomShowSessionShowItemPlan");
+        customShow.Should().Contain("SlideShowCustomShowSessionSlideItemPlan");
+        customShow.Should().NotContain("SlideShowCustomShowPlanner.");
+        customShow.Should().NotContain("record CustomShowListItem");
+        customShow.Should().NotContain("record CustomShowSlideListItem");
 
         var chartEx = ReadHostSource("ChartExSeriesLayoutDialog.cs");
         chartEx.Should().Contain("ChartExSeriesLayoutDialogSession");

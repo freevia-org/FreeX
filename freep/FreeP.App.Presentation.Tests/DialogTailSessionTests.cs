@@ -101,6 +101,12 @@ public sealed class DialogTailSessionTests
         presentation.KioskRestartAfterMilliseconds = 4_000;
         var session = new SlideShowSettingsDialogSession(MakeEditor(presentation));
 
+        SlideShowSettingsDialogSession.ShowTypeOptions
+            .Select(option => (option.ShowType, option.Label, Display: option.ToString()))
+            .Should().Equal(
+                (PresentationShowType.PresentedBySpeaker, "Presented by a speaker", "Presented by a speaker"),
+                (PresentationShowType.BrowsedByIndividual, "Browsed by an individual", "Browsed by an individual"),
+                (PresentationShowType.BrowsedAtKiosk, "Browsed at a kiosk", "Browsed at a kiosk"));
         session.InitialInput.ShowTypeIndex.Should().Be(1);
         session.InitialInput.KioskRestartMilliseconds.Should().Be("4000");
 
@@ -120,8 +126,24 @@ public sealed class DialogTailSessionTests
         presentation.ShowType.Should().Be(PresentationShowType.BrowsedAtKiosk);
         presentation.KioskRestartAfterMilliseconds.Should().Be(12_000);
         presentation.ShowMasterShapes.Should().BeFalse();
-        SlideShowSettingsDialogSession.ParseRestartMilliseconds("invalid")
-            .Should().BeNull();
+        session.LastCommitPlan!.Settings.Should().Be(new SlideShowSettingsState(
+            UseSlideTimings: false,
+            ShowWithAnimation: false,
+            LoopUntilStopped: true,
+            ShowType: PresentationShowType.BrowsedAtKiosk,
+            ShowBrowseScrollbar: false,
+            KioskRestartAfterMilliseconds: 12_000,
+            ShowWithNarration: false,
+            ShowMediaControls: false,
+            ShowMasterShapes: false));
+
+        var permissiveParse = session.BuildCommitPlan(session.InitialInput with
+        {
+            ShowTypeIndex = -1,
+            KioskRestartMilliseconds = "invalid",
+        });
+        permissiveParse.Settings.ShowType.Should().Be(PresentationShowType.PresentedBySpeaker);
+        permissiveParse.Settings.KioskRestartAfterMilliseconds.Should().BeNull();
     }
 
     [Fact]

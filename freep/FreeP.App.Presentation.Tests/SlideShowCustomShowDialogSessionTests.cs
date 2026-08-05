@@ -17,6 +17,10 @@ public sealed class SlideShowCustomShowDialogSessionTests
         var session = CreateSession(presentation, out _);
 
         session.Plan.SelectedShow!.Name.Should().Be("Review");
+        session.Plan.CustomShows.Single().ToString().Should().Be("Review (3 slides)");
+        session.Plan.AvailableSlides[0].DisplayText.Should().Be("Slide 1: Intro");
+        session.Plan.AvailableSlides[0].ToString().Should().Be("Slide 1: Intro");
+        session.Plan.SelectedSlides[0].ToString().Should().Be("Slide 3: Appendix");
         session.Plan.SelectedSlideIndex.Should().Be(0);
         session.Plan.CanMoveUp.Should().BeFalse();
         session.Plan.CanMoveDown.Should().BeTrue();

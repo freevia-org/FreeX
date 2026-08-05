@@ -20,6 +20,8 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     internal SlideShowSettingsState InitialState => _session.InitialState;
 
+    internal SlideShowSettingsDialogCommitPlan? LastCommitPlan => _session.LastCommitPlan;
+
     public SlideShowSettingsDialog(EditingSession editor)
     {
         _session = new SlideShowSettingsDialogSession(editor);
@@ -69,7 +71,7 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         };
         _showTypeCombo = new ComboBox
         {
-            ItemsSource = new[] { "Presented by a speaker", "Browsed by an individual", "Browsed at a kiosk" },
+            ItemsSource = SlideShowSettingsDialogSession.ShowTypeOptions,
             SelectedIndex = initial.ShowTypeIndex,
             Margin = new Thickness(0, 0, 0, 12),
         };
@@ -144,7 +146,7 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _showNarrationCheck.IsChecked = showWithNarration;
         _showMediaControlsCheck.IsChecked = showMediaControls;
         _showMasterShapesCheck.IsChecked = showMasterShapes;
-        _showTypeCombo.SelectedIndex = (int)showType;
+        _showTypeCombo.SelectedIndex = SlideShowSettingsDialogSession.ShowTypeIndex(showType);
         _showScrollbarCheck.IsChecked = showBrowseScrollbar;
         _kioskRestartText.Text = SlideShowSettingsDialogSession.FormatRestartMilliseconds(
             kioskRestartAfterMilliseconds);
@@ -153,7 +155,7 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     private bool Apply()
     {
-        var applied = _session.TryApply(new SlideShowSettingsDialogInput(
+        var applied = _session.TryApply(SlideShowSettingsDialogSession.CreateInput(
             _useTimingsCheck.IsChecked == true,
             _showAnimationCheck.IsChecked == true,
             _loopCheck.IsChecked == true,

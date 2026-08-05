@@ -227,20 +227,15 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void RenderFullPlan(SlideShowCustomShowSessionPlan plan)
     {
-        _showList.ItemsSource = plan.CustomShows
-            .Select(show => new CustomShowListItem(
-                show.Index,
-                show.Name,
-                show.SlideCount,
-                show.DisplayText))
-            .ToArray();
+        _showList.ItemsSource = plan.CustomShows;
 
         RebuildSlides(plan.AvailableSlides);
 
         var selected = _showList.Items
-            .OfType<CustomShowListItem>()
+            .OfType<SlideShowCustomShowSessionShowItemPlan>()
             .FirstOrDefault(item => item.Index == plan.SelectedShow?.Index);
-        _showList.SelectedItem = selected ?? _showList.Items.OfType<CustomShowListItem>().FirstOrDefault();
+        _showList.SelectedItem = selected ??
+            _showList.Items.OfType<SlideShowCustomShowSessionShowItemPlan>().FirstOrDefault();
         RenderSelectedShowPlan(plan);
     }
 
@@ -253,7 +248,7 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             var checkBox = new CheckBox
             {
-                Content = $"Slide {slide.Index + 1}: {slide.Title}",
+                Content = slide.DisplayText,
                 Tag = slide.SlideId,
                 Margin = new Thickness(0, 2, 0, 2),
             };
@@ -326,7 +321,7 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void OnCustomShowSlideListMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         var item = FindVisualAncestor<ListBoxItem>(e.OriginalSource as DependencyObject);
-        if (item?.DataContext is CustomShowSlideListItem slide)
+        if (item?.DataContext is SlideShowCustomShowSessionSlideItemPlan slide)
         {
             _customShowSlideDragStartPoint = e.GetPosition(_customShowSlideList);
             _customShowSlideDragSourceIndex = slide.Index;
@@ -383,7 +378,7 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private int ResolveCustomShowSlideDropIndex(DragEventArgs e)
     {
         var item = FindVisualAncestor<ListBoxItem>(e.OriginalSource as DependencyObject);
-        if (item?.DataContext is CustomShowSlideListItem slide)
+        if (item?.DataContext is SlideShowCustomShowSessionSlideItemPlan slide)
         {
             var position = e.GetPosition(item);
             return position.Y > item.ActualHeight / 2
@@ -412,12 +407,7 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void RebuildCustomShowSlides(
         IReadOnlyList<SlideShowCustomShowSessionSlideItemPlan> slides)
     {
-        _customShowSlideList.ItemsSource = slides
-            .Select(slide => new CustomShowSlideListItem(
-                slide.Index,
-                slide.SlideId,
-                slide.DisplayText))
-            .ToArray();
+        _customShowSlideList.ItemsSource = slides;
     }
 
     private IEnumerable<string?> SelectedSlideIds() =>
@@ -425,7 +415,8 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             .Where(checkBox => checkBox.IsChecked == true)
             .Select(checkBox => checkBox.Tag as string);
 
-    private CustomShowListItem? SelectedShow => _showList.SelectedItem as CustomShowListItem;
+    private SlideShowCustomShowSessionShowItemPlan? SelectedShow =>
+        _showList.SelectedItem as SlideShowCustomShowSessionShowItemPlan;
 
     private void SetValidation(string? message) =>
         _validationText.Text = message ?? string.Empty;
@@ -469,13 +460,4 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         return null;
     }
 
-    private sealed record CustomShowListItem(int Index, string Name, int SlideCount, string DisplayText)
-    {
-        public override string ToString() => DisplayText;
-    }
-
-    private sealed record CustomShowSlideListItem(int Index, string SlideId, string DisplayText)
-    {
-        public override string ToString() => DisplayText;
-    }
 }

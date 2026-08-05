@@ -264,20 +264,15 @@ internal sealed class CustomShowDialog : Window
 
     private void RenderFullPlan(SlideShowCustomShowSessionPlan plan)
     {
-        _showList.ItemsSource = plan.CustomShows
-            .Select(show => new CustomShowListItem(
-                show.Index,
-                show.Name,
-                show.SlideCount,
-                show.DisplayText))
-            .ToArray();
+        _showList.ItemsSource = plan.CustomShows;
 
         RebuildSlides(plan.AvailableSlides);
 
         var selected = _showList.Items
-            .OfType<CustomShowListItem>()
+            .OfType<SlideShowCustomShowSessionShowItemPlan>()
             .FirstOrDefault(item => item.Index == plan.SelectedShow?.Index);
-        _showList.SelectedItem = selected ?? _showList.Items.OfType<CustomShowListItem>().FirstOrDefault();
+        _showList.SelectedItem = selected ??
+            _showList.Items.OfType<SlideShowCustomShowSessionShowItemPlan>().FirstOrDefault();
         RenderSelectedShowPlan(plan);
     }
 
@@ -290,7 +285,7 @@ internal sealed class CustomShowDialog : Window
         {
             var checkBox = new CheckBox
             {
-                Content = $"Slide {slide.Index + 1}: {slide.Title}",
+                Content = slide.DisplayText,
                 Tag = slide.SlideId,
                 Margin = new Thickness(0, 2, 0, 2),
             };
@@ -370,7 +365,7 @@ internal sealed class CustomShowDialog : Window
         var point = e.GetCurrentPoint(_customShowSlideList);
         var item = FindControlAncestor<ListBoxItem>(e.Source);
         if (point.Properties.IsLeftButtonPressed &&
-            item?.DataContext is CustomShowSlideListItem slide)
+            item?.DataContext is SlideShowCustomShowSessionSlideItemPlan slide)
         {
             _customShowSlideDragStartPoint = point.Position;
             _customShowSlideDragSourceIndex = slide.Index;
@@ -457,7 +452,7 @@ internal sealed class CustomShowDialog : Window
         var pointerPosition = e.GetPosition(_customShowSlideList);
         var item = FindControlAncestor<ListBoxItem>(
             _customShowSlideList.InputHitTest(pointerPosition) ?? e.Source);
-        if (item?.DataContext is CustomShowSlideListItem slide)
+        if (item?.DataContext is SlideShowCustomShowSessionSlideItemPlan slide)
         {
             var itemPosition = e.GetPosition(item);
             return itemPosition.Y > item.Bounds.Height / 2
@@ -471,7 +466,7 @@ internal sealed class CustomShowDialog : Window
     private int ResolveCustomShowSlideDropIndex(DragEventArgs e)
     {
         var item = FindControlAncestor<ListBoxItem>(e.Source);
-        if (item?.DataContext is CustomShowSlideListItem slide)
+        if (item?.DataContext is SlideShowCustomShowSessionSlideItemPlan slide)
         {
             var position = e.GetPosition(item);
             return position.Y > item.Bounds.Height / 2
@@ -536,12 +531,7 @@ internal sealed class CustomShowDialog : Window
     private void RebuildCustomShowSlides(
         IReadOnlyList<SlideShowCustomShowSessionSlideItemPlan> slides)
     {
-        _customShowSlideList.ItemsSource = slides
-            .Select(slide => new CustomShowSlideListItem(
-                slide.Index,
-                slide.SlideId,
-                slide.DisplayText))
-            .ToArray();
+        _customShowSlideList.ItemsSource = slides;
     }
 
     private IEnumerable<string?> SelectedSlideIds() =>
@@ -549,7 +539,8 @@ internal sealed class CustomShowDialog : Window
             .Where(checkBox => checkBox.IsChecked == true)
             .Select(checkBox => checkBox.Tag as string);
 
-    private CustomShowListItem? SelectedShow => _showList.SelectedItem as CustomShowListItem;
+    private SlideShowCustomShowSessionShowItemPlan? SelectedShow =>
+        _showList.SelectedItem as SlideShowCustomShowSessionShowItemPlan;
 
     private void SetValidation(string? message) =>
         _validationText.Text = message ?? string.Empty;
@@ -593,13 +584,4 @@ internal sealed class CustomShowDialog : Window
         return null;
     }
 
-    private sealed record CustomShowListItem(int Index, string Name, int SlideCount, string DisplayText)
-    {
-        public override string ToString() => DisplayText;
-    }
-
-    private sealed record CustomShowSlideListItem(int Index, string SlideId, string DisplayText)
-    {
-        public override string ToString() => DisplayText;
-    }
 }

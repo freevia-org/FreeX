@@ -90,6 +90,10 @@ public sealed class DialogLifecycleParityTests
             buttons.Single(button => Equals(button.Content, "OK")).IsDefault.Should().BeTrue();
             buttons.Single(button => Equals(button.Content, "Cancel")).IsCancel.Should().BeTrue();
             dialog.InitialState.Should().Be(new SlideShowSettingsState(true, true, false));
+            dialog.GetLogicalDescendants()
+                .OfType<ComboBox>()
+                .Single()
+                .ItemsSource.Should().BeSameAs(SlideShowSettingsDialogSession.ShowTypeOptions);
 
             dialog.ApplyForTests(
                 useSlideTimings: false,
@@ -109,6 +113,8 @@ public sealed class DialogLifecycleParityTests
             editor.Presentation.ShowBrowseScrollbar.Should().BeFalse();
             editor.Presentation.KioskRestartAfterMilliseconds.Should().Be(18_000);
             editor.Presentation.ShowWithNarration.Should().BeFalse();
+            dialog.LastCommitPlan!.Settings.ShowType.Should().Be(PresentationShowType.BrowsedAtKiosk);
+            dialog.LastCommitPlan.Settings.KioskRestartAfterMilliseconds.Should().Be(18_000);
             editor.Presentation.ShowMediaControls.Should().BeFalse();
             editor.Presentation.ShowMasterShapes.Should().BeFalse();
             editor.Undo();
