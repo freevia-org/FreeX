@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using FreeP.App.Compositor;
@@ -9,8 +8,7 @@ namespace FreeP.App.Host;
 /// <summary>Small PowerPoint-style chart display/options dialog.</summary>
 public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly EditingSession _editor;
-    private readonly ChartDisplayOptionsPlanner _planner;
+    private readonly ChartDisplayOptionsDialogSession _session;
     private readonly TextBox _titleBox;
     private readonly CheckBox _titleOverlayCheck;
     private readonly CheckBox _plotVisibleOnlyCheck;
@@ -48,12 +46,9 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     public ChartDisplayOptionsDialog(EditingSession editor)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        var chart = editor.SelectedChart
-            ?? throw new InvalidOperationException("No chart is currently selected.");
-
-        _planner = ChartDisplayOptionsPlanner.FromChart(chart);
-        var surface = ChartDisplayOptionsPlanner.BuildSurfacePlan();
+        _session = new ChartDisplayOptionsDialogSession(editor);
+        var state = _session.State;
+        var surface = _session.Surface;
 
         Title = surface.Title;
         Width = ChartDisplayOptionsPlanner.DefaultDialogWidth;
@@ -61,157 +56,153 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
-        _titleBox = new TextBox { Text = _planner.Title, MinWidth = 240 };
+        _titleBox = new TextBox { Text = state.Title, MinWidth = 240 };
         _titleOverlayCheck = new CheckBox
         {
             Content = surface.TitleOverlayLabel,
-            IsChecked = _planner.TitleOverlay,
+            IsChecked = state.TitleOverlay,
         };
         _plotVisibleOnlyCheck = new CheckBox
         {
             Content = surface.PlotVisibleOnlyLabel,
-            IsChecked = _planner.PlotVisibleOnly,
+            IsChecked = state.PlotVisibleOnly,
         };
         _roundedCornersCheck = new CheckBox
         {
             Content = surface.RoundedCornersLabel,
-            IsChecked = _planner.RoundedCorners,
+            IsChecked = state.RoundedCorners,
         };
         _styleCombo = new ComboBox
         {
-            ItemsSource = _planner.AvailableStyleOptions,
-            DisplayMemberPath = nameof(ChartDisplayStyleOption.Label),
+            ItemsSource = _session.StyleOptions,
             MinWidth = 160,
-            SelectedIndex = FindStyleIndex(_planner.StyleId),
+            SelectedIndex = state.StyleIndex,
         };
         _legendCombo = new ComboBox
         {
-            ItemsSource = ChartDisplayOptionsPlanner.LegendOptions,
-            DisplayMemberPath = nameof(ChartDisplayLegendOption.Label),
+            ItemsSource = _session.LegendOptions,
             MinWidth = 160,
-            SelectedIndex = FindLegendIndex(_planner.Legend),
+            SelectedIndex = state.LegendIndex,
         };
         _valueLabelsCheck = new CheckBox
         {
             Content = surface.ValueLabelsLabel,
-            IsChecked = _planner.ShowValueLabels,
+            IsChecked = state.ShowValueLabels,
         };
         _percentLabelsCheck = new CheckBox
         {
             Content = surface.PercentLabelsLabel,
-            IsChecked = _planner.ShowPercentLabels,
+            IsChecked = state.ShowPercentLabels,
         };
         _categoryLabelsCheck = new CheckBox
         {
             Content = surface.CategoryLabelsLabel,
-            IsChecked = _planner.ShowCategoryLabels,
+            IsChecked = state.ShowCategoryLabels,
         };
         _seriesLabelsCheck = new CheckBox
         {
             Content = surface.SeriesLabelsLabel,
-            IsChecked = _planner.ShowSeriesLabels,
+            IsChecked = state.ShowSeriesLabels,
         };
         _legendKeysCheck = new CheckBox
         {
             Content = surface.LegendKeysLabel,
-            IsChecked = _planner.ShowLegendKeys,
+            IsChecked = state.ShowLegendKeys,
         };
         _bubbleSizeLabelsCheck = new CheckBox
         {
             Content = surface.BubbleSizeLabelsLabel,
-            IsChecked = _planner.ShowBubbleSize,
+            IsChecked = state.ShowBubbleSize,
         };
         _showLeaderLinesCheck = new CheckBox
         {
             Content = surface.LeaderLinesLabel,
             IsThreeState = true,
-            IsChecked = _planner.ShowLeaderLines,
-            IsEnabled = chart.ChartType is ChartType.Pie or ChartType.Doughnut,
+            IsChecked = state.ShowLeaderLines,
+            IsEnabled = state.SupportsLeaderLines,
         };
-        _numberFormatBox = new TextBox { Text = _planner.LabelNumberFormat, MinWidth = 160 };
-        _separatorBox = new TextBox { Text = _planner.LabelSeparator, MinWidth = 160 };
-        _labelFontFamilyBox = new TextBox { Text = _planner.LabelFontFamily, MinWidth = 160 };
-        _labelFontSizeBox = new TextBox { Text = Format(_planner.LabelFontSizePt), MinWidth = 120 };
-        _labelBoldCheck = new CheckBox { Content = surface.BoldLabel, IsThreeState = true, IsChecked = _planner.LabelBold };
-        _labelItalicCheck = new CheckBox { Content = surface.ItalicLabel, IsThreeState = true, IsChecked = _planner.LabelItalic };
-        _labelColorBox = new TextBox { Text = _planner.LabelColorText, MinWidth = 160 };
+        _numberFormatBox = new TextBox { Text = state.LabelNumberFormat, MinWidth = 160 };
+        _separatorBox = new TextBox { Text = state.LabelSeparator, MinWidth = 160 };
+        _labelFontFamilyBox = new TextBox { Text = state.LabelFontFamily, MinWidth = 160 };
+        _labelFontSizeBox = new TextBox { Text = state.LabelFontSizeText, MinWidth = 120 };
+        _labelBoldCheck = new CheckBox { Content = surface.BoldLabel, IsThreeState = true, IsChecked = state.LabelBold };
+        _labelItalicCheck = new CheckBox { Content = surface.ItalicLabel, IsThreeState = true, IsChecked = state.LabelItalic };
+        _labelColorBox = new TextBox { Text = state.LabelColor, MinWidth = 160 };
         _labelPositionCombo = new ComboBox
         {
-            ItemsSource = ChartDisplayOptionsPlanner.LabelPositionOptions,
-            DisplayMemberPath = nameof(ChartDisplayLabelPositionOption.Label),
+            ItemsSource = _session.LabelPositionOptions,
             MinWidth = 160,
-            SelectedIndex = FindLabelPositionIndex(_planner.LabelPosition),
+            SelectedIndex = state.LabelPositionIndex,
         };
         _categoryGridlinesCheck = new CheckBox
         {
             Content = surface.CategoryGridlinesLabel,
-            IsChecked = _planner.CategoryGridlines,
+            IsChecked = state.CategoryGridlines,
         };
         _valueGridlinesCheck = new CheckBox
         {
             Content = surface.ValueGridlinesLabel,
-            IsChecked = _planner.ValueGridlines,
+            IsChecked = state.ValueGridlines,
         };
-        _barGapWidthBox = new TextBox { Text = Format(_planner.BarGapWidthPercent), MinWidth = 160 };
-        _barOverlapBox = new TextBox { Text = Format(_planner.BarOverlapPercent), MinWidth = 160 };
+        _barGapWidthBox = new TextBox { Text = state.BarGapWidthText, MinWidth = 160 };
+        _barOverlapBox = new TextBox { Text = state.BarOverlapText, MinWidth = 160 };
         _displayBlanksCombo = new ComboBox
         {
-            ItemsSource = ChartDisplayOptionsPlanner.DisplayBlanksOptions,
-            DisplayMemberPath = nameof(ChartDisplayBlanksOption.Label),
+            ItemsSource = _session.DisplayBlanksOptions,
             MinWidth = 160,
-            SelectedIndex = FindDisplayBlanksIndex(_planner.DisplayBlanksAs),
+            SelectedIndex = state.DisplayBlanksIndex,
         };
         _showDataLabelsOverMaximumCheck = new CheckBox
         {
             Content = surface.ShowDataLabelsOverMaximumLabel,
             IsThreeState = true,
-            IsChecked = _planner.ShowDataLabelsOverMaximum,
+            IsChecked = state.ShowDataLabelsOverMaximum,
         };
         _varyColorsCheck = new CheckBox
         {
             Content = surface.VaryColorsLabel,
-            IsChecked = _planner.VaryColors,
+            IsChecked = state.VaryColors,
         };
         _legendOverlayCheck = new CheckBox
         {
             Content = surface.LegendOverlayLabel,
             IsThreeState = true,
-            IsChecked = _planner.LegendOverlay,
+            IsChecked = state.LegendOverlay,
         };
         _highLowLinesCheck = new CheckBox
         {
             Content = surface.HighLowLinesLabel,
             IsThreeState = true,
-            IsChecked = _planner.HighLowLines,
-            IsEnabled = _planner.SupportsHighLowLines,
+            IsChecked = state.HighLowLines,
+            IsEnabled = state.SupportsHighLowLines,
         };
         _waterfallConnectorLinesCheck = new CheckBox
         {
             Content = surface.WaterfallConnectorLinesLabel,
             IsThreeState = true,
-            IsChecked = _planner.WaterfallConnectorLines,
-            IsEnabled = _planner.SupportsWaterfallConnectorLines,
+            IsChecked = state.WaterfallConnectorLines,
+            IsEnabled = state.SupportsWaterfallConnectorLines,
         };
         _dropLinesCheck = new CheckBox
         {
             Content = surface.DropLinesLabel,
             IsThreeState = true,
-            IsChecked = _planner.DropLines,
-            IsEnabled = _planner.SupportsDropLines,
+            IsChecked = state.DropLines,
+            IsEnabled = state.SupportsDropLines,
         };
         _upDownBarsCheck = new CheckBox
         {
             Content = surface.UpDownBarsLabel,
             IsThreeState = true,
-            IsChecked = _planner.UpDownBars,
-            IsEnabled = _planner.SupportsUpDownBars,
+            IsChecked = state.UpDownBars,
+            IsEnabled = state.SupportsUpDownBars,
         };
         _seriesLinesCheck = new CheckBox
         {
             Content = surface.SeriesLinesLabel,
             IsThreeState = true,
-            IsChecked = _planner.SeriesLines,
-            IsEnabled = _planner.SupportsSeriesLines,
+            IsChecked = state.SeriesLines,
+            IsEnabled = state.SupportsSeriesLines,
         };
 
         var buttons = ChartOptionsDialogChrome.CreateActionRow(surface.OkLabel, OnOk, surface.CancelLabel, Close, new Thickness(8, 14, 8, 8));
@@ -256,11 +247,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         Content = content;
     }
 
-    internal ChartDisplayOptions BuildCommitPlanForTests()
-    {
-        UpdatePlannerFromControls();
-        return _planner.BuildCommitPlan();
-    }
+    internal ChartDisplayOptions BuildCommitPlanForTests() =>
+        _session.BuildCommitPlan(ReadInput());
 
     internal void SetVaryColorsForTests(bool value) => _varyColorsCheck.IsChecked = value;
 
@@ -270,7 +258,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     internal void SetRoundedCornersForTests(bool value) => _roundedCornersCheck.IsChecked = value;
 
-    internal void SetStyleIdForTests(int? styleId) => _styleCombo.SelectedIndex = FindStyleIndex(styleId);
+    internal void SetStyleIdForTests(int? styleId) => _styleCombo.SelectedIndex = _session.FindStyleIndex(styleId);
 
     internal void SetLegendOverlayForTests(bool? value) => _legendOverlayCheck.IsChecked = value;
 
@@ -287,7 +275,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     internal void SetLabelTextStyleForTests(string? family, double? sizePt, bool? bold, bool? italic, string? color)
     {
         _labelFontFamilyBox.Text = family ?? string.Empty;
-        _labelFontSizeBox.Text = Format(sizePt);
+        _labelFontSizeBox.Text = _session.Format(sizePt);
         _labelBoldCheck.IsChecked = bold;
         _labelItalicCheck.IsChecked = italic;
         _labelColorBox.Text = color ?? string.Empty;
@@ -299,71 +287,49 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     private void OnOk()
     {
-        _editor.ApplyChartDisplayOptions(BuildCommitPlanForTests());
+        var result = _session.Submit(ReadInput());
+        if (!result.ShouldClose)
+        {
+            MessageBox.Show(this, result.ValidationMessage, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         DialogResult = true;
     }
 
-    private void UpdatePlannerFromControls()
-    {
-        _planner.SetTitle(_titleBox.Text);
-        _planner.SetTitleOverlay(_titleOverlayCheck.IsChecked == true);
-        _planner.SetPlotVisibleOnly(_plotVisibleOnlyCheck.IsChecked == true);
-        _planner.SetRoundedCorners(_roundedCornersCheck.IsChecked == true);
-        _planner.SetStyleId(ChartDialogOptionProjection.ValueAtOrDefault(_planner.AvailableStyleOptions, _styleCombo.SelectedIndex, option => option.Value));
-        _planner.SetLegend(ChartDialogOptionProjection.ValueAtOrDefault(ChartDisplayOptionsPlanner.LegendOptions, _legendCombo.SelectedIndex, option => option.Value, default(LegendPosition?)));
-        _planner.SetShowValueLabels(_valueLabelsCheck.IsChecked == true);
-        _planner.SetShowPercentLabels(_percentLabelsCheck.IsChecked == true);
-        _planner.SetShowCategoryLabels(_categoryLabelsCheck.IsChecked == true);
-        _planner.SetShowSeriesLabels(_seriesLabelsCheck.IsChecked == true);
-        _planner.SetShowLegendKeys(_legendKeysCheck.IsChecked == true);
-        _planner.SetShowBubbleSize(_bubbleSizeLabelsCheck.IsChecked == true);
-        _planner.SetShowLeaderLines(_showLeaderLinesCheck.IsChecked);
-        _planner.SetLabelPosition(ChartDialogOptionProjection.ValueAtOrDefault(ChartDisplayOptionsPlanner.LabelPositionOptions, _labelPositionCombo.SelectedIndex, option => option.Value));
-        _planner.SetLabelNumberFormat(_numberFormatBox.Text);
-        _planner.SetLabelSeparator(_separatorBox.Text);
-        _planner.SetLabelFontFamily(_labelFontFamilyBox.Text);
-        _planner.SetLabelFontSize(ParseOptional(_labelFontSizeBox.Text, "Label font size"));
-        _planner.SetLabelBold(_labelBoldCheck.IsChecked);
-        _planner.SetLabelItalic(_labelItalicCheck.IsChecked);
-        _planner.SetLabelColor(_labelColorBox.Text);
-        _planner.SetCategoryGridlines(_categoryGridlinesCheck.IsChecked == true);
-        _planner.SetValueGridlines(_valueGridlinesCheck.IsChecked == true);
-        _planner.SetBarGapWidthPercent(ParseOptionalPercent(_barGapWidthBox.Text, "Bar gap width", 0, 500));
-        _planner.SetBarOverlapPercent(ParseOptionalPercent(_barOverlapBox.Text, "Bar overlap", -100, 100));
-        _planner.SetDisplayBlanksAs(ChartDialogOptionProjection.ValueAtOrDefault(ChartDisplayOptionsPlanner.DisplayBlanksOptions, _displayBlanksCombo.SelectedIndex, option => option.Value, default(ChartDisplayBlanksAs?)));
-        _planner.SetShowDataLabelsOverMaximum(_showDataLabelsOverMaximumCheck.IsChecked);
-        _planner.SetVaryColors(_varyColorsCheck.IsChecked == true);
-        _planner.SetLegendOverlay(_legendOverlayCheck.IsChecked);
-        _planner.SetHighLowLines(_highLowLinesCheck.IsChecked);
-        _planner.SetWaterfallConnectorLines(_waterfallConnectorLinesCheck.IsChecked);
-        _planner.SetDropLines(_dropLinesCheck.IsChecked);
-        _planner.SetUpDownBars(_upDownBarsCheck.IsChecked);
-        _planner.SetSeriesLines(_seriesLinesCheck.IsChecked);
-    }
-
-    private static int FindLegendIndex(LegendPosition? position) =>
-        ChartDialogOptionProjection.FindIndex(ChartDisplayOptionsPlanner.LegendOptions, position, option => option.Value);
-
-    private static int FindStyleIndex(int? styleId) =>
-        ChartDialogOptionProjection.FindIndex(ChartDisplayOptionsPlanner.StyleOptionsFor(styleId), styleId, option => option.Value);
-
-    private static int FindLabelPositionIndex(DataLabelPosition position) =>
-        ChartDialogOptionProjection.FindIndex(ChartDisplayOptionsPlanner.LabelPositionOptions, position, option => option.Value);
-
-    private static int FindDisplayBlanksIndex(ChartDisplayBlanksAs? value) =>
-        ChartDialogOptionProjection.FindIndex(ChartDisplayOptionsPlanner.DisplayBlanksOptions, value, option => option.Value);
-
-    private static string Format(int? value) => ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
-
-    private static string Format(double? value) => ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
-
-    private static double? ParseOptional(string? text, string label)
-    {
-        return ChartDialogOptionProjection.ParseOptionalDouble(text, CultureInfo.CurrentCulture, value => double.IsFinite(value) && value >= 0, $"{label} must be a non-negative finite number or blank.");
-    }
-
-    private static int? ParseOptionalPercent(string? text, string surface, int minimum, int maximum)
-    {
-        return ChartDialogOptionProjection.ParseOptionalInt(text, CultureInfo.CurrentCulture, value => value >= minimum && value <= maximum, $"{surface} must be a whole number from {minimum} to {maximum}, or blank.");
-    }
+    private ChartDisplayOptionsDialogInput ReadInput() => new(
+        _titleBox.Text,
+        _titleOverlayCheck.IsChecked == true,
+        _plotVisibleOnlyCheck.IsChecked == true,
+        _roundedCornersCheck.IsChecked == true,
+        _styleCombo.SelectedIndex,
+        _legendCombo.SelectedIndex,
+        _valueLabelsCheck.IsChecked == true,
+        _percentLabelsCheck.IsChecked == true,
+        _categoryLabelsCheck.IsChecked == true,
+        _seriesLabelsCheck.IsChecked == true,
+        _legendKeysCheck.IsChecked == true,
+        _bubbleSizeLabelsCheck.IsChecked == true,
+        _showLeaderLinesCheck.IsChecked,
+        _numberFormatBox.Text,
+        _separatorBox.Text,
+        _labelFontFamilyBox.Text,
+        _labelFontSizeBox.Text,
+        _labelBoldCheck.IsChecked,
+        _labelItalicCheck.IsChecked,
+        _labelColorBox.Text,
+        _labelPositionCombo.SelectedIndex,
+        _categoryGridlinesCheck.IsChecked == true,
+        _valueGridlinesCheck.IsChecked == true,
+        _barGapWidthBox.Text,
+        _barOverlapBox.Text,
+        _displayBlanksCombo.SelectedIndex,
+        _showDataLabelsOverMaximumCheck.IsChecked,
+        _varyColorsCheck.IsChecked == true,
+        _legendOverlayCheck.IsChecked,
+        _highLowLinesCheck.IsChecked,
+        _waterfallConnectorLinesCheck.IsChecked,
+        _dropLinesCheck.IsChecked,
+        _upDownBarsCheck.IsChecked,
+        _seriesLinesCheck.IsChecked);
 }

@@ -603,25 +603,26 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [Fact]
-    public void ChartDisplayOptionsDialog_UsesSharedPlannerAndSessionCommand()
+    public void ChartDisplayOptionsDialog_UsesPortableDialogSession()
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartDisplayOptionsDialog.cs");
 
-        source.Should().Contain("ChartDisplayOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartDisplayOptions");
+        source.Should().Contain("new ChartDisplayOptionsDialogSession(editor)");
+        source.Should().Contain("_session.BuildCommitPlan(ReadInput())");
+        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().NotContain("_editor.ApplyChartDisplayOptions");
         source.Should().NotContain("new SetChartDisplayOptionsCommand");
     }
 
     [Fact]
-    public void ChartAxisOptionsDialog_UsesSharedPlannerAndSessionCommand()
+    public void ChartAxisOptionsDialog_UsesPortableDialogSession()
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartAxisOptionsDialog.cs");
 
-        source.Should().Contain("ChartAxisOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("ChartAxisOptionsPlanner.AxisOptions");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartAxisOptions");
+        source.Should().Contain("new ChartAxisOptionsDialogSession(editor, initialAxis)");
+        source.Should().Contain("_session.BuildCommitPlan(ReadInput())");
+        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().NotContain("_editor.ApplyChartAxisOptions");
         source.Should().NotContain("new SetChartAxisOptionsCommand");
     }
 

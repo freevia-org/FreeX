@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using FreeP.App.Compositor;
@@ -9,8 +8,7 @@ namespace FreeP.App.Host;
 /// <summary>Small PowerPoint-style chart axis scale/display dialog.</summary>
 public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly EditingSession _editor;
-    private readonly ChartAxisOptionsPlanner _planner;
+    private readonly ChartAxisOptionsDialogSession _session;
     private readonly ComboBox _axisCombo;
     private readonly TextBox _titleBox;
     private readonly TextBox _titleFontFamilyBox;
@@ -42,11 +40,9 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     public ChartAxisOptionsDialog(EditingSession editor, ChartAxisKind? initialAxis = null)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        var chart = editor.SelectedChart
-            ?? throw new InvalidOperationException("No chart is currently selected.");
-        _planner = ChartAxisOptionsPlanner.FromChart(chart);
-        var surface = ChartAxisOptionsPlanner.BuildSurfacePlan();
+        _session = new ChartAxisOptionsDialogSession(editor, initialAxis);
+        var state = _session.State;
+        var surface = _session.Surface;
 
         Title = surface.Title;
         Width = ChartAxisOptionsPlanner.DefaultDialogWidth;
@@ -56,20 +52,12 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         _axisCombo = new ComboBox
         {
-            ItemsSource = ChartAxisOptionsPlanner.AxisOptions,
-            DisplayMemberPath = nameof(ChartAxisKindOption.Label),
-            SelectedIndex = (int)(initialAxis ?? ChartAxisKind.Value),
+            ItemsSource = _session.AxisOptions,
+            SelectedIndex = state.AxisIndex,
             MinWidth = 180,
         };
         _axisCombo.SelectionChanged += (_, _) =>
-        {
-            if (_axisCombo.SelectedItem is ChartAxisKindOption option)
-            {
-                _planner.SetAxis(option.Value);
-                LoadControls();
-            }
-        };
-        _planner.SetAxis((ChartAxisKind)_axisCombo.SelectedIndex);
+            LoadControls(_session.SelectAxis(_axisCombo.SelectedIndex));
         _titleBox = new TextBox { MinWidth = 240 };
         _titleFontFamilyBox = new TextBox { MinWidth = 180 };
         _titleFontSizeBox = new TextBox { MinWidth = 120 };
@@ -82,7 +70,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _majorUnitBox = new TextBox { MinWidth = 120 };
         _minorUnitBox = new TextBox { MinWidth = 120 };
         _numberFormatBox = new TextBox { MinWidth = 180 };
-        _displayUnitCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.DisplayUnitOptions);
+        _displayUnitCombo = MakeChoiceCombo(_session.DisplayUnitOptions);
         _customDisplayUnitBox = new TextBox
         {
             MinWidth = 120,
@@ -90,18 +78,18 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         };
         _majorGridlinesCheck = new CheckBox { Content = surface.MajorGridlinesLabel };
         _minorGridlinesCheck = new CheckBox { Content = surface.MinorGridlinesLabel };
-        _majorTickMarkCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickMarkOptions);
-        _minorTickMarkCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickMarkOptions);
-        _tickLabelPositionCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickLabelPositionOptions);
-        _crossesCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.CrossingOptions);
+        _majorTickMarkCombo = MakeChoiceCombo(_session.TickMarkOptions);
+        _minorTickMarkCombo = MakeChoiceCombo(_session.TickMarkOptions);
+        _tickLabelPositionCombo = MakeChoiceCombo(_session.TickLabelPositionOptions);
+        _crossesCombo = MakeChoiceCombo(_session.CrossingOptions);
         _crossesAtBox = new TextBox { MinWidth = 120 };
-        _crossBetweenCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.CrossBetweenOptions);
-        _labelAlignmentCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.LabelAlignmentOptions);
+        _crossBetweenCombo = MakeChoiceCombo(_session.CrossBetweenOptions);
+        _labelAlignmentCombo = MakeChoiceCombo(_session.LabelAlignmentOptions);
         _labelOffsetBox = new TextBox { MinWidth = 120 };
-        _multiLevelLabelsCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.MultiLevelLabelsOptions);
-        _autoCrossingCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.AutoCrossingOptions);
+        _multiLevelLabelsCombo = MakeChoiceCombo(_session.MultiLevelLabelsOptions);
+        _autoCrossingCombo = MakeChoiceCombo(_session.AutoCrossingOptions);
         _reverseOrderCheck = new CheckBox { Content = surface.ReverseOrderLabel };
-        LoadControls();
+        LoadControls(state);
 
         var buttons = ChartOptionsDialogChrome.CreateActionRow(
             surface.OkLabel,
@@ -144,108 +132,86 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Content = content;
     }
 
-    internal ChartAxisOptions BuildCommitPlanForTests()
-    {
-        UpdatePlannerFromControls();
-        return _planner.BuildCommitPlan();
-    }
+    internal ChartAxisOptions BuildCommitPlanForTests() =>
+        _session.BuildCommitPlan(ReadInput());
 
     private void OnOk()
     {
-        try
+        var result = _session.Submit(ReadInput());
+        if (!result.ShouldClose)
         {
-            _editor.ApplyChartAxisOptions(BuildCommitPlanForTests());
-            DialogResult = true;
+            MessageBox.Show(this, result.ValidationMessage, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
         }
-        catch (FormatException ex)
-        {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
+
+        DialogResult = true;
     }
 
-    private void LoadControls()
+    private void LoadControls(ChartAxisOptionsDialogState state)
     {
-        _titleBox.Text = _planner.Title;
-        _titleFontFamilyBox.Text = _planner.TitleFontFamily ?? string.Empty;
-        _titleFontSizeBox.Text = Format(_planner.TitleFontSizePt);
-        _titleColorBox.Text = _planner.TitleColorText;
-        _titleBoldCheck.IsChecked = _planner.TitleBold;
-        _titleItalicCheck.IsChecked = _planner.TitleItalic;
-        _showAxisCheck.IsChecked = _planner.ShowAxis;
-        _minimumBox.Text = Format(_planner.Minimum);
-        _maximumBox.Text = Format(_planner.Maximum);
-        _majorUnitBox.Text = Format(_planner.MajorUnit);
-        _minorUnitBox.Text = Format(_planner.MinorUnit);
-        _numberFormatBox.Text = _planner.NumberFormatCode;
-        _displayUnitCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.DisplayUnitOptions, _planner.DisplayUnit, option => option.Value);
-        _customDisplayUnitBox.Text = Format(_planner.CustomDisplayUnit);
-        _majorGridlinesCheck.IsChecked = _planner.MajorGridlines;
-        _minorGridlinesCheck.IsChecked = _planner.MinorGridlines;
-        _majorTickMarkCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, _planner.MajorTickMark, option => option.Value);
-        _minorTickMarkCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, _planner.MinorTickMark, option => option.Value);
-        _tickLabelPositionCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.TickLabelPositionOptions, _planner.TickLabelPosition, option => option.Value);
-        _crossesCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.CrossingOptions, _planner.Crosses, option => option.Value);
-        _crossesAtBox.Text = Format(_planner.CrossesAt);
-        _crossBetweenCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.CrossBetweenOptions, _planner.CrossBetween, option => option.Value);
-        _labelAlignmentCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.LabelAlignmentOptions, _planner.LabelAlignment, option => option.Value);
-        _labelOffsetBox.Text = Format(_planner.LabelOffsetPercent);
-        _multiLevelLabelsCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.MultiLevelLabelsOptions, _planner.NoMultiLevelLabels, option => option.Value);
-        _autoCrossingCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.AutoCrossingOptions, _planner.AutoCrossing, option => option.Value);
-        _reverseOrderCheck.IsChecked = _planner.ReverseOrder;
+        _titleBox.Text = state.Title;
+        _titleFontFamilyBox.Text = state.TitleFontFamily;
+        _titleFontSizeBox.Text = state.TitleFontSizeText;
+        _titleColorBox.Text = state.TitleColor;
+        _titleBoldCheck.IsChecked = state.TitleBold;
+        _titleItalicCheck.IsChecked = state.TitleItalic;
+        _showAxisCheck.IsChecked = state.ShowAxis;
+        _minimumBox.Text = state.MinimumText;
+        _maximumBox.Text = state.MaximumText;
+        _majorUnitBox.Text = state.MajorUnitText;
+        _minorUnitBox.Text = state.MinorUnitText;
+        _numberFormatBox.Text = state.NumberFormatCode;
+        _displayUnitCombo.SelectedIndex = state.DisplayUnitIndex;
+        _customDisplayUnitBox.Text = state.CustomDisplayUnitText;
+        _majorGridlinesCheck.IsChecked = state.MajorGridlines;
+        _minorGridlinesCheck.IsChecked = state.MinorGridlines;
+        _majorTickMarkCombo.SelectedIndex = state.MajorTickMarkIndex;
+        _minorTickMarkCombo.SelectedIndex = state.MinorTickMarkIndex;
+        _tickLabelPositionCombo.SelectedIndex = state.TickLabelPositionIndex;
+        _crossesCombo.SelectedIndex = state.CrossingIndex;
+        _crossesAtBox.Text = state.CrossesAtText;
+        _crossBetweenCombo.SelectedIndex = state.CrossBetweenIndex;
+        _labelAlignmentCombo.SelectedIndex = state.LabelAlignmentIndex;
+        _labelOffsetBox.Text = state.LabelOffsetText;
+        _multiLevelLabelsCombo.SelectedIndex = state.MultiLevelLabelsIndex;
+        _autoCrossingCombo.SelectedIndex = state.AutoCrossingIndex;
+        _reverseOrderCheck.IsChecked = state.ReverseOrder;
     }
 
-    private void UpdatePlannerFromControls()
-    {
-        _planner.SetTitle(_titleBox.Text);
-        _planner.SetTitleFontFamily(_titleFontFamilyBox.Text);
-        _planner.SetTitleFontSizePt(ParseOptional(_titleFontSizeBox.Text, "Axis title size"));
-        _planner.SetTitleColor(_titleColorBox.Text);
-        _planner.SetTitleBold(_titleBoldCheck.IsChecked);
-        _planner.SetTitleItalic(_titleItalicCheck.IsChecked);
-        _planner.SetShowAxis(_showAxisCheck.IsChecked == true);
-        _planner.SetMinimum(ParseOptional(_minimumBox.Text, "Minimum"));
-        _planner.SetMaximum(ParseOptional(_maximumBox.Text, "Maximum"));
-        _planner.SetMajorUnit(ParseOptional(_majorUnitBox.Text, "Major unit"));
-        _planner.SetMinorUnit(ParseOptional(_minorUnitBox.Text, "Minor unit"));
-        _planner.SetNumberFormatCode(_numberFormatBox.Text);
-        _planner.SetDisplayUnit(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.DisplayUnitOptions, _displayUnitCombo.SelectedIndex, option => option.Value));
-        _planner.SetCustomDisplayUnit(ParseOptional(_customDisplayUnitBox.Text, "Custom display-unit divisor"));
-        _planner.SetMajorGridlines(_majorGridlinesCheck.IsChecked == true);
-        _planner.SetMinorGridlines(_minorGridlinesCheck.IsChecked == true);
-        _planner.SetMajorTickMark(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.TickMarkOptions, _majorTickMarkCombo.SelectedIndex, option => option.Value));
-        _planner.SetMinorTickMark(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.TickMarkOptions, _minorTickMarkCombo.SelectedIndex, option => option.Value));
-        _planner.SetTickLabelPosition(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.TickLabelPositionOptions, _tickLabelPositionCombo.SelectedIndex, option => option.Value));
-        _planner.SetCrosses(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.CrossingOptions, _crossesCombo.SelectedIndex, option => option.Value));
-        _planner.SetCrossesAt(ParseOptional(_crossesAtBox.Text, "Crosses at"));
-        _planner.SetCrossBetween(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.CrossBetweenOptions, _crossBetweenCombo.SelectedIndex, option => option.Value));
-        _planner.SetLabelAlignment(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.LabelAlignmentOptions, _labelAlignmentCombo.SelectedIndex, option => option.Value));
-        _planner.SetLabelOffsetPercent(ParseOptionalInt(_labelOffsetBox.Text, surfaceLabel: "Label offset"));
-        _planner.SetNoMultiLevelLabels(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.MultiLevelLabelsOptions, _multiLevelLabelsCombo.SelectedIndex, option => option.Value));
-        _planner.SetAutoCrossing(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.AutoCrossingOptions, _autoCrossingCombo.SelectedIndex, option => option.Value));
-        _planner.SetReverseOrder(_reverseOrderCheck.IsChecked == true);
-    }
+    private ChartAxisOptionsDialogInput ReadInput() => new(
+        _axisCombo.SelectedIndex,
+        _titleBox.Text,
+        _titleFontFamilyBox.Text,
+        _titleFontSizeBox.Text,
+        _titleColorBox.Text,
+        _titleBoldCheck.IsChecked,
+        _titleItalicCheck.IsChecked,
+        _showAxisCheck.IsChecked == true,
+        _minimumBox.Text,
+        _maximumBox.Text,
+        _majorUnitBox.Text,
+        _minorUnitBox.Text,
+        _numberFormatBox.Text,
+        _displayUnitCombo.SelectedIndex,
+        _customDisplayUnitBox.Text,
+        _majorGridlinesCheck.IsChecked == true,
+        _minorGridlinesCheck.IsChecked == true,
+        _majorTickMarkCombo.SelectedIndex,
+        _minorTickMarkCombo.SelectedIndex,
+        _tickLabelPositionCombo.SelectedIndex,
+        _crossesCombo.SelectedIndex,
+        _crossesAtBox.Text,
+        _crossBetweenCombo.SelectedIndex,
+        _labelAlignmentCombo.SelectedIndex,
+        _labelOffsetBox.Text,
+        _multiLevelLabelsCombo.SelectedIndex,
+        _autoCrossingCombo.SelectedIndex,
+        _reverseOrderCheck.IsChecked == true);
 
-    private static double? ParseOptional(string text, string label)
-    {
-        return ChartDialogOptionProjection.ParseOptionalDouble(text, CultureInfo.CurrentCulture, double.IsFinite, $"{label} must be a finite number or blank.");
-    }
-
-    private static string Format(double? value) =>
-        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
-
-    private static string Format(int? value) =>
-        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
-
-    private static int? ParseOptionalInt(string text, string surfaceLabel)
-    {
-        return ChartDialogOptionProjection.ParseOptionalInt(text, CultureInfo.CurrentCulture, value => value is >= 0 and <= 100, $"{surfaceLabel} must be an integer from 0 to 100 or blank.");
-    }
-
-    private static ComboBox MakeChoiceCombo<T>(IReadOnlyList<T> options) where T : class =>
+    private static ComboBox MakeChoiceCombo(IEnumerable<string> options) =>
         new()
         {
             ItemsSource = options,
-            DisplayMemberPath = "Label",
             MinWidth = 150,
         };
 }
