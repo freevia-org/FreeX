@@ -1058,7 +1058,7 @@ public sealed partial class MainWindow : Window
     private async Task OpenMarkIndexEntryDialogAsync()
     {
         var seed = _editor.SelectedText.Trim();
-        var dialog = new MarkIndexEntryDialog(seed);
+        var dialog = new MarkIndexEntryDialog(seed, _editor.BookmarkNames());
         await dialog.ShowDialog(this);
         if (dialog.Mark is { } mark)
         {
