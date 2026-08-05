@@ -24,19 +24,57 @@ public sealed class SharedPresentationBoundarySourceGuardTests
     }
 
     [Fact]
-    public void PasteSpecialHosts_ConsumeSharedCatalogWithoutReowningOptions()
+    public void PasteSpecialHosts_ConsumeSharedSessionWithoutReowningOptionsOrAcceptance()
     {
         var catalog = ReadSource("freew", "FreeW.App.Presentation", "Dialogs", "PasteSpecialOptionCatalog.cs");
+        var session = ReadSource("freew", "FreeW.App.Presentation", "Dialogs", "PasteSpecialDialogSession.cs");
         var wpf = ReadSource("freew", "FreeW.App.Host", "PasteSpecialDialog.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "PasteSpecialDialog.cs");
 
         catalog.Should().Contain("public enum PasteSpecialOption");
         catalog.Should().Contain("public static class PasteSpecialOptionCatalog");
-        wpf.Should().Contain("PasteSpecialOptionCatalog.Options");
-        avalonia.Should().Contain("PasteSpecialOptionCatalog.Options");
+        session.Should().Contain("PasteSpecialOptionCatalog.Options");
+        foreach (var host in new[] { wpf, avalonia })
+        {
+            host.Should().Contain("PasteSpecialDialogSession");
+            host.Should().Contain("PlanAcceptance()");
+            host.Should().NotContain("PasteSpecialOptionCatalog.Options");
+        }
         wpf.Should().NotContain("internal enum PasteSpecialOption");
         avalonia.Should().NotContain("private static readonly OptionRow[] Options");
         avalonia.Should().NotContain("private sealed record OptionRow");
+    }
+
+    [Fact]
+    public void SimpleDialogHosts_DelegateResultAndCommitSemanticsToPresentation()
+    {
+        var wpfDateTime = ReadSource("freew", "FreeW.App.Host", "DateTimeDialog.cs");
+        var avaloniaDateTime = ReadSource("freew", "FreeW.App.Avalonia", "DateTimeDialog.cs");
+        var wpfPassword = ReadSource("freew", "FreeW.App.Host", "PasswordPromptDialog.cs");
+        var avaloniaPassword = ReadSource("freew", "FreeW.App.Avalonia", "PasswordPromptDialog.cs");
+        var wpfCommands = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        var avaloniaCellShading = ReadSource("freew", "FreeW.App.Avalonia", "CellShadingDialog.cs");
+
+        foreach (var host in new[] { wpfDateTime, avaloniaDateTime })
+        {
+            host.Should().Contain("DateTimeDialogSession");
+            host.Should().Contain("_session.PlanAcceptance()");
+            host.Should().NotContain("DateTimeFormats.BuildFieldPicture");
+            host.Should().NotContain("record DateTimeDialogResult");
+        }
+
+        foreach (var host in new[] { wpfPassword, avaloniaPassword })
+        {
+            host.Should().Contain("PasswordPromptDialogSession");
+            host.Should().Contain("_session.PlanAcceptance()");
+        }
+        wpfPassword.Should().NotContain("_result = _passwordBox.Password");
+        avaloniaPassword.Should().NotContain("Result = _passwordBox.Text");
+
+        wpfCommands.Should().Contain("CellShadingDialogPlanner.PlanCommit(result)");
+        avaloniaCellShading.Should().Contain("CellShadingDialogPlanner.PlanCommit(result)");
+        wpfCommands.Should().NotContain("result is not { Accepted: true }");
+        avaloniaCellShading.Should().NotContain("result is not { Accepted: true }");
     }
 
     [Fact]

@@ -34,18 +34,17 @@ internal static class PasteSpecialDialog
         {
             DialogMessageHelper.ShowWarning(
                 owner as Window,
-                "The clipboard is empty or does not contain text that can be pasted.");
+                PasteSpecialDialogSession.EmptyClipboardMessage);
             return null;
         }
 
-        // Build the list of backed options; order matches Word's Paste Special dialog.
-        var options = PasteSpecialOptionCatalog.Options;
+        var session = new PasteSpecialDialogSession();
 
         PasteSpecialOption? result = null;
 
         var dialog = new Window
         {
-            Title = "Paste Special",
+            Title = PasteSpecialDialogSession.Title,
             Width = 380,
             SizeToContent = SizeToContent.Height,
             ResizeMode = ResizeMode.NoResize,
@@ -61,13 +60,13 @@ internal static class PasteSpecialDialog
             Margin = new Thickness(0, 0, 0, 8),
             SelectionMode = SelectionMode.Single,
         };
-        foreach (var opt in options)
+        foreach (var opt in session.Options)
             list.Items.Add(opt.Label);
         list.SelectedIndex = 0;
 
         var description = new TextBlock
         {
-            Text = options[0].Description,
+            Text = session.State.Description,
             TextWrapping = TextWrapping.Wrap,
             Foreground = System.Windows.Media.Brushes.DarkGray,
             FontSize = 11,
@@ -77,24 +76,25 @@ internal static class PasteSpecialDialog
 
         list.SelectionChanged += (_, _) =>
         {
-            if (list.SelectedIndex >= 0 && list.SelectedIndex < options.Count)
-                description.Text = options[list.SelectedIndex].Description;
+            description.Text = session.UpdateSelection(list.SelectedIndex).Description;
         };
 
         list.MouseDoubleClick += (_, _) =>
         {
-            if (list.SelectedIndex >= 0)
+            session.UpdateSelection(list.SelectedIndex);
+            if (session.PlanAcceptance() is { } option)
             {
-                result = options[list.SelectedIndex].Option;
+                result = option;
                 dialog.DialogResult = true;
             }
         };
 
         void Accept()
         {
-            if (list.SelectedIndex >= 0)
+            session.UpdateSelection(list.SelectedIndex);
+            if (session.PlanAcceptance() is { } option)
             {
-                result = options[list.SelectedIndex].Option;
+                result = option;
                 dialog.DialogResult = true;
             }
         }
@@ -102,7 +102,7 @@ internal static class PasteSpecialDialog
         var panel = new StackPanel { Margin = new Thickness(14) };
         panel.Children.Add(new TextBlock
         {
-            Text = "Paste As:",
+            Text = PasteSpecialDialogSession.PasteAsLabel,
             FontWeight = System.Windows.FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 4),
         });

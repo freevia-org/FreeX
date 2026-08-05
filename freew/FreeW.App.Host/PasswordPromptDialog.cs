@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using Free.Shared.Shell;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
 
@@ -13,24 +14,26 @@ namespace FreeW.App.Host;
 internal sealed class PasswordPromptDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly PasswordBox _passwordBox = new() { MinWidth = 220 };
+    private readonly PasswordPromptDialogSession _session;
     private string? _result;
 
     private PasswordPromptDialog(Window? owner, string title, string prompt)
     {
+        _session = new PasswordPromptDialogSession(title, prompt);
         Owner = owner;
-        Title = title;
+        Title = _session.State.Title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         AutomationProperties.SetAutomationId(_passwordBox, "PasswordPromptPasswordBox");
-        AutomationProperties.SetName(_passwordBox, prompt);
+        AutomationProperties.SetName(_passwordBox, _session.State.Prompt);
 
         var panel = new StackPanel { Margin = new Thickness(14) };
         panel.Children.Add(new TextBlock
         {
-            Text = prompt,
+            Text = _session.State.Prompt,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8)
         });
@@ -44,7 +47,8 @@ internal sealed class PasswordPromptDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Accept()
     {
-        _result = _passwordBox.Password;
+        _session.UpdatePassword(_passwordBox.Password);
+        _result = _session.PlanAcceptance();
         Close();
     }
 

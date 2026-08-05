@@ -1,6 +1,7 @@
 using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
@@ -22,12 +23,18 @@ public sealed class PasteStyleDialogParityTests
         {
             var dialog = Create<PasteSpecialDialog>();
             var buttons = Buttons(dialog);
+            var list = dialog.GetLogicalDescendants().OfType<ListBox>().Single();
 
             dialog.Width.Should().Be(380);
             dialog.SizeToContent.Should().Be(SizeToContent.Height);
-            buttons.Select(button => button.Content?.ToString()).Should().Equal(
+            buttons.Select(UserFacingButtonText).Should().Equal(
                 ShellStrings.Current.Ok,
                 ShellStrings.Current.Cancel);
+            list.ItemsSource.Should().BeAssignableTo<IEnumerable<PasteSpecialOptionChoice>>()
+                .Which.Select(choice => choice.Option).Should().Equal(
+                    PasteSpecialOption.KeepSourceFormatting,
+                    PasteSpecialOption.MergeFormatting,
+                    PasteSpecialOption.KeepTextOnly);
             buttons[0].IsDefault.Should().BeTrue();
             buttons[1].IsCancel.Should().BeTrue();
             buttons.Should().OnlyContain(button => button.MinWidth == 72);
@@ -162,4 +169,12 @@ public sealed class PasteStyleDialogParityTests
 
     private static Button[] Buttons(Window dialog) =>
         dialog.GetLogicalDescendants().OfType<Button>().Where(button => button is not global::Avalonia.Controls.Primitives.ToggleButton).ToArray();
+
+    private static string? UserFacingButtonText(Button button) => button.Content switch
+    {
+        string text => text,
+        AccessText accessText => accessText.Text,
+        TextBlock textBlock => textBlock.Text,
+        _ => button.Content?.ToString(),
+    };
 }

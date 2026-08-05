@@ -4,6 +4,8 @@ public sealed record CellShadingColorChoice(string Label, string Hex);
 
 public sealed record CellShadingDialogResult(bool Accepted, string? Hex);
 
+public sealed record CellShadingCommitPlan(bool ShouldApply, string? Hex);
+
 /// <summary>
 /// Shared logical geometry and chrome values for the WPF and Avalonia palette hosts.
 /// Keeping these values here prevents the two platform dialogs from drifting while leaving
@@ -68,4 +70,9 @@ public static class CellShadingDialogPlanner
 
     public static CellShadingDialogResult Cancel() =>
         new(Accepted: false, Hex: null);
+
+    public static CellShadingCommitPlan PlanCommit(CellShadingDialogResult? result) =>
+        result is { Accepted: true }
+            ? new CellShadingCommitPlan(ShouldApply: true, result.Hex)
+            : new CellShadingCommitPlan(ShouldApply: false, Hex: null);
 }

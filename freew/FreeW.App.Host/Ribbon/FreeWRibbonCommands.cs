@@ -2908,9 +2908,10 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             var owner = Window.GetWindow(editor);
             var result = CellShadingDialog.Prompt(owner);
-            if (result is not { Accepted: true })
+            var commit = CellShadingDialogPlanner.PlanCommit(result);
+            if (!commit.ShouldApply)
                 return;
-            editor.SetCaretCellShading(result.Hex);
+            editor.SetCaretCellShading(commit.Hex);
         }
     }
 

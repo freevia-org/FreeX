@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia;
 
@@ -18,6 +19,7 @@ internal sealed class PasswordPromptDialog : FreeWDialogWindow
         MinWidth = 220,
         PasswordChar = '*',
     };
+    private readonly PasswordPromptDialogSession _session;
 
     public string? Result { get; private set; }
 
@@ -25,8 +27,9 @@ internal sealed class PasswordPromptDialog : FreeWDialogWindow
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
         ArgumentNullException.ThrowIfNull(prompt);
+        _session = new PasswordPromptDialogSession(title, prompt);
 
-        Title = title;
+        Title = _session.State.Title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -34,9 +37,9 @@ internal sealed class PasswordPromptDialog : FreeWDialogWindow
         ShowInTaskbar = false;
 
         AutomationProperties.SetAutomationId(this, "PasswordPromptDialog");
-        AutomationProperties.SetName(this, title);
+        AutomationProperties.SetName(this, _session.State.Title);
         AutomationProperties.SetAutomationId(_passwordBox, "PasswordPromptPasswordBox");
-        AutomationProperties.SetName(_passwordBox, prompt);
+        AutomationProperties.SetName(_passwordBox, _session.State.Prompt);
         AvaloniaCompactDialogChrome.ApplyTextBox(_passwordBox, DialogChromeStyle);
 
         var body = new StackPanel
@@ -46,7 +49,7 @@ internal sealed class PasswordPromptDialog : FreeWDialogWindow
         };
         body.Children.Add(new TextBlock
         {
-            Text = prompt,
+            Text = _session.State.Prompt,
             TextWrapping = TextWrapping.Wrap,
         });
         body.Children.Add(_passwordBox);
@@ -96,7 +99,8 @@ internal sealed class PasswordPromptDialog : FreeWDialogWindow
 
     private void Accept(bool close)
     {
-        Result = _passwordBox.Text ?? string.Empty;
+        _session.UpdatePassword(_passwordBox.Text);
+        Result = _session.PlanAcceptance();
         if (close)
             Close();
     }

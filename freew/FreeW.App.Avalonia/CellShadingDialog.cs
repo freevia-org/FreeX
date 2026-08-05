@@ -90,10 +90,11 @@ internal sealed class CellShadingDialog : FreeWDialogWindow
     public static void ApplyResult(DocumentView editor, CellShadingDialogResult? result)
     {
         ArgumentNullException.ThrowIfNull(editor);
-        if (result is not { Accepted: true })
+        var commit = CellShadingDialogPlanner.PlanCommit(result);
+        if (!commit.ShouldApply)
             return;
 
-        editor.SetCellShading(result.Hex);
+        editor.SetCellShading(commit.Hex);
     }
 
     public static async Task ShowAndApplyAsync(Window owner, DocumentView editor)

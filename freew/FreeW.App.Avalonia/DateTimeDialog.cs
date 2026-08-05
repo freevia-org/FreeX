@@ -4,27 +4,21 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
-using FreeW.Core.Model;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia;
-
-internal sealed record DateTimeDialogResult(string Text, bool IsField, string? FieldInstruction);
 
 internal sealed class DateTimeDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome = AvaloniaCompactDialogChrome.WindowsStyle;
-    private readonly DateTime _moment;
-    private readonly CultureInfo _culture;
-    private readonly IReadOnlyList<DateTimeFormat> _formats;
+    private readonly DateTimeDialogSession _session;
     private readonly ListBox _list;
     private readonly CheckBox _updateAutomatically;
 
     internal DateTimeDialog(DateTime moment, CultureInfo culture)
     {
-        _moment = moment;
-        _culture = culture;
-        _formats = DateTimeFormats.Build(moment, culture);
-        Title = "Date and Time";
+        _session = new DateTimeDialogSession(moment, culture);
+        Title = DateTimeDialogSession.Title;
         Width = 360;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -34,7 +28,7 @@ internal sealed class DateTimeDialog : FreeWDialogWindow
         _list = new ListBox
         {
             Height = 170,
-            ItemsSource = _formats.Select(format => format.Text).ToArray(),
+            ItemsSource = _session.Formats,
             SelectedIndex = 0,
         };
         AvaloniaCompactDialogChrome.ApplyListBox(_list, Chrome);
@@ -42,7 +36,7 @@ internal sealed class DateTimeDialog : FreeWDialogWindow
 
         _updateAutomatically = new CheckBox
         {
-            Content = "Update automatically",
+            Content = DateTimeDialogSession.UpdateAutomaticallyLabel,
             Margin = new Thickness(0, 8, 0, 0),
         };
 
@@ -53,7 +47,7 @@ internal sealed class DateTimeDialog : FreeWDialogWindow
             Margin = new Thickness(14),
             Children =
             {
-                new TextBlock { Text = "Available formats:", Margin = new Thickness(0, 0, 0, 6) },
+                new TextBlock { Text = DateTimeDialogSession.FormatsLabel, Margin = new Thickness(0, 0, 0, 6) },
                 _list,
                 _updateAutomatically,
                 AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)),
@@ -74,17 +68,19 @@ internal sealed class DateTimeDialog : FreeWDialogWindow
 
     internal DateTimeDialogResult BuildResultForTest(int selectedIndex, bool updateAutomatically)
     {
-        var index = Math.Clamp(selectedIndex, 0, _formats.Count - 1);
-        var text = _formats[index].Text;
-        if (!updateAutomatically)
-            return new DateTimeDialogResult(text, false, null);
-
-        var keyword = index is 2 or 3 ? "TIME" : "DATE";
-        var picture = DateTimeFormats.BuildFieldPicture(index, _culture);
-        return new DateTimeDialogResult(text, true, $@" {keyword} \@ ""{picture}"" ");
+        _session.UpdateSelection(Math.Clamp(selectedIndex, 0, _session.Formats.Count - 1));
+        _session.UpdateAutomatically(updateAutomatically);
+        return _session.PlanAcceptance()!;
     }
 
-    private void Accept() => Close(BuildResultForTest(_list.SelectedIndex, _updateAutomatically.IsChecked == true));
+    private void Accept()
+    {
+        _session.UpdateSelection(_list.SelectedIndex);
+        _session.UpdateAutomatically(_updateAutomatically.IsChecked == true);
+        var result = _session.PlanAcceptance();
+        if (result is not null)
+            Close(result);
+    }
 
     private static Button Button(string text, bool isDefault = false, bool isCancel = false, Action? click = null)
     {
