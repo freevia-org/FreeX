@@ -171,6 +171,23 @@ public sealed class PagedEdit4HfRegionTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────
+    [StaFact]
+    public void PageBox_FirstSectionPageRestartedAtTwo_UsesEvenSlots()
+    {
+        var doc = BuildDocWithHeader("Default Header");
+        doc.Page.PageNumberStartAt = 2;
+        doc.Page.DifferentOddEvenPages = true;
+        doc.EvenHeader = new HeaderFooter("Even-Page Header");
+        doc.EvenFooter = new HeaderFooter("Even-Page Footer");
+
+        var (panel, _) = BuildPanel(doc);
+        var firstBox = panel.PageBoxes[0];
+
+        firstBox.PageNumberText.Should().Be("2");
+        firstBox.HeaderSlotName.Should().Be("even-header");
+        firstBox.FooterSlotName.Should().Be("even-footer");
+    }
+
     // 3. Commit writes back to slot with run formatting preserved
     // ─────────────────────────────────────────────────────────────────────────────────────────────
 

@@ -88,7 +88,8 @@ public static class HeaderFooterVisualPlanner
             pageSection.HeadersFooters,
             pageSection.SectionRelativePageNumber,
             pageSection.PageSettings,
-            diffOddEven);
+            diffOddEven,
+            displayPlan?.LogicalPageNumber);
 
         var slotPlans = new List<FreeWVisualHeaderFooterSlotPlan>();
         AddSlot(slotPlans, slots.Header, slots.HeaderSlotName, isFooter: false, safePageNumber, safePageCount, pageSection, displayPlan);

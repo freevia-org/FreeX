@@ -1062,7 +1062,8 @@ public sealed class SlideShowWindow : Window
             preferredCaptionShapeId: _preferredCaptionSlideIndex == captionSlideIndex ? _preferredCaptionShapeId : null,
             preferredCaptionTrackIndex: _preferredCaptionTrackIndex,
             captionSlideIndex: captionSlideIndex,
-            preferredCaptionSlideIndex: _preferredCaptionSlideIndex);
+            preferredCaptionSlideIndex: _preferredCaptionSlideIndex,
+            showMediaControls: _presentation.ShowMediaControls);
 
         if (plan.Transition is { } t)
             PlayTransition(slide, t);

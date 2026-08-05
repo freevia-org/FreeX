@@ -44,6 +44,7 @@ public static class PptxPackageReader
     private const string ChartRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
     private const string NotesSlideRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
     private const string NotesMasterRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster";
+    private const string PresPropsRelType     = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/presProps";
     private const string HyperlinkRelType     = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
     private const string SlideHlinkRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
     private const string CommentsRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
@@ -163,6 +164,7 @@ public static class PptxPackageReader
         // Rels for presentation.xml
         var presRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(presPath));
         presentation.DocumentMathProperties = ReadDocumentMathProperties(archive, presRels, presDir);
+        ReadShowMediaControls(archive, presRels, presDir, presentation);
 
         // Table styles (keyed by style GUID)
         var tableStyles = new Dictionary<string, TableStyleData>(StringComparer.OrdinalIgnoreCase);
@@ -348,6 +350,32 @@ public static class PptxPackageReader
         }
 
         return presentation;
+    }
+
+    private static void ReadShowMediaControls(
+        ZipArchive archive,
+        IReadOnlyList<OpcRelationshipTarget> presentationRelationships,
+        string presentationDirectory,
+        Presentation presentation)
+    {
+        var target = OpcRelationships.FirstTargetByType(presentationRelationships, PresPropsRelType);
+        if (target is null)
+            return;
+
+        var path = ResolveRelativeZipPath(presentationDirectory, target);
+        var document = OpcXml.TryLoadXml(archive, path);
+        var showPr = document?.Root?.Element(P + "showPr");
+        if (showPr is null)
+            return;
+
+        var mediaControls = showPr.Element(P14 + "showMediaCtrls")
+            ?? showPr.Element(P + "extLst")?
+                .Elements(P + "ext")
+                .Select(ext => ext.Element(P14 + "showMediaCtrls"))
+                .FirstOrDefault(element => element is not null);
+
+        if (mediaControls is not null)
+            presentation.ShowMediaControls = ReadBoolean(mediaControls.Attribute("val")?.Value);
     }
 
     /// <summary>

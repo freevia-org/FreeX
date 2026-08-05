@@ -138,6 +138,7 @@ public sealed class SlideShowMediaController
     private double _canvasW;
     private double _canvasH;
     private Slide? _activeSlide;
+    private bool _showMediaControls = true;
 
     // ── per-slide state ───────────────────────────────────────────────────────
 
@@ -210,7 +211,8 @@ public sealed class SlideShowMediaController
                            uint? preferredCaptionShapeId = null,
                            int? preferredCaptionTrackIndex = null,
                            int? captionSlideIndex = null,
-                           int? preferredCaptionSlideIndex = null)
+                           int? preferredCaptionSlideIndex = null,
+                           bool showMediaControls = true)
     {
         // Teardown any previous slide's media first (guard against double-call).
         Teardown();
@@ -220,6 +222,7 @@ public sealed class SlideShowMediaController
         _canvasW = canvasW;
         _canvasH = canvasH;
         _activeSlide = slide;
+        _showMediaControls = showMediaControls;
 
         foreach (var shape in ShapeTreeLookup.Enumerate(slide))
         {
@@ -337,7 +340,8 @@ public sealed class SlideShowMediaController
             canvasW,
             canvasH,
             canvasX,
-            canvasY);
+            canvasY,
+            _showMediaControls);
         LastMediaClickShapeIdForTest = click.Media?.ShapeId;
         if (!click.IsHandled)
             return false;

@@ -57,6 +57,34 @@ public sealed class HeaderFooterPagePlannerTests
     }
 
     [Fact]
+    public void ResolveSlots_PageNumberRestartUsesLogicalParity()
+    {
+        var headersFooters = new SectionHeadersFooters
+        {
+            Header = new HeaderFooter("Default Header"),
+            EvenHeader = new HeaderFooter("Even Header")
+        };
+
+        var evenStart = HeaderFooterPagePlanner.ResolveSlots(
+            headersFooters,
+            sectionRelativePageNumber: 1,
+            new PageSettings(),
+            differentOddEvenPages: true,
+            logicalPageNumber: 2);
+        var oddStart = HeaderFooterPagePlanner.ResolveSlots(
+            headersFooters,
+            sectionRelativePageNumber: 2,
+            new PageSettings(),
+            differentOddEvenPages: true,
+            logicalPageNumber: 3);
+
+        evenStart.HeaderSlot.Should().Be(HeaderFooterSlotKind.EvenHeader);
+        evenStart.Header.Should().BeSameAs(headersFooters.EvenHeader);
+        oddStart.HeaderSlot.Should().Be(HeaderFooterSlotKind.Header);
+        oddStart.Header.Should().BeSameAs(headersFooters.Header);
+    }
+
+    [Fact]
     public void UsesDifferentOddEvenPages_IncludesNonFinalSectionFlags()
     {
         var document = new TextDocument();
