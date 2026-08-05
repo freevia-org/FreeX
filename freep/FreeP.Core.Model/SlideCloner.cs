@@ -192,6 +192,15 @@ public static class SlideCloner
             });
         }
 
+        foreach (var bookmark in source.Bookmarks)
+        {
+            copy.Bookmarks.Add(new MediaBookmarkInfo
+            {
+                Name = bookmark.Name,
+                TimeMilliseconds = bookmark.TimeMilliseconds,
+            });
+        }
+
         return copy;
     }
 

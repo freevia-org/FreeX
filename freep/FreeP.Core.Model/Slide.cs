@@ -220,6 +220,9 @@ public sealed class MediaInfo
     /// <summary>Milliseconds used to fade the media out at playback end.</summary>
     public double FadeOutMilliseconds { get; set; }
 
+    /// <summary>Named playback bookmarks authored for this media object.</summary>
+    public List<MediaBookmarkInfo> Bookmarks { get; } = new();
+
     /// <summary>Raw media bytes. Empty when the media is link-only (no embed).</summary>
     public byte[] Bytes { get; set; } = Array.Empty<byte>();
 
@@ -240,6 +243,14 @@ public sealed class MediaInfo
 
     /// <summary>Closed-caption or subtitle tracks associated with this media object.</summary>
     public List<MediaCaptionTrackInfo> CaptionTracks { get; } = new();
+}
+
+/// <summary>A named PowerPoint media bookmark measured from the media start in milliseconds.</summary>
+public sealed class MediaBookmarkInfo
+{
+    public string Name { get; set; } = string.Empty;
+
+    public double TimeMilliseconds { get; set; }
 }
 
 /// <summary>Metadata for a PowerPoint media caption/subtitle track.</summary>

@@ -1358,6 +1358,81 @@ public sealed class SetMediaTimingCommand : IPresentationCommand
     }
 }
 
+/// <summary>Replaces one media object's named bookmarks as one undoable edit.</summary>
+public sealed class SetMediaBookmarksCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly List<MediaBookmarkInfo> _before;
+    private readonly List<MediaBookmarkInfo> _after;
+
+    public SetMediaBookmarksCommand(
+        int slideIndex,
+        uint shapeId,
+        IEnumerable<MediaBookmarkInfo> before,
+        IEnumerable<MediaBookmarkInfo> after)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _before = Clone(before);
+        _after = Clone(after);
+    }
+
+    public string Label => "Set Media Bookmarks";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var media = FindMedia(presentation);
+        return media is not null && !Equal(media.Bookmarks, _after);
+    }
+
+    public void Apply(Presentation presentation) => SetBookmarks(FindMedia(presentation), _after);
+
+    public void Revert(Presentation presentation) => SetBookmarks(FindMedia(presentation), _before);
+
+    private MediaInfo? FindMedia(Presentation presentation)
+    {
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return null;
+        return FindMedia(presentation.Slides[_slideIndex].Shapes);
+    }
+
+    private MediaInfo? FindMedia(IEnumerable<SlideShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == _shapeId && shape.Kind == SlideShapeKind.Media)
+                return shape.Media;
+            if (shape.Children.Count > 0 && FindMedia(shape.Children) is { } child)
+                return child;
+        }
+        return null;
+    }
+
+    private static List<MediaBookmarkInfo> Clone(IEnumerable<MediaBookmarkInfo> bookmarks) =>
+        bookmarks.Select(bookmark => new MediaBookmarkInfo
+        {
+            Name = bookmark.Name,
+            TimeMilliseconds = double.IsFinite(bookmark.TimeMilliseconds)
+                ? Math.Max(0, bookmark.TimeMilliseconds)
+                : 0
+        }).ToList();
+
+    private static bool Equal(IReadOnlyList<MediaBookmarkInfo> left, IReadOnlyList<MediaBookmarkInfo> right) =>
+        left.Count == right.Count
+        && left.Zip(right).All(pair =>
+            pair.First.Name == pair.Second.Name
+            && pair.First.TimeMilliseconds == pair.Second.TimeMilliseconds);
+
+    private static void SetBookmarks(MediaInfo? media, IReadOnlyList<MediaBookmarkInfo> bookmarks)
+    {
+        if (media is null)
+            return;
+        media.Bookmarks.Clear();
+        media.Bookmarks.AddRange(Clone(bookmarks));
+    }
+}
+
 /// <summary>Edits one native Summary Zoom tile's supported format properties.</summary>
 public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
 {
