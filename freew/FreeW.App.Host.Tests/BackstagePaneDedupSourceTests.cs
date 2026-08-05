@@ -92,7 +92,8 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().NotContain("UseNewPane = true");
             source.Should().Contain("BuildAccountPane = BuildAccountPane");
             source.Should().Contain("PresentationBackstagePanePlanner");
-            source.Should().Contain("PresentationBackstagePrintSurfacePlanner");
+            source.Should().Contain("PresentationBackstagePrintSession");
+            source.Should().NotContain("PresentationBackstagePrintSurfacePlanner.Build(");
             source.Should().Contain("PanePlans.BuildAccountPane(");
             source.Should().Contain("PanePlans.BuildExportPane(");
             source.Should().Contain("PanePlans.BuildInfoPane(");

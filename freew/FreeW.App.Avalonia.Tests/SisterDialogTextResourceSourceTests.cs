@@ -62,7 +62,8 @@ public sealed class SisterDialogTextResourceSourceTests
         var source = ReadAvaloniaSource("MainWindow.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Shell;");
-        source.Should().Contain("FreeWEditorStatusPlanner.Build(");
+        source.Should().Contain("_editorInteraction.BuildStatus(");
+        source.Should().NotContain("FreeWEditorStatusPlanner.Build(");
         source.Should().Contain("new FreeWEditorStatusSnapshot(");
         source.Should().Contain("_editor.ComputeStatistics()");
         source.Should().Contain("SelectionText: _editor.SelectedText");
