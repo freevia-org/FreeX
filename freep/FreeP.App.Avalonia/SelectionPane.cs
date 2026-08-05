@@ -32,7 +32,7 @@ internal sealed class SelectionPane : Border
 
         var heading = new TextBlock
         {
-            Text = "Selection Pane",
+            Text = _session.CurrentPlan.TitleText,
             FontSize = 15,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(12, 12, 12, 4),
@@ -78,15 +78,16 @@ internal sealed class SelectionPane : Border
 
     private Control BuildItem(PresentationSelectionPaneItemPlan item, int index)
     {
+        var itemSession = _session.CreateItemSession(item.ShapeId);
         var select = new Button
         {
-            Content = $"{item.SelectionIndex + 1}.",
+            Content = item.SelectText,
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Padding = new Thickness(8, 5),
             Margin = new Thickness(8 + (item.NestingDepth * 16), 1, 4, 1),
         };
         ToolTip.SetTip(select, item.SelectToolTipText);
-        select.Click += (_, _) => _session.SelectShape(item.ShapeId);
+        select.Click += (_, _) => ApplyTransition(itemSession.Select());
 
         var rename = new TextBox
         {
@@ -96,15 +97,11 @@ internal sealed class SelectionPane : Border
             Margin = new Thickness(0, 1, 4, 1),
         };
         ToolTip.SetTip(rename, PresentationSelectionPaneItemPlan.RenameToolTipText);
-        var committed = false;
         void CommitName()
         {
-            if (committed)
-                return;
-            committed = true;
-            var transition = _session.RenameShape(item.ShapeId, rename.Text);
-            if (transition.RestoreNameText is { } restoreName)
-                rename.Text = restoreName;
+            ApplyTransition(
+                itemSession.CommitRename(rename.Text),
+                restoreName => rename.Text = restoreName);
         }
         rename.LostFocus += (_, _) => CommitName();
         rename.KeyDown += (_, args) =>
@@ -116,15 +113,14 @@ internal sealed class SelectionPane : Border
             }
             else if (args.Key == Key.Escape)
             {
-                committed = true;
-                Refresh();
+                ApplyTransition(itemSession.CancelRename());
                 args.Handled = true;
             }
         };
 
         var visibility = new Button
         {
-            Content = item.IsHidden ? "Show" : "Hide",
+            Content = item.VisibilityActionText,
             MinWidth = 50,
             Padding = new Thickness(5, 3),
             Margin = new Thickness(0, 1, 8, 1),
@@ -132,32 +128,32 @@ internal sealed class SelectionPane : Border
         ToolTip.SetTip(visibility, item.VisibilityToolTipText);
         visibility.Click += (_, _) =>
         {
-            var transition = _session.ToggleShapeVisibility(item.ShapeId);
-            if (transition.ShouldRefreshPane)
-                Render(transition.PanePlan);
+            ApplyTransition(itemSession.ToggleVisibility());
         };
 
         var moveUp = new Button
         {
-            Content = "▲",
+            Content = item.MoveUpText,
             Width = 22,
             Padding = new Thickness(0),
             Margin = new Thickness(0, 1, 2, 1),
             IsEnabled = item.CanMoveUp,
         };
         ToolTip.SetTip(moveUp, PresentationSelectionPaneItemPlan.MoveUpToolTipText);
-        moveUp.Click += (_, _) => MoveItem(item, offset: 1);
+        moveUp.Click += (_, _) =>
+            ApplyTransition(itemSession.MoveTowardFront());
 
         var moveDown = new Button
         {
-            Content = "▼",
+            Content = item.MoveDownText,
             Width = 22,
             Padding = new Thickness(0),
             Margin = new Thickness(0, 1, 2, 1),
             IsEnabled = item.CanMoveDown,
         };
         ToolTip.SetTip(moveDown, PresentationSelectionPaneItemPlan.MoveDownToolTipText);
-        moveDown.Click += (_, _) => MoveItem(item, offset: -1);
+        moveDown.Click += (_, _) =>
+            ApplyTransition(itemSession.MoveTowardBack());
 
         var row = new DockPanel();
         DockPanel.SetDock(visibility, Dock.Right);
@@ -174,7 +170,7 @@ internal sealed class SelectionPane : Border
             PresentationPaneAccessibilityPlanner.SelectionPaneId,
             index,
             item.ShapeName,
-            item.IsSelected ? "Selected" : "Not selected");
+            item.AccessibilityStateText);
         return row;
     }
 
@@ -185,9 +181,12 @@ internal sealed class SelectionPane : Border
             .Select(textBox => textBox is null ? null : ToolTip.GetTip(textBox)?.ToString())
             .ToArray();
 
-    private void MoveItem(PresentationSelectionPaneItemPlan item, int offset)
+    private void ApplyTransition(
+        PresentationSelectionPaneTransitionPlan transition,
+        Action<string>? restoreName = null)
     {
-        var transition = _session.MoveShapeInReadingOrder(item.ShapeId, offset);
+        if (transition.RestoreNameText is { } name)
+            restoreName?.Invoke(name);
         if (transition.ShouldRefreshPane)
             Render(transition.PanePlan);
     }

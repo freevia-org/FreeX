@@ -2537,9 +2537,16 @@ public sealed class ReviewWorkflowAdapterTests
             "FreeP.App.Host",
             "SelectionPane.cs"));
         selectionPaneSource.Should().Contain("PresentationSelectionPaneSession");
-        selectionPaneSource.Should().Contain("_session.RenameShape(");
-        selectionPaneSource.Should().Contain("_session.ToggleShapeVisibility(");
-        selectionPaneSource.Should().Contain("_session.MoveShapeInReadingOrder(");
+        selectionPaneSource.Should().Contain("_session.CreateItemSession(item.ShapeId)");
+        selectionPaneSource.Should().Contain("itemSession.CommitRename(rename.Text)");
+        selectionPaneSource.Should().Contain("itemSession.ToggleVisibility()");
+        selectionPaneSource.Should().Contain("itemSession.MoveTowardFront()");
+        selectionPaneSource.Should().Contain("itemSession.MoveTowardBack()");
+        selectionPaneSource.Should().NotContain("var committed");
+        selectionPaneSource.Should().NotContain("_session.RenameShape(");
+        selectionPaneSource.Should().NotContain("_session.ToggleShapeVisibility(");
+        selectionPaneSource.Should().NotContain("_session.MoveShapeInReadingOrder(");
+        selectionPaneSource.Should().NotContain("PresentationSelectionPaneMoveDirection");
         selectionPaneSource.Should().Contain("Key.Enter");
         selectionPaneSource.Should().Contain("rename.LostFocus");
         selectionPaneSource.Should().Contain("item.CanMoveUp");
