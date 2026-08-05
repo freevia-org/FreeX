@@ -1859,6 +1859,43 @@ public sealed class SlideShowMediaControllerTests
         return slide;
     }
 
+    private static byte[] CreateSeekableWav(TimeSpan duration)
+    {
+        const int sampleRate = 8000;
+        const short channels = 1;
+        const short bitsPerSample = 16;
+        var sampleCount = checked((int)(duration.TotalSeconds * sampleRate));
+        var dataLength = sampleCount * channels * (bitsPerSample / 8);
+
+        using var stream = new MemoryStream(44 + dataLength);
+        using var writer = new BinaryWriter(stream);
+        writer.Write("RIFF"u8.ToArray());
+        writer.Write(36 + dataLength);
+        writer.Write("WAVE"u8.ToArray());
+        writer.Write("fmt "u8.ToArray());
+        writer.Write(16);
+        writer.Write((short)1);
+        writer.Write(channels);
+        writer.Write(sampleRate);
+        writer.Write(sampleRate * channels * (bitsPerSample / 8));
+        writer.Write((short)(channels * (bitsPerSample / 8)));
+        writer.Write(bitsPerSample);
+        writer.Write("data"u8.ToArray());
+        writer.Write(dataLength);
+        writer.Write(new byte[dataLength]);
+        return stream.ToArray();
+    }
+
+    private static void ConfigureSeekableMedia(SlideShape shape)
+    {
+        shape.Media = new MediaInfo
+        {
+            IsVideo = false,
+            Bytes = CreateSeekableWav(TimeSpan.FromSeconds(5)),
+            ContentType = "audio/wav",
+        };
+    }
+
     // ── ComputeMediaRect ──────────────────────────────────────────────────────
 
     [Fact]
@@ -2436,6 +2473,9 @@ public sealed class SlideShowMediaControllerTests
         var overlay = new System.Windows.Controls.Canvas();
         var ctrl = new SlideShowMediaController(overlay, fakeWriter);
         var shape = MakeMediaShape();
+        shape.Id = 42;
+        shape.Name = "Audio1";
+        ConfigureSeekableMedia(shape);
         var slide = SlideWithMedia(shape);
 
         ctrl.EnterSlide(slide, 960, 720, 960, 720);
@@ -2457,6 +2497,7 @@ public sealed class SlideShowMediaControllerTests
         var overlay = new System.Windows.Controls.Canvas();
         var ctrl = new SlideShowMediaController(overlay, new TempMediaFileWriter());
         var shape = MakeMediaShape();
+        ConfigureSeekableMedia(shape);
         shape.Media!.Bookmarks.Add(new MediaBookmarkInfo
         {
             Name = "Cue",
