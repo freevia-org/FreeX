@@ -68,4 +68,68 @@ public sealed class AutomaticHyphenationDisplayPlannerTests
         offsets.Should().Contain(expectedRabbitBreak);
         offsets.Should().OnlyContain(offset => offset > rabbitStart);
     }
+
+    [Theory]
+    [InlineData(0, 18, false)]
+    [InlineData(0, 18.01, true)]
+    [InlineData(36, 36, false)]
+    [InlineData(36, 36.01, true)]
+    public void Line_decision_applies_default_or_authored_zone_at_the_exact_boundary(
+        double zonePt,
+        double trailingWhitespacePt,
+        bool expected)
+    {
+        var page = new PageSettings
+        {
+            AutoHyphenation = true,
+            HyphenationZonePt = zonePt,
+        };
+
+        AutomaticHyphenationDisplayPlanner.AllowsAutomaticLineBreak(
+                page,
+                consecutiveHyphenatedLines: 0,
+                hasOrdinaryWordBreak: true,
+                trailingWhitespacePt)
+            .Should().Be(expected);
+    }
+
+    [Fact]
+    public void Line_decision_does_not_apply_zone_when_no_whole_word_break_exists()
+    {
+        var page = new PageSettings
+        {
+            AutoHyphenation = true,
+            HyphenationZonePt = 72,
+        };
+
+        AutomaticHyphenationDisplayPlanner.AllowsAutomaticLineBreak(
+                page,
+                consecutiveHyphenatedLines: 0,
+                hasOrdinaryWordBreak: false,
+                ordinaryTrailingWhitespacePt: 0)
+            .Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(0, 20, true)]
+    [InlineData(2, 1, true)]
+    [InlineData(2, 2, false)]
+    public void Line_decision_honors_zero_as_unlimited_and_positive_consecutive_limit(
+        int limit,
+        int currentConsecutiveLines,
+        bool expected)
+    {
+        var page = new PageSettings
+        {
+            AutoHyphenation = true,
+            ConsecutiveHyphenLimit = limit,
+        };
+
+        AutomaticHyphenationDisplayPlanner.AllowsAutomaticLineBreak(
+                page,
+                currentConsecutiveLines,
+                hasOrdinaryWordBreak: false,
+                ordinaryTrailingWhitespacePt: 0)
+            .Should().Be(expected);
+    }
 }

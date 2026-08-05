@@ -8893,7 +8893,9 @@ public sealed class DocumentView : Control
         IReadOnlyList<double> heights,
         double availableWidth,
         ParagraphFormatting pf,
+        PageSettings page,
         double naturalLineHeightScale,
+        string automaticHyphenationText,
         IReadOnlyDictionary<int, double> automaticHyphenWidths)
     {
         if (cells.Count == 0)
@@ -8903,6 +8905,7 @@ public sealed class DocumentView : Control
         var lineStart = 0;
         var lineWidth = 0.0;
         var lastBreak = -1;
+        var consecutiveAutomaticHyphenLines = 0;
 
         void AddLine(int from, int to)
         {
@@ -8922,10 +8925,22 @@ public sealed class DocumentView : Control
                 var spaceBreakAt = lastBreak >= lineStart ? lastBreak + 1 : -1;
                 var automaticBreak = FindLatestAutomaticHyphenBreak(
                     lineStart, index, availableWidth, measured, automaticHyphenWidths);
-                var breakAt = automaticBreak.BreakAt > spaceBreakAt
+                var useAutomaticHyphen = ShouldUseAutomaticHyphenBreak(
+                    page,
+                    consecutiveAutomaticHyphenLines,
+                    automaticHyphenationText,
+                    measured,
+                    lineStart,
+                    spaceBreakAt,
+                    automaticBreak.BreakAt,
+                    availableWidth);
+                var breakAt = useAutomaticHyphen
                     ? automaticBreak.BreakAt
                     : spaceBreakAt > lineStart ? spaceBreakAt : index;
                 AddLine(lineStart, breakAt);
+                consecutiveAutomaticHyphenLines = useAutomaticHyphen
+                    ? consecutiveAutomaticHyphenLines + 1
+                    : 0;
                 lineStart = breakAt;
                 lineWidth = 0;
                 lastBreak = -1;
@@ -8942,6 +8957,41 @@ public sealed class DocumentView : Control
 
         AddLine(lineStart, cells.Count);
         return totalHeight;
+    }
+
+    internal static bool ShouldUseAutomaticHyphenBreak(
+        PageSettings page,
+        int consecutiveHyphenatedLines,
+        string displayText,
+        IReadOnlyList<double> measured,
+        int lineStart,
+        int spaceBreakAt,
+        int automaticBreakAt,
+        double availableWidth)
+    {
+        if (automaticBreakAt <= spaceBreakAt)
+            return false;
+
+        var hasOrdinaryWordBreak = spaceBreakAt > lineStart;
+        var ordinaryVisibleEnd = spaceBreakAt;
+        while (ordinaryVisibleEnd > lineStart
+               && char.IsWhiteSpace(displayText[ordinaryVisibleEnd - 1]))
+        {
+            ordinaryVisibleEnd--;
+        }
+
+        var ordinaryVisibleWidth = 0.0;
+        for (var index = lineStart; index < ordinaryVisibleEnd; index++)
+            ordinaryVisibleWidth += measured[index];
+        var trailingWhitespacePt = hasOrdinaryWordBreak
+            ? Math.Max(0, availableWidth - ordinaryVisibleWidth) / PxPerPoint
+            : 0;
+
+        return AutomaticHyphenationDisplayPlanner.AllowsAutomaticLineBreak(
+            page,
+            consecutiveHyphenatedLines,
+            hasOrdinaryWordBreak,
+            trailingWhitespacePt);
     }
 
     private static (int BreakAt, double HyphenWidth) FindLatestAutomaticHyphenBreak(
@@ -9173,11 +9223,13 @@ public sealed class DocumentView : Control
         if (keepParagraphTogether && supportsCompleteParagraphPlanning)
         {
             var paragraphHeight = MeasurePlainParagraphHeight(
-                cells, measured, heights, availableWidth, pf, naturalLineHeightScale, automaticHyphenWidths);
+                cells, measured, heights, availableWidth, pf, _doc.Page,
+                naturalLineHeightScale, automaticHyphenationText, automaticHyphenWidths);
             ReserveCompleteParagraph(paragraphHeight);
         }
 
         var lineIndex = 0;
+        var consecutiveAutomaticHyphenLines = 0;
         var supportsSplitFloatFragments = alignment == TextAlignment.Left
             && Math.Abs(leftInset) < 0.01
             && Math.Abs(indentLeft) < 0.01
@@ -9234,7 +9286,15 @@ public sealed class DocumentView : Control
                 var spaceBreakAt = lastBreak >= lineStart ? lastBreak + 1 : -1;
                 var automaticBreak = FindLatestAutomaticHyphenBreak(
                     lineStart, i, lineAvail, measured, automaticHyphenWidths);
-                var useAutomaticHyphen = automaticBreak.BreakAt > spaceBreakAt;
+                var useAutomaticHyphen = ShouldUseAutomaticHyphenBreak(
+                    _doc.Page,
+                    consecutiveAutomaticHyphenLines,
+                    automaticHyphenationText,
+                    measured,
+                    lineStart,
+                    spaceBreakAt,
+                    automaticBreak.BreakAt,
+                    lineAvail);
                 var breakAt = useAutomaticHyphen
                     ? automaticBreak.BreakAt
                     : spaceBreakAt > lineStart ? spaceBreakAt : i;
@@ -9247,6 +9307,9 @@ public sealed class DocumentView : Control
                     automaticHyphenWidth: useAutomaticHyphen ? automaticBreak.HyphenWidth : 0,
                     automaticHyphenSourceCell: useAutomaticHyphen ? cells[breakAt - 1] : null,
                     automaticHyphenBreakOffset: useAutomaticHyphen ? breakAt : -1);
+                consecutiveAutomaticHyphenLines = useAutomaticHyphen
+                    ? consecutiveAutomaticHyphenLines + 1
+                    : 0;
                 lineIndex++;
                 lineStart = breakAt;
                 lineWidth = 0;
@@ -9877,7 +9940,7 @@ public sealed class DocumentView : Control
             // AV-TBL: carry the TableCell model reference and actual column index so we can emit
             // per-paragraph, per-character cell-aware PlacedChars for caret routing.
             // BE2: CellParas holds wrapped lines per-paragraph (outer list = para, inner = wrapped lines).
-            var measured = new List<(TableCell Cell, int CellIndex, int StartCol, int Span, List<List<(double Height, List<(char Ch, double W, bool Hidden)> Chars)>> CellParas, List<(double Before, double After)> ParagraphSpacings, List<double> MarkerInsets, RunFormatting Fmt)>();
+            var measured = new List<(TableCell Cell, int CellIndex, int StartCol, int Span, List<List<CellWrappedLine>> CellParas, List<(double Before, double After)> ParagraphSpacings, List<double> MarkerInsets, RunFormatting Fmt)>();
             var rowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
             var col = 0;
             for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
@@ -10010,10 +10073,11 @@ public sealed class DocumentView : Control
                         _markers.Add((rect.Left + pad, ty, preservedMarker.Text, fmt));
                     }
 
-                    foreach (var (lineHeight, chars) in paraLines)
+                    foreach (var line in paraLines)
                     {
+                        var lineHeight = line.Height;
                         var tx = rect.Left + pad + markerInset;
-                        foreach (var (ch, w, hidden) in chars)
+                        foreach (var (ch, w, hidden) in line.Chars)
                         {
                             var placedFormatting = hidden ? fmt with { Hidden = true } : fmt;
                             _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, ty, w, lineHeight, placedFormatting, ch,
@@ -10023,13 +10087,30 @@ public sealed class DocumentView : Control
                             tx += w;
                         }
 
+                        if (line.AutomaticHyphenWidth > 0)
+                        {
+                            _automaticHyphenGlyphs.Add(new AutomaticHyphenGlyph(
+                                blockIndex,
+                                glyphOffset,
+                                tx,
+                                ty,
+                                line.AutomaticHyphenWidth,
+                                lineHeight,
+                                fmt,
+                                CommentId: null,
+                                Revision: RevisionKind.None,
+                                RevisionAuthor: null,
+                                Link: null,
+                                FormatRevision: null));
+                        }
+
                         ty += lineHeight;
                     }
 
                     ty += paragraphSpacing.After;
 
                     // BE1: sentinel at end of this paragraph (at the end of its last visual line).
-                    (double Height, List<(char Ch, double W, bool Hidden)> Chars)? lastParaLine = paraLines.Count > 0 ? paraLines[^1] : null;
+                    CellWrappedLine? lastParaLine = paraLines.Count > 0 ? paraLines[^1] : null;
                     var sentinelX = rect.Left + pad + (lastParaLine.HasValue ? lastParaLine.Value.Chars.Sum(c => c.W) : 0);
                     var sentinelY = lastParaLine.HasValue
                         ? ty - paragraphSpacing.After - lastParaLine.Value.Height
@@ -10845,41 +10926,105 @@ public sealed class DocumentView : Control
         return widths;
     }
 
-    private List<(double Height, List<(char Ch, double W, bool Hidden)> Chars)> WrapCellLines(
+    private List<CellWrappedLine> WrapCellLines(
         Paragraph paragraph,
         RunFormatting fmt,
         double maxInner)
     {
-        var result = new List<(double, List<(char, double, bool)>)>();
+        var result = new List<CellWrappedLine>();
         var lineHeight = Build("Ag", fmt).Height;
-        var current = new List<(char, double, bool)>();
-        double currentWidth = 0;
-        var lastSpace = -1;
+        var chars = new List<(char Ch, double W, bool Hidden)>();
 
         foreach (var run in paragraph.Runs)
         {
             var hidden = IsTextHiddenInCurrentView(ResolveRunFmt(run.Formatting, paragraph));
             foreach (var ch in run.Text)
             {
-                var w = hidden ? 0 : Build(ch.ToString(), fmt).WidthIncludingTrailingWhitespace;
-                if (!hidden && ch == ' ')
-                    lastSpace = current.Count;
-                if (currentWidth + w > maxInner && current.Count > 0)
-                {
-                    var breakAt = lastSpace > 0 ? lastSpace : current.Count;
-                    result.Add((lineHeight, current.Take(breakAt).ToList()));
-                    current = current.Skip(breakAt).ToList();
-                    currentWidth = current.Sum(c => c.Item2);
-                    lastSpace = -1;
-                }
-
-                current.Add((ch, w, hidden));
-                currentWidth += w;
+                var width = hidden ? 0 : Build(ch.ToString(), fmt).WidthIncludingTrailingWhitespace;
+                chars.Add((ch, width, hidden));
             }
         }
 
-        if (current.Count > 0 || result.Count == 0)
-            result.Add((lineHeight, current));
+        if (chars.Count == 0)
+        {
+            result.Add(new CellWrappedLine(lineHeight, [], 0));
+            return result;
+        }
+
+        var displayText = new string(chars.Select(item => item.Hidden ? ' ' : item.Ch).ToArray());
+        var measured = chars.Select(item => item.W).ToArray();
+        var automaticHyphenWidths = AutomaticHyphenationDisplayPlanner.BuildBreakOffsets(
+                displayText,
+                _doc.Page,
+                ResolveParagraphFmt(paragraph))
+            .Where(offset => offset > 0 && offset < chars.Count)
+            .Distinct()
+            .ToDictionary(
+                offset => offset,
+                _ => Build("-", fmt).WidthIncludingTrailingWhitespace);
+
+        var lineStart = 0;
+        var currentWidth = 0.0;
+        var lastSpace = -1;
+        var consecutiveAutomaticHyphenLines = 0;
+
+        void AddLine(int from, int to, double automaticHyphenWidth = 0)
+        {
+            result.Add(new CellWrappedLine(
+                lineHeight,
+                chars.Skip(from).Take(to - from).ToList(),
+                automaticHyphenWidth));
+        }
+
+        for (var index = 0; index < chars.Count; index++)
+        {
+            if (!chars[index].Hidden && chars[index].Ch == ' ')
+                lastSpace = index;
+
+            if (currentWidth + measured[index] > maxInner && index > lineStart)
+            {
+                var spaceBreakAt = lastSpace > lineStart ? lastSpace : -1;
+                var automaticBreak = FindLatestAutomaticHyphenBreak(
+                    lineStart,
+                    index,
+                    maxInner,
+                    measured,
+                    automaticHyphenWidths);
+                var useAutomaticHyphen = ShouldUseAutomaticHyphenBreak(
+                    _doc.Page,
+                    consecutiveAutomaticHyphenLines,
+                    displayText,
+                    measured,
+                    lineStart,
+                    spaceBreakAt,
+                    automaticBreak.BreakAt,
+                    maxInner);
+                var breakAt = useAutomaticHyphen
+                    ? automaticBreak.BreakAt
+                    : spaceBreakAt > lineStart ? spaceBreakAt : index;
+
+                AddLine(
+                    lineStart,
+                    breakAt,
+                    useAutomaticHyphen ? automaticBreak.HyphenWidth : 0);
+                consecutiveAutomaticHyphenLines = useAutomaticHyphen
+                    ? consecutiveAutomaticHyphenLines + 1
+                    : 0;
+                lineStart = breakAt;
+                currentWidth = 0;
+                lastSpace = -1;
+                for (var carried = lineStart; carried < index; carried++)
+                {
+                    currentWidth += measured[carried];
+                    if (!chars[carried].Hidden && chars[carried].Ch == ' ')
+                        lastSpace = carried;
+                }
+            }
+
+            currentWidth += measured[index];
+        }
+
+        AddLine(lineStart, chars.Count);
         return result;
     }
 
@@ -24887,6 +25032,11 @@ public sealed class DocumentView : Control
         string? RevisionAuthor,
         LinkInfo? Link,
         FormatRevision? FormatRevision);
+
+    private readonly record struct CellWrappedLine(
+        double Height,
+        List<(char Ch, double W, bool Hidden)> Chars,
+        double AutomaticHyphenWidth);
 
     /// <summary>
     /// AV-LINK: a hyperlink target carried alongside a glyph/run. Exactly one of <see cref="Url"/> (external)

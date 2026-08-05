@@ -8,6 +8,8 @@ namespace FreeW.App.Presentation.DocumentView;
 /// </summary>
 public static class AutomaticHyphenationDisplayPlanner
 {
+    public const double DefaultHyphenationZonePt = 18;
+
     public static IReadOnlyList<int> BuildBreakOffsets(
         string displayText,
         PageSettings page,
@@ -49,6 +51,36 @@ public static class AutomaticHyphenationDisplayPlanner
         }
 
         return offsets;
+    }
+
+    /// <summary>
+    /// Decides whether a measured line may consume an automatic break. The zone applies only when
+    /// an ordinary word break is available; an overlong first word has no trailing whole-word gap.
+    /// </summary>
+    public static bool AllowsAutomaticLineBreak(
+        PageSettings page,
+        int consecutiveHyphenatedLines,
+        bool hasOrdinaryWordBreak,
+        double ordinaryTrailingWhitespacePt)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+
+        if (!page.AutoHyphenation)
+            return false;
+
+        if (page.ConsecutiveHyphenLimit > 0
+            && consecutiveHyphenatedLines >= page.ConsecutiveHyphenLimit)
+        {
+            return false;
+        }
+
+        if (!hasOrdinaryWordBreak)
+            return true;
+
+        var zonePt = page.HyphenationZonePt > 0
+            ? page.HyphenationZonePt
+            : DefaultHyphenationZonePt;
+        return Math.Max(0, ordinaryTrailingWhitespacePt) > zonePt;
     }
 
     private static string HyphenateForDisplay(string text, bool doNotHyphenateCaps)
