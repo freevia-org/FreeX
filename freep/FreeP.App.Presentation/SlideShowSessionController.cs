@@ -25,6 +25,7 @@ public sealed class SlideShowSessionController
 
         StartedAtUtc = startedAtUtc;
         ToolPlan = initialToolPlan ?? SlideShowPresenterToolPlanner.BuildPlan(
+            inkColorHex: _presentation.PresenterPenColor?.Resolved.ToString(),
             captureReadiness: captureBackend.AdapterReadiness);
 
         _currentRouteSlideIndex = _playbackRoute.StartIndex;
@@ -96,7 +97,7 @@ public sealed class SlideShowSessionController
             timingIntent,
             mediaIntent,
             pointerMode,
-            inkColorHex,
+            inkColorHex ?? _presentation.PresenterPenColor?.Resolved.ToString(),
             inkThicknessDip,
             inkRetentionDecision,
             RecordingExecutionState.HostCapabilities.EffectiveCaptureAdapterReadiness);

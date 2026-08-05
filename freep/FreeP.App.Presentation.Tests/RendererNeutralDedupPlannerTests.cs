@@ -356,6 +356,33 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void PresenterPenColor_RoundTripsAsThemeAwareShowProperty()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.PresenterPenColor = new ThemeAwareColor(
+            SrgbColor.FromRgb(0x123456),
+            new SchemeColorRef { Slot = ThemeColorSlot.Accent2, RoleName = "accent2" });
+
+        using var output = new MemoryStream();
+        PptxPackageWriter.Write(presentation, output);
+        var bytes = output.ToArray();
+        var reopened = PptxPackageReader.Read(new MemoryStream(bytes));
+
+        reopened.PresenterPenColor.Should().NotBeNull();
+        reopened.PresenterPenColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xED7D31));
+        reopened.PresenterPenColor.SchemeColor!.Slot.Should().Be(ThemeColorSlot.Accent2);
+
+        using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        using var properties = archive.GetEntry("ppt/presProps.xml")!.Open();
+        var showPr = XDocument.Load(properties).Descendants(XName.Get(
+            "showPr", "http://schemas.openxmlformats.org/presentationml/2006/main")).Single();
+        showPr.Element(XName.Get(
+                "penClr", "http://schemas.openxmlformats.org/presentationml/2006/main"))!
+            .Element(XName.Get("schemeClr", "http://schemas.openxmlformats.org/drawingml/2006/main"))!
+            .Attribute("val")!.Value.Should().Be("accent2");
+    }
+
+    [Fact]
     public void SlideShowSettings_RoundTripAndUndoPreserveNativeShowProperties()
     {
         var presentation = Presentation.CreateEmpty();

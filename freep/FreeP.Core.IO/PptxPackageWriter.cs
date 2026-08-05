@@ -2988,6 +2988,12 @@ public static class PptxPackageWriter
         };
         showPr.Add(showMode);
 
+        if (presentation.PresenterPenColor is { } presenterPenColor)
+        {
+            showPr.Elements(P + "penClr").Remove();
+            showPr.Add(new XElement(P + "penClr", BuildColorEl(presenterPenColor)));
+        }
+
         foreach (var element in showPr.Elements(P14 + "showMediaCtrls").ToArray())
             element.Remove();
 

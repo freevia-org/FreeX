@@ -130,6 +130,12 @@ public sealed class Presentation
     /// <summary>Whether slideshow playback loops back to its first slide after the last slide.</summary>
     public bool LoopUntilStopped { get; set; }
 
+    /// <summary>
+    /// The authored default presenter pen color from PresentationML <c>p:showPr/p:penClr</c>.
+    /// Null means the package did not specify a color and presenter tools use their host defaults.
+    /// </summary>
+    public ThemeAwareColor? PresenterPenColor { get; set; }
+
     /// <summary>How PowerPoint presents the slide show window.</summary>
     public PresentationShowType ShowType { get; set; } = PresentationShowType.PresentedBySpeaker;
 

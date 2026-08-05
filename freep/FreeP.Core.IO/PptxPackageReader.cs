@@ -213,6 +213,10 @@ public static class PptxPackageReader
         // Notes master: retain the native part and expose its placeholder geometry/styles to the
         // shared notes-page planner.  This runs after slide-master themes are loaded so
         // theme-dependent notes styles resolve against the presentation's actual first theme.
+        // Re-read show properties after the first master theme is available so a theme-based
+        // p:penClr resolves against the authored presentation theme rather than the fallback.
+        ReadShowProperties(archive, presRels, presDir, presentation);
+
         var notesMasterTarget = OpcRelationships.FirstTargetByType(presRels, NotesMasterRelType);
         if (notesMasterTarget is not null)
         {
@@ -376,6 +380,9 @@ public static class PptxPackageReader
         presentation.ShowSpecialPlaceholdersOnTitleSlide = ReadBooleanOrDefault(
             showPr.Attribute("showSpecialPlsOnTitleSld")?.Value,
             defaultValue: false);
+        presentation.PresenterPenColor = PptxColorReader.TryReadColor(
+            showPr.Element(P + "penClr"),
+            presentation.Theme.ColorScheme);
         var browse = showPr.Element(P + "browse");
         var kiosk = showPr.Element(P + "kiosk");
         presentation.ShowType = browse is not null

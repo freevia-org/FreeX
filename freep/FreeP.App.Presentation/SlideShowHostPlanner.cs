@@ -616,7 +616,8 @@ public static class SlideShowHostPlanner
             startedAtUtc,
             elapsed,
             displayIntent ?? SlideShowPresenterDisplayIntent.FullScreen,
-            toolPlan ?? SlideShowPresenterToolPlanner.BuildPlan());
+            toolPlan ?? SlideShowPresenterToolPlanner.BuildPlan(
+                inkColorHex: presentation.PresenterPenColor?.Resolved.ToString()));
     }
 
     public static string FormatStatusText(int currentSlideIndex, int slideCount) =>
