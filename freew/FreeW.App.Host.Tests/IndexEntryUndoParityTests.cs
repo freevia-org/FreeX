@@ -134,6 +134,42 @@ public sealed class IndexEntryUndoParityTests
     }
 
     [StaFact]
+    public void RefreshIndex_ReplacesWordUpdatedNativeRegionByFieldOwnership()
+    {
+        var field = new ComplexField(" INDEX \\h \"A\" \\z \"1033\" ");
+        var heading = new Paragraph("A")
+        {
+            StyleId = "IndexHeading",
+            SpanningFieldStart = field,
+            SpanningFieldOwner = field
+        };
+        var entry = new Paragraph("Alpha, 1")
+        {
+            StyleId = "Index1",
+            SpanningFieldOwner = field
+        };
+        var trailing = new Paragraph
+        {
+            StyleId = "IndexEntry",
+            SpanningFieldOwner = field,
+            EndsSpanningField = true
+        };
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun("Beta") } });
+        document.Blocks.Add(heading);
+        document.Blocks.Add(entry);
+        document.Blocks.Add(trailing);
+        var editor = new DocumentView();
+        editor.LoadModel(document);
+
+        editor.RefreshIndex();
+
+        IndexText(editor, identifier: null).Should().Equal("B", "Beta, 1");
+        editor.Model.Blocks.Should().NotContain(heading).And.NotContain(entry).And.NotContain(trailing);
+    }
+
+    [StaFact]
     public void StructuredMarkIndexEntry_PreservesHierarchyAndCrossReferenceThroughUndo()
     {
         var editor = new DocumentView();

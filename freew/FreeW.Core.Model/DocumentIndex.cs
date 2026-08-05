@@ -50,7 +50,7 @@ public sealed record IndexBuildOptions(
 /// </para>
 /// <list type="bullet">
 /// <item>render with distinct index formatting once <see cref="EnsureStyles"/> has registered them;</item>
-/// <item>round-trip through docx as normal styled paragraphs (no I/O changes needed); and</item>
+/// <item>round-trip through docx as styled cached-result paragraphs owned by one native INDEX field; and</item>
 /// <item>act as a marker so a "refresh" can locate and replace a previously inserted index region
 /// via <see cref="IsIndexParagraph"/>.</item>
 /// </list>
@@ -153,7 +153,31 @@ public static class DocumentIndex
                 options.CultureName);
         }
 
+        if (paragraphs.Count > 0)
+        {
+            var field = new ComplexField(IndexFieldInstruction(identifier, options));
+            foreach (var paragraph in paragraphs)
+                paragraph.SpanningFieldOwner = field;
+            paragraphs[0].SpanningFieldStart = field;
+            paragraphs[^1].EndsSpanningField = true;
+        }
+
         return paragraphs;
+    }
+
+    private static string IndexFieldInstruction(string? identifier, IndexBuildOptions options)
+    {
+        var instruction = new StringBuilder(" INDEX");
+        if (!IsDefaultIdentifier(identifier))
+            instruction.Append(" \\f \"").Append(Escape(EffectiveIdentifier(identifier))).Append('"');
+        if (options.IncludeAlphabeticHeadings)
+            instruction.Append(" \\h \"A\"");
+
+        var culture = System.Globalization.CultureInfo.GetCultureInfo(options.CultureName);
+        instruction.Append(" \\z \"")
+            .Append(culture.LCID.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .Append("\" ");
+        return instruction.ToString();
     }
 
     /// <summary>Creates Word's hidden <c>XE</c> field mark for one index term.</summary>
@@ -507,13 +531,19 @@ public static class DocumentIndex
 
     /// <summary>True when <paramref name="block"/> is a paragraph carrying an index style (see <see cref="IsIndexStyleId"/>).</summary>
     public static bool IsIndexParagraph(Block block) =>
-        block is Paragraph paragraph && IsIndexStyleId(paragraph.StyleId);
+        block is Paragraph paragraph
+        && (paragraph.SpanningFieldOwner is { Keyword: "INDEX" }
+            || IsIndexStyleId(paragraph.StyleId));
 
     /// <summary>True only for the generated region belonging to the requested INDEX/XE identifier.</summary>
     public static bool IsIndexParagraph(Block block, string? identifier) =>
         block is Paragraph paragraph
-        && (string.Equals(paragraph.StyleId, HeadingStyleIdFor(identifier), StringComparison.Ordinal)
-            || string.Equals(paragraph.StyleId, EntryStyleIdFor(identifier), StringComparison.Ordinal));
+        && (paragraph.SpanningFieldOwner is { Keyword: "INDEX" } field
+            ? IdentifiersMatch(
+                ComplexFieldEngine.SwitchValue(field.Instruction, 'f') ?? string.Empty,
+                identifier)
+            : string.Equals(paragraph.StyleId, HeadingStyleIdFor(identifier), StringComparison.Ordinal)
+                || string.Equals(paragraph.StyleId, EntryStyleIdFor(identifier), StringComparison.Ordinal));
 
     public static string HeadingStyleIdFor(string? identifier) =>
         HeadingStyleId + IdentifierStyleSuffix(identifier);

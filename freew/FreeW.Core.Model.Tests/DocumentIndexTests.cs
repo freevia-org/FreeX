@@ -267,11 +267,20 @@ public class DocumentIndexTests
             });
         }
 
-        DocumentIndex.Build(doc).Select(paragraph => paragraph.PlainText).Should().Equal(
+        var paragraphs = DocumentIndex.Build(doc);
+
+        paragraphs.Select(paragraph => paragraph.PlainText).Should().Equal(
             "!", "!bang, 1",
             "1", "1alpha, 1",
             "E", "Éclair, 1",
             "Z", "Zulu, 1");
+        paragraphs[0].SpanningFieldStart!.Instruction.Should().Be(" INDEX \\h \"A\" \\z \"1033\" ");
+        paragraphs.Should().OnlyContain(paragraph =>
+            paragraph.SpanningFieldOwner != null
+            && paragraph.SpanningFieldOwner.Instruction == " INDEX \\h \"A\" \\z \"1033\" ");
+        paragraphs.Skip(1).Should().OnlyContain(paragraph => paragraph.SpanningFieldStart == null);
+        paragraphs.Take(paragraphs.Count - 1).Should().OnlyContain(paragraph => !paragraph.EndsSpanningField);
+        paragraphs[^1].EndsSpanningField.Should().BeTrue();
     }
 
     [Fact]

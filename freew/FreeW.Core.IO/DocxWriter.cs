@@ -2491,6 +2491,9 @@ public static class DocxWriter
             BlockContentControl = paragraph.BlockContentControl,
             Formatting = paragraph.Formatting,
             StyleId = paragraph.StyleId,
+            SpanningFieldStart = paragraph.SpanningFieldStart,
+            SpanningFieldOwner = paragraph.SpanningFieldOwner,
+            EndsSpanningField = paragraph.EndsSpanningField,
         };
         copy.BookmarkNames.AddRange(paragraph.BookmarkNames);
         copy.BookmarkBoundaries.AddRange(paragraph.BookmarkBoundaries);
@@ -3093,6 +3096,19 @@ public static class DocxWriter
         if (pPr is not null)
             p.Add(pPr);
 
+        if (paragraph.SpanningFieldStart is { SimpleField: null } spanningField)
+        {
+            p.Add(
+                new XElement(W + "r",
+                    new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "begin"))),
+                new XElement(W + "r",
+                    new XElement(W + "instrText",
+                        new XAttribute(XNamespace.Xml + "space", "preserve"),
+                        SanitizeXmlText(spanningField.Instruction))),
+                new XElement(W + "r",
+                    new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "separate"))));
+        }
+
         // Imported boundaries retain their exact run-relative positions below. Names with no imported
         // boundary are FreeW-authored bookmarks and keep the historical whole-paragraph behavior.
         var publicBookmarkNames = paragraph.BookmarkNames
@@ -3392,6 +3408,10 @@ public static class DocxWriter
         FlushRevision();
         if (openCommentId is { } trailing)
             p.Add(new XElement(W + "commentRangeEnd", new XAttribute(W + "id", trailing)));
+
+        if (paragraph.EndsSpanningField)
+            p.Add(new XElement(W + "r",
+                new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "end"))));
 
         foreach (var bId in wholeParagraphBookmarkIds)
             p.Add(new XElement(W + "bookmarkEnd", new XAttribute(W + "id", bId)));

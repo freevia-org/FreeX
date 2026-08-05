@@ -2275,6 +2275,26 @@ public sealed class Paragraph : Block
     public string? StyleId { get; set; }
 
     /// <summary>
+    /// A complex Word field whose cached result starts in this paragraph and continues through later
+    /// paragraphs. The result remains represented by the paragraphs' ordinary runs; this property owns
+    /// only the opening <c>w:fldChar</c>/<c>w:instrText</c>/<c>w:fldChar separate</c> boundary.
+    /// </summary>
+    public ComplexField? SpanningFieldStart { get; set; }
+
+    /// <summary>
+    /// The spanning field that owns this paragraph as cached result content. Unlike
+    /// <see cref="SpanningFieldStart"/>, this is populated on every paragraph in the field result so
+    /// semantic commands do not depend on Word's mutable result style ids.
+    /// </summary>
+    public ComplexField? SpanningFieldOwner { get; set; }
+
+    /// <summary>
+    /// True when this paragraph closes a complex field opened by <see cref="SpanningFieldStart"/> on this
+    /// or an earlier paragraph. Word uses this shape for generated INDEX and TOC results.
+    /// </summary>
+    public bool EndsSpanningField { get; set; }
+
+    /// <summary>
     /// Optional renderer-neutral drop-cap intent for the paragraph's leading glyph. The leading run is
     /// still represented normally in <see cref="Runs"/>; this metadata carries placement and wrapping.
     /// </summary>
