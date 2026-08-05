@@ -527,7 +527,7 @@ public sealed class DocumentView : Control
     public RestrictEditingEnforcementDecision GetRestrictEditingHistoryDecision(
         RestrictEditingOperationKind historyOperation,
         DocumentCommandMutationKind? mutationKind) =>
-        RestrictEditingPolicy.DecisionForHistory(historyOperation, mutationKind);
+        _editingSession.Review.DecisionForHistory(historyOperation, mutationKind);
     public bool SpellCheckEnabled { get; private set; } = true;
     public IReadOnlyList<string> CustomDictionaryWords => _customDictionary.Words;
 
@@ -550,18 +550,18 @@ public sealed class DocumentView : Control
     public bool IsEditingLocked => RestrictEditingPolicy.IsBodyEditingLocked;
 
     public RestrictEditingEnforcementPolicy RestrictEditingPolicy =>
-        RestrictEditingEnforcementPolicy.From(_doc.Protection, _doc.MarkedAsFinal);
+        _editingSession.Review.RestrictEditingPolicy;
 
     public RestrictEditingEnforcementDecision GetRestrictEditingDecision(RestrictEditingOperationKind operation) =>
-        RestrictEditingPolicy.DecisionFor(operation);
+        _editingSession.Review.DecisionFor(operation);
 
     private bool AllowsRestrictEditingOperation(RestrictEditingOperationKind operation) =>
-        RestrictEditingPolicy.Allows(operation);
+        _editingSession.Review.Allows(operation);
 
     private bool AllowsRestrictEditingHistoryOperation(
         RestrictEditingOperationKind operation,
         DocumentCommandMutationKind? mutationKind) =>
-        RestrictEditingPolicy.AllowsHistory(operation, mutationKind);
+        _editingSession.Review.AllowsHistory(operation, mutationKind);
 
     public void LoadDocument(TextDocument document)
     {
@@ -14192,14 +14192,14 @@ public sealed class DocumentView : Control
     /// <summary>True when the top-level comment thread anchoring <paramref name="commentId"/> is resolved.</summary>
     private bool IsCommentResolved(int commentId)
     {
-        var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
+        var topId = _editingSession.Review.ResolveTopLevelCommentId(commentId);
         return _doc.Comments.TryGetValue(topId, out var comment) && comment.Resolved;
     }
 
     /// <summary>The author's initial (or 'C') for the comment thread anchoring <paramref name="commentId"/>.</summary>
     private string CommentInitial(int commentId)
     {
-        var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
+        var topId = _editingSession.Review.ResolveTopLevelCommentId(commentId);
         if (!_doc.Comments.TryGetValue(topId, out var comment))
             return string.Empty;
         if (!string.IsNullOrWhiteSpace(comment.Initials))
@@ -19479,19 +19479,13 @@ public sealed class DocumentView : Control
         if (ParaCells(paragraph).Count == 0)
             return null;
 
-        var id = _doc.NextCommentId();
-        var comment = new Comment(id)
-        {
-            Author = author,
-            Initials = initials,
-            // W3CDTF (UTC, second precision) — matches the docx writer's w:date expectation.
-            DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
-        };
-        comment.Content.Add(new Paragraph(text));
-
-        _bus.Execute(new AddCommentCommand(block, startOffset, endOffset, id, comment));
-        // The command no-ops (and leaves Comments unchanged) when the range covers no text.
-        return _doc.Comments.ContainsKey(id) ? id : (int?)null;
+        return _editingSession.Review.TryAddComment(
+            block,
+            startOffset,
+            endOffset,
+            text,
+            author,
+            initials);
     }
 
     /// <summary>
@@ -19503,11 +19497,7 @@ public sealed class DocumentView : Control
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.CommentDelete))
             return false;
 
-        var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
-        if (!_doc.Comments.ContainsKey(topId))
-            return false;
-        _bus.Execute(new DeleteCommentCommand(topId));
-        return true;
+        return _editingSession.Review.TryDeleteComment(commentId);
     }
 
     /// <summary>Deletes the comment thread covering the caret/selection. Returns true when one was removed.</summary>
@@ -19523,11 +19513,7 @@ public sealed class DocumentView : Control
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.CommentResolve))
             return false;
 
-        var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
-        if (!_doc.Comments.ContainsKey(topId))
-            return false;
-        _bus.Execute(new SetCommentResolvedCommand(topId, resolved));
-        return true;
+        return _editingSession.Review.TrySetCommentResolved(commentId, resolved);
     }
 
     /// <summary>
@@ -19542,18 +19528,12 @@ public sealed class DocumentView : Control
         if (string.IsNullOrWhiteSpace(text))
             return false;
 
-        var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
-        if (!_doc.Comments.TryGetValue(topId, out var comment))
-            return false;
-
-        var replyId = _doc.NextCommentId();
-        var reply = new Comment(replyId, text, author, initials)
-        {
-            DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
-        };
-
-        _bus.Execute(new AddCommentReplyCommand(topId, reply));
-        return comment.Replies.Any(candidate => candidate.Id == replyId);
+        return _editingSession.Review.TryReplyToComment(
+            commentId,
+            text,
+            author,
+            initials,
+            CommentTextNormalization.Preserve);
     }
 
     /// <summary>Replies to the comment thread covering the caret. Returns true when a reply was appended.</summary>
@@ -19574,20 +19554,19 @@ public sealed class DocumentView : Control
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.CommentResolve))
             return null;
 
-        if (CommentIdAtCaret() is not { } id || !_doc.Comments.TryGetValue(id, out var comment))
+        if (CommentIdAtCaret() is not { } id)
             return null;
-        var newState = !comment.Resolved;
-        SetCommentResolved(id, newState);
-        return newState;
+
+        return _editingSession.Review.TryToggleCommentResolved(id);
     }
 
     /// <summary>All top-level review comments in the document, in id order. Replies live on each thread.</summary>
     public IReadOnlyList<Comment> AllComments =>
-        _doc.Comments.Values.OrderBy(c => c.Id).ToList();
+        _editingSession.Review.AllComments();
 
     /// <summary>Shared planned comment list rows in document order, including anchor positions.</summary>
     public IReadOnlyList<CommentListItem> PlannedCommentList() =>
-        CommentListPlanner.Build(_doc);
+        _editingSession.Review.BuildCommentList();
 
     /// <summary>Moves the caret to the previous comment in document order, wrapping at the start.</summary>
     public bool PreviousComment() => NavigateComment(direction: -1);
@@ -19597,7 +19576,7 @@ public sealed class DocumentView : Control
 
     private bool NavigateComment(int direction)
     {
-        var target = CommentListPlanner.SelectAdjacent(PlannedCommentList(), CommentIdAtCaret(), direction);
+        var target = _editingSession.Review.SelectAdjacentComment(CommentIdAtCaret(), direction);
         return target is not null && MoveCaretToComment(target);
     }
 
@@ -19670,12 +19649,12 @@ public sealed class DocumentView : Control
             if (probe < 0 || probe >= cells.Count)
                 continue;
             if (cells[probe].CommentId is { } cid)
-                return DeleteCommentCommand.ResolveTopLevel(_doc, cid);
+                return _editingSession.Review.ResolveTopLevelCommentId(cid);
         }
         // Fallback: any commented run in the paragraph (caret placed loosely inside the range).
         foreach (var cell in cells)
             if (cell.CommentId is { } cid)
-                return DeleteCommentCommand.ResolveTopLevel(_doc, cid);
+                return _editingSession.Review.ResolveTopLevelCommentId(cid);
         return null;
     }
 
@@ -19701,7 +19680,7 @@ public sealed class DocumentView : Control
             .Where(p => !p.Sentinel
                 && p.CommentId is not null
                 && policy.IsRevisionTextVisible(p.Revision))
-            .Select(p => (DeleteCommentCommand.ResolveTopLevel(_doc, p.CommentId!.Value),
+            .Select(p => (_editingSession.Review.ResolveTopLevelCommentId(p.CommentId!.Value),
                           new Rect(p.X, p.Y, Math.Max(1, p.W), p.LineHeight)))
             .ToList();
     }

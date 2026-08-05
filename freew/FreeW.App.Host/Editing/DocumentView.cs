@@ -5489,23 +5489,23 @@ public sealed class DocumentView : RichTextBox
     public bool IsMarkedAsFinal => _model.MarkedAsFinal;
 
     public RestrictEditingEnforcementPolicy RestrictEditingPolicy =>
-        RestrictEditingEnforcementPolicy.From(_model.Protection, _model.MarkedAsFinal);
+        _editingSession.Review.RestrictEditingPolicy;
 
     public RestrictEditingEnforcementDecision GetRestrictEditingDecision(RestrictEditingOperationKind operation) =>
-        RestrictEditingPolicy.DecisionFor(operation);
+        _editingSession.Review.DecisionFor(operation);
 
     public RestrictEditingEnforcementDecision GetRestrictEditingHistoryDecision(
         RestrictEditingOperationKind historyOperation,
         DocumentCommandMutationKind? mutationKind) =>
-        RestrictEditingPolicy.DecisionForHistory(historyOperation, mutationKind);
+        _editingSession.Review.DecisionForHistory(historyOperation, mutationKind);
 
     private bool AllowsRestrictEditingOperation(RestrictEditingOperationKind operation) =>
-        RestrictEditingPolicy.Allows(operation);
+        _editingSession.Review.Allows(operation);
 
     private bool AllowsRestrictEditingHistoryOperation(
         RestrictEditingOperationKind operation,
         DocumentCommandMutationKind? mutationKind) =>
-        RestrictEditingPolicy.AllowsHistory(operation, mutationKind);
+        _editingSession.Review.AllowsHistory(operation, mutationKind);
 
     private bool AllowsCurrentUndoHistory() =>
         AllowsRestrictEditingHistoryOperation(RestrictEditingOperationKind.HistoryUndo, mutationKind: null)
@@ -15842,22 +15842,16 @@ public sealed class DocumentView : RichTextBox
         // re-splices hidden blocks back in, so a raw visible index would mis-target with a heading
         // collapsed before the selection. Identity when nothing is collapsed.
         paragraphIndex = ModelIndexFromVisible(paragraphIndex);
-        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
+        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph)
             return;
 
-        if (!AddCommentCommand.HasCommentableRange(modelParagraph, startOffset, endOffset))
-            return; // nothing textual to anchor the comment to
-
-        var id = _model.NextCommentId();
-        var comment = new Comment(id)
-        {
-            Author = author,
-            Initials = initials,
-            // W3CDTF (UTC, second precision) - matches what the docx writer expects for w:date.
-            DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture)
-        };
-        comment.Content.Add(new ModelParagraph(text));
-        _commands.Execute(new AddCommentCommand(paragraphIndex, startOffset, endOffset, id, comment));
+        _editingSession.Review.TryAddComment(
+            paragraphIndex,
+            startOffset,
+            endOffset,
+            text,
+            author,
+            initials);
     }
 
     /// <summary>
@@ -15870,7 +15864,7 @@ public sealed class DocumentView : RichTextBox
     {
         // Fast path: the run under the caret/selection start carries a CommentMarker tag.
         if ((Selection.Start.Parent as WpfRun ?? CaretPosition?.Parent as WpfRun) is { Tag: RunMarkers { Comment: { } marker } })
-            return TopLevelCommentId(marker.CommentId);
+            return _editingSession.Review.ResolveTopLevelCommentId(marker.CommentId);
 
         // Fallback: commit and look for a commented run in the caret's model paragraph.
         var caretParagraph = Selection.Start.Paragraph ?? CaretPosition?.Paragraph;
@@ -15889,59 +15883,8 @@ public sealed class DocumentView : RichTextBox
             return null;
         foreach (var run in modelParagraph.Runs)
             if (run.CommentId is { } cid)
-                return TopLevelCommentId(cid);
+                return _editingSession.Review.ResolveTopLevelCommentId(cid);
         return null;
-    }
-
-    /// <summary>
-    /// Maps a comment id (which may be a reply's id) to its owning top-level comment id — the one keyed in
-    /// <see cref="TextDocument.Comments"/> and referenced by body ranges. Returns the id unchanged when it
-    /// is already a top-level comment (or unknown).
-    /// </summary>
-    private int TopLevelCommentId(int commentId)
-    {
-        return DeleteCommentCommand.ResolveTopLevel(_model, commentId);
-    }
-
-    private sealed record CommentNavigationTarget(int CommentId, int BlockIndex);
-
-    private IEnumerable<CommentNavigationTarget> CommentNavigationTargets()
-    {
-        CommitToModel();
-
-        var seen = new HashSet<int>();
-        for (var blockIndex = 0; blockIndex < _model.Blocks.Count; blockIndex++)
-        {
-            foreach (var paragraph in ParagraphsInBlock(_model.Blocks[blockIndex]))
-            {
-                foreach (var run in paragraph.Runs)
-                {
-                    if (run.CommentId is not { } commentId)
-                        continue;
-
-                    var topLevelId = TopLevelCommentId(commentId);
-                    if (_model.Comments.ContainsKey(topLevelId) && seen.Add(topLevelId))
-                        yield return new CommentNavigationTarget(topLevelId, blockIndex);
-                }
-            }
-        }
-    }
-
-    private static IEnumerable<ModelParagraph> ParagraphsInBlock(ModelBlock block)
-    {
-        if (block is ModelParagraph topLevelParagraph)
-        {
-            yield return topLevelParagraph;
-            yield break;
-        }
-
-        if (block is not ModelTable table)
-            yield break;
-
-        foreach (var row in table.Rows)
-            foreach (var cell in row.Cells)
-                foreach (var cellParagraph in cell.Paragraphs)
-                    yield return cellParagraph;
     }
 
     /// <summary>
@@ -15957,17 +15900,18 @@ public sealed class DocumentView : RichTextBox
         if (string.IsNullOrWhiteSpace(text))
             return false;
         Focus();
-        if (CommentIdAtCaret() is not { } id || !_model.Comments.TryGetValue(id, out var comment))
+        if (CommentIdAtCaret() is not { } id)
             return false;
 
-        var replyId = _model.NextCommentId();
-        var reply = new Comment(replyId, text.Trim(), author, initials)
+        if (!_editingSession.Review.TryReplyToComment(
+                id,
+                text,
+                author,
+                initials,
+                CommentTextNormalization.Trim))
         {
-            DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture)
-        };
-        _commands.Execute(new AddCommentReplyCommand(id, reply));
-        if (!comment.Replies.Any(candidate => candidate.Id == replyId))
             return false;
+        }
 
         MoveCaretToComment(id);
         return true;
@@ -15984,10 +15928,13 @@ public sealed class DocumentView : RichTextBox
             return null;
 
         Focus();
-        if (CommentIdAtCaret() is not { } id || !_model.Comments.TryGetValue(id, out var comment))
+        if (CommentIdAtCaret() is not { } id)
             return null;
-        var newState = !comment.Resolved;
-        _commands.Execute(new SetCommentResolvedCommand(id, newState));
+
+        var newState = _editingSession.Review.TryToggleCommentResolved(id);
+        if (newState is null)
+            return null;
+
         MoveCaretToComment(id);
         return newState;
     }
@@ -16002,11 +15949,10 @@ public sealed class DocumentView : RichTextBox
             return false;
 
         Focus();
-        if (CommentIdAtCaret() is not { } id || !_model.Comments.ContainsKey(id))
+        if (CommentIdAtCaret() is not { } id)
             return false;
 
-        _commands.Execute(new DeleteCommentCommand(id));
-        return !_model.Comments.ContainsKey(id);
+        return _editingSession.Review.TryDeleteComment(id);
     }
 
     /// <summary>Moves the caret to the next comment thread in document order, wrapping at the end.</summary>
@@ -16019,20 +15965,13 @@ public sealed class DocumentView : RichTextBox
     {
         Focus();
         var currentId = CommentIdAtCaret();
-        var targets = CommentNavigationTargets().ToArray();
-        if (targets.Length == 0)
+        CommitToModel();
+        var target = _editingSession.Review.SelectAdjacentComment(currentId, direction);
+        if (target is null)
             return false;
 
-        var currentIndex = currentId is { } id
-            ? Array.FindIndex(targets, target => target.CommentId == id)
-            : -1;
-        var targetIndex = currentIndex < 0
-            ? (direction > 0 ? 0 : targets.Length - 1)
-            : (currentIndex + direction + targets.Length) % targets.Length;
-
-        var target = targets[targetIndex];
         BringBlockIntoView(target.BlockIndex);
-        MoveCaretToComment(target.CommentId);
+        MoveCaretToComment(target.Id);
         return true;
     }
 
@@ -16089,7 +16028,7 @@ public sealed class DocumentView : RichTextBox
         foreach (var inline in inlines)
         {
             if (inline is WpfRun { Tag: RunMarkers { Comment: { } marker } } run
-                && TopLevelCommentId(marker.CommentId) == commentId)
+                && _editingSession.Review.ResolveTopLevelCommentId(marker.CommentId) == commentId)
             {
                 CaretPosition = run.ContentStart.GetInsertionPosition(LogicalDirection.Forward) ?? run.ContentStart;
                 Focus();
