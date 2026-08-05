@@ -21,6 +21,13 @@ namespace FreeW.Core.Model;
 /// </summary>
 public static class TableOfContents
 {
+    /// <summary>
+    /// Native Word field instruction matching FreeW's generated scope: Title and Heading 1-9,
+    /// with levels deeper than 3 folded into the deepest generated TOC style.
+    /// </summary>
+    public const string NativeFieldInstruction =
+        " TOC \\h \\z \\t \"Title,1,Heading 1,1,Heading 2,2,Heading 3,3,Heading 4,3,Heading 5,3,Heading 6,3,Heading 7,3,Heading 8,3,Heading 9,3\" ";
+
     /// <summary>Style id of the TOC's "Contents" heading paragraph.</summary>
     public const string HeadingStyleId = "TOCHeading";
 
@@ -78,6 +85,15 @@ public static class TableOfContents
             paragraphs.Add(CreateEntryParagraph(entry, pageText, entryRightTabStopPt));
         }
 
+        if (paragraphs.Count > 1)
+        {
+            var field = new ComplexField(NativeFieldInstructionFor(document));
+            for (var index = 1; index < paragraphs.Count; index++)
+                paragraphs[index].SpanningFieldOwner = field;
+            paragraphs[1].SpanningFieldStart = field;
+            paragraphs[^1].EndsSpanningField = true;
+        }
+
         return paragraphs;
     }
 
@@ -86,7 +102,7 @@ public static class TableOfContents
         string pageText,
         double entryRightTabStopPt)
     {
-        var styledLevel = Math.Clamp(entry.Level, 0, MaxStyledLevel);
+        var styledLevel = Math.Clamp(entry.Level, 1, MaxStyledLevel);
         var paragraph = new Paragraph
         {
             StyleId = EntryStyleId(styledLevel),
@@ -184,6 +200,32 @@ public static class TableOfContents
             || IsTocStyleId(paragraph.StyleId));
 
     /// <summary>
+    /// Builds the native field instruction using the document's actual source-style names. Imported
+    /// documents can rename a built-in Heading style while retaining its style id, and Word's
+    /// <c>\t</c> switch resolves display names rather than ids.
+    /// </summary>
+    public static string NativeFieldInstructionFor(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var mappings = new List<string>(20);
+        AddMapping("Title", "Title", 1);
+        for (var level = 1; level <= DocumentOutline.MaxOutlineLevel; level++)
+            AddMapping($"Heading{level}", $"Heading {level}", Math.Min(level, MaxStyledLevel));
+        return $" TOC \\h \\z \\t \"{string.Join(',', mappings)}\" ";
+
+        void AddMapping(string styleId, string fallbackName, int level)
+        {
+            var name = document.Styles.TryGetValue(styleId, out var style)
+                && !string.IsNullOrWhiteSpace(style.Name)
+                    ? style.Name
+                    : fallbackName;
+            mappings.Add(name);
+            mappings.Add(level.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
+    /// <summary>
     /// Registers the TOC styles (<see cref="HeadingStyleId"/> and <c>TOC1</c>..<c>TOC{MaxStyledLevel}</c>)
     /// in <paramref name="document"/>'s style catalog if they are not already present, so the inserted
     /// TOC paragraphs resolve their formatting. Idempotent — existing styles are left untouched.
@@ -191,6 +233,28 @@ public static class TableOfContents
     public static void EnsureStyles(TextDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
+
+        foreach (var entry in DocumentOutline.Of(document))
+        {
+            if (document.Styles.ContainsKey(entry.StyleId)
+                || BuiltInStyles.EnsureSeeded(document, entry.StyleId) is not null)
+            {
+                continue;
+            }
+
+            if (entry.Level > 0
+                && string.Equals(entry.StyleId, $"Heading{entry.Level}", StringComparison.Ordinal))
+            {
+                document.Styles[entry.StyleId] = new DocumentStyle
+                {
+                    Id = entry.StyleId,
+                    Name = $"Heading {entry.Level}",
+                    BasedOnStyleId = "Normal",
+                    NextStyleId = "Normal",
+                    OutlineLevel = entry.Level - 1
+                };
+            }
+        }
 
         document.Styles.TryAdd(HeadingStyleId, new DocumentStyle
         {

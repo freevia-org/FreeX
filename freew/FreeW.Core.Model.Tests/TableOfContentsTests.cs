@@ -52,7 +52,7 @@ public class TableOfContentsTests
         // The heading uses the TOC heading style; entries use TOC{level} (clamped at MaxStyledLevel).
         toc.Select(p => p.StyleId).Should().Equal(
             TableOfContents.HeadingStyleId,
-            "TOC0",
+            "TOC1",
             "TOC1",
             "TOC2",
             "TOC3",
@@ -84,6 +84,61 @@ public class TableOfContentsTests
                 TableOfContents.DefaultEntryRightTabStopPt,
                 TabStopAlignment.Right,
                 TabLeader.Dots));
+    }
+
+    [Fact]
+    public void Build_EntriesCarryOneNativeWordTocFieldAndHeadingRemainsOutsideIt()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Document Title") { StyleId = "Title" });
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Deep") { StyleId = "Heading6" });
+
+        var toc = TableOfContents.Build(doc);
+        var entries = toc.Skip(1).ToArray();
+
+        toc[0].SpanningFieldStart.Should().BeNull();
+        toc[0].SpanningFieldOwner.Should().BeNull();
+        toc[0].EndsSpanningField.Should().BeFalse();
+        entries.Should().OnlyContain(paragraph =>
+            paragraph.SpanningFieldOwner != null
+            && paragraph.SpanningFieldOwner.Instruction == TableOfContents.NativeFieldInstruction);
+        entries[0].SpanningFieldStart!.Instruction.Should().Be(TableOfContents.NativeFieldInstruction);
+        entries.Skip(1).Should().OnlyContain(paragraph => paragraph.SpanningFieldStart == null);
+        entries.Take(entries.Length - 1).Should().OnlyContain(paragraph => !paragraph.EndsSpanningField);
+        entries[^1].EndsSpanningField.Should().BeTrue();
+        entries.Select(paragraph => paragraph.StyleId).Should().Equal("TOC1", "TOC1", "TOC3");
+    }
+
+    [Fact]
+    public void NativeFieldInstructionFor_UsesImportedStyleNamesAndClampsDeepLevels()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Styles["Heading6"] = new DocumentStyle
+        {
+            Id = "Heading6",
+            Name = "Deep chapter",
+            OutlineLevel = 5
+        };
+
+        TableOfContents.NativeFieldInstructionFor(doc)
+            .Should().Contain("Heading 3,3")
+            .And.Contain("Deep chapter,3")
+            .And.NotContain("Heading 6,3");
+    }
+
+    [Fact]
+    public void EnsureStyles_SeedsUsedDeepHeadingForNativeWordUpdate()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Deep") { StyleId = "Heading6" });
+
+        TableOfContents.EnsureStyles(doc);
+
+        doc.Styles["Heading6"].Name.Should().Be("Heading 6");
+        doc.Styles["Heading6"].OutlineLevel.Should().Be(5);
+        doc.Styles["Heading6"].BasedOnStyleId.Should().Be("Normal");
     }
 
     [Fact]

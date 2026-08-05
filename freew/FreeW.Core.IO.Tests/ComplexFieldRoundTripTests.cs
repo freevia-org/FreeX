@@ -579,6 +579,44 @@ public class ComplexFieldRoundTripTests
     }
 
     [Fact]
+    public void GeneratedTableOfContents_EmitsOneNativeFieldAndReopensWithOwnedEntries()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Document Title") { StyleId = "Title" });
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Deep Six") { StyleId = "Heading6" });
+        TableOfContents.EnsureStyles(doc);
+        var generated = TableOfContents.Build(doc);
+        for (var index = generated.Count - 1; index >= 0; index--)
+            doc.Blocks.Insert(0, generated[index]);
+
+        var root = DocumentXml(doc);
+        var generatedXml = root.Descendants(W + "p").Take(generated.Count).ToArray();
+        generatedXml[0].Descendants(W + "fldChar").Should().BeEmpty();
+        generatedXml.SelectMany(paragraph => paragraph.Descendants(W + "instrText"))
+            .Should().ContainSingle()
+            .Which.Value.Should().Be(TableOfContents.NativeFieldInstruction);
+        generatedXml.SelectMany(paragraph => paragraph.Descendants(W + "fldChar"))
+            .Select(FieldCharacterType)
+            .Should().Equal("begin", "separate", "end");
+
+        var reopened = RoundTrip(doc);
+        var toc = reopened.Blocks.Take(generated.Count).Cast<Paragraph>().ToArray();
+        toc.Select(paragraph => paragraph.PlainText).Should().Equal(
+            TableOfContents.HeadingText,
+            "Document Title\t1",
+            "Chapter One\t1",
+            "Deep Six\t1");
+        toc[0].SpanningFieldOwner.Should().BeNull();
+        toc.Skip(1).All(paragraph =>
+            paragraph.SpanningFieldOwner?.Instruction == TableOfContents.NativeFieldInstruction)
+            .Should().BeTrue();
+        toc[1].SpanningFieldStart!.Instruction.Should().Be(TableOfContents.NativeFieldInstruction);
+        toc[^1].EndsSpanningField.Should().BeTrue();
+    }
+
+    [Fact]
     public void ComplexField_InsideContentControl_PreservesFieldAndControl()
     {
         // Word can wrap arbitrary inline content in a structured document tag. The paragraph reader's
