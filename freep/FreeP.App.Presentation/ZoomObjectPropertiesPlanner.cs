@@ -24,6 +24,10 @@ public static class ZoomObjectPropertiesPlanner
         "Pattern border requires a supported preset and two six-digit RGB colors.";
     public const string InvalidFrameBorderShadowMessage =
         "Border shadow requires a six-digit RGB color, alpha from 0 to 100 percent, and non-negative blur, distance, and direction from 0 to 360 degrees.";
+    public const string InvalidFrameBorderGlowMessage =
+        "Border glow requires a six-digit RGB color, alpha from 0 to 100 percent, and a non-negative radius in points.";
+    public const string InvalidFrameBorderSoftEdgeMessage =
+        "Border soft edge requires a non-negative radius in points.";
     public const string InvalidFrameGeometryMessage =
         "Frame shape must be Rectangle, Rounded rectangle, or Ellipse.";
     public const string InvalidCropEdgesMessage =
@@ -95,7 +99,11 @@ public static class ZoomObjectPropertiesPlanner
             ReadFrameBorderNoFill(properties),
             ReadFrameBorderThemeColor(properties),
             ReadFrameBorderShadow(properties),
-            ReadFrameBorderShadowEnabled(properties));
+            ReadFrameBorderShadowEnabled(properties),
+            ReadFrameBorderGlow(properties),
+            ReadFrameBorderGlowEnabled(properties),
+            ReadFrameBorderSoftEdge(properties),
+            ReadFrameBorderSoftEdgeEnabled(properties));
         return value.IsEmpty ? fallback : value;
     }
 
@@ -134,6 +142,66 @@ public static class ZoomObjectPropertiesPlanner
                 string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
         return effectList?.Elements().Any(element =>
             string.Equals(element.Name.LocalName, "outerShdw", StringComparison.OrdinalIgnoreCase)) == true
+            ? true
+            : null;
+    }
+
+    private static ZoomFrameBorderGlow? ReadFrameBorderGlow(XElement properties)
+    {
+        var glow = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "glow", StringComparison.OrdinalIgnoreCase));
+        var color = glow?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value?.Trim().TrimStart('#');
+        if (color is not { Length: 6 } || !color.All(Uri.IsHexDigit))
+            return null;
+
+        var alpha = ReadNullableInt(glow?.Descendants().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "alpha", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value) ?? 50000;
+        var radius = ReadNullableLong(glow?.Attribute("rad")?.Value) ?? 0;
+        if (alpha is < 0 or > 100000 || radius < 0)
+            return null;
+
+        return new ZoomFrameBorderGlow(color.ToUpperInvariant(), alpha, radius);
+    }
+
+    private static bool? ReadFrameBorderGlowEnabled(XElement properties)
+    {
+        var effectList = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
+        return effectList?.Elements().Any(element =>
+            string.Equals(element.Name.LocalName, "glow", StringComparison.OrdinalIgnoreCase)) == true
+            ? true
+            : null;
+    }
+
+    private static ZoomFrameBorderSoftEdge? ReadFrameBorderSoftEdge(XElement properties)
+    {
+        var softEdge = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "softEdge", StringComparison.OrdinalIgnoreCase));
+        var radius = ReadNullableLong(softEdge?.Attribute("rad")?.Value);
+        return radius is >= 0 ? new ZoomFrameBorderSoftEdge(radius.Value) : null;
+    }
+
+    private static bool? ReadFrameBorderSoftEdgeEnabled(XElement properties)
+    {
+        var effectList = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
+        return effectList?.Elements().Any(element =>
+            string.Equals(element.Name.LocalName, "softEdge", StringComparison.OrdinalIgnoreCase)) == true
             ? true
             : null;
     }
@@ -349,7 +417,9 @@ public static class ZoomObjectPropertiesPlanner
         || properties.FrameBorderPattern is not null
         || properties.FrameBorderNoFill == true
         || properties.FrameBorderThemeColor is not null
-        || IsFrameBorderShadowEnabled(properties);
+        || IsFrameBorderShadowEnabled(properties)
+        || IsFrameBorderGlowEnabled(properties)
+        || IsFrameBorderSoftEdgeEnabled(properties);
 
     public static string FormatFrameBorderWidth(ZoomObjectProperties properties) =>
         properties.FrameBorderWidthEmu is int width
@@ -390,6 +460,12 @@ public static class ZoomObjectPropertiesPlanner
 
     public static bool IsFrameBorderShadowEnabled(ZoomObjectProperties properties) =>
         properties.FrameBorderShadowEnabled == true || properties.FrameBorderShadow is not null;
+
+    public static bool IsFrameBorderGlowEnabled(ZoomObjectProperties properties) =>
+        properties.FrameBorderGlowEnabled == true || properties.FrameBorderGlow is not null;
+
+    public static bool IsFrameBorderSoftEdgeEnabled(ZoomObjectProperties properties) =>
+        properties.FrameBorderSoftEdgeEnabled == true || properties.FrameBorderSoftEdge is not null;
 
     public static string FormatFrameBorderShadowColor(ZoomObjectProperties properties) =>
         properties.FrameBorderShadow?.Color ?? string.Empty;
@@ -449,6 +525,71 @@ public static class ZoomObjectPropertiesPlanner
             checked((long)Math.Round(blurPoints * 12700d, MidpointRounding.AwayFromZero)),
             checked((long)Math.Round(distancePoints * 12700d, MidpointRounding.AwayFromZero)),
             checked((int)Math.Round(directionDegrees * 60000d, MidpointRounding.AwayFromZero)));
+        return true;
+    }
+
+    public static string FormatFrameBorderGlowColor(ZoomObjectProperties properties) =>
+        properties.FrameBorderGlow?.Color ?? string.Empty;
+
+    public static string FormatFrameBorderGlowAlpha(ZoomObjectProperties properties) =>
+        properties.FrameBorderGlow is { } glow
+            ? (glow.Alpha / 1000d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+            : "50";
+
+    public static string FormatFrameBorderGlowRadius(ZoomObjectProperties properties) =>
+        properties.FrameBorderGlow is { } glow
+            ? (glow.RadiusEmu / 12700d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+            : "16";
+
+    public static string FormatFrameBorderSoftEdgeRadius(ZoomObjectProperties properties) =>
+        properties.FrameBorderSoftEdge is { } softEdge
+            ? (softEdge.RadiusEmu / 12700d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+            : "10";
+
+    public static bool TryParseFrameBorderGlow(
+        string? colorText,
+        string? alphaText,
+        string? radiusText,
+        bool enabled,
+        out ZoomFrameBorderGlow? normalized)
+    {
+        normalized = null;
+        if (!enabled)
+            return true;
+
+        if (!TryNormalizeFrameBorderColor(colorText, out var color)
+            || !double.TryParse(alphaText?.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var alphaPercent)
+            || !double.TryParse(radiusText?.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var radiusPoints)
+            || !double.IsFinite(alphaPercent) || !double.IsFinite(radiusPoints)
+            || alphaPercent is < 0 or > 100 || radiusPoints < 0)
+            return false;
+
+        normalized = new ZoomFrameBorderGlow(
+            color!,
+            checked((int)Math.Round(alphaPercent * 1000d, MidpointRounding.AwayFromZero)),
+            checked((long)Math.Round(radiusPoints * 12700d, MidpointRounding.AwayFromZero)));
+        return true;
+    }
+
+    public static bool TryParseFrameBorderSoftEdge(
+        string? radiusText,
+        bool enabled,
+        out ZoomFrameBorderSoftEdge? normalized)
+    {
+        normalized = null;
+        if (!enabled)
+            return true;
+
+        if (!double.TryParse(radiusText?.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var radiusPoints)
+            || !double.IsFinite(radiusPoints)
+            || radiusPoints < 0)
+            return false;
+
+        normalized = new ZoomFrameBorderSoftEdge(
+            checked((long)Math.Round(radiusPoints * 12700d, MidpointRounding.AwayFromZero)));
         return true;
     }
 

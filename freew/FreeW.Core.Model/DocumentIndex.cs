@@ -6,7 +6,12 @@ namespace FreeW.Core.Model;
 /// <paramref name="CrossReference"/> is the exact text carried by XE's <c>\t</c> switch (for example,
 /// <c>See Vehicles</c>) and replaces the page number for that occurrence.
 /// </summary>
-public sealed record IndexMark(string MainEntry, string Subentry = "", string CrossReference = "")
+public sealed record IndexMark(
+    string MainEntry,
+    string Subentry = "",
+    string CrossReference = "",
+    bool BoldPageNumber = false,
+    bool ItalicPageNumber = false)
 {
     /// <summary>The colon-delimited entry text serialized as XE's first argument.</summary>
     public string EntryText => Subentry.Length == 0 ? MainEntry : MainEntry + ":" + Subentry;
@@ -118,6 +123,10 @@ public static class DocumentIndex
         var instruction = $" XE \"{Escape(normalized.EntryText)}\"";
         if (normalized.CrossReference.Length > 0)
             instruction += $" \\t \"{Escape(normalized.CrossReference)}\"";
+        if (normalized.BoldPageNumber)
+            instruction += " \\b";
+        if (normalized.ItalicPageNumber)
+            instruction += " \\i";
         return Run.ComplexFieldRun(instruction + " ");
     }
 
@@ -142,7 +151,9 @@ public static class DocumentIndex
         return Normalize(new IndexMark(
             mainEntry,
             subentry,
-            ComplexFieldEngine.SwitchValue(field.Instruction, 't') ?? string.Empty));
+            ComplexFieldEngine.SwitchValue(field.Instruction, 't') ?? string.Empty,
+            ComplexFieldEngine.HasSwitch(field.Instruction, 'b'),
+            ComplexFieldEngine.HasSwitch(field.Instruction, 'i')));
     }
 
     private static void AppendNode(
@@ -154,8 +165,13 @@ public static class DocumentIndex
     {
         var pages = node.Occurrences
             .Where(occurrence => occurrence.Mark.CrossReference.Length == 0)
-            .Select(occurrence => ResolvePageText(document, occurrence.BlockIndex, pageTextOf))
-            .Distinct(StringComparer.Ordinal)
+            .GroupBy(
+                occurrence => ResolvePageText(document, occurrence.BlockIndex, pageTextOf),
+                StringComparer.Ordinal)
+            .Select(group => new IndexPageReference(
+                group.Key,
+                group.Any(occurrence => occurrence.Mark.BoldPageNumber),
+                group.Any(occurrence => occurrence.Mark.ItalicPageNumber)))
             .ToList();
         var crossReferences = node.Occurrences
             .Select(occurrence => occurrence.Mark.CrossReference)
@@ -163,13 +179,7 @@ public static class DocumentIndex
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var text = node.Label;
-        if (pages.Count > 0)
-            text += ", " + string.Join(", ", pages);
-        if (crossReferences.Count > 0)
-            text += ". " + string.Join("; ", crossReferences);
-
-        paragraphs.Add(new Paragraph(text)
+        var paragraph = new Paragraph
         {
             StyleId = EntryStyleId,
             Formatting = new ParagraphFormatting
@@ -179,7 +189,23 @@ public static class DocumentIndex
                 SpaceAfterPt = 2,
                 SpaceAfterIsSet = true
             }
-        });
+        };
+        paragraph.Runs.Add(new Run(node.Label));
+        foreach (var page in pages)
+        {
+            paragraph.Runs.Add(new Run(", "));
+            paragraph.Runs.Add(new Run(page.Label)
+            {
+                Formatting = new RunFormatting
+                {
+                    Bold = page.Bold,
+                    Italic = page.Italic
+                }
+            });
+        }
+        if (crossReferences.Count > 0)
+            paragraph.Runs.Add(new Run(". " + string.Join("; ", crossReferences)));
+        paragraphs.Add(paragraph);
 
         foreach (var child in Ordered(node.Children.Values))
             AppendNode(paragraphs, child, depth + 1, document, pageTextOf);
@@ -193,7 +219,12 @@ public static class DocumentIndex
         entryText.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
     private static IndexMark Normalize(IndexMark mark) =>
-        new(mark.MainEntry.Trim(), mark.Subentry.Trim(), mark.CrossReference.Trim());
+        new(
+            mark.MainEntry.Trim(),
+            mark.Subentry.Trim(),
+            mark.CrossReference.Trim(),
+            mark.BoldPageNumber,
+            mark.ItalicPageNumber);
 
     private static string Escape(string value) =>
         value.Replace("\\", "\\\\", StringComparison.Ordinal)
@@ -216,6 +247,8 @@ public static class DocumentIndex
     }
 
     private sealed record IndexOccurrence(IndexMark Mark, int? BlockIndex);
+
+    private sealed record IndexPageReference(string Label, bool Bold, bool Italic);
 
     private sealed class IndexNode(string label)
     {

@@ -21726,7 +21726,9 @@ public sealed class DocumentView : Control
     private static bool SameIndexMark(IndexMark? left, IndexMark right) =>
         left is not null
         && string.Equals(left.EntryText, right.EntryText, StringComparison.OrdinalIgnoreCase)
-        && string.Equals(left.CrossReference, right.CrossReference, StringComparison.OrdinalIgnoreCase);
+        && string.Equals(left.CrossReference, right.CrossReference, StringComparison.OrdinalIgnoreCase)
+        && left.BoldPageNumber == right.BoldPageNumber
+        && left.ItalicPageNumber == right.ItalicPageNumber;
 
     public void InsertIndex()
     {

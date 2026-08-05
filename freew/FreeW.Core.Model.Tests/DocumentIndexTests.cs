@@ -145,6 +145,44 @@ public class DocumentIndexTests
     }
 
     [Fact]
+    public void Build_PageNumberRunMergesBoldAndItalicFormattingForSamePage()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Alpha"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha", BoldPageNumber: true)),
+                DocumentIndex.MarkRun(new IndexMark("Alpha", ItalicPageNumber: true))
+            }
+        });
+
+        var entry = DocumentIndex.Build(doc).Single(paragraph => paragraph.PlainText == "Alpha, 1");
+
+        entry.Runs.Select(run => run.Text).Should().Equal("Alpha", ", ", "1");
+        entry.Runs[0].Formatting.Bold.Should().BeFalse();
+        entry.Runs[1].Formatting.Bold.Should().BeFalse();
+        entry.Runs[2].Formatting.Bold.Should().BeTrue();
+        entry.Runs[2].Formatting.Italic.Should().BeTrue();
+    }
+
+    [Fact]
+    public void MarkRun_SerializesAndParsesPageNumberFormattingSwitches()
+    {
+        var run = DocumentIndex.MarkRun(new IndexMark(
+            "Alpha",
+            BoldPageNumber: true,
+            ItalicPageNumber: true));
+
+        run.ComplexField!.Instruction.Should().Be(" XE \"Alpha\" \\b \\i ");
+        DocumentIndex.MarkedEntry(run).Should().Be(new IndexMark(
+            "Alpha",
+            BoldPageNumber: true,
+            ItalicPageNumber: true));
+    }
+
+    [Fact]
     public void Build_DoesNotMutateTheDocument()
     {
         var doc = new TextDocument();

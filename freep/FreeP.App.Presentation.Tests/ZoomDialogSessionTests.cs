@@ -107,6 +107,12 @@ public sealed class ZoomDialogSessionTests
             FrameBorderShadowBlur = "4",
             FrameBorderShadowDistance = "3",
             FrameBorderShadowDirection = "45",
+            FrameBorderGlowEnabled = true,
+            FrameBorderGlowColor = "#4472c4",
+            FrameBorderGlowAlpha = "60",
+            FrameBorderGlowRadius = "8",
+            FrameBorderSoftEdgeEnabled = true,
+            FrameBorderSoftEdgeRadius = "5",
             CropEdges = "0, 5, 0, 5",
             SummaryOffset = "-2.5, 5",
             SummaryScale = "125, 80",
@@ -123,6 +129,12 @@ public sealed class ZoomDialogSessionTests
         session.Result.Properties.FrameBorderShadow.Should().NotBeNull();
         session.Result.Properties.FrameBorderShadow!.Color.Should().Be("404040");
         session.Result.Properties.FrameBorderShadowEnabled.Should().BeTrue();
+        session.Result.Properties.FrameBorderGlow.Should().Be(
+            new ZoomFrameBorderGlow("4472C4", 60000, 101600));
+        session.Result.Properties.FrameBorderGlowEnabled.Should().BeTrue();
+        session.Result.Properties.FrameBorderSoftEdge.Should().Be(
+            new ZoomFrameBorderSoftEdge(63500));
+        session.Result.Properties.FrameBorderSoftEdgeEnabled.Should().BeTrue();
         session.Result.Properties.CropTop.Should().Be(5000);
         session.Result.Properties.CropBottom.Should().Be(5000);
         session.Result.SummaryTileLayout.Should().Be(
@@ -193,7 +205,9 @@ public sealed class ZoomDialogSessionTests
             patternEnabled: true,
             noFillEnabled: false,
             themeEnabled: false,
-            shadowEnabled: true);
+            shadowEnabled: true,
+            glowEnabled: true,
+            softEdgeEnabled: true);
 
         enablement.TransitionDuration.Should().BeTrue();
         enablement.FrameBorderColor.Should().BeFalse();
@@ -202,6 +216,10 @@ public sealed class ZoomDialogSessionTests
         enablement.FrameBorderWidth.Should().BeTrue();
         enablement.FrameBorderShadowToggle.Should().BeTrue();
         enablement.FrameBorderShadowFields.Should().BeTrue();
+        enablement.FrameBorderGlowToggle.Should().BeTrue();
+        enablement.FrameBorderGlowFields.Should().BeTrue();
+        enablement.FrameBorderSoftEdgeToggle.Should().BeTrue();
+        enablement.FrameBorderSoftEdgeFields.Should().BeTrue();
     }
 
     private static SummaryZoomTarget Target(
@@ -239,6 +257,12 @@ public sealed class ZoomDialogSessionTests
             FrameBorderShadowBlur: string.Empty,
             FrameBorderShadowDistance: string.Empty,
             FrameBorderShadowDirection: string.Empty,
+            FrameBorderGlowEnabled: false,
+            FrameBorderGlowColor: string.Empty,
+            FrameBorderGlowAlpha: string.Empty,
+            FrameBorderGlowRadius: string.Empty,
+            FrameBorderSoftEdgeEnabled: false,
+            FrameBorderSoftEdgeRadius: string.Empty,
             FrameGeometry: "rect",
             CropEdges: string.Empty,
             SummaryTileIndex: 0,

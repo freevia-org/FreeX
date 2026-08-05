@@ -28,13 +28,17 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("Use no-fill border");
         source.Should().Contain("Use theme border color");
         source.Should().Contain("Use outer border shadow");
+        source.Should().Contain("Use border glow");
+        source.Should().Contain("Use border soft edge");
         source.Should().Contain("FrameBorderThemeColor");
         source.Should().Contain("FrameBorderShadowEnabled:");
+        source.Should().Contain("FrameBorderGlowEnabled:");
+        source.Should().Contain("FrameBorderSoftEdgeEnabled:");
         source.Should().Contain("Frame shape:");
         source.Should().Contain("_frameBorderColor.IsEnabled");
         source.Should().Contain("Apply format to all Summary Zoom tiles");
         source.Should().Contain("ApplySummaryPropertiesToAllTiles");
-        source.Should().Contain("29 + (_session.HasSummaryTargets ? 4 : 0)",
+        source.Should().Contain("35 + (_session.HasSummaryTargets ? 4 : 0)",
             "the merged frame, Summary Zoom, option, and action controls need distinct grid rows");
     }
 
@@ -82,6 +86,8 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("MessageBox.Show(");
         source.Should().NotContain("InvalidTransitionDurationMessage");
         source.Should().NotContain("InvalidFrameBorderShadowMessage");
+        source.Should().NotContain("InvalidFrameBorderGlowMessage");
+        source.Should().NotContain("InvalidFrameBorderSoftEdgeMessage");
         source.Should().NotContain("TryParseTransitionDuration");
         source.Should().NotContain("inline validation");
     }

@@ -222,6 +222,62 @@ public sealed class PresentationViewZoomPlannerTests
             .Should().BeFalse();
     }
 
+    [Fact]
+    public void Zoom_border_glow_normalizes_editable_values()
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderGlow(
+                "#00AAFF", "42", "12", enabled: true, out var normalized)
+            .Should().BeTrue();
+
+        normalized.Should().Be(new ZoomFrameBorderGlow("00AAFF", 42000, 152400));
+        var properties = new ZoomObjectProperties(FrameBorderGlow: normalized);
+        ZoomObjectPropertiesPlanner.FormatFrameBorderGlowColor(properties)
+            .Should().Be("00AAFF");
+        ZoomObjectPropertiesPlanner.FormatFrameBorderGlowAlpha(properties)
+            .Should().Be("42");
+        ZoomObjectPropertiesPlanner.FormatFrameBorderGlowRadius(properties)
+            .Should().Be("12");
+        ZoomObjectPropertiesPlanner.IsFrameBorderGlowEnabled(
+                properties)
+            .Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("GGGGGG", "50", "4")]
+    [InlineData("00AAFF", "101", "4")]
+    [InlineData("00AAFF", "50", "-1")]
+    public void Zoom_border_glow_rejects_invalid_values(string color, string alpha, string radius)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderGlow(
+                color, alpha, radius, enabled: true, out _)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void Zoom_border_soft_edge_normalizes_editable_values()
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderSoftEdge(
+                "12.5", enabled: true, out var normalized)
+            .Should().BeTrue();
+
+        normalized.Should().Be(new ZoomFrameBorderSoftEdge(158750));
+        var properties = new ZoomObjectProperties(FrameBorderSoftEdge: normalized);
+        ZoomObjectPropertiesPlanner.FormatFrameBorderSoftEdgeRadius(properties)
+            .Should().Be("12.5");
+        ZoomObjectPropertiesPlanner.IsFrameBorderSoftEdgeEnabled(properties)
+            .Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("-1")]
+    [InlineData("not-a-number")]
+    public void Zoom_border_soft_edge_rejects_invalid_values(string radius)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderSoftEdge(
+                radius, enabled: true, out _)
+            .Should().BeFalse();
+    }
+
     [Theory]
     [InlineData("not-a-pattern", "4472C4", "FFFFFF")]
     [InlineData("pct50", "GGGGGG", "FFFFFF")]

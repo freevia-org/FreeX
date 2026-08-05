@@ -19,6 +19,8 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private readonly CheckBox _frameBorderNoFillEnabled;
     private readonly CheckBox _frameBorderThemeEnabled;
     private readonly CheckBox _frameBorderShadowEnabled;
+    private readonly CheckBox _frameBorderGlowEnabled;
+    private readonly CheckBox _frameBorderSoftEdgeEnabled;
     private readonly ComboBox _imageType;
     private readonly TextBox _transitionDuration;
     private readonly TextBox _frameBorderColor;
@@ -28,6 +30,10 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private readonly TextBox _frameBorderShadowBlur;
     private readonly TextBox _frameBorderShadowDistance;
     private readonly TextBox _frameBorderShadowDirection;
+    private readonly TextBox _frameBorderGlowColor;
+    private readonly TextBox _frameBorderGlowAlpha;
+    private readonly TextBox _frameBorderGlowRadius;
+    private readonly TextBox _frameBorderSoftEdgeRadius;
     private readonly TextBox _frameBorderWidth;
     private readonly ComboBox _frameBorderDash;
     private readonly TextBox _frameBorderGradientStart;
@@ -203,6 +209,36 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             Text = fields.FrameBorderShadowDirection, MinWidth = 180,
         };
         _frameBorderShadowEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
+        _frameBorderGlowEnabled = new CheckBox
+        {
+            Content = "Use border glow",
+            IsChecked = fields.FrameBorderGlowEnabled,
+        };
+        _frameBorderGlowColor = new TextBox
+        {
+            Text = fields.FrameBorderGlowColor,
+            MinWidth = 180,
+            PlaceholderText = "six-digit RGB value",
+        };
+        _frameBorderGlowAlpha = new TextBox
+        {
+            Text = fields.FrameBorderGlowAlpha, MinWidth = 180,
+        };
+        _frameBorderGlowRadius = new TextBox
+        {
+            Text = fields.FrameBorderGlowRadius, MinWidth = 180,
+        };
+        _frameBorderGlowEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
+        _frameBorderSoftEdgeEnabled = new CheckBox
+        {
+            Content = "Use border soft edge",
+            IsChecked = fields.FrameBorderSoftEdgeEnabled,
+        };
+        _frameBorderSoftEdgeRadius = new TextBox
+        {
+            Text = fields.FrameBorderSoftEdgeRadius, MinWidth = 180,
+        };
+        _frameBorderSoftEdgeEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
         _frameGeometry = new ComboBox
         {
             ItemsSource = ZoomObjectPropertiesPlanner.FrameGeometryOptions,
@@ -259,6 +295,12 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             Row("Shadow blur (pt):", _frameBorderShadowBlur),
             Row("Shadow distance (pt):", _frameBorderShadowDistance),
             Row("Shadow direction (deg):", _frameBorderShadowDirection),
+            _frameBorderGlowEnabled,
+            Row("Glow color:", _frameBorderGlowColor),
+            Row("Glow alpha (%):", _frameBorderGlowAlpha),
+            Row("Glow radius (pt):", _frameBorderGlowRadius),
+            _frameBorderSoftEdgeEnabled,
+            Row("Soft-edge radius (pt):", _frameBorderSoftEdgeRadius),
             Row("Border width (pt):", _frameBorderWidth),
             Row("Border dash:", _frameBorderDash),
             _frameBorderGradientEnabled,
@@ -344,6 +386,12 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             FrameBorderShadowBlur: _frameBorderShadowBlur.Text,
             FrameBorderShadowDistance: _frameBorderShadowDistance.Text,
             FrameBorderShadowDirection: _frameBorderShadowDirection.Text,
+            FrameBorderGlowEnabled: _frameBorderGlowEnabled.IsChecked == true,
+            FrameBorderGlowColor: _frameBorderGlowColor.Text,
+            FrameBorderGlowAlpha: _frameBorderGlowAlpha.Text,
+            FrameBorderGlowRadius: _frameBorderGlowRadius.Text,
+            FrameBorderSoftEdgeEnabled: _frameBorderSoftEdgeEnabled.IsChecked == true,
+            FrameBorderSoftEdgeRadius: _frameBorderSoftEdgeRadius.Text,
             FrameGeometry: _frameGeometry.SelectedItem?.ToString(),
             CropEdges: _cropEdges.Text,
             SummaryTileIndex: _summaryTile?.SelectedIndex ?? -1,
@@ -393,6 +441,12 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         _frameBorderShadowBlur.Text = fields.FrameBorderShadowBlur;
         _frameBorderShadowDistance.Text = fields.FrameBorderShadowDistance;
         _frameBorderShadowDirection.Text = fields.FrameBorderShadowDirection;
+        _frameBorderGlowEnabled.IsChecked = fields.FrameBorderGlowEnabled;
+        _frameBorderGlowColor.Text = fields.FrameBorderGlowColor;
+        _frameBorderGlowAlpha.Text = fields.FrameBorderGlowAlpha;
+        _frameBorderGlowRadius.Text = fields.FrameBorderGlowRadius;
+        _frameBorderSoftEdgeEnabled.IsChecked = fields.FrameBorderSoftEdgeEnabled;
+        _frameBorderSoftEdgeRadius.Text = fields.FrameBorderSoftEdgeRadius;
         SyncFrameBorderState();
         _frameGeometry.SelectedItem = fields.FrameGeometry;
         _cropEdges.Text = fields.CropEdges;
@@ -433,7 +487,9 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             _frameBorderPatternEnabled.IsChecked == true,
             _frameBorderNoFillEnabled.IsChecked == true,
             _frameBorderThemeEnabled.IsChecked == true,
-            _frameBorderShadowEnabled.IsChecked == true);
+            _frameBorderShadowEnabled.IsChecked == true,
+            _frameBorderGlowEnabled.IsChecked == true,
+            _frameBorderSoftEdgeEnabled.IsChecked == true);
         _transitionDuration.IsEnabled = enablement.TransitionDuration;
         _frameBorderColor.IsEnabled = enablement.FrameBorderColor;
         _frameBorderWidth.IsEnabled = enablement.FrameBorderWidth;
@@ -455,5 +511,11 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         _frameBorderShadowBlur.IsEnabled = enablement.FrameBorderShadowFields;
         _frameBorderShadowDistance.IsEnabled = enablement.FrameBorderShadowFields;
         _frameBorderShadowDirection.IsEnabled = enablement.FrameBorderShadowFields;
+        _frameBorderGlowEnabled.IsEnabled = enablement.FrameBorderGlowToggle;
+        _frameBorderGlowColor.IsEnabled = enablement.FrameBorderGlowFields;
+        _frameBorderGlowAlpha.IsEnabled = enablement.FrameBorderGlowFields;
+        _frameBorderGlowRadius.IsEnabled = enablement.FrameBorderGlowFields;
+        _frameBorderSoftEdgeEnabled.IsEnabled = enablement.FrameBorderSoftEdgeToggle;
+        _frameBorderSoftEdgeRadius.IsEnabled = enablement.FrameBorderSoftEdgeFields;
     }
 }

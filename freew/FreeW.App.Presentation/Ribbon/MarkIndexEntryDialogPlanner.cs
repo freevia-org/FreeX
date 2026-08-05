@@ -6,7 +6,9 @@ public sealed record MarkIndexEntryDialogState(
     string MainEntry,
     string Subentry,
     bool UseCrossReference,
-    string CrossReference);
+    string CrossReference,
+    bool BoldPageNumber,
+    bool ItalicPageNumber);
 
 public sealed record MarkIndexEntryValidation(string Message);
 
@@ -28,6 +30,9 @@ public static class MarkIndexEntryDialogPlanner
     public const string OptionsLabel = "Options:";
     public const string CurrentPageLabel = "Current page";
     public const string CrossReferenceLabel = "Cross-reference:";
+    public const string PageNumberFormatLabel = "Page number format:";
+    public const string BoldLabel = "Bold";
+    public const string ItalicLabel = "Italic";
     public const string MarkButtonLabel = "Mark";
     public const string CancelButtonLabel = "Cancel";
     public const string DefaultCrossReference = "See ";
@@ -35,7 +40,13 @@ public static class MarkIndexEntryDialogPlanner
     public const string MissingCrossReferenceMessage = "Enter the cross-reference text before marking.";
 
     public static MarkIndexEntryDialogState BuildInitialState(string? selectedText) =>
-        new((selectedText ?? string.Empty).Trim(), string.Empty, false, DefaultCrossReference);
+        new(
+            (selectedText ?? string.Empty).Trim(),
+            string.Empty,
+            false,
+            DefaultCrossReference,
+            BoldPageNumber: false,
+            ItalicPageNumber: false);
 
     public static bool TryBuildMark(
         MarkIndexEntryDialogState state,
@@ -59,7 +70,12 @@ public static class MarkIndexEntryDialogPlanner
             return false;
         }
 
-        mark = new IndexMark(mainEntry, state.Subentry.Trim(), crossReference);
+        mark = new IndexMark(
+            mainEntry,
+            state.Subentry.Trim(),
+            crossReference,
+            BoldPageNumber: !state.UseCrossReference && state.BoldPageNumber,
+            ItalicPageNumber: !state.UseCrossReference && state.ItalicPageNumber);
         validation = null;
         return true;
     }

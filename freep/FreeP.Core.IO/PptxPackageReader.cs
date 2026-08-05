@@ -1806,7 +1806,11 @@ public static class PptxPackageReader
             ReadZoomFrameBorderNoFill(properties),
             ReadZoomFrameBorderThemeColor(properties),
             ReadZoomFrameBorderShadow(properties),
-            ReadZoomFrameBorderShadowEnabled(properties));
+            ReadZoomFrameBorderShadowEnabled(properties),
+            ReadZoomFrameBorderGlow(properties),
+            ReadZoomFrameBorderGlowEnabled(properties),
+            ReadZoomFrameBorderSoftEdge(properties),
+            ReadZoomFrameBorderSoftEdgeEnabled(properties));
         return value.IsEmpty ? null : value;
     }
 
@@ -1845,6 +1849,66 @@ public static class PptxPackageReader
             string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
         return effectList?.Elements().Any(element =>
             string.Equals(element.Name.LocalName, "outerShdw", StringComparison.OrdinalIgnoreCase)) == true
+            ? true
+            : null;
+    }
+
+    private static ZoomFrameBorderGlow? ReadZoomFrameBorderGlow(XElement properties)
+    {
+        var glow = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "glow", StringComparison.OrdinalIgnoreCase));
+        var color = glow?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value?.Trim().TrimStart('#');
+        if (color is not { Length: 6 } || !color.All(Uri.IsHexDigit))
+            return null;
+
+        var alpha = ParseNullableInt(glow?.Descendants().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "alpha", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value) ?? 50000;
+        var radius = ParseNullableLong(glow?.Attribute("rad")?.Value) ?? 0;
+        if (alpha is < 0 or > 100000 || radius < 0)
+            return null;
+
+        return new ZoomFrameBorderGlow(color.ToUpperInvariant(), alpha, radius);
+    }
+
+    private static bool? ReadZoomFrameBorderGlowEnabled(XElement properties)
+    {
+        var effectList = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
+        return effectList?.Elements().Any(element =>
+            string.Equals(element.Name.LocalName, "glow", StringComparison.OrdinalIgnoreCase)) == true
+            ? true
+            : null;
+    }
+
+    private static ZoomFrameBorderSoftEdge? ReadZoomFrameBorderSoftEdge(XElement properties)
+    {
+        var softEdge = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "softEdge", StringComparison.OrdinalIgnoreCase));
+        var radius = ParseNullableLong(softEdge?.Attribute("rad")?.Value);
+        return radius is >= 0 ? new ZoomFrameBorderSoftEdge(radius.Value) : null;
+    }
+
+    private static bool? ReadZoomFrameBorderSoftEdgeEnabled(XElement properties)
+    {
+        var effectList = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
+        return effectList?.Elements().Any(element =>
+            string.Equals(element.Name.LocalName, "softEdge", StringComparison.OrdinalIgnoreCase)) == true
             ? true
             : null;
     }
