@@ -7656,7 +7656,8 @@ public sealed class DocumentView : Control
                 sectionHf,
                 pageSection.SectionRelativePageNumber,
                 sectionPage,
-                diffOddEven);
+                diffOddEven,
+                pageNumberDisplay[pi].LogicalPageNumber);
             var header = slots.Header;
             var footer = slots.Footer;
             var headerSlot = ToHfSlot(slots.HeaderSlot);

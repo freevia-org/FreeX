@@ -32,7 +32,8 @@ public static class HeaderFooterPagePlanner
         SectionHeadersFooters headersFooters,
         int sectionRelativePageNumber,
         PageSettings pageSettings,
-        bool differentOddEvenPages)
+        bool differentOddEvenPages,
+        int? logicalPageNumber = null)
     {
         ArgumentNullException.ThrowIfNull(headersFooters);
         ArgumentNullException.ThrowIfNull(pageSettings);
@@ -44,7 +45,8 @@ public static class HeaderFooterPagePlanner
         if (pageSettings.DifferentFirstPage && sectionRelativePageNumber == 1)
             return BuildPlan(headersFooters, HeaderFooterSlotKind.FirstHeader, HeaderFooterSlotKind.FirstFooter);
 
-        if (differentOddEvenPages && sectionRelativePageNumber % 2 == 0)
+        var parityPageNumber = logicalPageNumber ?? sectionRelativePageNumber;
+        if (differentOddEvenPages && parityPageNumber % 2 == 0)
             return BuildPlan(headersFooters, HeaderFooterSlotKind.EvenHeader, HeaderFooterSlotKind.EvenFooter);
 
         return BuildPlan(headersFooters, HeaderFooterSlotKind.Header, HeaderFooterSlotKind.Footer);

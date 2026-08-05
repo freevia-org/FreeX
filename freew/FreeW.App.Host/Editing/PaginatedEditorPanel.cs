@@ -201,7 +201,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 pageSection.HeadersFooters,
                 pageSection.SectionRelativePageNumber,
                 pageSection.PageSettings,
-                differentOddEvenPages);
+                differentOddEvenPages,
+                pageNumberDisplay[i].LogicalPageNumber);
             var box = new PageBox(i + 1, pageSection.PageSettings, shards[i],
                 sourceModel: model,
                 headerSlot: slots.Header, headerSlotName: slots.HeaderSlotName,
@@ -626,7 +627,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 pageSection.HeadersFooters,
                 pageSection.SectionRelativePageNumber,
                 pageSection.PageSettings,
-                differentOddEvenPagesRep);
+                differentOddEvenPagesRep,
+                pageNumberDisplayRep[i].LogicalPageNumber);
             var box = new PageBox(i + 1, pageSection.PageSettings, shards[i],
                 sourceModel: model,
                 headerSlot: slots.Header, headerSlotName: slots.HeaderSlotName,
@@ -764,7 +766,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 pageSection.HeadersFooters,
                 pageSection.SectionRelativePageNumber,
                 pageSection.PageSettings,
-                differentOddEvenPagesReb);
+                differentOddEvenPagesReb,
+                pageNumberDisplayReb[i].LogicalPageNumber);
             var box = new PageBox(i + 1, pageSection.PageSettings, shards[i],
                 sourceModel: model,
                 headerSlot: slots.Header, headerSlotName: slots.HeaderSlotName,
@@ -843,16 +846,17 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         {
             SectionRelativePageNumber = finalBodySection.SectionRelativePageNumber + 1
         };
+        var displaySections = bodyPageSections.Concat([endnoteSection]).ToList();
+        var pageNumberDisplay = PageNumberFormatDialogPlanner.BuildDisplayPlans(
+            displaySections,
+            model,
+            blockPageAssignments)[^1];
         var slots = HeaderFooterPagePlanner.ResolveSlots(
             endnoteSection.HeadersFooters,
             endnoteSection.SectionRelativePageNumber,
             endnoteSection.PageSettings,
-            differentOddEvenPages);
-        var displaySections = bodyPageSections.Concat([endnoteSection]).ToList();
-        var pageNumberText = PageNumberFormatDialogPlanner.BuildDisplayPlans(
-            displaySections,
-            model,
-            blockPageAssignments)[^1].Text;
+            differentOddEvenPages,
+            pageNumberDisplay.LogicalPageNumber);
         var endnotePage = new PageBox(
             bodyPageCount + 1,
             endnoteSection.PageSettings,
@@ -863,7 +867,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             footerSlot: slots.Footer,
             footerSlotName: slots.FooterSlotName,
             pageCount: bodyPageCount + 1,
-            pageNumberText: pageNumberText,
+            pageNumberText: pageNumberDisplay.Text,
             endnoteIds: endnoteIds,
             isEndnoteSyntheticPage: true);
         endnotePage.OwnerSectionHf = endnoteSection.HeadersFooters;
