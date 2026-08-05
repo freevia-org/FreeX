@@ -748,12 +748,14 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
-    public void MainWindow_sources_route_accessibility_checker_navigation_through_shared_planner()
+    public void MainWindow_sources_route_accessibility_checker_navigation_through_shared_session()
     {
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(");
-        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(");
+        source.Should().Contain("_reviewWorkflowSession.SelectAccessibilityCheckerRow(rowIndex)");
+        source.Should().Contain("_reviewWorkflowSession.ApplyAccessibilityCheckerRowAction(rowIndex)");
+        source.Should().NotContain("PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(");
+        source.Should().NotContain("PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(");
         source.Should().Contain("_reviewWorkflowSession.ApplyReadingOrderMove(");
         source.Should().Contain("_reviewWorkflowSession.SelectReadingOrderItem(");
     }

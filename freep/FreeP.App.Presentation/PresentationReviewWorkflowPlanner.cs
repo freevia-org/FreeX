@@ -450,6 +450,14 @@ public sealed record PresentationAccessibilityCheckerPanePlan(
     IReadOnlyList<PresentationAccessibilityCheckerRowPlan> Rows,
     IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions)
 {
+    public string Heading => $"Accessibility - {IssueCount} issues";
+
+    public string Message => SelectedRow is { } selected
+        ? $"{selected.SlideDisplay}: {selected.Title}"
+        : EmptyStateMessage;
+
+    public string EmptyStateMessage => "No accessibility issues found.";
+
     public PresentationAccessibilityCheckerRowPlan? SelectedRow =>
         SelectedRowIndex >= 0 && SelectedRowIndex < Rows.Count
             ? Rows[SelectedRowIndex]

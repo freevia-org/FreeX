@@ -6,7 +6,11 @@ public sealed record PresentationReviewWorkflowSessionCallbacks(
     Action MarkDirty,
     Action RefreshCanvas,
     Action RefreshNotesPane,
-    Action RefreshAccessibilitySummaryPlan,
+    Action<PresentationAccessibilityCheckerPanePlan> RenderAccessibilityCheckerPaneIfVisible,
+    Action<PresentationAccessibilityCheckerPanePlan> PresentAccessibilityCheckerPane,
+    Action OpenAltTextPane,
+    Action OpenHyperlinkDialog,
+    Action OpenMediaCaptionPane,
     Action<PresentationCommentPanePlan> RenderCommentPane,
     Action<PresentationAltTextPanePlan> RenderAltTextPaneIfVisible,
     Action<PresentationProofingPanePlan> RenderProofingPaneIfVisible,
@@ -49,6 +53,24 @@ public sealed class PresentationReviewWorkflowSession
 
     public PresentationCommentMentionInsertionPlan? LastCommentMentionInsertionPlan { get; private set; }
 
+    public PresentationMediaTranscriptPlan? LastMediaTranscriptPlan { get; private set; }
+
+    public PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
+
+    public PresentationAccessibilityCheckerPanePlan? LastAccessibilityCheckerPanePlan { get; private set; }
+
+    public PresentationAccessibilityCheckerNavigationPlan? LastAccessibilityCheckerNavigationPlan { get; private set; }
+
+    public PresentationSlideTitleMutationPlan? LastSlideTitleMutationPlan { get; private set; }
+
+    public PresentationChartTitleMutationPlan? LastChartTitleMutationPlan { get; private set; }
+
+    public PresentationTableHeaderRowMutationPlan? LastTableHeaderRowMutationPlan { get; private set; }
+
+    public PresentationTableStructureReviewPlan? LastTableStructureReviewPlan { get; private set; }
+
+    public PresentationTableStructureReviewDisplayPlan? LastTableStructureReviewDisplayPlan { get; private set; }
+
     public PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
 
     public PresentationAltTextPanePlan? LastAltTextPanePlan { get; private set; }
@@ -69,7 +91,7 @@ public sealed class PresentationReviewWorkflowSession
             presentation.Slides,
             editor.CurrentSlideIndex,
             SelectedCommentIndex);
-        _callbacks.RefreshAccessibilitySummaryPlan();
+        RefreshAccessibilityCheckerPlans();
         RefreshAltTextPlansCore(null, null, null);
         _callbacks.RenderAltTextPaneIfVisible(LastAltTextPanePlan!);
         RefreshReadingOrderPlanCore();
@@ -241,6 +263,141 @@ public sealed class PresentationReviewWorkflowSession
     public string? GetSelectedCommentText()
         => SelectedCommentIndex is { } index ? GetCommentText(index) : null;
 
+    public PresentationAccessibilityCheckerPanePlan RefreshAccessibilityCheckerPlans()
+    {
+        var presentation = _getEditor().Presentation;
+        LastMediaTranscriptPlan = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation);
+        LastAccessibilitySummaryPlan =
+            PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+        LastAccessibilityCheckerPanePlan =
+            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
+                presentation,
+                LastAccessibilitySummaryPlan,
+                LastAccessibilityCheckerPanePlan?.SelectedRowIndex);
+        _callbacks.RenderAccessibilityCheckerPaneIfVisible(LastAccessibilityCheckerPanePlan);
+        return LastAccessibilityCheckerPanePlan;
+    }
+
+    public PresentationAccessibilityCheckerPanePlan ShowAccessibilityCheckerPane()
+    {
+        var plan = RefreshAccessibilityCheckerPlans();
+        _callbacks.PresentAccessibilityCheckerPane(plan);
+        return plan;
+    }
+
+    public PresentationAccessibilityCheckerPanePlan SelectAccessibilityCheckerRow(int rowIndex)
+    {
+        var current = RefreshAccessibilityCheckerPlans();
+        var normalized = PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(
+            current,
+            rowIndex);
+        LastAccessibilityCheckerPanePlan =
+            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
+                _getEditor().Presentation,
+                LastAccessibilitySummaryPlan!,
+                normalized >= 0 ? normalized : null);
+        LastAccessibilityCheckerNavigationPlan =
+            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(
+                LastAccessibilityCheckerPanePlan,
+                normalized >= 0 ? normalized : null);
+        ApplyAccessibilityCheckerNavigation(LastAccessibilityCheckerNavigationPlan);
+
+        if (LastAccessibilityCheckerPanePlan.SelectedRow?.CommandHint !=
+            PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId)
+        {
+            ClearTableStructureReview();
+        }
+
+        _callbacks.PresentAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan);
+        return LastAccessibilityCheckerPanePlan;
+    }
+
+    public PresentationAccessibilityCheckerPanePlan ApplyAccessibilityCheckerRowAction(int rowIndex)
+    {
+        var plan = SelectAccessibilityCheckerRow(rowIndex);
+        var row = plan.SelectedRow;
+        if (row?.CommandHint == PresentationReviewWorkflowPlanner.AltTextCommandId)
+        {
+            _callbacks.OpenAltTextPane();
+        }
+        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.SetSlideTitleCommandId)
+        {
+            LastSlideTitleMutationPlan =
+                PresentationReviewWorkflowPlanner.TryApplySlideTitleMutation(_getEditor(), row.SlideIndex);
+            RefreshAccessibilityCheckerPlans();
+        }
+        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.SetTableHeaderRowCommandId)
+        {
+            LastTableHeaderRowMutationPlan =
+                PresentationReviewWorkflowPlanner.TryApplyTableHeaderRowMutation(
+                    _getEditor(),
+                    row.SlideIndex,
+                    row.ShapeId);
+            RefreshAccessibilityCheckerPlans();
+        }
+        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId)
+        {
+            OpenTableStructureReview(row);
+        }
+        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.InsertLinkCommandId)
+        {
+            _callbacks.OpenHyperlinkDialog();
+        }
+        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.ChartTitleCommandId)
+        {
+            LastChartTitleMutationPlan =
+                PresentationReviewWorkflowPlanner.TryApplyChartTitleMutation(
+                    _getEditor(),
+                    row.SlideIndex,
+                    row.ShapeId);
+            RefreshAccessibilityCheckerPlans();
+        }
+        else if (row?.CommandHint == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneOpenCommandId
+            || row?.Category == "Media")
+        {
+            _callbacks.OpenMediaCaptionPane();
+        }
+
+        return LastAccessibilityCheckerPanePlan!;
+    }
+
+    private void OpenTableStructureReview(PresentationAccessibilityCheckerRowPlan row)
+    {
+        var presentation = _getEditor().Presentation;
+        LastTableStructureReviewPlan = PresentationReviewWorkflowPlanner.BuildTableStructureReviewPlan(
+            presentation,
+            row.SlideIndex,
+            row.ShapeId);
+        LastTableStructureReviewDisplayPlan =
+            PresentationReviewWorkflowPlanner.BuildTableStructureReviewDisplayPlan(
+                LastTableStructureReviewPlan);
+        RefreshAccessibilityCheckerPlans();
+        LastAccessibilityCheckerPanePlan =
+            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
+                presentation,
+                LastAccessibilitySummaryPlan!,
+                row.RowIndex);
+        _callbacks.PresentAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan);
+    }
+
+    private void ApplyAccessibilityCheckerNavigation(
+        PresentationAccessibilityCheckerNavigationPlan plan)
+    {
+        if (!plan.ShouldNavigate)
+            return;
+
+        var editor = _getEditor();
+        editor.SelectSlide(plan.TargetSlideIndex);
+        if (plan.ShouldSelectShape && plan.TargetShapeId is { } shapeId)
+            editor.Select(shapeId);
+    }
+
+    private void ClearTableStructureReview()
+    {
+        LastTableStructureReviewPlan = null;
+        LastTableStructureReviewDisplayPlan = null;
+    }
+
     public void RefreshAltTextPlans(
         string? proposedDescription,
         string? proposedTitle,
@@ -278,7 +435,7 @@ public sealed class PresentationReviewWorkflowSession
                 plan.Description,
                 plan.Title,
                 plan.IsDecorative);
-            _callbacks.RefreshAccessibilitySummaryPlan();
+            RefreshAccessibilityCheckerPlans();
         }
 
         return plan;

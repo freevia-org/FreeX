@@ -2506,9 +2506,12 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("_reviewWorkflowSession.RefreshReviewWorkflowPlans();");
         source.Should().Contain("_reviewWorkflowSession.ApplySelectedShapeAlternativeText(");
         source.Should().Contain("_reviewWorkflowSession.ApplyProofingCorrection(");
-        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(_presentation)");
-        source.Should().Contain("PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(");
-        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(");
+        source.Should().Contain("_reviewWorkflowSession.ShowAccessibilityCheckerPane()");
+        source.Should().Contain("_reviewWorkflowSession.SelectAccessibilityCheckerRow(rowIndex)");
+        source.Should().Contain("_reviewWorkflowSession.ApplyAccessibilityCheckerRowAction(rowIndex)");
+        source.Should().NotContain("PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(");
+        source.Should().NotContain("PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(");
+        source.Should().NotContain("PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(");
         source.Should().Contain("_reviewWorkflowSession.RefreshAltTextPlans(");
         source.Should().Contain("_reviewWorkflowSession.ApplyReadingOrderMove(");
         source.Should().Contain("_reviewWorkflowSession.SelectReadingOrderItem(");

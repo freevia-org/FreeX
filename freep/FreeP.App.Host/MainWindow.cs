@@ -151,7 +151,6 @@ public sealed partial class MainWindow : Window
     private TextBlock _accessibilityCheckerPaneMessage = null!;
     private StackPanel _accessibilityCheckerReviewDetailsPanel = null!;
     private StackPanel _accessibilityCheckerRowsPanel = null!;
-    private int? _selectedAccessibilityCheckerRowIndex;
     private readonly List<string> _accessibilityCheckerTableStructureReviewRenderedLines = new();
     private Border _readingOrderPaneHost = null!;
     private SelectionPane _selectionPane = null!;
@@ -226,20 +225,28 @@ public sealed partial class MainWindow : Window
     internal PresentationCommentNavigationPlan? LastCommentNavigationPlan => _reviewWorkflowSession.LastCommentNavigationPlan;
     internal PresentationCommentMentionPickerPlan? LastCommentMentionPickerPlan { get; private set; }
     internal PresentationCommentMentionInsertionPlan? LastCommentMentionInsertionPlan { get; private set; }
-    internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
-    internal PresentationAccessibilityCheckerPanePlan? LastAccessibilityCheckerPanePlan { get; private set; }
-    internal PresentationSlideTitleMutationPlan? LastSlideTitleMutationPlan { get; private set; }
-    internal PresentationChartTitleMutationPlan? LastChartTitleMutationPlan { get; private set; }
-    internal PresentationTableHeaderRowMutationPlan? LastTableHeaderRowMutationPlan { get; private set; }
-    internal PresentationTableStructureReviewPlan? LastTableStructureReviewPlan { get; private set; }
-    internal PresentationTableStructureReviewDisplayPlan? LastTableStructureReviewDisplayPlan { get; private set; }
+    internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan =>
+        _reviewWorkflowSession.LastAccessibilitySummaryPlan;
+    internal PresentationAccessibilityCheckerPanePlan? LastAccessibilityCheckerPanePlan =>
+        _reviewWorkflowSession.LastAccessibilityCheckerPanePlan;
+    internal PresentationSlideTitleMutationPlan? LastSlideTitleMutationPlan =>
+        _reviewWorkflowSession.LastSlideTitleMutationPlan;
+    internal PresentationChartTitleMutationPlan? LastChartTitleMutationPlan =>
+        _reviewWorkflowSession.LastChartTitleMutationPlan;
+    internal PresentationTableHeaderRowMutationPlan? LastTableHeaderRowMutationPlan =>
+        _reviewWorkflowSession.LastTableHeaderRowMutationPlan;
+    internal PresentationTableStructureReviewPlan? LastTableStructureReviewPlan =>
+        _reviewWorkflowSession.LastTableStructureReviewPlan;
+    internal PresentationTableStructureReviewDisplayPlan? LastTableStructureReviewDisplayPlan =>
+        _reviewWorkflowSession.LastTableStructureReviewDisplayPlan;
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan => _reviewWorkflowSession.LastAltTextRequestPlan;
     internal PresentationAltTextPanePlan? LastAltTextPanePlan => _reviewWorkflowSession.LastAltTextPanePlan;
     internal PresentationReadingOrderPlan? LastReadingOrderPlan => _reviewWorkflowSession.LastReadingOrderPlan;
     internal PresentationProofingRequestPlan? LastProofingRequestPlan => _reviewWorkflowSession.LastProofingRequestPlan;
     internal PresentationProofingExecutionPlan? LastProofingExecutionPlan => _reviewWorkflowSession.LastProofingExecutionPlan;
     internal PresentationProofingPanePlan? LastProofingPanePlan => _reviewWorkflowSession.LastProofingPanePlan;
-    internal PresentationMediaTranscriptPlan? LastMediaTranscriptPlan { get; private set; }
+    internal PresentationMediaTranscriptPlan? LastMediaTranscriptPlan =>
+        _reviewWorkflowSession.LastMediaTranscriptPlan;
     internal PresentationMediaCaptionAuthoringPanePlan? LastMediaCaptionAuthoringPanePlan { get; private set; }
     internal PresentationMediaCaptionAuthoringMutationPlan? LastMediaCaptionAuthoringMutationPlan { get; private set; }
     internal PresentationMediaCaptionTrackMutationResult? LastMediaCaptionTrackMutationResult { get; private set; }
@@ -453,7 +460,11 @@ public sealed partial class MainWindow : Window
                 MarkDirty: () => _file.MarkDirty(),
                 RefreshCanvas: RefreshCanvas,
                 RefreshNotesPane: RefreshNotesPane,
-                RefreshAccessibilitySummaryPlan: RefreshAccessibilitySummaryPlan,
+                RenderAccessibilityCheckerPaneIfVisible: RenderAccessibilityCheckerPaneIfVisible,
+                PresentAccessibilityCheckerPane: PresentAccessibilityCheckerPane,
+                OpenAltTextPane: () => ShowAltTextPane(),
+                OpenHyperlinkDialog: () => OpenHyperlinkDialog(),
+                OpenMediaCaptionPane: () => ShowMediaCaptionPane(),
                 RenderCommentPane: RenderCommentPane,
                 RenderAltTextPaneIfVisible: RenderAltTextPaneIfVisible,
                 RenderProofingPaneIfVisible: RenderProofingPaneIfVisible,
@@ -2598,139 +2609,36 @@ public sealed partial class MainWindow : Window
 
     private string? GetCommentText(int commentIndex) => _reviewWorkflowSession.GetCommentText(commentIndex);
 
-    private void RefreshAccessibilitySummaryPlan()
-    {
-        LastMediaTranscriptPlan = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(_presentation);
-        LastAccessibilitySummaryPlan =
-            PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(_presentation);
-        LastAccessibilityCheckerPanePlan =
-            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
-                _presentation,
-                LastAccessibilitySummaryPlan,
-                _selectedAccessibilityCheckerRowIndex);
-        _selectedAccessibilityCheckerRowIndex = LastAccessibilityCheckerPanePlan.SelectedRowIndex >= 0
-            ? LastAccessibilityCheckerPanePlan.SelectedRowIndex
-            : null;
-        if (IsAccessibilityCheckerPaneVisible)
-            RenderAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan);
-    }
-
     internal PresentationAccessibilityCheckerPanePlan ShowAccessibilityCheckerPane()
     {
-        RefreshAccessibilitySummaryPlan();
-        RenderAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan!);
-        _accessibilityCheckerPaneHost.Visibility = Visibility.Visible;
+        var plan = _reviewWorkflowSession.ShowAccessibilityCheckerPane();
         RefreshPaneAccessibilityMetadata();
-        return LastAccessibilityCheckerPanePlan!;
+        return plan;
     }
 
     internal PresentationAccessibilityCheckerPanePlan SelectAccessibilityCheckerRow(int rowIndex)
-    {
-        RefreshAccessibilitySummaryPlan();
-        var normalized = PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(
-            LastAccessibilityCheckerPanePlan!,
-            rowIndex);
-        _selectedAccessibilityCheckerRowIndex = normalized >= 0 ? normalized : null;
-        LastAccessibilityCheckerPanePlan =
-            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
-                _presentation,
-                LastAccessibilitySummaryPlan!,
-                _selectedAccessibilityCheckerRowIndex);
-        NavigateToAccessibilityCheckerRow(
-            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(
-                LastAccessibilityCheckerPanePlan,
-                _selectedAccessibilityCheckerRowIndex));
-        if (LastAccessibilityCheckerPanePlan.SelectedRow?.CommandHint != PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId)
-            ClearTableStructureReviewDisplay();
-        RenderAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan);
-        _accessibilityCheckerPaneHost.Visibility = Visibility.Visible;
-        return LastAccessibilityCheckerPanePlan;
-    }
+        => _reviewWorkflowSession.SelectAccessibilityCheckerRow(rowIndex);
 
     internal PresentationAccessibilityCheckerPanePlan ApplyAccessibilityCheckerRowAction(int rowIndex)
-    {
-        var plan = SelectAccessibilityCheckerRow(rowIndex);
-        var row = plan.SelectedRow;
-        if (row?.CommandHint == PresentationReviewWorkflowPlanner.AltTextCommandId)
-        {
-            ShowAltTextPane();
-        }
-        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.SetSlideTitleCommandId)
-        {
-            LastSlideTitleMutationPlan =
-                PresentationReviewWorkflowPlanner.TryApplySlideTitleMutation(Editor, row.SlideIndex);
-        }
-        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.SetTableHeaderRowCommandId)
-        {
-            LastTableHeaderRowMutationPlan =
-                PresentationReviewWorkflowPlanner.TryApplyTableHeaderRowMutation(
-                    Editor,
-                    row.SlideIndex,
-                    row.ShapeId);
-            RefreshAccessibilitySummaryPlan();
-        }
-        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId)
-        {
-            LastTableStructureReviewPlan = OpenTableStructureReviewPlan(row);
-        }
-        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.InsertLinkCommandId)
-        {
-            OpenHyperlinkDialog();
-        }
-        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.ChartTitleCommandId)
-        {
-            LastChartTitleMutationPlan =
-                PresentationReviewWorkflowPlanner.TryApplyChartTitleMutation(
-                    Editor,
-                    row.SlideIndex,
-                    row.ShapeId);
-            RefreshAccessibilitySummaryPlan();
-        }
-        else if (row?.CommandHint == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneOpenCommandId
-            || row?.Category == "Media")
-        {
-            ShowMediaCaptionPane();
-        }
+        => _reviewWorkflowSession.ApplyAccessibilityCheckerRowAction(rowIndex);
 
-        return LastAccessibilityCheckerPanePlan!;
+    private void RenderAccessibilityCheckerPaneIfVisible(
+        PresentationAccessibilityCheckerPanePlan plan)
+    {
+        if (IsAccessibilityCheckerPaneVisible)
+            RenderAccessibilityCheckerPane(plan);
     }
 
-    private PresentationTableStructureReviewPlan OpenTableStructureReviewPlan(PresentationAccessibilityCheckerRowPlan row)
+    private void PresentAccessibilityCheckerPane(PresentationAccessibilityCheckerPanePlan plan)
     {
-        var reviewPlan = PresentationReviewWorkflowPlanner.BuildTableStructureReviewPlan(
-            _presentation,
-            row.SlideIndex,
-            row.ShapeId);
-        LastTableStructureReviewDisplayPlan =
-            PresentationReviewWorkflowPlanner.BuildTableStructureReviewDisplayPlan(reviewPlan);
-        RefreshAccessibilitySummaryPlan();
-        LastAccessibilityCheckerPanePlan =
-            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
-                _presentation,
-                LastAccessibilitySummaryPlan!,
-                row.RowIndex);
-        RenderAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan);
+        RenderAccessibilityCheckerPane(plan);
         _accessibilityCheckerPaneHost.Visibility = Visibility.Visible;
-        return reviewPlan;
-    }
-
-    private void NavigateToAccessibilityCheckerRow(PresentationAccessibilityCheckerNavigationPlan plan)
-    {
-        if (!plan.ShouldNavigate)
-            return;
-
-        Editor.SelectSlide(plan.TargetSlideIndex);
-        if (plan.ShouldSelectShape && plan.TargetShapeId is { } shapeId)
-            Editor.Select(shapeId);
     }
 
     private void RenderAccessibilityCheckerPane(PresentationAccessibilityCheckerPanePlan plan)
     {
-        _accessibilityCheckerPaneHeading.Text =
-            $"Accessibility - {plan.IssueCount} issues";
-        _accessibilityCheckerPaneMessage.Text = plan.SelectedRow is { } selected
-            ? $"{selected.SlideDisplay}: {selected.Title}"
-            : "No accessibility issues found.";
+        _accessibilityCheckerPaneHeading.Text = plan.Heading;
+        _accessibilityCheckerPaneMessage.Text = plan.Message;
         RenderTableStructureReviewDetails(LastTableStructureReviewDisplayPlan);
 
         _accessibilityCheckerRowsPanel.Children.Clear();
@@ -2738,7 +2646,7 @@ public sealed partial class MainWindow : Window
         {
             _accessibilityCheckerRowsPanel.Children.Add(new TextBlock
             {
-                Text = "No accessibility issues found.",
+                Text = plan.EmptyStateMessage,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
                 Margin = new Thickness(12, 0, 12, 10),
                 TextWrapping = TextWrapping.Wrap,
@@ -2821,12 +2729,6 @@ public sealed partial class MainWindow : Window
             row.Title,
             row.IsSelected ? "Selected" : "Not selected");
         return card;
-    }
-
-    private void ClearTableStructureReviewDisplay()
-    {
-        LastTableStructureReviewPlan = null;
-        LastTableStructureReviewDisplayPlan = null;
     }
 
     private void RenderTableStructureReviewDetails(PresentationTableStructureReviewDisplayPlan? display)
