@@ -106,6 +106,15 @@ public sealed class Presentation
     /// </summary>
     public bool ShowMediaControls { get; set; } = true;
 
+    /// <summary>Whether slideshow playback honors authored per-slide transition timings.</summary>
+    public bool UseSlideTimings { get; set; } = true;
+
+    /// <summary>Whether slideshow playback runs authored shape animations.</summary>
+    public bool ShowWithAnimation { get; set; } = true;
+
+    /// <summary>Whether slideshow playback loops back to its first slide after the last slide.</summary>
+    public bool LoopUntilStopped { get; set; }
+
     /// <summary>Core document properties (title, author, subject, …).</summary>
     public DocumentProperties Properties { get; } = new();
 

@@ -134,6 +134,51 @@ public sealed class SlideShowHostPlannerTests
         instant.AutoAdvanceAfterMs.Should().Be(2500);
     }
 
+    [Fact]
+    public void BuildDisplayPlan_UseSlideTimingsFalseDisablesAutomaticAdvance()
+    {
+        var pres = MakePresentation(1);
+        pres.UseSlideTimings = false;
+        pres.Slides[0].Transition = new SlideTransition { AdvanceAfterMs = 2500 };
+
+        var plan = SlideShowHostPlanner.BuildDisplayPlan(
+            pres,
+            new SlideShowController(pres.Slides, startIndex: 0),
+            animated: true);
+
+        plan.AutoAdvanceAfterMs.Should().BeNull();
+    }
+
+    [Fact]
+    public void SlideShowController_RespectsAnimationAndLoopSettings()
+    {
+        var pres = MakePresentation(2);
+        pres.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 1,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Appear,
+            Trigger = AnimationTrigger.OnClick,
+        });
+
+        var noAnimation = new SlideShowController(
+            pres.Slides,
+            startIndex: 0,
+            showWithAnimation: false);
+        noAnimation.HasPendingSteps.Should().BeFalse();
+
+        var loop = new SlideShowController(
+            pres.Slides,
+            startIndex: 0,
+            showWithAnimation: false,
+            loopUntilStopped: true);
+        loop.Advance().Should().BeOfType<AdvanceResult.NavigateToSlide>()
+            .Which.SlideIndex.Should().Be(1);
+        loop.Advance().Should().BeOfType<AdvanceResult.NavigateToSlide>()
+            .Which.SlideIndex.Should().Be(0);
+        loop.IsAtEnd.Should().BeFalse();
+    }
+
     [Theory]
     [InlineData(TransitionKind.None, SlideShowTransitionPlaybackKind.Cut)]
     [InlineData(TransitionKind.Cut, SlideShowTransitionPlaybackKind.Cut)]

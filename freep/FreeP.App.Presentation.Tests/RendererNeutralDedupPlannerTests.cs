@@ -215,6 +215,45 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void SlideShowSettings_RoundTripAndUndoPreserveNativeShowProperties()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetSlideShowSettingsCommand(
+            oldUseSlideTimings: true,
+            oldShowWithAnimation: true,
+            oldLoopUntilStopped: false,
+            newUseSlideTimings: false,
+            newShowWithAnimation: false,
+            newLoopUntilStopped: true));
+        presentation.UseSlideTimings.Should().BeFalse();
+        presentation.ShowWithAnimation.Should().BeFalse();
+        presentation.LoopUntilStopped.Should().BeTrue();
+        bus.Undo();
+        presentation.UseSlideTimings.Should().BeTrue();
+        presentation.ShowWithAnimation.Should().BeTrue();
+        presentation.LoopUntilStopped.Should().BeFalse();
+        bus.Redo();
+
+        using var output = new MemoryStream();
+        PptxPackageWriter.Write(presentation, output);
+        var bytes = output.ToArray();
+        var reopened = PptxPackageReader.Read(new MemoryStream(bytes));
+        reopened.UseSlideTimings.Should().BeFalse();
+        reopened.ShowWithAnimation.Should().BeFalse();
+        reopened.LoopUntilStopped.Should().BeTrue();
+
+        using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        using var properties = archive.GetEntry("ppt/presProps.xml")!.Open();
+        var showPr = XDocument.Load(properties).Descendants(XName.Get(
+            "showPr", "http://schemas.openxmlformats.org/presentationml/2006/main")).Single();
+        showPr.Attribute("useTimings")!.Value.Should().Be("0");
+        showPr.Attribute("showAnimation")!.Value.Should().Be("0");
+        showPr.Attribute("loop")!.Value.Should().Be("1");
+    }
+
+    [Fact]
     public void BevelGeometryHelper_MapsSurfaceDimensionsToVisibleFootprint()
     {
         var dimensions = BevelGeometryHelper.GetRenderDimensions(
