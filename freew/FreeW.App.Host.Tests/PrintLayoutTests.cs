@@ -173,6 +173,15 @@ public sealed class PrintLayoutTests
             Assert.Null(blank.HeaderSubEditor);
             Assert.Null(blank.FooterSubEditor);
             Assert.Equal([1, 2, 3], panel.PageBoxes.Select(box => box.PageNumber));
+
+            var selectedPhysicalPages = PageRangeDocumentPaginator.Create(paginator, 2, 3);
+            Assert.Equal(2, selectedPhysicalPages.PageCount);
+            Assert.NotSame(
+                System.Windows.Documents.DocumentPage.Missing,
+                selectedPhysicalPages.GetPage(0));
+            Assert.NotSame(
+                System.Windows.Documents.DocumentPage.Missing,
+                selectedPhysicalPages.GetPage(1));
         }
     }
 

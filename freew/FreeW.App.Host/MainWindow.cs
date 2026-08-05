@@ -3034,6 +3034,15 @@ public sealed class MainWindow : Window
     {
         var dialog = new PrintDialog();
 
+        // Compose the same physical sequence used by Print Preview before opening the dialog. This
+        // gives the native range control exact bounds that include section parity blanks and note
+        // continuation pages.
+        var paginator = PrintLayout.BuildPaginator(editor);
+        paginator.ComputePageCount();
+        dialog.UserPageRangeEnabled = paginator.PageCount > 1;
+        dialog.MinPage = 1;
+        dialog.MaxPage = (uint)Math.Max(1, paginator.PageCount);
+
         // Print at the model's page size (points -> DIP), not just the printer's printable area, so
         // margins and page breaks match what the user sees in Print Preview.
         var page = editor.Model.Page;
@@ -3043,9 +3052,14 @@ public sealed class MainWindow : Window
         if (dialog.ShowDialog() != true)
             return;
 
-        // Build a fresh, page-settings-aware paginator (display-only clone of the editor content),
-        // breaking the flow into pages at the model's geometry and overlaying any header/footer.
-        var paginator = PrintLayout.BuildPaginator(editor);
+        if (dialog.PageRangeSelection == PageRangeSelection.UserPages)
+        {
+            paginator = PageRangeDocumentPaginator.Create(
+                paginator,
+                (int)dialog.PageRange.PageFrom,
+                (int)dialog.PageRange.PageTo);
+        }
+
         dialog.PrintDocument(paginator, description);
     }
 
