@@ -112,6 +112,12 @@ public sealed class Presentation
     /// </summary>
     public bool ShowMasterShapes { get; set; } = true;
 
+    /// <summary>
+    /// Whether PowerPoint shows date, footer, and slide-number placeholders on title slides.
+    /// PresentationML omits <c>showSpecialPlsOnTitleSld</c> when this policy is disabled.
+    /// </summary>
+    public bool ShowSpecialPlaceholdersOnTitleSlide { get; set; }
+
     /// <summary>Whether slideshow playback honors authored per-slide transition timings.</summary>
     public bool UseSlideTimings { get; set; } = true;
 

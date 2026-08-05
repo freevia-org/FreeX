@@ -59,6 +59,7 @@ public sealed class HeaderFooterDialogTests
         dialog.LastApplyPlan!.Options.SuppressOnTitleSlide.Should().BeTrue();
         editor.Presentation.Slides[0].HfVisibility!.ShowFooter.Should().BeFalse();
         editor.Presentation.Slides[1].HfVisibility!.ShowFooter.Should().BeTrue();
+        editor.Presentation.ShowSpecialPlaceholdersOnTitleSlide.Should().BeFalse();
     }
 
     [StaFact]

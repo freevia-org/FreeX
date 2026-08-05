@@ -99,7 +99,8 @@ public sealed class DialogLifecycleParityTests
                 showBrowseScrollbar: false,
                 kioskRestartAfterMilliseconds: 18_000,
                 showWithNarration: false,
-                showMediaControls: false).Should().BeTrue();
+                showMediaControls: false,
+                showMasterShapes: false).Should().BeTrue();
 
             editor.Presentation.UseSlideTimings.Should().BeFalse();
             editor.Presentation.ShowWithAnimation.Should().BeFalse();
@@ -109,8 +110,10 @@ public sealed class DialogLifecycleParityTests
             editor.Presentation.KioskRestartAfterMilliseconds.Should().Be(18_000);
             editor.Presentation.ShowWithNarration.Should().BeFalse();
             editor.Presentation.ShowMediaControls.Should().BeFalse();
+            editor.Presentation.ShowMasterShapes.Should().BeFalse();
             editor.Undo();
             editor.Presentation.UseSlideTimings.Should().BeTrue();
+            editor.Presentation.ShowMasterShapes.Should().BeTrue();
         }, CancellationToken.None);
     }
 

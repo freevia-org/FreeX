@@ -353,6 +353,34 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void SpecialTitlePlaceholders_RoundTripShowPrDefaultAndEnabledValue()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.ShowSpecialPlaceholdersOnTitleSlide = true;
+
+        using var output = new MemoryStream();
+        PptxPackageWriter.Write(presentation, output);
+        var bytes = output.ToArray();
+        var reopened = PptxPackageReader.Read(new MemoryStream(bytes));
+
+        reopened.ShowSpecialPlaceholdersOnTitleSlide.Should().BeTrue();
+        using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        using var properties = archive.GetEntry("ppt/presProps.xml")!.Open();
+        var showPr = XDocument.Load(properties).Descendants(XName.Get(
+            "showPr", "http://schemas.openxmlformats.org/presentationml/2006/main")).Single();
+        showPr.Attribute("showSpecialPlsOnTitleSld")!.Value.Should().Be("1");
+
+        var defaultPresentation = Presentation.CreateEmpty();
+        using var defaultOutput = new MemoryStream();
+        PptxPackageWriter.Write(defaultPresentation, defaultOutput);
+        using var defaultArchive = new ZipArchive(new MemoryStream(defaultOutput.ToArray()), ZipArchiveMode.Read);
+        using var defaultProperties = defaultArchive.GetEntry("ppt/presProps.xml")!.Open();
+        var defaultShowPr = XDocument.Load(defaultProperties).Descendants(XName.Get(
+            "showPr", "http://schemas.openxmlformats.org/presentationml/2006/main")).Single();
+        defaultShowPr.Attribute("showSpecialPlsOnTitleSld").Should().BeNull();
+    }
+
+    [Fact]
     public void BevelGeometryHelper_MapsSurfaceDimensionsToVisibleFootprint()
     {
         var dimensions = BevelGeometryHelper.GetRenderDimensions(

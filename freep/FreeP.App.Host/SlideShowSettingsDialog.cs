@@ -13,6 +13,7 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly CheckBox _showAnimationCheck;
     private readonly CheckBox _showNarrationCheck;
     private readonly CheckBox _showMediaControlsCheck;
+    private readonly CheckBox _showMasterShapesCheck;
     private readonly CheckBox _loopCheck;
     private readonly ComboBox _showTypeCombo;
     private readonly CheckBox _showScrollbarCheck;
@@ -55,6 +56,12 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             IsChecked = InitialState.ShowMediaControls,
             Margin = new Thickness(0, 0, 0, 8),
         };
+        _showMasterShapesCheck = new CheckBox
+        {
+            Content = "Show master graphics",
+            IsChecked = InitialState.ShowMasterShapes,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
         _loopCheck = new CheckBox
         {
             Content = "Loop until stopped",
@@ -85,6 +92,7 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         panel.Children.Add(_showAnimationCheck);
         panel.Children.Add(_showNarrationCheck);
         panel.Children.Add(_showMediaControlsCheck);
+        panel.Children.Add(_showMasterShapesCheck);
         panel.Children.Add(_loopCheck);
         panel.Children.Add(_showTypeCombo);
         panel.Children.Add(_showScrollbarCheck);
@@ -128,13 +136,15 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         bool showBrowseScrollbar = true,
         uint? kioskRestartAfterMilliseconds = null,
         bool showWithNarration = true,
-        bool showMediaControls = true)
+        bool showMediaControls = true,
+        bool showMasterShapes = true)
     {
         _useTimingsCheck.IsChecked = useSlideTimings;
         _showAnimationCheck.IsChecked = !showWithAnimation;
         _loopCheck.IsChecked = loopUntilStopped;
         _showNarrationCheck.IsChecked = showWithNarration;
         _showMediaControlsCheck.IsChecked = showMediaControls;
+        _showMasterShapesCheck.IsChecked = showMasterShapes;
         _showTypeCombo.SelectedIndex = (int)showType;
         _showScrollbarCheck.IsChecked = showBrowseScrollbar;
         _kioskRestartText.Text = kioskRestartAfterMilliseconds?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
@@ -152,7 +162,8 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             _showScrollbarCheck.IsChecked == true,
             ParseRestartMilliseconds(),
             _showNarrationCheck.IsChecked == true,
-            _showMediaControlsCheck.IsChecked == true);
+            _showMediaControlsCheck.IsChecked == true,
+            _showMasterShapesCheck.IsChecked == true);
         if (applied && IsLoaded)
             DialogResult = true;
         return applied;

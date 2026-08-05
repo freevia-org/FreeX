@@ -373,6 +373,9 @@ public static class PptxPackageReader
         presentation.ShowWithNarration = ReadBooleanOrDefault(showPr.Attribute("showNarration")?.Value, defaultValue: true);
         presentation.LoopUntilStopped = ReadBooleanOrDefault(showPr.Attribute("loop")?.Value, defaultValue: false);
         presentation.ShowMasterShapes = ReadBooleanOrDefault(showPr.Attribute("showMasterSp")?.Value, defaultValue: true);
+        presentation.ShowSpecialPlaceholdersOnTitleSlide = ReadBooleanOrDefault(
+            showPr.Attribute("showSpecialPlsOnTitleSld")?.Value,
+            defaultValue: false);
         var browse = showPr.Element(P + "browse");
         var kiosk = showPr.Element(P + "kiosk");
         presentation.ShowType = browse is not null

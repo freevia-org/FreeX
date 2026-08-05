@@ -306,6 +306,7 @@ public sealed class HeaderFooterCommandPlannerTests
         titleSlide.HfVisibility.ShowFooter.Should().BeFalse();
         titleSlide.HfVisibility.ShowSlideNum.Should().BeFalse();
         HeaderFooterPlaceholders(titleSlide).Should().BeEmpty();
+        editor.Presentation.ShowSpecialPlaceholdersOnTitleSlide.Should().BeFalse();
 
         var contentSlide = editor.Presentation.Slides[1];
         contentSlide.HfVisibility!.ShowDate.Should().BeTrue();

@@ -16,7 +16,8 @@ public static class SlideShowSettingsPlanner
             presentation.ShowBrowseScrollbar,
             presentation.KioskRestartAfterMilliseconds,
             presentation.ShowWithNarration,
-            presentation.ShowMediaControls);
+            presentation.ShowMediaControls,
+            presentation.ShowMasterShapes);
 
     public static bool TryApply(
         EditingSession editor,
@@ -27,7 +28,8 @@ public static class SlideShowSettingsPlanner
         bool showBrowseScrollbar = true,
         uint? kioskRestartAfterMilliseconds = null,
         bool showWithNarration = true,
-        bool showMediaControls = true) =>
+        bool showMediaControls = true,
+        bool showMasterShapes = true) =>
         editor.SetSlideShowSettings(
             useSlideTimings,
             showWithAnimation,
@@ -36,7 +38,8 @@ public static class SlideShowSettingsPlanner
             showBrowseScrollbar,
             kioskRestartAfterMilliseconds,
             showWithNarration,
-            showMediaControls);
+            showMediaControls,
+            showMasterShapes);
 }
 
 public sealed record SlideShowSettingsState(
@@ -47,4 +50,5 @@ public sealed record SlideShowSettingsState(
     bool ShowBrowseScrollbar = true,
     uint? KioskRestartAfterMilliseconds = null,
     bool ShowWithNarration = true,
-    bool ShowMediaControls = true);
+    bool ShowMediaControls = true,
+    bool ShowMasterShapes = true);
