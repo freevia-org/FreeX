@@ -316,7 +316,9 @@ public static class SlideShowHostPlanner
                 nav.SlideIndex,
                 animateSlide: controller.ShowWithAnimation,
                 stopAutoAdvance,
-                result),
+                result,
+                transitionDurationMs: nav.TransitionDurationMs,
+                useDestinationBackground: nav.UseDestinationBackground),
             AdvanceResult.AtEnd => SlideShowHostCommand.Close(stopAutoAdvance, result),
             _ => SlideShowHostCommand.HandledNoOp(stopAutoAdvance, advanceResult: result)
         };
@@ -336,7 +338,9 @@ public static class SlideShowHostPlanner
                 nav.SlideIndex,
                 animateSlide: controller.ShowWithAnimation,
                 stopAutoAdvance,
-                backResult: result),
+                backResult: result,
+                transitionDurationMs: nav.TransitionDurationMs,
+                useDestinationBackground: nav.UseDestinationBackground),
             BackResult.AtStart => SlideShowHostCommand.HandledNoOp(stopAutoAdvance, backResult: result),
             _ => SlideShowHostCommand.HandledNoOp(stopAutoAdvance, backResult: result)
         };
@@ -414,7 +418,11 @@ public static class SlideShowHostPlanner
         if (slides.Count == 0 || targetSlideIndex < 0)
             return SlideShowHostCommand.HandledNoOp(stopAutoAdvance: true);
 
-        controller.EnterZoomNavigation(targetSlideIndex, returnToParent);
+        controller.EnterZoomNavigation(
+            targetSlideIndex,
+            returnToParent,
+            transitionDurationMs,
+            showBackground);
         var slide = controller.CurrentSlide;
         return slide is null
             ? SlideShowHostCommand.HandledNoOp(stopAutoAdvance: true)

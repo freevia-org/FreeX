@@ -48,7 +48,7 @@ public sealed class SlideShowController
     /// Parent slides for active PowerPoint Zoom objects whose ReturnToParent flag is set.
     /// A stack permits a Zoom target to contain another return-to-parent Zoom.
     /// </summary>
-    private readonly Stack<int> _zoomReturnStack = new();
+    private readonly Stack<ZoomReturnPoint> _zoomReturnStack = new();
 
     // ── Construction ─────────────────────────────────────────────────────────────
 
@@ -124,9 +124,13 @@ public sealed class SlideShowController
 
         if (_zoomReturnStack.Count > 0)
         {
-            var parentIndex = _zoomReturnStack.Pop();
-            GoToSlide(parentIndex);
-            return new AdvanceResult.NavigateToSlide(parentIndex, _slides[parentIndex]);
+            var returnPoint = _zoomReturnStack.Pop();
+            GoToSlide(returnPoint.SlideIndex);
+            return new AdvanceResult.NavigateToSlide(
+                returnPoint.SlideIndex,
+                _slides[returnPoint.SlideIndex],
+                returnPoint.TransitionDurationMs,
+                returnPoint.ShowBackground);
         }
 
         if (CurrentSlideIndex < _slides.Count - 1)
@@ -153,9 +157,13 @@ public sealed class SlideShowController
     {
         if (_zoomReturnStack.Count > 0)
         {
-            var parentIndex = _zoomReturnStack.Pop();
-            GoToSlide(parentIndex);
-            return new BackResult.NavigateToSlide(parentIndex, _slides[parentIndex]);
+            var returnPoint = _zoomReturnStack.Pop();
+            GoToSlide(returnPoint.SlideIndex);
+            return new BackResult.NavigateToSlide(
+                returnPoint.SlideIndex,
+                _slides[returnPoint.SlideIndex],
+                returnPoint.TransitionDurationMs,
+                returnPoint.ShowBackground);
         }
 
         if (CurrentSlideIndex <= 0)
@@ -178,19 +186,33 @@ public sealed class SlideShowController
     /// Enters a Zoom target, optionally recording the current slide for PowerPoint's
     /// Return to Parent behavior.
     /// </summary>
-    public void EnterZoomNavigation(int targetIndex, bool returnToParent)
+    public void EnterZoomNavigation(
+        int targetIndex,
+        bool returnToParent,
+        int? transitionDurationMs = null,
+        bool showBackground = true)
     {
         if (_slides.Count == 0)
             return;
 
         if (returnToParent && CurrentSlideIndex >= 0)
-            _zoomReturnStack.Push(CurrentSlideIndex);
+        {
+            _zoomReturnStack.Push(new ZoomReturnPoint(
+                CurrentSlideIndex,
+                transitionDurationMs,
+                showBackground));
+        }
 
         GoToSlide(targetIndex);
     }
 
     /// <summary>Clears any active Zoom return path before an unrelated direct jump.</summary>
     public void ClearZoomReturnPath() => _zoomReturnStack.Clear();
+
+    private sealed record ZoomReturnPoint(
+        int SlideIndex,
+        int? TransitionDurationMs,
+        bool ShowBackground);
 
     /// <summary>
     /// Starts the current slide's animation sequence at a selected flat animation
@@ -486,7 +508,19 @@ public abstract class AdvanceResult
     {
         public int SlideIndex { get; }
         public Slide Slide { get; }
-        public NavigateToSlide(int index, Slide slide) { SlideIndex = index; Slide = slide; }
+        public int? TransitionDurationMs { get; }
+        public bool UseDestinationBackground { get; }
+        public NavigateToSlide(
+            int index,
+            Slide slide,
+            int? transitionDurationMs = null,
+            bool useDestinationBackground = true)
+        {
+            SlideIndex = index;
+            Slide = slide;
+            TransitionDurationMs = transitionDurationMs;
+            UseDestinationBackground = useDestinationBackground;
+        }
     }
 
     /// <summary>Already at the end of the presentation; nothing more to do.</summary>
@@ -507,7 +541,19 @@ public abstract class BackResult
     {
         public int SlideIndex { get; }
         public Slide Slide { get; }
-        public NavigateToSlide(int index, Slide slide) { SlideIndex = index; Slide = slide; }
+        public int? TransitionDurationMs { get; }
+        public bool UseDestinationBackground { get; }
+        public NavigateToSlide(
+            int index,
+            Slide slide,
+            int? transitionDurationMs = null,
+            bool useDestinationBackground = true)
+        {
+            SlideIndex = index;
+            Slide = slide;
+            TransitionDurationMs = transitionDurationMs;
+            UseDestinationBackground = useDestinationBackground;
+        }
     }
 
     /// <summary>Already on the first slide; nothing to go back to.</summary>
