@@ -1231,7 +1231,7 @@ internal static class FreeWRibbonCommands
         // Insert tab — References: mark the selection (or a prompted term) for the document index, and
         // insert an alphabetical index built from the marked terms at the caret (reversibly via the bus).
         registry.Register("freew.index-mark", new MarkIndexEntryCommand(editor));
-        registry.Register("freew.index-insert", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertIndex(); }));
+        registry.Register("freew.index-insert", new InsertIndexCommand(editor));
         registry.Register("freew.index-refresh", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshIndex(); }));
         // Insert tab — References: generate a Table of Figures from the document's figure captions at the
         // caret, and rebuild it in place (remove the prior region + re-insert). Both route through the bus.
@@ -5406,6 +5406,23 @@ internal static class FreeWRibbonCommands
                 editor.MarkAllIndexEntries(seed, result.Mark);
             else
                 editor.MarkIndexEntry(result.Mark);
+        }
+    }
+
+    // References > Index > Insert Index: choose the optional XE identifier whose entries should be
+    // included. A blank identifier preserves Word's default index behavior.
+    private sealed class InsertIndexCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var result = InsertIndexDialog.Prompt(
+                Window.GetWindow(editor),
+                InsertIndexDialogPlanner.BuildInitialState());
+            if (result is null)
+                return;
+
+            editor.InsertIndex(result.Identifier);
         }
     }
 
