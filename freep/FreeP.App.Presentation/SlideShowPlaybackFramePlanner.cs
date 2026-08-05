@@ -232,6 +232,10 @@ public static class SlideShowPlaybackFramePlanner
         var playbackDurationMs = ResolvePlaybackDuration(plan);
         var isComplete = !plan.RepeatIndefinitely && localElapsedMs >= playbackDurationMs;
         var progress = ResolvePlaybackProgress(plan, localElapsedMs, durationMs, isComplete);
+        progress = SlideShowPlaybackPlanner.ApplyTimingEasing(
+            progress,
+            plan.Acceleration,
+            plan.Deceleration);
         var opacity = ResolveOpacity(plan, progress, isBeforeStart);
         var (scaleX, scaleY) = ResolveScaleAxes(plan, progress);
         var scale = scaleX;

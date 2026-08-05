@@ -3313,12 +3313,17 @@ public static class DocxWriter
                 {
                     WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "begin"))),
                     WithProps(new XElement(W + "instrText",
-                        new XAttribute(XNamespace.Xml + "space", "preserve"), SanitizeXmlText(complex.Instruction))),
-                    WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "separate")))
+                        new XAttribute(XNamespace.Xml + "space", "preserve"), SanitizeXmlText(complex.Instruction)))
                 };
-                if (fieldRun.Text.Length > 0)
-                    fieldElements.Add(WithProps(new XElement(W + "t",
-                        new XAttribute(XNamespace.Xml + "space", "preserve"), fieldRun.Text)));
+                if (complex.Keyword != "XE")
+                {
+                    fieldElements.Add(WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "separate"))));
+                    if (fieldRun.Text.Length > 0)
+                    {
+                        fieldElements.Add(WithProps(new XElement(W + "t",
+                            new XAttribute(XNamespace.Xml + "space", "preserve"), fieldRun.Text)));
+                    }
+                }
                 fieldElements.Add(WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "end"))));
 
                 if (complex.Keyword == "CITATION")

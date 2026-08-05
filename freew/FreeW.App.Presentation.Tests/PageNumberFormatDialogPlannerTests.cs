@@ -95,6 +95,32 @@ public sealed class PageNumberFormatDialogPlannerTests
     }
 
     [Fact]
+    public void BuildBlockPageReferenceResolver_UsesSectionRestartAndFormat()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var frontMatterPage = document.Page.Clone();
+        frontMatterPage.PageNumberFormat = PageNumberFormat.LowerRoman;
+        frontMatterPage.PageNumberStartAt = 1;
+        document.Page.PageNumberFormat = PageNumberFormat.Decimal;
+        document.Page.PageNumberStartAt = 1;
+        document.Blocks.Add(new Paragraph("Front target") { BookmarkName = "front" });
+        document.Blocks.Add(new Paragraph("Section end")
+        {
+            SectionBreak = new Section(frontMatterPage, SectionBreakKind.NextPage),
+        });
+        document.Blocks.Add(new Paragraph("Main target") { BookmarkName = "main" });
+
+        var resolver = PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
+            document,
+            blockIndex => blockIndex < 2 ? 1 : 2);
+
+        resolver(0).Should().Be("i");
+        resolver(2).Should().Be("1");
+        resolver(3).Should().BeNull();
+    }
+
+    [Fact]
     public void BuildDisplayPlans_PrefixesPageNumbersFromMappedHeadingOutline()
     {
         var document = TextDocument.CreateEmpty();

@@ -162,6 +162,26 @@ public sealed class ReferencesTabTests
         entries.Count(t => t != TableOfContents.HeadingText).Should().Be(2, "now two heading entries");
     }
 
+    [Fact]
+    public void UpdateTableOfContents_UsesLogicalPageLabelOfPlacedHeading()
+    {
+        var view = new DocumentView();
+        view.Document.Blocks.Clear();
+        view.Document.Blocks.Add(new Paragraph(TableOfContents.HeadingText) { StyleId = TableOfContents.HeadingStyleId });
+        view.Document.Blocks.Add(new Paragraph("Old Heading\t9") { StyleId = TableOfContents.EntryStyleId(1) });
+        view.Document.Blocks.Add(DocumentOps.CreatePageBreak());
+        view.Document.Blocks.Add(Heading("Chapter Two", 1));
+        view.Document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        view.Document.Page.PageNumberStartAt = 4;
+
+        view.UpdateTableOfContents();
+
+        view.Document.Blocks.Where(TableOfContents.IsTocParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Chapter Two\tV");
+    }
+
     // ── Caption ─────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -431,6 +451,42 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void UpdateFields_page_reference_uses_target_physical_page()
+    {
+        var view = ViewWith(
+            new Paragraph
+            {
+                Runs =
+                {
+                    new Run("See page "),
+                    Run.CrossReferenceFieldRun(
+                        new CrossReferenceField(CrossRefFieldKind.PageRef, "_Ref2", CrossRefInsertAs.PageNumber, Hyperlink: false),
+                        "9"),
+                    new Run(" and imported "),
+                    Run.ComplexFieldRun(" PAGEREF _Ref2 ", "9")
+                }
+            },
+            DocumentOps.CreatePageBreak(),
+            new Paragraph("Target")
+            {
+                BookmarkName = "_Ref2",
+            });
+        view.Document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        view.Document.Page.PageNumberStartAt = 4;
+
+        view.UpdateFields();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.CrossReference is not null)
+            .Text.Should().Be("V");
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.ComplexField?.Keyword == "PAGEREF")
+            .Text.Should().Be("V");
+    }
+
+    [Fact]
     public void UpdateFields_refreshes_stale_styleref_cached_text()
     {
         var view = ViewWith(
@@ -648,7 +704,7 @@ public sealed class ReferencesTabTests
             .Where(DocumentIndex.IsIndexParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Equal("Index", "Alpha", "Beta");
+            .Equal("Index", "Alpha, 1", "Beta, 1");
         view.Document.Blocks.OfType<Paragraph>()
             .Count(paragraph => paragraph.StyleId == DocumentIndex.HeadingStyleId)
             .Should()
@@ -669,11 +725,56 @@ public sealed class ReferencesTabTests
             .Where(TableOfFigures.IsTableOfFiguresParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Equal("Table of Figures", "Figure 1: First", "Figure 2: Second");
+            .Equal("Table of Figures", "Figure 1: First\t1", "Figure 2: Second\t1");
         view.Document.Blocks.OfType<Paragraph>()
             .Count(paragraph => paragraph.StyleId == TableOfFigures.HeadingStyleId)
             .Should()
             .Be(1);
+    }
+
+    [Fact]
+    public void Index_refresh_aggregates_logical_pages_from_xe_occurrences()
+    {
+        var view = ViewWith(
+            new Paragraph(DocumentIndex.HeadingText) { StyleId = DocumentIndex.HeadingStyleId },
+            new Paragraph("Old, 9") { StyleId = DocumentIndex.EntryStyleId },
+            new Paragraph { Runs = { new Run("First"), DocumentIndex.MarkRun("Alpha") } },
+            DocumentOps.CreatePageBreak(),
+            new Paragraph
+            {
+                Runs = { new Run("Second"), DocumentIndex.MarkRun("Alpha"), DocumentIndex.MarkRun("Beta") }
+            });
+        view.Document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        view.Document.Page.PageNumberStartAt = 4;
+
+        view.RefreshIndex();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(DocumentIndex.IsIndexParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Alpha, IV, V", "Beta, V");
+    }
+
+    [Fact]
+    public void Table_of_figures_refresh_uses_caption_logical_page_label()
+    {
+        var view = ViewWith(
+            new Paragraph(TableOfFigures.HeadingText(CaptionLabel.Figure))
+            {
+                StyleId = TableOfFigures.HeadingStyleId
+            },
+            new Paragraph("Old Figure\t9") { StyleId = TableOfFigures.EntryStyleId },
+            DocumentOps.CreatePageBreak(),
+            Captions.BuildCaption(CaptionLabel.Figure, 1, "Architecture"));
+        view.Document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        view.Document.Page.PageNumberStartAt = 4;
+
+        view.RefreshTableOfFigures();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Figure 1: Architecture\tV");
     }
 
     [Fact]
@@ -689,7 +790,7 @@ public sealed class ReferencesTabTests
             .Where(TableOfFigures.IsTableOfFiguresParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Equal("Table of Equations", "Equation 1: Energy");
+            .Equal("Table of Equations", "Equation 1: Energy\t1");
 
         view.RefreshTableOfFigures("Scheme");
 
@@ -697,7 +798,7 @@ public sealed class ReferencesTabTests
             .Where(TableOfFigures.IsTableOfFiguresParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Equal("Table of Schemes", "Scheme 1: Flow");
+            .Equal("Table of Schemes", "Scheme 1: Flow\t1");
     }
 
     [Fact]
@@ -715,7 +816,7 @@ public sealed class ReferencesTabTests
             .Where(TableOfFigures.IsTableOfFiguresParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Equal("Table of Equations", "Equation 1: First", "Equation 2: Second");
+            .Equal("Table of Equations", "Equation 1: First\t1", "Equation 2: Second\t1");
     }
 
     [Fact]
@@ -1107,7 +1208,7 @@ public sealed class ReferencesTabTests
             .Where(DocumentIndex.IsIndexParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Contain("Alpha");
+            .Contain("Alpha, 1");
 
         var authoritiesView = ViewWith(new Paragraph("Brown v. Board"));
         var authoritiesRegistry = FreeWRibbon.BuildRegistry(authoritiesView, NoopCallbacks() with

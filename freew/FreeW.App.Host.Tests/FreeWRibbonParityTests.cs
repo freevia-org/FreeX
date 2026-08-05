@@ -365,7 +365,33 @@ public sealed class FreeWRibbonParityTests
             .Select(paragraph => paragraph.PlainText)
             .ToList();
         tableText.Should().StartWith("Table of Equations");
-        tableText.Skip(1).Should().BeEquivalentTo("Equation 1: First", "Equation 2: Second");
+        tableText.Skip(1).Should().BeEquivalentTo("Equation 1: First\t1", "Equation 2: Second\t1");
+    }
+
+    [StaFact]
+    public void TableOfFiguresRefresh_UsesCaptionLogicalPageLabel()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Blocks.Add(new Paragraph(TableOfFigures.HeadingText(CaptionLabel.Figure))
+        {
+            StyleId = TableOfFigures.HeadingStyleId
+        });
+        model.Blocks.Add(new Paragraph("Old Figure\t9") { StyleId = TableOfFigures.EntryStyleId });
+        model.Blocks.Add(DocumentOps.CreatePageBreak());
+        model.Blocks.Add(Captions.BuildCaption(CaptionLabel.Figure, 1, "Architecture"));
+        model.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        model.Page.PageNumberStartAt = 4;
+
+        var editor = new DocumentView();
+        editor.LoadModel(model);
+
+        editor.RefreshTableOfFigures();
+
+        editor.Model.Blocks.OfType<Paragraph>()
+            .Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Figure 1: Architecture\tV");
     }
 
     [StaFact]
@@ -397,7 +423,7 @@ public sealed class FreeWRibbonParityTests
             .Where(DocumentIndex.IsIndexParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Equal("Index", "Alpha", "Beta", "Gamma");
+            .Equal("Index", "Alpha, 1", "Beta, 1", "Gamma, 1");
         editor.Model.Blocks.OfType<Paragraph>()
             .Count(paragraph => paragraph.StyleId == DocumentIndex.HeadingStyleId)
             .Should()

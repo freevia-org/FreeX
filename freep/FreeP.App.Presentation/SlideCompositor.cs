@@ -1271,6 +1271,8 @@ public static class SlideCompositor
                 var borderRight  = ResolveOneBorder(cell.Borders?.Right);
                 var borderTop    = ResolveOneBorder(cell.Borders?.Top);
                 var borderBottom = ResolveOneBorder(cell.Borders?.Bottom);
+                var borderDiagonalDown = ResolveOneBorder(cell.Borders?.DiagonalDown);
+                var borderDiagonalUp = ResolveOneBorder(cell.Borders?.DiagonalUp);
 
                 // Effective text color (for cells that have no explicit run color).
                 var effectiveTextColor = table.ComputeEffectiveTextColor(r, c);
@@ -1304,6 +1306,8 @@ public static class SlideCompositor
                     BorderRight  = borderRight,
                     BorderTop    = borderTop,
                     BorderBottom = borderBottom,
+                    BorderDiagonalDown = borderDiagonalDown,
+                    BorderDiagonalUp = borderDiagonalUp,
                     Text         = textLayout,
                     Anchor       = cell.Anchor ?? TableCellAnchor.Top
                 });

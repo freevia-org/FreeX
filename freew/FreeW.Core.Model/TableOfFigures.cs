@@ -7,7 +7,8 @@ namespace FreeW.Core.Model;
 /// <para>
 /// <see cref="Build"/> produces ordinary styled <see cref="Paragraph"/>s — a "Table of Figures"
 /// (or "Table of Tables") heading followed by one paragraph per caption of the requested
-/// <see cref="CaptionLabel"/>, in document order, each carrying the caption's text. The paragraphs use
+/// <see cref="CaptionLabel"/>, in document order, each carrying the caption's text and page reference.
+/// The paragraphs use
 /// dedicated style ids (<see cref="HeadingStyleId"/> and <see cref="EntryStyleId"/>) so they:
 /// </para>
 /// <list type="bullet">
@@ -50,19 +51,26 @@ public static class TableOfFigures
     /// <summary>
     /// Builds the table-of-figures paragraphs for <paramref name="document"/>: a heading
     /// (<see cref="HeadingStyleId"/>, text from <see cref="HeadingText"/>) followed by one paragraph per
-    /// caption of <paramref name="label"/> found in document order, each carrying the caption's text and
-    /// the <see cref="EntryStyleId"/> style. A document with no matching captions yields just the heading
+    /// caption of <paramref name="label"/> found in document order. Each entry carries the caption text,
+    /// a dotted right tab, the caption page label, and the <see cref="EntryStyleId"/> style. A document
+    /// with no matching captions yields just the heading
     /// paragraph. Deterministic and side-effect free — it never mutates <paramref name="document"/>.
     /// </summary>
-    public static IReadOnlyList<Paragraph> Build(TextDocument document, CaptionLabel label = CaptionLabel.Figure)
+    public static IReadOnlyList<Paragraph> Build(
+        TextDocument document,
+        CaptionLabel label = CaptionLabel.Figure,
+        Func<int, string?>? pageTextOf = null)
     {
-        return Build(document, Captions.LabelText(label));
+        return Build(document, Captions.LabelText(label), pageTextOf);
     }
 
     /// <summary>
     /// Builds the table-of-figures paragraphs for a built-in or custom caption label.
     /// </summary>
-    public static IReadOnlyList<Paragraph> Build(TextDocument document, string labelText)
+    public static IReadOnlyList<Paragraph> Build(
+        TextDocument document,
+        string labelText,
+        Func<int, string?>? pageTextOf = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         var label = Captions.NormalizeLabelText(labelText);
@@ -72,16 +80,51 @@ public static class TableOfFigures
             new(HeadingText(label)) { StyleId = HeadingStyleId }
         };
 
-        foreach (var block in document.Blocks)
+        var entryRightTabStopPt = Math.Max(
+            0,
+            document.Page.WidthPt - document.Page.MarginLeftPt - document.Page.MarginRightPt);
+        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
         {
-            if (block is Paragraph paragraph
+            if (document.Blocks[blockIndex] is Paragraph paragraph
                 && Captions.IsCaptionOf(paragraph, label))
             {
-                paragraphs.Add(new Paragraph(paragraph.PlainText) { StyleId = EntryStyleId });
+                var pageText = pageTextOf?.Invoke(blockIndex);
+                if (string.IsNullOrEmpty(pageText))
+                {
+                    pageText = (CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex) ?? 1)
+                        .ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+
+                paragraphs.Add(CreateEntryParagraph(paragraph.PlainText, pageText, entryRightTabStopPt));
             }
         }
 
         return paragraphs;
+    }
+
+    private static Paragraph CreateEntryParagraph(
+        string captionText,
+        string pageText,
+        double entryRightTabStopPt)
+    {
+        var paragraph = new Paragraph
+        {
+            StyleId = EntryStyleId,
+            Formatting = ParagraphFormatting.Default with
+            {
+                TabStops =
+                [
+                    new TabStop(
+                        entryRightTabStopPt,
+                        TabStopAlignment.Right,
+                        TabLeader.Dots)
+                ]
+            }
+        };
+        paragraph.Runs.Add(new Run(captionText));
+        paragraph.Runs.Add(new Run("\t"));
+        paragraph.Runs.Add(new Run(pageText));
+        return paragraph;
     }
 
     /// <summary>

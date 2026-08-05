@@ -365,6 +365,8 @@ internal static class PresentationModelCloneHelper
                 Right = source.Right,
                 Top = source.Top,
                 Bottom = source.Bottom,
+                DiagonalDown = source.DiagonalDown,
+                DiagonalUp = source.DiagonalUp,
             };
 
     private static TableStyleFlags CloneTableStyleFlags(TableStyleFlags source) => new()

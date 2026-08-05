@@ -6,7 +6,7 @@ public static class ZoomFrameBorderPatternCatalog
     public static IReadOnlyList<string> Presets { get; } =
         new[]
         {
-            "pct5", "pct10", "pct20", "pct25", "pct30", "pct40", "pct50", "pct60", "pct75", "pct90",
+            "pct0", "pct5", "pct10", "pct20", "pct25", "pct30", "pct40", "pct50", "pct60", "pct75", "pct90", "pct100",
             "horzStripe", "vertStripe", "ltHorz", "ltVert", "dashHorz", "dashVert",
             "diagStripe", "ltDnDiag", "dnDiag", "upDiag", "ltUpDiag", "cross", "diagCross",
             "smConfetti", "smGrid", "wave", "trellis",

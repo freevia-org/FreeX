@@ -1206,13 +1206,15 @@ public static class SmartArtEditingPlanner
                 firstShape.AddBeforeSelf(groupProperties);
         }
 
-        foreach (var staleShape in sourceSpTree.Elements().Where(IsDrawingShapeElement).ToList())
-            staleShape.Remove();
-
         var generatedShapes = generatedSpTree.Elements()
             .Where(IsDrawingShapeElement)
             .Select(element => new XElement(element))
             .ToArray();
+        PreserveAuthoredDrawingVisuals(generatedShapes, sourceSpTree);
+
+        foreach (var staleShape in sourceSpTree.Elements().Where(IsDrawingShapeElement).ToList())
+            staleShape.Remove();
+
         var extensionList = sourceSpTree.Elements()
             .FirstOrDefault(element => element.Name.LocalName == "extLst");
         if (extensionList is null)
@@ -1221,6 +1223,113 @@ public static class SmartArtEditingPlanner
             extensionList.AddBeforeSelf(generatedShapes);
 
         return sourceDocument;
+    }
+
+    private static void PreserveAuthoredDrawingVisuals(
+        IReadOnlyList<XElement> generatedShapes,
+        XElement sourceSpTree)
+    {
+        var sourceByModelId = sourceSpTree
+            .Descendants()
+            .Where(IsDrawingShapeElement)
+            .Select(element => (ModelId: element.Attribute("modelId")?.Value?.Trim(), Element: element))
+            .Where(item => !string.IsNullOrWhiteSpace(item.ModelId))
+            .GroupBy(item => item.ModelId!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().Element, StringComparer.Ordinal);
+
+        foreach (var generatedShape in generatedShapes)
+        {
+            var modelId = generatedShape.Attribute("modelId")?.Value?.Trim();
+            if (string.IsNullOrWhiteSpace(modelId) ||
+                !sourceByModelId.TryGetValue(modelId, out var sourceShape))
+            {
+                continue;
+            }
+
+            var sourceProperties = sourceShape.Element(Dsp + "spPr");
+            var generatedProperties = generatedShape.Element(Dsp + "spPr");
+            if (sourceProperties is not null && generatedProperties is not null)
+            {
+                foreach (var name in new[] { A + "effectLst", A + "scene3d", A + "sp3d", A + "extLst" })
+                {
+                    var authoredPayload = sourceProperties.Element(name);
+                    if (authoredPayload is null)
+                        continue;
+
+                    generatedProperties.Element(name)?.Remove();
+                    generatedProperties.Add(new XElement(authoredPayload));
+                }
+            }
+
+            PreserveAuthoredTextFormatting(generatedShape, sourceShape);
+        }
+    }
+
+    private static void PreserveAuthoredTextFormatting(
+        XElement generatedShape,
+        XElement sourceShape)
+    {
+        var sourceBody = sourceShape.Element(Dsp + "txBody");
+        var generatedBody = generatedShape.Element(Dsp + "txBody");
+        if (sourceBody is null || generatedBody is null)
+            return;
+
+        foreach (var name in new[] { A + "bodyPr", A + "lstStyle" })
+        {
+            var authored = sourceBody.Element(name);
+            if (authored is null)
+                continue;
+
+            var generated = generatedBody.Element(name);
+            if (generated is not null)
+                generated.ReplaceWith(new XElement(authored));
+            else
+                generatedBody.AddFirst(new XElement(authored));
+        }
+
+        var sourceParagraphs = sourceBody.Elements(A + "p").ToArray();
+        var generatedParagraphs = generatedBody.Elements(A + "p").ToArray();
+        for (var paragraphIndex = 0;
+             paragraphIndex < Math.Min(sourceParagraphs.Length, generatedParagraphs.Length);
+             paragraphIndex++)
+        {
+            var sourceParagraph = sourceParagraphs[paragraphIndex];
+            var generatedParagraph = generatedParagraphs[paragraphIndex];
+            CopyTextChild(sourceParagraph, generatedParagraph, A + "pPr", insertAtStart: true);
+            CopyTextChild(sourceParagraph, generatedParagraph, A + "endParaRPr", insertAtStart: false);
+
+            var sourceRuns = sourceParagraph.Elements(A + "r").ToArray();
+            var generatedRuns = generatedParagraph.Elements(A + "r").ToArray();
+            for (var runIndex = 0;
+                 runIndex < Math.Min(sourceRuns.Length, generatedRuns.Length);
+                 runIndex++)
+            {
+                CopyTextChild(sourceRuns[runIndex], generatedRuns[runIndex], A + "rPr", insertAtStart: true);
+            }
+        }
+    }
+
+    private static void CopyTextChild(
+        XElement source,
+        XElement generated,
+        XName name,
+        bool insertAtStart)
+    {
+        var authored = source.Element(name);
+        if (authored is null)
+            return;
+
+        var existing = generated.Element(name);
+        if (existing is not null)
+        {
+            existing.ReplaceWith(new XElement(authored));
+            return;
+        }
+
+        if (insertAtStart)
+            generated.AddFirst(new XElement(authored));
+        else
+            generated.Add(new XElement(authored));
     }
 
     private static bool IsDrawingShapeElement(XElement element) =>

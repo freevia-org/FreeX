@@ -28,6 +28,8 @@ public sealed class AnimationPresetRoundTripTests
             Preset = AnimationPreset.Pulse,
             RepeatCount = 3,
             AutoReverse = true,
+            Acceleration = 25000,
+            Deceleration = 35000,
         });
 
         using var first = new MemoryStream();
@@ -37,10 +39,14 @@ public sealed class AnimationPresetRoundTripTests
         animation.RepeatCount.Should().Be(3);
         animation.RepeatIndefinitely.Should().BeFalse();
         animation.AutoReverse.Should().BeTrue();
+        animation.Acceleration.Should().Be(25000);
+        animation.Deceleration.Should().Be(35000);
 
         var clone = SlideCloner.CloneSlide(reloaded.Slides[0]).Animations.Single();
         clone.RepeatCount.Should().Be(3);
         clone.AutoReverse.Should().BeTrue();
+        clone.Acceleration.Should().Be(25000);
+        clone.Deceleration.Should().Be(35000);
 
         using var second = new MemoryStream();
         PptxPackageWriter.Write(reloaded, second);
@@ -53,6 +59,8 @@ public sealed class AnimationPresetRoundTripTests
                 && element.Attribute("nodeType")?.Value == "withEffect");
         cTn.Attribute("repeatCount")!.Value.Should().Be("3");
         cTn.Attribute("autoRev")!.Value.Should().Be("1");
+        cTn.Attribute("accel")!.Value.Should().Be("25000");
+        cTn.Attribute("decel")!.Value.Should().Be("35000");
     }
 
     [Fact]

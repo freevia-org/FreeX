@@ -760,6 +760,10 @@ public sealed class TableCellOp
     public ResolvedOutline BorderTop    { get; init; } = ResolvedOutline.None.Instance;
     /// <summary>Bottom border.</summary>
     public ResolvedOutline BorderBottom { get; init; } = ResolvedOutline.None.Instance;
+    /// <summary>Top-left to bottom-right diagonal border.</summary>
+    public ResolvedOutline BorderDiagonalDown { get; init; } = ResolvedOutline.None.Instance;
+    /// <summary>Bottom-left to top-right diagonal border.</summary>
+    public ResolvedOutline BorderDiagonalUp { get; init; } = ResolvedOutline.None.Instance;
 
     /// <summary>Text to render in this cell, or null if the cell is empty.</summary>
     public ResolvedTextLayout? Text { get; init; }

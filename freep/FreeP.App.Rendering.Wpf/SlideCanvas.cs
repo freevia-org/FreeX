@@ -1049,6 +1049,10 @@ public sealed class SlideCanvas : FrameworkElement
             new Point(rect.Left,  rect.Top), new Point(rect.Left,  rect.Bottom));
         DrawCellBorder(dc, cell.BorderRight,
             new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom));
+        DrawCellBorder(dc, cell.BorderDiagonalDown,
+            new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom));
+        DrawCellBorder(dc, cell.BorderDiagonalUp,
+            new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Top));
 
         // Text (respecting cell vertical anchor + insets).
         if (cell.Text is not null)

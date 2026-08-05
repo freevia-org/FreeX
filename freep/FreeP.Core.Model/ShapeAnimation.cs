@@ -45,6 +45,12 @@ public sealed class ShapeAnimation
     /// <summary>Whether each repeat reverses direction before the next pass.</summary>
     public bool AutoReverse { get; set; }
 
+    /// <summary>Authored OOXML acceleration timing (p:cTn/@accel, 0..100000).</summary>
+    public int? Acceleration { get; set; }
+
+    /// <summary>Authored OOXML deceleration timing (p:cTn/@decel, 0..100000).</summary>
+    public int? Deceleration { get; set; }
+
     /// <summary>Optional direction modifier (e.g. FlyIn from left vs. right).</summary>
     public AnimationDirection? Direction { get; set; }
 

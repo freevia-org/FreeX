@@ -54,9 +54,13 @@ public static class TableCellBorderOptionParser
             "right" => TableCellBorderSide.Right,
             "top" => TableCellBorderSide.Top,
             "bottom" => TableCellBorderSide.Bottom,
+            "diagonaldown" or "diagonal-down" or "tl-to-br" => TableCellBorderSide.DiagonalDown,
+            "diagonalup" or "diagonal-up" or "bl-to-tr" => TableCellBorderSide.DiagonalUp,
             _ => default,
         };
 
-        return value.Trim().ToLowerInvariant() is "left" or "right" or "top" or "bottom";
+        return value.Trim().ToLowerInvariant() is "left" or "right" or "top" or "bottom"
+            or "diagonaldown" or "diagonal-down" or "tl-to-br"
+            or "diagonalup" or "diagonal-up" or "bl-to-tr";
     }
 }

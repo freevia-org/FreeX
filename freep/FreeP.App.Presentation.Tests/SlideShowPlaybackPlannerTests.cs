@@ -1259,6 +1259,8 @@ public sealed class SlideShowPlaybackPlannerTests
                 Preset = AnimationPreset.Pulse,
                 RepeatCount = 3,
                 AutoReverse = true,
+                Acceleration = 25000,
+                Deceleration = 35000,
                 DurationMs = 240
             },
             startDelayMs: 15);
@@ -1266,7 +1268,22 @@ public sealed class SlideShowPlaybackPlannerTests
         plan.RepeatCount.Should().Be(3);
         plan.RepeatIndefinitely.Should().BeFalse();
         plan.AutoReverse.Should().BeTrue();
+        plan.Acceleration.Should().Be(25000);
+        plan.Deceleration.Should().Be(35000);
         plan.DelayMs.Should().Be(15);
+    }
+
+    [Fact]
+    public void TimingEasing_UsesAuthoredAccelerationAndDeceleration()
+    {
+        SlideShowPlaybackPlanner.ApplyTimingEasing(0.125, 25000, 35000)
+            .Should().BeApproximately(0.125, 0.0001);
+        SlideShowPlaybackPlanner.ApplyTimingEasing(0.5, 25000, 35000)
+            .Should().BeApproximately(0.5, 0.0001);
+        SlideShowPlaybackPlanner.ApplyTimingEasing(0.875, 25000, 35000)
+            .Should().BeApproximately(0.8979592, 0.0001);
+        SlideShowPlaybackPlanner.ApplyTimingEasing(0.5, null, null)
+            .Should().Be(0.5);
     }
 
     [Fact]

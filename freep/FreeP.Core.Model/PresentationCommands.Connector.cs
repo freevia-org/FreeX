@@ -110,8 +110,9 @@ public sealed class UpdateConnectorBoundsCommand : IPresentationCommand
 /// 3. Prefer a 2-segment L-route (horizontal + vertical) when S and E are horizontally
 ///    or vertically aligned within a gap. Otherwise use a 3-segment Z-route (H/V/H or V/H/V)
 ///    with the midpoint chosen as the midspan between the two shapes.
-/// 4. Full obstacle-avoidance graph routing is OUT OF SCOPE — only the two endpoint shapes
-///    are considered, and the route prefers to exit/enter perpendicular to the attached edge.
+/// 4. When non-endpoint obstacle rectangles are supplied, a Manhattan visibility graph
+///    detours around them while preserving the endpoint exit/entry directions. With no
+///    obstacles, the compact endpoint-only route remains unchanged.
 ///
 /// Returns a list of waypoints in EMU including the start and end sites:
 ///   [start, ... bend points ..., end]
@@ -132,7 +133,8 @@ public static class ElbowRouter
         (long X, long Y) start,
         (long X, long Y) end,
         (long L, long T, long R, long B)? startShapeRect,
-        (long L, long T, long R, long B)? endShapeRect)
+        (long L, long T, long R, long B)? endShapeRect,
+        IReadOnlyList<(long L, long T, long R, long B)>? obstacles = null)
     {
         // Trivial same-point
         if (start.X == end.X && start.Y == end.Y)
@@ -166,7 +168,9 @@ public static class ElbowRouter
                 gapMidY = (topShapeBottom + bottomShapeTop) / 2;
         }
 
-        return BuildRoute(start, end, exitDir, entryDir, gapMidX, gapMidY);
+        var route = BuildRoute(start, end, exitDir, entryDir, gapMidX, gapMidY);
+        return TryRouteAroundObstacles(route, start, end, exitDir, entryDir, obstacles)
+            ?? route;
     }
 
     // ── Exit direction inference ───────────────────────────────────────────────────
@@ -261,6 +265,241 @@ public static class ElbowRouter
         return pts;
     }
 
+    private readonly record struct RouteState(int Node, int Direction);
+
+    /// <summary>
+    /// Re-routes a base Manhattan path through a small orthogonal visibility graph when
+    /// the base path intersects an intervening shape. Grid coordinates are the endpoints
+    /// plus the outside edges of every obstacle, so the result stays deterministic and
+    /// does not introduce arbitrary sampling resolution into the document model.
+    /// </summary>
+    private static List<(long X, long Y)>? TryRouteAroundObstacles(
+        IReadOnlyList<(long X, long Y)> baseRoute,
+        (long X, long Y) start,
+        (long X, long Y) end,
+        Direction exitDirection,
+        Direction entryDirection,
+        IReadOnlyList<(long L, long T, long R, long B)>? obstacles)
+    {
+        var rects = obstacles?
+            .Where(rect => rect.R > rect.L && rect.B > rect.T)
+            .Select(InflateObstacle)
+            .Distinct()
+            .ToArray();
+        if (rects is not { Length: > 0 }
+            || IsRouteClear(baseRoute, rects))
+            return baseRoute.ToList();
+
+        var xs = new SortedSet<long> { start.X, end.X };
+        var ys = new SortedSet<long> { start.Y, end.Y };
+        foreach (var rect in rects)
+        {
+            xs.Add(rect.L);
+            xs.Add(rect.R);
+            ys.Add(rect.T);
+            ys.Add(rect.B);
+        }
+
+        var points = new List<(long X, long Y)>();
+        var nodeByPoint = new Dictionary<(long X, long Y), int>();
+        foreach (var y in ys)
+        foreach (var x in xs)
+        {
+            var point = (x, y);
+            if (point != start && point != end && IsPointInsideObstacle(point, rects))
+                continue;
+
+            nodeByPoint[point] = points.Count;
+            points.Add(point);
+        }
+
+        if (!nodeByPoint.TryGetValue(start, out var startNode)
+            || !nodeByPoint.TryGetValue(end, out var endNode))
+            return null;
+
+        var edges = Enumerable.Range(0, points.Count)
+            .Select(_ => new List<int>())
+            .ToArray();
+        for (var left = 0; left < points.Count; left++)
+        for (var right = left + 1; right < points.Count; right++)
+        {
+            var first = points[left];
+            var second = points[right];
+            if ((first.X != second.X && first.Y != second.Y)
+                || !IsSegmentClear(first, second, rects))
+                continue;
+
+            edges[left].Add(right);
+            edges[right].Add(left);
+        }
+
+        var requiredFirstDirection = DirectionCode(exitDirection);
+        var requiredLastDirection = DirectionCode(Opposite(entryDirection));
+        var initial = new RouteState(startNode, 0);
+        var distances = new Dictionary<RouteState, double> { [initial] = 0 };
+        var previous = new Dictionary<RouteState, RouteState>();
+        var queue = new PriorityQueue<RouteState, double>();
+        queue.Enqueue(initial, 0);
+
+        RouteState? completed = null;
+        while (queue.TryDequeue(out var current, out var priority))
+        {
+            if (!distances.TryGetValue(current, out var currentDistance)
+                || priority > currentDistance)
+                continue;
+            if (current.Node == endNode)
+            {
+                completed = current;
+                break;
+            }
+
+            foreach (var nextNode in edges[current.Node])
+            {
+                var direction = SegmentDirection(points[current.Node], points[nextNode]);
+                if (direction == 0)
+                    continue;
+                if (current.Node == startNode
+                    && requiredFirstDirection != 0
+                    && direction != requiredFirstDirection)
+                    continue;
+                if (nextNode == endNode
+                    && requiredLastDirection != 0
+                    && direction != requiredLastDirection)
+                    continue;
+
+                var next = new RouteState(
+                    nextNode,
+                    direction is 1 or 2 ? 1 : 2);
+                var segmentLength = Math.Abs(points[current.Node].X - points[nextNode].X)
+                    + Math.Abs(points[current.Node].Y - points[nextNode].Y);
+                var bendPenalty = current.Direction != 0 && current.Direction != next.Direction
+                    ? 1_000_000d
+                    : 0d;
+                var candidateDistance = currentDistance + segmentLength + bendPenalty;
+                if (distances.TryGetValue(next, out var knownDistance)
+                    && knownDistance <= candidateDistance)
+                    continue;
+
+                distances[next] = candidateDistance;
+                previous[next] = current;
+                queue.Enqueue(next, candidateDistance);
+            }
+        }
+
+        if (completed is not { } final)
+            return null;
+
+        var reversed = new List<(long X, long Y)> { points[final.Node] };
+        var cursor = final;
+        while (previous.TryGetValue(cursor, out var prior))
+        {
+            reversed.Add(points[prior.Node]);
+            cursor = prior;
+        }
+        reversed.Reverse();
+        return SimplifyRoute(reversed);
+    }
+
+    private static (long L, long T, long R, long B) InflateObstacle(
+        (long L, long T, long R, long B) rect) =>
+        (rect.L == long.MinValue ? rect.L : rect.L - 1,
+         rect.T == long.MinValue ? rect.T : rect.T - 1,
+         rect.R == long.MaxValue ? rect.R : rect.R + 1,
+         rect.B == long.MaxValue ? rect.B : rect.B + 1);
+
+    private static bool IsRouteClear(
+        IReadOnlyList<(long X, long Y)> route,
+        IReadOnlyList<(long L, long T, long R, long B)> obstacles)
+    {
+        for (var index = 1; index < route.Count; index++)
+        {
+            if (!IsSegmentClear(route[index - 1], route[index], obstacles))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsPointInsideObstacle(
+        (long X, long Y) point,
+        IReadOnlyList<(long L, long T, long R, long B)> obstacles) =>
+        obstacles.Any(rect => point.X > rect.L && point.X < rect.R
+            && point.Y > rect.T && point.Y < rect.B);
+
+    private static bool IsSegmentClear(
+        (long X, long Y) first,
+        (long X, long Y) second,
+        IReadOnlyList<(long L, long T, long R, long B)> obstacles)
+    {
+        if (first.X != second.X && first.Y != second.Y)
+            return false;
+        if (first == second)
+            return true;
+
+        foreach (var rect in obstacles)
+        {
+            if (first.Y == second.Y
+                && first.Y > rect.T && first.Y < rect.B
+                && Math.Max(first.X, second.X) > rect.L
+                && Math.Min(first.X, second.X) < rect.R)
+                return false;
+            if (first.X == second.X
+                && first.X > rect.L && first.X < rect.R
+                && Math.Max(first.Y, second.Y) > rect.T
+                && Math.Min(first.Y, second.Y) < rect.B)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static int SegmentDirection((long X, long Y) first, (long X, long Y) second) =>
+        first.Y == second.Y
+            ? second.X >= first.X ? 1 : 2
+            : second.Y >= first.Y ? 3 : 4;
+
+    private static int DirectionCode(Direction direction) => direction switch
+    {
+        Direction.Right => 1,
+        Direction.Left => 2,
+        Direction.Down => 3,
+        Direction.Up => 4,
+        _ => 0,
+    };
+
+    private static Direction Opposite(Direction direction) => direction switch
+    {
+        Direction.Right => Direction.Left,
+        Direction.Left => Direction.Right,
+        Direction.Down => Direction.Up,
+        Direction.Up => Direction.Down,
+        _ => direction,
+    };
+
+    private static List<(long X, long Y)> SimplifyRoute(
+        IReadOnlyList<(long X, long Y)> route)
+    {
+        var simplified = new List<(long X, long Y)>();
+        foreach (var point in route)
+        {
+            if (simplified.Count >= 2)
+            {
+                var previous = simplified[^1];
+                var beforePrevious = simplified[^2];
+                if ((beforePrevious.X == previous.X && previous.X == point.X)
+                    || (beforePrevious.Y == previous.Y && previous.Y == point.Y))
+                {
+                    simplified[^1] = point;
+                    continue;
+                }
+            }
+
+            simplified.Add(point);
+        }
+
+        return simplified;
+    }
+
     // ── Helper: shape rect from SlideShape ───────────────────────────────────────
 
     /// <summary>
@@ -337,10 +576,23 @@ internal static class ConnectorRouter
             {
                 var startShape = ShapeHelper.Find(p, slideIndex, shape.ConnectionStart.ShapeId);
                 var endShape   = ShapeHelper.Find(p, slideIndex, shape.ConnectionEnd.ShapeId);
+                var endpointIds = new HashSet<uint>
+                {
+                    shape.ConnectionStart.ShapeId,
+                    shape.ConnectionEnd.ShapeId,
+                };
+                var obstacles = ShapeHelper.All(p, slideIndex)
+                    .Where(candidate => candidate.Kind != SlideShapeKind.Connector
+                        && !endpointIds.Contains(candidate.Id))
+                    .Select(ElbowRouter.RectOf)
+                    .Where(rect => rect.HasValue)
+                    .Select(rect => rect!.Value)
+                    .ToArray();
                 elbowRoute = ElbowRouter.Route(
                     (sx, sy), (ex, ey),
                     ElbowRouter.RectOf(startShape),
-                    ElbowRouter.RectOf(endShape));
+                    ElbowRouter.RectOf(endShape),
+                    obstacles);
             }
 
             yield return new UpdateConnectorBoundsCommand(slideIndex, shape.Id, newX, newY, newCx, newCy, elbowRoute);

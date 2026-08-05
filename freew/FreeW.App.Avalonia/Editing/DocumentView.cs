@@ -21116,7 +21116,7 @@ public sealed class DocumentView : Control
         for (var i = tocIndices.Count - 1; i >= 0; i--)
             _bus.Execute(new DeleteParagraphCommand(tocIndices[i]));
         var index = Math.Clamp(insertAt, 0, _doc.Blocks.Count);
-        foreach (var paragraph in TableOfContents.Build(_doc))
+        foreach (var paragraph in BuildTableOfContents())
             _bus.Execute(new InsertParagraphCommand(index++, paragraph));
         _bus.CommitUndoGroup("Update Table of Contents");
     }
@@ -21126,9 +21126,14 @@ public sealed class DocumentView : Control
     {
         _bus.BeginUndoGroup();
         var index = Math.Clamp(at, 0, _doc.Blocks.Count);
-        foreach (var paragraph in TableOfContents.Build(_doc))
+        foreach (var paragraph in BuildTableOfContents())
             _bus.Execute(new InsertParagraphCommand(index++, paragraph));
         _bus.CommitUndoGroup(label);
+    }
+
+    private IReadOnlyList<Paragraph> BuildTableOfContents()
+    {
+        return TableOfContents.Build(_doc, BuildGeneratedPageTextResolver());
     }
 
     /// <summary>
@@ -21699,20 +21704,36 @@ public sealed class DocumentView : Control
         if (resolved.Length == 0)
             return;
 
-        _bus.Execute(new AddIndexEntryCommand(resolved));
+        var hostIndex = ResolveReferenceHostBlock();
+        if (hostIndex < 0
+            || _doc.Blocks[hostIndex] is not Paragraph paragraph
+            || paragraph.Runs.Any(run => string.Equals(
+                DocumentIndex.MarkedTerm(run),
+                resolved,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        var offset = ReferenceInsertionOffset(hostIndex);
+        _bus.Execute(new ReplaceParagraphRunsCommand(hostIndex, target =>
+            InsertRunAtOffset(target, offset, DocumentIndex.MarkRun(resolved))));
+        _cellCaret = null;
+        _caret = new DocPosition(hostIndex, Math.Clamp(offset, 0, BlockLength(hostIndex)));
+        _selectionAnchor = _caret;
         Focus();
     }
 
     public void InsertIndex()
     {
         DocumentIndex.EnsureStyles(_doc);
-        InsertGeneratedReferenceBlocks(DocumentIndex.Build(_doc), "Insert Index", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+        InsertGeneratedReferenceBlocks(DocumentIndex.Build(_doc, BuildGeneratedPageTextResolver()), "Insert Index", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
     }
 
     public void RefreshIndex()
     {
         DocumentIndex.EnsureStyles(_doc);
-        RefreshGeneratedReferenceBlocks(DocumentIndex.IsIndexParagraph, () => DocumentIndex.Build(_doc), "Update Index");
+        RefreshGeneratedReferenceBlocks(DocumentIndex.IsIndexParagraph, () => DocumentIndex.Build(_doc, BuildGeneratedPageTextResolver()), "Update Index");
     }
 
     public void InsertTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
@@ -21724,7 +21745,7 @@ public sealed class DocumentView : Control
     {
         labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_doc);
-        InsertGeneratedReferenceBlocks(TableOfFigures.Build(_doc, labelText), "Insert Table of Figures", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+        InsertGeneratedReferenceBlocks(BuildTableOfFigures(labelText), "Insert Table of Figures", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
     }
 
     public void RefreshTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
@@ -21736,7 +21757,18 @@ public sealed class DocumentView : Control
     {
         labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_doc);
-        RefreshGeneratedReferenceBlocks(TableOfFigures.IsTableOfFiguresParagraph, () => TableOfFigures.Build(_doc, labelText), "Update Table of Figures");
+        RefreshGeneratedReferenceBlocks(TableOfFigures.IsTableOfFiguresParagraph, () => BuildTableOfFigures(labelText), "Update Table of Figures");
+    }
+
+    private IReadOnlyList<Paragraph> BuildTableOfFigures(string labelText) =>
+        TableOfFigures.Build(_doc, labelText, BuildGeneratedPageTextResolver());
+
+    private Func<int, string?>? BuildGeneratedPageTextResolver()
+    {
+        var physicalPageOf = BuildCrossReferencePageResolver();
+        return physicalPageOf is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_doc, physicalPageOf);
     }
 
     public void MarkCitation(string? longCitation = null)
@@ -21800,7 +21832,7 @@ public sealed class DocumentView : Control
         {
             Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
             var pageCount = Math.Max(1, _pageCount);
-            var hasExplicitPageBoundary = HasTableOfAuthoritiesExplicitPageBoundary(_doc);
+            var hasExplicitPageBoundary = HasExplicitPageBoundary(_doc);
             if (pageCount == 1 && hasExplicitPageBoundary)
                 return null;
 
@@ -21841,7 +21873,7 @@ public sealed class DocumentView : Control
             : null;
     }
 
-    private static bool HasTableOfAuthoritiesExplicitPageBoundary(TextDocument document) =>
+    private static bool HasExplicitPageBoundary(TextDocument document) =>
         document.Blocks.OfType<Paragraph>().Any(paragraph =>
             paragraph.Formatting.PageBreakBefore
             || paragraph.Runs.Any(run => run.IsPageBreak)
@@ -22169,6 +22201,18 @@ public sealed class DocumentView : Control
     /// </summary>
     public void UpdateFields()
     {
+        var crossReferencePageResolver = _doc.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef
+                || run.ComplexField?.Keyword == "PAGEREF")
+                ? BuildCrossReferencePageResolver()
+                : null;
+        var crossReferencePageTextResolver = crossReferencePageResolver is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
+                _doc,
+                crossReferencePageResolver);
         for (var b = 0; b < _doc.Blocks.Count; b++)
         {
             if (_doc.Blocks[b] is not Paragraph paragraph)
@@ -22179,7 +22223,13 @@ public sealed class DocumentView : Control
                 var run = paragraph.Runs[r];
                 if (run.CrossReference is { } crossReference)
                 {
-                    var resolved = CrossReferences.ResolveField(_doc, crossReference, run.Text, b);
+                    var resolved = CrossReferences.ResolveField(
+                        _doc,
+                        crossReference,
+                        run.Text,
+                        b,
+                        crossReferencePageResolver,
+                        crossReferencePageTextResolver);
                     if (!string.IsNullOrEmpty(resolved))
                         run.Text = resolved;
                 }
@@ -22189,7 +22239,12 @@ public sealed class DocumentView : Control
                         continue;
 
                     var resolved = ComplexFieldEngine.CanRecompute(complexField)
-                        ? ComplexFieldEngine.Recompute(_doc, b, r)
+                        ? ComplexFieldEngine.Recompute(
+                            _doc,
+                            b,
+                            r,
+                            crossReferencePageResolver,
+                            crossReferencePageTextResolver)
                         : ResolveComplexField(complexField, run.Text);
                     if (!string.IsNullOrEmpty(resolved))
                         run.Text = resolved;
@@ -22240,6 +22295,38 @@ public sealed class DocumentView : Control
 
         InvalidateVisual();
         Focus();
+    }
+
+    private Func<int, int?>? BuildCrossReferencePageResolver()
+    {
+        try
+        {
+            Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
+            var pageCount = Math.Max(1, _pageCount);
+            var hasExplicitPageBoundary = HasExplicitPageBoundary(_doc);
+
+            return blockIndex =>
+            {
+                if (blockIndex < 0
+                    || blockIndex >= _doc.Blocks.Count
+                    || _doc.Blocks[blockIndex] is not Paragraph)
+                {
+                    return null;
+                }
+
+                var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex);
+                if (TryResolvePlacedPageForBlockOffset(blockIndex, 0, pageCount, out var pageIndex))
+                    return explicitPage is { } authoredPage
+                        ? Math.Max(pageIndex + 1, authoredPage)
+                        : pageIndex + 1;
+
+                return explicitPage ?? (pageCount == 1 && !hasExplicitPageBoundary ? 1 : null);
+            };
+        }
+        catch (InvalidOperationException)
+        {
+            return blockIndex => CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex);
+        }
     }
 
     private string ResolveComplexField(ComplexField field, string fallback) =>

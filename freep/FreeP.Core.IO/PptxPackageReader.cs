@@ -4482,11 +4482,14 @@ public static class PptxPackageReader
                 Left   = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnL"), scheme),
                 Right  = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnR"), scheme),
                 Top    = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnT"), scheme),
-                Bottom = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnB"), scheme)
+                Bottom = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnB"), scheme),
+                DiagonalDown = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnTlToBr"), scheme),
+                DiagonalUp = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnBlToTr"), scheme)
             };
 
             if (borders.Left is not null || borders.Right is not null ||
-                borders.Top is not null  || borders.Bottom is not null)
+                borders.Top is not null  || borders.Bottom is not null ||
+                borders.DiagonalDown is not null || borders.DiagonalUp is not null)
                 cell.Borders = borders;
         }
 
@@ -6668,6 +6671,8 @@ public static class PptxPackageReader
 
         var repeatInfo = ReadRepeat(cTn);
         var autoReverse = ReadBoolean(cTn.Attribute("autoRev")?.Value);
+        var acceleration = ReadTimingPercentage(cTn.Attribute("accel")?.Value);
+        var deceleration = ReadTimingPercentage(cTn.Attribute("decel")?.Value);
 
         var spTgt = FindSpTgt(buildPar);
         if (spTgt is null) return null;
@@ -6702,6 +6707,8 @@ public static class PptxPackageReader
             RepeatCount    = repeatInfo.Count,
             RepeatIndefinitely = repeatInfo.Indefinite,
             AutoReverse    = autoReverse,
+            Acceleration   = acceleration,
+            Deceleration   = deceleration,
             Direction      = direction,
             WheelSpokeCount = wheelSpokeCount,
             EffectSubtype  = authoredEffectSubtype,
@@ -6773,6 +6780,11 @@ public static class PptxPackageReader
 
     private static bool ReadBoolean(string? value)
         => value is "1" or "true" or "on";
+
+    private static int? ReadTimingPercentage(string? value) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? Math.Clamp(parsed, 0, 100000)
+            : null;
 
     private static int? ReadWheelSpokeCountFromFilter(string? filter)
     {
@@ -6864,6 +6876,8 @@ public static class PptxPackageReader
             RepeatCount    = repeatCount,
             RepeatIndefinitely = repeatIndefinitely,
             AutoReverse    = autoReverse,
+            Acceleration   = ReadTimingPercentage(buildPar.Element(P + "cTn")?.Attribute("accel")?.Value),
+            Deceleration   = ReadTimingPercentage(buildPar.Element(P + "cTn")?.Attribute("decel")?.Value),
             Motion         = motion,
             TriggerShapeId = triggerShapeId,
         };

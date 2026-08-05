@@ -56,8 +56,16 @@ public static class ComplexFieldEngine
     /// Optional page-number resolver mapping a target body block index to its 1-based page (for PAGEREF).
     /// Null — or a null return — falls back to "1", since the pure model has no pagination.
     /// </param>
+    /// <param name="pageTextOf">
+    /// Optional formatted page-text resolver. A non-empty result is authoritative over
+    /// <paramref name="pageOf"/> for section restarts and non-decimal page formats.
+    /// </param>
     public static string Recompute(
-        TextDocument document, int blockIndex, int runIndex, Func<int, int?>? pageOf = null)
+        TextDocument document,
+        int blockIndex,
+        int runIndex,
+        Func<int, int?>? pageOf = null,
+        Func<int, string?>? pageTextOf = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         if (blockIndex < 0 || blockIndex >= document.Blocks.Count)
@@ -74,7 +82,7 @@ public static class ComplexFieldEngine
         return field.Keyword switch
         {
             "REF" => ResolveRef(document, field, run.Text),
-            "PAGEREF" => ResolvePageRef(document, field, run.Text, pageOf),
+            "PAGEREF" => ResolvePageRef(document, field, run.Text, pageOf, pageTextOf),
             "SEQ" => ResolveSeq(document, field, blockIndex, runIndex),
             "CITATION" => Citations.ResolveCitationField(document, field, run.Text),
             "STYLEREF" => ResolveStyleRef(document, field, blockIndex, run.Text),
@@ -207,7 +215,11 @@ public static class ComplexFieldEngine
     // PAGEREF: the page number of the referenced bookmark's paragraph, via the page resolver; "1" when no
     // page is known (the pure model has no pagination). Unresolvable bookmark falls back to cached text.
     private static string ResolvePageRef(
-        TextDocument document, ComplexField field, string cached, Func<int, int?>? pageOf)
+        TextDocument document,
+        ComplexField field,
+        string cached,
+        Func<int, int?>? pageOf,
+        Func<int, string?>? pageTextOf)
     {
         var name = Argument(field.Instruction);
         if (name.Length == 0)
@@ -216,6 +228,9 @@ public static class ComplexFieldEngine
         {
             if (string.Equals(location.Name, name, StringComparison.Ordinal))
             {
+                if (pageTextOf?.Invoke(location.BlockIndex) is { Length: > 0 } pageText)
+                    return pageText;
+
                 var page = pageOf?.Invoke(location.BlockIndex);
                 return (page ?? 1).ToString(CultureInfo.InvariantCulture);
             }
@@ -311,6 +326,9 @@ public static class ComplexFieldEngine
         return document.Styles.TryGetValue(styleId, out var style)
             && string.Equals(style.Name, argument, StringComparison.OrdinalIgnoreCase);
     }
+
+    internal static string? FirstArgument(string instruction) =>
+        Tokenize(instruction).FirstOrDefault(token => !token.StartsWith('\\'));
 
     // Splits a field instruction into whitespace-separated tokens, skipping the leading keyword, honouring
     // double-quoted spans (so a quoted argument with spaces stays one token) and splitting a "\x" switch

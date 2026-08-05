@@ -82,6 +82,29 @@ public class ComplexFieldRoundTripTests
     }
 
     [Fact]
+    public void IndexMark_EmitsInstructionOnlyXeFieldAndReopensAsDurableOccurrence()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("Alpha"), DocumentIndex.MarkRun("Alpha topic") }
+        });
+
+        var root = DocumentXml(doc);
+        root.Descendants(W + "fldChar")
+            .Select(element => element.Attribute(W + "fldCharType")?.Value)
+            .Should().Equal("begin", "end");
+        root.Descendants(W + "instrText").Single().Value.Should().Be(" XE \"Alpha topic\" ");
+
+        var reopened = RoundTrip(doc);
+        var mark = reopened.Blocks.OfType<Paragraph>().Single().Runs.Single(run => run.ComplexField is not null);
+        DocumentIndex.MarkedTerm(mark).Should().Be("Alpha topic");
+        DocumentIndex.Build(reopened).Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Alpha topic, 1");
+    }
+
+    [Fact]
     public void NativeMailMergeControlFields_EmitInstructionsAndRoundTripCachedLabels()
     {
         var doc = TextDocument.CreateEmpty();
