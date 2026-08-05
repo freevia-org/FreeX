@@ -62,7 +62,7 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     public ChartDataDialog(EditingSession editor)
     {
         _session = new ChartDataDialogSession(editor);
-        var surface = ChartDataDialogPlanner.BuildSurfacePlan();
+        var surface = _session.Surface;
 
         // ── Window chrome ─────────────────────────────────────────────────────────
         Title          = surface.Title;
@@ -84,17 +84,15 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _switchRowsAndColumnsBtn = MakeToolbarButton(surface.SwitchRowsAndColumnsLabel, OnSwitchRowsAndColumns);
         _chartTypeCombo = new ComboBox
         {
-            ItemsSource = ChartDataDialogPlanner.ChartTypeOptions,
+            ItemsSource = _session.ChartTypeOptions,
             DisplayMemberPath = nameof(ChartDataDialogChartTypeOption.Label),
-            SelectedValuePath = nameof(ChartDataDialogChartTypeOption.Value),
-            SelectedValue = _session.SelectedChartType,
+            SelectedIndex = _session.SelectedChartTypeIndex,
             Width = 170,
             Margin = new Thickness(8, 0, 4, 0),
         };
         _chartTypeCombo.SelectionChanged += (_, _) =>
         {
-            if (_chartTypeCombo.SelectedValue is ChartType chartType)
-                _session.SetChartType(chartType);
+            _session.SelectChartType(_chartTypeCombo.SelectedIndex);
         };
 
         var toolbar = new WrapPanel { Margin = new Thickness(4, 4, 4, 2) };

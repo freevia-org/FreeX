@@ -32,25 +32,15 @@ internal sealed class ChartDataDialog : Window
     {
         _culture = culture ?? throw new ArgumentNullException(nameof(culture));
         _session = new ChartDataDialogSession(editor);
-        _surface = ChartDataDialogPlanner.BuildSurfacePlan();
-        var chartTypeOptions = ChartDataDialogPlanner.ChartTypeOptions;
-        var selectedChartTypeIndex = chartTypeOptions
-            .ToList()
-            .FindIndex(option => option.Value == _session.SelectedChartType);
+        _surface = _session.Surface;
         _chartTypeCombo = new ComboBox
         {
-            ItemsSource = chartTypeOptions.Select(option => option.Label).ToArray(),
-            SelectedIndex = selectedChartTypeIndex >= 0 ? selectedChartTypeIndex : 0,
+            ItemsSource = _session.ChartTypeOptions.Select(option => option.Label).ToArray(),
+            SelectedIndex = _session.SelectedChartTypeIndex,
             MinWidth = 170,
         };
         _chartTypeCombo.SelectionChanged += (_, _) =>
-        {
-            if (_chartTypeCombo.SelectedIndex >= 0 &&
-                _chartTypeCombo.SelectedIndex < chartTypeOptions.Count)
-            {
-                _session.SetChartType(chartTypeOptions[_chartTypeCombo.SelectedIndex].Value);
-            }
-        };
+            _session.SelectChartType(_chartTypeCombo.SelectedIndex);
 
         Title = _surface.Title;
         Width = 625.3333333333334;
@@ -89,10 +79,7 @@ internal sealed class ChartDataDialog : Window
     internal void SetChartTypeForTests(ChartType chartType)
     {
         _session.SetChartType(chartType);
-        var options = ChartDataDialogPlanner.ChartTypeOptions;
-        var index = options.ToList().FindIndex(option => option.Value == chartType);
-        if (index >= 0)
-            _chartTypeCombo.SelectedIndex = index;
+        _chartTypeCombo.SelectedIndex = _session.SelectedChartTypeIndex;
     }
 
     internal void MoveSeriesForTests(int seriesIndex, bool down)

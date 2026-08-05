@@ -15,18 +15,25 @@ internal sealed class MotionPathEditorDialog : Window
     private readonly MotionPathEditorDialogSession _session;
     private readonly StackPanel _rowsPanel = new();
     private readonly List<Row> _rows = new();
+    private readonly TextBlock _validationText = new()
+    {
+        Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+        TextWrapping = TextWrapping.Wrap,
+        Margin = new Thickness(0, 6, 0, 0),
+    };
 
     public MotionPathEditorDialog(EditingSession editor, int animationIndex)
     {
         _session = new MotionPathEditorDialogSession(editor, animationIndex);
-        Title = "Edit Motion Path";
+        var surface = _session.Surface;
+        Title = surface.Title;
         Width = 760;
         Height = 520;
         CanResize = true;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         foreach (var segment in _session.InitialSegments)
-            _rows.Add(new Row(segment));
+            _rows.Add(new Row(segment, surface));
 
         Content = BuildContent();
         RenderRows();
@@ -41,10 +48,11 @@ internal sealed class MotionPathEditorDialog : Window
 
     private Control BuildContent()
     {
+        var surface = _session.Surface;
         var root = new DockPanel { Margin = new Thickness(12) };
         var intro = new TextBlock
         {
-            Text = "Coordinates are relative to the animated shape. Edit endpoints and curve control points, then press OK.",
+            Text = surface.Introduction,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8),
         };
@@ -53,19 +61,22 @@ internal sealed class MotionPathEditorDialog : Window
 
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         DockPanel.SetDock(actions, Dock.Bottom);
-        var addLine = Button("Add line", 82);
-        addLine.Click += (_, _) => AddSegment(_session.CreateLineAfter);
-        var addCurve = Button("Add curve", 82);
-        addCurve.Click += (_, _) => AddSegment(_session.CreateCubicAfter);
-        var ok = Button("OK", 80);
-        ok.Click += (_, _) => Apply();
-        var cancel = Button("Cancel", 80);
+        var addLine = Button(surface.AddLineLabel, 82);
+        addLine.Click += (_, _) => ApplyTransition(_session.AddLine(ReadRowInputs()));
+        var addCurve = Button(surface.AddCurveLabel, 82);
+        addCurve.Click += (_, _) => ApplyTransition(_session.AddCurve(ReadRowInputs()));
+        var ok = Button(surface.AcceptLabel, 80);
+        ok.Click += (_, _) => ApplyTransition(_session.Submit(ReadRowInputs()));
+        var cancel = Button(surface.CancelLabel, 80);
         cancel.Click += (_, _) => Close(false);
         actions.Children.Add(addLine);
         actions.Children.Add(addCurve);
         actions.Children.Add(ok);
         actions.Children.Add(cancel);
         root.Children.Add(actions);
+
+        DockPanel.SetDock(_validationText, Dock.Bottom);
+        root.Children.Add(_validationText);
 
         root.Children.Add(new ScrollViewer
         {
@@ -75,59 +86,35 @@ internal sealed class MotionPathEditorDialog : Window
         return root;
     }
 
-    private void AddSegment(Func<IReadOnlyList<MotionPathSegmentEdit>, MotionPathSegmentEdit> factory)
-    {
-        ReadRowsOrEmpty();
-        _rows.Add(new Row(factory(_rows.Select(row => row.Value).ToArray())));
-        RenderRows();
-    }
-
     private void RenderRows()
     {
         _rowsPanel.Children.Clear();
         for (var index = 0; index < _rows.Count; index++)
         {
             var row = _rows[index];
+            var rowIndex = index;
             row.Build(index == 0, () =>
-            {
-                if (!MotionPathEditorRowProjection.CanRemove(index))
-                    return;
-                ReadRowsOrEmpty();
-                _rows.RemoveAt(index);
-                RenderRows();
-            });
+                ApplyTransition(_session.Remove(ReadRowInputs(), rowIndex)));
             _rowsPanel.Children.Add(row.Control!);
         }
     }
 
-    private bool ReadRowsOrEmpty()
-    {
-        try
-        {
-            foreach (var row in _rows)
-                row.Read();
-            return true;
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-    }
+    private IReadOnlyList<MotionPathEditorRowInput> ReadRowInputs() =>
+        _rows.Select(row => row.ReadInput()).ToArray();
 
-    private void Apply()
+    private void ApplyTransition(MotionPathEditorDialogTransition transition)
     {
-        try
+        if (transition.ShouldRenderRows)
         {
-            foreach (var row in _rows)
-                row.Read();
-            if (!_session.TryApply(_rows.Select(row => row.Value), out _))
-                return;
+            _rows.Clear();
+            foreach (var segment in transition.Segments)
+                _rows.Add(new Row(segment, _session.Surface));
+            RenderRows();
+        }
+
+        _validationText.Text = transition.ValidationMessage;
+        if (transition.ShouldClose)
             Close(true);
-        }
-        catch (FormatException)
-        {
-            // Leave invalid input visible for correction.
-        }
     }
 
     private static Button Button(string text, double minWidth)
@@ -139,6 +126,7 @@ internal sealed class MotionPathEditorDialog : Window
 
     private sealed class Row
     {
+        private readonly MotionPathEditorDialogSurfacePlan _surface;
         private readonly ComboBox _kind = new();
         private readonly TextBox _x = Box();
         private readonly TextBox _y = Box();
@@ -149,14 +137,19 @@ internal sealed class MotionPathEditorDialog : Window
         private MotionPathSegmentEdit _value;
         private bool _isFirst;
         public Control? Control { get; private set; }
-        public MotionPathSegmentEdit Value => _value;
 
-        public Row(MotionPathSegmentEdit value) => _value = value;
+        public Row(
+            MotionPathSegmentEdit value,
+            MotionPathEditorDialogSurfacePlan surface)
+        {
+            _value = value;
+            _surface = surface;
+        }
 
         public void Build(bool first, Action remove)
         {
             _isFirst = first;
-            _kind.ItemsSource = Enum.GetValues<MotionPathSegmentKind>();
+            _kind.ItemsSource = _surface.SegmentKinds;
             _kind.SelectedItem = _value.Kind;
             _kind.IsEnabled = MotionPathEditorRowProjection
                 .BuildEnablement(_value.Kind, first)
@@ -172,15 +165,15 @@ internal sealed class MotionPathEditorDialog : Window
             Set(_y2, _value.Y2);
 
             var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2) };
-            panel.Children.Add(new TextBlock { Text = first ? "Start" : "Segment", Width = 62, VerticalAlignment = VerticalAlignment.Center });
+            panel.Children.Add(new TextBlock { Text = first ? _surface.StartRowLabel : _surface.SegmentRowLabel, Width = 62, VerticalAlignment = VerticalAlignment.Center });
             panel.Children.Add(_kind);
-            panel.Children.Add(Labeled("X", _x));
-            panel.Children.Add(Labeled("Y", _y));
-            panel.Children.Add(Labeled("X1", _x1));
-            panel.Children.Add(Labeled("Y1", _y1));
-            panel.Children.Add(Labeled("X2", _x2));
-            panel.Children.Add(Labeled("Y2", _y2));
-            var delete = Button("Delete", 58);
+            panel.Children.Add(Labeled(_surface.XLabel, _x));
+            panel.Children.Add(Labeled(_surface.YLabel, _y));
+            panel.Children.Add(Labeled(_surface.X1Label, _x1));
+            panel.Children.Add(Labeled(_surface.Y1Label, _y1));
+            panel.Children.Add(Labeled(_surface.X2Label, _x2));
+            panel.Children.Add(Labeled(_surface.Y2Label, _y2));
+            var delete = Button(_surface.DeleteLabel, 58);
             delete.IsEnabled = MotionPathEditorRowProjection
                 .BuildEnablement(_value.Kind, first)
                 .DeleteEnabled;
@@ -195,23 +188,14 @@ internal sealed class MotionPathEditorDialog : Window
             UpdateControlState();
         }
 
-        public void Read()
-        {
-            var kind = _kind.SelectedItem is MotionPathSegmentKind selected ? selected : MotionPathSegmentKind.Line;
-            if (!MotionPathEditorRowProjection.TryParse(
-                    kind,
-                    _x.Text,
-                    _y.Text,
-                    _x1.Text,
-                    _y1.Text,
-                    _x2.Text,
-                    _y2.Text,
-                    out _value,
-                    out var error))
-            {
-                throw new FormatException(error);
-            }
-        }
+        public MotionPathEditorRowInput ReadInput() => new(
+            _kind.SelectedItem is MotionPathSegmentKind selected ? selected : null,
+            _x.Text,
+            _y.Text,
+            _x1.Text,
+            _y1.Text,
+            _x2.Text,
+            _y2.Text);
 
         private void UpdateControlState()
         {

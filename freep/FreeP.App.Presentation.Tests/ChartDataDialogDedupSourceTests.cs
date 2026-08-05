@@ -8,7 +8,10 @@ public sealed class ChartDataDialogDedupSourceTests
         foreach (var source in RendererSources())
         {
             source.Should().Contain("new ChartDataDialogSession(editor)");
-            source.Should().Contain("ChartDataDialogPlanner.BuildSurfacePlan()");
+            source.Should().Contain("_session.Surface");
+            source.Should().Contain("_session.ChartTypeOptions");
+            source.Should().Contain("_session.SelectedChartTypeIndex");
+            source.Should().Contain("_session.SelectChartType(");
             source.Should().Contain("_session.BuildTableProjection()");
             source.Should().Contain("_session.TryApplyEdits(");
             source.Should().Contain("_session.TryCommit(");
@@ -19,6 +22,8 @@ public sealed class ChartDataDialogDedupSourceTests
             source.Should().Contain("_session.SwitchRowsAndColumns()");
             source.Should().NotContain("private readonly ChartDataDialogPlanner");
             source.Should().NotContain("ChartDataDialogPlanner.FromChart(");
+            source.Should().NotContain("ChartDataDialogPlanner.BuildSurfacePlan(");
+            source.Should().NotContain("ChartDataDialogPlanner.ChartTypeOptions");
             source.Should().NotContain("_planner.");
             source.Should().NotContain("ReplaceChartData(");
             source.Should().NotContain("double.TryParse(");
@@ -42,10 +47,41 @@ public sealed class ChartDataDialogDedupSourceTests
         avalonia.Should().Contain("_valueBoxes[validation.InvalidValueEditIndex].TextBox.Focus()");
     }
 
+    [Fact]
+    public void MotionPathRenderers_DelegateSurfaceValidationMutationAndAcceptanceToSession()
+    {
+        foreach (var source in RendererSources("MotionPathEditorDialog.cs"))
+        {
+            source.Should().Contain("new MotionPathEditorDialogSession(editor, animationIndex)");
+            source.Should().Contain("_session.Surface");
+            source.Should().Contain("_session.AddLine(ReadRowInputs())");
+            source.Should().Contain("_session.AddCurve(ReadRowInputs())");
+            source.Should().Contain("_session.Remove(ReadRowInputs(), rowIndex)");
+            source.Should().Contain("_session.Submit(ReadRowInputs())");
+            source.Should().Contain("MotionPathEditorRowProjection.BuildEnablement(");
+            source.Should().Contain("MotionPathEditorRowProjection.Format(");
+            source.Should().NotContain("MotionPathEditorRowProjection.TryParse(");
+            source.Should().NotContain("MotionPathEditingPlanner.");
+            source.Should().NotContain("Enum.GetValues<MotionPathSegmentKind>()");
+            source.Should().NotContain("ReadRowsOrEmpty");
+            source.Should().NotContain("catch (FormatException");
+            source.Should().NotContain("_rows.RemoveAt(");
+            source.Should().NotContain("\"Edit Motion Path\"");
+            source.Should().NotContain("\"Add line\"");
+            source.Should().NotContain("\"Add curve\"");
+            source.Should().NotContain("\"Delete\"");
+        }
+    }
+
     private static IEnumerable<string> RendererSources()
     {
-        yield return ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartDataDialog.cs");
-        yield return ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "ChartDataDialog.cs");
+        return RendererSources("ChartDataDialog.cs");
+    }
+
+    private static IEnumerable<string> RendererSources(string fileName)
+    {
+        yield return ReadWorkspaceFile("freep", "FreeP.App.Host", fileName);
+        yield return ReadWorkspaceFile("freep", "FreeP.App.Avalonia", fileName);
     }
 
     private static string ReadWorkspaceFile(params string[] relativeParts)

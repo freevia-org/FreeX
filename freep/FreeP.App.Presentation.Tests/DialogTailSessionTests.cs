@@ -32,6 +32,48 @@ public sealed class DialogTailSessionTests
     }
 
     [Fact]
+    public void MotionPathDialogTransitions_OwnSurfaceValidationMutationAndAcceptance()
+    {
+        var editor = MakeMotionPathEditor();
+        var session = new MotionPathEditorDialogSession(
+            editor,
+            0,
+            CultureInfo.InvariantCulture);
+
+        session.Surface.Title.Should().Be("Edit Motion Path");
+        session.Surface.SegmentKinds.Should().Equal(Enum.GetValues<MotionPathSegmentKind>());
+
+        var initialRows = session.InitialSegments.Select(ToRowInput).ToArray();
+        var invalidRows = initialRows.ToArray();
+        invalidRows[1] = invalidRows[1] with { X = "invalid" };
+        var invalidAdd = session.AddLine(invalidRows);
+        invalidAdd.Succeeded.Should().BeFalse();
+        invalidAdd.ShouldRenderRows.Should().BeFalse();
+        invalidAdd.ShouldClose.Should().BeFalse();
+        invalidAdd.ValidationMessage.Should().Be("X must be a number.");
+        invalidAdd.Segments.Should().HaveCount(2);
+
+        var added = session.AddCurve(initialRows);
+        added.Succeeded.Should().BeTrue();
+        added.ShouldRenderRows.Should().BeTrue();
+        added.Segments.Should().HaveCount(3);
+        added.Segments[^1].Kind.Should().Be(MotionPathSegmentKind.Cubic);
+
+        var removed = session.Remove(added.Segments.Select(ToRowInput), 2);
+        removed.Succeeded.Should().BeTrue();
+        removed.ShouldRenderRows.Should().BeTrue();
+        removed.Segments.Should().HaveCount(2);
+
+        var editedRows = removed.Segments.Select(ToRowInput).ToArray();
+        editedRows[1] = editedRows[1] with { X = "0.75" };
+        var accepted = session.Submit(editedRows);
+        accepted.Succeeded.Should().BeTrue();
+        accepted.ShouldClose.Should().BeTrue();
+        accepted.ValidationMessage.Should().BeEmpty();
+        editor.CurrentSlideAnimations[0].Motion!.Segments[1].X.Should().Be(0.75);
+    }
+
+    [Fact]
     public void MotionPathRowProjection_OwnsParsingFormattingAndEnablement()
     {
         MotionPathEditorRowProjection.TryParse(
@@ -184,6 +226,16 @@ public sealed class DialogTailSessionTests
         });
         return MakeEditor(presentation);
     }
+
+    private static MotionPathEditorRowInput ToRowInput(MotionPathSegmentEdit segment) =>
+        new(
+            segment.Kind,
+            segment.X.ToString("G", CultureInfo.InvariantCulture),
+            segment.Y.ToString("G", CultureInfo.InvariantCulture),
+            segment.X1.ToString("G", CultureInfo.InvariantCulture),
+            segment.Y1.ToString("G", CultureInfo.InvariantCulture),
+            segment.X2.ToString("G", CultureInfo.InvariantCulture),
+            segment.Y2.ToString("G", CultureInfo.InvariantCulture));
 
     private static EditingSession MakeChartExEditor()
     {

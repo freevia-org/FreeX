@@ -40,7 +40,13 @@ public sealed class ChartDataDialogSession
         var chart = editor.SelectedChart
             ?? throw new InvalidOperationException("No chart is currently selected.");
         _planner = ChartDataDialogPlanner.FromChart(chart);
+        Surface = ChartDataDialogPlanner.BuildSurfacePlan();
+        ChartTypeOptions = ChartDataDialogPlanner.ChartTypeOptions;
     }
+
+    public ChartDataDialogSurfacePlan Surface { get; }
+
+    public IReadOnlyList<ChartDataDialogChartTypeOption> ChartTypeOptions { get; }
 
     public int ActiveSeriesIndex => _activeSeriesIndex;
 
@@ -52,11 +58,34 @@ public sealed class ChartDataDialogSession
 
     public ChartType SelectedChartType => _planner.SelectedChartType;
 
+    public int SelectedChartTypeIndex
+    {
+        get
+        {
+            for (var index = 0; index < ChartTypeOptions.Count; index++)
+            {
+                if (ChartTypeOptions[index].Value == SelectedChartType)
+                    return index;
+            }
+
+            return 0;
+        }
+    }
+
     public ChartDataDialogTableProjection BuildTableProjection() =>
         _planner.BuildTableProjection();
 
     public void SetChartType(ChartType chartType) =>
         _planner.SetChartType(chartType);
+
+    public bool SelectChartType(int selectedIndex)
+    {
+        if (!IsIndexInRange(selectedIndex, ChartTypeOptions.Count))
+            return false;
+
+        SetChartType(ChartTypeOptions[selectedIndex].Value);
+        return true;
+    }
 
     public void SelectSeries(int seriesIndex)
     {

@@ -6,6 +6,29 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class ChartDataDialogSessionTests
 {
     [Fact]
+    public void SurfaceAndChartTypeSelection_AreOwnedBySession()
+    {
+        var session = CreateSession(out _);
+
+        session.Surface.Should().Be(ChartDataDialogPlanner.BuildSurfacePlan());
+        session.ChartTypeOptions.Should().BeSameAs(ChartDataDialogPlanner.ChartTypeOptions);
+        session.SelectedChartTypeIndex.Should().Be(
+            session.ChartTypeOptions
+                .Select((option, index) => (option, index))
+                .Single(item => item.option.Value == ChartType.ColumnClustered)
+                .index);
+
+        var lineIndex = session.ChartTypeOptions
+            .Select((option, index) => (option, index))
+            .Single(item => item.option.Value == ChartType.Line)
+            .index;
+        session.SelectChartType(lineIndex).Should().BeTrue();
+        session.SelectedChartType.Should().Be(ChartType.Line);
+        session.SelectChartType(-1).Should().BeFalse();
+        session.SelectedChartType.Should().Be(ChartType.Line);
+    }
+
+    [Fact]
     public void SelectionTransitions_MoveAndRemoveActiveSeriesAndCategory()
     {
         var session = CreateSession(out _);
