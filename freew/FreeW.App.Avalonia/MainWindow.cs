@@ -130,7 +130,7 @@ public sealed partial class MainWindow : Window
     private bool _sideToSideUsesLiveEditor;
     private double _zoomScale = 1.0;
     private bool _updatingZoomSlider;
-    private bool _readMode;
+    private readonly FreeWEditorInteractionSession _editorInteraction = new();
     private bool _pagedEditMode;
     // Avalonia's PrintLayout is already the live, multi-page editing surface used by Page Edit.
     // Keep the prior continuous view so entering the alias does not change the user's view when it
@@ -141,17 +141,7 @@ public sealed partial class MainWindow : Window
     private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
     private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
     private Thickness _editorMarginBeforeReadMode;
-    private bool _navPaneVisibleBeforeReadMode;
-    private bool _reviewingPaneVisibleBeforeReadMode;
-    private bool _revealPaneVisibleBeforeReadMode;
-    private bool _titleBarVisibleBeforeReadMode;
-    private bool _ribbonVisibleBeforeReadMode;
-    private bool _dataFolderVisibleBeforeReadMode;
-    private bool _statusViewSwitchVisibleBeforeReadMode;
-    private bool _statusZoomVisibleBeforeReadMode;
     private IBrush _workspaceBackgroundBeforeReadMode = Brushes.Transparent;
-    private string _readModeColumnWidth = FreeWReadModePlanner.DefaultColumn;
-    private string _readModePageColor = FreeWReadModePlanner.NoColor;
     private bool _suppressEditorDirty;
     private AvaloniaSpeechEngine? _readAloudEngine;
     private ReadAloudController? _readAloudController;
@@ -1889,7 +1879,7 @@ public sealed partial class MainWindow : Window
             OpenAbout: () => _ = OpenAboutAsync(),
             OpenLegalNotices: () => _ = OpenLegalNoticesAsync(),
             ToggleReadMode: ToggleReadMode,
-            IsReadModeActive: () => _readMode,
+            IsReadModeActive: () => _editorInteraction.IsReadModeActive,
             ApplyReadModeColumnWidth: ApplyReadModeColumnWidth,
             ApplyReadModePageColor: ApplyReadModePageColor,
             ToggleReviewBalloons: ToggleReviewBalloons,
@@ -2597,14 +2587,19 @@ public sealed partial class MainWindow : Window
 
     private void SetViewMode(DocumentViewMode mode)
     {
-        if (_outlineMode)
+        var plan = _editorInteraction.PlanDocumentViewChange(
+            CurrentDocumentViewSnapshot(),
+            mode);
+
+        if (plan.ExitOutlineMode)
             LeaveOutlineView(restorePriorView: false);
 
-        if (_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive)
+        if (plan.ExitPaginatedView)
             ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
 
-        _pagedEditMode = false;
-        _editor.ViewMode = mode;
+        if (plan.ExitPagedEditMode)
+            _pagedEditMode = false;
+        _editor.ViewMode = plan.TargetMode;
         if (_viewDepthPlan.IsSplitActive)
             RefreshSplitPreviewSnapshot();
         UpdateViewModeButtons();
@@ -2612,13 +2607,19 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
+    private FreeWDocumentViewSnapshot CurrentDocumentViewSnapshot() => new(
+        _editor.ViewMode,
+        _outlineMode,
+        _pagedEditMode,
+        _viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive);
+
     private void UpdateViewModeButtons()
     {
-        var mode = _editor.ViewMode;
-        ApplyStatusToggleState(_printLayoutSwitch, !_outlineMode && !_pagedEditMode && mode == DocumentViewMode.PrintLayout);
-        ApplyStatusToggleState(_webLayoutSwitch, !_outlineMode && !_pagedEditMode && mode == DocumentViewMode.WebLayout);
-        ApplyStatusToggleState(_draftSwitch, !_outlineMode && !_pagedEditMode && mode == DocumentViewMode.Draft);
-        ApplyStatusToggleState(_pagedEditSwitch, _pagedEditMode);
+        var plan = _editorInteraction.BuildDocumentViewChecks(CurrentDocumentViewSnapshot());
+        ApplyStatusToggleState(_printLayoutSwitch, plan.PrintLayout);
+        ApplyStatusToggleState(_webLayoutSwitch, plan.WebLayout);
+        ApplyStatusToggleState(_draftSwitch, plan.Draft);
+        ApplyStatusToggleState(_pagedEditSwitch, plan.PagedEdit);
     }
 
     private static void ApplyStatusToggleState(ToggleButton toggle, bool isChecked)
@@ -2659,59 +2660,47 @@ public sealed partial class MainWindow : Window
 
     private void ToggleReadMode()
     {
-        _readMode = !_readMode;
-        if (_readMode)
-        {
-            _titleBarVisibleBeforeReadMode = _titleBar.IsVisible;
-            _ribbonVisibleBeforeReadMode = _ribbonHost?.IsVisible == true;
-            _dataFolderVisibleBeforeReadMode = _dataFolderItemControl?.IsVisible == true;
-            _statusViewSwitchVisibleBeforeReadMode = _statusViewSwitchControl?.IsVisible == true;
-            _statusZoomVisibleBeforeReadMode = _statusZoomControl?.IsVisible == true;
-            _navPaneVisibleBeforeReadMode = _navPane.IsVisible;
-            _reviewingPaneVisibleBeforeReadMode = _reviewingPane.IsVisible;
-            _revealPaneVisibleBeforeReadMode = _revealPane.IsVisible;
-            _workspaceBackgroundBeforeReadMode = _workspace.Background ?? Brushes.Transparent;
+        var plan = _editorInteraction.ToggleReadMode(new FreeWEditorChromeVisibility(
+            TitleBar: ToChromeVisibility(_titleBar.IsVisible),
+            Ribbon: ToChromeVisibility(_ribbonHost?.IsVisible == true),
+            DataFolder: ToChromeVisibility(_dataFolderItemControl?.IsVisible == true),
+            ViewSwitch: ToChromeVisibility(_statusViewSwitchControl?.IsVisible == true),
+            Zoom: ToChromeVisibility(_statusZoomControl?.IsVisible == true),
+            NavigationPane: ToChromeVisibility(_navPane.IsVisible),
+            RevealPane: ToChromeVisibility(_revealPane.IsVisible),
+            ReviewingPane: ToChromeVisibility(_reviewingPane.IsVisible)));
 
+        if (plan.IsActive)
+        {
+            _workspaceBackgroundBeforeReadMode = _workspace.Background ?? Brushes.Transparent;
             _editorMaxWidthBeforeReadMode = _editor.MaxWidth;
             _editorAlignmentBeforeReadMode = _editor.HorizontalAlignment;
             _editorMarginBeforeReadMode = _editor.Margin;
-            _titleBar.IsVisible = false;
-            if (_ribbonHost is not null)
-                _ribbonHost.IsVisible = false;
-            if (_dataFolderItemControl is not null)
-                _dataFolderItemControl.IsVisible = false;
-            if (_statusViewSwitchControl is not null)
-                _statusViewSwitchControl.IsVisible = false;
-            if (_statusZoomControl is not null)
-                _statusZoomControl.IsVisible = false;
+        }
 
-            _navPane.IsVisible = false;
-            _reviewingPane.IsVisible = false;
-            _revealPane.IsVisible = false;
+        _titleBar.IsVisible = IsChromeVisible(plan.Chrome.TitleBar);
+        if (_ribbonHost is not null)
+            _ribbonHost.IsVisible = IsChromeVisible(plan.Chrome.Ribbon);
+        if (_dataFolderItemControl is not null)
+            _dataFolderItemControl.IsVisible = IsChromeVisible(plan.Chrome.DataFolder);
+        if (_statusViewSwitchControl is not null)
+            _statusViewSwitchControl.IsVisible = IsChromeVisible(plan.Chrome.ViewSwitch);
+        if (_statusZoomControl is not null)
+            _statusZoomControl.IsVisible = IsChromeVisible(plan.Chrome.Zoom);
+        _navPane.IsVisible = IsChromeVisible(plan.Chrome.NavigationPane);
+        _revealPane.IsVisible = IsChromeVisible(plan.Chrome.RevealPane);
+        _reviewingPane.IsVisible = IsChromeVisible(plan.Chrome.ReviewingPane);
 
-            _editor.MaxWidth = FreeWReadModePlanner.ColumnWidth(_readModeColumnWidth);
+        if (plan.IsActive)
+        {
+            _editor.MaxWidth = plan.ColumnWidth;
             _editor.HorizontalAlignment = HorizontalAlignment.Center;
             _editor.Margin = new Thickness(40);
-            var backgroundHex = FreeWReadModePlanner.PageColorHex(_readModePageColor);
-            _editor.ViewBackgroundColorHex = backgroundHex;
-            _workspace.Background = new SolidColorBrush(ParseColor(backgroundHex));
+            _editor.ViewBackgroundColorHex = plan.PageColorHex;
+            _workspace.Background = new SolidColorBrush(ParseColor(plan.PageColorHex));
         }
         else
         {
-            _titleBar.IsVisible = _titleBarVisibleBeforeReadMode;
-            if (_ribbonHost is not null)
-                _ribbonHost.IsVisible = _ribbonVisibleBeforeReadMode;
-            if (_dataFolderItemControl is not null)
-                _dataFolderItemControl.IsVisible = _dataFolderVisibleBeforeReadMode;
-            if (_statusViewSwitchControl is not null)
-                _statusViewSwitchControl.IsVisible = _statusViewSwitchVisibleBeforeReadMode;
-            if (_statusZoomControl is not null)
-                _statusZoomControl.IsVisible = _statusZoomVisibleBeforeReadMode;
-
-            _navPane.IsVisible = _navPaneVisibleBeforeReadMode;
-            _reviewingPane.IsVisible = _reviewingPaneVisibleBeforeReadMode;
-            _revealPane.IsVisible = _revealPaneVisibleBeforeReadMode;
-
             _editor.MaxWidth = _editorMaxWidthBeforeReadMode;
             _editor.HorizontalAlignment = _editorAlignmentBeforeReadMode;
             _editor.Margin = _editorMarginBeforeReadMode;
@@ -2725,28 +2714,33 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
+    private static FreeWChromeVisibility ToChromeVisibility(bool isVisible) =>
+        isVisible ? FreeWChromeVisibility.Visible : FreeWChromeVisibility.Collapsed;
+
+    private static bool IsChromeVisible(FreeWChromeVisibility visibility) =>
+        visibility == FreeWChromeVisibility.Visible;
+
     private void ApplyReadModeColumnWidth(string token)
     {
-        _readModeColumnWidth = FreeWReadModePlanner.NormalizeColumnWidth(token);
-        if (_readMode)
-            _editor.MaxWidth = FreeWReadModePlanner.ColumnWidth(_readModeColumnWidth);
+        var plan = _editorInteraction.UpdateReadModeColumnWidth(token);
+        if (plan.ApplyImmediately)
+            _editor.MaxWidth = plan.ColumnWidth;
     }
 
     private void ApplyReadModePageColor(string token)
     {
-        _readModePageColor = FreeWReadModePlanner.NormalizePageColor(token);
-        if (_readMode)
+        var plan = _editorInteraction.UpdateReadModePageColor(token);
+        if (plan.ApplyImmediately)
         {
-            var backgroundHex = FreeWReadModePlanner.PageColorHex(_readModePageColor);
-            _editor.ViewBackgroundColorHex = backgroundHex;
-            _workspace.Background = new SolidColorBrush(ParseColor(backgroundHex));
+            _editor.ViewBackgroundColorHex = plan.PageColorHex;
+            _workspace.Background = new SolidColorBrush(ParseColor(plan.PageColorHex));
         }
     }
 
     private static Color ParseColor(string hex) =>
         Color.Parse(hex);
 
-    internal bool IsReadModeActiveForTests => _readMode;
+    internal bool IsReadModeActiveForTests => _editorInteraction.IsReadModeActive;
     internal double ReadModeMaxWidthForTests => _editor.MaxWidth;
     internal string? ReadModeBackgroundForTests => _editor.ViewBackgroundColorHex;
     internal bool IsRibbonVisibleForTests => _ribbonHost?.IsVisible == true;
@@ -4097,7 +4091,7 @@ public sealed partial class MainWindow : Window
     {
         var stats = _editor.ComputeStatistics();
         var (currentSection, totalSections) = _editor.SectionInfo();
-        var plan = FreeWEditorStatusPlanner.Build(new FreeWEditorStatusSnapshot(
+        var plan = _editorInteraction.BuildStatus(new FreeWEditorStatusSnapshot(
             stats.Words,
             stats.CharactersWithSpaces,
             stats.Paragraphs,

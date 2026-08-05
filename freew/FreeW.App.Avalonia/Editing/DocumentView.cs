@@ -23,27 +23,6 @@ using TextAlignment = FreeW.Core.Model.TextAlignment;
 
 namespace FreeW.App.Avalonia.Editing;
 
-/// <summary>Controls how <see cref="DocumentView"/> lays out and renders the document.</summary>
-public enum DocumentViewMode
-{
-    /// <summary>
-    /// Paginated white pages on a grey desk with margins, page breaks, and inter-page gaps.
-    /// This is the default — matches Word's Print Layout view.
-    /// </summary>
-    PrintLayout,
-    /// <summary>
-    /// Single continuous column at the control's available width (capped at <c>WebMaxContentWidth</c>),
-    /// plain white background, no page breaks, no grey desk, no page chrome. Matches Word's Web Layout.
-    /// </summary>
-    WebLayout,
-
-    /// <summary>
-    /// Plain white background, small fixed left margin, no chrome, continuous flow.
-    /// Fastest/plainest reading/editing view. Matches Word's Draft view.
-    /// </summary>
-    Draft,
-}
-
 /// <summary>
 /// AV-HANDLES: identifies which manipulation handle a pointer is over (or that a drag is operating on)
 /// for a selected floating object. <see cref="None"/> = not on the object at all; <see cref="Body"/> =

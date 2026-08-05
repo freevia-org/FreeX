@@ -71,7 +71,6 @@ public sealed class MainWindow : Window
     private ListBox _reviewList = null!;
     private TextBlock _reviewStatus = null!;
     private bool _reviewPaneVisible;
-    private bool _reviewPaneVisibleBeforeReadMode;
     // The revisions currently shown in the pane (the live snapshot the list items index into).
     private System.Collections.Generic.IReadOnlyList<RevisionEntry> _reviewEntries = System.Array.Empty<RevisionEntry>();
     // Active sort order for the Reviewing Pane. Default: reading order (sequence/date).
@@ -190,7 +189,7 @@ public sealed class MainWindow : Window
     private FrameworkElement _dataFolderItem = null!;
     private FrameworkElement _viewSwitchItem = null!;
     private FrameworkElement _zoomItem = null!;
-    private bool _readMode;
+    private readonly FreeWEditorInteractionSession _editorInteraction = new();
 
     // Status-bar view-switch toggle buttons for the three mutually-exclusive print-family view modes
     // (Print Layout / Web Layout / Draft). They mirror the same state as the View ribbon's Views group;
@@ -232,8 +231,6 @@ public sealed class MainWindow : Window
     // the same save/restore shape as Read Mode. The model is never mutated by switching views.
     private OutlineView _outlineView = null!;
     private bool _outlineMode;
-    private bool _navPaneVisibleBeforeReadMode;
-    private bool _revealPaneVisibleBeforeReadMode;
     private Thickness _editorMarginBeforeReadMode;
     private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
     private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
@@ -242,15 +239,6 @@ public sealed class MainWindow : Window
     private double _editorWidthBeforeReadMode = double.NaN;
     private Effect? _editorEffectBeforeReadMode;
     private System.Windows.Media.Brush? _editorBackgroundBeforeReadMode;
-    private Visibility _titleBarVisibilityBeforeReadMode = Visibility.Visible;
-    private Visibility _ribbonVisibilityBeforeReadMode = Visibility.Visible;
-    private Visibility _dataFolderVisibilityBeforeReadMode = Visibility.Visible;
-    private Visibility _viewSwitchVisibilityBeforeReadMode = Visibility.Visible;
-    private Visibility _zoomVisibilityBeforeReadMode = Visibility.Visible;
-
-    // Feature 4 — Read Mode options: column width token ("narrow"/"default"/"wide") and page color token.
-    private string _readModeColumnWidth = "default";
-    private string _readModePageColor   = "none";
 
     // FreeW's persisted settings (shared JsonSettingsStore). Defaults are used when none are supplied,
     // so the window stays constructible in isolation; Program.Main passes the loaded options + the store
@@ -304,7 +292,8 @@ public sealed class MainWindow : Window
         var stateStore = new RibbonStateStore();
         _stateStore = stateStore;
         var commands = FreeWRibbonCommands.Build(
-            editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode,
+            editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode,
+            () => _editorInteraction.IsReadModeActive,
             () => SetViewMode(DocumentViewMode.PrintLayout), () => _editor.ViewMode == DocumentViewMode.PrintLayout,
             ToggleOutlineView, () => _outlineMode, OpenZoomDialog,
             onZoom100: () => _editor.ZoomLevel = ZoomLevels.Default,
@@ -843,7 +832,7 @@ public sealed class MainWindow : Window
     {
         var (current, total) = _editor.PageInfo();
         var (section, sections) = _editor.SectionInfo();
-        return FreeWEditorStatusPlanner.Build(new FreeWEditorStatusSnapshot(
+        return _editorInteraction.BuildStatus(new FreeWEditorStatusSnapshot(
             words,
             charactersWithSpaces,
             paragraphs,
@@ -1978,107 +1967,101 @@ public sealed class MainWindow : Window
     // in sync, exactly like the navigation-pane toggle.
     private void ToggleReadMode()
     {
-        _readMode = !_readMode;
-        if (_readMode)
+        var plan = _editorInteraction.ToggleReadMode(new FreeWEditorChromeVisibility(
+            TitleBar: ToChromeVisibility(_titleBar.Visibility),
+            Ribbon: ToChromeVisibility(_ribbon.Visibility),
+            DataFolder: ToChromeVisibility(_dataFolderItem.Visibility),
+            ViewSwitch: ToChromeVisibility(_viewSwitchItem.Visibility),
+            Zoom: ToChromeVisibility(_zoomItem.Visibility),
+            NavigationPane: ToChromeVisibility(_navPaneVisible),
+            RevealPane: ToChromeVisibility(_revealPaneVisible),
+            ReviewingPane: ToChromeVisibility(_reviewPaneVisible)));
+
+        if (plan.IsActive)
         {
-            _titleBarVisibilityBeforeReadMode = _titleBar.Visibility;
-            _ribbonVisibilityBeforeReadMode = _ribbon.Visibility;
-            _dataFolderVisibilityBeforeReadMode = _dataFolderItem.Visibility;
-            _viewSwitchVisibilityBeforeReadMode = _viewSwitchItem.Visibility;
-            _zoomVisibilityBeforeReadMode = _zoomItem.Visibility;
-            // Remember the normal layout so we can put it back verbatim when read mode is switched off.
-            _navPaneVisibleBeforeReadMode = _navPaneVisible;
             _editorMarginBeforeReadMode = _editor.Margin;
             _editorMaxWidthBeforeReadMode = _editor.MaxWidth;
             _editorAlignmentBeforeReadMode = _editor.HorizontalAlignment;
             _editorWidthBeforeReadMode = _editor.Width;
             _editorEffectBeforeReadMode = _editor.Effect;
             _editorBackgroundBeforeReadMode = _editor.Background;
+        }
 
-            _titleBar.Visibility = Visibility.Collapsed;
-            _ribbon.Visibility = Visibility.Collapsed;
-            _dataFolderItem.Visibility = Visibility.Collapsed;
-            _viewSwitchItem.Visibility = Visibility.Collapsed;
-            _zoomItem.Visibility = Visibility.Collapsed;
+        _titleBar.Visibility = ToVisibility(plan.Chrome.TitleBar);
+        _ribbon.Visibility = ToVisibility(plan.Chrome.Ribbon);
+        _dataFolderItem.Visibility = ToVisibility(plan.Chrome.DataFolder);
+        _viewSwitchItem.Visibility = ToVisibility(plan.Chrome.ViewSwitch);
+        _zoomItem.Visibility = ToVisibility(plan.Chrome.Zoom);
+        _navPane.Visibility = ToVisibility(plan.Chrome.NavigationPane);
+        _revealPane.Visibility = ToVisibility(plan.Chrome.RevealPane);
+        _reviewPane.Visibility = ToVisibility(plan.Chrome.ReviewingPane);
 
-            // Collapse the navigation pane while reading (without disturbing its remembered state).
-            _navPane.Visibility = Visibility.Collapsed;
-
-            // Likewise hide the Reveal Formatting pane while reading (its remembered state is untouched).
-            _revealPaneVisibleBeforeReadMode = _revealPaneVisible;
-            _revealPane.Visibility = Visibility.Collapsed;
-
-            // And hide the Reviewing Pane while reading (its remembered state is untouched).
-            _reviewPaneVisibleBeforeReadMode = _reviewPaneVisible;
-            _reviewPane.Visibility = Visibility.Collapsed;
-
-            // A centered, comfortable reading column: cap the width and add generous breathing room.
-            // Drop any Print-Layout page sizing/shadow so the reading column owns the surface width.
-            // Column width respects the user's last-chosen token (Feature 4).
+        if (plan.IsActive)
+        {
             _editor.HorizontalAlignment = HorizontalAlignment.Center;
             _editor.Width = double.NaN;
             _editor.Effect = null;
-            _editor.MaxWidth = FreeWReadModePlanner.ColumnWidth(_readModeColumnWidth);
+            _editor.MaxWidth = plan.ColumnWidth;
             _editor.Margin = new Thickness(40, 40, 40, 40);
-            // Apply saved page color (Feature 4).
-            _editor.Background = ReadModeBrush(_readModePageColor);
+            _editor.Background = ReadModeBrush(plan.PageColorHex);
         }
         else
         {
-            _titleBar.Visibility = _titleBarVisibilityBeforeReadMode;
-            _ribbon.Visibility = _ribbonVisibilityBeforeReadMode;
-            _dataFolderItem.Visibility = _dataFolderVisibilityBeforeReadMode;
-            _viewSwitchItem.Visibility = _viewSwitchVisibilityBeforeReadMode;
-            _zoomItem.Visibility = _zoomVisibilityBeforeReadMode;
-
-            // Restore the editor's original presentation (including any Print-Layout page sizing/shadow).
             _editor.HorizontalAlignment = _editorAlignmentBeforeReadMode;
             _editor.MaxWidth = _editorMaxWidthBeforeReadMode;
             _editor.Margin = _editorMarginBeforeReadMode;
             _editor.Width = _editorWidthBeforeReadMode;
             _editor.Effect = _editorEffectBeforeReadMode;
             _editor.Background = _editorBackgroundBeforeReadMode;
-
-            // Restore the navigation pane to whatever it was before entering read mode.
-            _navPane.Visibility = _navPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
-
-            // Restore the Reveal Formatting pane to whatever it was before entering read mode.
-            _revealPane.Visibility = _revealPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
-
-            // Restore the Reviewing Pane to whatever it was before entering read mode.
-            _reviewPane.Visibility = _reviewPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        _stateStore.SetChecked("freew.read-mode", _readMode);
+        _stateStore.SetChecked("freew.read-mode", plan.IsActive);
     }
+
+    private static FreeWChromeVisibility ToChromeVisibility(bool isVisible) =>
+        isVisible ? FreeWChromeVisibility.Visible : FreeWChromeVisibility.Collapsed;
+
+    private static FreeWChromeVisibility ToChromeVisibility(Visibility visibility) => visibility switch
+    {
+        Visibility.Visible => FreeWChromeVisibility.Visible,
+        Visibility.Hidden => FreeWChromeVisibility.Hidden,
+        _ => FreeWChromeVisibility.Collapsed,
+    };
+
+    private static Visibility ToVisibility(FreeWChromeVisibility visibility) => visibility switch
+    {
+        FreeWChromeVisibility.Visible => Visibility.Visible,
+        FreeWChromeVisibility.Hidden => Visibility.Hidden,
+        _ => Visibility.Collapsed,
+    };
 
     // Feature 4 — Read Mode column width: Narrow (560 px) / Default (760 px) / Wide (1024 px).
     // Stores the token and, if read mode is currently active, applies the new max-width immediately.
     private void ApplyReadModeColumnWidth(string token)
     {
-        _readModeColumnWidth = FreeWReadModePlanner.NormalizeColumnWidth(token);
-        if (!_readMode) return;
-        _editor.MaxWidth = FreeWReadModePlanner.ColumnWidth(_readModeColumnWidth);
+        var plan = _editorInteraction.UpdateReadModeColumnWidth(token);
+        if (plan.ApplyImmediately)
+            _editor.MaxWidth = plan.ColumnWidth;
     }
 
     // Feature 4 — Read Mode page color: None (white), Sepia (#F0E0C0), or Inverse (dark #1E1E1E).
     // Stores the token and, if read mode is currently active, tints the editor background immediately.
     private void ApplyReadModePageColor(string token)
     {
-        _readModePageColor = FreeWReadModePlanner.NormalizePageColor(token);
-        if (!_readMode) return;
-        _editor.Background = ReadModeBrush(_readModePageColor);
+        var plan = _editorInteraction.UpdateReadModePageColor(token);
+        if (plan.ApplyImmediately)
+            _editor.Background = ReadModeBrush(plan.PageColorHex);
     }
 
-    private static System.Windows.Media.Brush ReadModeBrush(string token) =>
+    private static System.Windows.Media.Brush ReadModeBrush(string colorHex) =>
         new System.Windows.Media.SolidColorBrush(
             (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
-                FreeWReadModePlanner.PageColorHex(token))!);
+                colorHex)!);
 
-    internal bool IsReadModeActiveForTests => _readMode;
+    internal bool IsReadModeActiveForTests => _editorInteraction.IsReadModeActive;
     internal double ReadModeMaxWidthForTests => _editor.MaxWidth;
-    internal string ReadModeColumnWidthForTests => _readModeColumnWidth;
-    internal string ReadModePageColorForTests => _readModePageColor;
+    internal string ReadModeColumnWidthForTests => _editorInteraction.ReadModeColumnWidth;
+    internal string ReadModePageColorForTests => _editorInteraction.ReadModePageColor;
     internal bool IsTitleBarVisibleForTests => _titleBar.Visibility == Visibility.Visible;
     internal bool IsRibbonVisibleForTests => _ribbon.Visibility == Visibility.Visible;
     internal bool IsNavigationPaneVisibleForTests => _navPane.Visibility == Visibility.Visible;
@@ -2166,25 +2149,28 @@ public sealed class MainWindow : Window
     // bar so exactly one mode reads as active. Switching never mutates the model.
     private void SetViewMode(DocumentViewMode mode)
     {
-        // Outline view swaps the whole surface out, so it would hide whichever print-family view is chosen.
-        // Picking Print Layout / Web Layout / Draft therefore leaves Outline first (Word's views are all
-        // mutually exclusive), mirroring how the ribbon's Views group behaves.
-        if (_outlineMode)
+        var plan = _editorInteraction.PlanDocumentViewChange(
+            CurrentDocumentViewSnapshot(),
+            mode);
+
+        if (plan.ExitOutlineMode)
             ToggleOutlineView();
 
-        // Multiple Pages / Side to Side overlay the workspace child with a read-only page viewer;
-        // switching back to any live editor mode must restore the workspaceGrid first.
-        if (_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive)
+        if (plan.ExitPaginatedView)
             ExitPaginatedView();
 
-        // PagedEdit also swaps the workspace child; switching to any print-family mode exits it,
-        // committing the page boxes back to the model first.
-        if (_pagedEditMode)
+        if (plan.ExitPagedEditMode)
             ExitPagedEdit();
 
-        _editor.SetViewMode(mode);
+        _editor.SetViewMode(plan.TargetMode);
         RefreshViewModeChecks();
     }
+
+    private FreeWDocumentViewSnapshot CurrentDocumentViewSnapshot() => new(
+        _editor.ViewMode,
+        _outlineMode,
+        _pagedEditMode,
+        _viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive);
 
     // Push the active view mode into the shared RibbonStateStore (so the View ribbon's Print Layout /
     // Web Layout / Draft / Page Edit toggle buttons reflect it) and the status-bar toggle buttons.
@@ -2193,20 +2179,17 @@ public sealed class MainWindow : Window
     // read-mode / nav-pane toggles keep their buttons in sync.
     private void RefreshViewModeChecks()
     {
-        var mode = _editor.ViewMode;
-        var printLayout = !_outlineMode && !_pagedEditMode && mode == DocumentViewMode.PrintLayout;
-        var webLayout = !_outlineMode && !_pagedEditMode && mode == DocumentViewMode.WebLayout;
-        var draft = !_outlineMode && !_pagedEditMode && mode == DocumentViewMode.Draft;
+        var plan = _editorInteraction.BuildDocumentViewChecks(CurrentDocumentViewSnapshot());
 
-        _stateStore.SetChecked("freew.print-layout", printLayout);
-        _stateStore.SetChecked("freew.web-layout", webLayout);
-        _stateStore.SetChecked("freew.draft-view", draft);
-        _stateStore.SetChecked("freew.paged-edit-view", _pagedEditMode);
+        _stateStore.SetChecked("freew.print-layout", plan.PrintLayout);
+        _stateStore.SetChecked("freew.web-layout", plan.WebLayout);
+        _stateStore.SetChecked("freew.draft-view", plan.Draft);
+        _stateStore.SetChecked("freew.paged-edit-view", plan.PagedEdit);
 
-        if (_printLayoutSwitch is not null) _printLayoutSwitch.IsChecked = printLayout;
-        if (_webLayoutSwitch is not null) _webLayoutSwitch.IsChecked = webLayout;
-        if (_draftSwitch is not null) _draftSwitch.IsChecked = draft;
-        if (_pagedEditSwitch is not null) _pagedEditSwitch.IsChecked = _pagedEditMode;
+        if (_printLayoutSwitch is not null) _printLayoutSwitch.IsChecked = plan.PrintLayout;
+        if (_webLayoutSwitch is not null) _webLayoutSwitch.IsChecked = plan.WebLayout;
+        if (_draftSwitch is not null) _draftSwitch.IsChecked = plan.Draft;
+        if (_pagedEditSwitch is not null) _pagedEditSwitch.IsChecked = plan.PagedEdit;
     }
 
     // View > Outline: swap the normal editing surface for the heading-structured outline view (and its

@@ -39,35 +39,6 @@ using ModelTextAlignment = FreeW.Core.Model.TextAlignment;
 namespace FreeW.App.Host.Editing;
 
 /// <summary>
-/// Word's mutually-exclusive document view modes (View ▸ Views), as far as the live editing surface is
-/// concerned. Read Mode and Outline are separate host-level overlays (they swap the surface out entirely),
-/// so they are not part of this enum — these three all reuse the one editable surface and differ only in
-/// the page chrome they show.
-/// <list type="bullet">
-/// <item><see cref="PrintLayout"/> — the Word default: a white page sheet on the grey workspace, margins,
-/// drop shadow and page-break markers.</item>
-/// <item><see cref="WebLayout"/> — a continuous, full-width view with no page chrome (text wraps to the
-/// window like a web page).</item>
-/// <item><see cref="Draft"/> — a simplified continuous view with no page chrome, for fast editing.</item>
-/// </list>
-/// </summary>
-public enum DocumentViewMode
-{
-    PrintLayout,
-    WebLayout,
-    Draft,
-    /// <summary>
-    /// Renders the document as discrete editable page boxes (<see cref="PageBox"/>)
-    /// stacked in a <see cref="PaginatedEditorPanel"/>.  Opt-in via View ▸ Views ▸ Page Edit.
-    /// Entering commits the continuous editor first; exiting commits all page boxes back to the
-    /// model and reloads the continuous editor so PrintLayout/Web/Draft work normally again.
-    /// The default continuous editor (PrintLayout/Web/Draft) and its
-    /// <see cref="DocumentView.CommitToModel"/> path are untouched.
-    /// </summary>
-    PagedEdit,
-}
-
-/// <summary>
 /// The FreeW editing surface: a RichTextBox that renders a <see cref="TextDocument"/> into a
 /// WPF FlowDocument (resolving run/paragraph formatting through styles + document defaults) and
 /// commits edits back into the model. Caret, selection, typing, delete and Enter come from the
