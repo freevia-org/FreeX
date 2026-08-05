@@ -1,4 +1,5 @@
 using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.KeyTips;
 using FreeP.App.Compositor;
 
 namespace FreeP.Ribbon.Definitions;
@@ -29,85 +30,7 @@ public static class FreePRibbon
                 AddViewGroups)
             .Build();
 
-        return EnsureUnambiguousKeyTips(definition);
-    }
-
-    private static RibbonDefinition EnsureUnambiguousKeyTips(RibbonDefinition definition)
-    {
-        var tabKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var tabs = definition.Tabs.Select(tab =>
-        {
-            var tabKeyTip = MakeUniqueKeyTip(tab.KeyTip, tabKeyTips);
-            var groupKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var groups = tab.Groups.Select(group =>
-            {
-                var groupKeyTip = MakeUniqueKeyTip(group.KeyTip, groupKeyTips);
-                var controlKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var controls = group.Controls.Select(control =>
-                {
-                    var normalized = control switch
-                    {
-                        RibbonSplitButton split => split with { Menu = NormalizeMenuKeyTips(split.Menu) },
-                        RibbonDropdown dropdown => dropdown with { Menu = NormalizeMenuKeyTips(dropdown.Menu) },
-                        _ => control,
-                    };
-                    return normalized with
-                    {
-                        KeyTip = MakeUniqueKeyTip(normalized.KeyTip, controlKeyTips),
-                    };
-                }).ToArray();
-
-                return group with { KeyTip = groupKeyTip, Controls = controls };
-            }).ToArray();
-
-            return tab with { KeyTip = tabKeyTip, Groups = groups };
-        }).ToArray();
-
-        return definition with { Tabs = tabs };
-    }
-
-    private static RibbonMenu NormalizeMenuKeyTips(RibbonMenu menu)
-    {
-        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var items = menu.Items.Select(item => item with
-        {
-            KeyTip = MakeUniqueKeyTip(item.KeyTip, used),
-            Children = NormalizeMenuItems(item.Children),
-        }).ToArray();
-        return menu with { Items = items };
-    }
-
-    private static IReadOnlyList<RibbonMenuItem> NormalizeMenuItems(
-        IReadOnlyList<RibbonMenuItem> source)
-    {
-        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        return source.Select(item => item with
-        {
-            KeyTip = MakeUniqueKeyTip(item.KeyTip, used),
-            Children = NormalizeMenuItems(item.Children),
-        }).ToArray();
-    }
-
-    private static string? MakeUniqueKeyTip(string? keyTip, HashSet<string> used)
-    {
-        if (string.IsNullOrWhiteSpace(keyTip))
-            return keyTip;
-
-        var normalized = keyTip.Trim().ToUpperInvariant();
-        if (used.Add(normalized))
-            return normalized;
-
-        for (var suffix = 2; ; suffix++)
-        {
-            var candidate = $"{normalized}{suffix}";
-            if (normalized.StartsWith("[[", StringComparison.Ordinal) &&
-                normalized.EndsWith("]]", StringComparison.Ordinal))
-            {
-                candidate = $"{normalized[..^2]}{suffix}]]";
-            }
-            if (used.Add(candidate))
-                return candidate;
-        }
+        return RibbonDefinitionKeyTipUniquifier.Normalize(definition);
     }
 
     private static void AddHomeGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)
