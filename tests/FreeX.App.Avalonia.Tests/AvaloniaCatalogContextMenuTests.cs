@@ -267,9 +267,9 @@ public sealed class AvaloniaCatalogContextMenuTests
             RoutedEvent = InputElement.KeyDownEvent,
             Key = Key.S,
             KeyModifiers = KeyModifiers.None,
-            Source = menu,
+            Source = item,
         };
-        menu.RaiseEvent(keyDown);
+        item.RaiseEvent(keyDown);
 
         keyDown.Handled.Should().BeTrue();
         dispatchCount.Should().Be(1);

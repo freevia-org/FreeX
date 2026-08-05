@@ -54,16 +54,12 @@ public sealed class WpfAuthoritySurfaceParityTests
             text.Text.Should().Contain("Built with .NET 10 and Avalonia.");
             text.Text.Should().Contain("Help > Legal Notices");
             text.Text.Should().NotContain("Microsoft 365");
-            var workspaceRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
-            var aboutSource = File.ReadAllText(Path.Combine(
-                workspaceRoot,
-                "shared",
-                "Free.Shared.Shell.Avalonia",
-                "AvaloniaAboutDialog.cs"));
-            aboutSource.Should().Contain("selector => selector.OfType<ScrollViewer>()");
-            aboutSource.Should().Contain("ScrollViewer.VerticalContentAlignmentProperty");
-            aboutSource.Should().Contain("VerticalAlignment.Center");
             AssertDefaultCancelButtons(dialog);
+            var viewportAlignment = text.Styles
+                .OfType<global::Avalonia.Styling.Style>()
+                .SelectMany(style => style.Setters.OfType<global::Avalonia.Styling.Setter>())
+                .Single(setter => setter.Property == ScrollViewer.VerticalContentAlignmentProperty);
+            viewportAlignment.Value.Should().Be(global::Avalonia.Layout.VerticalAlignment.Center);
         }, CancellationToken.None);
     }
 
