@@ -1580,11 +1580,12 @@ public partial class MainWindow
 
     private bool TryCreateCellFromEntryText(CellAddress addr, string text, out Cell newCell)
     {
-        try
-        {
-            newCell = CellEntryParser.CreateCell(text, addr, _options.UseR1C1ReferenceStyle, _workbook);
-        }
-        catch (FormulaParseException)
+        var plan = CellEntryCommitPlanner.BuildSingle(
+            text,
+            addr,
+            _options.UseR1C1ReferenceStyle,
+            _workbook);
+        if (!plan.Success)
         {
             // Matches Excel's own "we found an error in this formula" refusal to leave edit mode
             // for genuinely malformed formula syntax (e.g. an unbalanced "=SUM(A1") -- reject the
@@ -1599,6 +1600,8 @@ public partial class MainWindow
                 MessageBoxImage.Error);
             return false;
         }
+
+        newCell = plan.Edits[0].NewCell;
 
         var validationSheet = _workbook.GetSheet(_currentSheetId);
         if (validationSheet != null)

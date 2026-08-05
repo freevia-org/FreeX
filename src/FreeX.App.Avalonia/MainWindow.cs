@@ -20065,27 +20065,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         var range = _session.SelectedRange;
-        var edits = new List<(CellAddress Address, Cell NewCell)>();
-        try
-        {
-            foreach (var address in range.AllCells())
-                edits.Add((address, CellEntryParser.CreateCell(text, address, UseR1C1ReferenceStyle)));
-        }
-        catch (FormulaParseException ex)
+        var plan = CellEntryCommitPlanner.BuildSelection(
+            text,
+            range.AllCells(),
+            UseR1C1ReferenceStyle);
+        if (!plan.Success)
         {
             // Matches Excel's own refusal to commit a genuinely malformed formula (e.g. an
             // unbalanced "=SUM(A1") for a Ctrl+Enter fill-across-selection entry, instead of
             // silently persisting broken formula text into every selected cell
             // (R91-formula-editing-assist-5-4).
-            ShowEditIssue(ex.Message);
+            ShowEditIssue(plan.ErrorMessage!);
             return false;
         }
 
-        if (edits.Count == 0)
+        if (plan.Edits.Count == 0)
             return false;
 
         var result = _session.ExecuteReviewCommand(
-            new EditCellsCommand(_session.ActiveSheet.Id, edits),
+            new EditCellsCommand(_session.ActiveSheet.Id, plan.Edits),
             fallbackAddress: current);
 
         if (!result.Success)

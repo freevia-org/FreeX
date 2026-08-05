@@ -2570,18 +2570,15 @@ public sealed class WorkbookSession : IDisposable
 
         var address = FormulaEditAddress ?? ActiveCell;
 
-        Cell cell;
-        try
-        {
-            cell = CellEntryParser.CreateCell(text, address, useR1C1ReferenceStyle, Workbook);
-        }
-        catch (FormulaParseException ex)
-        {
-            // Matches Excel's own refusal to commit a genuinely malformed formula (e.g. an
-            // unbalanced "=SUM(A1"): reject the entry instead of silently persisting broken
-            // formula text (R91-formula-editing-assist-5-4).
-            return new WorkbookCellEditResult(false, ex.Message, [], RecalcReport: null);
-        }
+        var plan = CellEntryCommitPlanner.BuildSingle(
+            text,
+            address,
+            useR1C1ReferenceStyle,
+            Workbook);
+        if (!plan.Success)
+            return new WorkbookCellEditResult(false, plan.ErrorMessage, [], RecalcReport: null);
+
+        var cell = plan.Edits[0].NewCell;
 
         // Enforce data validation the same way the WPF host's TryCreateCellFromEntryText does: a
         // Stop-alert rule blocks the entry outright, while a Warning/Information ("AskToContinue")

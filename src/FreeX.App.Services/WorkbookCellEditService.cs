@@ -259,20 +259,15 @@ public sealed class WorkbookCellEditService
         if (!address.Sheet.Equals(sheetId))
             throw new ArgumentException("The edit address must belong to the target sheet.", nameof(address));
 
-        Cell newCell;
-        try
-        {
-            newCell = CellEntryParser.CreateCell(text, address, useR1C1ReferenceStyle, workbook);
-        }
-        catch (FormulaParseException ex)
-        {
-            // Matches Excel's own refusal to commit a genuinely malformed formula (e.g. an
-            // unbalanced "=SUM(A1"): reject the entry instead of silently persisting broken
-            // formula text (R91-formula-editing-assist-5-4).
-            return new WorkbookCellEditResult(false, ex.Message, [], RecalcReport: null);
-        }
+        var plan = CellEntryCommitPlanner.BuildSingle(
+            text,
+            address,
+            useR1C1ReferenceStyle,
+            workbook);
+        if (!plan.Success)
+            return new WorkbookCellEditResult(false, plan.ErrorMessage, [], RecalcReport: null);
 
-        return ExecuteEditCommand(workbook, new EditCellsCommand(sheetId, [(address, newCell)]));
+        return ExecuteEditCommand(workbook, new EditCellsCommand(sheetId, plan.Edits));
     }
 
     private WorkbookCellEditResult ApplyHistoryOutcome(Workbook workbook, CommandOutcome outcome)
