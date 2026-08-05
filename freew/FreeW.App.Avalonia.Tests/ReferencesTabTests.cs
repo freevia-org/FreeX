@@ -162,6 +162,26 @@ public sealed class ReferencesTabTests
         entries.Count(t => t != TableOfContents.HeadingText).Should().Be(2, "now two heading entries");
     }
 
+    [Fact]
+    public void UpdateTableOfContents_UsesLogicalPageLabelOfPlacedHeading()
+    {
+        var view = new DocumentView();
+        view.Document.Blocks.Clear();
+        view.Document.Blocks.Add(new Paragraph(TableOfContents.HeadingText) { StyleId = TableOfContents.HeadingStyleId });
+        view.Document.Blocks.Add(new Paragraph("Old Heading\t9") { StyleId = TableOfContents.EntryStyleId(1) });
+        view.Document.Blocks.Add(DocumentOps.CreatePageBreak());
+        view.Document.Blocks.Add(Heading("Chapter Two", 1));
+        view.Document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        view.Document.Page.PageNumberStartAt = 4;
+
+        view.UpdateTableOfContents();
+
+        view.Document.Blocks.Where(TableOfContents.IsTocParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Chapter Two\tV");
+    }
+
     // ── Caption ─────────────────────────────────────────────────────────────────────
 
     [Fact]

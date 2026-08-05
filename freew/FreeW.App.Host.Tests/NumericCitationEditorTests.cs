@@ -89,6 +89,30 @@ public sealed class NumericCitationEditorTests
     }
 
     [StaFact]
+    public void UpdateFields_TocUsesLogicalPageLabelOfPlacedHeading()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Blocks.Add(new Paragraph(TableOfContents.HeadingText) { StyleId = TableOfContents.HeadingStyleId });
+        model.Blocks.Add(new Paragraph("Old Heading\t9") { StyleId = TableOfContents.EntryStyleId(1) });
+        model.Blocks.Add(DocumentOps.CreatePageBreak());
+        model.Blocks.Add(Heading("Chapter Two"));
+        model.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        model.Page.PageNumberStartAt = 4;
+
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        view.Model.Blocks.Where(TableOfContents.IsTocParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Chapter Two\tV");
+    }
+
+    [StaFact]
     public void UpdateFields_CitationFieldAndBibliographyRefresh_DoNotOverwriteCitationFromStaleView()
     {
         var first = new Source { Tag = "Ada1843", Author = "Ada Lovelace", Title = "Notes", Year = "1843" };

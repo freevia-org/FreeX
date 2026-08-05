@@ -144,6 +144,22 @@ public class TableOfContentsTests
     }
 
     [Fact]
+    public void Build_PageTextResolverOverridesPhysicalDecimalAndKeepsFallback()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Front matter") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Main matter") { StyleId = "Heading1" });
+
+        var entries = TableOfContents.Build(
+                doc,
+                blockIndex => blockIndex == 0 ? "iv" : null)
+            .Skip(1)
+            .Select(paragraph => paragraph.PlainText);
+
+        entries.Should().Equal("Front matter\tiv", "Main matter\t1");
+    }
+
+    [Fact]
     public void Build_SectionBreaksAdvanceLaterHeadingPageNumbers()
     {
         var doc = new TextDocument();
