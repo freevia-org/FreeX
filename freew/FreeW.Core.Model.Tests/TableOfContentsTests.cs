@@ -289,6 +289,15 @@ public class TableOfContentsTests
         {
             SpanningFieldOwner = new ComplexField(" INDEX ")
         }).Should().BeFalse();
+        TableOfContents.IsTocParagraph(new Paragraph("x")
+        {
+            SpanningFieldOwner = new ComplexField(" TOC \\c \"Figure\" ")
+        }).Should().BeFalse();
+        TableOfContents.IsTocParagraph(new Paragraph("x")
+        {
+            StyleId = "TOC1",
+            SpanningFieldOwner = new ComplexField(" TOC \\c \"Figure\" ")
+        }).Should().BeFalse();
         TableOfContents.IsTocParagraph(Table.Create(1, 1)).Should().BeFalse();
     }
 

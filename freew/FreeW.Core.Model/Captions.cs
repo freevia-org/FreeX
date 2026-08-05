@@ -17,11 +17,10 @@ public enum CaptionLabel
 /// Pure, WPF-free helpers for document captions and sequential caption numbering. Lives in the
 /// model project so it is fully unit-testable without any UI.
 /// <para>
-/// A caption is just an ordinary <see cref="Paragraph"/> carrying the <see cref="StyleId"/>
-/// <see cref="StyleId"/> (a built-in <c>Caption</c> style, registered in
-/// <see cref="TextDocument.CreateEmpty"/>), whose text starts with a label prefix and a 1-based
-/// ordinal, e.g. <c>"Figure 1: My diagram"</c>. Because it is a plain styled paragraph it round-trips
-/// through docx unchanged — no I/O changes are needed.
+/// A caption is a <see cref="Paragraph"/> carrying the built-in <see cref="StyleId"/> style whose
+/// visible text starts with a label prefix and a 1-based ordinal, e.g.
+/// <c>"Figure 1: My diagram"</c>. The ordinal is authored as a native Word <c>SEQ</c> complex field,
+/// with the supplied number retained as its cached result.
 /// </para>
 /// <para>
 /// Numbering is computed by counting the captions of the same label already present in a document
@@ -97,8 +96,8 @@ public static class Captions
 
     /// <summary>
     /// Builds a <c>Caption</c>-styled paragraph reading "<c>{Label} {number}</c>" optionally followed
-    /// by "<c>: {text}</c>" when <paramref name="text"/> is non-empty — e.g. <c>"Figure 1: My diagram"</c>
-    /// or, with no text, <c>"Table 2"</c>. The number is formatted invariantly. Never mutates input.
+    /// by "<c>: {text}</c>" when <paramref name="text"/> is non-empty. The number is the cached result
+    /// of a native <c>SEQ</c> field and is formatted invariantly. Never mutates input.
     /// </summary>
     public static Paragraph BuildCaption(CaptionLabel label, int number, string text)
     {
@@ -110,11 +109,31 @@ public static class Captions
     /// </summary>
     public static Paragraph BuildCaption(string labelText, int number, string text)
     {
-        var prefix = $"{NormalizeLabelText(labelText)} {number.ToString(CultureInfo.InvariantCulture)}";
+        var label = NormalizeLabelText(labelText);
         var trimmed = text?.Trim() ?? string.Empty;
-        var full = trimmed.Length > 0 ? $"{prefix}{Separator}{trimmed}" : prefix;
-        return new Paragraph(full) { StyleId = StyleId };
+        var paragraph = new Paragraph { StyleId = StyleId };
+        paragraph.Runs.Add(new Run(label + " "));
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            SequenceInstructionFor(label),
+            number.ToString(CultureInfo.InvariantCulture)));
+        if (trimmed.Length > 0)
+            paragraph.Runs.Add(new Run(Separator + trimmed));
+        return paragraph;
     }
+
+    /// <summary>The native Word sequence instruction used by captions of <paramref name="labelText"/>.</summary>
+    public static string SequenceInstructionFor(string labelText)
+    {
+        var label = NormalizeLabelText(labelText);
+        var argument = label.Any(char.IsWhiteSpace) || label.IndexOfAny(['"', '\\']) >= 0
+            ? $"\"{EscapeFieldArgument(label)}\""
+            : label;
+        return $" SEQ {argument} \\* ARABIC ";
+    }
+
+    internal static string EscapeFieldArgument(string value) =>
+        value.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("\"", "\\\"", StringComparison.Ordinal);
 
     /// <summary>
     /// True when <paramref name="block"/> is a paragraph carrying the <c>Caption</c> style. Used to
