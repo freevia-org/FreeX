@@ -286,6 +286,40 @@ public sealed class ContextMenuInteractionValidationTests
     }
 
     [Fact]
+    public async Task ProductionDispatch_ExercisesShowNotesAndEveryAutoFilterCriterion()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            window.Show();
+            try
+            {
+                var inventory = MainWindow.BuildContextMenuValidationInventory();
+                var rows = inventory
+                    .Where(row =>
+                        row.ActionKey == nameof(WorksheetContextMenuAction.ShowNotes) ||
+                        row.FamilyId == "context-menu.auto-filter-criteria")
+                    .ToArray();
+
+                rows.Should().HaveCount(33);
+                rows.Should().OnlyContain(row => !MainWindow.MayOpenOwnedContextDialog(row));
+
+                var results = new List<InteractionValidationResult>();
+                foreach (var row in rows)
+                    results.Add(await window.RunContextMenuInteractionValidationForTestAsync(row.Id));
+
+                results.Should().OnlyContain(result => result.Status == "passed", because:
+                    string.Join(Environment.NewLine, results.Select(result =>
+                        $"{result.Id}: {result.EvidenceLevel} | {result.Note}")));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ProductionDispatch_ObservesWorksheetInlineEditorsAndPictureCropMode()
     {
         await Session.Dispatch(async () =>
