@@ -180,6 +180,122 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void SlideShowMediaInteractionPlanner_CarriesShowWhenStoppedPolicy()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 8,
+            Kind = SlideShapeKind.Media,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 4 * 9525,
+            ExtentCyEmu = 4 * 9525,
+            Media = new MediaInfo { IsVideo = true, Bytes = [4, 5, 6], ShowWhenStopped = false },
+        });
+
+        var plan = SlideShowMediaInteractionPlanner.BuildSlidePlan(slide, 10, 10, 10, 10);
+
+        plan.Should().ContainSingle().Which.ShowWhenStopped.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SlideShowMediaInteractionPlanner_ResolvesTrimFromStartAndEndAgainstDuration()
+    {
+        var media = new MediaInfo
+        {
+            TrimStartMilliseconds = 1250,
+            TrimEndMilliseconds = 2750,
+        };
+
+        var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
+            media,
+            TimeSpan.FromSeconds(20));
+
+        window.Start.Should().Be(TimeSpan.FromMilliseconds(1250));
+        window.End.Should().Be(TimeSpan.FromMilliseconds(17250));
+        SlideShowMediaInteractionPlanner.IsAtOrPastTrimEnd(
+            media,
+            TimeSpan.FromMilliseconds(17250),
+            TimeSpan.FromSeconds(20)).Should().BeTrue();
+        SlideShowMediaInteractionPlanner.IsAtOrPastTrimEnd(
+            media,
+            TimeSpan.FromMilliseconds(17249),
+            TimeSpan.FromSeconds(20)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void SlideShowMediaInteractionPlanner_ClampsInvalidTrimAndDefersUnknownDurationEnd()
+    {
+        var media = new MediaInfo
+        {
+            TrimStartMilliseconds = -20,
+            TrimEndMilliseconds = double.NaN,
+        };
+
+        var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
+            media,
+            TimeSpan.Zero);
+
+        window.Start.Should().Be(TimeSpan.Zero);
+        window.End.Should().Be(TimeSpan.MaxValue);
+        SlideShowMediaInteractionPlanner.ClampToTrimStart(
+            new MediaInfo { TrimStartMilliseconds = 500 },
+            TimeSpan.FromMilliseconds(100)).Should().Be(TimeSpan.FromMilliseconds(500));
+    }
+
+    [Fact]
+    public void SlideShowMediaInteractionPlanner_ResolvesNamedBookmarkWithinTrimWindow()
+    {
+        var media = new MediaInfo
+        {
+            TrimStartMilliseconds = 1000,
+            TrimEndMilliseconds = 2000,
+        };
+        media.Bookmarks.AddRange(
+        [
+            new MediaBookmarkInfo { Name = "Intro", TimeMilliseconds = 0 },
+            new MediaBookmarkInfo { Name = "Middle", TimeMilliseconds = 5000 },
+            new MediaBookmarkInfo { Name = "Outro", TimeMilliseconds = 30000 },
+        ]);
+
+        SlideShowMediaInteractionPlanner.TryResolveMediaBookmarkPosition(
+            media, " intro ", TimeSpan.FromSeconds(20), out var intro).Should().BeTrue();
+        intro.Should().Be(TimeSpan.FromSeconds(1));
+        SlideShowMediaInteractionPlanner.TryResolveMediaBookmarkPosition(
+            media, "MIDDLE", TimeSpan.FromSeconds(20), out var middle).Should().BeTrue();
+        middle.Should().Be(TimeSpan.FromSeconds(5));
+        SlideShowMediaInteractionPlanner.TryResolveMediaBookmarkPosition(
+            media, "Outro", TimeSpan.FromSeconds(20), out var outro).Should().BeTrue();
+        outro.Should().Be(TimeSpan.FromSeconds(18));
+        SlideShowMediaInteractionPlanner.TryResolveMediaBookmarkPosition(
+            media, "missing", TimeSpan.FromSeconds(20), out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void SlideShowMediaInteractionPlanner_ComputesFadeEnvelopeAgainstTrimWindow()
+    {
+        var media = new MediaInfo
+        {
+            TrimStartMilliseconds = 1000,
+            TrimEndMilliseconds = 2000,
+            FadeInMilliseconds = 4000,
+            FadeOutMilliseconds = 3000,
+        };
+
+        SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent(
+            media, 80, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(20)).Should().Be(0);
+        SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent(
+            media, 80, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(20)).Should().Be(40);
+        SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent(
+            media, 80, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(20)).Should().Be(80);
+        SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent(
+            media, 80, TimeSpan.FromSeconds(16.5), TimeSpan.FromSeconds(20)).Should().Be(40);
+        SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent(
+            media, 80, TimeSpan.FromSeconds(18), TimeSpan.FromSeconds(20)).Should().Be(0);
+    }
+
+    [Fact]
     public void SlideShowMediaInteractionPlanner_SuppressesNarrationAudioButKeepsVideo()
     {
         var slide = new Slide();

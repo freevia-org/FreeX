@@ -148,6 +148,9 @@ public sealed class SlideShowMediaController
         uint ShapeId,
         MediaElement? Element,
         string? TempPath,
+        bool ShowWhenStopped,
+        MediaInfo? Media = null,
+        int BaseVolumePercent = 100,
         PresentationMediaTranscriptTrackDescriptor? CaptionTrack = null,
         Border? CaptionHost = null,
         TextBlock? CaptionText = null);
@@ -166,7 +169,11 @@ public sealed class SlideShowMediaController
         {
             Interval = TimeSpan.FromMilliseconds(100),
         };
-        _captionTimer.Tick += (_, _) => UpdateCaptions();
+        _captionTimer.Tick += (_, _) =>
+        {
+            EnforceTrimWindows();
+            UpdateCaptions();
+        };
     }
 
     internal string? CaptionTextForTest(uint shapeId) =>
@@ -260,7 +267,8 @@ public sealed class SlideShowMediaController
             _slots.Add(slot);
         }
 
-        _captionTimer.IsEnabled = _slots.Any(slot => slot.CaptionTrack is not null);
+        _captionTimer.IsEnabled = _slots.Any(slot =>
+            slot.CaptionTrack is not null || HasPlaybackEnvelope(slot.Media));
         UpdateCaptions();
     }
 
@@ -357,7 +365,7 @@ public sealed class SlideShowMediaController
         if (slot is null)
             return true;
 
-        TogglePlayPause(slot.Element);
+        TogglePlayPause(slot);
         return true;
     }
 
@@ -503,10 +511,11 @@ public sealed class SlideShowMediaController
         // NOTE: tempPath is set even when source is null (e.g. invalid URI from a fake writer),
         // so we always have it for cleanup.
         Uri? source = ResolveSource(media, out string? tempPath);
+        var baseVolumePercent = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(media.VolumePercent);
         if (source is null)
         {
             // Still record the tempPath for cleanup (written but URI was unparseable).
-            return new MediaSlot(shapeId, null, tempPath);
+            return new MediaSlot(shapeId, null, tempPath, media.ShowWhenStopped, media, baseVolumePercent);
         }
 
         MediaElement? element = null;
@@ -517,9 +526,11 @@ public sealed class SlideShowMediaController
                 LoadedBehavior   = MediaState.Manual,
                 UnloadedBehavior = MediaState.Stop,
                 Source           = source,
-                Volume           = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(media.VolumePercent) / 100d,
+                Volume           = baseVolumePercent / 100d,
                 // For audio: collapse the visual (no video frame to show).
-                Visibility       = isVideo ? Visibility.Visible : Visibility.Collapsed,
+                Visibility       = isVideo && media.ShowWhenStopped
+                    ? Visibility.Visible
+                    : Visibility.Collapsed,
                 IsHitTestVisible = false,   // we do our own hit-testing
             };
 
@@ -531,14 +542,25 @@ public sealed class SlideShowMediaController
                 element.Visibility = Visibility.Collapsed;
             };
 
+            element.MediaOpened += (_, _) =>
+            {
+                SeekToTrimStart(element, media);
+                ApplyFade(element, media, baseVolumePercent);
+            };
+
             element.MediaEnded += (_, _) =>
             {
                 if (!media.Loop)
+                {
+                    if (!media.ShowWhenStopped && isVideo)
+                        element.Visibility = Visibility.Collapsed;
                     return;
+                }
 
                 try
                 {
-                    element.Position = TimeSpan.Zero;
+                    SeekToTrimStart(element, media);
+                    ApplyFade(element, media, baseVolumePercent);
                     element.Play();
                     element.Tag = true;
                 }
@@ -551,8 +573,12 @@ public sealed class SlideShowMediaController
             _overlay.Children.Add(element);
             if (media.PlaybackStartMode == MediaPlaybackStartMode.Automatically)
             {
+                SeekToTrimStart(element, media);
+                ApplyFade(element, media, baseVolumePercent);
                 element.Play();
                 element.Tag = true;
+                if (isVideo)
+                    element.Visibility = Visibility.Visible;
             }
         }
         catch
@@ -561,7 +587,7 @@ public sealed class SlideShowMediaController
             element = null;
         }
 
-        return new MediaSlot(shapeId, element, tempPath);
+        return new MediaSlot(shapeId, element, tempPath, media.ShowWhenStopped, media, baseVolumePercent);
     }
 
     private Uri? ResolveSource(MediaInfo media, out string? tempPath)
@@ -600,13 +626,29 @@ public sealed class SlideShowMediaController
         if (position < TimeSpan.Zero)
             return false;
 
-        var element = _slots.FirstOrDefault(slot => slot.ShapeId == shapeId)?.Element;
-        if (element is null)
+        var slot = _slots.FirstOrDefault(candidate => candidate.ShapeId == shapeId);
+        if (slot?.Element is not { } element)
             return false;
 
         try
         {
-            element.Position = position;
+            var media = slot.Media;
+            if (media is null)
+            {
+                element.Position = position;
+            }
+            else
+            {
+                var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
+                    media,
+                    element.NaturalDuration.HasTimeSpan
+                        ? element.NaturalDuration.TimeSpan
+                        : TimeSpan.Zero);
+                element.Position = window.End != TimeSpan.MaxValue && position > window.End
+                    ? window.End
+                    : SlideShowMediaInteractionPlanner.ClampToTrimStart(media, position);
+            }
+            ApplyFade(element, media, slot.BaseVolumePercent);
             return true;
         }
         catch (InvalidOperationException)
@@ -615,16 +657,37 @@ public sealed class SlideShowMediaController
         }
     }
 
+    /// <summary>Seeks an active media element to a named authored bookmark.</summary>
+    public bool TrySeekToBookmark(uint shapeId, string bookmarkName)
+    {
+        var slot = _slots.FirstOrDefault(candidate => candidate.ShapeId == shapeId);
+        if (slot?.Element is not { } element || slot.Media is not { } media)
+            return false;
+
+        var duration = element.NaturalDuration.HasTimeSpan
+            ? element.NaturalDuration.TimeSpan
+            : TimeSpan.Zero;
+        if (!SlideShowMediaInteractionPlanner.TryResolveMediaBookmarkPosition(
+                media, bookmarkName, duration, out var position))
+            return false;
+
+        // Reuse the established WPF seek path so unopened MediaElement instances
+        // receive the same dispatcher/trim handling as ordinary scrubbing.
+        return TrySeek(shapeId, position);
+    }
+
     /// <summary>Sets the active media volume using the shared 0-100 volume convention.</summary>
     public bool TrySetVolume(uint shapeId, int volume)
     {
-        var element = _slots.FirstOrDefault(slot => slot.ShapeId == shapeId)?.Element;
-        if (element is null)
+        var slotIndex = _slots.FindIndex(slot => slot.ShapeId == shapeId);
+        if (slotIndex < 0 || _slots[slotIndex].Element is not { } element)
             return false;
 
         try
         {
-            element.Volume = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(volume) / 100d;
+            var baseVolumePercent = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(volume);
+            _slots[slotIndex] = _slots[slotIndex] with { BaseVolumePercent = baseVolumePercent };
+            ApplyFade(element, _slots[slotIndex].Media, baseVolumePercent);
             return true;
         }
         catch (InvalidOperationException)
@@ -641,8 +704,9 @@ public sealed class SlideShowMediaController
         Canvas.SetTop(el, r.Y);
     }
 
-    private static void TogglePlayPause(MediaElement? el)
+    private static void TogglePlayPause(MediaSlot slot)
     {
+        var el = slot.Element;
         if (el is null) return;
         try
         {
@@ -655,13 +719,100 @@ public sealed class SlideShowMediaController
             {
                 el.Pause();
                 el.Tag = false;
+                if (!slot.ShowWhenStopped)
+                    el.Visibility = Visibility.Collapsed;
             }
             else
             {
+                SeekToTrimStart(el, slot.Media);
+                ApplyFade(el, slot.Media, slot.BaseVolumePercent);
                 el.Play();
                 el.Tag = true;
+                el.Visibility = Visibility.Visible;
             }
         }
         catch { /* ignore */ }
+    }
+
+    private void EnforceTrimWindows()
+    {
+        foreach (var slot in _slots)
+        {
+            if (slot.Element is not { } element || slot.Media is not { } media)
+                continue;
+
+            if (element.Tag is not true)
+                continue;
+
+            ApplyFade(element, media, slot.BaseVolumePercent);
+
+            var duration = element.NaturalDuration.HasTimeSpan
+                ? element.NaturalDuration.TimeSpan
+                : TimeSpan.Zero;
+            if (!SlideShowMediaInteractionPlanner.IsAtOrPastTrimEnd(
+                    media, element.Position, duration))
+                continue;
+
+            if (media.Loop)
+            {
+                SeekToTrimStart(element, media);
+                ApplyFade(element, media, slot.BaseVolumePercent);
+                element.Play();
+            }
+            else
+            {
+                element.Pause();
+                element.Tag = false;
+                if (!slot.ShowWhenStopped)
+                    element.Visibility = Visibility.Collapsed;
+            }
+        }
+    }
+
+    private static bool HasPlaybackEnvelope(MediaInfo? media) =>
+        media is not null &&
+        (HasPositiveTiming(media.TrimStartMilliseconds) ||
+         HasPositiveTiming(media.TrimEndMilliseconds) ||
+         HasPositiveTiming(media.FadeInMilliseconds) ||
+         HasPositiveTiming(media.FadeOutMilliseconds));
+
+    private static bool HasPositiveTiming(double value) => value > 0 && double.IsFinite(value);
+
+    private static void ApplyFade(MediaElement element, MediaInfo? media, int baseVolumePercent)
+    {
+        if (media is null)
+            return;
+
+        var duration = element.NaturalDuration.HasTimeSpan
+            ? element.NaturalDuration.TimeSpan
+            : TimeSpan.Zero;
+        element.Volume = SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent(
+            media,
+            baseVolumePercent,
+            element.Position,
+            duration) / 100d;
+    }
+
+    private static void SeekToTrimStart(MediaElement element, MediaInfo? media)
+    {
+        if (media is null)
+            return;
+
+        try
+        {
+            var position = element.Position;
+            var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
+                media,
+                element.NaturalDuration.HasTimeSpan
+                    ? element.NaturalDuration.TimeSpan
+                    : TimeSpan.Zero);
+            if (window.End != TimeSpan.MaxValue && position >= window.End)
+                element.Position = window.Start;
+            else if (position < window.Start)
+                element.Position = window.Start;
+        }
+        catch (InvalidOperationException)
+        {
+        }
     }
 }

@@ -1623,7 +1623,7 @@ public sealed class DocumentView : RichTextBox
     // InsertParagraphCommand each (kept in order), then re-render. The bus's Changed event redraws.
     private void InsertTocAt(int at)
     {
-        var toc = TableOfContents.Build(_model);
+        var toc = TableOfContents.Build(_model, BuildGeneratedPageTextResolver());
         var index = Math.Clamp(at, 0, _model.Blocks.Count);
         foreach (var paragraph in toc)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
@@ -12845,6 +12845,18 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         var blocks = _model.Blocks;
+        var crossReferencePageResolver = blocks
+            .OfType<ModelParagraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef
+                || run.ComplexField?.Keyword == "PAGEREF")
+                ? BuildCrossReferencePageResolver()
+                : null;
+        var crossReferencePageTextResolver = crossReferencePageResolver is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
+                _model,
+                crossReferencePageResolver);
         for (var b = 0; b < blocks.Count; b++)
         {
             if (blocks[b] is not ModelParagraph paragraph)
@@ -12854,7 +12866,13 @@ public sealed class DocumentView : RichTextBox
                 var r = paragraph.Runs[i];
                 if (r.CrossReference is { } crossReference)
                 {
-                    var resolved = CrossReferences.ResolveField(_model, crossReference, r.Text, b);
+                    var resolved = CrossReferences.ResolveField(
+                        _model,
+                        crossReference,
+                        r.Text,
+                        b,
+                        crossReferencePageResolver,
+                        crossReferencePageTextResolver);
                     if (resolved.Length > 0)
                         r.Text = resolved;
                 }
@@ -12866,7 +12884,12 @@ public sealed class DocumentView : RichTextBox
                     // REF/PAGEREF/SEQ re-evaluate against current bookmarks/sequences; the rest reuse the
                     // live DATE/AUTHOR/… resolver (PAGE/NUMPAGES keep their cached value here).
                     var resolved = ComplexFieldEngine.CanRecompute(cf)
-                        ? ComplexFieldEngine.Recompute(_model, b, i)
+                        ? ComplexFieldEngine.Recompute(
+                            _model,
+                            b,
+                            i,
+                            crossReferencePageResolver,
+                            crossReferencePageTextResolver)
                         : ResolveFieldText(ComplexFieldDisplayPlanner.ResolveLiveKind(cf.Keyword), r.Text, _model, CurrentFileName);
                     if (resolved.Length > 0)
                         r.Text = resolved;
@@ -12919,6 +12942,63 @@ public sealed class DocumentView : RichTextBox
 
         Render();
     }
+
+    private Func<int, int?>? BuildCrossReferencePageResolver()
+    {
+        try
+        {
+            var pagination = PaginationEngine.Compute(this);
+            var pageCount = Math.Max(1, pagination.PageCount);
+            if (pageCount == 1 || pagination.PageBreakYsDip.Count == 0)
+                return blockIndex => IsModelParagraph(blockIndex)
+                    ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex) ?? 1
+                    : null;
+
+            var firstRect = Document.ContentStart.GetCharacterRect(LogicalDirection.Forward);
+            if (firstRect.IsEmpty)
+                return blockIndex => IsModelParagraph(blockIndex)
+                    ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
+                    : null;
+
+            var topY = firstRect.Top;
+            return blockIndex =>
+            {
+                if (!IsModelParagraph(blockIndex))
+                    return null;
+
+                var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex);
+                if (TextPointerAtModelTextOffset(blockIndex, 0) is not { } pointer)
+                    return explicitPage;
+
+                var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
+                if (rect.IsEmpty)
+                    return explicitPage;
+
+                var y = rect.Top - topY;
+                var pageIndex = 0;
+                foreach (var breakY in pagination.PageBreakYsDip)
+                {
+                    if (y + 0.5 < breakY)
+                        break;
+                    pageIndex++;
+                }
+
+                var placedPage = Math.Min(Math.Max(1, pageIndex + 1), pageCount);
+                return explicitPage is { } authoredPage
+                    ? Math.Max(placedPage, authoredPage)
+                    : placedPage;
+            };
+        }
+        catch (InvalidOperationException)
+        {
+            return blockIndex => CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex);
+        }
+    }
+
+    private bool IsModelParagraph(int blockIndex) =>
+        blockIndex >= 0
+        && blockIndex < _model.Blocks.Count
+        && _model.Blocks[blockIndex] is ModelParagraph;
 
     /// <summary>
     /// Renders an inline image as an InlineUIContainer hosting a WPF Image. The image bytes are decoded
@@ -16493,10 +16573,18 @@ public sealed class DocumentView : RichTextBox
     // InsertParagraphCommand each (kept in order). The bus's Changed event redraws.
     private void InsertTableOfFiguresAt(int at, string labelText)
     {
-        var entries = TableOfFigures.Build(_model, labelText);
+        var entries = TableOfFigures.Build(_model, labelText, BuildGeneratedPageTextResolver());
         var index = Math.Clamp(at, 0, _model.Blocks.Count);
         foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+    }
+
+    private Func<int, string?>? BuildGeneratedPageTextResolver()
+    {
+        var physicalPageOf = BuildCrossReferencePageResolver();
+        return physicalPageOf is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_model, physicalPageOf);
     }
 
     /// <summary>

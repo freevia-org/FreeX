@@ -10,7 +10,8 @@ public sealed record SlideShowMediaShapePlan(
     bool HasSource,
     string SourceKind,
     string PlaybackCapabilityNote,
-    bool ShowMediaControls);
+    bool ShowMediaControls,
+    bool ShowWhenStopped);
 
 public sealed record SlideShowMediaClickPlan(
     bool IsHandled,
@@ -18,6 +19,13 @@ public sealed record SlideShowMediaClickPlan(
     SlideShowMediaShapePlan? Media)
 {
     public static SlideShowMediaClickPlan NotMedia { get; } = new(false, false, null);
+}
+
+public readonly record struct SlideShowMediaTrimWindow(
+    TimeSpan Start,
+    TimeSpan End)
+{
+    public bool IsTrimmed => Start > TimeSpan.Zero || End < TimeSpan.MaxValue;
 }
 
 /// <summary>
@@ -104,6 +112,122 @@ public static class SlideShowMediaInteractionPlanner
     /// </summary>
     public static int NormalizeVolumePercent(int volume) => Math.Clamp(volume, 0, 100);
 
+    /// <summary>
+    /// Resolves PowerPoint's trim-from-start/trim-from-end values against the
+    /// duration reported by the active playback engine. Unknown durations keep
+    /// the start trim (which can be applied before playback) and leave the end
+    /// open until the engine reports a duration.
+    /// </summary>
+    public static SlideShowMediaTrimWindow ResolveTrimWindow(
+        MediaInfo media,
+        TimeSpan duration)
+    {
+        ArgumentNullException.ThrowIfNull(media);
+
+        var start = PositiveMilliseconds(media.TrimStartMilliseconds);
+        if (duration <= TimeSpan.Zero)
+            return new SlideShowMediaTrimWindow(start, TimeSpan.MaxValue);
+
+        var endTrim = PositiveMilliseconds(media.TrimEndMilliseconds);
+        var end = duration - endTrim;
+        if (end < start)
+            end = start;
+
+        return new SlideShowMediaTrimWindow(start, end);
+    }
+
+    public static bool IsAtOrPastTrimEnd(
+        MediaInfo media,
+        TimeSpan position,
+        TimeSpan duration)
+    {
+        var window = ResolveTrimWindow(media, duration);
+        return window.End != TimeSpan.MaxValue && position >= window.End;
+    }
+
+    public static TimeSpan ClampToTrimStart(MediaInfo media, TimeSpan position)
+    {
+        ArgumentNullException.ThrowIfNull(media);
+        var start = PositiveMilliseconds(media.TrimStartMilliseconds);
+        return position < start ? start : position;
+    }
+
+    /// <summary>
+    /// Resolves a named media bookmark to a seek position while respecting the
+    /// active trim window. Bookmark names are user-facing labels, so lookup is
+    /// trimmed and case-insensitive; duplicate names resolve to the first entry.
+    /// </summary>
+    public static bool TryResolveMediaBookmarkPosition(
+        MediaInfo media,
+        string bookmarkName,
+        TimeSpan duration,
+        out TimeSpan position)
+    {
+        ArgumentNullException.ThrowIfNull(media);
+        position = TimeSpan.Zero;
+        var normalizedName = bookmarkName?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedName))
+            return false;
+
+        var bookmark = media.Bookmarks.FirstOrDefault(candidate =>
+            string.Equals(candidate.Name?.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase));
+        if (bookmark is null || !double.IsFinite(bookmark.TimeMilliseconds) || bookmark.TimeMilliseconds < 0)
+            return false;
+
+        position = TimeSpan.FromMilliseconds(
+            Math.Min(bookmark.TimeMilliseconds, TimeSpan.MaxValue.TotalMilliseconds));
+        var window = ResolveTrimWindow(media, duration);
+        if (position < window.Start)
+            position = window.Start;
+        else if (window.End != TimeSpan.MaxValue && position > window.End)
+            position = window.End;
+        return true;
+    }
+
+    /// <summary>
+    /// Computes the current playback volume after applying authored fade-in and
+    /// fade-out durations. The returned value remains in the shared 0-100 range.
+    /// </summary>
+    public static int ComputeEffectiveVolumePercent(
+        MediaInfo media,
+        int baseVolumePercent,
+        TimeSpan position,
+        TimeSpan duration)
+    {
+        ArgumentNullException.ThrowIfNull(media);
+
+        var baseVolume = NormalizeVolumePercent(baseVolumePercent);
+        var fadeIn = PositiveMilliseconds(media.FadeInMilliseconds);
+        var fadeOut = PositiveMilliseconds(media.FadeOutMilliseconds);
+        if (fadeIn == TimeSpan.Zero && fadeOut == TimeSpan.Zero)
+            return baseVolume;
+
+        var window = ResolveTrimWindow(media, duration);
+        var factor = 1d;
+        if (fadeIn > TimeSpan.Zero)
+        {
+            var elapsed = position - window.Start;
+            factor = Math.Min(factor, elapsed <= TimeSpan.Zero
+                ? 0d
+                : Math.Clamp(elapsed.TotalMilliseconds / fadeIn.TotalMilliseconds, 0d, 1d));
+        }
+
+        if (fadeOut > TimeSpan.Zero && window.End != TimeSpan.MaxValue)
+        {
+            var remaining = window.End - position;
+            factor = Math.Min(factor, remaining <= TimeSpan.Zero
+                ? 0d
+                : Math.Clamp(remaining.TotalMilliseconds / fadeOut.TotalMilliseconds, 0d, 1d));
+        }
+
+        return (int)Math.Round(baseVolume * factor, MidpointRounding.AwayFromZero);
+    }
+
+    private static TimeSpan PositiveMilliseconds(double value) =>
+        value > 0 && double.IsFinite(value)
+            ? TimeSpan.FromMilliseconds(Math.Min(value, TimeSpan.MaxValue.TotalMilliseconds))
+            : TimeSpan.Zero;
+
     private static SlideShowMediaShapePlan BuildShapePlan(
         SlideShape shape,
         double slideDipW,
@@ -124,7 +248,8 @@ public static class SlideShowMediaInteractionPlanner
             hasEmbeddedSource || hasLinkedSource,
             hasEmbeddedSource ? "embedded" : hasLinkedSource ? "http-link" : "missing",
             PlaybackBackendCapabilityNote,
-            showMediaControls);
+            showMediaControls,
+            media.ShowWhenStopped);
     }
 
     private static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)

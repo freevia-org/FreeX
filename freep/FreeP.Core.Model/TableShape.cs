@@ -37,7 +37,9 @@ public enum TableCellBorderSide
     Left = 0,
     Right = 1,
     Top = 2,
-    Bottom = 3
+    Bottom = 3,
+    DiagonalDown = 4,
+    DiagonalUp = 5
 }
 
 /// <summary>One of the four editable cell inset sides.</summary>
@@ -71,6 +73,12 @@ public sealed class TableCellBorders
     public ShapeOutline? Right  { get; set; }
     public ShapeOutline? Top    { get; set; }
     public ShapeOutline? Bottom { get; set; }
+
+    /// <summary>Top-left to bottom-right diagonal border (a:lnTlToBr).</summary>
+    public ShapeOutline? DiagonalDown { get; set; }
+
+    /// <summary>Bottom-left to top-right diagonal border (a:lnBlToTr).</summary>
+    public ShapeOutline? DiagonalUp { get; set; }
 }
 
 /// <summary>

@@ -32,8 +32,8 @@ public class TableOfFiguresTests
 
         tof.Select(p => p.PlainText).Should().Equal(
             "Table of Figures",
-            "Figure 1: First diagram",
-            "Figure 2: Second diagram");
+            "Figure 1: First diagram\t1",
+            "Figure 2: Second diagram\t1");
 
         tof.Select(p => p.StyleId).Should().Equal(
             TableOfFigures.HeadingStyleId,
@@ -53,8 +53,8 @@ public class TableOfFiguresTests
 
         tof.Select(p => p.PlainText).Should().Equal(
             "Table of Tables",
-            "Table 1: Quarterly results",
-            "Table 2: Annual results");
+            "Table 1: Quarterly results\t1",
+            "Table 2: Annual results\t1");
 
         tof[0].StyleId.Should().Be(TableOfFigures.HeadingStyleId);
         tof.Skip(1).Should().OnlyContain(p => p.StyleId == TableOfFigures.EntryStyleId);
@@ -72,8 +72,8 @@ public class TableOfFiguresTests
 
         tof.Select(p => p.PlainText).Should().Equal(
             "Table of Equations",
-            "Equation 1: E = mc2",
-            "Equation 2: F = ma");
+            "Equation 1: E = mc2\t1",
+            "Equation 2: F = ma\t1");
     }
 
     [Fact]
@@ -88,8 +88,41 @@ public class TableOfFiguresTests
 
         tof.Select(p => p.PlainText).Should().Equal(
             "Table of Schemes",
-            "Scheme 1: Flow",
-            "Scheme 2: State");
+            "Scheme 1: Flow\t1",
+            "Scheme 2: State\t1");
+    }
+
+    [Fact]
+    public void Build_EntriesUseDottedRightTabAndLogicalPageResolverWithDecimalFallback()
+    {
+        var doc = new TextDocument();
+        doc.Page.WidthPt = 700;
+        doc.Page.MarginLeftPt = 80;
+        doc.Page.MarginRightPt = 120;
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 1, "Front matter"));
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 2, "Main matter"));
+
+        var entries = TableOfFigures.Build(
+            doc,
+            CaptionLabel.Figure,
+            blockIndex => blockIndex == 0 ? "iv" : null);
+
+        entries.Skip(1).Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Figure 1: Front matter\tiv", "Figure 2: Main matter\t1");
+        entries[1].Formatting.TabStops.Should().Equal(
+            new TabStop(500, TabStopAlignment.Right, TabLeader.Dots));
+    }
+
+    [Fact]
+    public void Build_ExplicitPageBreakAdvancesCaptionFallbackPage()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 1, "First"));
+        doc.Blocks.Add(DocumentOps.CreatePageBreak());
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 2, "Second"));
+
+        TableOfFigures.Build(doc).Skip(1).Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Figure 1: First\t1", "Figure 2: Second\t2");
     }
 
     [Fact]

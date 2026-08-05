@@ -44,6 +44,7 @@ public sealed record PresentationMediaPaneProjection(
     int VolumePercent,
     MediaPlaybackStartMode PlaybackStartMode,
     bool Loop,
+    bool ShowWhenStopped,
     PresentationMediaTimingInputPlan Timing,
     IReadOnlyList<PresentationMediaBookmarkPaneItemPlan> Bookmarks,
     int? SelectedBookmarkIndex,
@@ -162,9 +163,12 @@ public sealed class PresentationMediaPaneSession
         return changed;
     }
 
-    public bool ApplyPlayback(MediaPlaybackStartMode startMode, bool loop)
+    public bool ApplyPlayback(
+        MediaPlaybackStartMode startMode,
+        bool loop,
+        bool showWhenStopped = true)
     {
-        var changed = _getEditor().SetSelectedMediaPlaybackOptions(startMode, loop);
+        var changed = _getEditor().SetSelectedMediaPlaybackOptions(startMode, loop, showWhenStopped);
         if (changed)
             CompleteMutation();
         return changed;
@@ -237,6 +241,7 @@ public sealed class PresentationMediaPaneSession
             media?.VolumePercent ?? 80,
             media?.PlaybackStartMode ?? MediaPlaybackStartMode.InClickSequence,
             media?.Loop ?? false,
+            media?.ShowWhenStopped ?? true,
             BuildTimingInputPlan(
                 media?.TrimStartMilliseconds ?? 0,
                 media?.TrimEndMilliseconds ?? 0,

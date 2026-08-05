@@ -180,6 +180,7 @@ public sealed partial class MainWindow : Window
     private TextBlock _mediaStartModeText = null!;
     private ComboBox _mediaStartModeBox = null!;
     private CheckBox _mediaLoopCheckBox = null!;
+    private CheckBox _mediaShowWhenStoppedCheckBox = null!;
     private Button _mediaPlaybackApplyButton = null!;
     private TextBlock _mediaTrimStartText = null!;
     private TextBox _mediaTrimStartBox = null!;
@@ -387,6 +388,7 @@ public sealed partial class MainWindow : Window
         ? startMode
         : PresentationMediaPaneSession.GetPlaybackStartMode(-1);
     internal bool MediaLoop => _mediaLoopCheckBox?.IsChecked == true;
+    internal bool MediaShowWhenStopped => _mediaShowWhenStoppedCheckBox?.IsChecked != false;
     internal string? ReadingOrderMoveEarlierDisabledReason =>
         LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
             action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)?.DisabledReason;
@@ -1329,6 +1331,12 @@ public sealed partial class MainWindow : Window
             Content = "Loop until stopped",
             Margin = new Thickness(12, 2, 12, 4),
         };
+        _mediaShowWhenStoppedCheckBox = new CheckBox
+        {
+            Content = "Show when stopped",
+            Margin = new Thickness(12, 2, 12, 4),
+            IsChecked = true,
+        };
         _mediaPlaybackApplyButton = BuildMediaCaptionPaneButton();
         _mediaPlaybackApplyButton.Content = "Apply playback";
         _mediaPlaybackApplyButton.Click += (_, _) => ApplyMediaPlaybackPane();
@@ -1419,6 +1427,7 @@ public sealed partial class MainWindow : Window
         panel.Children.Add(_mediaStartModeText);
         panel.Children.Add(_mediaStartModeBox);
         panel.Children.Add(_mediaLoopCheckBox);
+        panel.Children.Add(_mediaShowWhenStoppedCheckBox);
         panel.Children.Add(_mediaVolumeText);
         panel.Children.Add(_mediaVolumeSlider);
         panel.Children.Add(_mediaTrimStartText);
@@ -3501,7 +3510,10 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal void SetMediaPlaybackPaneInput(MediaPlaybackStartMode startMode, bool loop)
+    internal void SetMediaPlaybackPaneInput(
+        MediaPlaybackStartMode startMode,
+        bool loop,
+        bool showWhenStopped = true)
     {
         if (!IsMediaCaptionPaneVisible)
             ShowMediaCaptionPane();
@@ -3511,6 +3523,7 @@ public sealed partial class MainWindow : Window
         {
             _mediaStartModeBox.SelectedIndex = PresentationMediaPaneSession.GetPlaybackStartModeIndex(startMode);
             _mediaLoopCheckBox.IsChecked = loop;
+            _mediaShowWhenStoppedCheckBox.IsChecked = showWhenStopped;
         }
         finally
         {
@@ -3530,7 +3543,7 @@ public sealed partial class MainWindow : Window
     internal bool ApplyMediaVolumePane() => _mediaPaneSession.ApplyVolume(MediaVolumePercent);
 
     internal bool ApplyMediaPlaybackPane() =>
-        _mediaPaneSession.ApplyPlayback(MediaPlaybackStartMode, MediaLoop);
+        _mediaPaneSession.ApplyPlayback(MediaPlaybackStartMode, MediaLoop, MediaShowWhenStopped);
 
     internal double MediaTrimStartMilliseconds => PresentationMediaPaneSession.ParseTiming(_mediaTrimStartBox?.Text);
     internal double MediaTrimEndMilliseconds => PresentationMediaPaneSession.ParseTiming(_mediaTrimEndBox?.Text);
@@ -3659,8 +3672,10 @@ public sealed partial class MainWindow : Window
             var mediaPlan = _mediaPaneSession.BuildProjection();
             _mediaStartModeBox.SelectedIndex = PresentationMediaPaneSession.GetPlaybackStartModeIndex(mediaPlan.PlaybackStartMode);
             _mediaLoopCheckBox.IsChecked = mediaPlan.Loop;
+            _mediaShowWhenStoppedCheckBox.IsChecked = mediaPlan.ShowWhenStopped;
             _mediaStartModeBox.IsEnabled = mediaPlan.HasMedia;
             _mediaLoopCheckBox.IsEnabled = mediaPlan.HasMedia;
+            _mediaShowWhenStoppedCheckBox.IsEnabled = mediaPlan.HasMedia;
             _mediaPlaybackApplyButton.IsEnabled = mediaPlan.HasMedia;
             _mediaVolumeSlider.Value = mediaPlan.VolumePercent;
             _mediaVolumeSlider.IsEnabled = mediaPlan.HasMedia;

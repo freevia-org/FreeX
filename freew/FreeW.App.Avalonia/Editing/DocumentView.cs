@@ -8125,44 +8125,7 @@ public sealed class DocumentView : Control
     /// clamping, instead of the previous 1-line-per-note estimate.
     /// </summary>
     private double MeasureNoteContentHeight(string number, IReadOnlyList<Paragraph> content, double x, double availWidth)
-    {
-        var noteFmt = RunFormatting.Default with { FontSizePt = NoteFontSizePt };
-        var numFmt  = noteFmt with { VerticalAlign = VerticalAlign.Superscript };
-        var lineH   = Math.Max(1, Build("Ag", noteFmt).Height);
-
-        var numText  = number + " ";
-        var numWidth = BuildForLayout(numText, numFmt).WidthIncludingTrailingWhitespace;
-        var textLeft = x + numWidth;
-        var penX     = textLeft;
-        var lineY    = 0.0; // relative to the note's start Y
-
-        var first = true;
-        foreach (var para in content)
-        {
-            if (!first)
-            {
-                lineY += lineH;
-                penX = textLeft;
-            }
-            first = false;
-
-            var visibleText = DocumentNoteRegionPlanner.ResolveVisiblePlainText(_doc, [para]);
-            var words = visibleText.Split(' ');
-            for (var wi = 0; wi < words.Length; wi++)
-            {
-                var word = wi == words.Length - 1 ? words[wi] : words[wi] + " ";
-                if (word.Length == 0) continue;
-                var w = Build(word, noteFmt).WidthIncludingTrailingWhitespace;
-                if (penX + w > x + availWidth && penX > textLeft)
-                {
-                    lineY += lineH;
-                    penX = textLeft;
-                }
-                penX += w;
-            }
-        }
-        return lineY + lineH; // total height from the note's top to the last line's bottom
-    }
+        => LayoutNoteContentCore(number, content, x, y: 0, availWidth: availWidth, emitItems: false);
 
     /// <summary>
     /// DB3: Computes the display number string for a note (footnote or endnote) given its
@@ -8271,22 +8234,37 @@ public sealed class DocumentView : Control
     /// Returns the page-space Y just past the laid-out content (the next free line).
     /// </summary>
     private double LayoutNoteContent(string number, IReadOnlyList<Paragraph> content, double x, double y, double availWidth)
+        => LayoutNoteContentCore(number, content, x, y, availWidth, emitItems: true);
+
+    private double LayoutNoteContentCore(
+        string number,
+        IReadOnlyList<Paragraph> content,
+        double x,
+        double y,
+        double availWidth,
+        bool emitItems)
     {
         var noteFmt = RunFormatting.Default with { FontSizePt = NoteFontSizePt };
         var numFmt  = noteFmt with { VerticalAlign = VerticalAlign.Superscript };
-
         var lineH = Math.Max(1, Build("Ag", noteFmt).Height);
+        var right = x + availWidth;
+
+        void AddItem(string text, RunFormatting formatting, double itemX, double itemY)
+        {
+            if (emitItems && !string.IsNullOrEmpty(text))
+                _noteItems.Add(new NoteRenderItem { Text = text, Fmt = formatting, X = itemX, Y = itemY });
+        }
 
         // Emit the number marker first (superscript), then the text flows after it on the same line.
         var numText = string.IsNullOrEmpty(number) ? string.Empty : number + " ";
         var numWidth = BuildForLayout(numText, numFmt).WidthIncludingTrailingWhitespace;
-        if (!string.IsNullOrEmpty(numText))
-            _noteItems.Add(new NoteRenderItem { Text = numText, Fmt = numFmt, X = x, Y = y });
+        AddItem(numText, numFmt, x, y);
 
         var textLeft = x + numWidth;
-        var lineLeft = textLeft;
         var penX = textLeft;
+        var lineVisibleRight = textLeft;
         var lineY = y;
+        var lineHasContent = false;
 
         // Flatten the note's paragraphs into a single wrapped flow (note content is usually one paragraph).
         var first = true;
@@ -8297,9 +8275,11 @@ public sealed class DocumentView : Control
                 // New paragraph in the note: break to a fresh line at the text-left indent.
                 lineY += lineH;
                 penX = textLeft;
-                lineLeft = textLeft;
+                lineVisibleRight = textLeft;
+                lineHasContent = false;
             }
             first = false;
+            var consecutiveAutomaticHyphenLines = 0;
 
             var visibleText = DocumentNoteRegionPlanner.ResolveVisiblePlainText(_doc, [para]);
             var words = visibleText.Split(' ');
@@ -8307,16 +8287,103 @@ public sealed class DocumentView : Control
             {
                 var word = wi == words.Length - 1 ? words[wi] : words[wi] + " ";
                 if (word.Length == 0) continue;
-                var w = Build(word, noteFmt).WidthIncludingTrailingWhitespace;
-                // Wrap when the word would overflow the available width (but always place at least one word).
-                if (penX + w > x + availWidth && penX > lineLeft)
+
+                var coreLength = word.TrimEnd(' ').Length;
+                var core = word[..coreLength];
+                var trailing = word[coreLength..];
+                var automaticOffsets = AutomaticHyphenationDisplayPlanner.BuildBreakOffsets(
+                        core,
+                        _doc.Page,
+                        ResolveParagraphFmt(para))
+                    .Where(offset => offset > 0 && offset < core.Length)
+                    .Distinct()
+                    .OrderBy(offset => offset)
+                    .ToArray();
+                var segmentStart = 0;
+
+                while (segmentStart < core.Length || (core.Length == 0 && trailing.Length > 0))
                 {
-                    lineY += lineH;
-                    penX = textLeft;
-                    lineLeft = textLeft;
+                    var remaining = core[segmentStart..] + trailing;
+                    var remainingWidth = Build(remaining, noteFmt).WidthIncludingTrailingWhitespace;
+                    if (penX + remainingWidth > right)
+                    {
+                        var available = Math.Max(0, right - penX);
+                        var automaticBreakAt = -1;
+                        foreach (var offset in automaticOffsets)
+                        {
+                            if (offset <= segmentStart)
+                                continue;
+                            var candidate = core[segmentStart..offset] + "-";
+                            if (Build(candidate, noteFmt).WidthIncludingTrailingWhitespace <= available)
+                                automaticBreakAt = offset;
+                        }
+
+                        var trailingWhitespacePt = lineHasContent
+                            ? Math.Max(0, right - lineVisibleRight) / PxPerPoint
+                            : 0;
+                        var useAutomaticHyphen = automaticBreakAt > segmentStart
+                            && AutomaticHyphenationDisplayPlanner.AllowsAutomaticLineBreak(
+                                _doc.Page,
+                                consecutiveAutomaticHyphenLines,
+                                lineHasContent,
+                                trailingWhitespacePt);
+                        if (useAutomaticHyphen)
+                        {
+                            var fragment = core[segmentStart..automaticBreakAt] + "-";
+                            AddItem(fragment, noteFmt, penX, lineY);
+                            lineY += lineH;
+                            penX = textLeft;
+                            lineVisibleRight = textLeft;
+                            lineHasContent = false;
+                            segmentStart = automaticBreakAt;
+                            consecutiveAutomaticHyphenLines++;
+                            continue;
+                        }
+
+                        if (lineHasContent)
+                        {
+                            lineY += lineH;
+                            penX = textLeft;
+                            lineVisibleRight = textLeft;
+                            lineHasContent = false;
+                            consecutiveAutomaticHyphenLines = 0;
+                            continue;
+                        }
+
+                        // An overlong first word still needs a non-hyphenated line when the consecutive
+                        // limit rejects the next candidate. This mirrors the body wrapper's hard fallback.
+                        var hardBreakAt = segmentStart;
+                        if (automaticOffsets.Any(offset => offset > segmentStart))
+                        {
+                            for (var offset = segmentStart + 1; offset <= core.Length; offset++)
+                            {
+                                if (Build(core[segmentStart..offset], noteFmt).WidthIncludingTrailingWhitespace <= available)
+                                    hardBreakAt = offset;
+                            }
+                        }
+                        if (hardBreakAt > segmentStart && hardBreakAt < core.Length)
+                        {
+                            AddItem(core[segmentStart..hardBreakAt], noteFmt, penX, lineY);
+                            lineY += lineH;
+                            penX = textLeft;
+                            lineVisibleRight = textLeft;
+                            lineHasContent = false;
+                            segmentStart = hardBreakAt;
+                            consecutiveAutomaticHyphenLines = 0;
+                            continue;
+                        }
+                    }
+
+                    AddItem(remaining, noteFmt, penX, lineY);
+                    if (core.Length > segmentStart)
+                    {
+                        lineVisibleRight = penX
+                            + Build(core[segmentStart..], noteFmt).WidthIncludingTrailingWhitespace;
+                        lineHasContent = true;
+                    }
+                    penX += remainingWidth;
+                    break;
                 }
-                _noteItems.Add(new NoteRenderItem { Text = word, Fmt = noteFmt, X = penX, Y = lineY });
-                penX += w;
             }
         }
 
@@ -8872,7 +8939,9 @@ public sealed class DocumentView : Control
         IReadOnlyList<double> heights,
         double availableWidth,
         ParagraphFormatting pf,
+        PageSettings page,
         double naturalLineHeightScale,
+        string automaticHyphenationText,
         IReadOnlyDictionary<int, double> automaticHyphenWidths)
     {
         if (cells.Count == 0)
@@ -8882,6 +8951,7 @@ public sealed class DocumentView : Control
         var lineStart = 0;
         var lineWidth = 0.0;
         var lastBreak = -1;
+        var consecutiveAutomaticHyphenLines = 0;
 
         void AddLine(int from, int to)
         {
@@ -8901,10 +8971,22 @@ public sealed class DocumentView : Control
                 var spaceBreakAt = lastBreak >= lineStart ? lastBreak + 1 : -1;
                 var automaticBreak = FindLatestAutomaticHyphenBreak(
                     lineStart, index, availableWidth, measured, automaticHyphenWidths);
-                var breakAt = automaticBreak.BreakAt > spaceBreakAt
+                var useAutomaticHyphen = ShouldUseAutomaticHyphenBreak(
+                    page,
+                    consecutiveAutomaticHyphenLines,
+                    automaticHyphenationText,
+                    measured,
+                    lineStart,
+                    spaceBreakAt,
+                    automaticBreak.BreakAt,
+                    availableWidth);
+                var breakAt = useAutomaticHyphen
                     ? automaticBreak.BreakAt
                     : spaceBreakAt > lineStart ? spaceBreakAt : index;
                 AddLine(lineStart, breakAt);
+                consecutiveAutomaticHyphenLines = useAutomaticHyphen
+                    ? consecutiveAutomaticHyphenLines + 1
+                    : 0;
                 lineStart = breakAt;
                 lineWidth = 0;
                 lastBreak = -1;
@@ -8921,6 +9003,41 @@ public sealed class DocumentView : Control
 
         AddLine(lineStart, cells.Count);
         return totalHeight;
+    }
+
+    internal static bool ShouldUseAutomaticHyphenBreak(
+        PageSettings page,
+        int consecutiveHyphenatedLines,
+        string displayText,
+        IReadOnlyList<double> measured,
+        int lineStart,
+        int spaceBreakAt,
+        int automaticBreakAt,
+        double availableWidth)
+    {
+        if (automaticBreakAt <= spaceBreakAt)
+            return false;
+
+        var hasOrdinaryWordBreak = spaceBreakAt > lineStart;
+        var ordinaryVisibleEnd = spaceBreakAt;
+        while (ordinaryVisibleEnd > lineStart
+               && char.IsWhiteSpace(displayText[ordinaryVisibleEnd - 1]))
+        {
+            ordinaryVisibleEnd--;
+        }
+
+        var ordinaryVisibleWidth = 0.0;
+        for (var index = lineStart; index < ordinaryVisibleEnd; index++)
+            ordinaryVisibleWidth += measured[index];
+        var trailingWhitespacePt = hasOrdinaryWordBreak
+            ? Math.Max(0, availableWidth - ordinaryVisibleWidth) / PxPerPoint
+            : 0;
+
+        return AutomaticHyphenationDisplayPlanner.AllowsAutomaticLineBreak(
+            page,
+            consecutiveHyphenatedLines,
+            hasOrdinaryWordBreak,
+            trailingWhitespacePt);
     }
 
     private static (int BreakAt, double HyphenWidth) FindLatestAutomaticHyphenBreak(
@@ -9152,11 +9269,13 @@ public sealed class DocumentView : Control
         if (keepParagraphTogether && supportsCompleteParagraphPlanning)
         {
             var paragraphHeight = MeasurePlainParagraphHeight(
-                cells, measured, heights, availableWidth, pf, naturalLineHeightScale, automaticHyphenWidths);
+                cells, measured, heights, availableWidth, pf, _doc.Page,
+                naturalLineHeightScale, automaticHyphenationText, automaticHyphenWidths);
             ReserveCompleteParagraph(paragraphHeight);
         }
 
         var lineIndex = 0;
+        var consecutiveAutomaticHyphenLines = 0;
         var supportsSplitFloatFragments = alignment == TextAlignment.Left
             && Math.Abs(leftInset) < 0.01
             && Math.Abs(indentLeft) < 0.01
@@ -9213,7 +9332,15 @@ public sealed class DocumentView : Control
                 var spaceBreakAt = lastBreak >= lineStart ? lastBreak + 1 : -1;
                 var automaticBreak = FindLatestAutomaticHyphenBreak(
                     lineStart, i, lineAvail, measured, automaticHyphenWidths);
-                var useAutomaticHyphen = automaticBreak.BreakAt > spaceBreakAt;
+                var useAutomaticHyphen = ShouldUseAutomaticHyphenBreak(
+                    _doc.Page,
+                    consecutiveAutomaticHyphenLines,
+                    automaticHyphenationText,
+                    measured,
+                    lineStart,
+                    spaceBreakAt,
+                    automaticBreak.BreakAt,
+                    lineAvail);
                 var breakAt = useAutomaticHyphen
                     ? automaticBreak.BreakAt
                     : spaceBreakAt > lineStart ? spaceBreakAt : i;
@@ -9226,6 +9353,9 @@ public sealed class DocumentView : Control
                     automaticHyphenWidth: useAutomaticHyphen ? automaticBreak.HyphenWidth : 0,
                     automaticHyphenSourceCell: useAutomaticHyphen ? cells[breakAt - 1] : null,
                     automaticHyphenBreakOffset: useAutomaticHyphen ? breakAt : -1);
+                consecutiveAutomaticHyphenLines = useAutomaticHyphen
+                    ? consecutiveAutomaticHyphenLines + 1
+                    : 0;
                 lineIndex++;
                 lineStart = breakAt;
                 lineWidth = 0;
@@ -9856,7 +9986,7 @@ public sealed class DocumentView : Control
             // AV-TBL: carry the TableCell model reference and actual column index so we can emit
             // per-paragraph, per-character cell-aware PlacedChars for caret routing.
             // BE2: CellParas holds wrapped lines per-paragraph (outer list = para, inner = wrapped lines).
-            var measured = new List<(TableCell Cell, int CellIndex, int StartCol, int Span, List<List<(double Height, List<(char Ch, double W, bool Hidden)> Chars)>> CellParas, List<(double Before, double After)> ParagraphSpacings, List<double> MarkerInsets, RunFormatting Fmt)>();
+            var measured = new List<(TableCell Cell, int CellIndex, int StartCol, int Span, List<List<CellWrappedLine>> CellParas, List<(double Before, double After)> ParagraphSpacings, List<double> MarkerInsets, RunFormatting Fmt)>();
             var rowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
             var col = 0;
             for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
@@ -9989,10 +10119,11 @@ public sealed class DocumentView : Control
                         _markers.Add((rect.Left + pad, ty, preservedMarker.Text, fmt));
                     }
 
-                    foreach (var (lineHeight, chars) in paraLines)
+                    foreach (var line in paraLines)
                     {
+                        var lineHeight = line.Height;
                         var tx = rect.Left + pad + markerInset;
-                        foreach (var (ch, w, hidden) in chars)
+                        foreach (var (ch, w, hidden) in line.Chars)
                         {
                             var placedFormatting = hidden ? fmt with { Hidden = true } : fmt;
                             _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, ty, w, lineHeight, placedFormatting, ch,
@@ -10002,13 +10133,30 @@ public sealed class DocumentView : Control
                             tx += w;
                         }
 
+                        if (line.AutomaticHyphenWidth > 0)
+                        {
+                            _automaticHyphenGlyphs.Add(new AutomaticHyphenGlyph(
+                                blockIndex,
+                                glyphOffset,
+                                tx,
+                                ty,
+                                line.AutomaticHyphenWidth,
+                                lineHeight,
+                                fmt,
+                                CommentId: null,
+                                Revision: RevisionKind.None,
+                                RevisionAuthor: null,
+                                Link: null,
+                                FormatRevision: null));
+                        }
+
                         ty += lineHeight;
                     }
 
                     ty += paragraphSpacing.After;
 
                     // BE1: sentinel at end of this paragraph (at the end of its last visual line).
-                    (double Height, List<(char Ch, double W, bool Hidden)> Chars)? lastParaLine = paraLines.Count > 0 ? paraLines[^1] : null;
+                    CellWrappedLine? lastParaLine = paraLines.Count > 0 ? paraLines[^1] : null;
                     var sentinelX = rect.Left + pad + (lastParaLine.HasValue ? lastParaLine.Value.Chars.Sum(c => c.W) : 0);
                     var sentinelY = lastParaLine.HasValue
                         ? ty - paragraphSpacing.After - lastParaLine.Value.Height
@@ -10824,41 +10972,105 @@ public sealed class DocumentView : Control
         return widths;
     }
 
-    private List<(double Height, List<(char Ch, double W, bool Hidden)> Chars)> WrapCellLines(
+    private List<CellWrappedLine> WrapCellLines(
         Paragraph paragraph,
         RunFormatting fmt,
         double maxInner)
     {
-        var result = new List<(double, List<(char, double, bool)>)>();
+        var result = new List<CellWrappedLine>();
         var lineHeight = Build("Ag", fmt).Height;
-        var current = new List<(char, double, bool)>();
-        double currentWidth = 0;
-        var lastSpace = -1;
+        var chars = new List<(char Ch, double W, bool Hidden)>();
 
         foreach (var run in paragraph.Runs)
         {
             var hidden = IsTextHiddenInCurrentView(ResolveRunFmt(run.Formatting, paragraph));
             foreach (var ch in run.Text)
             {
-                var w = hidden ? 0 : Build(ch.ToString(), fmt).WidthIncludingTrailingWhitespace;
-                if (!hidden && ch == ' ')
-                    lastSpace = current.Count;
-                if (currentWidth + w > maxInner && current.Count > 0)
-                {
-                    var breakAt = lastSpace > 0 ? lastSpace : current.Count;
-                    result.Add((lineHeight, current.Take(breakAt).ToList()));
-                    current = current.Skip(breakAt).ToList();
-                    currentWidth = current.Sum(c => c.Item2);
-                    lastSpace = -1;
-                }
-
-                current.Add((ch, w, hidden));
-                currentWidth += w;
+                var width = hidden ? 0 : Build(ch.ToString(), fmt).WidthIncludingTrailingWhitespace;
+                chars.Add((ch, width, hidden));
             }
         }
 
-        if (current.Count > 0 || result.Count == 0)
-            result.Add((lineHeight, current));
+        if (chars.Count == 0)
+        {
+            result.Add(new CellWrappedLine(lineHeight, [], 0));
+            return result;
+        }
+
+        var displayText = new string(chars.Select(item => item.Hidden ? ' ' : item.Ch).ToArray());
+        var measured = chars.Select(item => item.W).ToArray();
+        var automaticHyphenWidths = AutomaticHyphenationDisplayPlanner.BuildBreakOffsets(
+                displayText,
+                _doc.Page,
+                ResolveParagraphFmt(paragraph))
+            .Where(offset => offset > 0 && offset < chars.Count)
+            .Distinct()
+            .ToDictionary(
+                offset => offset,
+                _ => Build("-", fmt).WidthIncludingTrailingWhitespace);
+
+        var lineStart = 0;
+        var currentWidth = 0.0;
+        var lastSpace = -1;
+        var consecutiveAutomaticHyphenLines = 0;
+
+        void AddLine(int from, int to, double automaticHyphenWidth = 0)
+        {
+            result.Add(new CellWrappedLine(
+                lineHeight,
+                chars.Skip(from).Take(to - from).ToList(),
+                automaticHyphenWidth));
+        }
+
+        for (var index = 0; index < chars.Count; index++)
+        {
+            if (!chars[index].Hidden && chars[index].Ch == ' ')
+                lastSpace = index;
+
+            if (currentWidth + measured[index] > maxInner && index > lineStart)
+            {
+                var spaceBreakAt = lastSpace > lineStart ? lastSpace : -1;
+                var automaticBreak = FindLatestAutomaticHyphenBreak(
+                    lineStart,
+                    index,
+                    maxInner,
+                    measured,
+                    automaticHyphenWidths);
+                var useAutomaticHyphen = ShouldUseAutomaticHyphenBreak(
+                    _doc.Page,
+                    consecutiveAutomaticHyphenLines,
+                    displayText,
+                    measured,
+                    lineStart,
+                    spaceBreakAt,
+                    automaticBreak.BreakAt,
+                    maxInner);
+                var breakAt = useAutomaticHyphen
+                    ? automaticBreak.BreakAt
+                    : spaceBreakAt > lineStart ? spaceBreakAt : index;
+
+                AddLine(
+                    lineStart,
+                    breakAt,
+                    useAutomaticHyphen ? automaticBreak.HyphenWidth : 0);
+                consecutiveAutomaticHyphenLines = useAutomaticHyphen
+                    ? consecutiveAutomaticHyphenLines + 1
+                    : 0;
+                lineStart = breakAt;
+                currentWidth = 0;
+                lastSpace = -1;
+                for (var carried = lineStart; carried < index; carried++)
+                {
+                    currentWidth += measured[carried];
+                    if (!chars[carried].Hidden && chars[carried].Ch == ' ')
+                        lastSpace = carried;
+                }
+            }
+
+            currentWidth += measured[index];
+        }
+
+        AddLine(lineStart, chars.Count);
         return result;
     }
 
@@ -20883,7 +21095,7 @@ public sealed class DocumentView : Control
         for (var i = tocIndices.Count - 1; i >= 0; i--)
             _bus.Execute(new DeleteParagraphCommand(tocIndices[i]));
         var index = Math.Clamp(insertAt, 0, _doc.Blocks.Count);
-        foreach (var paragraph in TableOfContents.Build(_doc))
+        foreach (var paragraph in BuildTableOfContents())
             _bus.Execute(new InsertParagraphCommand(index++, paragraph));
         _bus.CommitUndoGroup("Update Table of Contents");
     }
@@ -20893,9 +21105,14 @@ public sealed class DocumentView : Control
     {
         _bus.BeginUndoGroup();
         var index = Math.Clamp(at, 0, _doc.Blocks.Count);
-        foreach (var paragraph in TableOfContents.Build(_doc))
+        foreach (var paragraph in BuildTableOfContents())
             _bus.Execute(new InsertParagraphCommand(index++, paragraph));
         _bus.CommitUndoGroup(label);
+    }
+
+    private IReadOnlyList<Paragraph> BuildTableOfContents()
+    {
+        return TableOfContents.Build(_doc, BuildGeneratedPageTextResolver());
     }
 
     /// <summary>
@@ -21491,7 +21708,7 @@ public sealed class DocumentView : Control
     {
         labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_doc);
-        InsertGeneratedReferenceBlocks(TableOfFigures.Build(_doc, labelText), "Insert Table of Figures", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+        InsertGeneratedReferenceBlocks(BuildTableOfFigures(labelText), "Insert Table of Figures", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
     }
 
     public void RefreshTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
@@ -21503,7 +21720,18 @@ public sealed class DocumentView : Control
     {
         labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_doc);
-        RefreshGeneratedReferenceBlocks(TableOfFigures.IsTableOfFiguresParagraph, () => TableOfFigures.Build(_doc, labelText), "Update Table of Figures");
+        RefreshGeneratedReferenceBlocks(TableOfFigures.IsTableOfFiguresParagraph, () => BuildTableOfFigures(labelText), "Update Table of Figures");
+    }
+
+    private IReadOnlyList<Paragraph> BuildTableOfFigures(string labelText) =>
+        TableOfFigures.Build(_doc, labelText, BuildGeneratedPageTextResolver());
+
+    private Func<int, string?>? BuildGeneratedPageTextResolver()
+    {
+        var physicalPageOf = BuildCrossReferencePageResolver();
+        return physicalPageOf is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_doc, physicalPageOf);
     }
 
     public void MarkCitation(string? longCitation = null)
@@ -21567,7 +21795,7 @@ public sealed class DocumentView : Control
         {
             Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
             var pageCount = Math.Max(1, _pageCount);
-            var hasExplicitPageBoundary = HasTableOfAuthoritiesExplicitPageBoundary(_doc);
+            var hasExplicitPageBoundary = HasExplicitPageBoundary(_doc);
             if (pageCount == 1 && hasExplicitPageBoundary)
                 return null;
 
@@ -21608,7 +21836,7 @@ public sealed class DocumentView : Control
             : null;
     }
 
-    private static bool HasTableOfAuthoritiesExplicitPageBoundary(TextDocument document) =>
+    private static bool HasExplicitPageBoundary(TextDocument document) =>
         document.Blocks.OfType<Paragraph>().Any(paragraph =>
             paragraph.Formatting.PageBreakBefore
             || paragraph.Runs.Any(run => run.IsPageBreak)
@@ -21936,6 +22164,18 @@ public sealed class DocumentView : Control
     /// </summary>
     public void UpdateFields()
     {
+        var crossReferencePageResolver = _doc.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef
+                || run.ComplexField?.Keyword == "PAGEREF")
+                ? BuildCrossReferencePageResolver()
+                : null;
+        var crossReferencePageTextResolver = crossReferencePageResolver is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
+                _doc,
+                crossReferencePageResolver);
         for (var b = 0; b < _doc.Blocks.Count; b++)
         {
             if (_doc.Blocks[b] is not Paragraph paragraph)
@@ -21946,7 +22186,13 @@ public sealed class DocumentView : Control
                 var run = paragraph.Runs[r];
                 if (run.CrossReference is { } crossReference)
                 {
-                    var resolved = CrossReferences.ResolveField(_doc, crossReference, run.Text, b);
+                    var resolved = CrossReferences.ResolveField(
+                        _doc,
+                        crossReference,
+                        run.Text,
+                        b,
+                        crossReferencePageResolver,
+                        crossReferencePageTextResolver);
                     if (!string.IsNullOrEmpty(resolved))
                         run.Text = resolved;
                 }
@@ -21956,7 +22202,12 @@ public sealed class DocumentView : Control
                         continue;
 
                     var resolved = ComplexFieldEngine.CanRecompute(complexField)
-                        ? ComplexFieldEngine.Recompute(_doc, b, r)
+                        ? ComplexFieldEngine.Recompute(
+                            _doc,
+                            b,
+                            r,
+                            crossReferencePageResolver,
+                            crossReferencePageTextResolver)
                         : ResolveComplexField(complexField, run.Text);
                     if (!string.IsNullOrEmpty(resolved))
                         run.Text = resolved;
@@ -22007,6 +22258,38 @@ public sealed class DocumentView : Control
 
         InvalidateVisual();
         Focus();
+    }
+
+    private Func<int, int?>? BuildCrossReferencePageResolver()
+    {
+        try
+        {
+            Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
+            var pageCount = Math.Max(1, _pageCount);
+            var hasExplicitPageBoundary = HasExplicitPageBoundary(_doc);
+
+            return blockIndex =>
+            {
+                if (blockIndex < 0
+                    || blockIndex >= _doc.Blocks.Count
+                    || _doc.Blocks[blockIndex] is not Paragraph)
+                {
+                    return null;
+                }
+
+                var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex);
+                if (TryResolvePlacedPageForBlockOffset(blockIndex, 0, pageCount, out var pageIndex))
+                    return explicitPage is { } authoredPage
+                        ? Math.Max(pageIndex + 1, authoredPage)
+                        : pageIndex + 1;
+
+                return explicitPage ?? (pageCount == 1 && !hasExplicitPageBoundary ? 1 : null);
+            };
+        }
+        catch (InvalidOperationException)
+        {
+            return blockIndex => CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex);
+        }
     }
 
     private string ResolveComplexField(ComplexField field, string fallback) =>
@@ -24866,6 +25149,11 @@ public sealed class DocumentView : Control
         string? RevisionAuthor,
         LinkInfo? Link,
         FormatRevision? FormatRevision);
+
+    private readonly record struct CellWrappedLine(
+        double Height,
+        List<(char Ch, double W, bool Hidden)> Chars,
+        double AutomaticHyphenWidth);
 
     /// <summary>
     /// AV-LINK: a hyperlink target carried alongside a glyph/run. Exactly one of <see cref="Url"/> (external)

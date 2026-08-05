@@ -92,7 +92,43 @@ public class PlainTextFileAdapterTests
     }
 
     [Fact]
-    public void Save_WritesOnlyParagraphCharactersAndDropsNonTextStructures()
+    public void Load_BomlessInvalidUtf8_FallsBackToWindows1252()
+    {
+        byte[] bytes =
+        [
+            0x43, 0x61, 0x66, 0xE9, 0x20,
+            0x80, 0x20,
+            0x93, 0x71, 0x75, 0x6F, 0x74, 0x65, 0x94,
+        ];
+
+        using var stream = new MemoryStream(bytes);
+        LinesOf(new PlainTextFileAdapter().Load(stream))
+            .Should().Equal("Caf\u00e9 \u20ac \u201cquote\u201d");
+    }
+
+    [Fact]
+    public void Load_BomlessValidUtf8_RemainsUtf8()
+    {
+        var bytes = Encoding.UTF8.GetBytes("Caf\u00e9 \u20ac \u201cquote\u201d");
+
+        using var stream = new MemoryStream(bytes);
+        LinesOf(new PlainTextFileAdapter().Load(stream))
+            .Should().Equal("Caf\u00e9 \u20ac \u201cquote\u201d");
+    }
+
+    [Fact]
+    public void Load_LeavesCallerStreamOpen()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("text"));
+
+        _ = new PlainTextFileAdapter().Load(stream);
+
+        stream.CanRead.Should().BeTrue();
+        stream.Position.Should().Be(stream.Length);
+    }
+
+    [Fact]
+    public void Save_ProjectsTableCellsAsTabDelimitedRows()
     {
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
@@ -104,14 +140,38 @@ public class PlainTextFileAdapterTests
                 new Run("bold", RunFormatting.Default with { Bold = true }),
             },
         });
-        document.Blocks.Add(Table.Create(1, 1));
+        var table = Table.Create(2, 2);
+        table.Rows[0].Cells[0].Paragraphs[0] = new Paragraph("A1");
+        table.Rows[0].Cells[1].Paragraphs[0] = new Paragraph("B1");
+        table.Rows[1].Cells[0].Paragraphs[0] = new Paragraph("A2");
+        table.Rows[1].Cells[1].Paragraphs[0] = new Paragraph("B2");
+        document.Blocks.Add(table);
         document.Blocks.Add(new Paragraph("After table"));
 
         var adapter = new PlainTextFileAdapter();
         var bytes = Save(document, adapter);
 
-        Encoding.UTF8.GetString(bytes).Should().Be("Plain bold\r\nAfter table");
+        Encoding.UTF8.GetString(bytes).Should().Be("Plain bold\r\nA1\tB1\r\nA2\tB2\r\nAfter table");
         using var stream = new MemoryStream(bytes);
-        LinesOf(adapter.Load(stream)).Should().Equal("Plain bold", "After table");
+        LinesOf(adapter.Load(stream)).Should().Equal("Plain bold", "A1\tB1", "A2\tB2", "After table");
+    }
+
+    [Fact]
+    public void Save_TableProjectionPreservesCellParagraphsAndEmptyCellsUsingConfiguredEol()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = Table.Create(2, 2);
+        table.Rows[0].Cells[0].Paragraphs[0] = new Paragraph("First");
+        table.Rows[0].Cells[0].Paragraphs.Add(new Paragraph("Second"));
+        table.Rows[0].Cells[1].Paragraphs[0] = new Paragraph("Right");
+        table.Rows[1].Cells[1].Paragraphs[0] = new Paragraph("Tail");
+        document.Blocks.Add(table);
+
+        var adapter = new PlainTextFileAdapter(
+            new TextSaveOptions(new UTF8Encoding(false), EolStyle.Lf));
+
+        Encoding.UTF8.GetString(Save(document, adapter))
+            .Should().Be("First\nSecond\tRight\n\tTail");
     }
 }

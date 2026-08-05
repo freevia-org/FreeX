@@ -123,6 +123,8 @@ public static class CanvasTransformPreviewComposer
                     BorderRight = cell.BorderRight,
                     BorderTop = cell.BorderTop,
                     BorderBottom = cell.BorderBottom,
+                    BorderDiagonalDown = cell.BorderDiagonalDown,
+                    BorderDiagonalUp = cell.BorderDiagonalUp,
                     Text = cell.Text,
                     Anchor = cell.Anchor,
                 })

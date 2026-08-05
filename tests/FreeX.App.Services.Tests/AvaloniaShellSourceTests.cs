@@ -2920,7 +2920,7 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("public IWorkbookCommand CreateCommand()");
         parityCaptureSource.Should().Contain("(\"dialog.DataTable\", () => ShowDataTableParityDialogAsync()),");
         parityCaptureSource.Should().Contain("private Task ShowDataTableParityDialogAsync()");
-        parityCaptureSource.Should().Contain("async () => { await ShowDataTableInputDialogAsync(\"E2\", \"F2\"); }");
+        parityCaptureSource.Should().Contain("async () => { await ShowDataTableInputDialogAsync(); }");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowDataTableDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);

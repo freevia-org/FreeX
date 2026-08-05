@@ -2151,7 +2151,8 @@ public static class PptxPackageWriter
             .Where(shape => shape.Kind == SlideShapeKind.Media
                 && (shape.Media?.PlaybackStartMode == MediaPlaybackStartMode.Automatically
                     || shape.Media?.Loop == true
-                    || shape.Media?.VolumePercent != 80))
+                    || shape.Media?.VolumePercent != 80
+                    || shape.Media?.ShowWhenStopped == false))
             .ToList();
         if (animations.Count == 0 && timedMedia.Count == 0 && string.IsNullOrWhiteSpace(slide.AnimationBuildListXml))
             return null;
@@ -2262,6 +2263,12 @@ public static class PptxPackageWriter
         var mediaElementName = shape.Media?.IsVideo == true ? P + "video" : P + "audio";
         bool automatic = shape.Media?.PlaybackStartMode == MediaPlaybackStartMode.Automatically;
         int volume = Math.Clamp(shape.Media?.VolumePercent ?? 80, 0, 100);
+        var mediaNodeAttributes = new List<object>
+        {
+            new XAttribute("vol", (volume * 1000).ToString(CultureInfo.InvariantCulture)),
+        };
+        if (shape.Media?.ShowWhenStopped == false)
+            mediaNodeAttributes.Add(new XAttribute("showWhenStopped", "0"));
         var condition = automatic
             ? new XElement(P + "cond",
                 new XAttribute("evt", "onBegin"),
@@ -2284,7 +2291,7 @@ public static class PptxPackageWriter
 
         return new XElement(mediaElementName,
             new XElement(P + "cMediaNode",
-                new XAttribute("vol", (volume * 1000).ToString(CultureInfo.InvariantCulture)),
+                mediaNodeAttributes,
                 new XElement(P + "cTn",
                     cTnAttributes.Cast<object>().ToArray(),
                     new XElement(P + "stCondLst", condition)),
@@ -3852,6 +3859,8 @@ public static class PptxPackageWriter
         if (cell.Borders?.Right  is { } br) tcPr.Add(new XElement(A + "lnR",   BuildBorderAttrs(br)));
         if (cell.Borders?.Top    is { } bt) tcPr.Add(new XElement(A + "lnT",   BuildBorderAttrs(bt)));
         if (cell.Borders?.Bottom is { } bb) tcPr.Add(new XElement(A + "lnB",   BuildBorderAttrs(bb)));
+        if (cell.Borders?.DiagonalDown is { } bd) tcPr.Add(new XElement(A + "lnTlToBr", BuildBorderAttrs(bd)));
+        if (cell.Borders?.DiagonalUp is { } bu) tcPr.Add(new XElement(A + "lnBlToTr", BuildBorderAttrs(bu)));
 
         // Explicit fill
         if (cell.Fill is not null)

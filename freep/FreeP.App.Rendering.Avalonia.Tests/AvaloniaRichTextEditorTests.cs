@@ -957,6 +957,76 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task ClipboardCopyTransfer_WithInlineImage_PreservesAllProductionFormats()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var imageBytes = Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+            var body = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs =
+                        {
+                            new Run { Text = "Before " },
+                            new Run
+                            {
+                                Text = "\uFFFC",
+                                InlineImage = new ImagePart
+                                {
+                                    Bytes = imageBytes,
+                                    ContentType = "image/png",
+                                },
+                                InlineImageWidthEmu = 228_600,
+                                InlineImageHeightEmu = 114_300,
+                            },
+                            new Run { Text = " after" },
+                        },
+                    },
+                },
+            };
+            var payload = new InCanvasRichClipboardPayload(
+                body,
+                InCanvasTextEditPlanner.ExtractPlainText(body));
+
+            using var transfer = AvaloniaRichTextEditor.BuildRichTextDataTransfer(payload);
+            var privateBytes = await transfer.TryGetValueAsync(
+                OperatingSystem.IsWindows()
+                    ? AvaloniaRichTextEditor.RichTextPlatformFormat
+                    : AvaloniaRichTextEditor.RichTextFormat);
+            var rtf = await transfer.TryGetValueAsync(
+                OperatingSystem.IsWindows()
+                    ? AvaloniaRichTextEditor.ExternalRtfWindowsFormat
+                    : AvaloniaRichTextEditor.ExternalRtfLinuxFormat);
+            var xaml = await transfer.TryGetValueAsync(
+                OperatingSystem.IsWindows()
+                    ? AvaloniaRichTextEditor.ExternalXamlPackageWindowsFormat
+                    : AvaloniaRichTextEditor.ExternalXamlPackageLinuxFormat);
+            var plainText = await transfer.TryGetTextAsync();
+
+            var privatePayload = InCanvasRichClipboardPlanner.Deserialize(privateBytes);
+            privatePayload.Should().NotBeNull();
+            privatePayload!.Body.Paragraphs.Single().Runs.Select(run => run.Text)
+                .Should().Equal("Before ", "\uFFFC", " after");
+            privatePayload.Body.Paragraphs.Single().Runs[1].InlineImage!.Bytes
+                .Should().Equal(imageBytes);
+            ExternalRichTextClipboardPlanner.TryParseRtf(rtf).Should().NotBeNull();
+            plainText.Should().Be("Before  after");
+
+            xaml.Should().NotBeNull();
+            var restored = ExternalXamlClipboardPlanner.TryParseXamlPackage(xaml);
+            restored.Should().NotBeNull();
+            restored!.Body.Paragraphs.Single().Runs.Select(run => run.Text)
+                .Should().Equal("Before ", "\uFFFC", " after");
+            restored.Body.Paragraphs.Single().Runs[1].InlineImage!.Bytes
+                .Should().Equal(imageBytes);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ClipboardPaste_CustomPayloadPrecedesXamlPackageRtfAndPlainText()
     {
         await Session.Dispatch(async () =>

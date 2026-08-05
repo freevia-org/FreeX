@@ -88,6 +88,7 @@ internal static class AvaloniaWaterfallPointContextMenu
                     Header = command.AccessHeader,
                     IsEnabled = command.IsEnabled,
                     IsChecked = command.IsChecked,
+                    InputGesture = KeyGesture.Parse(ExtractAccessKey(command.AccessHeader)),
                     Tag = pointIndex,
                 };
                 item.ToggleType = MenuItemToggleType.CheckBox;
@@ -96,5 +97,16 @@ internal static class AvaloniaWaterfallPointContextMenu
                 return (Control)item;
             })
             .ToArray();
+    }
+
+    private static string ExtractAccessKey(string? accessHeader)
+    {
+        if (string.IsNullOrWhiteSpace(accessHeader))
+            return string.Empty;
+
+        var marker = accessHeader.IndexOf('_');
+        return marker >= 0 && marker + 1 < accessHeader.Length
+            ? accessHeader[(marker + 1)..].Substring(0, 1)
+            : string.Empty;
     }
 }

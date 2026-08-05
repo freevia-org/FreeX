@@ -229,21 +229,25 @@ public sealed class MediaCaptionCommandTests
                 IsVideo = true,
                 PlaybackStartMode = MediaPlaybackStartMode.InClickSequence,
                 Loop = false,
+                ShowWhenStopped = true,
             }
         };
         presentation.Slides[0].Shapes.Add(mediaShape);
         var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
         editor.Select(mediaShape.Id);
 
-        editor.SetSelectedMediaPlaybackOptions(MediaPlaybackStartMode.Automatically, true).Should().BeTrue();
+        editor.SetSelectedMediaPlaybackOptions(MediaPlaybackStartMode.Automatically, true, false).Should().BeTrue();
         mediaShape.Media.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
         mediaShape.Media.Loop.Should().BeTrue();
+        mediaShape.Media.ShowWhenStopped.Should().BeFalse();
         editor.Undo();
         mediaShape.Media.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.InClickSequence);
         mediaShape.Media.Loop.Should().BeFalse();
+        mediaShape.Media.ShowWhenStopped.Should().BeTrue();
         editor.Redo();
         mediaShape.Media.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
         mediaShape.Media.Loop.Should().BeTrue();
+        mediaShape.Media.ShowWhenStopped.Should().BeFalse();
     }
 
     [Fact]

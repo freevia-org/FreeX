@@ -550,11 +550,14 @@ public sealed class SetTableCellBorderCommand : IPresentationCommand
         Right = source?.Right,
         Top = source?.Top,
         Bottom = source?.Bottom,
+        DiagonalDown = source?.DiagonalDown,
+        DiagonalUp = source?.DiagonalUp,
     };
 
     private static bool HasAnySide(TableCellBorders borders) =>
         borders.Left is not null || borders.Right is not null ||
-        borders.Top is not null || borders.Bottom is not null;
+        borders.Top is not null || borders.Bottom is not null ||
+        borders.DiagonalDown is not null || borders.DiagonalUp is not null;
 
     private static ShapeOutline? GetSide(TableCellBorders? borders, TableCellBorderSide side) => side switch
     {
@@ -562,6 +565,8 @@ public sealed class SetTableCellBorderCommand : IPresentationCommand
         TableCellBorderSide.Right => borders?.Right,
         TableCellBorderSide.Top => borders?.Top,
         TableCellBorderSide.Bottom => borders?.Bottom,
+        TableCellBorderSide.DiagonalDown => borders?.DiagonalDown,
+        TableCellBorderSide.DiagonalUp => borders?.DiagonalUp,
         _ => null,
     };
 
@@ -580,6 +585,12 @@ public sealed class SetTableCellBorderCommand : IPresentationCommand
                 break;
             case TableCellBorderSide.Bottom:
                 borders.Bottom = outline;
+                break;
+            case TableCellBorderSide.DiagonalDown:
+                borders.DiagonalDown = outline;
+                break;
+            case TableCellBorderSide.DiagonalUp:
+                borders.DiagonalUp = outline;
                 break;
         }
     }

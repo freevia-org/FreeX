@@ -33,6 +33,7 @@ public sealed class PresentationMediaPaneSessionTests
         media.VolumePercent = 35;
         media.PlaybackStartMode = MediaPlaybackStartMode.Automatically;
         media.Loop = true;
+        media.ShowWhenStopped = false;
         media.TrimStartMilliseconds = 125;
         media.Bookmarks.Add(new MediaBookmarkInfo { Name = "Intro", TimeMilliseconds = 400 });
         media.Bookmarks.Add(new MediaBookmarkInfo { Name = "Demo", TimeMilliseconds = 900 });
@@ -45,6 +46,7 @@ public sealed class PresentationMediaPaneSessionTests
         plan.VolumePercent.Should().Be(35);
         plan.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
         plan.Loop.Should().BeTrue();
+        plan.ShowWhenStopped.Should().BeFalse();
         plan.Timing.TrimStartText.Should().Be(PresentationMediaPaneSession.FormatTiming(125));
         plan.Bookmarks.Select(bookmark => bookmark.DisplayText)
             .Should().Equal("1. Intro", "2. Demo");
@@ -109,7 +111,10 @@ public sealed class PresentationMediaPaneSessionTests
         var session = CreateSession(editor, () => callbackCount++);
 
         session.ApplyVolume(135).Should().BeTrue();
-        session.ApplyPlayback(MediaPlaybackStartMode.Automatically, loop: true).Should().BeTrue();
+        session.ApplyPlayback(
+            MediaPlaybackStartMode.Automatically,
+            loop: true,
+            showWhenStopped: false).Should().BeTrue();
         session.ApplyTiming("125", "250", "500", "750").Should().BeTrue();
         session.ApplyBookmark(
             PresentationMediaBookmarkMutationIntentKind.Create,
@@ -119,6 +124,7 @@ public sealed class PresentationMediaPaneSessionTests
         media.VolumePercent.Should().Be(100);
         media.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
         media.Loop.Should().BeTrue();
+        media.ShowWhenStopped.Should().BeFalse();
         media.TrimStartMilliseconds.Should().Be(125);
         media.TrimEndMilliseconds.Should().Be(250);
         media.FadeInMilliseconds.Should().Be(500);

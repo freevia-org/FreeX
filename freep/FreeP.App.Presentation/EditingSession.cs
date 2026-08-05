@@ -2408,8 +2408,11 @@ public sealed class EditingSession
         return true;
     }
 
-    /// <summary>Sets the selected media's authored start mode and loop policy through the shared undo bus.</summary>
-    public bool SetSelectedMediaPlaybackOptions(MediaPlaybackStartMode startMode, bool loop)
+    /// <summary>Sets the selected media's authored playback options through the shared undo bus.</summary>
+    public bool SetSelectedMediaPlaybackOptions(
+        MediaPlaybackStartMode startMode,
+        bool loop,
+        bool showWhenStopped = true)
     {
         var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
             CurrentSlide,
@@ -2424,7 +2427,9 @@ public sealed class EditingSession
             media.PlaybackStartMode,
             media.Loop,
             startMode,
-            loop));
+            loop,
+            media.ShowWhenStopped,
+            showWhenStopped));
         return true;
     }
 

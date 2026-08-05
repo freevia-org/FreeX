@@ -1165,6 +1165,10 @@ public sealed class SlideCanvas : Control
             new Point(rect.Left,  rect.Top),    new Point(rect.Left,  rect.Bottom));
         DrawCellBorder(dc, cell.BorderRight,
             new Point(rect.Right, rect.Top),    new Point(rect.Right, rect.Bottom));
+        DrawCellBorder(dc, cell.BorderDiagonalDown,
+            new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom));
+        DrawCellBorder(dc, cell.BorderDiagonalUp,
+            new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Top));
 
         if (cell.Text is not null)
             RenderTableCellText(dc, cell.Text, cell.BoundsDip, cell.Anchor);
