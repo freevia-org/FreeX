@@ -102,7 +102,7 @@ public enum RecentFileRegistration
 /// <param name="Filter">
 ///   The format-filter string in the platform-conventional form (e.g. on Windows
 ///   <c>"Word documents (*.docx)|*.docx|All files (*.*)|*.*"</c>). Built by
-///   <see cref="FileDialogFilter"/>.
+///   <see cref="FileDialogFilterBuilder"/>.
 /// </param>
 /// <param name="DefaultExtension">The default extension (with leading dot), e.g. <c>".docx"</c>.</param>
 public sealed record FileOpenRequest(string Filter, string DefaultExtension);
