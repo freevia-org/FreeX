@@ -46,6 +46,19 @@ public sealed class Wave26ConnectorFrameTests
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8" +
             "z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==");
 
+    private static bool SegmentCrossesInterior(
+        (long X, long Y) first,
+        (long X, long Y) second,
+        (long L, long T, long R, long B) obstacle) =>
+        first.Y == second.Y
+            ? first.Y > obstacle.T && first.Y < obstacle.B
+                && Math.Max(first.X, second.X) > obstacle.L
+                && Math.Min(first.X, second.X) < obstacle.R
+            : first.X == second.X
+                && first.X > obstacle.L && first.X < obstacle.R
+                && Math.Max(first.Y, second.Y) > obstacle.T
+                && Math.Min(first.Y, second.Y) < obstacle.B;
+
     // ════════════════════════════════════════════════════════════════════════════
     // Part 1 — Per-shape connection sites
     // ════════════════════════════════════════════════════════════════════════════
@@ -191,6 +204,29 @@ public sealed class Wave26ConnectorFrameTests
     }
 
     [Fact]
+    public void ElbowRouter_DetoursAroundInterveningObstacle()
+    {
+        var start = (X: 200L, Y: 50L);
+        var end = (X: 600L, Y: 50L);
+        var obstacle = (L: 350L, T: 0L, R: 450L, B: 100L);
+
+        var route = ElbowRouter.Route(
+            start,
+            end,
+            (L: 0L, T: 0L, R: 200L, B: 100L),
+            (L: 600L, T: 0L, R: 800L, B: 100L),
+            [obstacle]);
+
+        route.First().Should().Be(start);
+        route.Last().Should().Be(end);
+        route.Should().Contain(point => point.Y < obstacle.T || point.Y > obstacle.B,
+            "the route must leave the obstacle's vertical band");
+        route.Should().OnlyContain(point => point.X >= 200 && point.X <= 600);
+        for (var index = 1; index < route.Count; index++)
+            SegmentCrossesInterior(route[index - 1], route[index], obstacle).Should().BeFalse();
+    }
+
+    [Fact]
     public void ElbowRouter_SamePoint_ReturnsTwoPoints()
     {
         var pt = (X: 100L, Y: 200L);
@@ -241,6 +277,42 @@ public sealed class Wave26ConnectorFrameTests
         var endSite   = ConnectionSiteHelper.Resolve(new ConnectorAttachment { ShapeId = 2, SiteIndex = 0 }, slide);
         c.ElbowRoute.First().Should().Be(startSite, "route must start at the start site");
         c.ElbowRoute.Last().Should().Be(endSite,    "route must end at the end site");
+    }
+
+    [Fact]
+    public void ConnectorRouter_ElbowConnector_RoutesAroundOtherShapes()
+    {
+        var pres = new Presentation();
+        var slide = new Slide { Id = "s1" };
+        pres.Slides.Add(slide);
+
+        var shapeA = MakeShape(1, DrawingShapeKind.Rectangle, 0, 0, 200, 100);
+        var shapeB = MakeShape(2, DrawingShapeKind.Rectangle, 600, 0, 200, 100);
+        var obstacle = MakeShape(4, DrawingShapeKind.Rectangle, 350, 0, 100, 100);
+        var connector = MakeConnector(3,
+            start: new ConnectorAttachment { ShapeId = 1, SiteIndex = 2 },
+            end: new ConnectorAttachment { ShapeId = 2, SiteIndex = 0 });
+
+        slide.Shapes.Add(shapeA);
+        slide.Shapes.Add(shapeB);
+        slide.Shapes.Add(obstacle);
+        slide.Shapes.Add(connector);
+
+        var bus = new PresentationCommandBus(pres);
+        bus.Execute(new MoveShapeCommand(0, 1, 50, 20));
+
+        var route = slide.Shapes.First(s => s.Id == 3).ElbowRoute;
+        route.Should().NotBeNull();
+        route!.Should().Contain(point => point.Y < obstacle.OffsetYEmu
+            || point.Y > obstacle.OffsetYEmu + obstacle.ExtentCyEmu);
+        for (var index = 1; index < route.Count; index++)
+            SegmentCrossesInterior(
+                route[index - 1],
+                route[index],
+                (obstacle.OffsetXEmu,
+                 obstacle.OffsetYEmu,
+                 obstacle.OffsetXEmu + obstacle.ExtentCxEmu,
+                 obstacle.OffsetYEmu + obstacle.ExtentCyEmu)).Should().BeFalse();
     }
 
     [Fact]
