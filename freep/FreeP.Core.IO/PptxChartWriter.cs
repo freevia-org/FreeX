@@ -112,6 +112,7 @@ internal static class PptxChartWriter
                 var preserved = XDocument.Parse(chart.PreservedChartExXml, LoadOptions.PreserveWhitespace);
                 UpdateChartExTitle(preserved, chart);
                 UpdateChartExSeriesLayouts(preserved, chart);
+                UpdateChartExValueColorScales(preserved, chart);
                 UpdateChartExSeriesDataPoints(preserved, chart);
                 UpdateChartExSeriesDataLabels(preserved, chart);
                 if (chart.RegenerateWorkbookOnSave)
@@ -306,6 +307,93 @@ internal static class PptxChartWriter
             if (!string.IsNullOrWhiteSpace(layoutId))
                 series[index].SetAttributeValue("layoutId", layoutId);
         }
+    }
+
+    private static void UpdateChartExValueColorScales(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var series = document.Descendants(cx + "plotAreaRegion")
+            .Elements(cx + "series")
+            .ToList();
+
+        if (series.Count == 0 || series.Count != chart.Series.Count)
+            return;
+
+        for (var index = 0; index < series.Count; index++)
+        {
+            var scale = chart.Series[index].ValueColorScale;
+            if (scale is null)
+                continue;
+
+            series[index].Element(cx + "valueColors")?.Remove();
+            series[index].Element(cx + "valueColorPositions")?.Remove();
+
+            var anchor = series[index].Elements().FirstOrDefault(element =>
+                element.Name == cx + "dataPt"
+                || element.Name == cx + "dataLabels"
+                || element.Name == cx + "dataId"
+                || element.Name == cx + "layoutPr");
+
+            var valueColors = new XElement(cx + "valueColors");
+            AddChartExValueColor(valueColors, "minColor", scale.MinColor, cx);
+            AddChartExValueColor(valueColors, "midColor", scale.MidColor, cx);
+            AddChartExValueColor(valueColors, "maxColor", scale.MaxColor, cx);
+            if (!valueColors.IsEmpty)
+                InsertBeforeOrAdd(series[index], anchor, valueColors);
+
+            var positions = new XElement(cx + "valueColorPositions",
+                new XAttribute("count", (scale.PositionCount is 2 or 3)
+                    ? scale.PositionCount.Value.ToString(CultureInfo.InvariantCulture)
+                    : scale.MidPosition is null ? "2" : "3"));
+            AddChartExValueColorPosition(positions, "min", scale.MinPosition, cx);
+            AddChartExValueColorPosition(positions, "mid", scale.MidPosition, cx);
+            AddChartExValueColorPosition(positions, "max", scale.MaxPosition, cx);
+            if (positions.Elements().Any())
+                InsertBeforeOrAdd(series[index], anchor, positions);
+        }
+    }
+
+    private static void AddChartExValueColor(
+        XElement parent,
+        string name,
+        ThemeAwareColor? color,
+        XNamespace cx)
+    {
+        if (color is null)
+            return;
+
+        parent.Add(new XElement(cx + name,
+            new XElement(A + "solidFill", BuildColorEl(color))));
+    }
+
+    private static void AddChartExValueColorPosition(
+        XElement parent,
+        string name,
+        ChartValueColorPosition? position,
+        XNamespace cx)
+    {
+        if (position is null)
+            return;
+
+        XElement value;
+        if (position.IsExtreme)
+            value = new XElement(cx + "extremeValue");
+        else if (position.Number is double number)
+            value = new XElement(cx + "number", new XAttribute("val", number.ToString("G", CultureInfo.InvariantCulture)));
+        else if (position.Percent is double percent)
+            value = new XElement(cx + "percent", new XAttribute("val", percent.ToString("G", CultureInfo.InvariantCulture)));
+        else
+            return;
+
+        parent.Add(new XElement(cx + name, value));
+    }
+
+    private static void InsertBeforeOrAdd(XElement parent, XElement? anchor, XElement child)
+    {
+        if (anchor is not null)
+            anchor.AddBeforeSelf(child);
+        else
+            parent.Add(child);
     }
 
     /// <summary>

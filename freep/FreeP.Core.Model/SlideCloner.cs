@@ -308,6 +308,7 @@ public static class SlideCloner
                 ErrorBars         = CloneChartErrorBars(s.ErrorBars),
                 Trendline         = CloneChartTrendline(s.Trendline),
                 OverrideChartType = s.OverrideChartType,
+                ValueColorScale = CloneChartValueColorScale(s.ValueColorScale),
             };
             foreach (var v in s.Values)
                 sc.Values.Add(v);
@@ -330,6 +331,30 @@ public static class SlideCloner
 
         return copy;
     }
+
+    private static ChartValueColorScale? CloneChartValueColorScale(ChartValueColorScale? source) =>
+        source is null
+            ? null
+            : new ChartValueColorScale
+            {
+                MinColor = source.MinColor,
+                MidColor = source.MidColor,
+                MaxColor = source.MaxColor,
+                MinPosition = CloneChartValueColorPosition(source.MinPosition),
+                MidPosition = CloneChartValueColorPosition(source.MidPosition),
+                MaxPosition = CloneChartValueColorPosition(source.MaxPosition),
+                PositionCount = source.PositionCount,
+            };
+
+    private static ChartValueColorPosition? CloneChartValueColorPosition(ChartValueColorPosition? source) =>
+        source is null
+            ? null
+            : new ChartValueColorPosition
+            {
+                Number = source.Number,
+                Percent = source.Percent,
+                IsExtreme = source.IsExtreme,
+            };
 
     private static ChartManualLayout? CloneChartManualLayout(ChartManualLayout? source) =>
         source is null
