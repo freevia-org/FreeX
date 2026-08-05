@@ -171,6 +171,12 @@ internal static class PptxChartWriter
         {
             document.Root?.Element(cx + "chart")?.AddFirst(
                 new XElement(cx + "title",
+                    chart.ChartExTitlePosition is { } titlePosition
+                        ? new XAttribute("pos", ChartExTitlePositionToken(titlePosition))
+                        : null,
+                    chart.ChartExTitleAlignment is { } titleAlignment
+                        ? new XAttribute("align", ChartExTitleAlignmentToken(titleAlignment))
+                        : null,
                     chart.TitleOverlay is { } overlay
                         ? new XAttribute("overlay", overlay ? "1" : "0")
                         : null,
@@ -204,11 +210,33 @@ internal static class PptxChartWriter
             _ => "r",
         };
 
+    private static string ChartExTitlePositionToken(ChartExTitlePosition position) =>
+        position switch
+        {
+            ChartExTitlePosition.Bottom => "b",
+            ChartExTitlePosition.Left => "l",
+            ChartExTitlePosition.Right => "r",
+            _ => "t",
+        };
+
+    private static string ChartExTitleAlignmentToken(ChartExTitleAlignment alignment) =>
+        alignment switch
+        {
+            ChartExTitleAlignment.Near => "near",
+            ChartExTitleAlignment.Far => "far",
+            _ => "ctr",
+        };
+
     private static void UpdateChartExLegend(XDocument document, ChartShape chart)
     {
         XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
         if (chart.Legend is not { } position)
+        {
+            // Clearing the legend is an explicit authoring edit. Remove the
+            // preserved native node instead of leaving it visible on save.
+            document.Root?.Element(cx + "chart")?.Element(cx + "legend")?.Remove();
             return;
+        }
 
         var chartElement = document.Root?.Element(cx + "chart");
         if (chartElement is null)
@@ -251,11 +279,22 @@ internal static class PptxChartWriter
 
         var title = chartElement.Element(cx + "title");
         if (chart.Title is null)
+        {
+            // An empty title is an explicit authoring edit. Do not leave the
+            // preserved native title visible just because the model has no text.
+            title?.Remove();
             return;
+        }
 
         if (title is null)
         {
             chartElement.AddFirst(new XElement(cx + "title",
+                chart.ChartExTitlePosition is { } titlePosition
+                    ? new XAttribute("pos", ChartExTitlePositionToken(titlePosition))
+                    : null,
+                chart.ChartExTitleAlignment is { } titleAlignment
+                    ? new XAttribute("align", ChartExTitleAlignmentToken(titleAlignment))
+                    : null,
                 chart.TitleOverlay is { } overlay
                     ? new XAttribute("overlay", overlay ? "1" : "0")
                     : null,
@@ -290,6 +329,11 @@ internal static class PptxChartWriter
 
         if (chart.TitleOverlay is { } overlayValue)
             title.SetAttributeValue("overlay", overlayValue ? "1" : "0");
+
+        if (chart.ChartExTitlePosition is { } positionValue)
+            title.SetAttributeValue("pos", ChartExTitlePositionToken(positionValue));
+        if (chart.ChartExTitleAlignment is { } alignmentValue)
+            title.SetAttributeValue("align", ChartExTitleAlignmentToken(alignmentValue));
 
         if (chart.TitleStyle is not null)
         {

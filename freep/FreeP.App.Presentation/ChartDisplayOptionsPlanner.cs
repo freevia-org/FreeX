@@ -3,6 +3,8 @@ using FreeP.Core.Model;
 namespace FreeP.App.Compositor;
 
 public sealed record ChartDisplayLegendOption(LegendPosition? Value, string Label);
+public sealed record ChartDisplayTitlePositionOption(ChartExTitlePosition Value, string Label);
+public sealed record ChartDisplayTitleAlignmentOption(ChartExTitleAlignment Value, string Label);
 
 public sealed record ChartDisplayLabelPositionOption(DataLabelPosition Value, string Label);
 
@@ -14,6 +16,8 @@ public sealed record ChartDisplayOptionsSurfacePlan(
     string Title,
     string ChartTitleLabel,
     string TitleOverlayLabel,
+    string TitlePositionLabel,
+    string TitleAlignmentLabel,
     string PlotVisibleOnlyLabel,
     string RoundedCornersLabel,
     string ChartStyleLabel,
@@ -60,6 +64,8 @@ public sealed class ChartDisplayOptionsPlanner
     public const string DialogTitle = "Chart Options";
     public const string ChartTitleLabel = "Chart Title";
     public const string TitleOverlayLabel = "Overlay title on plot";
+    public const string TitlePositionLabel = "Title side";
+    public const string TitleAlignmentLabel = "Title alignment";
     public const string PlotVisibleOnlyLabel = "Plot visible cells only";
     public const string RoundedCornersLabel = "Rounded chart corners";
     public const string ChartStyleLabel = "Chart Style";
@@ -114,6 +120,21 @@ public sealed class ChartDisplayOptionsPlanner
         new(LegendPosition.Bottom, "Bottom"),
     ];
 
+    public static IReadOnlyList<ChartDisplayTitlePositionOption> TitlePositionOptions { get; } =
+    [
+        new(ChartExTitlePosition.Top, "Top"),
+        new(ChartExTitlePosition.Bottom, "Bottom"),
+        new(ChartExTitlePosition.Left, "Left"),
+        new(ChartExTitlePosition.Right, "Right"),
+    ];
+
+    public static IReadOnlyList<ChartDisplayTitleAlignmentOption> TitleAlignmentOptions { get; } =
+    [
+        new(ChartExTitleAlignment.Near, "Near"),
+        new(ChartExTitleAlignment.Center, "Center"),
+        new(ChartExTitleAlignment.Far, "Far"),
+    ];
+
     public static IReadOnlyList<ChartDisplayLabelPositionOption> LabelPositionOptions { get; } =
     [
         new(DataLabelPosition.BestFit, "Best fit"),
@@ -130,6 +151,11 @@ public sealed class ChartDisplayOptionsPlanner
     private string _title = string.Empty;
     private bool _titleOverlay;
     private bool _titleOverlayChanged;
+    private ChartExTitlePosition _titlePosition;
+    private bool _titlePositionChanged;
+    private ChartExTitleAlignment _titleAlignment;
+    private bool _titleAlignmentChanged;
+    private readonly bool _supportsChartExTitleLayout;
     private bool _plotVisibleOnly;
     private bool _plotVisibleOnlyChanged;
     private bool _roundedCorners;
@@ -175,6 +201,9 @@ public sealed class ChartDisplayOptionsPlanner
     {
         _title = chart.Title ?? string.Empty;
         _titleOverlay = chart.TitleOverlay == true;
+        _titlePosition = chart.ChartExTitlePosition ?? ChartExTitlePosition.Top;
+        _titleAlignment = chart.ChartExTitleAlignment ?? ChartExTitleAlignment.Center;
+        _supportsChartExTitleLayout = chart.IsChartEx;
         _plotVisibleOnly = chart.PlotVisibleOnly != false;
         _roundedCorners = chart.RoundedCorners == true;
         _styleId = chart.StyleId;
@@ -223,6 +252,8 @@ public sealed class ChartDisplayOptionsPlanner
             DialogTitle,
             ChartTitleLabel,
             TitleOverlayLabel,
+            TitlePositionLabel,
+            TitleAlignmentLabel,
             PlotVisibleOnlyLabel,
             RoundedCornersLabel,
             ChartStyleLabel,
@@ -267,6 +298,9 @@ public sealed class ChartDisplayOptionsPlanner
 
     public string Title => _title;
     public bool TitleOverlay => _titleOverlay;
+    public bool SupportsChartExTitleLayout => _supportsChartExTitleLayout;
+    public ChartExTitlePosition TitlePosition => _titlePosition;
+    public ChartExTitleAlignment TitleAlignment => _titleAlignment;
     public bool PlotVisibleOnly => _plotVisibleOnly;
     public bool RoundedCorners => _roundedCorners;
     public int? StyleId => _styleId;
@@ -327,6 +361,16 @@ public sealed class ChartDisplayOptionsPlanner
     {
         _titleOverlay = value;
         _titleOverlayChanged = true;
+    }
+    public void SetTitlePosition(ChartExTitlePosition value)
+    {
+        _titlePosition = value;
+        _titlePositionChanged = true;
+    }
+    public void SetTitleAlignment(ChartExTitleAlignment value)
+    {
+        _titleAlignment = value;
+        _titleAlignmentChanged = true;
     }
     public void SetPlotVisibleOnly(bool value)
     {
@@ -408,7 +452,9 @@ public sealed class ChartDisplayOptionsPlanner
         _supportsWaterfallConnectorLines ? _waterfallConnectorLines : null,
         _supportsDropLines ? _dropLines : null,
         _supportsUpDownBars ? _upDownBars : null,
-        _supportsSeriesLines ? _seriesLines : null);
+        _supportsSeriesLines ? _seriesLines : null,
+        _supportsChartExTitleLayout && _titlePositionChanged ? _titlePosition : null,
+        _supportsChartExTitleLayout && _titleAlignmentChanged ? _titleAlignment : null);
 
     private ChartTextStyle? BuildLabelTextStyle()
     {

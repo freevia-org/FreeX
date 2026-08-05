@@ -16,6 +16,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private readonly ChartDisplayOptionsPlanner _planner;
     private readonly TextBox _titleBox;
     private readonly CheckBox _titleOverlayCheck;
+    private readonly ComboBox _titlePositionCombo;
+    private readonly ComboBox _titleAlignmentCombo;
     private readonly CheckBox _plotVisibleOnlyCheck;
     private readonly CheckBox _roundedCornersCheck;
     private readonly ComboBox _styleCombo;
@@ -70,6 +72,20 @@ internal sealed class ChartDisplayOptionsDialog : Window
         {
             Content = surface.TitleOverlayLabel,
             IsChecked = _planner.TitleOverlay,
+        };
+        _titlePositionCombo = new ComboBox
+        {
+            ItemsSource = ChartDisplayOptionsPlanner.TitlePositionOptions.Select(option => option.Label).ToArray(),
+            SelectedIndex = FindTitlePositionIndex(_planner.TitlePosition),
+            MinWidth = 150,
+            IsEnabled = _planner.SupportsChartExTitleLayout,
+        };
+        _titleAlignmentCombo = new ComboBox
+        {
+            ItemsSource = ChartDisplayOptionsPlanner.TitleAlignmentOptions.Select(option => option.Label).ToArray(),
+            SelectedIndex = FindTitleAlignmentIndex(_planner.TitleAlignment),
+            MinWidth = 150,
+            IsEnabled = _planner.SupportsChartExTitleLayout,
         };
         _plotVisibleOnlyCheck = new CheckBox
         {
@@ -235,6 +251,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
             {
                 MakeRow(surface.ChartTitleLabel, _titleBox),
                 _titleOverlayCheck,
+                MakeRow(surface.TitlePositionLabel, _titlePositionCombo),
+                MakeRow(surface.TitleAlignmentLabel, _titleAlignmentCombo),
                 _plotVisibleOnlyCheck,
                 _roundedCornersCheck,
                 MakeRow(surface.ChartStyleLabel, _styleCombo),
@@ -282,6 +300,12 @@ internal sealed class ChartDisplayOptionsDialog : Window
     internal void SetVaryColorsForTests(bool value) => _varyColorsCheck.IsChecked = value;
 
     internal void SetTitleOverlayForTests(bool value) => _titleOverlayCheck.IsChecked = value;
+
+    internal void SetTitlePositionForTests(ChartExTitlePosition value) =>
+        _titlePositionCombo.SelectedIndex = FindTitlePositionIndex(value);
+
+    internal void SetTitleAlignmentForTests(ChartExTitleAlignment value) =>
+        _titleAlignmentCombo.SelectedIndex = FindTitleAlignmentIndex(value);
 
     internal void SetPlotVisibleOnlyForTests(bool value) => _plotVisibleOnlyCheck.IsChecked = value;
 
@@ -362,6 +386,15 @@ internal sealed class ChartDisplayOptionsDialog : Window
     {
         _planner.SetTitle(_titleBox.Text);
         _planner.SetTitleOverlay(_titleOverlayCheck.IsChecked == true);
+        if (_planner.SupportsChartExTitleLayout)
+        {
+            if (_titlePositionCombo.SelectedIndex >= 0 &&
+                _titlePositionCombo.SelectedIndex < ChartDisplayOptionsPlanner.TitlePositionOptions.Count)
+                _planner.SetTitlePosition(ChartDisplayOptionsPlanner.TitlePositionOptions[_titlePositionCombo.SelectedIndex].Value);
+            if (_titleAlignmentCombo.SelectedIndex >= 0 &&
+                _titleAlignmentCombo.SelectedIndex < ChartDisplayOptionsPlanner.TitleAlignmentOptions.Count)
+                _planner.SetTitleAlignment(ChartDisplayOptionsPlanner.TitleAlignmentOptions[_titleAlignmentCombo.SelectedIndex].Value);
+        }
         _planner.SetPlotVisibleOnly(_plotVisibleOnlyCheck.IsChecked == true);
         _planner.SetRoundedCorners(_roundedCornersCheck.IsChecked == true);
         var styleIndex = _styleCombo.SelectedIndex;
@@ -444,6 +477,16 @@ internal sealed class ChartDisplayOptionsDialog : Window
         Math.Max(0, ChartDisplayOptionsPlanner.LabelPositionOptions
             .Select((option, index) => (option, index))
             .FirstOrDefault(item => item.option.Value == position).index);
+
+    private static int FindTitlePositionIndex(ChartExTitlePosition position) =>
+        Math.Max(0, ChartDisplayOptionsPlanner.TitlePositionOptions
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(item => item.option.Value == position).index);
+
+    private static int FindTitleAlignmentIndex(ChartExTitleAlignment alignment) =>
+        Math.Max(0, ChartDisplayOptionsPlanner.TitleAlignmentOptions
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(item => item.option.Value == alignment).index);
 
     private static int FindDisplayBlanksIndex(ChartDisplayBlanksAs? value) =>
         Math.Max(0, ChartDisplayOptionsPlanner.DisplayBlanksOptions
