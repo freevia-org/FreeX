@@ -12874,6 +12874,12 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         var blocks = _model.Blocks;
+        var crossReferencePageResolver = blocks
+            .OfType<ModelParagraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef)
+                ? BuildCrossReferencePageResolver()
+                : null;
         for (var b = 0; b < blocks.Count; b++)
         {
             if (blocks[b] is not ModelParagraph paragraph)
@@ -12883,7 +12889,12 @@ public sealed class DocumentView : RichTextBox
                 var r = paragraph.Runs[i];
                 if (r.CrossReference is { } crossReference)
                 {
-                    var resolved = CrossReferences.ResolveField(_model, crossReference, r.Text, b);
+                    var resolved = CrossReferences.ResolveField(
+                        _model,
+                        crossReference,
+                        r.Text,
+                        b,
+                        crossReferencePageResolver);
                     if (resolved.Length > 0)
                         r.Text = resolved;
                 }
@@ -12948,6 +12959,63 @@ public sealed class DocumentView : RichTextBox
 
         Render();
     }
+
+    private Func<int, int?>? BuildCrossReferencePageResolver()
+    {
+        try
+        {
+            var pagination = PaginationEngine.Compute(this);
+            var pageCount = Math.Max(1, pagination.PageCount);
+            if (pageCount == 1 || pagination.PageBreakYsDip.Count == 0)
+                return blockIndex => IsModelParagraph(blockIndex)
+                    ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex) ?? 1
+                    : null;
+
+            var firstRect = Document.ContentStart.GetCharacterRect(LogicalDirection.Forward);
+            if (firstRect.IsEmpty)
+                return blockIndex => IsModelParagraph(blockIndex)
+                    ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
+                    : null;
+
+            var topY = firstRect.Top;
+            return blockIndex =>
+            {
+                if (!IsModelParagraph(blockIndex))
+                    return null;
+
+                var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex);
+                if (TextPointerAtModelTextOffset(blockIndex, 0) is not { } pointer)
+                    return explicitPage;
+
+                var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
+                if (rect.IsEmpty)
+                    return explicitPage;
+
+                var y = rect.Top - topY;
+                var pageIndex = 0;
+                foreach (var breakY in pagination.PageBreakYsDip)
+                {
+                    if (y + 0.5 < breakY)
+                        break;
+                    pageIndex++;
+                }
+
+                var placedPage = Math.Min(Math.Max(1, pageIndex + 1), pageCount);
+                return explicitPage is { } authoredPage
+                    ? Math.Max(placedPage, authoredPage)
+                    : placedPage;
+            };
+        }
+        catch (InvalidOperationException)
+        {
+            return blockIndex => CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex);
+        }
+    }
+
+    private bool IsModelParagraph(int blockIndex) =>
+        blockIndex >= 0
+        && blockIndex < _model.Blocks.Count
+        && _model.Blocks[blockIndex] is ModelParagraph;
 
     /// <summary>
     /// Renders an inline image as an InlineUIContainer hosting a WPF Image. The image bytes are decoded

@@ -144,4 +144,34 @@ public sealed class CrossReferenceEditorTests
             .Single(r => r.CrossReference is not null);
         fieldRun.Text.Should().Be("Chapter Two");
     }
+
+    [StaFact]
+    public void UpdateFields_PageReferenceUsesTargetPhysicalPage()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("See page "),
+                Run.CrossReferenceFieldRun(
+                    new CrossReferenceField(CrossRefFieldKind.PageRef, "_Ref2", CrossRefInsertAs.PageNumber, Hyperlink: false),
+                    "9")
+                }
+        });
+        doc.Blocks.Add(DocumentOps.CreatePageBreak());
+        doc.Blocks.Add(new Paragraph("Target")
+        {
+            BookmarkName = "_Ref2",
+        });
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        InsertedField(view).Text.Should().Be("2");
+    }
 }

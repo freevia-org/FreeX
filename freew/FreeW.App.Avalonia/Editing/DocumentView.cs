@@ -21800,7 +21800,7 @@ public sealed class DocumentView : Control
         {
             Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
             var pageCount = Math.Max(1, _pageCount);
-            var hasExplicitPageBoundary = HasTableOfAuthoritiesExplicitPageBoundary(_doc);
+            var hasExplicitPageBoundary = HasExplicitPageBoundary(_doc);
             if (pageCount == 1 && hasExplicitPageBoundary)
                 return null;
 
@@ -21841,7 +21841,7 @@ public sealed class DocumentView : Control
             : null;
     }
 
-    private static bool HasTableOfAuthoritiesExplicitPageBoundary(TextDocument document) =>
+    private static bool HasExplicitPageBoundary(TextDocument document) =>
         document.Blocks.OfType<Paragraph>().Any(paragraph =>
             paragraph.Formatting.PageBreakBefore
             || paragraph.Runs.Any(run => run.IsPageBreak)
@@ -22169,6 +22169,12 @@ public sealed class DocumentView : Control
     /// </summary>
     public void UpdateFields()
     {
+        var crossReferencePageResolver = _doc.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef)
+                ? BuildCrossReferencePageResolver()
+                : null;
         for (var b = 0; b < _doc.Blocks.Count; b++)
         {
             if (_doc.Blocks[b] is not Paragraph paragraph)
@@ -22179,7 +22185,12 @@ public sealed class DocumentView : Control
                 var run = paragraph.Runs[r];
                 if (run.CrossReference is { } crossReference)
                 {
-                    var resolved = CrossReferences.ResolveField(_doc, crossReference, run.Text, b);
+                    var resolved = CrossReferences.ResolveField(
+                        _doc,
+                        crossReference,
+                        run.Text,
+                        b,
+                        crossReferencePageResolver);
                     if (!string.IsNullOrEmpty(resolved))
                         run.Text = resolved;
                 }
@@ -22240,6 +22251,38 @@ public sealed class DocumentView : Control
 
         InvalidateVisual();
         Focus();
+    }
+
+    private Func<int, int?>? BuildCrossReferencePageResolver()
+    {
+        try
+        {
+            Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
+            var pageCount = Math.Max(1, _pageCount);
+            var hasExplicitPageBoundary = HasExplicitPageBoundary(_doc);
+
+            return blockIndex =>
+            {
+                if (blockIndex < 0
+                    || blockIndex >= _doc.Blocks.Count
+                    || _doc.Blocks[blockIndex] is not Paragraph)
+                {
+                    return null;
+                }
+
+                var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex);
+                if (TryResolvePlacedPageForBlockOffset(blockIndex, 0, pageCount, out var pageIndex))
+                    return explicitPage is { } authoredPage
+                        ? Math.Max(pageIndex + 1, authoredPage)
+                        : pageIndex + 1;
+
+                return explicitPage ?? (pageCount == 1 && !hasExplicitPageBoundary ? 1 : null);
+            };
+        }
+        catch (InvalidOperationException)
+        {
+            return blockIndex => CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex);
+        }
     }
 
     private string ResolveComplexField(ComplexField field, string fallback) =>
