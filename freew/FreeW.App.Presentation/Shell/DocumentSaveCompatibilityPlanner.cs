@@ -33,7 +33,8 @@ public static class DocumentSaveCompatibilityPlanner
 
     private static FileFormatDescriptor? ResolveTargetFormat(DocumentSaveTarget target)
     {
-        var extension = DocumentFileFormatResolver.NormalizeExtension(Path.GetExtension(target.Path));
+        var extension = DocumentFileFormatResolver.NormalizeExtension(
+            FilePathPolicy.GetExtensionOrEmpty(target.Path));
         return target.Adapter.Formats.FirstOrDefault(format =>
             string.Equals(
                 DocumentFileFormatResolver.NormalizeExtension(format.Extension),
@@ -216,7 +217,8 @@ public static class DocumentSaveCompatibilityPlanner
     {
         public static TargetProfile From(FileFormatDescriptor? format, IDocumentFileAdapter adapter, string path)
         {
-            var extension = DocumentFileFormatResolver.NormalizeExtension(format?.Extension ?? Path.GetExtension(path));
+            var extension = DocumentFileFormatResolver.NormalizeExtension(
+                format?.Extension ?? FilePathPolicy.GetExtensionOrEmpty(path));
             var formatName = format?.FormatName ?? adapter.FormatName;
             var kind = Classify(format, adapter, extension, formatName);
             var canSave = format?.CanSave ?? true;

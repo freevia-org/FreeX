@@ -1,4 +1,5 @@
 using System.Text;
+using Free.Shared.IO;
 using Free.Shared.Shell;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -36,7 +37,7 @@ public static class PresentationFilePersistenceWorkflow
 
     public static bool IsSupportedPresentationPath(string path)
     {
-        var extension = Path.GetExtension(path);
+        var extension = FilePathPolicy.GetExtensionOrEmpty(path);
         return string.Equals(extension, DefaultPresentationExtension, StringComparison.OrdinalIgnoreCase)
             || string.Equals(extension, MacroEnabledPresentationExtension, StringComparison.OrdinalIgnoreCase)
             || string.Equals(extension, TemplateExtension, StringComparison.OrdinalIgnoreCase)
@@ -47,7 +48,7 @@ public static class PresentationFilePersistenceWorkflow
     }
 
     public static PresentationFilePersistenceFormat ResolveFormat(string path) =>
-        string.Equals(Path.GetExtension(path), LegacyFxpExtension, StringComparison.OrdinalIgnoreCase)
+        string.Equals(FilePathPolicy.GetExtensionOrEmpty(path), LegacyFxpExtension, StringComparison.OrdinalIgnoreCase)
             ? PresentationFilePersistenceFormat.LegacyFxp
             : PresentationFilePersistenceFormat.PowerPoint;
 
@@ -94,11 +95,11 @@ public static class PresentationFilePersistenceWorkflow
     }
 
     public static bool IsPowerPointPackagePath(string path) =>
-        !string.Equals(Path.GetExtension(path), LegacyFxpExtension, StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(FilePathPolicy.GetExtensionOrEmpty(path), LegacyFxpExtension, StringComparison.OrdinalIgnoreCase) &&
         IsSupportedPresentationPath(path);
 
     public static PresentationPackageKind ResolvePackageKind(string path) =>
-        Path.GetExtension(path).ToLowerInvariant() switch
+        FilePathPolicy.GetExtensionOrEmpty(path).ToLowerInvariant() switch
         {
             MacroEnabledPresentationExtension => PresentationPackageKind.MacroEnabledPresentation,
             TemplateExtension => PresentationPackageKind.Template,

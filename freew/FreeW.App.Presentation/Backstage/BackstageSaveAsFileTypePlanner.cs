@@ -1,4 +1,4 @@
-using System.IO;
+using Free.Shared.IO;
 using Free.Shared.Shell;
 using FreeW.Core.IO;
 using FreeW.App.Presentation.Shell;
@@ -46,7 +46,7 @@ public static class BackstageSaveAsFileTypePlanner
             .ToArray();
 
         var currentExtension = DocumentFileFormatResolver.NormalizeExtension(
-            string.IsNullOrWhiteSpace(currentPath) ? string.Empty : Path.GetExtension(currentPath));
+            FilePathPolicy.GetExtensionOrEmpty(currentPath));
         var selectedExtension = choices.Any(choice => string.Equals(choice.PrimaryExtension, currentExtension, StringComparison.OrdinalIgnoreCase))
             ? currentExtension
             : choices.Any(choice => string.Equals(choice.PrimaryExtension, DefaultSaveExtension, StringComparison.OrdinalIgnoreCase))

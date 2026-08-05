@@ -44,6 +44,7 @@ public sealed class PresentationFilePersistenceWorkflowTests : IDisposable
     [InlineData("deck.fxp", true)]
     [InlineData("deck.pdf", false)]
     [InlineData("deck", false)]
+    [InlineData("bad\0deck.pptx", false)]
     public void IsSupportedPresentationPath_IsRestrictedToOpenablePresentationFiles(string path, bool expected) =>
         PresentationFilePersistenceWorkflow.IsSupportedPresentationPath(path).Should().Be(expected);
 

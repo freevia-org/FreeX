@@ -1,4 +1,3 @@
-using System.IO;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -73,7 +72,7 @@ public sealed class AvaloniaBackstagePaneComposer
             var capturedPath = path;
             panel.Children.Add(AvaloniaBackstageChrome.CreateStackedActionButton(
                 new AvaloniaBackstageStackedActionButtonSpec(
-                    FileNameOrPath(capturedPath),
+                    BackstageRecentActionRowsPlanner.FileNameOrPath(capturedPath),
                     capturedPath,
                     "BackstageRecent_" + AutomationToken(capturedPath),
                     () => spec.OpenPath(capturedPath)),
@@ -223,12 +222,6 @@ public sealed class AvaloniaBackstagePaneComposer
         HorizontalAlignment = HorizontalAlignment.Left,
         Spacing = 10,
     };
-
-    private static string FileNameOrPath(string path)
-    {
-        var fileName = Path.GetFileName(path);
-        return string.IsNullOrWhiteSpace(fileName) ? path : fileName;
-    }
 
     private static string AutomationToken(string value) =>
         string.Concat(value.Where(char.IsLetterOrDigit));

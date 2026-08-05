@@ -41,7 +41,10 @@ public sealed class DocumentPersistenceWorkflow
             DocumentFormatCapabilityPlanner.BuildFixedLayoutExportFormats(includeXpsExport));
 
     public bool CanOpenPath(string path) =>
-        DocumentFileFormatResolver.FindOpenAdapter(_adapters, Path.GetExtension(path), out _) is not null;
+        DocumentFileFormatResolver.FindOpenAdapter(
+            _adapters,
+            FilePathPolicy.GetExtensionOrEmpty(path),
+            out _) is not null;
 
     public bool TryGetSaveFormat(string extension, out FileFormatDescriptor? format) =>
         DocumentFileFormatResolver.FindSaveAdapter(_adapters, extension, out format) is not null;
@@ -103,8 +106,9 @@ public sealed class DocumentPersistenceWorkflow
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, Path.GetExtension(path), out var format)
-            ?? throw new InvalidOperationException($"FreeW has no reader for \"{Path.GetExtension(path)}\" files.");
+        var extension = FilePathPolicy.GetExtensionOrEmpty(path);
+        var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, extension, out var format)
+            ?? throw new InvalidOperationException($"FreeW has no reader for \"{extension}\" files.");
 
         using var stream = File.OpenRead(path);
         var document = adapter.Load(stream);
@@ -127,7 +131,7 @@ public sealed class DocumentPersistenceWorkflow
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        var extension = Path.GetExtension(path);
+        var extension = FilePathPolicy.GetExtensionOrEmpty(path);
         var adapter = DocumentFileFormatResolver.FindOpenAdapter(_pdfImportAdapters, extension, out var format)
             ?? throw new InvalidOperationException(
                 $"FreeW can import text only from \".pdf\" files, not \"{extension}\".");
@@ -143,7 +147,7 @@ public sealed class DocumentPersistenceWorkflow
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        var chosenExtension = Path.GetExtension(path);
+        var chosenExtension = FilePathPolicy.GetExtensionOrEmpty(path);
         var adapter = FileDialogSaveSelectionResolver.ResolveAdapter(
             _adapters,
             static candidate => candidate.Formats,
@@ -203,9 +207,9 @@ public sealed class DocumentPersistenceWorkflow
         if (normalizedPreferred.Length > 0)
             return normalizedPreferred;
 
-        return string.IsNullOrWhiteSpace(currentPath)
-            ? DefaultSaveExtension
-            : Path.GetExtension(currentPath);
+        return FilePathPolicy.TryGetExtension(currentPath, out var currentExtension)
+            ? currentExtension
+            : DefaultSaveExtension;
     }
 
     private static bool AdapterOwnsFormat(IDocumentFileAdapter adapter, FileFormatDescriptor selectedFormat) =>

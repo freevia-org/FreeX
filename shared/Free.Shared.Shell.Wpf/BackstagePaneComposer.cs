@@ -83,7 +83,7 @@ public sealed class BackstagePaneComposer
             var item = new StackPanel { Margin = new Thickness(0, 0, 0, 12), Cursor = Cursors.Hand };
             item.Children.Add(new TextBlock
             {
-                Text = Path.GetFileName(path),
+                Text = BackstageRecentActionRowsPlanner.FileNameOrPath(path),
                 Foreground = _kit.Link,
                 FontSize = 14
             });

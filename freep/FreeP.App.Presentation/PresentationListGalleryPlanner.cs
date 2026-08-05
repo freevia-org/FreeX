@@ -1,3 +1,4 @@
+using Free.Shared.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -228,7 +229,7 @@ public static class PresentationPictureBulletAuthoringPlanner
 
     public static string InferContentType(string? fileName)
     {
-        var extension = (Path.GetExtension(fileName) ?? string.Empty).ToLowerInvariant();
+        var extension = FilePathPolicy.GetExtensionOrEmpty(fileName).ToLowerInvariant();
         return extension switch
         {
             ".jpg" or ".jpeg" => "image/jpeg",

@@ -1,3 +1,4 @@
+using Free.Shared.IO;
 using FreeX.Core.IO;
 
 namespace FreeX.App.Services;
@@ -25,7 +26,7 @@ public sealed class StartupWorkbookLoader
                      .Select(argument => LocalFilePath.TryNormalize(argument, out var path) ? path : null)
                      .Where(path => path is not null && File.Exists(path)))
         {
-            var extension = Path.GetExtension(filePath!);
+            var extension = FilePathPolicy.GetExtensionOrEmpty(filePath);
             var adapter = FileFormatResolver.FindOpenAdapter(_adapters, extension, out var format);
             if (adapter is null || format is null)
             {

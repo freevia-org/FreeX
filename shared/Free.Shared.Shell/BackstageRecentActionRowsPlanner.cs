@@ -1,5 +1,6 @@
 using System.IO;
 using Free.Shared.AppServices;
+using Free.Shared.IO;
 
 namespace Free.Shared.Shell;
 
@@ -53,7 +54,7 @@ public static class BackstageRecentActionRowsPlanner
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentNullException.ThrowIfNull(openFolder);
 
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(PlatformPathIdentityComparer.Current);
         var rows = new List<BackstageActionRow>();
         foreach (var entry in entries)
         {
@@ -81,16 +82,12 @@ public static class BackstageRecentActionRowsPlanner
     }
 
     public static string FileNameOrPath(string path)
-    {
-        var fileName = Path.GetFileName(path);
-        return string.IsNullOrWhiteSpace(fileName) ? path : fileName;
-    }
+        => FilePathPolicy.FileNameOrPath(path);
 
     public static string FolderNameOrPath(string path)
     {
         var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var name = Path.GetFileName(trimmed);
-        return string.IsNullOrWhiteSpace(name) ? path : name;
+        return FilePathPolicy.TryGetFileName(trimmed, out var name) ? name : path;
     }
 
     private static bool Matches(string label, string description, string? filter)

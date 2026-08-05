@@ -1,4 +1,5 @@
 using Free.Shared.Drawing;
+using Free.Shared.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -332,7 +333,7 @@ public static class SlideObjectInsertionPlanner
 
     public static string InferPictureContentType(string? fileNameOrExtension)
     {
-        var extension = Path.GetExtension(fileNameOrExtension);
+        var extension = FilePathPolicy.GetExtensionOrEmpty(fileNameOrExtension);
         if (string.IsNullOrWhiteSpace(extension))
         {
             extension = fileNameOrExtension ?? string.Empty;
@@ -350,7 +351,7 @@ public static class SlideObjectInsertionPlanner
 
     public static string InferMediaContentType(string? fileNameOrExtension, bool isVideo)
     {
-        var extension = Path.GetExtension(fileNameOrExtension ?? string.Empty).TrimStart('.').ToLowerInvariant();
+        var extension = FilePathPolicy.GetExtensionOrEmpty(fileNameOrExtension).TrimStart('.').ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(extension))
             extension = (fileNameOrExtension ?? string.Empty).TrimStart('.').ToLowerInvariant();
 

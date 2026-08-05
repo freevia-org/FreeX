@@ -58,6 +58,7 @@ public sealed class PresentationFileDialogPlannerTests
     [InlineData("deck.fxp", "deck.fxp", true)]
     [InlineData("deck.PPTX", "deck.PPTX", true)]
     [InlineData("deck.txt", "", false)]
+    [InlineData("bad\0deck.pptx", "", false)]
     public void TryResolveSavePickerPath_UsesSupportedExtensionsAndDefault(
         string path,
         string expectedPath,

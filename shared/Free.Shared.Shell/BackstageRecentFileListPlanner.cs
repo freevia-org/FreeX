@@ -1,5 +1,6 @@
 using System.Globalization;
 using Free.Shared.AppServices;
+using Free.Shared.IO;
 
 namespace Free.Shared.Shell;
 
@@ -82,7 +83,7 @@ public sealed class RecentFileViewModel
     public RecentFileViewModel(RecentFileEntry entry)
     {
         Path = entry.Path;
-        FileName = System.IO.Path.GetFileName(entry.Path);
+        FileName = FilePathPolicy.FileNameOrPath(entry.Path);
         Directory = System.IO.Path.GetDirectoryName(entry.Path) ?? "";
         LastOpenedText = FormatDate(entry.LastOpened);
         IsPinned = entry.IsPinned;

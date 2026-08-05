@@ -16,6 +16,19 @@ public sealed class DocumentPersistenceWorkflowTests : IDisposable
         try { Directory.Delete(_tempDir, recursive: true); } catch { /* best effort */ }
     }
 
+    [Theory]
+    [InlineData("draft.DOCX", true)]
+    [InlineData("draft", false)]
+    [InlineData("bad\0draft.docx", false)]
+    public void CanOpenPath_ClassifiesExtensionWithoutThrowing(string path, bool expected)
+    {
+        var adapter = new FakeDocumentAdapter(
+            [new FileFormatDescriptor(".docx", "Word Document")]);
+        var workflow = new DocumentPersistenceWorkflow([adapter]);
+
+        workflow.CanOpenPath(path).Should().Be(expected);
+    }
+
     [Fact]
     public void Open_TemplateFormat_ReturnsLoadedDocumentWithoutSavedPath()
     {

@@ -1,4 +1,5 @@
 using Free.Shared.AppServices;
+using Free.Shared.IO;
 using FreeX.Core.IO;
 
 namespace FreeX.App.Services;
@@ -40,7 +41,7 @@ public static class WorkbookOpenTargetPlanner
             return false;
         }
 
-        if (!TryGetExtension(openPath, out var extension))
+        if (!FilePathPolicy.TryGetExtension(openPath, out var extension))
         {
             message = UnsupportedFileTypeMessage;
             return false;
@@ -183,34 +184,4 @@ public static class WorkbookOpenTargetPlanner
         return WorkbookFileAccessIdentity.FromLocalPath(path);
     }
 
-    private static bool TryGetExtension(string path, out string extension)
-    {
-        try
-        {
-            if (path.Contains('\0', StringComparison.Ordinal) ||
-                path.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
-            {
-                extension = "";
-                return false;
-            }
-
-            extension = Path.GetExtension(path) ?? "";
-            return !string.IsNullOrWhiteSpace(extension);
-        }
-        catch (ArgumentException)
-        {
-            extension = "";
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            extension = "";
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            extension = "";
-            return false;
-        }
-    }
 }

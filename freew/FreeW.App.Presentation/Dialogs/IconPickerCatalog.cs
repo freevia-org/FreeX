@@ -1,3 +1,5 @@
+using Free.Shared.IO;
+
 namespace FreeW.App.Presentation.Dialogs;
 
 /// <summary>
@@ -25,7 +27,10 @@ public static class IconPickerCatalog
             .OrderBy(Path.GetFileName, PathNameComparer)
             .ThenBy(Path.GetFileName, StringComparer.Ordinal)
             .SelectMany(categoryPath => Directory.EnumerateFiles(categoryPath)
-                .Where(path => string.Equals(Path.GetExtension(path), ".svg", StringComparison.OrdinalIgnoreCase))
+                .Where(path => string.Equals(
+                    FilePathPolicy.GetExtensionOrEmpty(path),
+                    ".svg",
+                    StringComparison.OrdinalIgnoreCase))
                 .OrderBy(Path.GetFileName, PathNameComparer)
                 .ThenBy(Path.GetFileName, StringComparer.Ordinal)
                 .Select(path => CreateEntry(categoryPath, path)))

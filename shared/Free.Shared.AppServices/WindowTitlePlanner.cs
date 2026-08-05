@@ -1,4 +1,4 @@
-using System.IO;
+using Free.Shared.IO;
 
 namespace Free.Shared.AppServices;
 
@@ -67,5 +67,5 @@ public static class WindowTitlePlanner
     /// its extension.
     /// </summary>
     public static string DisplayNameFromPath(string path) =>
-        Path.GetFileNameWithoutExtension(path);
+        FilePathPolicy.FileNameWithoutExtensionOr(path, string.Empty);
 }

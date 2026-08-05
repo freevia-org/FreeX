@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 using Free.Shared.AppServices;
+using Free.Shared.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -1211,7 +1212,7 @@ public static class ExternalXamlClipboardPlanner
             .FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value));
 
     private static string ContentTypeFor(string path) =>
-        Path.GetExtension(path).ToLowerInvariant() switch
+        FilePathPolicy.GetExtensionOrEmpty(path).ToLowerInvariant() switch
         {
             ".jpg" or ".jpeg" => "image/jpeg",
             ".gif" => "image/gif",

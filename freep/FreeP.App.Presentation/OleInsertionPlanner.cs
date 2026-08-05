@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using Free.Shared.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -20,7 +21,7 @@ public static class OleInsertionPlanner
         if (bytes.Length == 0)
             throw new ArgumentException("The embedded object file cannot be empty.", nameof(bytes));
 
-        var extension = NormalizeExtension(Path.GetExtension(fileName));
+        var extension = NormalizeExtension(FilePathPolicy.GetExtensionOrEmpty(fileName));
         var contentType = ContentTypeFor(extension);
         var progId = string.IsNullOrWhiteSpace(sourceProgId)
             ? ProgIdFor(extension)

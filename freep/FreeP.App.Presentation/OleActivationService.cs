@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Free.Shared.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -237,7 +238,7 @@ public static class OleActivationService
 
     public static string ResolveExtension(InlineOleObjectInfo inlineObject)
     {
-        string extension = NormalizeExtension(Path.GetExtension(inlineObject.FileName));
+        string extension = NormalizeExtension(FilePathPolicy.GetExtensionOrEmpty(inlineObject.FileName));
         if (extension != "bin")
             return extension;
 
