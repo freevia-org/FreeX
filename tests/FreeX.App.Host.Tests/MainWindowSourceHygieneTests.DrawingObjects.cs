@@ -5,17 +5,24 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class MainWindowSourceHygieneTests
 {
     [Fact]
-    public void TextBoxInlineEditing_RoutesKeyCommitAndLostFocusPolicyThroughSharedPlanner()
+    public void TextBoxInlineEditing_RoutesLifecycleAndPolicyThroughSharedSession()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.TextBoxInlineEditing.cs");
 
-        source.Should().Contain("TextBoxInlineEditPlanner.PlanKeyDown(");
-        source.Should().Contain("TextBoxInlineEditPlanner.CreateCommitPlan(");
-        source.Should().Contain("TextBoxInlineEditPlanner.ShouldCommitLostFocus(");
-        source.Should().Contain("TextBoxInlineEditPlanner.CommitCommandTitle");
+        source.Should().Contain("TextBoxInlineEditSession _textBoxInlineEditSession = new();");
+        source.Should().Contain("_textBoxInlineEditSession.Begin(textBox)");
+        source.Should().Contain("_textBoxInlineEditSession.CreateCommitPlan(");
+        source.Should().Contain("_textBoxInlineEditSession.CreateCancelPlan()");
+        source.Should().Contain("_textBoxInlineEditSession.ShouldCommitLostFocus(");
+        source.Should().Contain("TextBoxInlineEditSession.CommitCommandTitle");
+        source.Should().NotContain("TextBoxInlineEditPlanner.CreateCommitPlan(");
+        source.Should().NotContain("TextBoxInlineEditPlanner.PlanKeyDown(");
+        source.Should().NotContain("TextBoxInlineEditPlanner.ShouldCommitLostFocus(");
+        source.Should().NotContain("new SetTextBoxTextCommand(");
         source.Should().NotContain("e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None");
         source.Should().NotContain("e.Key is Key.Enter or Key.Return && Keyboard.Modifiers == ModifierKeys.None");
-        source.Should().NotContain("string.Equals(_textBoxInlineOriginalText, newText, StringComparison.Ordinal)");
+        source.Should().NotContain("_textBoxInlineEditingId");
+        source.Should().NotContain("_textBoxInlineOriginalText");
     }
 
     [Fact]

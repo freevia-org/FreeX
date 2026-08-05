@@ -5623,7 +5623,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         foreach (var renderPlan in DrawingObjectRenderPlanner.Plan(viewport))
         {
             var drawingObject = renderPlan.Bounds;
-            if (_textBoxInlineEditingId == drawingObject.Id &&
+            if (_textBoxInlineEditSession.IsEditing(drawingObject.Id) &&
                 drawingObject.Kind == SelectionPaneObjectKind.TextBox)
             {
                 continue;
@@ -5985,7 +5985,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         if (IsTextBoxInlineEditorVisible &&
             (drawingObject.Kind != SelectionPaneObjectKind.TextBox ||
-             drawingObject.Id != _textBoxInlineEditingId) &&
+             !_textBoxInlineEditSession.IsEditing(drawingObject.Id)) &&
             !HideTextBoxInlineEditor(commit: true))
         {
             return;

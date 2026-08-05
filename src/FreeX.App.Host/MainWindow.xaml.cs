@@ -269,8 +269,6 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private System.Windows.Controls.TextBlock? _inlineFormulaReferenceOverlay;
     private System.Windows.Controls.TextBox? _textBoxInlineEditor;
     private System.Windows.Controls.Border? _textBoxInlineEditorChrome;
-    private Guid? _textBoxInlineEditingId;
-    private string? _textBoxInlineOriginalText;
     private bool _syncingFormulaEditorText;
     private bool _isApplyingFormulaEditorText;
     private System.Windows.Controls.ComboBox? _validationDropdown;

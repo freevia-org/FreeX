@@ -25,7 +25,7 @@ public sealed partial class MainWindow
     private void TextBoxInlineEditor_LayoutUpdated(object? sender, EventArgs args)
     {
         if (!_textBoxInlinePhysicalLayoutObservationPending ||
-            _textBoxInlineEditingId is not { } textBoxId ||
+            _textBoxInlineEditSession.EditingTextBoxId is not { } textBoxId ||
             _textBoxInlineEditor is not { IsVisible: true, IsFocused: true } editor ||
             editor.Bounds.Width <= 0 ||
             editor.Bounds.Height <= 0)
