@@ -22,6 +22,8 @@ public static class ZoomObjectPropertiesPlanner
         "Gradient border requires two six-digit RGB colors and an angle from 0 to 360 degrees.";
     public const string InvalidFrameBorderPatternMessage =
         "Pattern border requires a supported preset and two six-digit RGB colors.";
+    public const string InvalidFrameBorderShadowMessage =
+        "Border shadow requires a six-digit RGB color, alpha from 0 to 100 percent, and non-negative blur, distance, and direction from 0 to 360 degrees.";
     public const string InvalidFrameGeometryMessage =
         "Frame shape must be Rectangle, Rounded rectangle, or Ellipse.";
     public const string InvalidCropEdgesMessage =
@@ -91,8 +93,49 @@ public static class ZoomObjectPropertiesPlanner
             ReadFrameBorderGradient(properties),
             ReadFrameBorderPattern(properties),
             ReadFrameBorderNoFill(properties),
-            ReadFrameBorderThemeColor(properties));
+            ReadFrameBorderThemeColor(properties),
+            ReadFrameBorderShadow(properties),
+            ReadFrameBorderShadowEnabled(properties));
         return value.IsEmpty ? fallback : value;
+    }
+
+    private static ZoomFrameBorderShadow? ReadFrameBorderShadow(XElement properties)
+    {
+        var shadow = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "outerShdw", StringComparison.OrdinalIgnoreCase));
+        var color = shadow?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value?.Trim().TrimStart('#');
+        if (color is not { Length: 6 } || !color.All(Uri.IsHexDigit))
+            return null;
+
+        var alpha = ReadNullableInt(shadow?.Descendants().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "alpha", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value) ?? 50000;
+        var blur = ReadNullableLong(shadow?.Attribute("blurRad")?.Value) ?? 0;
+        var distance = ReadNullableLong(shadow?.Attribute("dist")?.Value) ?? 0;
+        var direction = ReadNullableInt(shadow?.Attribute("dir")?.Value) ?? 0;
+        if (alpha is < 0 or > 100000 || blur < 0 || distance < 0
+            || direction is < 0 or > 21600000)
+            return null;
+
+        return new ZoomFrameBorderShadow(color.ToUpperInvariant(), alpha, blur, distance, direction);
+    }
+
+    private static bool? ReadFrameBorderShadowEnabled(XElement properties)
+    {
+        var effectList = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
+        return effectList?.Elements().Any(element =>
+            string.Equals(element.Name.LocalName, "outerShdw", StringComparison.OrdinalIgnoreCase)) == true
+            ? true
+            : null;
     }
 
     private static string? ReadFrameBorderColor(XElement properties)
@@ -287,6 +330,12 @@ public static class ZoomObjectPropertiesPlanner
             ? parsed
             : null;
 
+    private static long? ReadNullableLong(string? value) =>
+        long.TryParse(value, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+
     public static bool IsSupportedImageType(string? imageType) =>
         string.Equals(imageType, "preview", StringComparison.OrdinalIgnoreCase)
         || string.Equals(imageType, "cover", StringComparison.OrdinalIgnoreCase);
@@ -299,7 +348,8 @@ public static class ZoomObjectPropertiesPlanner
         || properties.FrameBorderGradient is not null
         || properties.FrameBorderPattern is not null
         || properties.FrameBorderNoFill == true
-        || properties.FrameBorderThemeColor is not null;
+        || properties.FrameBorderThemeColor is not null
+        || IsFrameBorderShadowEnabled(properties);
 
     public static string FormatFrameBorderWidth(ZoomObjectProperties properties) =>
         properties.FrameBorderWidthEmu is int width
@@ -337,6 +387,70 @@ public static class ZoomObjectPropertiesPlanner
 
     public static bool IsFrameBorderThemeColorEnabled(ZoomObjectProperties properties) =>
         properties.FrameBorderThemeColor is not null;
+
+    public static bool IsFrameBorderShadowEnabled(ZoomObjectProperties properties) =>
+        properties.FrameBorderShadowEnabled == true || properties.FrameBorderShadow is not null;
+
+    public static string FormatFrameBorderShadowColor(ZoomObjectProperties properties) =>
+        properties.FrameBorderShadow?.Color ?? string.Empty;
+
+    public static string FormatFrameBorderShadowAlpha(ZoomObjectProperties properties) =>
+        properties.FrameBorderShadow is { } shadow
+            ? (shadow.Alpha / 1000d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+            : "50";
+
+    public static string FormatFrameBorderShadowBlur(ZoomObjectProperties properties) =>
+        properties.FrameBorderShadow is { } shadow
+            ? (shadow.BlurRadiusEmu / 12700d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+            : "4";
+
+    public static string FormatFrameBorderShadowDistance(ZoomObjectProperties properties) =>
+        properties.FrameBorderShadow is { } shadow
+            ? (shadow.DistanceEmu / 12700d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+            : "3";
+
+    public static string FormatFrameBorderShadowDirection(ZoomObjectProperties properties) =>
+        properties.FrameBorderShadow is { } shadow
+            ? (shadow.Direction / 60000d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+            : "45";
+
+    public static bool TryParseFrameBorderShadow(
+        string? colorText,
+        string? alphaText,
+        string? blurText,
+        string? distanceText,
+        string? directionText,
+        bool enabled,
+        out ZoomFrameBorderShadow? normalized)
+    {
+        normalized = null;
+        if (!enabled)
+            return true;
+
+        if (!TryNormalizeFrameBorderColor(colorText, out var color)
+            || !double.TryParse(alphaText?.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var alphaPercent)
+            || !double.TryParse(blurText?.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var blurPoints)
+            || !double.TryParse(distanceText?.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var distancePoints)
+            || !double.TryParse(directionText?.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var directionDegrees)
+            || !double.IsFinite(alphaPercent) || !double.IsFinite(blurPoints)
+            || !double.IsFinite(distancePoints) || !double.IsFinite(directionDegrees)
+            || alphaPercent is < 0 or > 100
+            || blurPoints < 0 || distancePoints < 0
+            || directionDegrees is < 0 or > 360)
+            return false;
+
+        normalized = new ZoomFrameBorderShadow(
+            color!,
+            checked((int)Math.Round(alphaPercent * 1000d, MidpointRounding.AwayFromZero)),
+            checked((long)Math.Round(blurPoints * 12700d, MidpointRounding.AwayFromZero)),
+            checked((long)Math.Round(distancePoints * 12700d, MidpointRounding.AwayFromZero)),
+            checked((int)Math.Round(directionDegrees * 60000d, MidpointRounding.AwayFromZero)));
+        return true;
+    }
 
     public static string FormatFrameBorderPatternPreset(ZoomObjectProperties properties) =>
         properties.FrameBorderPattern?.Preset ?? FrameBorderPatternOptions[0];

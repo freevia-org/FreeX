@@ -634,6 +634,7 @@ public static class SlideCompositor
                 CropRight = crop.Right,
                 CropBottom = crop.Bottom,
                 Outline = outline,
+                Effects = ResolveZoomFrameEffects(properties, info.ZoomProperties),
                 PictureFrameGeometry = geometry,
             });
             composed = true;
@@ -699,6 +700,7 @@ public static class SlideCompositor
             CropRight = crop.Right,
             CropBottom = crop.Bottom,
             Outline = outline,
+            Effects = ResolveZoomFrameEffects(properties, info.ZoomProperties),
             PictureFrameGeometry = geometry,
         });
         return true;
@@ -729,6 +731,59 @@ public static class SlideCompositor
         value.HasValue
             ? Math.Clamp(value.Value / 100000d, 0, 1)
             : 0;
+
+    private static ResolvedShapeEffects? ResolveZoomFrameEffects(
+        XElement? properties,
+        ZoomObjectProperties? fallback)
+    {
+        var shapeProperties = properties?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase));
+        var effectList = shapeProperties?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
+        var shadow = effectList?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "outerShdw", StringComparison.OrdinalIgnoreCase));
+        var fallbackShadow = fallback?.FrameBorderShadowEnabled == false
+            ? null
+            : fallback?.FrameBorderShadow;
+        if (shadow is null && fallbackShadow is null)
+            return null;
+
+        var colorText = shadow?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value;
+        var color = TryParseZoomRgb(colorText, out var nativeColor)
+            ? nativeColor
+            : TryParseZoomRgb(fallbackShadow?.Color, out var fallbackColor)
+                ? fallbackColor
+                : new SrgbColor(0x40, 0x40, 0x40);
+        var alpha100k = shadow?.Descendants().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "alpha", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value;
+        var alpha = int.TryParse(alpha100k, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawAlpha)
+            ? rawAlpha
+            : fallbackShadow?.Alpha ?? 50000;
+        var blur = long.TryParse(shadow?.Attribute("blurRad")?.Value,
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawBlur)
+            ? rawBlur / EmuPerDip
+            : (fallbackShadow?.BlurRadiusEmu ?? 0) / EmuPerDip;
+        var distance = long.TryParse(shadow?.Attribute("dist")?.Value,
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawDistance)
+            ? rawDistance / EmuPerDip
+            : (fallbackShadow?.DistanceEmu ?? 0) / EmuPerDip;
+        var direction = int.TryParse(shadow?.Attribute("dir")?.Value,
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawDirection)
+            ? rawDirection / 60000d
+            : (fallbackShadow?.Direction ?? 0) / 60000d;
+        return new ResolvedShapeEffects
+        {
+            HasOuterShadow = true,
+            OuterShadowColor = color,
+            OuterShadowAlpha = (byte)Math.Clamp((int)Math.Round(alpha * 255d / 100000d), 0, 255),
+            OuterShadowBlurDip = Math.Max(0, blur),
+            OuterShadowDistDip = Math.Max(0, distance),
+            OuterShadowDirDeg = direction,
+        };
+    }
 
     private static ResolvedOutline ResolveZoomFrameOutline(
         XElement? properties,

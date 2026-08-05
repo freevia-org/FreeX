@@ -492,6 +492,41 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void ZoomFrameBorderShadow_IsUndoableAndRoundTripsNativeEffect()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var zoom = session.InsertSlideZoom("slide-2");
+        var shadow = new ZoomFrameBorderShadow("404040", 50000, 50800, 38100, 2700000);
+        session.SetZoomObjectProperties(
+                zoom.Id,
+                new ZoomObjectProperties(FrameBorderShadow: shadow))
+            .Should().BeTrue();
+
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var raw = XElement.Parse(zoom.PreservedObject!.RawXml);
+        var outerShadow = raw.Descendants(drawing + "outerShdw").Single();
+        outerShadow.Attribute("blurRad")!.Value.Should().Be("50800");
+        outerShadow.Attribute("dist")!.Value.Should().Be("38100");
+        outerShadow.Attribute("dir")!.Value.Should().Be("2700000");
+        outerShadow.Descendants(drawing + "srgbClr").Single()
+            .Attribute("val")!.Value.Should().Be("404040");
+        zoom.PreservedObject.ZoomProperties!.FrameBorderShadow.Should().Be(shadow);
+
+        session.Undo();
+        XElement.Parse(zoom.PreservedObject.RawXml).Descendants(drawing + "outerShdw")
+            .Should().BeEmpty();
+        session.Redo();
+
+        var reopened = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
+            .PreservedObject!.ZoomProperties!.FrameBorderShadow.Should().Be(shadow);
+    }
+
+    [Fact]
     public void ZoomFrameBorder_GradientIsUndoableAndRoundTripsNativeStops()
     {
         var presentation = new Presentation();

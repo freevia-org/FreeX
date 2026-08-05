@@ -99,6 +99,52 @@ public class DocumentIndexTests
     }
 
     [Fact]
+    public void Build_HierarchicalXeMarksEmitIndentedSubentriesAndCrossReferenceWithoutPage()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("Cats"), DocumentIndex.MarkRun(new IndexMark("Animals", "Cats")) } });
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("Dogs"), DocumentIndex.MarkRun(new IndexMark("Animals", "Dogs")) } });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Transport"),
+                DocumentIndex.MarkRun(new IndexMark("Transportation", CrossReference: "See Vehicles"))
+            }
+        });
+
+        var index = DocumentIndex.Build(doc, _ => "1");
+
+        index.Select(paragraph => paragraph.PlainText).Should().Equal(
+            DocumentIndex.HeadingText,
+            "Animals",
+            "Cats, 1",
+            "Dogs, 1",
+            "Transportation. See Vehicles");
+        index[1].Formatting.Should().Match<ParagraphFormatting>(format =>
+            format.IndentLeftPt == 12 && format.FirstLineIndentPt == -12);
+        index[2].Formatting.Should().Match<ParagraphFormatting>(format =>
+            format.IndentLeftPt == 24 && format.FirstLineIndentPt == -12);
+        index[4].PlainText.Should().NotContain(", 1");
+    }
+
+    [Fact]
+    public void MarkRun_SerializesAndParsesSubentryAndCrossReference()
+    {
+        var run = DocumentIndex.MarkRun(new IndexMark(
+            "  Animals  ",
+            " Cats:Longhair ",
+            " See Pet care "));
+
+        run.ComplexField!.Instruction.Should().Be(" XE \"Animals:Cats:Longhair\" \\t \"See Pet care\" ");
+        DocumentIndex.MarkedEntry(run).Should().Be(new IndexMark(
+            "Animals",
+            "Cats:Longhair",
+            "See Pet care"));
+        DocumentIndex.MarkedTerm(run).Should().Be("Animals:Cats:Longhair");
+    }
+
+    [Fact]
     public void Build_DoesNotMutateTheDocument()
     {
         var doc = new TextDocument();

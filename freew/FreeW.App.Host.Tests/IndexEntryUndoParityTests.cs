@@ -50,9 +50,33 @@ public sealed class IndexEntryUndoParityTests
             .Should().Equal("Index", "Alpha, IV, V", "Beta, V");
     }
 
+    [StaFact]
+    public void StructuredMarkIndexEntry_PreservesHierarchyAndCrossReferenceThroughUndo()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TextDocument.CreateEmpty());
+        var mark = new IndexMark("Transportation", "Rail", "See Trains");
+
+        editor.MarkIndexEntry(mark);
+
+        MarksWithOptions(editor).Should().Equal(mark);
+        editor.Undo();
+        MarksWithOptions(editor).Should().BeEmpty();
+        editor.Redo();
+        MarksWithOptions(editor).Should().Equal(mark);
+        editor.MarkIndexEntry(new IndexMark("transportation", "rail", "see trains"));
+        MarksWithOptions(editor).Should().Equal(mark);
+    }
+
     private static IEnumerable<string> Marks(DocumentView editor) =>
         editor.Model.Blocks.OfType<Paragraph>()
             .SelectMany(paragraph => paragraph.Runs)
             .Select(DocumentIndex.MarkedTerm)
             .OfType<string>();
+
+    private static IEnumerable<IndexMark> MarksWithOptions(DocumentView editor) =>
+        editor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(DocumentIndex.MarkedEntry)
+            .OfType<IndexMark>();
 }

@@ -21704,25 +21704,37 @@ public sealed class DocumentView : Control
         if (resolved.Length == 0)
             return;
 
+        MarkIndexEntry(new IndexMark(resolved));
+    }
+
+    public void MarkIndexEntry(IndexMark mark)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        var markRun = DocumentIndex.MarkRun(mark);
+        if (DocumentIndex.MarkedEntry(markRun) is not { MainEntry.Length: > 0 } normalized)
+            return;
+
         var hostIndex = ResolveReferenceHostBlock();
         if (hostIndex < 0
             || _doc.Blocks[hostIndex] is not Paragraph paragraph
-            || paragraph.Runs.Any(run => string.Equals(
-                DocumentIndex.MarkedTerm(run),
-                resolved,
-                StringComparison.OrdinalIgnoreCase)))
+            || paragraph.Runs.Any(run => SameIndexMark(DocumentIndex.MarkedEntry(run), normalized)))
         {
             return;
         }
 
         var offset = ReferenceInsertionOffset(hostIndex);
         _bus.Execute(new ReplaceParagraphRunsCommand(hostIndex, target =>
-            InsertRunAtOffset(target, offset, DocumentIndex.MarkRun(resolved))));
+            InsertRunAtOffset(target, offset, markRun)));
         _cellCaret = null;
         _caret = new DocPosition(hostIndex, Math.Clamp(offset, 0, BlockLength(hostIndex)));
         _selectionAnchor = _caret;
         Focus();
     }
+
+    private static bool SameIndexMark(IndexMark? left, IndexMark right) =>
+        left is not null
+        && string.Equals(left.EntryText, right.EntryText, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(left.CrossReference, right.CrossReference, StringComparison.OrdinalIgnoreCase);
 
     public void InsertIndex()
     {

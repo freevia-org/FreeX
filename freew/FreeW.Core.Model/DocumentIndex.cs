@@ -1,6 +1,18 @@
 namespace FreeW.Core.Model;
 
 /// <summary>
+/// The semantic payload of one hidden Word <c>XE</c> mark. <paramref name="Subentry"/> may contain
+/// colon-separated second/third-level text, matching Word's field-code convention. A non-empty
+/// <paramref name="CrossReference"/> is the exact text carried by XE's <c>\t</c> switch (for example,
+/// <c>See Vehicles</c>) and replaces the page number for that occurrence.
+/// </summary>
+public sealed record IndexMark(string MainEntry, string Subentry = "", string CrossReference = "")
+{
+    /// <summary>The colon-delimited entry text serialized as XE's first argument.</summary>
+    public string EntryText => Subentry.Length == 0 ? MainEntry : MainEntry + ":" + Subentry;
+}
+
+/// <summary>
 /// Pure, WPF-free generation of a document index from hidden body <c>XE</c> marks plus legacy
 /// <see cref="TextDocument.IndexEntries"/>. Lives in the model project so it is unit-testable without
 /// any UI, mirroring <see cref="TableOfContents"/>.
@@ -50,60 +62,142 @@ public static class DocumentIndex
 
             foreach (var run in paragraph.Runs)
             {
-                if (MarkedTerm(run) is not { Length: > 0 } term)
+                if (MarkedEntry(run) is not { } mark)
                     continue;
-                occurrences.Add(new IndexOccurrence(term, blockIndex));
-                bodyTerms.Add(term);
+                occurrences.Add(new IndexOccurrence(mark, blockIndex));
+                bodyTerms.Add(mark.EntryText);
             }
         }
 
         foreach (var entry in document.IndexEntries)
         {
             if (entry.Term.Length > 0 && !bodyTerms.Contains(entry.Term))
-                occurrences.Add(new IndexOccurrence(entry.Term, BlockIndex: null));
+                occurrences.Add(new IndexOccurrence(new IndexMark(entry.Term), BlockIndex: null));
         }
 
         var paragraphs = new List<Paragraph>
         {
             new(HeadingText) { StyleId = HeadingStyleId }
         };
-        foreach (var group in occurrences
-            .GroupBy(occurrence => occurrence.Term, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(group => group.Key, StringComparer.Ordinal))
+        var roots = new Dictionary<string, IndexNode>(StringComparer.OrdinalIgnoreCase);
+        foreach (var occurrence in occurrences)
         {
-            var pages = group
-                .Select(occurrence => ResolvePageText(document, occurrence.BlockIndex, pageTextOf))
-                .Distinct(StringComparer.Ordinal)
-                .ToList();
-            paragraphs.Add(new Paragraph(group.First().Term + ", " + string.Join(", ", pages))
+            var levels = SplitLevels(occurrence.Mark.EntryText);
+            if (levels.Count == 0)
+                continue;
+
+            var siblings = roots;
+            IndexNode? node = null;
+            foreach (var level in levels)
             {
-                StyleId = EntryStyleId
-            });
+                if (!siblings.TryGetValue(level, out node))
+                {
+                    node = new IndexNode(level);
+                    siblings.Add(level, node);
+                }
+                siblings = node.Children;
+            }
+            node!.Occurrences.Add(occurrence);
         }
+
+        foreach (var root in Ordered(roots.Values))
+            AppendNode(paragraphs, root, depth: 0, document, pageTextOf);
 
         return paragraphs;
     }
 
     /// <summary>Creates Word's hidden <c>XE</c> field mark for one index term.</summary>
     public static Run MarkRun(string term)
+        => MarkRun(new IndexMark((term ?? string.Empty).Trim()));
+
+    /// <summary>Creates Word's hidden <c>XE</c> field mark from a structured index entry.</summary>
+    public static Run MarkRun(IndexMark mark)
     {
-        var normalized = (term ?? string.Empty).Trim();
-        var escaped = normalized.Replace("\\", "\\\\", StringComparison.Ordinal)
-            .Replace("\"", "\\\"", StringComparison.Ordinal);
-        return Run.ComplexFieldRun($" XE \"{escaped}\" ");
+        ArgumentNullException.ThrowIfNull(mark);
+        var normalized = Normalize(mark);
+        var instruction = $" XE \"{Escape(normalized.EntryText)}\"";
+        if (normalized.CrossReference.Length > 0)
+            instruction += $" \\t \"{Escape(normalized.CrossReference)}\"";
+        return Run.ComplexFieldRun(instruction + " ");
     }
 
     /// <summary>Returns the term carried by a hidden <c>XE</c> field run, or null for another run.</summary>
     public static string? MarkedTerm(Run run)
+        => MarkedEntry(run)?.EntryText;
+
+    /// <summary>Returns the structured payload carried by a hidden <c>XE</c> field run.</summary>
+    public static IndexMark? MarkedEntry(Run run)
     {
         ArgumentNullException.ThrowIfNull(run);
         if (run.ComplexField is not { Keyword: "XE" } field)
             return null;
 
         var term = ComplexFieldEngine.FirstArgument(field.Instruction)?.Trim();
-        return string.IsNullOrEmpty(term) ? null : term;
+        if (string.IsNullOrEmpty(term))
+            return null;
+
+        var separator = term.IndexOf(':');
+        var mainEntry = separator < 0 ? term : term[..separator];
+        var subentry = separator < 0 ? string.Empty : term[(separator + 1)..];
+        return Normalize(new IndexMark(
+            mainEntry,
+            subentry,
+            ComplexFieldEngine.SwitchValue(field.Instruction, 't') ?? string.Empty));
     }
+
+    private static void AppendNode(
+        ICollection<Paragraph> paragraphs,
+        IndexNode node,
+        int depth,
+        TextDocument document,
+        Func<int, string?>? pageTextOf)
+    {
+        var pages = node.Occurrences
+            .Where(occurrence => occurrence.Mark.CrossReference.Length == 0)
+            .Select(occurrence => ResolvePageText(document, occurrence.BlockIndex, pageTextOf))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var crossReferences = node.Occurrences
+            .Select(occurrence => occurrence.Mark.CrossReference)
+            .Where(value => value.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var text = node.Label;
+        if (pages.Count > 0)
+            text += ", " + string.Join(", ", pages);
+        if (crossReferences.Count > 0)
+            text += ". " + string.Join("; ", crossReferences);
+
+        paragraphs.Add(new Paragraph(text)
+        {
+            StyleId = EntryStyleId,
+            Formatting = new ParagraphFormatting
+            {
+                IndentLeftPt = (depth + 1) * 12,
+                FirstLineIndentPt = -12,
+                SpaceAfterPt = 2,
+                SpaceAfterIsSet = true
+            }
+        });
+
+        foreach (var child in Ordered(node.Children.Values))
+            AppendNode(paragraphs, child, depth + 1, document, pageTextOf);
+    }
+
+    private static IEnumerable<IndexNode> Ordered(IEnumerable<IndexNode> nodes) =>
+        nodes.OrderBy(node => node.Label, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(node => node.Label, StringComparer.Ordinal);
+
+    private static IReadOnlyList<string> SplitLevels(string entryText) =>
+        entryText.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    private static IndexMark Normalize(IndexMark mark) =>
+        new(mark.MainEntry.Trim(), mark.Subentry.Trim(), mark.CrossReference.Trim());
+
+    private static string Escape(string value) =>
+        value.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("\"", "\\\"", StringComparison.Ordinal);
 
     private static string ResolvePageText(
         TextDocument document,
@@ -121,7 +215,14 @@ public static class DocumentIndex
             .ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    private sealed record IndexOccurrence(string Term, int? BlockIndex);
+    private sealed record IndexOccurrence(IndexMark Mark, int? BlockIndex);
+
+    private sealed class IndexNode(string label)
+    {
+        public string Label { get; } = label;
+        public Dictionary<string, IndexNode> Children { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public List<IndexOccurrence> Occurrences { get; } = [];
+    }
 
     /// <summary>
     /// Builds the index paragraphs from an arbitrary set of <paramref name="terms"/>: an "Index" heading
