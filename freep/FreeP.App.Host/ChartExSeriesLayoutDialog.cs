@@ -1,27 +1,18 @@
 using System.Windows;
 using System.Windows.Controls;
 using FreeP.App.Compositor;
-using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
 public sealed class ChartExSeriesLayoutDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly EditingSession _editor;
-    private readonly ChartShape _chart;
-    private readonly IReadOnlyList<ChartExSeriesLayoutOption> _seriesOptions;
+    private readonly ChartExSeriesLayoutDialogSession _session;
     private readonly ComboBox _seriesCombo;
     private readonly ComboBox _layoutCombo;
 
     public ChartExSeriesLayoutDialog(EditingSession editor)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        _chart = editor.SelectedChart
-            ?? throw new InvalidOperationException("No chart is currently selected.");
-        if (!ChartExSeriesLayoutPlanner.CanEdit(_chart))
-            throw new InvalidOperationException("The selected chart has no editable native ChartEx series layouts.");
-
-        _seriesOptions = ChartExSeriesLayoutPlanner.BuildOptions(_chart);
+        _session = new ChartExSeriesLayoutDialogSession(editor);
         Title = ChartExSeriesLayoutPlanner.DialogTitle;
         Width = 430;
         Height = 220;
@@ -30,13 +21,12 @@ public sealed class ChartExSeriesLayoutDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
         _seriesCombo = new ComboBox
         {
-            ItemsSource = _seriesOptions,
-            DisplayMemberPath = nameof(ChartExSeriesLayoutOption.Label),
+            ItemsSource = _session.SeriesOptions.Select(option => option.Label).ToArray(),
             SelectedIndex = 0,
             MinWidth = 260,
         };
         _seriesCombo.SelectionChanged += (_, _) => LoadLayoutChoices();
-        _layoutCombo = new ComboBox { MinWidth = 260, DisplayMemberPath = nameof(LayoutChoice.Label) };
+        _layoutCombo = new ComboBox { MinWidth = 260 };
         LoadLayoutChoices();
 
         var ok = new Button { Content = ChartExSeriesLayoutPlanner.OkLabel, IsDefault = true, MinWidth = 80, Margin = new Thickness(4) };
@@ -54,40 +44,33 @@ public sealed class ChartExSeriesLayoutDialog : Free.Shared.Ribbon.Wpf.DialogWin
         Content = content;
     }
 
-    internal int SelectedSeriesIndexForTests => (_seriesCombo.SelectedItem as ChartExSeriesLayoutOption)?.SeriesIndex ?? -1;
-    internal string? SelectedLayoutIdForTests => (_layoutCombo.SelectedItem as LayoutChoice)?.LayoutId;
+    internal int SelectedSeriesIndexForTests => _session.SelectedSeriesIndex;
+    internal string? SelectedLayoutIdForTests => _session.LayoutIdAt(_layoutCombo.SelectedIndex);
 
     internal void ApplyForTests()
     {
-        var seriesIndex = SelectedSeriesIndexForTests;
-        var layoutId = SelectedLayoutIdForTests ?? string.Empty;
-        var plan = ChartExSeriesLayoutPlanner.BuildCommitPlan(_chart, seriesIndex, layoutId);
-        _editor.SetChartExSeriesLayout(plan.SeriesIndex, plan.LayoutId);
+        if (!_session.TryApply(_layoutCombo.SelectedIndex, out var error))
+            throw new ArgumentException(error);
     }
 
     private void OnOk()
     {
-        try
+        if (!_session.TryApply(_layoutCombo.SelectedIndex, out var error))
         {
-            ApplyForTests();
-            DialogResult = true;
+            MessageBox.Show(this, error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
         }
-        catch (ArgumentException ex)
-        {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
+
+        DialogResult = true;
     }
 
     private void LoadLayoutChoices()
     {
-        if (_seriesCombo.SelectedItem is not ChartExSeriesLayoutOption series)
-            return;
-        var choices = ChartExSeriesLayoutPlanner.BuildLayoutChoices(_chart)
-            .Select(layoutId => new LayoutChoice(layoutId, FormatLayoutLabel(layoutId)))
+        var selection = _session.SelectSeries(_seriesCombo.SelectedIndex);
+        _layoutCombo.ItemsSource = selection.LayoutChoices
+            .Select(choice => choice.Label)
             .ToArray();
-        _layoutCombo.ItemsSource = choices;
-        _layoutCombo.SelectedIndex = Math.Max(0,
-            Array.FindIndex(choices, choice => string.Equals(choice.LayoutId, series.LayoutId, StringComparison.OrdinalIgnoreCase)));
+        _layoutCombo.SelectedIndex = selection.LayoutIndex;
     }
 
     private static StackPanel MakeRow(string label, Control control)
@@ -97,10 +80,4 @@ public sealed class ChartExSeriesLayoutDialog : Free.Shared.Ribbon.Wpf.DialogWin
         row.Children.Add(control);
         return row;
     }
-
-    private static string FormatLayoutLabel(string layoutId) =>
-        string.Concat(layoutId.Replace('_', ' ').Replace('-', ' ').Select((character, index) =>
-            index == 0 ? char.ToUpperInvariant(character).ToString() : character.ToString()));
-
-    private sealed record LayoutChoice(string LayoutId, string Label);
 }

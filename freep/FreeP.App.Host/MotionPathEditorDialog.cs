@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using FreeP.App.Compositor;
@@ -9,42 +8,32 @@ namespace FreeP.App.Host;
 /// <summary>Small, host-local editor for the normalized segments of a motion path.</summary>
 public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly EditingSession _editor;
-    private readonly int _animationIndex;
-    private readonly string _origin;
-    private readonly string? _ptsTypes;
+    private readonly MotionPathEditorDialogSession _session;
     private readonly StackPanel _rowsPanel = new();
     private readonly List<Row> _rows = new();
 
     public MotionPathEditorDialog(EditingSession editor, int animationIndex)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        var plan = MotionPathEditingPlanner.BuildPlan(editor.CurrentSlideAnimations, animationIndex);
-        if (!plan.CanEdit)
-            throw new InvalidOperationException(plan.Message);
-
-        _animationIndex = animationIndex;
-        _origin = plan.Origin;
-        _ptsTypes = plan.PtsTypes;
+        _session = new MotionPathEditorDialogSession(editor, animationIndex);
         Title = "Edit Motion Path";
         Width = 720;
         Height = 500;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResize;
 
-        foreach (var segment in plan.Segments)
+        foreach (var segment in _session.InitialSegments)
             _rows.Add(new Row(segment));
 
         var addLine = new Button { Content = "Add line", Margin = new Thickness(4), MinWidth = 80 };
         addLine.Click += (_, _) =>
         {
-            _rows.Add(new Row(MotionPathEditingPlanner.CreateLineAfter(ReadRowsOrEmpty())));
+            _rows.Add(new Row(_session.CreateLineAfter(ReadRowsOrEmpty())));
             RenderRows();
         };
         var addCurve = new Button { Content = "Add curve", Margin = new Thickness(4), MinWidth = 80 };
         addCurve.Click += (_, _) =>
         {
-            _rows.Add(new Row(MotionPathEditingPlanner.CreateCubicAfter(ReadRowsOrEmpty())));
+            _rows.Add(new Row(_session.CreateCubicAfter(ReadRowsOrEmpty())));
             RenderRows();
         };
 
@@ -83,7 +72,7 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             var row = _rows[index];
             row.Build(index == 0, () =>
             {
-                if (index == 0)
+                if (!MotionPathEditorRowProjection.CanRemove(index))
                     return;
                 ReadRows();
                 _rows.RemoveAt(index);
@@ -117,7 +106,7 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         try
         {
             ReadRows();
-            if (!MotionPathEditingPlanner.TryApply(_editor, _animationIndex, _rows.Select(row => row.Value), _origin, _ptsTypes, out var error))
+            if (!_session.TryApply(_rows.Select(row => row.Value), out var error))
             {
                 MessageBox.Show(this, error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -141,6 +130,7 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         private readonly TextBox _x2 = Box();
         private readonly TextBox _y2 = Box();
         private MotionPathSegmentEdit _value;
+        private bool _isFirst;
         public UIElement? Control { get; private set; }
         public MotionPathSegmentEdit Value => _value;
 
@@ -151,9 +141,12 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         public void Build(bool first, Action remove)
         {
+            _isFirst = first;
             _kind.ItemsSource = Enum.GetValues<MotionPathSegmentKind>();
             _kind.SelectedItem = _value.Kind;
-            _kind.IsEnabled = !first;
+            _kind.IsEnabled = MotionPathEditorRowProjection
+                .BuildEnablement(_value.Kind, first)
+                .KindEnabled;
             _kind.Width = 76;
             _kind.Margin = new Thickness(2);
             _kind.SelectionChanged += (_, _) => UpdateControlState();
@@ -175,7 +168,14 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Add(grid, Labeled("Y1", _y1), 5);
             Add(grid, Labeled("X2", _x2), 6);
             Add(grid, Labeled("Y2", _y2), 7);
-            var removeButton = new Button { Content = "Delete", Margin = new Thickness(2), IsEnabled = !first };
+            var removeButton = new Button
+            {
+                Content = "Delete",
+                Margin = new Thickness(2),
+                IsEnabled = MotionPathEditorRowProjection
+                    .BuildEnablement(_value.Kind, first)
+                    .DeleteEnabled,
+            };
             removeButton.Click += (_, _) => remove();
             Grid.SetColumn(removeButton, 8);
             grid.Children.Add(removeButton);
@@ -186,27 +186,40 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         public void Read()
         {
             var kind = _kind.SelectedItem is MotionPathSegmentKind selected ? selected : MotionPathSegmentKind.Line;
-            _value = new MotionPathSegmentEdit(kind, Parse(_x, "X"), Parse(_y, "Y"), Parse(_x1, "X1"), Parse(_y1, "Y1"), Parse(_x2, "X2"), Parse(_y2, "Y2"));
+            if (!MotionPathEditorRowProjection.TryParse(
+                    kind,
+                    _x.Text,
+                    _y.Text,
+                    _x1.Text,
+                    _y1.Text,
+                    _x2.Text,
+                    _y2.Text,
+                    out _value,
+                    out var error))
+            {
+                throw new FormatException(error);
+            }
         }
 
         private void UpdateControlState()
         {
-            var curve = _kind.SelectedItem is MotionPathSegmentKind.Cubic;
+            var kind = _kind.SelectedItem is MotionPathSegmentKind selected
+                ? selected
+                : MotionPathSegmentKind.Line;
+            var enablement = MotionPathEditorRowProjection.BuildEnablement(
+                kind,
+                _isFirst);
+            _kind.IsEnabled = enablement.KindEnabled;
             foreach (var box in new[] { _x1, _y1, _x2, _y2 })
-                box.IsEnabled = curve;
-            var close = _kind.SelectedItem is MotionPathSegmentKind.Close;
-            _x.IsEnabled = !close;
-            _y.IsEnabled = !close;
+                box.IsEnabled = enablement.ControlPointsEnabled;
+            _x.IsEnabled = enablement.EndpointEnabled;
+            _y.IsEnabled = enablement.EndpointEnabled;
         }
 
         private static TextBox Box() => new() { Width = 52, Margin = new Thickness(1), Padding = new Thickness(2, 1, 2, 1) };
-        private static void Set(TextBox box, double value) => box.Text = value.ToString("G", CultureInfo.CurrentCulture);
-        private static double Parse(TextBox box, string name)
-        {
-            if (double.TryParse(box.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value))
-                return value;
-            throw new FormatException($"{name} must be a number.");
-        }
+        private static void Set(TextBox box, double value) =>
+            box.Text = MotionPathEditorRowProjection.Format(value);
+
         private static void Add(Grid grid, UIElement element, int column)
         {
             Grid.SetColumn(element, column);

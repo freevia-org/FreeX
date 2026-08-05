@@ -81,7 +81,7 @@ public static class ChartExSeriesLayoutPlanner
         return new ChartExSeriesLayoutCommitPlan(seriesIndex, normalized);
     }
 
-    private static string FormatLayoutLabel(string layoutId)
+    public static string FormatLayoutLabel(string layoutId)
     {
         var words = layoutId.Replace('_', ' ').Replace('-', ' ');
         return string.Concat(words.Select((character, index) =>

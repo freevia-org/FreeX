@@ -1,4 +1,3 @@
-using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -14,7 +13,7 @@ internal sealed class SlideShowSettingsDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
-    private readonly EditingSession _editor;
+    private readonly SlideShowSettingsDialogSession _session;
     private readonly CheckBox _useTimingsCheck;
     private readonly CheckBox _showAnimationCheck;
     private readonly CheckBox _showNarrationCheck;
@@ -25,12 +24,12 @@ internal sealed class SlideShowSettingsDialog : Window
     private readonly CheckBox _showScrollbarCheck;
     private readonly TextBox _kioskRestartText;
 
-    internal SlideShowSettingsState InitialState { get; }
+    internal SlideShowSettingsState InitialState => _session.InitialState;
 
     public SlideShowSettingsDialog(EditingSession editor)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        InitialState = SlideShowSettingsPlanner.BuildState(editor.Presentation);
+        _session = new SlideShowSettingsDialogSession(editor);
+        var initial = _session.InitialInput;
 
         Title = "Set Up Slide Show";
         Width = 345.3333333333333;
@@ -43,46 +42,46 @@ internal sealed class SlideShowSettingsDialog : Window
         _useTimingsCheck = new CheckBox
         {
             Content = "Use timings, if present",
-            IsChecked = InitialState.UseSlideTimings,
+            IsChecked = initial.UseSlideTimings,
         };
         _showAnimationCheck = new CheckBox
         {
             Content = "Show without animation",
-            IsChecked = !InitialState.ShowWithAnimation,
+            IsChecked = initial.ShowWithoutAnimation,
         };
         _showNarrationCheck = new CheckBox
         {
             Content = "Play narration",
-            IsChecked = InitialState.ShowWithNarration,
+            IsChecked = initial.ShowWithNarration,
         };
         _showMediaControlsCheck = new CheckBox
         {
             Content = "Show media controls",
-            IsChecked = InitialState.ShowMediaControls,
+            IsChecked = initial.ShowMediaControls,
         };
         _showMasterShapesCheck = new CheckBox
         {
             Content = "Show master graphics",
-            IsChecked = InitialState.ShowMasterShapes,
+            IsChecked = initial.ShowMasterShapes,
         };
         _loopCheck = new CheckBox
         {
             Content = "Loop until stopped",
-            IsChecked = InitialState.LoopUntilStopped,
+            IsChecked = initial.LoopUntilStopped,
         };
         _showTypeCombo = new ComboBox
         {
             ItemsSource = new[] { "Presented by a speaker", "Browsed by an individual", "Browsed at a kiosk" },
-            SelectedIndex = (int)InitialState.ShowType,
+            SelectedIndex = initial.ShowTypeIndex,
         };
         _showScrollbarCheck = new CheckBox
         {
             Content = "Show scrollbar when browsing",
-            IsChecked = InitialState.ShowBrowseScrollbar,
+            IsChecked = initial.ShowBrowseScrollbar,
         };
         _kioskRestartText = new TextBox
         {
-            Text = InitialState.KioskRestartAfterMilliseconds?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            Text = initial.KioskRestartMilliseconds,
             MinWidth = 76,
         };
 
@@ -160,30 +159,26 @@ internal sealed class SlideShowSettingsDialog : Window
         _showMasterShapesCheck.IsChecked = showMasterShapes;
         _showTypeCombo.SelectedIndex = (int)showType;
         _showScrollbarCheck.IsChecked = showBrowseScrollbar;
-        _kioskRestartText.Text = kioskRestartAfterMilliseconds?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+        _kioskRestartText.Text = SlideShowSettingsDialogSession.FormatRestartMilliseconds(
+            kioskRestartAfterMilliseconds);
         return Apply();
     }
 
     private bool Apply()
     {
-        var applied = SlideShowSettingsPlanner.TryApply(
-            _editor,
+        var applied = _session.TryApply(new SlideShowSettingsDialogInput(
             _useTimingsCheck.IsChecked == true,
-            _showAnimationCheck.IsChecked != true,
+            _showAnimationCheck.IsChecked == true,
             _loopCheck.IsChecked == true,
-            (PresentationShowType)Math.Clamp(_showTypeCombo.SelectedIndex, 0, 2),
+            _showTypeCombo.SelectedIndex,
             _showScrollbarCheck.IsChecked == true,
-            ParseRestartMilliseconds(),
+            _kioskRestartText.Text ?? string.Empty,
             _showNarrationCheck.IsChecked == true,
             _showMediaControlsCheck.IsChecked == true,
-            _showMasterShapesCheck.IsChecked == true);
+            _showMasterShapesCheck.IsChecked == true));
         if (applied && IsVisible)
             Close(true);
         return applied;
     }
 
-    private uint? ParseRestartMilliseconds() =>
-        uint.TryParse(_kioskRestartText.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var milliseconds)
-            ? milliseconds
-            : null;
 }
