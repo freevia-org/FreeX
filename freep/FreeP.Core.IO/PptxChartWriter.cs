@@ -167,6 +167,15 @@ internal static class PptxChartWriter
                 new XElement(cx + "chart",
                     new XElement(cx + "plotArea",
                         new XElement(cx + "plotAreaRegion", series)))));
+        if (!string.IsNullOrWhiteSpace(chart.Title))
+        {
+            document.Root?.Element(cx + "chart")?.AddFirst(
+                new XElement(cx + "title",
+                    new XElement(cx + "tx",
+                        new XElement(cx + "txData",
+                            new XElement(cx + "v", chart.Title))),
+                    BuildChartTextPropertiesEl(chart.TitleStyle, cx)));
+        }
         if (chart.Legend is { } position)
             document.Root?.Element(cx + "chart")?.Add(BuildChartExLegend(
                 position, chart.LegendOverlay, chart.LegendTextStyle, cx));
@@ -246,7 +255,8 @@ internal static class PptxChartWriter
             chartElement.AddFirst(new XElement(cx + "title",
                 new XElement(cx + "tx",
                     new XElement(cx + "txData",
-                        new XElement(cx + "v", chart.Title)))));
+                        new XElement(cx + "v", chart.Title))),
+                BuildChartTextPropertiesEl(chart.TitleStyle, cx)));
             return;
         }
 
@@ -254,21 +264,38 @@ internal static class PptxChartWriter
         if (value is not null)
         {
             value.Value = chart.Title;
-            return;
         }
-
-        var richRuns = title.Descendants(A + "t").ToList();
-        if (richRuns.Count > 0)
+        else
         {
-            richRuns[0].Value = chart.Title;
-            foreach (var run in richRuns.Skip(1))
-                run.Value = string.Empty;
-            return;
+            var richRuns = title.Descendants(A + "t").ToList();
+            if (richRuns.Count > 0)
+            {
+                richRuns[0].Value = chart.Title;
+                foreach (var run in richRuns.Skip(1))
+                    run.Value = string.Empty;
+            }
+            else
+            {
+                var txData = title.Descendants(cx + "txData").FirstOrDefault();
+                if (txData is not null)
+                    txData.Add(new XElement(cx + "v", chart.Title));
+            }
         }
 
-        var txData = title.Descendants(cx + "txData").FirstOrDefault();
-        if (txData is not null)
-            txData.Add(new XElement(cx + "v", chart.Title));
+        if (chart.TitleStyle is not null)
+        {
+            title.Element(cx + "txPr")?.Remove();
+            var textProperties = BuildChartTextPropertiesEl(chart.TitleStyle, cx);
+            if (textProperties is not null)
+            {
+                var anchor = title.Elements().FirstOrDefault(element =>
+                    element.Name == cx + "offset" || element.Name == cx + "extLst");
+                if (anchor is null)
+                    title.Add(textProperties);
+                else
+                    anchor.AddBeforeSelf(textProperties);
+            }
+        }
     }
 
     private static bool IsWaterfallChartEx(XDocument document, ChartShape chart)

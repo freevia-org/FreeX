@@ -232,6 +232,7 @@ internal static class PptxChartReader
 
         var chartSpace = doc.Root;
         var chart = chartSpace?.Element(Cx + "chart");
+        var chartExTitle = chart?.Element(Cx + "title");
         var region = chart?.Element(Cx + "plotArea")?.Element(Cx + "plotAreaRegion");
         var seriesEl = region?.Element(Cx + "series");
         if (chartSpace is null || chart is null || region is null || seriesEl is null)
@@ -260,7 +261,8 @@ internal static class PptxChartReader
                 .Distinct()
                 .OrderBy(index => index)
                 .ToList(),
-            Title = ReadChartExTitle(chart.Element(Cx + "title")),
+            Title = ReadChartExTitle(chartExTitle),
+            TitleStyle = ReadChartTextStyle(chartExTitle?.Element(Cx + "txPr"), scheme),
         };
         var legend = chart.Element(Cx + "legend");
         if (legend is not null)
