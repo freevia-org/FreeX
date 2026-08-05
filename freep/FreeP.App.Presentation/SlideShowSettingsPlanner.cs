@@ -12,23 +12,31 @@ public static class SlideShowSettingsPlanner
             presentation.UseSlideTimings,
             presentation.ShowWithAnimation,
             presentation.LoopUntilStopped,
-            presentation.ShowType);
+            presentation.ShowType,
+            presentation.ShowBrowseScrollbar,
+            presentation.KioskRestartAfterMinutes);
 
     public static bool TryApply(
         EditingSession editor,
         bool useSlideTimings,
         bool showWithAnimation,
         bool loopUntilStopped,
-        PresentationShowType showType = PresentationShowType.PresentedBySpeaker) =>
+        PresentationShowType showType = PresentationShowType.PresentedBySpeaker,
+        bool showBrowseScrollbar = true,
+        uint? kioskRestartAfterMinutes = null) =>
         editor.SetSlideShowSettings(
             useSlideTimings,
             showWithAnimation,
             loopUntilStopped,
-            showType);
+            showType,
+            showBrowseScrollbar,
+            kioskRestartAfterMinutes);
 }
 
 public sealed record SlideShowSettingsState(
     bool UseSlideTimings,
     bool ShowWithAnimation,
     bool LoopUntilStopped,
-    PresentationShowType ShowType = PresentationShowType.PresentedBySpeaker);
+    PresentationShowType ShowType = PresentationShowType.PresentedBySpeaker,
+    bool ShowBrowseScrollbar = true,
+    uint? KioskRestartAfterMinutes = null);

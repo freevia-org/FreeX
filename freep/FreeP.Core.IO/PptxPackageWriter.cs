@@ -2935,12 +2935,19 @@ public static class PptxPackageWriter
 
         foreach (var element in showPr.Elements(P + "present").Concat(showPr.Elements(P + "browse")).Concat(showPr.Elements(P + "kiosk")).ToArray())
             element.Remove();
-        showPr.Add(new XElement(presentation.ShowType switch
+        var showMode = presentation.ShowType switch
         {
-            PresentationShowType.BrowsedByIndividual => P + "browse",
-            PresentationShowType.BrowsedAtKiosk => P + "kiosk",
-            _ => P + "present",
-        }));
+            PresentationShowType.BrowsedByIndividual => new XElement(
+                P + "browse",
+                presentation.ShowBrowseScrollbar ? null : new XAttribute("showScrollbar", "0")),
+            PresentationShowType.BrowsedAtKiosk => new XElement(
+                P + "kiosk",
+                presentation.KioskRestartAfterMinutes is uint restart
+                    ? new XAttribute("restart", restart.ToString(CultureInfo.InvariantCulture))
+                    : null),
+            _ => new XElement(P + "present"),
+        };
+        showPr.Add(showMode);
 
         foreach (var element in showPr.Elements(P14 + "showMediaCtrls").ToArray())
             element.Remove();
