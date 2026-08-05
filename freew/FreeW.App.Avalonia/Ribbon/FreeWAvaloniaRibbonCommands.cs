@@ -545,20 +545,26 @@ internal static class FreeWAvaloniaRibbonCommands
             callbacks.IsReviewingPaneVisible ?? (() => false));
         r.Register("freew.reviewing-pane", reviewingPaneCommand);
         r.Register("freew.reviewingpane", reviewingPaneCommand);
-        // AV-REVIEW: Track Changes uses the same selection transition as the WPF command: enabling it
-        // over a non-empty selection immediately records that selection as an insertion.
-        r.Register("freew.track-changes", new TrackChangesToggleCommand(editor));
-        r.Register("freew.track-formatting", new TrackFormattingToggleCommand(editor));
-        var displayAllMarkup = new DisplayForReviewCommand(editor, ReviewDisplayMode.AllMarkup);
-        r.Register("freew.display-for-review", displayAllMarkup);
-        r.Register("freew.display-for-review-all-markup", displayAllMarkup);
-        r.Register("freew.display-for-review-simple-markup", new DisplayForReviewCommand(editor, ReviewDisplayMode.SimpleMarkup));
-        r.Register("freew.display-for-review-no-markup", new DisplayForReviewCommand(editor, ReviewDisplayMode.NoMarkup));
-        r.Register("freew.display-for-review-original", new DisplayForReviewCommand(editor, ReviewDisplayMode.Original));
-        r.Register("freew.show-markup", EmptyRibbonCommand.Instance);
-        r.Register("freew.show-markup-insertions-deletions", new ShowMarkupInsertionsDeletionsCommand(editor));
-        r.Register("freew.show-markup-comments", new ShowMarkupCommentsCommand(editor));
-        r.Register("freew.show-markup-formatting", new ShowMarkupFormattingCommand(editor));
+        ReviewTrackingRibbonWorkflow.Register(
+            r,
+            new ReviewTrackingCommandBindings(
+                PrepareExecution: static () => { },
+                IsTrackChangesEnabled: () => editor.TrackChangesEnabled,
+                HasSelection: () => editor.SelectedText.Length > 0,
+                ToggleTrackChanges: () => editor.ToggleTrackChanges(),
+                MarkSelectionAsInsertion: () => editor.MarkSelectionAsRevision(RevisionKind.Inserted),
+                IsTrackFormattingEnabled: () => editor.TrackFormattingEnabled,
+                ToggleTrackFormatting: () => editor.ToggleTrackFormatting(),
+                GetDisplayForReview: () => editor.DisplayForReview,
+                ApplyDisplayForReview: editor.ApplyDisplayForReview,
+                ShowMarkupInsertionsAndDeletions: () => editor.ShowMarkupInsertionsAndDeletions,
+                ApplyShowMarkupInsertionsAndDeletions: editor.ApplyShowMarkupInsertionsAndDeletions,
+                ShowMarkupComments: () => editor.ShowMarkupComments,
+                ApplyShowMarkupComments: editor.ApplyShowMarkupComments,
+                ShowMarkupFormatting: () => editor.ShowMarkupFormatting,
+                ApplyShowMarkupFormatting: editor.ApplyShowMarkupFormatting,
+                AcceptAllRevisions: () => editor.AcceptAllRevisions(),
+                RejectAllRevisions: () => editor.RejectAllRevisions()));
         r.Register("freew.show-markup-balloons", new ShowMarkupBalloonsCommand(editor, callbacks));
         // Accept / reject the revision selected in the Reviewing Pane, matching WPF's selected-row
         // authority. Test-only or detached registries retain the caret-relative fallback.
@@ -570,8 +576,6 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.accept-change", acceptCurrentRevisionCommand);
         r.Register("freew.reject-this", rejectCurrentRevisionCommand);
         r.Register("freew.reject-change", rejectCurrentRevisionCommand);
-        r.Register("freew.accept-all",    new ActionRibbonCommand(() => editor.AcceptAllRevisions()));
-        r.Register("freew.reject-all",    new ActionRibbonCommand(() => editor.RejectAllRevisions()));
         r.Register("freew.previous-change", new ActionRibbonCommand(callbacks.PreviousChange ?? (() => { })));
         r.Register("freew.next-change", new ActionRibbonCommand(callbacks.NextChange ?? (() => { })));
         // Comments — thread navigation/actions over the shared comment model.
@@ -956,28 +960,6 @@ internal static class FreeWAvaloniaRibbonCommands
             new(Value: DocumentStyleSet.FindMatching(editor.Document)?.Name);
     }
 
-    private sealed class TrackChangesToggleCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            var plan = TrackChangesTogglePlanner.Build(
-                editor.TrackChangesEnabled,
-                hasSelection: editor.SelectedText.Length > 0);
-            editor.ToggleTrackChanges();
-            if (plan.MarkSelectionAsInsertion)
-                editor.MarkSelectionAsRevision(RevisionKind.Inserted);
-        }
-
-        public RibbonCommandState GetState() => new(IsChecked: editor.TrackChangesEnabled);
-    }
-
-    private sealed class TrackFormattingToggleCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) => editor.ToggleTrackFormatting();
-
-        public RibbonCommandState GetState() => new(IsChecked: editor.TrackFormattingEnabled);
-    }
-
     private sealed class ProofingLanguageCommand(DocumentView editor, RibbonHostCallbacks callbacks) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -1314,41 +1296,6 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.cell-align-bottom-left",    TableCellVerticalAlignment.Bottom, TextAlignment.Left);
         Add(r, editor, "freew.cell-align-bottom-center",  TableCellVerticalAlignment.Bottom, TextAlignment.Center);
         Add(r, editor, "freew.cell-align-bottom-right",   TableCellVerticalAlignment.Bottom, TextAlignment.Right);
-    }
-
-    private sealed class DisplayForReviewCommand(DocumentView editor, ReviewDisplayMode mode) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) => editor.ApplyDisplayForReview(mode);
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: editor.DisplayForReview == mode);
-    }
-
-    private sealed class ShowMarkupInsertionsDeletionsCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyShowMarkupInsertionsAndDeletions(!editor.ShowMarkupInsertionsAndDeletions);
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: editor.ShowMarkupInsertionsAndDeletions);
-    }
-
-    private sealed class ShowMarkupCommentsCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyShowMarkupComments(!editor.ShowMarkupComments);
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: editor.ShowMarkupComments);
-    }
-
-    private sealed class ShowMarkupFormattingCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyShowMarkupFormatting(!editor.ShowMarkupFormatting);
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: editor.ShowMarkupFormatting);
     }
 
     private sealed class ShowMarkupBalloonsCommand(DocumentView editor, RibbonHostCallbacks callbacks) : IRibbonStatefulCommand
