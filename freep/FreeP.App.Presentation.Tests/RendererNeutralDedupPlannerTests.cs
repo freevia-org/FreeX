@@ -180,6 +180,26 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void SlideShowMediaInteractionPlanner_CarriesShowWhenStoppedPolicy()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 8,
+            Kind = SlideShapeKind.Media,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 4 * 9525,
+            ExtentCyEmu = 4 * 9525,
+            Media = new MediaInfo { IsVideo = true, Bytes = [4, 5, 6], ShowWhenStopped = false },
+        });
+
+        var plan = SlideShowMediaInteractionPlanner.BuildSlidePlan(slide, 10, 10, 10, 10);
+
+        plan.Should().ContainSingle().Which.ShowWhenStopped.Should().BeFalse();
+    }
+
+    [Fact]
     public void SlideShowMediaInteractionPlanner_SuppressesNarrationAudioButKeepsVideo()
     {
         var slide = new Slide();

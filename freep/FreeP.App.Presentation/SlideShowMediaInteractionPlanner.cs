@@ -10,7 +10,8 @@ public sealed record SlideShowMediaShapePlan(
     bool HasSource,
     string SourceKind,
     string PlaybackCapabilityNote,
-    bool ShowMediaControls);
+    bool ShowMediaControls,
+    bool ShowWhenStopped);
 
 public sealed record SlideShowMediaClickPlan(
     bool IsHandled,
@@ -124,7 +125,8 @@ public static class SlideShowMediaInteractionPlanner
             hasEmbeddedSource || hasLinkedSource,
             hasEmbeddedSource ? "embedded" : hasLinkedSource ? "http-link" : "missing",
             PlaybackBackendCapabilityNote,
-            showMediaControls);
+            showMediaControls,
+            media.ShowWhenStopped);
     }
 
     private static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)
