@@ -200,6 +200,51 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void SlideShowMediaInteractionPlanner_ResolvesTrimFromStartAndEndAgainstDuration()
+    {
+        var media = new MediaInfo
+        {
+            TrimStartMilliseconds = 1250,
+            TrimEndMilliseconds = 2750,
+        };
+
+        var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
+            media,
+            TimeSpan.FromSeconds(20));
+
+        window.Start.Should().Be(TimeSpan.FromMilliseconds(1250));
+        window.End.Should().Be(TimeSpan.FromMilliseconds(17250));
+        SlideShowMediaInteractionPlanner.IsAtOrPastTrimEnd(
+            media,
+            TimeSpan.FromMilliseconds(17250),
+            TimeSpan.FromSeconds(20)).Should().BeTrue();
+        SlideShowMediaInteractionPlanner.IsAtOrPastTrimEnd(
+            media,
+            TimeSpan.FromMilliseconds(17249),
+            TimeSpan.FromSeconds(20)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void SlideShowMediaInteractionPlanner_ClampsInvalidTrimAndDefersUnknownDurationEnd()
+    {
+        var media = new MediaInfo
+        {
+            TrimStartMilliseconds = -20,
+            TrimEndMilliseconds = double.NaN,
+        };
+
+        var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
+            media,
+            TimeSpan.Zero);
+
+        window.Start.Should().Be(TimeSpan.Zero);
+        window.End.Should().Be(TimeSpan.MaxValue);
+        SlideShowMediaInteractionPlanner.ClampToTrimStart(
+            new MediaInfo { TrimStartMilliseconds = 500 },
+            TimeSpan.FromMilliseconds(100)).Should().Be(TimeSpan.FromMilliseconds(500));
+    }
+
+    [Fact]
     public void SlideShowMediaInteractionPlanner_SuppressesNarrationAudioButKeepsVideo()
     {
         var slide = new Slide();

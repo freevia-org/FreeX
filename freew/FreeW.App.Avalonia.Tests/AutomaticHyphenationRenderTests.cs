@@ -243,6 +243,60 @@ public sealed class AutomaticHyphenationRenderTests
         limitedGlyphs.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public async Task Footnote_wrap_paints_display_only_hyphen_in_live_and_pdf_without_changing_note_text()
+    {
+        var noteWord = LongWord + LongWord;
+        IReadOnlyList<(string Text, double X, double Y, bool IsNumberMarker)>? items = null;
+        IReadOnlyList<(string Text, double X, double Y, bool IsNumberMarker)>? disabledItems = null;
+        string? modelText = null;
+        string? pdfText = null;
+
+        await OnUiThread(() =>
+        {
+            var document = BuildNoteDocument(noteWord, consecutiveHyphenLimit: 0);
+            var view = Layout(document);
+            items = view.NoteRenderItems;
+            modelText = document.Footnotes[1].Content[0].PlainText;
+            pdfText = string.Concat(view.BuildPdfContent().Pages
+                .SelectMany(page => page.Ops)
+                .OfType<Free.Shared.Pdf.PdfText>()
+                .Select(text => text.Text));
+
+            var disabledDocument = BuildNoteDocument(noteWord, consecutiveHyphenLimit: 0);
+            disabledDocument.Page.AutoHyphenation = false;
+            disabledItems = Layout(disabledDocument).NoteRenderItems;
+        });
+
+        var bodyFragments = items!.Where(item => !item.IsNumberMarker).Select(item => item.Text).ToList();
+        bodyFragments.Should().Contain(fragment => fragment.EndsWith("-", StringComparison.Ordinal));
+        string.Concat(bodyFragments).Replace("-", string.Empty, StringComparison.Ordinal).Should().Be(noteWord);
+        modelText.Should().Be(noteWord);
+        pdfText.Should().Contain("-");
+        pdfText.Should().Contain(LongWord[..3]);
+        disabledItems!.Where(item => !item.IsNumberMarker)
+            .Should().NotContain(item => item.Text.EndsWith("-", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Footnote_wrap_honors_consecutive_hyphen_limit()
+    {
+        var unlimitedGlyphs = -1;
+        var limitedGlyphs = -1;
+
+        await OnUiThread(() =>
+        {
+            var text = string.Concat(Enumerable.Repeat(LongWord, 6));
+            unlimitedGlyphs = Layout(BuildNoteDocument(text, consecutiveHyphenLimit: 0))
+                .NoteRenderItems.Count(item => !item.IsNumberMarker && item.Text.EndsWith("-", StringComparison.Ordinal));
+            limitedGlyphs = Layout(BuildNoteDocument(text, consecutiveHyphenLimit: 1))
+                .NoteRenderItems.Count(item => !item.IsNumberMarker && item.Text.EndsWith("-", StringComparison.Ordinal));
+        });
+
+        unlimitedGlyphs.Should().BeGreaterThan(limitedGlyphs);
+        limitedGlyphs.Should().BeGreaterThan(0);
+    }
+
     private static (TextDocument Document, Paragraph Paragraph) BuildDocument(
         bool autoHyphenation,
         bool suppressAutoHyphens = false,
@@ -275,6 +329,26 @@ public sealed class AutomaticHyphenationRenderTests
         paragraph.Runs[0].Formatting = paragraph.Runs[0].Formatting with { FontSizePt = 24 };
         document.Blocks.Add(paragraph);
         return (document, paragraph);
+    }
+
+    private static TextDocument BuildNoteDocument(string noteText, int consecutiveHyphenLimit)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Page.WidthPt = 100;
+        document.Page.HeightPt = 400;
+        document.Page.MarginLeftPt = 20;
+        document.Page.MarginRightPt = 20;
+        document.Page.MarginTopPt = 20;
+        document.Page.MarginBottomPt = 20;
+        document.Page.AutoHyphenation = true;
+        document.Page.ConsecutiveHyphenLimit = consecutiveHyphenLimit;
+
+        var body = new Paragraph("Body");
+        body.Runs.Add(Run.FootnoteReference(1));
+        document.Blocks.Add(body);
+        document.Footnotes[1] = new Footnote(1, noteText);
+        return document;
     }
 
     private static DocumentView Layout(TextDocument document)

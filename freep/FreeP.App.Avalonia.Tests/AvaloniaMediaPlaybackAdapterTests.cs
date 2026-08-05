@@ -99,6 +99,39 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
     }
 
     [Fact]
+    public void Controller_AppliesTrimWindowOnStartAndSeek()
+    {
+        var factory = new FakeBackendFactory();
+        var controller = new AvaloniaSlideShowMediaController(new Canvas(), factory);
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 43,
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 9144000,
+            ExtentCyEmu = 6858000,
+            Media = new MediaInfo
+            {
+                IsVideo = false,
+                PlaybackStartMode = MediaPlaybackStartMode.Automatically,
+                TrimStartMilliseconds = 1250,
+                TrimEndMilliseconds = 2750,
+                Bytes = [1, 2, 3],
+                ContentType = "audio/wav",
+            },
+        });
+
+        controller.EnterSlide(slide, 960, 720, 960, 720);
+
+        var session = factory.Backend.Sessions.Single();
+        session.LastSeek.Should().Be(TimeSpan.FromMilliseconds(1250));
+        controller.TrySeek(43, TimeSpan.Zero).Should().BeTrue();
+        session.LastSeek.Should().Be(TimeSpan.FromMilliseconds(1250));
+        controller.TrySeek(43, TimeSpan.FromSeconds(70)).Should().BeTrue();
+        session.LastSeek.Should().Be(TimeSpan.FromSeconds(57.25));
+    }
+
+    [Fact]
     public void Controller_ClampsVolumeToSharedZeroToHundredRange()
     {
         var factory = new FakeBackendFactory();
