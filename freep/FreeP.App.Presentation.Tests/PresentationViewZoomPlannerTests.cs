@@ -222,6 +222,91 @@ public sealed class PresentationViewZoomPlannerTests
             .Should().BeFalse();
     }
 
+    [Fact]
+    public void Zoom_border_glow_normalizes_editable_values()
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderGlow(
+                "#00AAFF", "42", "12", enabled: true, out var normalized)
+            .Should().BeTrue();
+
+        normalized.Should().Be(new ZoomFrameBorderGlow("00AAFF", 42000, 152400));
+        var properties = new ZoomObjectProperties(FrameBorderGlow: normalized);
+        ZoomObjectPropertiesPlanner.FormatFrameBorderGlowColor(properties)
+            .Should().Be("00AAFF");
+        ZoomObjectPropertiesPlanner.FormatFrameBorderGlowAlpha(properties)
+            .Should().Be("42");
+        ZoomObjectPropertiesPlanner.FormatFrameBorderGlowRadius(properties)
+            .Should().Be("12");
+        ZoomObjectPropertiesPlanner.IsFrameBorderGlowEnabled(
+                properties)
+            .Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("GGGGGG", "50", "4")]
+    [InlineData("00AAFF", "101", "4")]
+    [InlineData("00AAFF", "50", "-1")]
+    public void Zoom_border_glow_rejects_invalid_values(string color, string alpha, string radius)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderGlow(
+                color, alpha, radius, enabled: true, out _)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void Zoom_border_soft_edge_normalizes_editable_values()
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderSoftEdge(
+                "12.5", enabled: true, out var normalized)
+            .Should().BeTrue();
+
+        normalized.Should().Be(new ZoomFrameBorderSoftEdge(158750));
+        var properties = new ZoomObjectProperties(FrameBorderSoftEdge: normalized);
+        ZoomObjectPropertiesPlanner.FormatFrameBorderSoftEdgeRadius(properties)
+            .Should().Be("12.5");
+        ZoomObjectPropertiesPlanner.IsFrameBorderSoftEdgeEnabled(properties)
+            .Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("-1")]
+    [InlineData("not-a-number")]
+    public void Zoom_border_soft_edge_rejects_invalid_values(string radius)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderSoftEdge(
+                radius, enabled: true, out _)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void Zoom_border_reflection_normalizes_editable_values()
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderReflection(
+                "42", "3.5", "90", "-75", enabled: true, out var normalized)
+            .Should().BeTrue();
+
+        normalized.Should().Be(new ZoomFrameBorderReflection(
+            42000, 0, 44450, 5400000, -75000, 100000));
+        var properties = new ZoomObjectProperties(FrameBorderReflection: normalized);
+        ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionAlpha(properties).Should().Be("42");
+        ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(properties).Should().Be("3.5");
+        ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(properties).Should().Be("90");
+        ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(properties).Should().Be("-75");
+        ZoomObjectPropertiesPlanner.IsFrameBorderReflectionEnabled(properties).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("101", "0", "90", "-100")]
+    [InlineData("50", "0", "90", "0")]
+    [InlineData("50", "0", "90", "-101")]
+    public void Zoom_border_reflection_rejects_invalid_values(
+        string alpha, string distance, string direction, string scale)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderReflection(
+                alpha, distance, direction, scale, enabled: true, out _)
+            .Should().BeFalse();
+    }
+
     [Theory]
     [InlineData("not-a-pattern", "4472C4", "FFFFFF")]
     [InlineData("pct50", "GGGGGG", "FFFFFF")]

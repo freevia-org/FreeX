@@ -145,6 +145,114 @@ public class DocumentIndexTests
     }
 
     [Fact]
+    public void Build_PageNumberRunMergesBoldAndItalicFormattingForSamePage()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Alpha"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha", BoldPageNumber: true)),
+                DocumentIndex.MarkRun(new IndexMark("Alpha", ItalicPageNumber: true))
+            }
+        });
+
+        var entry = DocumentIndex.Build(doc).Single(paragraph => paragraph.PlainText == "Alpha, 1");
+
+        entry.Runs.Select(run => run.Text).Should().Equal("Alpha", ", ", "1");
+        entry.Runs[0].Formatting.Bold.Should().BeFalse();
+        entry.Runs[1].Formatting.Bold.Should().BeFalse();
+        entry.Runs[2].Formatting.Bold.Should().BeTrue();
+        entry.Runs[2].Formatting.Italic.Should().BeTrue();
+    }
+
+    [Fact]
+    public void MarkRun_SerializesAndParsesPageNumberFormattingSwitches()
+    {
+        var run = DocumentIndex.MarkRun(new IndexMark(
+            "Alpha",
+            BoldPageNumber: true,
+            ItalicPageNumber: true));
+
+        run.ComplexField!.Instruction.Should().Be(" XE \"Alpha\" \\b \\i ");
+        DocumentIndex.MarkedEntry(run).Should().Be(new IndexMark(
+            "Alpha",
+            BoldPageNumber: true,
+            ItalicPageNumber: true));
+    }
+
+    [Fact]
+    public void MarkRun_SerializesAndParsesBookmarkPageRangeSwitch()
+    {
+        var run = DocumentIndex.MarkRun(new IndexMark(
+            "Alpha",
+            BoldPageNumber: true,
+            BookmarkName: "TopicRange"));
+
+        run.ComplexField!.Instruction.Should().Be(" XE \"Alpha\" \\r \"TopicRange\" \\b ");
+        DocumentIndex.MarkedEntry(run).Should().Be(new IndexMark(
+            "Alpha",
+            BoldPageNumber: true,
+            BookmarkName: "TopicRange"));
+    }
+
+    [Fact]
+    public void Build_BookmarkPageRangeUsesFirstAndLastLogicalPageLabels()
+    {
+        var doc = new TextDocument();
+        var start = new Paragraph("Range start");
+        start.BookmarkNames.Add("TopicRange");
+        start.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "42", BookmarkBoundaryKind.Start, 0, "TopicRange"));
+        doc.Blocks.Add(start);
+        doc.Blocks.Add(new Paragraph("Range middle"));
+        var end = new Paragraph
+        {
+            Runs =
+            {
+                new Run("Range end"),
+                DocumentIndex.MarkRun(new IndexMark(
+                    "Alpha",
+                    ItalicPageNumber: true,
+                    BookmarkName: "TopicRange"))
+            }
+        };
+        end.BookmarkBoundaries.Add(new BookmarkBoundary("42", BookmarkBoundaryKind.End, 0));
+        doc.Blocks.Add(end);
+
+        var entry = DocumentIndex.Build(doc, blockIndex => blockIndex switch
+        {
+            0 => "iv",
+            2 => "vi",
+            _ => null
+        }).Single(paragraph => paragraph.PlainText == "Alpha, iv\u2013vi");
+
+        entry.Runs.Select(run => run.Text).Should().Equal("Alpha", ", ", "iv\u2013vi");
+        entry.Runs[^1].Formatting.Italic.Should().BeTrue();
+    }
+
+    [Fact]
+    public void MarkAllTargets_FindWholeTermParagraphsAndSkipGeneratedOrExistingMarks()
+    {
+        var mark = new IndexMark("Alpha", "Topic");
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Alpha starts Alpha"));
+        doc.Blocks.Add(new Paragraph("alphabet is not the term"));
+        doc.Blocks.Add(new Paragraph("Another ALPHA appears"));
+        doc.Blocks.Add(new Paragraph("Alpha, 1") { StyleId = DocumentIndex.EntryStyleId });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("Alpha"), DocumentIndex.MarkRun(mark), new Run(" already marked") }
+        });
+
+        DocumentIndex.MarkAllTargets(doc, " alpha ", mark).Should().Equal(
+            new IndexMarkTarget(0, 5),
+            new IndexMarkTarget(0, 18),
+            new IndexMarkTarget(2, 13));
+    }
+
+    [Fact]
     public void Build_DoesNotMutateTheDocument()
     {
         var doc = new TextDocument();

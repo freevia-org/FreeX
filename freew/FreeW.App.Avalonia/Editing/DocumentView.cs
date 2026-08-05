@@ -21717,7 +21717,7 @@ public sealed class DocumentView : Control
         var hostIndex = ResolveReferenceHostBlock();
         if (hostIndex < 0
             || _doc.Blocks[hostIndex] is not Paragraph paragraph
-            || paragraph.Runs.Any(run => SameIndexMark(DocumentIndex.MarkedEntry(run), normalized)))
+            || paragraph.Runs.Any(run => DocumentIndex.MarksEquivalent(DocumentIndex.MarkedEntry(run), normalized)))
         {
             return;
         }
@@ -21731,10 +21731,36 @@ public sealed class DocumentView : Control
         Focus();
     }
 
-    private static bool SameIndexMark(IndexMark? left, IndexMark right) =>
-        left is not null
-        && string.Equals(left.EntryText, right.EntryText, StringComparison.OrdinalIgnoreCase)
-        && string.Equals(left.CrossReference, right.CrossReference, StringComparison.OrdinalIgnoreCase);
+    public int MarkAllIndexEntries(string sourceText, IndexMark mark)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        var markRun = DocumentIndex.MarkRun(mark);
+        if (DocumentIndex.MarkedEntry(markRun) is not { MainEntry.Length: > 0 } normalized)
+            return 0;
+        var targets = DocumentIndex.MarkAllTargets(_doc, sourceText, normalized);
+        if (targets.Count == 0)
+            return 0;
+
+        _bus.BeginUndoGroup();
+        try
+        {
+            foreach (var target in targets)
+            {
+                _bus.Execute(new ReplaceParagraphRunsCommand(target.BlockIndex, paragraph =>
+                    InsertRunAtOffset(paragraph, target.TextOffset, DocumentIndex.MarkRun(normalized))));
+            }
+            _bus.CommitUndoGroup("Mark All Index Entries");
+        }
+        catch
+        {
+            _bus.AbortUndoGroup();
+            throw;
+        }
+
+        InvalidateLayoutAndVisual();
+        Focus();
+        return targets.Count;
+    }
 
     public void InsertIndex()
     {

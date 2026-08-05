@@ -757,11 +757,114 @@ public sealed class ReferencesTabTests
 
         dialog.Width.Should().Be(MarkIndexEntryDialogPlanner.DialogWidth);
         dialog.CrossReferenceEnabledForTests.Should().BeFalse();
+        dialog.PageNumberFormattingEnabledForTests.Should().BeTrue();
         dialog.SetForTests(" Animals ", " Cats ", true, " See Pet care ");
         dialog.CrossReferenceEnabledForTests.Should().BeTrue();
+        dialog.PageNumberFormattingEnabledForTests.Should().BeFalse();
         dialog.AcceptForTests().Should().BeTrue();
         dialog.Mark.Should().Be(new IndexMark("Animals", "Cats", "See Pet care"));
     });
+
+    [Fact]
+    public Task MarkIndexEntry_dialog_carries_bold_and_italic_page_number_format() => RunOnUiThread(() =>
+    {
+        var dialog = new MarkIndexEntryDialog("Alpha");
+        dialog.SetForTests("Alpha", null, false, null, boldPageNumber: true, italicPageNumber: true);
+
+        dialog.AcceptForTests().Should().BeTrue();
+        dialog.Mark.Should().Be(new IndexMark(
+            "Alpha",
+            BoldPageNumber: true,
+            ItalicPageNumber: true));
+    });
+
+    [Fact]
+    public Task MarkIndexEntry_dialog_returns_mark_all_action_for_selected_text() => RunOnUiThread(() =>
+    {
+        var dialog = new MarkIndexEntryDialog("Alpha");
+
+        dialog.MarkAllEnabledForTests.Should().BeTrue();
+        dialog.AcceptAllForTests().Should().BeTrue();
+        dialog.MarkAll.Should().BeTrue();
+        dialog.Mark.Should().Be(new IndexMark("Alpha"));
+    });
+
+    [Fact]
+    public Task MarkIndexEntry_dialog_returns_bookmark_page_range_with_page_formatting() => RunOnUiThread(() =>
+    {
+        var dialog = new MarkIndexEntryDialog("Animals", ["chapter", "appendix"]);
+        dialog.SetForTests(
+            " Animals ",
+            " Cats ",
+            IndexEntryReferenceKind.PageRange,
+            "appendix",
+            null,
+            boldPageNumber: true,
+            italicPageNumber: true);
+
+        dialog.BookmarkSelectorEnabledForTests.Should().BeTrue();
+        dialog.CrossReferenceEnabledForTests.Should().BeFalse();
+        dialog.PageNumberFormattingEnabledForTests.Should().BeTrue();
+        dialog.MarkAllEnabledForTests.Should().BeFalse();
+        dialog.AcceptForTests().Should().BeTrue();
+        dialog.MarkAll.Should().BeFalse();
+        dialog.Mark.Should().Be(new IndexMark(
+            "Animals",
+            "Cats",
+            BoldPageNumber: true,
+            ItalicPageNumber: true,
+            BookmarkName: "appendix"));
+    });
+
+    [Fact]
+    public Task MarkIndexEntry_dialog_updates_selector_and_mark_all_for_reference_kind() => RunOnUiThread(() =>
+    {
+        var dialog = new MarkIndexEntryDialog("Alpha", ["chapter"]);
+
+        dialog.BookmarkSelectorEnabledForTests.Should().BeFalse();
+        dialog.MarkAllEnabledForTests.Should().BeTrue();
+
+        dialog.SetForTests("Alpha", null, IndexEntryReferenceKind.PageRange, "chapter", null);
+        dialog.BookmarkSelectorEnabledForTests.Should().BeTrue();
+        dialog.PageNumberFormattingEnabledForTests.Should().BeTrue();
+        dialog.MarkAllEnabledForTests.Should().BeFalse();
+        dialog.AcceptAllForTests().Should().BeFalse();
+
+        dialog.SetForTests("Alpha", null, IndexEntryReferenceKind.CrossReference, null, "See Beta");
+        dialog.BookmarkSelectorEnabledForTests.Should().BeFalse();
+        dialog.CrossReferenceEnabledForTests.Should().BeTrue();
+        dialog.PageNumberFormattingEnabledForTests.Should().BeFalse();
+        dialog.MarkAllEnabledForTests.Should().BeTrue();
+    });
+
+    [Fact]
+    public void MarkAllIndexEntries_marks_matching_paragraphs_as_one_undoable_operation()
+    {
+        var view = ViewWith(
+            new Paragraph("Alpha first Alpha"),
+            new Paragraph("alphabet control"),
+            new Paragraph("Second ALPHA"));
+        var mark = new IndexMark("Alpha", "Topic", ItalicPageNumber: true);
+
+        view.MarkAllIndexEntries("Alpha", mark).Should().Be(3);
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(DocumentIndex.MarkedEntry)
+            .OfType<IndexMark>()
+            .Should().Equal(mark, mark, mark);
+
+        view.Undo();
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(DocumentIndex.MarkedEntry)
+            .Should().AllSatisfy(entry => entry.Should().BeNull());
+        view.Redo();
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(DocumentIndex.MarkedEntry)
+            .OfType<IndexMark>()
+            .Should().Equal(mark, mark, mark);
+    }
 
     [Fact]
     public void Index_mark_ribbon_command_uses_owner_dialog_callback_when_available()

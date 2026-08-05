@@ -18,14 +18,23 @@ internal static class ZoomFrameBorderXml
         bool? noFill = null,
         ThemeColorSlot? themeColor = null,
         ZoomFrameBorderShadow? shadow = null,
-        bool? shadowEnabled = null)
+        bool? shadowEnabled = null,
+        ZoomFrameBorderGlow? glow = null,
+        bool? glowEnabled = null,
+        ZoomFrameBorderSoftEdge? softEdge = null,
+        bool? softEdgeEnabled = null,
+        ZoomFrameBorderReflection? reflection = null,
+        bool? reflectionEnabled = null)
     {
         if (noFill == false)
             noFill = null;
 
         // Null means the model did not understand the native line; preserve it verbatim.
         if (color is null && widthEmu is null && dash is null && gradient is null && pattern is null && noFill is null && themeColor is null
-            && shadow is null && shadowEnabled is null)
+            && shadow is null && shadowEnabled is null
+            && glow is null && glowEnabled is null
+            && softEdge is null && softEdgeEnabled is null
+            && reflection is null && reflectionEnabled is null)
             return;
 
         var shapeProperties = zoomProperties.Elements().FirstOrDefault(element =>
@@ -51,6 +60,9 @@ internal static class ZoomFrameBorderXml
         }
 
         SetOuterShadow(shapeProperties, shadow, shadowEnabled);
+        SetGlow(shapeProperties, glow, glowEnabled);
+        SetSoftEdge(shapeProperties, softEdge, softEdgeEnabled);
+        SetReflection(shapeProperties, reflection, reflectionEnabled);
 
         var solidFill = line?.Elements(Drawing + "solidFill").FirstOrDefault();
         if (gradient is not null && pattern is not null)
@@ -215,6 +227,126 @@ internal static class ZoomFrameBorderXml
                     new XAttribute("val", shadow.Alpha))));
         if (outerShadow.Parent is null)
             effectList.Add(outerShadow);
+        if (effectList.Parent is null)
+        {
+            var line = shapeProperties.Elements(Drawing + "ln").FirstOrDefault();
+            if (line is null)
+                shapeProperties.Add(effectList);
+            else
+                line.AddAfterSelf(effectList);
+        }
+    }
+
+    private static void SetGlow(
+        XElement shapeProperties,
+        ZoomFrameBorderGlow? glow,
+        bool? glowEnabled)
+    {
+        if (glow is null && glowEnabled is null)
+            return;
+
+        var effectList = shapeProperties.Elements(Drawing + "effectLst").FirstOrDefault();
+        var nativeGlow = effectList?.Elements(Drawing + "glow").FirstOrDefault();
+        if (glowEnabled == false)
+        {
+            nativeGlow?.Remove();
+            if (effectList is not null && !effectList.Elements().Any())
+                effectList.Remove();
+            return;
+        }
+
+        if (glow is null)
+            return;
+
+        effectList ??= new XElement(Drawing + "effectLst");
+        nativeGlow ??= new XElement(Drawing + "glow");
+        nativeGlow.SetAttributeValue("rad", glow.RadiusEmu);
+        nativeGlow.Elements().Remove();
+        nativeGlow.Add(
+            new XElement(Drawing + "srgbClr",
+                new XAttribute("val", glow.Color),
+                new XElement(Drawing + "alpha",
+                    new XAttribute("val", glow.Alpha))));
+        if (nativeGlow.Parent is null)
+            effectList.Add(nativeGlow);
+        if (effectList.Parent is null)
+        {
+            var line = shapeProperties.Elements(Drawing + "ln").FirstOrDefault();
+            if (line is null)
+                shapeProperties.Add(effectList);
+            else
+                line.AddAfterSelf(effectList);
+        }
+    }
+
+    private static void SetSoftEdge(
+        XElement shapeProperties,
+        ZoomFrameBorderSoftEdge? softEdge,
+        bool? softEdgeEnabled)
+    {
+        if (softEdge is null && softEdgeEnabled is null)
+            return;
+
+        var effectList = shapeProperties.Elements(Drawing + "effectLst").FirstOrDefault();
+        var nativeSoftEdge = effectList?.Elements(Drawing + "softEdge").FirstOrDefault();
+        if (softEdgeEnabled == false)
+        {
+            nativeSoftEdge?.Remove();
+            if (effectList is not null && !effectList.Elements().Any())
+                effectList.Remove();
+            return;
+        }
+
+        if (softEdge is null)
+            return;
+
+        effectList ??= new XElement(Drawing + "effectLst");
+        nativeSoftEdge ??= new XElement(Drawing + "softEdge");
+        nativeSoftEdge.SetAttributeValue("rad", softEdge.RadiusEmu);
+        if (nativeSoftEdge.Parent is null)
+            effectList.Add(nativeSoftEdge);
+        if (effectList.Parent is null)
+        {
+            var line = shapeProperties.Elements(Drawing + "ln").FirstOrDefault();
+            if (line is null)
+                shapeProperties.Add(effectList);
+            else
+                line.AddAfterSelf(effectList);
+        }
+    }
+
+    private static void SetReflection(
+        XElement shapeProperties,
+        ZoomFrameBorderReflection? reflection,
+        bool? reflectionEnabled)
+    {
+        if (reflection is null && reflectionEnabled is null)
+            return;
+
+        var effectList = shapeProperties.Elements(Drawing + "effectLst").FirstOrDefault();
+        var nativeReflection = effectList?.Elements(Drawing + "reflection").FirstOrDefault();
+        if (reflectionEnabled == false)
+        {
+            nativeReflection?.Remove();
+            if (effectList is not null && !effectList.Elements().Any())
+                effectList.Remove();
+            return;
+        }
+
+        if (reflection is null)
+            return;
+
+        effectList ??= new XElement(Drawing + "effectLst");
+        nativeReflection ??= new XElement(Drawing + "reflection");
+        nativeReflection.ReplaceAttributes(
+            new XAttribute("blurRad", reflection.BlurRadiusEmu),
+            new XAttribute("stA", reflection.Alpha),
+            new XAttribute("dist", reflection.DistanceEmu),
+            new XAttribute("dir", reflection.Direction),
+            new XAttribute("sy", reflection.ScaleY),
+            new XAttribute("endPos", reflection.EndPosition));
+        if (nativeReflection.Parent is null)
+            effectList.Add(nativeReflection);
         if (effectList.Parent is null)
         {
             var line = shapeProperties.Elements(Drawing + "ln").FirstOrDefault();

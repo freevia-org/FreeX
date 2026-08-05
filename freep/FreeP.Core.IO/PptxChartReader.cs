@@ -260,7 +260,7 @@ internal static class PptxChartReader
                 .Distinct()
                 .OrderBy(index => index)
                 .ToList(),
-            Title = chart.Element(Cx + "title") is null ? null : string.Empty,
+            Title = ReadChartExTitle(chart.Element(Cx + "title")),
         };
         shape.Categories.AddRange(categories);
 
@@ -282,6 +282,21 @@ internal static class PptxChartReader
         }
 
         return shape;
+    }
+
+    private static string? ReadChartExTitle(XElement? title)
+    {
+        if (title is null)
+            return null;
+
+        var value = title.Descendants(Cx + "v")
+            .Select(element => element.Value)
+            .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
+        if (value is not null)
+            return value;
+
+        var richText = string.Concat(title.Descendants(A + "t").Select(element => element.Value));
+        return string.IsNullOrWhiteSpace(richText) ? string.Empty : richText;
     }
 
     private static XElement? FindChartExCategoryData(IReadOnlyList<XElement> dataElements)

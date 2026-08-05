@@ -16,6 +16,9 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private readonly CheckBox _frameBorderNoFillEnabled;
     private readonly CheckBox _frameBorderThemeEnabled;
     private readonly CheckBox _frameBorderShadowEnabled;
+    private readonly CheckBox _frameBorderGlowEnabled;
+    private readonly CheckBox _frameBorderSoftEdgeEnabled;
+    private readonly CheckBox _frameBorderReflectionEnabled;
     private readonly ComboBox _imageType;
     private readonly TextBox _transitionDuration;
     private readonly TextBox _frameBorderColor;
@@ -25,6 +28,14 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private readonly TextBox _frameBorderShadowBlur;
     private readonly TextBox _frameBorderShadowDistance;
     private readonly TextBox _frameBorderShadowDirection;
+    private readonly TextBox _frameBorderGlowColor;
+    private readonly TextBox _frameBorderGlowAlpha;
+    private readonly TextBox _frameBorderGlowRadius;
+    private readonly TextBox _frameBorderSoftEdgeRadius;
+    private readonly TextBox _frameBorderReflectionAlpha;
+    private readonly TextBox _frameBorderReflectionDistance;
+    private readonly TextBox _frameBorderReflectionDirection;
+    private readonly TextBox _frameBorderReflectionScale;
     private readonly TextBox _frameBorderWidth;
     private readonly ComboBox _frameBorderDash;
     private readonly TextBox _frameBorderGradientStart;
@@ -244,6 +255,49 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         };
         _frameBorderShadowEnabled.Checked += (_, _) => SyncFrameBorderState();
         _frameBorderShadowEnabled.Unchecked += (_, _) => SyncFrameBorderState();
+        _frameBorderGlowEnabled = new CheckBox
+        {
+            Content = "Use border glow",
+            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderGlowEnabled(current),
+        };
+        _frameBorderGlowColor = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowColor(current),
+            MinWidth = 180,
+            ToolTip = "six-digit RGB value; for example 4472C4",
+        };
+        _frameBorderGlowAlpha = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowAlpha(current), MinWidth = 180,
+        };
+        _frameBorderGlowRadius = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowRadius(current), MinWidth = 180,
+        };
+        _frameBorderGlowEnabled.Checked += (_, _) => SyncFrameBorderState();
+        _frameBorderGlowEnabled.Unchecked += (_, _) => SyncFrameBorderState();
+        _frameBorderSoftEdgeEnabled = new CheckBox
+        {
+            Content = "Use border soft edge",
+            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderSoftEdgeEnabled(current),
+        };
+        _frameBorderSoftEdgeRadius = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderSoftEdgeRadius(current), MinWidth = 180,
+        };
+        _frameBorderSoftEdgeEnabled.Checked += (_, _) => SyncFrameBorderState();
+        _frameBorderSoftEdgeEnabled.Unchecked += (_, _) => SyncFrameBorderState();
+        _frameBorderReflectionEnabled = new CheckBox
+        {
+            Content = "Use border reflection",
+            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderReflectionEnabled(current),
+        };
+        _frameBorderReflectionAlpha = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionAlpha(current), MinWidth = 180 };
+        _frameBorderReflectionDistance = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(current), MinWidth = 180 };
+        _frameBorderReflectionDirection = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(current), MinWidth = 180 };
+        _frameBorderReflectionScale = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(current), MinWidth = 180 };
+        _frameBorderReflectionEnabled.Checked += (_, _) => SyncFrameBorderState();
+        _frameBorderReflectionEnabled.Unchecked += (_, _) => SyncFrameBorderState();
         _frameBorderGradientEnabled.Checked += (_, _) => _frameBorderThemeEnabled.IsChecked = false;
         _frameBorderPatternEnabled.Checked += (_, _) => _frameBorderThemeEnabled.IsChecked = false;
         _frameBorderNoFillEnabled.Checked += (_, _) => _frameBorderThemeEnabled.IsChecked = false;
@@ -285,7 +339,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         }
 
         var grid = new Grid { Margin = new Thickness(14) };
-        for (var i = 0; i < 29 + (_summaryTargets.Count > 0 ? 4 : 0); i++)
+        for (var i = 0; i < 40 + (_summaryTargets.Count > 0 ? 4 : 0); i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -312,6 +366,23 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         AddRow(grid, row++, "Shadow blur (pt):", _frameBorderShadowBlur);
         AddRow(grid, row++, "Shadow distance (pt):", _frameBorderShadowDistance);
         AddRow(grid, row++, "Shadow direction (deg):", _frameBorderShadowDirection);
+        Grid.SetRow(_frameBorderGlowEnabled, row++);
+        Grid.SetColumnSpan(_frameBorderGlowEnabled, 2);
+        grid.Children.Add(_frameBorderGlowEnabled);
+        AddRow(grid, row++, "Glow color:", _frameBorderGlowColor);
+        AddRow(grid, row++, "Glow alpha (%):", _frameBorderGlowAlpha);
+        AddRow(grid, row++, "Glow radius (pt):", _frameBorderGlowRadius);
+        Grid.SetRow(_frameBorderSoftEdgeEnabled, row++);
+        Grid.SetColumnSpan(_frameBorderSoftEdgeEnabled, 2);
+        grid.Children.Add(_frameBorderSoftEdgeEnabled);
+        AddRow(grid, row++, "Soft-edge radius (pt):", _frameBorderSoftEdgeRadius);
+        Grid.SetRow(_frameBorderReflectionEnabled, row++);
+        Grid.SetColumnSpan(_frameBorderReflectionEnabled, 2);
+        grid.Children.Add(_frameBorderReflectionEnabled);
+        AddRow(grid, row++, "Reflection alpha (%):", _frameBorderReflectionAlpha);
+        AddRow(grid, row++, "Reflection distance (pt):", _frameBorderReflectionDistance);
+        AddRow(grid, row++, "Reflection direction (deg):", _frameBorderReflectionDirection);
+        AddRow(grid, row++, "Reflection scale (%):", _frameBorderReflectionScale);
         AddRow(grid, row++, "Border width (pt):", _frameBorderWidth);
         AddRow(grid, row++, "Border dash:", _frameBorderDash);
         Grid.SetRow(_frameBorderGradientEnabled, row++);
@@ -510,6 +581,47 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                 MessageBoxImage.Warning);
             return;
         }
+        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderGlow(
+                _frameBorderGlowColor.Text,
+                _frameBorderGlowAlpha.Text,
+                _frameBorderGlowRadius.Text,
+                _frameBorderGlowEnabled.IsChecked == true,
+                out var frameBorderGlow))
+        {
+            MessageBox.Show(this,
+                ZoomObjectPropertiesPlanner.InvalidFrameBorderGlowMessage,
+                ZoomObjectPropertiesPlanner.DialogTitle,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderSoftEdge(
+                _frameBorderSoftEdgeRadius.Text,
+                _frameBorderSoftEdgeEnabled.IsChecked == true,
+                out var frameBorderSoftEdge))
+        {
+            MessageBox.Show(this,
+                ZoomObjectPropertiesPlanner.InvalidFrameBorderSoftEdgeMessage,
+                ZoomObjectPropertiesPlanner.DialogTitle,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderReflection(
+                _frameBorderReflectionAlpha.Text,
+                _frameBorderReflectionDistance.Text,
+                _frameBorderReflectionDirection.Text,
+                _frameBorderReflectionScale.Text,
+                _frameBorderReflectionEnabled.IsChecked == true,
+                out var frameBorderReflection))
+        {
+            MessageBox.Show(this,
+                ZoomObjectPropertiesPlanner.InvalidFrameBorderReflectionMessage,
+                ZoomObjectPropertiesPlanner.DialogTitle,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
         if (!ZoomObjectPropertiesPlanner.TryParseFrameGeometry(
                 _frameGeometry.SelectedItem?.ToString(), out var frameGeometry))
         {
@@ -568,7 +680,13 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             noFillEnabled ? true : null,
             themeColor,
             frameBorderShadow,
-            _frameBorderShadowEnabled.IsChecked == true ? true : false);
+            _frameBorderShadowEnabled.IsChecked == true ? true : false,
+            frameBorderGlow,
+            _frameBorderGlowEnabled.IsChecked == true ? true : false,
+            frameBorderSoftEdge,
+            _frameBorderSoftEdgeEnabled.IsChecked == true ? true : false,
+            frameBorderReflection,
+            _frameBorderReflectionEnabled.IsChecked == true ? true : false);
         if (_summaryTile is not null && _summaryTile.SelectedIndex >= 0
             && _summaryTile.SelectedIndex < _summaryTargets.Count)
         {
@@ -618,6 +736,17 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _frameBorderShadowBlur.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowBlur(properties);
         _frameBorderShadowDistance.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowDistance(properties);
         _frameBorderShadowDirection.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowDirection(properties);
+        _frameBorderGlowEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderGlowEnabled(properties);
+        _frameBorderGlowColor.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowColor(properties);
+        _frameBorderGlowAlpha.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowAlpha(properties);
+        _frameBorderGlowRadius.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowRadius(properties);
+        _frameBorderSoftEdgeEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderSoftEdgeEnabled(properties);
+        _frameBorderSoftEdgeRadius.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderSoftEdgeRadius(properties);
+        _frameBorderReflectionEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderReflectionEnabled(properties);
+        _frameBorderReflectionAlpha.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionAlpha(properties);
+        _frameBorderReflectionDistance.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(properties);
+        _frameBorderReflectionDirection.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(properties);
+        _frameBorderReflectionScale.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(properties);
         SyncFrameBorderState();
         _frameGeometry.SelectedItem = ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
             geometry => string.Equals(geometry, properties.FrameGeometry, StringComparison.OrdinalIgnoreCase))
@@ -661,5 +790,16 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _frameBorderShadowBlur.IsEnabled = _frameBorderShadowColor.IsEnabled;
         _frameBorderShadowDistance.IsEnabled = _frameBorderShadowColor.IsEnabled;
         _frameBorderShadowDirection.IsEnabled = _frameBorderShadowColor.IsEnabled;
+        _frameBorderGlowEnabled.IsEnabled = enabled;
+        _frameBorderGlowColor.IsEnabled = enabled && _frameBorderGlowEnabled.IsChecked == true;
+        _frameBorderGlowAlpha.IsEnabled = _frameBorderGlowColor.IsEnabled;
+        _frameBorderGlowRadius.IsEnabled = _frameBorderGlowColor.IsEnabled;
+        _frameBorderSoftEdgeEnabled.IsEnabled = enabled;
+        _frameBorderSoftEdgeRadius.IsEnabled = enabled && _frameBorderSoftEdgeEnabled.IsChecked == true;
+        _frameBorderReflectionEnabled.IsEnabled = enabled;
+        _frameBorderReflectionAlpha.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
+        _frameBorderReflectionDistance.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
+        _frameBorderReflectionDirection.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
+        _frameBorderReflectionScale.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
     }
 }

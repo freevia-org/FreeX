@@ -69,8 +69,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowHostPlanner.HitTestHyperlink(");
         source.Should().Contain("SlideShowHostPlanner.HitTestTriggerShape(");
         source.Should().Contain("SlideShowHostPlanner.PlanPointerClick(");
-        source.Should().Contain("SlideShowPlaybackPlanner.PlanTransition(_presentation, slide, t);");
-        source.Should().Contain("t = plan.EffectiveTransition;");
+        source.Should().Contain("SlideShowTransitionPlaybackCoordinator.Play(_presentation, slide, t, this);");
+        source.Should().Contain("ISlideShowTransitionPlaybackRenderer");
         source.Should().Contain("PlaySplitTransition(");
         source.Should().Contain("PlayBlindsTransition(");
         source.Should().Contain("SlideShowPlaybackPlanner.BlindsBandCount");
@@ -143,7 +143,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowPlaybackPlanner.WindowInitialOpenFactor");
         source.Should().Contain("SlideShowPlaybackPlanner.GalleryStartScale");
         source.Should().Contain("SlideShowPlaybackPlanner.GalleryOutgoingEndScale");
-        source.Should().Contain("SlideShowTransitionPlaybackActionKind.Morph");
+        source.Should().Contain("ISlideShowTransitionPlaybackRenderer.PlayMorph");
         source.Should().Contain("PlayDissolveTransition(");
         source.Should().Contain("PlayFlashTransition(");
         source.Should().Contain("PlayBoxTransition(");
@@ -185,6 +185,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().NotContain("case TransitionKind.");
         source.Should().NotContain("SlideShowTransitionPlanner.Plan(");
         source.Should().NotContain("SlideShowPlaybackPlanner.PlanTransition(t)");
+        source.Should().NotContain("switch (plan.ActionKind)");
         source.Should().NotContain("TransitionKind.Random");
         source.Should().NotContain("_controller.GoToSlide(0)");
         source.Should().NotContain("_presentation.Slides.Count - 1");
