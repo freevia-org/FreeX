@@ -147,7 +147,8 @@ internal static class PrintLayout
     /// </summary>
     public static DocumentPaginator BuildPaginator(DocumentView editor)
     {
-        if (editor.Model.Sections.Count > 1 && NeedsSectionAwareRendering(editor.Model))
+        if (editor.Model.Sections.Count > 1
+            && (NeedsSectionAwareRendering(editor.Model) || HasParitySectionStarts(editor.Model)))
             return SectionAwareDocumentPaginator.Build(editor);
 
         var page = editor.Model.Page;
@@ -183,6 +184,10 @@ internal static class PrintLayout
             !section.HeadersFooters.IsEmpty
             || PageGeometryDiffers(section.Page, document.Page)
             || LineNumberingDiffers(section.Page, document.Page));
+
+    private static bool HasParitySectionStarts(TextDocument document) =>
+        document.Blocks.OfType<FreeW.Core.Model.Paragraph>().Any(paragraph =>
+            paragraph.SectionBreak?.BreakKind is SectionBreakKind.EvenPage or SectionBreakKind.OddPage);
 
     private static bool LineNumberingDiffers(PageSettings left, PageSettings right) =>
         left.LineNumberMode != right.LineNumberMode
