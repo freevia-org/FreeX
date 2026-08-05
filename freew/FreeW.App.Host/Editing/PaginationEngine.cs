@@ -391,22 +391,132 @@ internal static class PaginationEngine
         var renderedParagraphs = EnumerateRenderedBodyParagraphs(flow.Blocks).ToList();
 
         // Lists coalesce several model paragraphs into one top-level WPF List, while hidden or
-        // unsupported blocks can remove/introduce rendered paragraphs. Apply boundaries only when
-        // the paragraph sequence is complete; an uncertain mapping must not move a section break.
-        if (modelParagraphs.Count != renderedParagraphs.Count)
-            return;
-
-        for (int i = 0; i < modelParagraphs.Count - 1; i++)
+        // unsupported blocks can remove/introduce rendered paragraphs. Apply paragraph boundaries
+        // only when the sequence is complete; an uncertain mapping must not move a section break.
+        if (modelParagraphs.Count == renderedParagraphs.Count)
         {
-            if (modelParagraphs[i] is { SectionBreak: { } sec }
-                && sec.BreakKind is SectionBreakKind.NextPage
-                                 or SectionBreakKind.EvenPage
-                                 or SectionBreakKind.OddPage)
+            for (int i = 0; i < modelParagraphs.Count - 1; i++)
             {
-                renderedParagraphs[i + 1].BreakPageBefore = true;
+                if (IsPageTypeSectionBreak(modelParagraphs[i].SectionBreak))
+                    renderedParagraphs[i + 1].BreakPageBefore = true;
             }
         }
+
+        ApplyTableSectionBreakFlags(editor.Model, flow);
     }
+
+    private static void ApplyTableSectionBreakFlags(TextDocument document, FlowDocument flow)
+    {
+        var renderedBlocks = flow.Blocks.ToList();
+        var firstRenderedBlockByTableIndex = new Dictionary<int, int>();
+        var renderedIndex = 0;
+
+        for (var modelIndex = 0; modelIndex < document.Blocks.Count; modelIndex++)
+        {
+            if (document.Blocks[modelIndex] is FreeW.Core.Model.Paragraph
+                {
+                    Formatting.ListKind: not ListKind.None
+                } firstListParagraph)
+            {
+                var kind = firstListParagraph.Formatting.ListKind;
+                while (modelIndex + 1 < document.Blocks.Count
+                       && document.Blocks[modelIndex + 1] is FreeW.Core.Model.Paragraph
+                       {
+                           Formatting.ListKind: var nextKind
+                       }
+                       && nextKind == kind)
+                {
+                    modelIndex++;
+                }
+
+                renderedIndex++;
+                continue;
+            }
+
+            if (document.Blocks[modelIndex] is FreeW.Core.Model.Table table)
+            {
+                firstRenderedBlockByTableIndex[modelIndex] = renderedIndex;
+                renderedIndex += RenderedTopLevelBlockCount(document, table, modelIndex);
+                continue;
+            }
+
+            renderedIndex++;
+        }
+
+        // Outline-collapsed or unsupported blocks can change the rendered sequence. Refuse to apply
+        // any table boundary unless the renderer-neutral count reproduces the cloned flow exactly.
+        if (renderedIndex != renderedBlocks.Count)
+            return;
+
+        foreach (var (modelIndex, firstRenderedIndex) in firstRenderedBlockByTableIndex)
+        {
+            if (modelIndex == 0
+                || document.Blocks[modelIndex - 1] is not FreeW.Core.Model.Paragraph previous
+                || !IsPageTypeSectionBreak(previous.SectionBreak))
+            {
+                continue;
+            }
+
+            ApplyBreakBefore(flow, renderedBlocks[firstRenderedIndex]);
+        }
+    }
+
+    private static void ApplyBreakBefore(FlowDocument flow, System.Windows.Documents.Block target)
+    {
+        if (target is not System.Windows.Documents.Table table)
+        {
+            target.BreakPageBefore = true;
+            return;
+        }
+
+        // WPF stores Table.BreakPageBefore but its paginator does not honor it. A display-only
+        // Section is the nearest effective block owner and leaves the nested editable table intact.
+        var previous = table.PreviousBlock;
+        flow.Blocks.Remove(table);
+        var wrapper = new System.Windows.Documents.Section(table)
+        {
+            BreakPageBefore = true,
+            Margin = new Thickness(0),
+            Padding = new Thickness(0)
+        };
+        if (previous is not null)
+        {
+            flow.Blocks.InsertAfter(previous, wrapper);
+        }
+        else if (flow.Blocks.FirstBlock is { } first)
+        {
+            flow.Blocks.InsertBefore(first, wrapper);
+        }
+        else
+        {
+            flow.Blocks.Add(wrapper);
+        }
+    }
+
+    private static int RenderedTopLevelBlockCount(
+        TextDocument document,
+        FreeW.Core.Model.Table table,
+        int sourceBlockIndex)
+    {
+        var leadingContentHeightDip = DocumentViewLayoutPlanner.EstimateLeadingContentHeightDip(
+            document,
+            sourceBlockIndex);
+        var plan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(
+            table,
+            page: document.Page,
+            firstPageLeadingContentHeightDip: leadingContentHeightDip);
+        var hasVerticalMerges = table.Rows
+            .SelectMany(row => row.Cells)
+            .Any(cell => cell.VerticalMerge != VerticalMergeState.None);
+        return plan.Pagination.Pages.Count > 1 && !hasVerticalMerges
+            ? plan.Pagination.Pages.Count
+            : 1;
+    }
+
+    private static bool IsPageTypeSectionBreak(FreeW.Core.Model.Section? section) =>
+        section?.BreakKind is SectionBreakKind.NextPage
+                            or SectionBreakKind.EvenPage
+                            or SectionBreakKind.OddPage;
 
     private static IEnumerable<System.Windows.Documents.Paragraph> EnumerateRenderedBodyParagraphs(
         IEnumerable<System.Windows.Documents.Block> blocks)
