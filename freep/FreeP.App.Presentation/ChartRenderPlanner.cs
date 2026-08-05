@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -4294,7 +4295,10 @@ public static partial class ChartRenderPlanner
         var values = Enumerable.Range(0, categoryCount)
             .Select(index => index < series.Values.Count ? series.Values[index] ?? 0 : 0)
             .ToArray();
-        var waterfallBars = WaterfallBarPlanner.Compute(values, chart.WaterfallTotalPointIndices);
+        var waterfallBars = WaterfallBarPlanner.Compute(
+            values,
+            chart.WaterfallTotalPointIndices,
+            WaterfallNullTotalsPolicy.NoTotals);
         for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
         {
             int renderCategoryIndex = ResolveCategoryRenderIndex(chart.CategoryAxis, categoryIndex, categoryCount);
@@ -4356,7 +4360,10 @@ public static partial class ChartRenderPlanner
         var values = Enumerable.Range(0, categoryCount)
             .Select(index => index < chart.Series[0].Values.Count ? chart.Series[0].Values[index] ?? 0 : 0)
             .ToArray();
-        var waterfallBars = WaterfallBarPlanner.Compute(values, chart.WaterfallTotalPointIndices);
+        var waterfallBars = WaterfallBarPlanner.Compute(
+            values,
+            chart.WaterfallTotalPointIndices,
+            WaterfallNullTotalsPolicy.NoTotals);
         ChartPlanPoint? previousEnd = null;
 
         for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
@@ -7845,7 +7852,10 @@ public static partial class ChartRenderPlanner
             return;
 
         var values = series.Values.Select(value => value ?? 0).ToArray();
-        foreach (var bar in WaterfallBarPlanner.Compute(values, chart.WaterfallTotalPointIndices))
+        foreach (var bar in WaterfallBarPlanner.Compute(
+                     values,
+                     chart.WaterfallTotalPointIndices,
+                     WaterfallNullTotalsPolicy.NoTotals))
         {
             dataMin = Math.Min(dataMin, Math.Min(bar.Bottom, bar.Top));
             dataMax = Math.Max(dataMax, Math.Max(bar.Bottom, bar.Top));

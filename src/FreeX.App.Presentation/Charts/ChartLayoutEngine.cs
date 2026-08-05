@@ -2352,7 +2352,10 @@ public static class ChartLayoutEngine
         }
 
         // Waterfall geometry is computed by the shared WaterfallBarPlanner (ported from WPF).
-        var plan = WaterfallBarPlanner.Compute(rawValues, chart.WaterfallTotalPointIndices);
+        var plan = WaterfallBarPlanner.Compute(
+            rawValues,
+            chart.WaterfallTotalPointIndices,
+            WaterfallNullTotalsPolicy.LastPointIsTotal);
 
         // Compute the full value range so we can build a proper value axis.
         var yMin = double.PositiveInfinity;

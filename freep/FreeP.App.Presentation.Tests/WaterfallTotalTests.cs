@@ -8,7 +8,10 @@ public sealed class WaterfallTotalTests
     [Fact]
     public void Planner_DrawsMarkedPointFromZeroWithoutConsumingItsValue()
     {
-        var bars = WaterfallBarPlanner.Compute([100, -30, 20, 90], [0, 2]);
+        var bars = WaterfallBarPlanner.Compute(
+            [100, -30, 20, 90],
+            [0, 2],
+            WaterfallNullTotalsPolicy.NoTotals);
 
         bars.Select(bar => bar.Kind).Should().Equal(
             WaterfallBarKind.Total,

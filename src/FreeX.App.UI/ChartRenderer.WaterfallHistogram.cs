@@ -38,7 +38,10 @@ public static partial class ChartRenderer
 
         // Column geometry/classification (increase / decrease / total anchor) is decided by the pure,
         // unit-tested WaterfallBarPlanner; the renderer only draws the resulting bars and connectors.
-        var plan = WaterfallBarPlanner.Compute(values, chart.WaterfallTotalPointIndices);
+        var plan = WaterfallBarPlanner.Compute(
+            values,
+            chart.WaterfallTotalPointIndices,
+            WaterfallNullTotalsPolicy.LastPointIsTotal);
         for (int i = 0; i < plan.Count; i++)
         {
             var bar = plan[i];

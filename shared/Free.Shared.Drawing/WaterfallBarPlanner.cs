@@ -1,6 +1,5 @@
-namespace FreeP.Core.Model;
+namespace Free.Shared.Drawing;
 
-/// <summary>Whether a waterfall point is an increase, decrease, or anchored total.</summary>
 public enum WaterfallBarKind
 {
     Increase,
@@ -8,7 +7,12 @@ public enum WaterfallBarKind
     Total,
 }
 
-/// <summary>Pure waterfall geometry shared by rendering and functional editing.</summary>
+public enum WaterfallNullTotalsPolicy
+{
+    NoTotals,
+    LastPointIsTotal,
+}
+
 public readonly record struct WaterfallBar(
     double Bottom,
     double Top,
@@ -16,21 +20,21 @@ public readonly record struct WaterfallBar(
     double CumulativeAfter);
 
 /// <summary>
-/// Computes PowerPoint-style waterfall columns. A total is drawn from zero to the
-/// accumulated value and does not consume its source cell as an increment.
+/// Pure waterfall-chart geometry shared by the spreadsheet and presentation workareas. A total is
+/// anchored at zero and does not consume its source value as an increment.
 /// </summary>
 public static class WaterfallBarPlanner
 {
     public static IReadOnlyList<WaterfallBar> Compute(
         IReadOnlyList<double> values,
-        IReadOnlyCollection<int>? totalIndices)
+        IReadOnlyCollection<int>? totalIndices,
+        WaterfallNullTotalsPolicy nullTotalsPolicy)
     {
-        if (values is null || values.Count == 0)
+        ArgumentNullException.ThrowIfNull(values);
+        if (values.Count == 0)
             return [];
 
-        var totals = totalIndices is null
-            ? []
-            : totalIndices.Where(index => index >= 0 && index < values.Count).ToHashSet();
+        var totals = ResolveTotals(values.Count, totalIndices, nullTotalsPolicy);
         var result = new List<WaterfallBar>(values.Count);
         var cumulative = 0d;
 
@@ -56,5 +60,21 @@ public static class WaterfallBarPlanner
         }
 
         return result;
+    }
+
+    private static HashSet<int> ResolveTotals(
+        int count,
+        IReadOnlyCollection<int>? totalIndices,
+        WaterfallNullTotalsPolicy nullTotalsPolicy)
+    {
+        if (totalIndices is not null)
+            return totalIndices.Where(index => index >= 0 && index < count).ToHashSet();
+
+        return nullTotalsPolicy switch
+        {
+            WaterfallNullTotalsPolicy.NoTotals => [],
+            WaterfallNullTotalsPolicy.LastPointIsTotal => [count - 1],
+            _ => throw new ArgumentOutOfRangeException(nameof(nullTotalsPolicy)),
+        };
     }
 }
