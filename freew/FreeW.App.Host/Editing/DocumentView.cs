@@ -11,6 +11,7 @@ using System.Windows.Media.Imaging;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Editing;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
@@ -74,7 +75,8 @@ public sealed class DocumentView : RichTextBox
     // surrounding line box. The transform is calibrated to Word's cached footnote/endnote references.
     private const double NoteReferenceSuperscriptOffsetDip = 5.0;
 
-    private TextDocument _model = TextDocument.CreateEmpty();
+    private readonly DocumentEditingSession _editingSession;
+    private TextDocument _model => _editingSession.Document;
     private bool _spellCheckEnabled = true;
     private DocumentViewDepthLayoutPlan _viewDepthLayout =
         DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor);
@@ -114,7 +116,7 @@ public sealed class DocumentView : RichTextBox
     [ThreadStatic]
     internal static int _renderHfPageCount;
 
-    private readonly DocumentCommandBus _commands;
+    private DocumentCommandBus _commands => _editingSession.Commands;
     private readonly ScaleTransform _zoomTransform = new(ZoomLevels.Default, ZoomLevels.Default);
     private double _zoomLevel = ZoomLevels.Default;
 
@@ -244,6 +246,7 @@ public sealed class DocumentView : RichTextBox
 
     public DocumentView()
     {
+        _editingSession = new DocumentEditingSession(() => CurrentRevisionAuthor());
         AcceptsTab = true;
         IsDocumentEnabled = true;
         SpellCheck.IsEnabled = true;
@@ -257,8 +260,7 @@ public sealed class DocumentView : RichTextBox
         // while the model and on-disk document are untouched (this is pure view chrome).
         LayoutTransform = _zoomTransform;
 
-        _commands = new DocumentCommandBus(new ViewContext(this));
-        _commands.Changed += Render;
+        _editingSession.Changed += Render;
 
         // Clear the floating-image selection when the user clicks within the text body so the inline
         // selection takes priority and the floating selection does not persist unexpectedly.
@@ -895,7 +897,7 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Render a model document into the editable surface.</summary>
     public void LoadModel(TextDocument document)
     {
-        _model = document;
+        _editingSession.LoadDocument(document);
         _trackChangesEnabled = document.TrackRevisions || RestrictEditingPolicy.ShouldForceTrackChanges;
         ApplySpellCheckVisibility();
         Render();
@@ -1400,10 +1402,9 @@ public sealed class DocumentView : RichTextBox
     {
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-        _commands.Execute(new InsertBlockCommand(index, ModelTable.Create(rows, columns)));
+        var index = _editingSession.InsertBlockAfter(
+            CaretBlockIndex(),
+            ModelTable.Create(rows, columns));
 
         // Word places the caret in the new table's first cell, so the Table Design contextual tab appears
         // immediately and the user can type straight into the table. BringBlockIntoView moves the caret to
@@ -1447,23 +1448,7 @@ public sealed class DocumentView : RichTextBox
 
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-
-        // Bring over any styles the source has that the target is missing, so style-referencing
-        // paragraphs (e.g. Heading1) render correctly. Never clobber a style the target already defines.
-        foreach (var (id, style) in source.Styles)
-            _model.Styles.TryAdd(id, style);
-
-        var clones = DocumentMerge.CloneBlocksForInsertion(_model, source);
-        if (clones.Count == 0)
-            return;
-
-        // Insert after the block the caret sits in (else at the end), keeping document order.
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-
-        foreach (var block in clones)
-            _commands.Execute(new InsertBlockCommand(index++, block));
+        _editingSession.InsertDocumentAfter(CaretBlockIndex(), source);
     }
 
     /// <summary>
@@ -1663,12 +1648,10 @@ public sealed class DocumentView : RichTextBox
     public void InsertBlankPage()
     {
         CommitToModel();
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-
-        foreach (var block in DocumentOps.BuildBlankPage())
-            _commands.Execute(new InsertBlockCommand(index++, block));
+        _editingSession.InsertBlocksAfter(
+            CaretBlockIndex(),
+            DocumentOps.BuildBlankPage(),
+            "Insert Blank Page");
     }
 
     /// <summary>
@@ -1678,10 +1661,7 @@ public sealed class DocumentView : RichTextBox
     public void InsertHorizontalRule()
     {
         CommitToModel();
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-        _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreateHorizontalRule()));
+        _editingSession.InsertBlockAfter(CaretBlockIndex(), DocumentOps.CreateHorizontalRule());
     }
 
     /// <summary>
@@ -1691,10 +1671,7 @@ public sealed class DocumentView : RichTextBox
     public void InsertPageBreak()
     {
         CommitToModel();
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-        _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreatePageBreak()));
+        _editingSession.InsertBlockAfter(CaretBlockIndex(), DocumentOps.CreatePageBreak());
     }
 
     /// <summary>Insert a blank row above the caret's row in the table containing the caret.</summary>
@@ -1708,15 +1685,12 @@ public sealed class DocumentView : RichTextBox
     public void InsertPageNumberAtCaret()
     {
         CommitToModel();
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
         var para = new FreeW.Core.Model.Paragraph();
         para.Runs.Add(new FreeW.Core.Model.Run(ResolvePageNumberFieldText(_model))
         {
             FieldKind = RunFieldKind.PageNumber
         });
-        _commands.Execute(new InsertBlockCommand(index, para));
+        _editingSession.InsertBlockAfter(CaretBlockIndex(), para);
     }
 
     /// <summary>
@@ -1727,10 +1701,9 @@ public sealed class DocumentView : RichTextBox
     public void InsertSectionBreak(SectionBreakKind breakKind)
     {
         CommitToModel();
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-        _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreateSectionBreak(breakKind, _model.Page)));
+        _editingSession.InsertBlockAfter(
+            CaretBlockIndex(),
+            DocumentOps.CreateSectionBreak(breakKind, _model.Page));
     }
 
     /// <summary>
@@ -1739,10 +1712,7 @@ public sealed class DocumentView : RichTextBox
     public void InsertColumnBreak()
     {
         CommitToModel();
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-        _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreateColumnBreak()));
+        _editingSession.InsertBlockAfter(CaretBlockIndex(), DocumentOps.CreateColumnBreak());
     }
 
     /// <summary>Insert a blank row below the caret's row in the table containing the caret.</summary>
@@ -8506,12 +8476,6 @@ public sealed class DocumentView : RichTextBox
             var x = contentLeftDip + column * (plan.WidthDip + plan.GapDip) - plan.GapDip / 2 - 0.5;
             drawingContext.DrawLine(pen, new Point(x, contentTopDip + 0.5), new Point(x, contentBottomDip - 0.5));
         }
-    }
-
-    private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
-    {
-        public TextDocument Document => view._model;
-        public string? RevisionAuthor => view.CurrentRevisionAuthor();
     }
 
     /// <summary>
@@ -17017,10 +16981,7 @@ public sealed class DocumentView : RichTextBox
     public void RemoveBookmark(string name)
     {
         CommitToModel();
-        if (string.IsNullOrWhiteSpace(name))
-            return;
-        _commands.Execute(new RemoveBookmarkCommand(name.Trim()));
-        Render();
+        _editingSession.RemoveBookmark(name);
     }
 
     /// <summary>

@@ -12,6 +12,7 @@ using Free.Shared.Ribbon.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Editing;
 using FreeW.App.Presentation.Links;
 using FreeW.App.Presentation.Proofing;
 using FreeW.App.Presentation.Ribbon;
@@ -256,8 +257,9 @@ public sealed class DocumentView : Control
     private bool _shapeEditPointDragChanged;
     private bool _shapeEditPointDragOwnsUndoGroup;
 
-    private TextDocument _doc = TextDocument.CreateEmpty();
-    private DocumentCommandBus _bus;
+    private readonly DocumentEditingSession _editingSession;
+    private TextDocument _doc => _editingSession.Document;
+    private DocumentCommandBus _bus => _editingSession.Commands;
     private DocPosition _caret;
     private DocPosition? _selectionAnchor;
     // BZ5: pending character formatting to be applied to the NEXT typed character when the caret
@@ -313,13 +315,13 @@ public sealed class DocumentView : Control
 
     internal DocumentView(CustomDictionaryStore? customDictionary)
     {
+        _editingSession = new DocumentEditingSession(() => RevisionAuthor);
         _customDictionary = customDictionary ?? CustomDictionaryStore.Load();
         Focusable = true;
         // Word's exported pages use grayscale antialiasing. Subpixel LCD rendering leaves colour fringes
         // in page previews and captured document surfaces, so keep document text device-independent.
         TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
-        _bus = new DocumentCommandBus(new ViewContext(this));
-        _bus.Changed += OnModelChanged;
+        _editingSession.Changed += OnModelChanged;
     }
 
     /// <summary>Raised after any change to the document (edit, undo/redo, load) so the shell can refresh chrome.</summary>
@@ -563,12 +565,10 @@ public sealed class DocumentView : Control
 
     public void LoadDocument(TextDocument document)
     {
-        _doc = document ?? throw new ArgumentNullException(nameof(document));
+        _editingSession.LoadDocument(document);
         ClearBitmapCache();
         if (_doc.Blocks.Count == 0)
             _doc.Blocks.Add(new Paragraph());
-        _bus = new DocumentCommandBus(new ViewContext(this));
-        _bus.Changed += OnModelChanged;
         _caret = new DocPosition(FirstEditableBlock(), 0);
         _selectionAnchor = null;
         _cellCaret = null; // AV-TBL: clear cell state on document load
@@ -20632,8 +20632,7 @@ public sealed class DocumentView : Control
 
         var table = Table.Create(Math.Max(1, rows), Math.Max(1, columns));
         table.Formatting = TableFormatting.Default with { Borders = true, HeaderRow = true };
-        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
-        _bus.Execute(new InsertBlockCommand(insertAt, table));
+        _editingSession.InsertBlockAfter(_caret.Block, table);
     }
 
     /// <summary>
@@ -20722,8 +20721,7 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
-        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
-        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreatePageBreak()));
+        _editingSession.InsertBlockAfter(_caret.Block, DocumentOps.CreatePageBreak());
     }
 
     /// <summary>
@@ -20734,12 +20732,10 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
-        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
-        var blocks = DocumentOps.BuildBlankPage();
-        _bus.BeginUndoGroup();
-        for (var i = 0; i < blocks.Count; i++)
-            _bus.Execute(new InsertBlockCommand(insertAt + i, blocks[i]));
-        _bus.CommitUndoGroup("Insert Blank Page");
+        _editingSession.InsertBlocksAfter(
+            _caret.Block,
+            DocumentOps.BuildBlankPage(),
+            "Insert Blank Page");
     }
 
     /// <summary>
@@ -20750,8 +20746,7 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
-        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
-        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreateHorizontalRule()));
+        _editingSession.InsertBlockAfter(_caret.Block, DocumentOps.CreateHorizontalRule());
     }
 
     /// <summary>
@@ -20762,8 +20757,7 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
-        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
-        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreateColumnBreak()));
+        _editingSession.InsertBlockAfter(_caret.Block, DocumentOps.CreateColumnBreak());
     }
 
     /// <summary>
@@ -20774,8 +20768,9 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
-        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
-        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreateSectionBreak(breakKind, _doc.Page)));
+        _editingSession.InsertBlockAfter(
+            _caret.Block,
+            DocumentOps.CreateSectionBreak(breakKind, _doc.Page));
     }
 
     /// <summary>
@@ -21310,8 +21305,7 @@ public sealed class DocumentView : Control
 
     public void DeleteBookmark(string name)
     {
-        if (!string.IsNullOrWhiteSpace(name))
-            _bus.Execute(new RemoveBookmarkCommand(name.Trim()));
+        _editingSession.RemoveBookmark(name);
     }
 
     /// <summary>
@@ -23149,27 +23143,7 @@ public sealed class DocumentView : Control
         if (source is null || IsEditingLocked || source.Blocks.Count == 0)
             return;
 
-        var clones = DocumentMerge.CloneBlocksForInsertion(_doc, source);
-        if (clones.Count == 0)
-            return;
-
-        foreach (var (id, style) in source.Styles)
-            _doc.Styles.TryAdd(id, style);
-
-        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
-        _bus.BeginUndoGroup();
-        try
-        {
-            for (var index = 0; index < clones.Count; index++)
-                _bus.Execute(new InsertBlockCommand(insertAt + index, clones[index]));
-            _bus.CommitUndoGroup("Insert Text from File");
-        }
-        catch
-        {
-            _bus.AbortUndoGroup();
-            throw;
-        }
-
+        _editingSession.InsertDocumentAfter(_caret.Block, source);
         Focus();
     }
 
@@ -25227,12 +25201,6 @@ public sealed class DocumentView : Control
 
         /// <summary>True when this glyph is part of a tracked deletion (kept and struck).</summary>
         public bool IsDeletedRevision => Revision == RevisionKind.Deleted;
-    }
-
-    private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
-    {
-        public TextDocument Document => view._doc;
-        public string? RevisionAuthor => view.RevisionAuthor;
     }
 
     private Cell WithTrackedRunFormatting(Cell cell, RunFormatting formatting)
