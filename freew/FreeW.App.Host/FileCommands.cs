@@ -45,6 +45,7 @@ internal sealed class FileCommands
 
     private readonly DocumentPersistenceWorkflow _persistence;
     private readonly Func<DocumentSaveCompatibilityPlan, bool> _confirmSaveCompatibility;
+    private readonly Func<string?> _promptPdfImportPath;
 
     public FileCommands(
         Window window,
@@ -54,7 +55,8 @@ internal sealed class FileCommands
         IReadOnlyList<IDocumentFileAdapter>? adapters = null,
         Func<RecentFilesStore>? loadRecentFilesStore = null,
         IUserMessageService? messageService = null,
-        Func<DocumentSaveCompatibilityPlan, bool>? confirmSaveCompatibility = null)
+        Func<DocumentSaveCompatibilityPlan, bool>? confirmSaveCompatibility = null,
+        Func<string?>? promptPdfImportPath = null)
     {
         _window = window;
         _editor = editor;
@@ -62,6 +64,7 @@ internal sealed class FileCommands
         _persistence = new DocumentPersistenceWorkflow(adapters);
         _confirmSaveCompatibility = confirmSaveCompatibility ??
             (plan => SaveCompatibilityWarningDialog.Show(_window, plan));
+        _promptPdfImportPath = promptPdfImportPath ?? PromptPdfImportPath;
         _workflow = new SisterWpfFileCommandWorkflow(
             "FreeW",
             () => _options.RecentFilesCap,
@@ -148,7 +151,7 @@ internal sealed class FileCommands
     /// read-only text import, so the result becomes an untitled dirty document that must be saved elsewhere.
     /// </summary>
     public bool ImportPdfText() =>
-        _workflow.Open("importing a PDF", PromptPdfImportPath, ImportPdfTextPath);
+        _workflow.Open("importing a PDF", _promptPdfImportPath, ImportPdfTextPath);
 
     /// <summary>
     /// Dialog-free PDF text import for tests and host integrations. The PDF path is never associated with the

@@ -14,6 +14,7 @@ public sealed class DocumentPersistenceWorkflow
 {
     public const string DefaultSaveExtension = ".docx";
     public const string DefaultFallbackDisplayName = "Document";
+    private const string PdfImportMimeType = "application/pdf";
 
     private readonly IReadOnlyList<IDocumentFileAdapter> _adapters;
     private readonly IReadOnlyList<IDocumentFileAdapter> _pdfImportAdapters;
@@ -56,6 +57,17 @@ public sealed class DocumentPersistenceWorkflow
 
     public FileOpenDialogPlan BuildPdfImportDialogPlan(string allSupportedName = "PDF documents") =>
         DocumentFileDialogRequestPlanner.BuildOpenDialogPlan(_pdfImportAdapters, allSupportedName);
+
+    public FileOpenPickerPlan BuildPdfImportPickerPlan()
+    {
+        var plan = DocumentFileDialogRequestPlanner.BuildOpenPickerPlan(_pdfImportAdapters);
+        // The command already scopes the picker to PDF, so omit the redundant aggregate row.
+        return new FileOpenPickerPlan(
+            plan.FileTypes
+                .Skip(1)
+                .Select(type => type with { MimeTypes = [PdfImportMimeType] })
+                .ToArray());
+    }
 
     public FileSaveDialogPlan BuildSaveDialogPlan(
         string? currentPath,

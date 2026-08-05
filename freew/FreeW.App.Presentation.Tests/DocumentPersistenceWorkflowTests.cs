@@ -141,6 +141,11 @@ public sealed class DocumentPersistenceWorkflowTests : IDisposable
         result.Format!.CanSave.Should().BeFalse();
         workflow.CanOpenPath(path).Should().BeFalse("PDF import is not a normal editable Open path");
         workflow.BuildPdfImportDialogPlan().Filter.Should().Contain("PDF Document (*.pdf)|*.pdf");
+
+        var pickerPlan = workflow.BuildPdfImportPickerPlan();
+        pickerPlan.FileTypes.Select(type => type.DisplayName).Should().Equal("PDF Document");
+        pickerPlan.FileTypes.Should().OnlyContain(type => type.Patterns.SequenceEqual(new[] { "*.pdf" }));
+        pickerPlan.FileTypes.Should().OnlyContain(type => type.MimeTypes!.SequenceEqual(new[] { "application/pdf" }));
     }
 
     [Fact]

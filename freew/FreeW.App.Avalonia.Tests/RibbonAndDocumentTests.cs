@@ -277,6 +277,23 @@ public class RibbonAndDocumentTests
     }
 
     [Fact]
+    public void Avalonia_pdf_import_uses_shared_dirty_gate_persistence_and_picker_plan()
+    {
+        var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+        var importStart = mainWindow.IndexOf("private Task<bool> ImportPdfTextAsync()", StringComparison.Ordinal);
+        var saveStart = mainWindow.IndexOf("private Task<bool> SaveAsync()", importStart, StringComparison.Ordinal);
+
+        importStart.Should().BeGreaterThanOrEqualTo(0);
+        saveStart.Should().BeGreaterThan(importStart);
+        var importSource = mainWindow[importStart..saveStart];
+        importSource.Should().Contain("_fileWorkflow.OpenAsync(");
+        importSource.Should().Contain("_documentPersistence.BuildPdfImportPickerPlan().FileTypes");
+        importSource.Should().Contain("_documentPersistence.ImportPdfText(path)");
+        importSource.Should().NotContain("DocumentFileAdapterCatalog.CreatePdfImportAdapters()");
+        importSource.Should().NotContain("File.OpenRead(path)");
+    }
+
+    [Fact]
     public void Avalonia_shell_wires_review_compare_combine_to_model_backed_workflow()
     {
         var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));

@@ -3,6 +3,7 @@ using Avalonia.Platform.Storage;
 using Free.Shared.IO;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -82,27 +83,31 @@ public class DocumentFilePickerTypesTests
     }
 
     [Fact]
-    public void Pdf_import_types_are_dedicated_to_explicit_text_import()
+    public void Pdf_import_types_are_derived_from_the_shared_persistence_catalog()
     {
-        var types = DocumentFilePickerTypes.BuildPdfImportTypes();
+        var plan = new DocumentPersistenceWorkflow().BuildPdfImportPickerPlan();
+        var types = AvaloniaFilePickerTypeAdapter.ToFileTypes(plan.FileTypes);
 
-        types.Should().ContainSingle();
-        types[0].Name.Should().Be("PDF document");
-        types[0].Patterns.Should().Equal("*.pdf");
-        types[0].MimeTypes.Should().Equal("application/pdf");
+        types.Select(type => type.Name).Should().Equal("PDF Document");
+        types.Should().OnlyContain(type => type.Patterns!.SequenceEqual(new[] { "*.pdf" }));
+        types.Should().OnlyContain(type => type.MimeTypes!.SequenceEqual(new[] { "application/pdf" }));
     }
 
     [Fact]
-    public void Shared_adapter_preserves_descriptor_labels_and_patterns()
+    public void Shared_adapter_preserves_descriptor_labels_patterns_and_mime_types()
     {
         var descriptor = new FileDialogPickerTypeDescriptor(
             "Exact Label",
-            ["*.docx", "*.txt", "*.docx"]);
+            ["*.docx", "*.txt", "*.docx"],
+            ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]);
 
         var type = AvaloniaFilePickerTypeAdapter.ToFileType(descriptor);
 
         type.Name.Should().Be("Exact Label");
         type.Patterns.Should().Equal("*.docx", "*.txt", "*.docx");
+        type.MimeTypes.Should().Equal(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "text/plain");
     }
 
     [Fact]

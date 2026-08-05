@@ -1070,7 +1070,7 @@ public sealed class AvaloniaShellSourceTests
         pickerService.Should().Contain("AvaloniaFilePickerTypeAdapter.ToFileTypes(fileTypes)");
         pickerService.Should().Contain("AvaloniaFilePickerTypeAdapter.ToFileTypes(plan.FileTypes)");
         source.Should().NotContain("private static FilePickerFileType CreateFilePickerFileType(FilePickerTypeDescriptor descriptor)");
-        adapter.Should().Contain("CreateFileType(descriptor.DisplayName, descriptor.Patterns)");
+        adapter.Should().Contain("CreateFileType(descriptor.DisplayName, descriptor.Patterns, descriptor.MimeTypes)");
     }
 
     [Fact]

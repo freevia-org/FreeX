@@ -1,9 +1,11 @@
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Free.Shared.AppServices;
+using Free.Shared.IO;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia;
 using FreeW.App.Presentation.Options;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 
@@ -160,6 +162,142 @@ public sealed class AsyncFileLifecycleHeadlessTests
         }
     }
 
+    [Fact]
+    public async Task MainWindow_ImportPdfTextAsync_DirtyGateCancelStopsBeforePicker()
+    {
+        var pickerCalls = 0;
+        var imported = true;
+        var dirty = false;
+        var beforeText = string.Empty;
+        var afterText = string.Empty;
+
+        await RunOnUiThread(async () =>
+        {
+            var window = new MainWindow(
+                [],
+                new FreeWOptions(),
+                CreateOptionsStore(),
+                promptSaveChangesAsync: _ => Task.FromResult(SaveChangesPrompt.Cancel),
+                pickPdfImportPathAsync: () =>
+                {
+                    pickerCalls++;
+                    return Task.FromResult<string?>("ShouldNotOpen.pdf");
+                });
+            window.Editor.InsertText("Unsaved PDF import sentinel");
+            beforeText = window.Editor.PlainText;
+
+            imported = await window.ImportPdfTextAsyncForTests();
+            afterText = window.Editor.PlainText;
+            dirty = window.BuildBackstageCallbacks().GetIsDirty();
+        });
+
+        imported.Should().BeFalse();
+        pickerCalls.Should().Be(0);
+        afterText.Should().Be(beforeText);
+        dirty.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task MainWindow_ImportPdfTextAsync_PickerCancelPreservesDocument()
+    {
+        var imported = true;
+        var beforeText = string.Empty;
+        var afterText = string.Empty;
+
+        await RunOnUiThread(async () =>
+        {
+            var window = new MainWindow(
+                [],
+                new FreeWOptions(),
+                CreateOptionsStore(),
+                pickPdfImportPathAsync: () => Task.FromResult<string?>(null));
+            beforeText = window.Editor.PlainText;
+
+            imported = await window.ImportPdfTextAsyncForTests();
+            afterText = window.Editor.PlainText;
+        });
+
+        imported.Should().BeFalse();
+        afterText.Should().Be(beforeText);
+    }
+
+    [Fact]
+    public async Task MainWindow_ImportPdfTextAsync_DiscardThenUsesSharedPersistenceWorkflow()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.Tests", Guid.NewGuid().ToString("N"));
+        var pdfPath = Path.Combine(tempDirectory, "Imported.pdf");
+        Directory.CreateDirectory(tempDirectory);
+        await File.WriteAllTextAsync(pdfPath, "Imported through shared persistence");
+
+        try
+        {
+            var imported = false;
+            var dirty = false;
+            string? currentPath = "not-cleared";
+            var documentText = string.Empty;
+            var status = string.Empty;
+
+            await RunOnUiThread(async () =>
+            {
+                var persistence = new DocumentPersistenceWorkflow(
+                    pdfImportAdapters: [new TextPdfImportAdapter()]);
+                var window = new MainWindow(
+                    [],
+                    new FreeWOptions(),
+                    CreateOptionsStore(),
+                    promptSaveChangesAsync: _ => Task.FromResult(SaveChangesPrompt.DontSave),
+                    documentPersistence: persistence,
+                    pickPdfImportPathAsync: () => Task.FromResult<string?>(pdfPath));
+                window.Editor.InsertText("Replace this unsaved text");
+
+                imported = await window.ImportPdfTextAsyncForTests();
+                var callbacks = window.BuildBackstageCallbacks();
+                dirty = callbacks.GetIsDirty();
+                currentPath = callbacks.CurrentPath;
+                documentText = window.Editor.PlainText.Trim();
+                status = window.CountsStatusForTests;
+            });
+
+            imported.Should().BeTrue();
+            dirty.Should().BeTrue();
+            currentPath.Should().BeNull();
+            documentText.Should().Be("Imported through shared persistence");
+            status.Should().Be("Imported PDF text from Imported.pdf");
+        }
+        finally
+        {
+            try { Directory.Delete(tempDirectory, recursive: true); }
+            catch { /* best-effort cleanup */ }
+        }
+    }
+
+    [Fact]
+    public async Task MainWindow_ImportPdfTextAsync_UnsupportedPathPreservesDocumentAndReportsError()
+    {
+        var imported = true;
+        var beforeText = string.Empty;
+        var afterText = string.Empty;
+        var status = string.Empty;
+
+        await RunOnUiThread(async () =>
+        {
+            var window = new MainWindow(
+                [],
+                new FreeWOptions(),
+                CreateOptionsStore(),
+                pickPdfImportPathAsync: () => Task.FromResult<string?>("Unsupported.txt"));
+            beforeText = window.Editor.PlainText;
+
+            imported = await window.ImportPdfTextAsyncForTests();
+            afterText = window.Editor.PlainText;
+            status = window.CountsStatusForTests;
+        });
+
+        imported.Should().BeFalse();
+        afterText.Should().Be(beforeText);
+        status.Should().StartWith("PDF import failed:");
+    }
+
     [Theory]
     [InlineData(SaveChangesPrompt.DontSave, true)]
     [InlineData(SaveChangesPrompt.Cancel, false)]
@@ -249,6 +387,10 @@ public sealed class AsyncFileLifecycleHeadlessTests
                 Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.Tests", Guid.NewGuid().ToString("N"), "settings.json")),
             promptSaveChangesAsync: _ => Task.FromResult(prompt));
 
+    private static ApplicationOptionsStore<FreeWOptions> CreateOptionsStore() =>
+        ApplicationOptionsStore<FreeWOptions>.ForPath(
+            Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.Tests", Guid.NewGuid().ToString("N"), "settings.json"));
+
     private static SisterAvaloniaFileCommandWorkflow CreateWorkflow(
         SaveChangesPrompt prompt = SaveChangesPrompt.Cancel,
         Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null) =>
@@ -269,5 +411,27 @@ public sealed class AsyncFileLifecycleHeadlessTests
                 return true;
             },
             CancellationToken.None);
+    }
+
+    private sealed class TextPdfImportAdapter : IDocumentFileAdapter
+    {
+        public string Extension => ".pdf";
+
+        public string FormatName => "PDF Document";
+
+        public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
+            [new FileFormatDescriptor(".pdf", "PDF Document", CanOpen: true, CanSave: false)];
+
+        public TextDocument Load(Stream stream)
+        {
+            using var reader = new StreamReader(stream, leaveOpen: true);
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Blocks.Add(new Paragraph(reader.ReadToEnd()));
+            return document;
+        }
+
+        public void Save(TextDocument document, Stream stream) =>
+            throw new NotSupportedException();
     }
 }

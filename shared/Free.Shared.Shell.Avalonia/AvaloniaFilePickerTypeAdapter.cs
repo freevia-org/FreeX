@@ -38,6 +38,6 @@ public static class AvaloniaFilePickerTypeAdapter
     {
         ArgumentNullException.ThrowIfNull(descriptor);
 
-        return CreateFileType(descriptor.DisplayName, descriptor.Patterns);
+        return CreateFileType(descriptor.DisplayName, descriptor.Patterns, descriptor.MimeTypes);
     }
 }

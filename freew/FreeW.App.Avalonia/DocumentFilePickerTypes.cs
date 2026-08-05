@@ -25,12 +25,6 @@ internal static class DocumentFilePickerTypes
         return AvaloniaFilePickerTypeAdapter.ToFileTypes(plan);
     }
 
-    /// <summary>Explicit lossy PDF text-import picker types; PDF is intentionally not part of normal Open.</summary>
-    public static IReadOnlyList<FilePickerFileType> BuildPdfImportTypes() =>
-    [
-        new FilePickerFileType("PDF document") { Patterns = ["*.pdf"], MimeTypes = ["application/pdf"] },
-    ];
-
     /// <summary>One <see cref="FilePickerFileType"/> per <see cref="FileFormatDescriptor.CanSave"/> format.</summary>
     public static IReadOnlyList<FilePickerFileType> BuildSaveTypes(IEnumerable<IDocumentFileAdapter> adapters)
     {

@@ -55,12 +55,13 @@ public sealed partial class MainWindow : Window
             ["*.xps"],
             ["application/oxps", "application/vnd.ms-xpsdocument"]);
 
-    private readonly DocumentPersistenceWorkflow _documentPersistence = new();
+    private readonly DocumentPersistenceWorkflow _documentPersistence;
     private readonly IPlatformPrintService _printService;
     private readonly Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> _showPrintSelectionDialog;
     private readonly Action<IInputElement?> _restorePrintOwnerFocus;
     private readonly Action<DocumentView, string> _savePrintPdf;
     private readonly Func<IStorageProvider, AvaloniaFilePickerSaveRequest, Task<(bool Canceled, string? LocalPath)>> _pickExportPath;
+    private readonly Func<Task<string?>> _pickPdfImportPathAsync;
     private readonly Func<bool, string, Task<string?>>? _askHeaderFooterText;
     private readonly IScreenClipService _screenClipService;
     private readonly DocumentView _editor = new();
@@ -173,9 +174,12 @@ public sealed partial class MainWindow : Window
         Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
         Func<string, Exception, Task>? showFileCommandErrorAsync = null,
         Func<bool, string, Task<string?>>? askHeaderFooterText = null,
-        Action<DocumentView, string>? savePrintPdf = null)
+        Action<DocumentView, string>? savePrintPdf = null,
+        DocumentPersistenceWorkflow? documentPersistence = null,
+        Func<Task<string?>>? pickPdfImportPathAsync = null)
     {
         _optionsStore = optionsStore;
+        _documentPersistence = documentPersistence ?? new DocumentPersistenceWorkflow();
         _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
         _printService = printService ?? new CupsPrintService();
         _showPrintSelectionDialog = showPrintSelectionDialog ??
@@ -184,6 +188,7 @@ public sealed partial class MainWindow : Window
         _restorePrintOwnerFocus = restorePrintOwnerFocus ?? RestorePrintOwnerFocus;
         _savePrintPdf = savePrintPdf ?? ((view, path) => FreeWAvaloniaPdfExport.Save(view, path));
         _pickExportPath = pickExportPath ?? PickExportPathAsync;
+        _pickPdfImportPathAsync = pickPdfImportPathAsync ?? PromptPdfImportPathAsync;
         _askHeaderFooterText = askHeaderFooterText;
         _options = options ?? _optionsStore.Load();
         _options.Normalize();
@@ -3181,36 +3186,39 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task ImportPdfTextAsync()
+    internal Task<bool> ImportPdfTextAsyncForTests() => ImportPdfTextAsync();
+
+    private Task<bool> ImportPdfTextAsync() =>
+        _fileWorkflow.OpenAsync(
+            "importing a PDF",
+            _pickPdfImportPathAsync,
+            ImportPdfTextPathAsync);
+
+    private async Task<string?> PromptPdfImportPathAsync()
     {
         using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
             StorageProvider,
             AvaloniaFilePickerOpenRequest.FromFileTypes(
                 "Import PDF (text only)",
-                DocumentFilePickerTypes.BuildPdfImportTypes()));
-        var path = file?.LocalPath;
-        if (path is null)
-            return;
+                AvaloniaFilePickerTypeAdapter.ToFileTypes(
+                    _documentPersistence.BuildPdfImportPickerPlan().FileTypes)));
+        return file?.LocalPath;
+    }
 
-        if (DocumentFileFormatResolver.FindOpenAdapter(
-                DocumentFileAdapterCatalog.CreatePdfImportAdapters(),
-                Path.GetExtension(path),
-                out _) is not { } adapter)
-        {
-            _status.Text = $"PDF import failed: unsupported file type \"{Path.GetExtension(path)}\".";
-            return;
-        }
-
+    private Task<bool> ImportPdfTextPathAsync(string path)
+    {
         try
         {
-            using var stream = File.OpenRead(path);
-            LoadDocumentContent(adapter.Load(stream));
+            var result = _documentPersistence.ImportPdfText(path);
+            LoadDocumentContent(result.Document);
             _fileWorkflow.MarkDirtyWithPath(null);
             _status.Text = $"Imported PDF text from {Path.GetFileName(path)}";
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             _status.Text = $"PDF import failed: {ex.Message}";
+            return Task.FromResult(false);
         }
     }
 

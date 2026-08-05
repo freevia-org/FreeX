@@ -44,7 +44,7 @@ public sealed class FileLifecycleTests : IDisposable
         DocumentView editor,
         FileCommands file,
         Func<int> changeCount,
-        RecordingUserMessageService messages) CreateHarness()
+        RecordingUserMessageService messages) CreateHarness(Func<string?>? promptPdfImportPath = null)
     {
         var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
         var editor = new DocumentView();
@@ -57,7 +57,8 @@ public sealed class FileLifecycleTests : IDisposable
             editor,
             () => changes++,
             loadRecentFilesStore: () => RecentFilesStore.Load(recentStorePath),
-            messageService: messages);
+            messageService: messages,
+            promptPdfImportPath: promptPdfImportPath);
         return (window, editor, file, () => changes, messages);
     }
 
@@ -171,6 +172,51 @@ public sealed class FileLifecycleTests : IDisposable
         Assert.Equal("Untitled", file.DisplayName);
         Assert.Contains("Imported PDF text", editor.Model.PlainText);
         Assert.Equal(1, changeCount());
+    }
+
+    [StaFact]
+    public void ImportPdfText_OnDirtyDocument_CancelStopsBeforePicker()
+    {
+        var pickerCalls = 0;
+        var (_, editor, file, _, messages) = CreateHarness(() =>
+        {
+            pickerCalls++;
+            return WritePdf("ShouldNotOpen.pdf", "replacement");
+        });
+        messages.NextResult = UserMessageResult.Cancel;
+        var before = editor.Model.PlainText;
+        file.MarkDirty();
+
+        var imported = file.ImportPdfText();
+
+        Assert.False(imported);
+        Assert.Equal(0, pickerCalls);
+        Assert.Equal(before, editor.Model.PlainText);
+        Assert.True(file.IsDirty);
+        Assert.Single(messages.Messages);
+    }
+
+    [StaFact]
+    public void ImportPdfText_OnDirtyDocument_DiscardThenImportsThroughSharedWorkflow()
+    {
+        var path = WritePdf("Replacement.pdf", "Replacement PDF text");
+        var pickerCalls = 0;
+        var (_, editor, file, _, messages) = CreateHarness(() =>
+        {
+            pickerCalls++;
+            return path;
+        });
+        messages.NextResult = UserMessageResult.No;
+        file.MarkDirty();
+
+        var imported = file.ImportPdfText();
+
+        Assert.True(imported);
+        Assert.Equal(1, pickerCalls);
+        Assert.Contains("Replacement PDF text", editor.Model.PlainText);
+        Assert.True(file.IsDirty);
+        Assert.Null(file.CurrentPath);
+        Assert.Single(messages.Messages);
     }
 
     [StaFact]
