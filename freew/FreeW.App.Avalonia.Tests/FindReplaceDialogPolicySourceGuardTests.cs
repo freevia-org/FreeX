@@ -5,28 +5,30 @@ namespace FreeW.App.Avalonia.Tests;
 public sealed class FindReplaceDialogPolicySourceGuardTests
 {
     [Fact]
-    public void FindReplaceDialog_DelegatesOptionPolicyValidationAndResultTextToPresentationPlanner()
+    public void FindReplaceDialog_DelegatesOptionPolicyAndWorkflowToPresentationSession()
     {
         var source = ReadAvaloniaSource("FindReplaceDialog.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
         source.Should().Contain("FindReplaceDialogPlanner.LabelFor(");
-        source.Should().Contain("FindReplaceDialogPlanner.NormalizeOptions(");
-        source.Should().Contain("FindReplaceDialogPlanner.IsOptionEnabled(");
-        source.Should().Contain("FindReplaceDialogPlanner.TryCreateSearchRequest(");
-        source.Should().Contain("FindReplaceDialogPlanner.TryCreateReplaceRequest(");
-        source.Should().Contain("FindReplaceDialogPlanner.ValidationMessageFor(");
-        source.Should().Contain("FindReplaceDialogPlanner.BuildFindStatus(");
-        source.Should().Contain("FindReplaceDialogPlanner.BuildReplaceStatus(");
-        source.Should().Contain("FindReplaceDialogPlanner.BuildReplaceAllStatus(");
+        source.Should().Contain("new FindReplaceDialogSession(");
+        source.Should().Contain("SyncSessionInput()");
+        source.Should().Contain("_session.FindNext()");
+        source.Should().Contain("_session.ReplaceNext()");
+        source.Should().Contain("_session.ReplaceAll()");
         source.Should().Contain("ApplyCompactCheckBox(_matchCase");
         source.Should().Contain("ApplyCompactCheckBox(_wholeWord");
         source.Should().Contain("ApplyCompactCheckBox(_useWildcards");
-        source.Should().Contain("_editor.FindNext(request.Term, request.Options)");
-        source.Should().Contain("_editor.ReplaceNext(request!.Term, request.Replacement, request.Options)");
-        source.Should().Contain("_editor.ReplaceAll(request!.Term, request.Replacement, request.Options)");
+        source.Should().Contain("editor.FindNext(request.Term, request.Options)");
+        source.Should().Contain("editor.ReplaceNext(request.Term, request.Replacement, request.Options)");
+        source.Should().Contain("editor.ReplaceAll(request.Term, request.Replacement, request.Options)");
         source.Should().NotContain("TextSearch.FindAll(");
         source.Should().NotContain("internal static int CountMatches(");
+        source.Should().NotContain("FindReplaceDialogPlanner.TryCreateSearchRequest(");
+        source.Should().NotContain("FindReplaceDialogPlanner.TryCreateReplaceRequest(");
+        source.Should().NotContain("FindReplaceDialogPlanner.BuildFindStatus(");
+        source.Should().NotContain("FindReplaceDialogPlanner.BuildReplaceStatus(");
+        source.Should().NotContain("FindReplaceDialogPlanner.BuildReplaceAllStatus(");
         source.Should().NotContain("Content = \"Match case\"");
         source.Should().NotContain("Content = \"Whole word\"");
         source.Should().NotContain("Content = \"Use wildcards");

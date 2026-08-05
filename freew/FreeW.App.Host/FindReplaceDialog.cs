@@ -30,7 +30,7 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly CheckBox _useWildcards = new() { Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.UseWildcards), Margin = new Thickness(0, 4, 0, 0) };
     private readonly ComboBox _goToTarget = new() { MinWidth = 220, Margin = new Thickness(0, 6, 0, 0) };
     private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 6, 0, 0) };
-    private FindReplaceDialogOpenMode _openMode;
+    private readonly FindReplaceDialogSession _session;
 
     public FindReplaceDialog(
         Window owner,
@@ -38,7 +38,7 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         FindReplaceDialogOpenMode openMode = FindReplaceDialogOpenMode.Find)
     {
         _editor = editor;
-        _openMode = openMode;
+        _session = new FindReplaceDialogSession(new WpfFindReplaceCommandHost(editor), openMode);
         Owner = owner;
         Title = "Find & Replace";
         Width = 420;
@@ -95,16 +95,16 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         outer.Children.Add(statusHost);
         Content = outer;
 
-        Loaded += (_, _) => ActivateFor(_openMode);
+        Loaded += (_, _) => ActivateFor(_session.State.OpenMode);
     }
 
     internal void ActivateFor(FindReplaceDialogOpenMode openMode)
     {
-        _openMode = openMode;
-        DialogFocus.FocusAndSelect(_openMode == FindReplaceDialogOpenMode.Replace ? _replaceBox : _findBox);
+        var state = _session.ActivateFor(openMode);
+        DialogFocus.FocusAndSelect(state.OpenMode == FindReplaceDialogOpenMode.Replace ? _replaceBox : _findBox);
     }
 
-    internal FindReplaceDialogOpenMode OpenModeForTest => _openMode;
+    internal FindReplaceDialogOpenMode OpenModeForTest => _session.State.OpenMode;
 
     internal FindReplaceDialogOpenMode? FocusedFieldForTest =>
         _findBox.IsKeyboardFocusWithin ? FindReplaceDialogOpenMode.Find :
@@ -231,7 +231,7 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 break;
         }
 
-        _status.Text = $"Jumped to {item.Label.Trim()}.";
+        _status.Text = _session.SetStatus($"Jumped to {item.Label.Trim()}.").StatusText;
     }
 
     private static void AddRow(Grid grid, int row, string label, UIElement field)
@@ -256,139 +256,123 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void FindNext()
     {
-        if (!FindReplaceDialogPlanner.TryCreateSearchRequest(
-                _findBox.Text,
-                CurrentOptions(),
-                out var request,
-                out var error))
-        {
-            _status.Text = FindReplaceDialogPlanner.ValidationMessageFor(error);
-            return;
-        }
-
-        var start = _editor.Selection.IsEmpty ? _editor.CaretPosition : _editor.Selection.End;
-        var found = SelectFrom(start, request!) || SelectFrom(_editor.Document.ContentStart, request!);
-        _status.Text = FindReplaceDialogPlanner.BuildFindStatus(request!, found);
+        SyncSessionInput();
+        _status.Text = _session.FindNext().StatusText;
     }
 
     private void Replace()
     {
-        if (!FindReplaceDialogPlanner.TryCreateReplaceRequest(
-                _findBox.Text,
-                _replaceBox.Text,
-                CurrentOptions(),
-                out var request,
-                out var error))
-        {
-            _status.Text = FindReplaceDialogPlanner.ValidationMessageFor(error);
-            return;
-        }
-
-        var replaced = !_editor.Selection.IsEmpty && IsTermSelected(request!);
-        if (replaced)
-        {
-            _editor.Selection.Text = request!.Replacement;
-        }
-
-        var searchRequest = new FindReplaceSearchRequest(request!.Term, request.Options);
-        var start = _editor.Selection.IsEmpty ? _editor.CaretPosition : _editor.Selection.End;
-        var found = SelectFrom(start, searchRequest)
-            || SelectFrom(_editor.Document.ContentStart, searchRequest);
-        _status.Text = FindReplaceDialogPlanner.BuildReplaceStatus(request!, found);
+        SyncSessionInput();
+        _status.Text = _session.ReplaceNext().StatusText;
     }
-
-    // True when the current selection is exactly an occurrence of term under the active match options.
-    private bool IsTermSelected(FindReplaceReplaceRequest request) =>
-        FindReplaceDialogPlanner.MatchesExactly(
-            _editor.Selection.Text,
-            request.Term,
-            request.Options);
 
     private void ReplaceAll()
     {
-        if (!FindReplaceDialogPlanner.TryCreateReplaceRequest(
-                _findBox.Text,
-                _replaceBox.Text,
-                CurrentOptions(),
-                out var request,
-                out var error))
-        {
-            _status.Text = FindReplaceDialogPlanner.ValidationMessageFor(error);
-            return;
-        }
-
-        // Restrict to the current selection when there is one; otherwise sweep the whole document.
-        var restrictToSelection = !_editor.Selection.IsEmpty;
-        var (from, limit) = restrictToSelection
-            ? (_editor.Selection.Start, _editor.Selection.End)
-            : (_editor.Document.ContentStart, _editor.Document.ContentEnd);
-
-        var count = 0;
-        var pointer = from;
-        var searchRequest = new FindReplaceSearchRequest(request!.Term, request.Options);
-        while (TryFind(pointer, searchRequest, out var matchStart, out var matchEnd))
-        {
-            // When restricted to a selection, stop once a match would start past the selection end.
-            if (restrictToSelection && matchStart.CompareTo(limit) >= 0)
-                break;
-
-            _editor.Selection.Select(matchStart, matchEnd);
-            _editor.Selection.Text = request!.Replacement;
-            pointer = _editor.Selection.End;
-            count++;
-        }
-
-        _status.Text = FindReplaceDialogPlanner.BuildReplaceAllStatus(request!, count, restrictToSelection);
+        SyncSessionInput();
+        _status.Text = _session.ReplaceAll().StatusText;
     }
 
-    private bool SelectFrom(TextPointer from, FindReplaceSearchRequest request)
-    {
-        if (!TryFind(from, request, out var matchStart, out var matchEnd))
-            return false;
-        _editor.Selection.Select(matchStart, matchEnd);
-        _editor.Focus();
-        return true;
-    }
-
-    // Finds the first match of term at or after `from`, scanning text runs in document order. Match
-    // decisions (case, whole-word boundaries within the run text) come from the pure TextSearch helper.
-    private bool TryFind(TextPointer from, FindReplaceSearchRequest request, out TextPointer matchStart, out TextPointer matchEnd)
-    {
-        matchStart = matchEnd = _editor.Document.ContentStart;
-        for (var pointer = from; pointer is not null; pointer = pointer.GetNextContextPosition(LogicalDirection.Forward))
-        {
-            if (pointer.GetPointerContext(LogicalDirection.Forward) != TextPointerContext.Text)
-                continue;
-
-            var runText = pointer.GetTextInRun(LogicalDirection.Forward);
-            foreach (var (index, length) in FindReplaceDialogPlanner.FindAll(runText, request.Term, request.Options))
-            {
-                var start = pointer.GetPositionAtOffset(index);
-                var end = start?.GetPositionAtOffset(length);
-                if (start is null || end is null)
-                    continue;
-
-                matchStart = start;
-                matchEnd = end;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private FindReplaceSearchOptions CurrentOptions() =>
-        FindReplaceDialogPlanner.NormalizeOptions(new FindReplaceSearchOptions(
+    private FindReplaceDialogState SyncSessionInput() =>
+        _session.SetInput(
+            _findBox.Text,
+            _replaceBox.Text,
             _matchCase.IsChecked == true,
             _wholeWord.IsChecked == true,
-            _useWildcards.IsChecked == true));
+            _useWildcards.IsChecked == true);
 
     private void ApplyOptionPolicy()
     {
-        var options = CurrentOptions();
-        _wholeWord.IsEnabled = FindReplaceDialogPlanner.IsOptionEnabled(
-            FindReplaceOptionKind.WholeWord,
-            options);
-        if (!_wholeWord.IsEnabled)
+        var state = SyncSessionInput();
+        _wholeWord.IsEnabled = state.WholeWordEnabled;
+        if (_wholeWord.IsChecked == true && !state.Options.WholeWord)
             _wholeWord.IsChecked = false;
+    }
+
+    private sealed class WpfFindReplaceCommandHost(DocumentView editor) : IFindReplaceDialogCommandHost
+    {
+        public bool FindNext(FindReplaceSearchRequest request)
+        {
+            var start = editor.Selection.IsEmpty ? editor.CaretPosition : editor.Selection.End;
+            return SelectFrom(start, request) || SelectFrom(editor.Document.ContentStart, request);
+        }
+
+        public bool ReplaceNext(FindReplaceReplaceRequest request)
+        {
+            if (!editor.Selection.IsEmpty && FindReplaceDialogPlanner.MatchesExactly(
+                    editor.Selection.Text,
+                    request.Term,
+                    request.Options))
+            {
+                editor.Selection.Text = request.Replacement;
+            }
+
+            var searchRequest = new FindReplaceSearchRequest(request.Term, request.Options);
+            var start = editor.Selection.IsEmpty ? editor.CaretPosition : editor.Selection.End;
+            return SelectFrom(start, searchRequest)
+                || SelectFrom(editor.Document.ContentStart, searchRequest);
+        }
+
+        public FindReplaceAllExecutionResult ReplaceAll(FindReplaceReplaceRequest request)
+        {
+            var restrictToSelection = !editor.Selection.IsEmpty;
+            var (from, limit) = restrictToSelection
+                ? (editor.Selection.Start, editor.Selection.End)
+                : (editor.Document.ContentStart, editor.Document.ContentEnd);
+
+            var count = 0;
+            var pointer = from;
+            var searchRequest = new FindReplaceSearchRequest(request.Term, request.Options);
+            while (TryFind(pointer, searchRequest, out var matchStart, out var matchEnd))
+            {
+                if (restrictToSelection && matchStart.CompareTo(limit) >= 0)
+                    break;
+
+                editor.Selection.Select(matchStart, matchEnd);
+                editor.Selection.Text = request.Replacement;
+                pointer = editor.Selection.End;
+                count++;
+            }
+
+            return new FindReplaceAllExecutionResult(count, restrictToSelection);
+        }
+
+        private bool SelectFrom(TextPointer from, FindReplaceSearchRequest request)
+        {
+            if (!TryFind(from, request, out var matchStart, out var matchEnd))
+                return false;
+
+            editor.Selection.Select(matchStart, matchEnd);
+            editor.Focus();
+            return true;
+        }
+
+        private bool TryFind(
+            TextPointer from,
+            FindReplaceSearchRequest request,
+            out TextPointer matchStart,
+            out TextPointer matchEnd)
+        {
+            matchStart = matchEnd = editor.Document.ContentStart;
+            for (var pointer = from; pointer is not null; pointer = pointer.GetNextContextPosition(LogicalDirection.Forward))
+            {
+                if (pointer.GetPointerContext(LogicalDirection.Forward) != TextPointerContext.Text)
+                    continue;
+
+                var runText = pointer.GetTextInRun(LogicalDirection.Forward);
+                foreach (var (index, length) in FindReplaceDialogPlanner.FindAll(runText, request.Term, request.Options))
+                {
+                    var start = pointer.GetPositionAtOffset(index);
+                    var end = start?.GetPositionAtOffset(length);
+                    if (start is null || end is null)
+                        continue;
+
+                    matchStart = start;
+                    matchEnd = end;
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 }

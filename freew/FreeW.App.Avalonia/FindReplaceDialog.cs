@@ -82,7 +82,7 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
     };
 
     private TextBox _lastFocusedBox = null!;
-    private FindReplaceDialogOpenMode _openMode;
+    private readonly FindReplaceDialogSession _session;
 
     // ── Construction ──────────────────────────────────────────────────────────
 
@@ -91,7 +91,7 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         FindReplaceDialogOpenMode openMode = FindReplaceDialogOpenMode.Find)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        _openMode = openMode;
+        _session = new FindReplaceDialogSession(new AvaloniaFindReplaceCommandHost(_editor), openMode);
 
         Title = "Find & Replace";
         Width = 420;
@@ -173,17 +173,17 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
             if (e.Key == Key.Escape) { Close(); e.Handled = true; }
         };
 
-        Opened += (_, _) => ActivateFor(_openMode);
+        Opened += (_, _) => ActivateFor(_session.State.OpenMode);
     }
 
     internal void ActivateFor(FindReplaceDialogOpenMode openMode)
     {
-        _openMode = openMode;
+        var state = _session.ActivateFor(openMode);
         AvaloniaCompactDialogChrome.FocusAndSelect(
-            _openMode == FindReplaceDialogOpenMode.Replace ? _replaceBox : _findBox);
+            state.OpenMode == FindReplaceDialogOpenMode.Replace ? _replaceBox : _findBox);
     }
 
-    internal FindReplaceDialogOpenMode OpenModeForTest => _openMode;
+    internal FindReplaceDialogOpenMode OpenModeForTest => _session.State.OpenMode;
 
     internal FindReplaceDialogOpenMode? FocusedFieldForTest =>
         _findBox.IsFocused ? FindReplaceDialogOpenMode.Find :
@@ -313,84 +313,55 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
 
         ScrollEditorToBlock(blockIndex);
         _editor.Focus();
-        _status.Text = $"Jumped to {label}.";
+        _status.Text = _session.SetStatus($"Jumped to {label}.").StatusText;
     }
 
     // ── Find / Replace logic ──────────────────────────────────────────────────
 
     private void FindNext()
     {
-        if (!FindReplaceDialogPlanner.TryCreateSearchRequest(
-                _findBox.Text,
-                CurrentOptions(),
-                out var request,
-                out var error))
-        {
-            _status.Text = FindReplaceDialogPlanner.ValidationMessageFor(error);
-            return;
-        }
-
-        var found = FindNextWithOptions(request!);
-        _status.Text = FindReplaceDialogPlanner.BuildFindStatus(request!, found);
-    }
-
-    /// <summary>
-    /// The editor executes the same option-aware planner contract for every search mode.
-    /// </summary>
-    private bool FindNextWithOptions(FindReplaceSearchRequest request)
-    {
-        return _editor.FindNext(request.Term, request.Options);
+        SyncSessionInput();
+        _status.Text = _session.FindNext().StatusText;
     }
 
     private void Replace()
     {
-        if (!FindReplaceDialogPlanner.TryCreateReplaceRequest(
-                _findBox.Text,
-                _replaceBox.Text,
-                CurrentOptions(),
-                out var request,
-                out var error))
-        {
-            _status.Text = FindReplaceDialogPlanner.ValidationMessageFor(error);
-            return;
-        }
-
-        var replaced = _editor.ReplaceNext(request!.Term, request.Replacement, request.Options);
-        _status.Text = FindReplaceDialogPlanner.BuildReplaceStatus(request, replaced);
+        SyncSessionInput();
+        _status.Text = _session.ReplaceNext().StatusText;
     }
 
     private void ReplaceAll()
     {
-        if (!FindReplaceDialogPlanner.TryCreateReplaceRequest(
-                _findBox.Text,
-                _replaceBox.Text,
-                CurrentOptions(),
-                out var request,
-                out var error))
-        {
-            _status.Text = FindReplaceDialogPlanner.ValidationMessageFor(error);
-            return;
-        }
-
-        var count = _editor.ReplaceAll(request!.Term, request.Replacement, request.Options);
-        _status.Text = FindReplaceDialogPlanner.BuildReplaceAllStatus(request, count);
+        SyncSessionInput();
+        _status.Text = _session.ReplaceAll().StatusText;
     }
 
-    private FindReplaceSearchOptions CurrentOptions() =>
-        FindReplaceDialogPlanner.NormalizeOptions(new FindReplaceSearchOptions(
+    private FindReplaceDialogState SyncSessionInput() =>
+        _session.SetInput(
+            _findBox.Text,
+            _replaceBox.Text,
             _matchCase.IsChecked == true,
             _wholeWord.IsChecked == true,
-            _useWildcards.IsChecked == true));
+            _useWildcards.IsChecked == true);
 
     private void ApplyOptionPolicy()
     {
-        var options = CurrentOptions();
-        var wholeWordEnabled = FindReplaceDialogPlanner.IsOptionEnabled(
-            FindReplaceOptionKind.WholeWord,
-            options);
-        _wholeWord.IsEnabled = wholeWordEnabled;
-        if (!wholeWordEnabled)
+        var state = SyncSessionInput();
+        _wholeWord.IsEnabled = state.WholeWordEnabled;
+        if (_wholeWord.IsChecked == true && !state.Options.WholeWord)
             _wholeWord.IsChecked = false;
+    }
+
+    private sealed class AvaloniaFindReplaceCommandHost(DocumentView editor) : IFindReplaceDialogCommandHost
+    {
+        public bool FindNext(FindReplaceSearchRequest request) =>
+            editor.FindNext(request.Term, request.Options);
+
+        public bool ReplaceNext(FindReplaceReplaceRequest request) =>
+            editor.ReplaceNext(request.Term, request.Replacement, request.Options);
+
+        public FindReplaceAllExecutionResult ReplaceAll(FindReplaceReplaceRequest request) =>
+            new(editor.ReplaceAll(request.Term, request.Replacement, request.Options));
     }
 
     // ── Scroll helper (mirrors NavigationPane.ScrollEditorToBlock) ────────────

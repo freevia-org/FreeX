@@ -36,22 +36,41 @@ public sealed class FreeWBehaviorSourceGuardTests
     }
 
     [Fact]
-    public void FindReplaceHosts_DelegateExecutionToSharedOptionAwarePlanner()
+    public void FindReplaceHosts_DelegateWorkflowToSharedSessionAndKeepNativeTraversalLocal()
     {
         var wpf = ReadSource("freew", "FreeW.App.Host", "FindReplaceDialog.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "FindReplaceDialog.cs");
 
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("new FindReplaceDialogSession(");
+            source.Should().Contain("SyncSessionInput()");
+            source.Should().Contain("_session.FindNext()");
+            source.Should().Contain("_session.ReplaceNext()");
+            source.Should().Contain("_session.ReplaceAll()");
+            source.Should().NotContain("FindReplaceDialogPlanner.TryCreateSearchRequest(");
+            source.Should().NotContain("FindReplaceDialogPlanner.TryCreateReplaceRequest(");
+            source.Should().NotContain("FindReplaceDialogPlanner.BuildFindStatus(");
+            source.Should().NotContain("FindReplaceDialogPlanner.BuildReplaceStatus(");
+            source.Should().NotContain("FindReplaceDialogPlanner.BuildReplaceAllStatus(");
+        }
+
+        wpf.Should().Contain("class WpfFindReplaceCommandHost");
         wpf.Should().Contain("FindReplaceDialogPlanner.FindAll(");
         wpf.Should().Contain("FindReplaceDialogPlanner.MatchesExactly(");
-        wpf.Should().Contain("CurrentOptions");
-        wpf.Should().Contain("var found = SelectFrom(start, searchRequest)");
-        wpf.Should().Contain("FindReplaceDialogPlanner.BuildReplaceStatus(request!, found)");
-        wpf.Should().NotContain("BuildReplaceStatus(request!, replaced)");
-        avalonia.Should().Contain("_editor.FindNext(request.Term, request.Options)");
-        avalonia.Should().Contain("_editor.ReplaceNext(request!.Term, request.Replacement, request.Options)");
-        avalonia.Should().Contain("_editor.ReplaceAll(request!.Term, request.Replacement, request.Options)");
+        wpf.Should().Contain("TextPointer from");
+        wpf.Should().Contain("restrictToSelection");
+        avalonia.Should().Contain("class AvaloniaFindReplaceCommandHost");
+        avalonia.Should().Contain("editor.FindNext(request.Term, request.Options)");
+        avalonia.Should().Contain("editor.ReplaceNext(request.Term, request.Replacement, request.Options)");
+        avalonia.Should().Contain("editor.ReplaceAll(request.Term, request.Replacement, request.Options)");
         wpf.Should().NotContain("TextSearch.FindAll(");
         avalonia.Should().NotContain("TextSearch.FindAll(");
+
+        var session = ReadSource("freew", "FreeW.App.Presentation", "Dialogs", "FindReplaceDialogSession.cs");
+        session.Should().Contain("IFindReplaceDialogCommandHost");
+        session.Should().Contain("FindReplaceDialogPlanner.TryCreateSearchRequest(");
+        session.Should().Contain("FindReplaceDialogPlanner.TryCreateReplaceRequest(");
 
         var planner = ReadSource("freew", "FreeW.App.Presentation", "Dialogs", "FindReplaceDialogPlanner.cs");
         planner.Should().Contain(".Any(match => match.Start == 0 && match.Length == text.Length)");
