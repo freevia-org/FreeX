@@ -112,6 +112,7 @@ internal static class PptxChartWriter
                 var preserved = XDocument.Parse(chart.PreservedChartExXml, LoadOptions.PreserveWhitespace);
                 UpdateChartExTitle(preserved, chart);
                 UpdateChartExSeriesLayouts(preserved, chart);
+                UpdateChartExSeriesDataLabels(preserved, chart);
                 if (chart.RegenerateWorkbookOnSave)
                     UpdateChartExData(preserved, chart);
                 if (IsWaterfallChartEx(preserved, chart))
@@ -303,6 +304,118 @@ internal static class PptxChartWriter
             var layoutId = chart.Series[index].ChartExLayoutId;
             if (!string.IsNullOrWhiteSpace(layoutId))
                 series[index].SetAttributeValue("layoutId", layoutId);
+        }
+    }
+
+    /// <summary>
+    /// Updates only the modeled ChartEx series data-label payload. A null model
+    /// value leaves the native element untouched so unsupported family metadata
+    /// remains verbatim.
+    /// </summary>
+    private static void UpdateChartExSeriesDataLabels(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var series = document.Descendants(cx + "plotAreaRegion")
+            .Elements(cx + "series")
+            .ToList();
+
+        if (series.Count == 0 || series.Count != chart.Series.Count)
+            return;
+
+        for (var index = 0; index < series.Count; index++)
+        {
+            var source = chart.Series[index];
+            var pointLabels = source.PointStyles
+                .Where(pair => pair.Value.DataLabels is not null)
+                .ToDictionary(pair => pair.Key, pair => pair.Value.DataLabels!);
+            if (source.DataLabels is null && pointLabels.Count == 0)
+                continue;
+
+            var element = series[index].Element(cx + "dataLabels");
+            if (element is null)
+            {
+                element = new XElement(cx + "dataLabels");
+                var dataId = series[index].Element(cx + "dataId");
+                if (dataId is not null)
+                    dataId.AddBeforeSelf(element);
+                else
+                    series[index].Add(element);
+            }
+
+            foreach (var childName in new[]
+                     { "numFmt", "txPr", "visibility", "separator", "dataLabel", "dataLabelHidden" })
+            {
+                element.Elements(cx + childName).Remove();
+            }
+            element.Attribute("pos")?.Remove();
+            var labels = source.DataLabels;
+            if (labels is not null)
+                AddChartExDataLabelContent(element, labels, cx);
+
+            foreach (var pair in pointLabels.OrderBy(pair => pair.Key))
+            {
+                var point = pair.Value;
+                if (point.Delete == true)
+                {
+                    element.Add(new XElement(cx + "dataLabelHidden",
+                        new XAttribute("idx", pair.Key)));
+                    continue;
+                }
+
+                element.Add(new XElement(cx + "dataLabel",
+                    new XAttribute("idx", pair.Key)));
+                AddChartExDataLabelContent(
+                    element.Elements(cx + "dataLabel").Last(), point, cx);
+            }
+        }
+    }
+
+    private static void AddChartExDataLabelContent(
+        XElement element,
+        ChartDataLabels labels,
+        XNamespace cx)
+    {
+        if (labels.NumberFormat is not null)
+            element.Add(new XElement(cx + "numFmt",
+                new XAttribute("formatCode", labels.NumberFormat),
+                new XAttribute("sourceLinked", "0")));
+
+        var textProperties = BuildChartTextPropertiesEl(labels.TextStyle);
+        if (textProperties is not null)
+            element.Add(new XElement(cx + "txPr", textProperties.Nodes()));
+
+        if (labels.ShowSeriesName || labels.ShowCategoryName || labels.ShowValue)
+        {
+            var visibility = new XElement(cx + "visibility");
+            if (labels.ShowSeriesName)
+                visibility.SetAttributeValue("seriesName", "true");
+            if (labels.ShowCategoryName)
+                visibility.SetAttributeValue("categoryName", "true");
+            if (labels.ShowValue)
+                visibility.SetAttributeValue("value", "true");
+            element.Add(visibility);
+        }
+
+        if (labels.Separator is not null)
+            element.Add(new XElement(cx + "separator", labels.Separator));
+
+        if (labels.Position is { } position)
+        {
+            var token = position switch
+            {
+                DataLabelPosition.Center => "ctr",
+                DataLabelPosition.InsideEnd => "inEnd",
+                DataLabelPosition.OutsideEnd => "outEnd",
+                DataLabelPosition.InsideBase => "inBase",
+                DataLabelPosition.BestFit => "bestFit",
+                DataLabelPosition.Above => "t",
+                DataLabelPosition.Below => "b",
+                DataLabelPosition.Left => "l",
+                DataLabelPosition.Right => "r",
+                _ => null
+            };
+            if (token is not null)
+                element.SetAttributeValue("pos", token);
         }
     }
 

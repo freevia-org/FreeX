@@ -1948,6 +1948,71 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void Edit_NativeChartExSeriesDataLabels_RoundTripsWithoutFlatteningFamilyPayload()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XElement(cxNs + "chartData",
+                    new XElement(cxNs + "data", new XAttribute("id", 0))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData",
+                                        new XElement(cxNs + "v", "Revenue"))),
+                                new XElement(cxNs + "dataLabels",
+                                    new XAttribute("pos", "outEnd"),
+                                    new XElement(cxNs + "numFmt",
+                                        new XAttribute("formatCode", "0.0")),
+                                    new XElement(cxNs + "visibility",
+                                        new XAttribute("value", "true"),
+                                        new XAttribute("categoryName", "false")),
+                                    new XElement(cxNs + "separator", " | "),
+                                    new XElement(cxNs + "dataLabelHidden",
+                                        new XAttribute("idx", 1))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0))))))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+        chart.Categories.AddRange(["Q1", "Q2"]);
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+
+        var importedPath = WriteToPptx(BuildPresWithChart(chart));
+        var imported = PptxPackageReader.Read(importedPath).Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        imported.Series[0].DataLabels.Should().NotBeNull();
+        imported.Series[0].DataLabels!.ShowValue.Should().BeTrue();
+        imported.Series[0].DataLabels!.Position.Should().Be(DataLabelPosition.OutsideEnd);
+        imported.Series[0].DataLabels!.NumberFormat.Should().Be("0.0");
+        imported.Series[0].DataLabels!.Separator.Should().Be(" | ");
+        imported.Series[0].PointStyles[1].DataLabels!.Delete.Should().BeTrue();
+
+        imported.Series[0].DataLabels!.ShowCategoryName = true;
+        imported.Series[0].DataLabels!.ShowValue = false;
+        var editedPath = WriteToPptx(BuildPresWithChart(imported));
+        using var archive = ZipFile.OpenRead(editedPath);
+        var edited = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var labels = edited.Descendants(cxNs + "series").Single()
+            .Element(cxNs + "dataLabels")!;
+        labels.Attribute("pos")!.Value.Should().Be("outEnd");
+        labels.Element(cxNs + "visibility")!.Attribute("categoryName")!.Value.Should().Be("true");
+        labels.Element(cxNs + "visibility")!.Attribute("value").Should().BeNull();
+        labels.Element(cxNs + "dataLabelHidden")!.Attribute("idx")!.Value.Should().Be("1");
+        edited.Descendants(cxNs + "series").Single().Attribute("layoutId")!.Value.Should().Be("histogram");
+    }
+
+    [Fact]
     public void Edit_NativeSingleSeriesChartEx_UpdatesDataWithoutChangingFamilyPayload()
     {
         const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
