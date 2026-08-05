@@ -95,8 +95,8 @@ public sealed partial class MainWindowXamlKeyTipTests
         qatSource.Should().Contain("ExecuteUndo();");
         qatSource.Should().Contain("case QuickAccessToolbarCommandIds.Redo:");
         qatSource.Should().Contain("ExecuteRedo();");
-        commandSource.Should().Contain("_commandBus.Undo(_workbook.Id)");
-        commandSource.Should().Contain("_commandBus.Redo(_workbook.Id)");
+        commandSource.Should().Contain("_session.UndoLastEdit()");
+        commandSource.Should().Contain("_session.RedoLastEdit()");
         commandSource.Should().Contain("RefreshToolbar()");
     }
 

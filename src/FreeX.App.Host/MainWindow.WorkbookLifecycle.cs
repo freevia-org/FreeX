@@ -57,6 +57,7 @@ public partial class MainWindow
             includeObjects: true);
         _workbook = _session.Workbook;
         _currentSheetId = _session.ActiveSheet.Id;
+        ConfigureWorkbookSessionRendererAdapters();
         previousSession.Dispose();
     }
 

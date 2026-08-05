@@ -877,7 +877,10 @@ public sealed class WorkbookSession : IDisposable
         SheetId sheetId,
         GridRange primaryRange,
         IReadOnlyList<GridRange> ranges,
-        CellAddress activeCell)
+        CellAddress activeCell,
+        IReadOnlyCollection<SheetId>? groupedSheetIds = null,
+        SheetId? sheetGroupAnchor = null,
+        CellAddress? formulaEditAddress = null)
     {
         ThrowIfDisposed();
         if (primaryRange.Start.Sheet != sheetId || primaryRange.End.Sheet != sheetId)
@@ -892,9 +895,24 @@ public sealed class WorkbookSession : IDisposable
 
         if (!primaryRange.Contains(activeCell))
             throw new ArgumentOutOfRangeException(nameof(activeCell), "The active cell must be inside the primary range.");
+        if (formulaEditAddress is { } editAddress &&
+            (!IsValidAddress(editAddress) || Workbook.GetSheet(editAddress.Sheet) is null))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(formulaEditAddress),
+                "The formula edit cell must belong to an existing worksheet and be inside the worksheet bounds.");
+        }
 
         if (ActiveSheet.Id != sheetId)
             RememberActiveWorksheetSelection();
+
+        if (groupedSheetIds is not null)
+        {
+            SetGroupedSheetIds(groupedSheetIds, sheetId);
+            _sheetGroupAnchor = sheetGroupAnchor is { } anchor && _groupedSheetIds.Contains(anchor)
+                ? anchor
+                : sheetId;
+        }
 
         var selection = _sheetSelectionService.SelectSheet(Workbook, sheetId, _groupedSheetIds);
         if (selection.Sheet.Id != sheetId)
@@ -909,7 +927,7 @@ public sealed class WorkbookSession : IDisposable
         ActiveCell = activeCell;
         ActiveSheet.ActiveRow = activeCell.Row;
         ActiveSheet.ActiveCol = activeCell.Col;
-        FormulaEditAddress = null;
+        FormulaEditAddress = formulaEditAddress;
     }
 
     /// <summary>
@@ -2559,42 +2577,21 @@ public sealed class WorkbookSession : IDisposable
         ArgumentNullException.ThrowIfNull(text);
 
         var address = FormulaEditAddress ?? ActiveCell;
-
-        var plan = CellEntryCommitPlanner.BuildSingle(
+        var failure = TryBuildValidatedCellEntryEdits(
             text,
-            address,
+            [address],
             useR1C1ReferenceStyle,
-            Workbook);
-        if (!plan.Success)
-            return new WorkbookCellEditResult(false, plan.ErrorMessage, [], RecalcReport: null);
-
-        var cell = plan.Edits[0].NewCell;
-
-        // Enforce data validation the same way the WPF host's TryCreateCellFromEntryText does: a
-        // Stop-alert rule blocks the entry outright, while a Warning/Information ("AskToContinue")
-        // rule asks the host via DataValidationPromptResolver (Warning: Yes/No/Cancel;
-        // Information: OK/Cancel) -- Yes/OK still commits the invalid value, anything else does
-        // not. A host that hasn't wired DataValidationPromptResolver keeps this session's
-        // original pass-through behavior for AskToContinue rules (silently accepted).
-        var check = EvaluateDataValidationForEntry(cell, address);
-        if (check.Outcome == DataValidationEntryOutcome.Blocked)
-            return new WorkbookCellEditResult(false, check.Message, [], RecalcReport: null);
-
-        if (check.Outcome == DataValidationEntryOutcome.NeedsConfirmation &&
-            DataValidationPromptResolver is { } resolvePrompt)
-        {
-            var decision = resolvePrompt(new DataValidationPromptRequest(check.Message!, check.Title!, check.AlertStyle));
-            if (decision is not (UserMessageResult.Yes or UserMessageResult.Ok))
-                return new WorkbookCellEditResult(false, check.Message, [], RecalcReport: null);
-        }
+            out var edits);
+        if (failure is not null)
+            return failure;
 
         // Formula point mode can leave the visible sheet on the reference target while the edit
         // belongs to the original source sheet. Build the command against the source sheet in that
         // case; using the visible ActiveSheet here would write the source address into the pointed
         // sheet and leave the real edit cell untouched.
         var editCommand = address.Sheet.Equals(ActiveSheet.Id)
-            ? CreateEditCellsCommand([(address, cell)])
-            : new EditCellsCommand(address.Sheet, [(address, cell)]);
+            ? CreateEditCellsCommand(edits)
+            : new EditCellsCommand(address.Sheet, edits);
         var result = _cellEditService.ExecuteEditCommand(Workbook, editCommand);
 
         if (!result.Success)
@@ -2604,6 +2601,123 @@ public sealed class WorkbookSession : IDisposable
         GrowRowHeightForAlreadyWrappedCellIfNeeded(address);
         CancelPendingCutAfterMutatingEdit();
         return result;
+    }
+
+    /// <summary>
+    /// Commits one entry to every cell in the current single- or multi-area selection as one
+    /// undoable command while preserving the selection. Both desktop renderers use this for
+    /// Ctrl+Enter, so parsing, validation, grouped-sheet targeting, recalculation, and dirty-state
+    /// ownership stay in the application session.
+    /// </summary>
+    public WorkbookCellEditResult CommitCellTextAcrossSelection(
+        string text,
+        bool useR1C1ReferenceStyle = false)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var primaryRange = SelectedRange;
+        var selectedRanges = SelectedRanges.Count > 0
+            ? SelectedRanges.ToArray()
+            : [primaryRange];
+        var addresses = new List<CellAddress>();
+        var seenAddresses = new HashSet<CellAddress>();
+        foreach (var range in selectedRanges)
+        {
+            ValidateSelectionRange(range, nameof(SelectedRanges));
+            foreach (var address in range.AllCells())
+            {
+                if (seenAddresses.Add(address))
+                    addresses.Add(address);
+            }
+        }
+
+        if (addresses.Count == 0)
+            return new WorkbookCellEditResult(false, "The current selection contains no cells.", [], null);
+
+        var failure = TryBuildValidatedCellEntryEdits(
+            text,
+            addresses,
+            useR1C1ReferenceStyle,
+            out var edits);
+        if (failure is not null)
+            return failure;
+
+        var activeCell = ActiveCell;
+        var result = _cellEditService.ExecuteEditCommand(Workbook, CreateEditCellsCommand(edits));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulSelectionEditResult(result, primaryRange, selectedRanges, activeCell);
+        foreach (var address in addresses)
+            GrowRowHeightForAlreadyWrappedCellIfNeeded(address);
+        CancelPendingCutAfterMutatingEdit();
+        return result;
+    }
+
+    private WorkbookCellEditResult? TryBuildValidatedCellEntryEdits(
+        string text,
+        IReadOnlyList<CellAddress> addresses,
+        bool useR1C1ReferenceStyle,
+        out IReadOnlyList<(CellAddress Address, Cell NewCell)> edits)
+    {
+        var plan = CellEntryCommitPlanner.BuildSelection(
+            text,
+            addresses,
+            useR1C1ReferenceStyle,
+            Workbook);
+        if (!plan.Success)
+        {
+            edits = [];
+            return new WorkbookCellEditResult(
+                false,
+                plan.ErrorMessage,
+                [],
+                RecalcReport: null,
+                new WorkbookCellEditFailure(WorkbookCellEditFailureKind.InvalidEntrySyntax));
+        }
+
+        foreach (var (address, cell) in plan.Edits)
+        {
+            var check = EvaluateDataValidationForEntry(cell, address);
+            if (check.Outcome == DataValidationEntryOutcome.Blocked)
+            {
+                edits = [];
+                return new WorkbookCellEditResult(
+                    false,
+                    check.Message,
+                    [],
+                    RecalcReport: null,
+                    new WorkbookCellEditFailure(
+                        WorkbookCellEditFailureKind.DataValidationBlocked,
+                        check.Title,
+                        check.AlertStyle));
+            }
+
+            if (check.Outcome != DataValidationEntryOutcome.NeedsConfirmation ||
+                DataValidationPromptResolver is not { } resolvePrompt)
+            {
+                continue;
+            }
+
+            var decision = resolvePrompt(new DataValidationPromptRequest(check.Message!, check.Title!, check.AlertStyle));
+            if (decision is UserMessageResult.Yes or UserMessageResult.Ok)
+                continue;
+
+            edits = [];
+            return new WorkbookCellEditResult(
+                false,
+                check.Message,
+                [],
+                RecalcReport: null,
+                new WorkbookCellEditFailure(
+                    WorkbookCellEditFailureKind.DataValidationDeclined,
+                    check.Title,
+                    check.AlertStyle,
+                    decision));
+        }
+
+        edits = plan.Edits;
+        return null;
     }
 
     /// <summary>
@@ -5944,6 +6058,24 @@ public sealed class WorkbookSession : IDisposable
         ActiveSheet.ActiveRow = ActiveCell.Row;
         ActiveSheet.ActiveCol = ActiveCell.Col;
         SetSingleSelectedRange(selectedRange);
+        FormulaEditAddress = null;
+        RefreshLinkedPicturesForEditedCells(result);
+        MarkDirty();
+        _selectionStatsRevision++;
+        RefreshViewport();
+        EnsureActiveCellVisible();
+    }
+
+    private void ApplySuccessfulSelectionEditResult(
+        WorkbookCellEditResult result,
+        GridRange primaryRange,
+        IReadOnlyList<GridRange> selectedRanges,
+        CellAddress activeCell)
+    {
+        ActiveCell = primaryRange.Contains(activeCell) ? activeCell : primaryRange.Start;
+        ActiveSheet.ActiveRow = ActiveCell.Row;
+        ActiveSheet.ActiveCol = ActiveCell.Col;
+        SetSelectedRanges(primaryRange, selectedRanges);
         FormulaEditAddress = null;
         RefreshLinkedPicturesForEditedCells(result);
         MarkDirty();

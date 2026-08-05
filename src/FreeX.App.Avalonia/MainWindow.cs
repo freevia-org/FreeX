@@ -9961,7 +9961,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var text = editor.Text ?? _inlineCellEditText ?? "";
             _formulaBox.Text = text;
             ClearInlineCellEditorState();
-            if (CommitEditAcrossSelection(address, text))
+            if (CommitEditAcrossSelection(text))
             {
                 ClearFormulaRangeEntryState();
                 RefreshShell("Ready");
@@ -19562,7 +19562,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             {
                 ShowSaveIssue("Finish saving before editing cells.");
             }
-            else if (CommitEditAcrossSelection(current, _formulaBox.Text ?? ""))
+            else if (CommitEditAcrossSelection(_formulaBox.Text ?? ""))
             {
                 ClearFormulaRangeEntryState();
                 RefreshShell("Ready");
@@ -20057,7 +20057,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // cell of the current selection as a single undoable command, mirroring the WPF host's
     // CommitEditAcrossSelection (MainWindow.Editing.cs). Unlike CommitAndMove, the selection is
     // not collapsed to one cell -- Excel keeps the whole range selected after a Ctrl+Enter fill.
-    private bool CommitEditAcrossSelection(CellAddress current, string text)
+    private bool CommitEditAcrossSelection(string text)
     {
         if (_isOpening || _isSaving)
         {
@@ -20065,36 +20065,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return false;
         }
 
-        var range = _session.SelectedRange;
-        var plan = CellEntryCommitPlanner.BuildSelection(
-            text,
-            range.AllCells(),
-            UseR1C1ReferenceStyle);
-        if (!plan.Success)
-        {
-            // Matches Excel's own refusal to commit a genuinely malformed formula (e.g. an
-            // unbalanced "=SUM(A1") for a Ctrl+Enter fill-across-selection entry, instead of
-            // silently persisting broken formula text into every selected cell
-            // (R91-formula-editing-assist-5-4).
-            ShowEditIssue(plan.ErrorMessage!);
-            return false;
-        }
-
-        if (plan.Edits.Count == 0)
-            return false;
-
-        var result = _session.ExecuteReviewCommand(
-            new EditCellsCommand(_session.ActiveSheet.Id, plan.Edits),
-            fallbackAddress: current);
+        var result = _session.CommitCellTextAcrossSelection(text, UseR1C1ReferenceStyle);
 
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Edit failed");
             return false;
         }
-
-        if (range.CellCount > 1)
-            _session.SelectRange(range);
 
         _formulaBoxEditOriginalText = null;
         ClearFormulaRangeEntryState();

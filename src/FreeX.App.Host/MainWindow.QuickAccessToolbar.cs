@@ -328,8 +328,8 @@ public partial class MainWindow
 
     private QuickAccessCommandState CreateQuickAccessCommandState() =>
         new(
-            _commandBus.CanUndo(_workbook.Id),
-            _commandBus.CanRedo(_workbook.Id),
+            _session.CanUndo,
+            _session.CanRedo,
             HasActiveWorksheetForQuickAccessCommandState(),
             HasSelectionForQuickAccessCommandState());
 
@@ -394,13 +394,10 @@ public partial class MainWindow
 
     private IReadOnlyList<CommandHistoryEntry> GetQuickAccessHistoryEntries(string commandId)
     {
-        if (_commandBus is not ICommandHistoryProvider historyProvider)
-            return [];
-
         return commandId switch
         {
-            QuickAccessToolbarCommandIds.Undo => historyProvider.GetUndoHistory(_workbook.Id, QuickAccessHistoryMaxCount),
-            QuickAccessToolbarCommandIds.Redo => historyProvider.GetRedoHistory(_workbook.Id, QuickAccessHistoryMaxCount),
+            QuickAccessToolbarCommandIds.Undo => _session.GetUndoHistory(QuickAccessHistoryMaxCount),
+            QuickAccessToolbarCommandIds.Redo => _session.GetRedoHistory(QuickAccessHistoryMaxCount),
             _ => []
         };
     }

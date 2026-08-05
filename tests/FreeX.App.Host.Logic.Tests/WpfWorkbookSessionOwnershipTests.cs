@@ -64,12 +64,49 @@ public sealed class WpfWorkbookSessionOwnershipTests
     }
 
     [Fact]
+    public void MainWindow_CellCommitAndHistory_ExecuteThroughWorkbookSession()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
+            try
+            {
+                var sheet = workbook.GetSheetAt(0);
+                var address = new CellAddress(sheet.Id, 3, 2);
+                R49MainWindowTestHarness.Invoke(window, "SetActiveCell", address);
+                window.FormulaBar.Text = "=1+1";
+
+                R49MainWindowTestHarness.Invoke(window, "CommitEdit").Should().Be(true);
+
+                sheet.GetCell(address)!.Value.Should().Be(new NumberValue(2));
+                window.Session.IsDirty.Should().BeTrue();
+                window.Session.CanUndo.Should().BeTrue();
+
+                R49MainWindowTestHarness.Invoke(window, "ExecuteUndo").Should().Be(true);
+                sheet.GetCell(address).Should().BeNull();
+                window.Session.CanRedo.Should().BeTrue();
+                window.SheetGrid.SelectedRange.Should().Be(new GridRange(address, address));
+
+                R49MainWindowTestHarness.Invoke(window, "ExecuteRedo").Should().Be(true);
+                sheet.GetCell(address)!.Value.Should().Be(new NumberValue(2));
+                window.Session.ActiveCell.Should().Be(address);
+            }
+            finally
+            {
+                R49MainWindowTestHarness.Close(window);
+            }
+        });
+    }
+
+    [Fact]
     public void MainWindow_SourceKeepsWorkbookSessionAsTheLifecycleOwner()
     {
         var mainWindow = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "MainWindow.xaml.cs");
         var lifecycle = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "MainWindow.WorkbookLifecycle.cs");
         var backstage = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "MainWindow.Backstage.cs");
         var multiWindow = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "MainWindow.MultiWindow.cs");
+        var editing = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "MainWindow.Editing.cs");
+        var commandExecution = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "MainWindow.CommandExecution.cs");
 
         mainWindow.Should().Contain("private WorkbookSession _session;");
         mainWindow.Should().NotContain("private WorkbookDocumentState _documentState;");
@@ -80,6 +117,16 @@ public sealed class WpfWorkbookSessionOwnershipTests
         backstage.Should().NotContain("_workbook = plan.Workbook;");
         multiWindow.Should().Contain("_session.CreateSiblingView(");
         multiWindow.Should().NotContain("_documentState");
+        editing.Should().Contain("_session.CommitCellText(");
+        editing.Should().Contain("_session.CommitCellTextAcrossSelection(");
+        editing.Should().NotContain("private bool TryCreateCellFromEntryText(");
+        editing.Should().NotContain("RegisterFormulaDependencies");
+        commandExecution.Should().Contain("_session.UndoLastEdit()");
+        commandExecution.Should().Contain("_session.RedoLastEdit()");
+        commandExecution.Should().Contain("_session.RepeatLastAction()");
+        commandExecution.Should().NotContain("_commandBus.Undo(");
+        commandExecution.Should().NotContain("_commandBus.Redo(");
+        commandExecution.Should().NotContain("_commandBus.RepeatLast(");
     }
 
     private static Workbook GetWorkbookMirror(MainWindow window) =>

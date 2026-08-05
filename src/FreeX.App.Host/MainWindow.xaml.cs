@@ -369,6 +369,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
             throw new ArgumentException("The supplied workbook session must own the supplied workbook.", nameof(workbookSession));
         _workbook = _session.Workbook;
         _currentSheetId = _session.ActiveSheet.Id;
+        ConfigureWorkbookSessionRendererAdapters();
         _options = options ?? FreeXOptions.Load();
         _windowRegistry = windowRegistry;
         // A window handed a workbook that a registered window already views is a secondary view

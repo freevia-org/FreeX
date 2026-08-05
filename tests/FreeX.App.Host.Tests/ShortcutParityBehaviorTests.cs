@@ -613,12 +613,12 @@ public sealed class ShortcutParityBehaviorTests
     }
 
     [Fact]
-    public void RepeatLastAction_RoutesToCommandBusRepeatLastWithSelectionTracking()
+    public void RepeatLastAction_RoutesToWorkbookSessionWithSelectionTracking()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CommandExecution.cs");
 
         source.Should().Contain("ExecuteRepeatLast");
-        source.Should().Contain("_commandBus.RepeatLast");
+        source.Should().Contain("_session.RepeatLastAction()");
     }
 
     [Fact]

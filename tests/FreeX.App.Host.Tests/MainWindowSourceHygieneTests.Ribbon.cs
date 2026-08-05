@@ -525,8 +525,8 @@ public sealed partial class MainWindowSourceHygieneTests
         qatSource.Should().Contain("private void RefreshQuickAccessToolbarCommandStates(bool force = false)");
         qatSource.Should().Contain("private void RefreshQuickAccessToolbarCommandStatesAfterSelectionChange()");
         qatSource.Should().Contain("private QuickAccessCommandState CreateQuickAccessCommandState()");
-        qatSource.Should().Contain("_commandBus.CanUndo(_workbook.Id)");
-        qatSource.Should().Contain("_commandBus.CanRedo(_workbook.Id)");
+        qatSource.Should().Contain("_session.CanUndo");
+        qatSource.Should().Contain("_session.CanRedo");
         qatSource.Should().Contain("HasActiveWorksheetForQuickAccessCommandState()");
         qatSource.Should().Contain("HasSelectionForQuickAccessCommandState()");
         qatSource.Should().Contain("state.WithSelectionContext(");
@@ -535,9 +535,8 @@ public sealed partial class MainWindowSourceHygieneTests
         qatSource.Should().Contain("GetQuickAccessHistoryButtonName(command.Id)");
         qatSource.Should().Contain("\"UndoQatHistoryBtn\"");
         qatSource.Should().Contain("\"RedoQatHistoryBtn\"");
-        qatSource.Should().Contain("_commandBus is not ICommandHistoryProvider historyProvider");
-        qatSource.Should().Contain("historyProvider.GetUndoHistory(_workbook.Id, QuickAccessHistoryMaxCount)");
-        qatSource.Should().Contain("historyProvider.GetRedoHistory(_workbook.Id, QuickAccessHistoryMaxCount)");
+        qatSource.Should().Contain("_session.GetUndoHistory(QuickAccessHistoryMaxCount)");
+        qatSource.Should().Contain("_session.GetRedoHistory(QuickAccessHistoryMaxCount)");
         qatSource.Should().Contain("private void ExecuteQuickAccessHistory(string commandId, int actionCount)");
         qatSource.Should().Contain("QuickAccessToolbarCommandIds.Undo => ExecuteUndo()");
         qatSource.Should().Contain("QuickAccessToolbarCommandIds.Redo => ExecuteRedo()");

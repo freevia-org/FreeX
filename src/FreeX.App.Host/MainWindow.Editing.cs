@@ -1519,10 +1519,11 @@ public partial class MainWindow
         var addr = _formulaEditCell ?? SheetGrid.SelectedRange!.Value.Start;
         var text = FormulaBar.Text;
 
-        if (!TryCreateCellFromEntryText(addr, text, out var newCell))
-            return false;
-
-        var committed = CommitPreparedEdits([(addr, newCell)], text, [addr], "Edit Cell");
+        SynchronizeWorkbookSessionSelection();
+        var committed = CompleteWorkbookSessionCellCommit(
+            _session.CommitCellText(text, _options.UseR1C1ReferenceStyle),
+            addr,
+            "Edit Cell");
         if (committed)
             ClearFormulaRangeEntryState();
         return committed;
@@ -1531,162 +1532,48 @@ public partial class MainWindow
     private bool CommitEditAcrossSelection(bool fillFormulaEditCellOnly = false)
     {
         if (SheetGrid.SelectedRange is not { } range) return false;
+        SynchronizeWorkbookSessionSelection();
         if (fillFormulaEditCellOnly && _formulaEditCell is { } formulaCell)
         {
             var formulaText = FormulaBar.Text;
-            if (!TryCreateCellFromEntryText(formulaCell, formulaText, out var newCell))
-                return false;
-
-            var committed = CommitPreparedEdits([(formulaCell, newCell)], formulaText, [formulaCell], "Edit Cell");
+            var committed = CompleteWorkbookSessionCellCommit(
+                _session.CommitCellText(formulaText, _options.UseR1C1ReferenceStyle),
+                formulaCell,
+                "Edit Cell");
             if (committed)
                 ClearFormulaRangeEntryState();
             return committed;
         }
 
         var text = FormulaBar.Text;
-        // Ctrl+Enter fills EVERY selected area of a Ctrl+click multi-area selection with the same
-        // entry, not just the active area (R49-render-multiarea-selection-3-3). GetCurrentSelectionRanges
-        // resolves SheetGrid.SelectedRanges (falling back to just `range` for the ordinary
-        // single-area case), matching the same helper Clear/Format commands already use for this
-        // scenario.
-        var areas = GetCurrentSelectionRanges(range);
-        var edits = new List<(CellAddress Address, Cell NewCell)>();
-        var seenAddresses = new HashSet<CellAddress>();
-        foreach (var area in areas)
-        {
-            foreach (var address in area.AllCells())
-            {
-                if (!seenAddresses.Add(address))
-                    continue;
-                if (!TryCreateCellFromEntryText(address, text, out var newCell))
-                    return false;
-
-                edits.Add((address, newCell));
-            }
-        }
-
-        if (edits.Count == 0)
-            return false;
-
-        var selectionCommitted = CommitPreparedEdits(
-            edits,
-            text,
-            edits.Select(edit => edit.Address).ToList(),
+        var selectionCommitted = CompleteWorkbookSessionCellCommit(
+            _session.CommitCellTextAcrossSelection(text, _options.UseR1C1ReferenceStyle),
+            range.Start,
             "Edit Selection");
         if (selectionCommitted)
             ClearFormulaRangeEntryState();
         return selectionCommitted;
     }
 
-    private bool TryCreateCellFromEntryText(CellAddress addr, string text, out Cell newCell)
+    private void ConfigureWorkbookSessionRendererAdapters() =>
+        _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
+
+    private UserMessageResult ResolveDataValidationPrompt(DataValidationPromptRequest request)
     {
-        var plan = CellEntryCommitPlanner.BuildSingle(
-            text,
-            addr,
-            _options.UseR1C1ReferenceStyle,
-            _workbook);
-        if (!plan.Success)
-        {
-            // Matches Excel's own "we found an error in this formula" refusal to leave edit mode
-            // for genuinely malformed formula syntax (e.g. an unbalanced "=SUM(A1") -- reject the
-            // entry outright instead of silently committing broken formula text that would
-            // otherwise only ever surface as a #VALUE! error later, during recalculation
-            // (R91-formula-editing-assist-5-4).
-            newCell = null!;
-            ShowOwnedMessage(
-                "Microsoft Excel found an error in this formula. Please check the formula and try again.",
-                "Microsoft Excel",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-            return false;
-        }
-
-        newCell = plan.Edits[0].NewCell;
-
-        var validationSheet = _workbook.GetSheet(_currentSheetId);
-        if (validationSheet != null)
-        {
-            var value = ComputeValueForValidation(newCell, validationSheet, _workbook, addr);
-
-            var applicableRules = DataValidationService.GetApplicable(validationSheet, addr);
-
-            DataValidation? violatingRule = null;
-            string? violationMsg = null;
-            foreach (var dv in applicableRules)
+        Activate();
+        return _messageService.ShowMessage(
+            request.Message,
+            request.Title,
+            request.AlertStyle == DvAlertStyle.Information
+                ? UserMessageButtons.OkCancel
+                : UserMessageButtons.YesNoCancel,
+            request.AlertStyle switch
             {
-                var msg = DataValidationService.Validate(dv, value, validationSheet, addr, _workbook);
-                if (msg != null) { violatingRule = dv; violationMsg = msg; break; }
-            }
-
-            if (violationMsg != null && violatingRule != null)
-            {
-                var dvRule = violatingRule;
-                var action = DataValidationService.GetInvalidEntryAction(dvRule);
-                if (action == DataValidationInvalidEntryAction.Block)
-                {
-                    var icon = dvRule.AlertStyle switch
-                    {
-                        DvAlertStyle.Information => MessageBoxImage.Information,
-                        DvAlertStyle.Warning => MessageBoxImage.Warning,
-                        _ => MessageBoxImage.Error
-                    };
-                    ShowOwnedMessage(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
-                        MessageBoxButton.OK, icon);
-                    RefreshValidationDropdown();
-                    return false;
-                }
-
-                if (action == DataValidationInvalidEntryAction.AskToContinue)
-                {
-                    var icon = dvRule.AlertStyle switch
-                    {
-                        DvAlertStyle.Information => MessageBoxImage.Information,
-                        DvAlertStyle.Warning => MessageBoxImage.Warning,
-                        _ => MessageBoxImage.Error
-                    };
-                    // Excel's three AskToContinue alert styles offer different button sets:
-                    // Information is OK/Cancel (OK = accept, Cancel = stay in the cell to
-                    // re-edit); Warning is Yes/No/Cancel (Yes = accept, No = stay in the cell
-                    // to re-edit, Cancel = discard the entry and restore the prior value).
-                    var buttons = dvRule.AlertStyle == DvAlertStyle.Information
-                        ? MessageBoxButton.OKCancel
-                        : MessageBoxButton.YesNoCancel;
-                    var result = ShowOwnedMessage(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
-                        buttons, icon);
-                    if (ShouldRestoreOnCancel(dvRule.AlertStyle, result))
-                    {
-                        RefreshValidationDropdown();
-                        RestoreFormulaBarToCommittedValue(addr);
-                        return false;
-                    }
-
-                    if (result is MessageBoxResult.No or MessageBoxResult.Cancel)
-                    {
-                        RefreshValidationDropdown();
-                        return false;
-                    }
-                }
-            }
-        }
-
-        return true;
+                DvAlertStyle.Information => UserMessageIcon.Information,
+                DvAlertStyle.Warning => UserMessageIcon.Warning,
+                _ => UserMessageIcon.Error
+            });
     }
-
-    /// <summary>
-    /// Computes the value a newly-entered cell should be validated against for data-validation
-    /// purposes. A freshly-parsed formula cell (<see cref="Cell.FromFormula"/>) has its
-    /// <see cref="Cell.Value"/> left at the default <c>BlankValue.Instance</c> — the calc engine
-    /// only populates it later, asynchronously, once the edit is committed. Validating against
-    /// that placeholder blank instead of the formula's COMPUTED result silently bypasses (when
-    /// AllowBlank is true) or wrongly blocks (when AllowBlank is false) every data-validation rule
-    /// whenever the user types a formula rather than a literal. This evaluates the formula text
-    /// up front, purely for the validation decision; the cell's real <see cref="Cell.Value"/> is
-    /// still (re)computed by the calc engine on recalculation after the edit commits.
-    /// </summary>
-    internal static ScalarValue ComputeValueForValidation(Cell newCell, Sheet sheet, Workbook workbook, CellAddress addr) =>
-        newCell.HasFormula
-            ? new FormulaEvaluator().Evaluate(newCell.FormulaText!, sheet, workbook, currentCell: addr)
-            : newCell.Value;
 
     /// <summary>
     /// Decides whether a Cancel response to an AskToContinue data-validation alert should discard
@@ -1713,53 +1600,96 @@ public partial class MainWindow
         ClearFormulaRangeEntryState();
     }
 
-    private bool CommitPreparedEdits(
-        IReadOnlyList<(CellAddress Address, Cell NewCell)> edits,
-        string text,
-        IReadOnlyList<CellAddress> fallbackAffectedCells,
+    private bool CompleteWorkbookSessionCellCommit(
+        WorkbookCellEditResult result,
+        CellAddress editedAddress,
         string title)
     {
-        if (!TryExecuteEditCells(edits, title, out var outcome))
+        if (result.Success || result.Failure is null)
+        {
+            RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
+            {
+                ["command"] = title,
+                ["status"] = result.Success ? "succeeded" : "failed"
+            });
+        }
+
+        if (!result.Success)
+        {
+            ShowWorkbookSessionCellEditFailure(result, editedAddress, title);
             return false;
-
-        var affectedCells = outcome.AffectedCells ?? fallbackAffectedCells;
-        if (text.StartsWith("="))
-        {
-            // For now, we manually register dependencies because we haven't automated this in the command yet.
-            try
-            {
-                foreach (var affected in affectedCells)
-                {
-                    var formulaA1 = _options.UseR1C1ReferenceStyle
-                        ? FormulaReferenceStyleService.ToA1(text.Substring(1), affected)
-                        : text.Substring(1);
-                    var lexer = new Lexer("=" + formulaA1);
-                    var parser = new Parser(lexer.Tokenize());
-                    var ast = parser.Parse();
-                    _recalcEngine.RegisterFormulaDependencies(affected, ast, affected.Sheet, _workbook);
-                }
-            }
-            catch
-            {
-                // Formula syntax is invalid; clear stale dependencies so this cell
-                // does not incorrectly depend on previously-referenced cells.
-                foreach (var affected in affectedCells)
-                    _recalcEngine.ClearFormulaDependencies(affected);
-            }
-        }
-        else
-        {
-            foreach (var affected in affectedCells)
-                _recalcEngine.ClearFormulaDependencies(affected);
         }
 
-        RecalculateIfAutomatic(affectedCells);
+        if (_internalClipboard is not null || SheetGrid.ClipboardRange is not null)
+        {
+            _internalClipboard = null;
+            ClearClipboardVisualState();
+        }
+
+        ApplyWorkbookSessionSelectionToRenderer();
+        InvalidateNavigationCaches();
+        UpdateTitleBar();
+        _windowRegistry?.NotifyDocumentStateChanged(this);
         UpdateViewport();
         RefreshStatusBar();
         RefreshValidationDropdown();
         RefreshDvInputMessage();
+        NotifyOtherWindowsOfWorkbookChange();
         return true;
     }
+
+    private void ShowWorkbookSessionCellEditFailure(
+        WorkbookCellEditResult result,
+        CellAddress editedAddress,
+        string title)
+    {
+        switch (result.Failure)
+        {
+            case { Kind: WorkbookCellEditFailureKind.InvalidEntrySyntax }:
+                ShowOwnedMessage(
+                    "Microsoft Excel found an error in this formula. Please check the formula and try again.",
+                    "Microsoft Excel",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                return;
+
+            case
+            {
+                Kind: WorkbookCellEditFailureKind.DataValidationBlocked,
+                AlertStyle: { } alertStyle
+            } blocked:
+                ShowOwnedMessage(
+                    result.ErrorMessage ?? "The value is not valid.",
+                    blocked.Title ?? "Validation Error",
+                    MessageBoxButton.OK,
+                    ToDataValidationMessageBoxImage(alertStyle));
+                RefreshValidationDropdown();
+                return;
+
+            case
+            {
+                Kind: WorkbookCellEditFailureKind.DataValidationDeclined,
+                AlertStyle: { } alertStyle,
+                PromptDecision: { } decision
+            }:
+                RefreshValidationDropdown();
+                if (ShouldRestoreOnCancel(alertStyle, ToMessageBoxResult(decision)))
+                    RestoreFormulaBarToCommittedValue(editedAddress);
+                return;
+
+            default:
+                ShowCommandError(new CommandOutcome(false, result.ErrorMessage), title);
+                return;
+        }
+    }
+
+    private static MessageBoxImage ToDataValidationMessageBoxImage(DvAlertStyle alertStyle) =>
+        alertStyle switch
+        {
+            DvAlertStyle.Information => MessageBoxImage.Information,
+            DvAlertStyle.Warning => MessageBoxImage.Warning,
+            _ => MessageBoxImage.Error
+        };
 
     private void UpdateTitleBar()
     {

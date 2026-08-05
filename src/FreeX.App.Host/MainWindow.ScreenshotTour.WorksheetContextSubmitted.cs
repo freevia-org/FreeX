@@ -184,8 +184,8 @@ public partial class MainWindow
                 "ClearContentsCommand on protected locked B13",
                 protectedOutcome.Success,
                 protectedOutcome.ErrorMessage ?? "",
-                _commandBus.CanUndo(_workbook.Id),
-                _commandBus.CanRedo(_workbook.Id)));
+                _session.CanUndo,
+                _session.CanRedo));
             captures.Add(await CaptureWorksheetContextSubmittedWindowAsync(
                 outputDir,
                 context,
@@ -415,8 +415,8 @@ public partial class MainWindow
             commandRoute,
             true,
             "",
-            _commandBus.CanUndo(_workbook.Id),
-            _commandBus.CanRedo(_workbook.Id)));
+            _session.CanUndo,
+            _session.CanRedo));
     }
 
     private CommandOutcome ExecuteWorksheetContextSubmittedProtectedBlockedCommand(WorksheetContextSubmittedTourContext context)
@@ -561,8 +561,8 @@ public partial class MainWindow
             SelectedRange: SheetGrid.SelectedRange?.ToString() ?? string.Empty,
             ActiveSheetName: _workbook.GetSheet(_currentSheetId)?.Name ?? "",
             WorkbookDirty: _workbookDirty,
-            CanUndo: _commandBus.CanUndo(_workbook.Id),
-            CanRedo: _commandBus.CanRedo(_workbook.Id),
+            CanUndo: _session.CanUndo,
+            CanRedo: _session.CanRedo,
             NoteExists: context.Sheet.Comments.ContainsKey(context.NoteCell),
             ThreadedCommentResolved: context.Sheet.ThreadedComments.TryGetValue(context.ThreadedCommentCell, out var threaded) && threaded.IsResolved,
             HyperlinkExists: context.Sheet.Hyperlinks.ContainsKey(context.HyperlinkCell),

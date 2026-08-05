@@ -255,7 +255,7 @@ public sealed class R75_ClipboardMarqueeOverlayTests
             "source range the user has since overwritten");
 
         var commitAcrossSelectionBody = ExtractMethodBody(
-            source, "private bool CommitEditAcrossSelection(CellAddress current, string text)");
+            source, "private bool CommitEditAcrossSelection(string text)");
         commitAcrossSelectionBody.Should().Contain("SetClipboardMarquee(null, isCut: false);",
             "the Ctrl+Enter fill-selection commit path must cancel the marquee identically to the single-cell commit");
     }

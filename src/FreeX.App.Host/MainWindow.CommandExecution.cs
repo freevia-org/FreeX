@@ -513,90 +513,10 @@ public partial class MainWindow
         TryExecuteGroupedSheetCommand(title, createCommand, out _);
 
     private bool ExecuteUndo()
-    {
-        var outcome = _commandBus.Undo(_workbook.Id);
-        if (!outcome.Success)
-            return false;
-
-        // After undo, check whether the stack has returned to the save point.
-        // If so, restore the clean state; otherwise mark dirty. The version check (in addition
-        // to the raw depth) guards against a trim-then-refill aliasing the save-point depth with
-        // different entries than were actually on the stack at save time.
-        if (!_session.TryMarkCleanIfAtSavePoint())
-            MarkWorkbookDirty();
-        else
-        {
-            // Cleaned via save-point — still update title bar and fan out.
-            UpdateTitleBar();
-            _windowRegistry?.NotifyDocumentStateChanged(this);
-
-            // The workbook is clean again, but any autosave snapshot written while it was dirty
-            // (between the save point and this undo) is now stale — it reflects edits that have
-            // been undone away. Delete it so a later crash (even one before any new edit) does
-            // not surface stale, already-superseded content as a false "recover unsaved changes?"
-            // prompt for a document the user believes was never left dirty (M10).
-            NotifyAutosaveSaved();
-        }
-
-        InvalidateNavigationCaches();
-        RecalculateAfterCommandOutcome(outcome);
-        RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
-        // R88-commands-undo-redo-coalescing-5-1: Excel switches the active sheet and reselects the
-        // edited range so the user immediately sees what was reverted, even when they had navigated
-        // away to a different sheet (or a different part of the current sheet) before pressing
-        // Ctrl+Z. Must run before SyncWindowViewState/UpdateViewport below so both act on the
-        // now-current sheet.
-        RestoreSelectionAfterUndoRedo(outcome);
-        // Undo can revert a view-mode/zoom change THIS window itself made; re-adopt the current
-        // sheet's now-reverted values into this window's own view-state cache before rendering,
-        // or the stale cached override would mask the undo (R83-app-view-modes-5-1).
-        SyncWindowViewState([_currentSheetId]);
-        UpdateViewport();
-        RefreshToolbar();
-        RefreshStatusBar();
-        NotifyOtherWindowsOfWorkbookChange();
-        return true;
-    }
+        => ApplyWorkbookSessionHistoryResult(_session.UndoLastEdit());
 
     private bool ExecuteRedo()
-    {
-        var outcome = _commandBus.Redo(_workbook.Id);
-        if (!outcome.Success)
-            return false;
-
-        // After redo, check whether the stack has returned to the save point.
-        // If so, restore the clean state; otherwise mark dirty. The version check (in addition
-        // to the raw depth) guards against a trim-then-refill aliasing the save-point depth with
-        // different entries than were actually on the stack at save time.
-        if (!_session.TryMarkCleanIfAtSavePoint())
-            MarkWorkbookDirty();
-        else
-        {
-            // Cleaned via save-point — still update title bar and fan out.
-            UpdateTitleBar();
-            _windowRegistry?.NotifyDocumentStateChanged(this);
-
-            // Same rationale as ExecuteUndo(): the stale dirty-period autosave snapshot must be
-            // deleted now that we are back at the save point, or a later crash offers stale
-            // content for a document that was never actually left dirty (M10).
-            NotifyAutosaveSaved();
-        }
-
-        InvalidateNavigationCaches();
-        RecalculateAfterCommandOutcome(outcome);
-        RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
-        // See ExecuteUndo() (R88-commands-undo-redo-coalescing-5-1): re-navigate to the
-        // affected sheet/range before SyncWindowViewState/UpdateViewport below.
-        RestoreSelectionAfterUndoRedo(outcome);
-        // Redo can re-apply a view-mode/zoom change THIS window itself made; re-adopt the
-        // current sheet's values before rendering (see ExecuteUndo).
-        SyncWindowViewState([_currentSheetId]);
-        UpdateViewport();
-        RefreshToolbar();
-        RefreshStatusBar();
-        NotifyOtherWindowsOfWorkbookChange();
-        return true;
-    }
+        => ApplyWorkbookSessionHistoryResult(_session.RedoLastEdit());
 
     private void ExecuteRepeatLast()
     {
@@ -604,26 +524,20 @@ public partial class MainWindow
         // (redo takes priority over repeat). Without this gate, F4 after an Undo would re-invoke
         // the stale repeatable factory against whatever is now selected AND destroy the pending
         // redo entry (Execute clears the redo stack), permanently losing the undone change.
-        if (_commandBus.CanRedo(_workbook.Id))
+        if (_session.CanRedo)
         {
             ExecuteRedo();
             return;
         }
 
+        SynchronizeWorkbookSessionSelection();
         var postAction = _repeatPostAction;
-        var outcome = _commandBus.RepeatLast(_workbook.Id);
-        if (!outcome.Success) return;
-        MarkWorkbookDirty();
-        InvalidateNavigationCaches();
-        postAction?.Invoke(outcome);
-        RecalculateAfterCommandOutcome(outcome);
-        RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
-        // See TryExecuteCommand above (R83-app-view-modes-5-1).
-        SyncWindowViewState([_currentSheetId]);
-        UpdateViewport();
-        RefreshToolbar();
-        RefreshStatusBar();
-        NotifyOtherWindowsOfWorkbookChange();
+        var result = _session.RepeatLastAction();
+        ApplyWorkbookSessionHistoryResult(
+            result,
+            () => postAction?.Invoke(new CommandOutcome(
+                true,
+                AffectedCells: result.AffectedCells)));
     }
 
     private IWorkbookCommand CreateSingleCellEditCommand(CellAddress address, Cell cell)
@@ -635,58 +549,27 @@ public partial class MainWindow
             : new EditCellsCommand(_currentSheetId, edits);
     }
 
-    /// <summary>
-    /// R88-commands-undo-redo-coalescing-5-1: single choke point for both <see cref="ExecuteUndo"/>
-    /// and <see cref="ExecuteRedo"/> to switch the active sheet and reselect the affected range,
-    /// matching real Excel (which always brings the just-undone/redone edit back into view even when
-    /// the user had navigated to a different sheet, or a different part of the current sheet, since
-    /// the edit was made). No-ops when the outcome carries no affected cells (nothing to navigate
-    /// to), leaving today's behavior unchanged for those outcomes.
-    /// </summary>
-    private void RestoreSelectionAfterUndoRedo(CommandOutcome outcome)
+    private bool ApplyWorkbookSessionHistoryResult(
+        WorkbookCellEditResult result,
+        Action? afterSelectionApplied = null)
     {
-        if (outcome.AffectedCells is not { Count: > 0 } affectedCells)
-            return;
+        if (!result.Success)
+            return false;
 
-        // A single command's affected cells always belong to one sheet, EXCEPT a
-        // CompositeWorkbookCommand fanned out across a grouped-sheet edit (Commands.cs); in that
-        // case land on the sheet the user was already viewing if it was one of the affected sheets,
-        // otherwise fall back to the first affected cell's sheet (mirrors Excel picking the sheet
-        // that contains the edit when the previous active sheet had no part in it).
-        var targetSheetId = affectedCells[0].Sheet;
-        foreach (var candidate in affectedCells)
-        {
-            if (candidate.Sheet.Equals(_currentSheetId))
-            {
-                targetSheetId = _currentSheetId;
-                break;
-            }
-        }
+        UpdateTitleBar();
+        _windowRegistry?.NotifyDocumentStateChanged(this);
+        if (!_session.IsDirty)
+            NotifyAutosaveSaved();
 
-        uint minRow = uint.MaxValue, maxRow = uint.MinValue, minCol = uint.MaxValue, maxCol = uint.MinValue;
-        foreach (var address in affectedCells)
-        {
-            if (!address.Sheet.Equals(targetSheetId))
-                continue;
-
-            if (address.Row < minRow) minRow = address.Row;
-            if (address.Row > maxRow) maxRow = address.Row;
-            if (address.Col < minCol) minCol = address.Col;
-            if (address.Col > maxCol) maxCol = address.Col;
-        }
-
-        if (minRow == uint.MaxValue)
-            return;
-
-        var previousSheetId = _currentSheetId;
-        _currentSheetId = targetSheetId;
-        var start = new CellAddress(targetSheetId, minRow, minCol);
-        var end = new CellAddress(targetSheetId, maxRow, maxCol);
-        SetSelectionRange(new GridRange(start, end), start);
-        EnsureCellVisible(start);
-
-        if (!targetSheetId.Equals(previousSheetId))
-            RefreshSheetTabs();
+        InvalidateNavigationCaches();
+        ApplyWorkbookSessionSelectionToRenderer();
+        afterSelectionApplied?.Invoke();
+        SyncWindowViewState([_currentSheetId]);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+        NotifyOtherWindowsOfWorkbookChange();
+        return true;
     }
 
     private void RecalculateAfterCommandOutcome(CommandOutcome outcome)

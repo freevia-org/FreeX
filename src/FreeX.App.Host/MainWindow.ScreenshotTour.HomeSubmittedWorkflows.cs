@@ -147,7 +147,7 @@ public partial class MainWindow
                     return new ClearContentsCommand(_currentSheetId, range);
                 });
             SetSelectionRange(context.RepeatSecondRange, context.RepeatSecondRange.Start);
-            if (!_commandBus.CanRepeat(_workbook.Id))
+            if (!_session.CanRepeatLastAction)
                 throw new InvalidOperationException("Home submitted workflows tour expected a repeatable command before F4 proof.");
             ExecuteRepeatLast();
             captures.Add(await CaptureHomeSubmittedWorkflowsWindowAsync(
@@ -413,9 +413,9 @@ public partial class MainWindow
             CaptureLogicalHeight: logicalHeight,
             SelectedRange: SheetGrid.SelectedRange?.ToString() ?? string.Empty,
             HiddenRows: string.Join(",", context.Sheet.HiddenRows.OrderBy(row => row)),
-            CanUndo: _commandBus.CanUndo(_workbook.Id),
-            CanRedo: _commandBus.CanRedo(_workbook.Id),
-            CanRepeat: _commandBus.CanRepeat(_workbook.Id),
+            CanUndo: _session.CanUndo,
+            CanRedo: _session.CanRedo,
+            CanRepeat: _session.CanRepeatLastAction,
             EvidenceSummary: evidenceSummary);
 
     private static void DeleteHomeSubmittedWorkflowsTourEvidence(string outputDir)

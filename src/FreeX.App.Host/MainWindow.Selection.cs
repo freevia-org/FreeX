@@ -1987,7 +1987,48 @@ public partial class MainWindow
         var activeCell = _selectionAnchor is { } anchor && primaryRange.Contains(anchor)
             ? anchor
             : primaryRange.Start;
-        _session.SynchronizeSelectionState(_currentSheetId, primaryRange, selectedRanges, activeCell);
+        _session.SynchronizeSelectionState(
+            _currentSheetId,
+            primaryRange,
+            selectedRanges,
+            activeCell,
+            _groupedSheetIds,
+            _sheetGroupAnchor,
+            _formulaEditCell);
+    }
+
+    /// <summary>
+    /// Projects authoritative selection changes made by WorkbookSession (notably Undo/Redo and
+    /// formula commits) back into the native WPF grid without moving input/render ownership out
+    /// of GridView.
+    /// </summary>
+    private void ApplyWorkbookSessionSelectionToRenderer()
+    {
+        if (_workbookSessionDisposed)
+            return;
+        if (!ReferenceEquals(_session.Workbook, _workbook))
+            throw new InvalidOperationException("The WPF workbook mirror diverged from WorkbookSession.");
+
+        var previousSheetId = _currentSheetId;
+        _currentSheetId = _session.ActiveSheet.Id;
+        var primaryRange = _session.SelectedRange;
+        var selectedRanges = _session.SelectedRanges.Count > 0
+            ? _session.SelectedRanges.ToArray()
+            : [primaryRange];
+
+        _selectionAnchor = _session.ActiveCell;
+        _selectionCursor = primaryRange.End;
+        SheetGrid.SelectedRange = primaryRange;
+        SetSelectedRangesIfChanged(selectedRanges.Length > 1 ? selectedRanges : null);
+        CellAddressBox.Text = FormatNameBoxSelectionText(primaryRange);
+        SetFormulaBarSelectionText(FormatFormulaBarText(
+            _workbook.GetSheet(_currentSheetId)?.GetCell(_session.ActiveCell),
+            _session.ActiveCell));
+
+        if (!previousSheetId.Equals(_currentSheetId))
+            RefreshSheetTabs();
+
+        EnsureCellVisible(_session.ActiveCell);
     }
 
     private void SetCellAddressBoxSelectionText(string text)

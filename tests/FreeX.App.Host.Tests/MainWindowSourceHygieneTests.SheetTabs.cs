@@ -117,11 +117,13 @@ public sealed partial class MainWindowSourceHygieneTests
         editingSource.Should().Contain("private void InlineEditor_KeyDown(");
         editingSource.Should().Contain("private void FormulaBar_KeyDown(");
         editingSource.Should().Contain("private bool CommitEdit(");
-        editingSource.Should().Contain("private bool TryCreateCellFromEntryText(");
-        editingSource.Should().Contain("private bool CommitPreparedEdits(");
+        editingSource.Should().Contain("_session.CommitCellText(");
+        editingSource.Should().Contain("_session.CommitCellTextAcrossSelection(");
+        editingSource.Should().NotContain("private bool TryCreateCellFromEntryText(");
+        editingSource.Should().NotContain("private bool CommitPreparedEdits(");
         editingSource.Should().Contain("ExcelEditKeyPlanner");
         editingSource.Should().Contain("FormulaRangeEntryPlanner.GetKeyboardSelectionTarget");
-        editingSource.Should().Contain("CellEntryParser");
+        editingSource.Should().NotContain("CellEntryParser");
         formulaReferenceSource.Should().Contain("private bool TryApplyFormulaRangeSelection(");
         formulaReferenceSource.Should().Contain("FormulaRangeEntryPlanner");
         formulaReferenceSource.Should().Contain("FormulaReferenceHighlightPlanner");

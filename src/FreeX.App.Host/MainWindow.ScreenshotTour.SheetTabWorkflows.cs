@@ -340,8 +340,8 @@ public partial class MainWindow
             ActiveTabColor: FormatSheetTabWorkflowColor(_workbook.GetSheet(_currentSheetId)?.TabColor),
             CurrentFilePath: _currentFilePath ?? "",
             WorkbookDirty: _workbookDirty,
-            CanUndo: _commandBus.CanUndo(_workbook.Id),
-            CanRedo: _commandBus.CanRedo(_workbook.Id),
+            CanUndo: _session.CanUndo,
+            CanRedo: _session.CanRedo,
             CaptureLogicalWidth: ActualWidth,
             CaptureLogicalHeight: Math.Min(ActualHeight, 760));
     }

@@ -274,12 +274,11 @@ public sealed partial class DataValidationDialogTests
     public void DataValidationViolationMessages_UseOwnedMainWindowMessageHelper()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
-        var method = source[
-            source.IndexOf("private bool TryCreateCellFromEntryText(", StringComparison.Ordinal)..
-            source.IndexOf("private bool CommitPreparedEdits(", StringComparison.Ordinal)];
 
-        method.Should().Contain("ShowOwnedMessage(violationMsg");
-        method.Should().NotContain("MessageBox.Show(");
+        source.Should().Contain("_session.DataValidationPromptResolver = ResolveDataValidationPrompt;");
+        source.Should().Contain("private UserMessageResult ResolveDataValidationPrompt(");
+        source.Should().Contain("_messageService.ShowMessage(");
+        source.Should().NotContain("MessageBox.Show(");
     }
 
     [Fact]
