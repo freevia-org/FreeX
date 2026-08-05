@@ -11,8 +11,7 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class ChartLayoutOptionsDialog : Window
 {
-    private readonly EditingSession _editor;
-    private readonly ChartLayoutOptionsPlanner _planner;
+    private readonly ChartLayoutOptionsDialogSession _session;
     private readonly ComboBox _targetCombo;
     private readonly ComboBox _layoutTargetCombo;
     private readonly ComboBox _xModeCombo;
@@ -26,9 +25,8 @@ internal sealed class ChartLayoutOptionsDialog : Window
 
     internal ChartLayoutOptionsDialog(EditingSession editor)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        var chart = editor.SelectedChart ?? throw new InvalidOperationException("No chart is currently selected.");
-        _planner = ChartLayoutOptionsPlanner.FromChart(chart);
+        _session = new ChartLayoutOptionsDialogSession(editor);
+        var state = _session.State;
         var surface = ChartLayoutOptionsPlanner.BuildSurfacePlan();
 
         Title = surface.Title;
@@ -39,8 +37,8 @@ internal sealed class ChartLayoutOptionsDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
-        _targetCombo = new ComboBox { ItemsSource = ChartLayoutOptionsPlanner.TargetOptions.Select(x => x.Label).ToArray(), SelectedIndex = 0, MinWidth = 190 };
-        _targetCombo.SelectionChanged += (_, _) => { _planner.SetTarget(SelectedTarget()); LoadControls(); };
+        _targetCombo = new ComboBox { ItemsSource = ChartLayoutOptionsPlanner.TargetOptions.Select(x => x.Label).ToArray(), SelectedIndex = state.TargetIndex, MinWidth = 190 };
+        _targetCombo.SelectionChanged += (_, _) => LoadControls(_session.SelectTarget(_targetCombo.SelectedIndex));
         _layoutTargetCombo = MakeLayoutTargetCombo();
         _xModeCombo = MakeModeCombo();
         _yModeCombo = MakeModeCombo();
@@ -50,7 +48,7 @@ internal sealed class ChartLayoutOptionsDialog : Window
         _yBox = new TextBox { MinWidth = 110 };
         _widthBox = new TextBox { MinWidth = 110 };
         _heightBox = new TextBox { MinWidth = 110 };
-        LoadControls();
+        LoadControls(state);
 
         var buttons = ChartOptionsDialogChrome.CreateActionRow(
             surface.OkLabel,
@@ -70,11 +68,8 @@ internal sealed class ChartLayoutOptionsDialog : Window
         };
     }
 
-    internal ChartLayoutOptions BuildCommitPlanForTests()
-    {
-        UpdatePlannerFromControls();
-        return _planner.BuildCommitPlan();
-    }
+    internal ChartLayoutOptions BuildCommitPlanForTests() =>
+        _session.BuildCommitPlan(ReadInput(), CultureInfo.CurrentCulture);
 
     internal void SetOptionsForTests(ChartLayoutTarget target, string? layoutTarget, ChartManualLayoutMode xMode, ChartManualLayoutMode yMode, ChartManualLayoutMode widthMode, ChartManualLayoutMode heightMode, double? x, double? y, double? width, double? height)
     {
@@ -87,41 +82,34 @@ internal sealed class ChartLayoutOptionsDialog : Window
 
     private void OnOk()
     {
-        try { _editor.ApplyChartLayoutOptions(BuildCommitPlanForTests()); Close(true); }
-        catch (FormatException) { Close(false); }
+        var result = _session.TryCommit(ReadInput(), CultureInfo.CurrentCulture);
+        Close(result.Succeeded);
     }
 
-    private void LoadControls()
-    {
-        SelectLayoutTarget(_planner.LayoutTarget);
-        _xModeCombo.SelectedIndex = FindModeIndex(_planner.XMode); _yModeCombo.SelectedIndex = FindModeIndex(_planner.YMode);
-        _widthModeCombo.SelectedIndex = FindModeIndex(_planner.WidthMode); _heightModeCombo.SelectedIndex = FindModeIndex(_planner.HeightMode);
-        _xBox.Text = Format(_planner.X); _yBox.Text = Format(_planner.Y); _widthBox.Text = Format(_planner.Width); _heightBox.Text = Format(_planner.Height);
-    }
+    private ChartLayoutOptionsDialogInput ReadInput() => new(
+        _targetCombo.SelectedIndex,
+        _layoutTargetCombo.SelectedIndex,
+        _xModeCombo.SelectedIndex,
+        _yModeCombo.SelectedIndex,
+        _widthModeCombo.SelectedIndex,
+        _heightModeCombo.SelectedIndex,
+        _xBox.Text,
+        _yBox.Text,
+        _widthBox.Text,
+        _heightBox.Text);
 
-    private void UpdatePlannerFromControls()
+    private void LoadControls(ChartLayoutOptionsDialogState state)
     {
-        _planner.SetLayoutTarget(SelectedLayoutTarget());
-        _planner.SetXMode(SelectedMode(_xModeCombo)); _planner.SetYMode(SelectedMode(_yModeCombo));
-        _planner.SetWidthMode(SelectedMode(_widthModeCombo)); _planner.SetHeightMode(SelectedMode(_heightModeCombo));
-        _planner.SetX(ParseOptional(_xBox.Text, "X")); _planner.SetY(ParseOptional(_yBox.Text, "Y"));
-        _planner.SetWidth(ParseOptional(_widthBox.Text, "Width")); _planner.SetHeight(ParseOptional(_heightBox.Text, "Height"));
-    }
-
-    private ChartLayoutTarget SelectedTarget() =>
-        ChartDialogOptionProjection.ValueAtOrDefault(
-            ChartLayoutOptionsPlanner.TargetOptions,
-            _targetCombo.SelectedIndex,
-            option => option.Value,
-            ChartLayoutTarget.PlotArea);
-    private string? SelectedLayoutTarget()
-    {
-        var options = ChartLayoutOptionsPlanner.LayoutTargetOptionsFor(_planner.LayoutTarget);
-        return ChartDialogOptionProjection.ValueAtOrDefault(
-            options,
-            _layoutTargetCombo.SelectedIndex,
-            option => option.Value,
-            default(string?));
+        _layoutTargetCombo.ItemsSource = state.LayoutTargetOptions.Select(option => option.Label).ToArray();
+        _layoutTargetCombo.SelectedIndex = state.LayoutTargetIndex;
+        _xModeCombo.SelectedIndex = state.XModeIndex;
+        _yModeCombo.SelectedIndex = state.YModeIndex;
+        _widthModeCombo.SelectedIndex = state.WidthModeIndex;
+        _heightModeCombo.SelectedIndex = state.HeightModeIndex;
+        _xBox.Text = Format(state.X);
+        _yBox.Text = Format(state.Y);
+        _widthBox.Text = Format(state.Width);
+        _heightBox.Text = Format(state.Height);
     }
 
     private void SelectLayoutTarget(string? value)
@@ -137,14 +125,6 @@ internal sealed class ChartLayoutOptionsDialog : Window
 
     private static ComboBox MakeLayoutTargetCombo() => new() { MinWidth = 190 };
     private static ComboBox MakeModeCombo() => new() { ItemsSource = ChartLayoutOptionsPlanner.ModeOptions.Select(x => x.Label).ToArray(), MinWidth = 105 };
-    private static ChartManualLayoutMode SelectedMode(ComboBox combo) =>
-        ChartDialogOptionProjection.ValueAtOrDefault(
-            ChartLayoutOptionsPlanner.ModeOptions,
-            combo.SelectedIndex,
-            option => option.Value,
-            ChartManualLayoutMode.Factor);
-    private static double? ParseOptional(string? text, string label) =>
-        ChartDialogOptionProjection.ParseOptionalDouble(text, CultureInfo.CurrentCulture, double.IsFinite, $"{label} must be a finite number or blank.");
     private static string Format(double? value) => ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
     private static int FindTargetIndex(ChartLayoutTarget value) =>
         ChartDialogOptionProjection.FindIndex(ChartLayoutOptionsPlanner.TargetOptions, value, option => option.Value);

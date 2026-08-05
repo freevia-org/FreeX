@@ -9,8 +9,7 @@ namespace FreeP.App.Host;
 /// <summary>PowerPoint-style chart data-table options dialog.</summary>
 public sealed class ChartDataTableOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly EditingSession _editor;
-    private readonly ChartDataTableOptionsPlanner _planner;
+    private readonly ChartDataTableOptionsDialogSession _session;
     private readonly CheckBox _showTableCheck;
     private readonly CheckBox _horizontalBorderCheck;
     private readonly CheckBox _verticalBorderCheck;
@@ -27,10 +26,8 @@ public sealed class ChartDataTableOptionsDialog : Free.Shared.Ribbon.Wpf.DialogW
 
     public ChartDataTableOptionsDialog(EditingSession editor)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        var chart = editor.SelectedChart
-            ?? throw new InvalidOperationException("No chart is currently selected.");
-        _planner = ChartDataTableOptionsPlanner.FromChart(chart);
+        _session = new ChartDataTableOptionsDialogSession(editor);
+        var state = _session.State;
         var surface = ChartDataTableOptionsPlanner.BuildSurfacePlan();
 
         Title = surface.Title;
@@ -39,19 +36,19 @@ public sealed class ChartDataTableOptionsDialog : Free.Shared.Ribbon.Wpf.DialogW
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
-        _showTableCheck = new CheckBox { Content = surface.ShowDataTableLabel, IsChecked = _planner.ShowDataTable };
-        _horizontalBorderCheck = new CheckBox { Content = surface.HorizontalBorderLabel, IsChecked = _planner.ShowHorizontalBorder };
-        _verticalBorderCheck = new CheckBox { Content = surface.VerticalBorderLabel, IsChecked = _planner.ShowVerticalBorder };
-        _outlineBorderCheck = new CheckBox { Content = surface.OutlineBorderLabel, IsChecked = _planner.ShowOutlineBorder };
-        _legendKeysCheck = new CheckBox { Content = surface.LegendKeysLabel, IsChecked = _planner.ShowLegendKeys };
-        _backgroundColorBox = CreateTextBox(_planner.BackgroundColor);
-        _borderColorBox = CreateTextBox(_planner.BorderColor);
-        _borderWidthBox = CreateTextBox(FormatOptional(_planner.BorderWidthPt));
-        _textColorBox = CreateTextBox(_planner.TextColor);
-        _fontSizeBox = CreateTextBox(FormatOptional(_planner.FontSizePt));
-        _fontFamilyBox = CreateTextBox(_planner.FontFamily);
-        _boldCheck = new CheckBox { Content = surface.BoldLabel, IsThreeState = true, IsChecked = _planner.Bold };
-        _italicCheck = new CheckBox { Content = surface.ItalicLabel, IsThreeState = true, IsChecked = _planner.Italic };
+        _showTableCheck = new CheckBox { Content = surface.ShowDataTableLabel, IsChecked = state.ShowDataTable };
+        _horizontalBorderCheck = new CheckBox { Content = surface.HorizontalBorderLabel, IsChecked = state.ShowHorizontalBorder };
+        _verticalBorderCheck = new CheckBox { Content = surface.VerticalBorderLabel, IsChecked = state.ShowVerticalBorder };
+        _outlineBorderCheck = new CheckBox { Content = surface.OutlineBorderLabel, IsChecked = state.ShowOutlineBorder };
+        _legendKeysCheck = new CheckBox { Content = surface.LegendKeysLabel, IsChecked = state.ShowLegendKeys };
+        _backgroundColorBox = CreateTextBox(state.BackgroundColor);
+        _borderColorBox = CreateTextBox(state.BorderColor);
+        _borderWidthBox = CreateTextBox(FormatOptional(state.BorderWidthPt));
+        _textColorBox = CreateTextBox(state.TextColor);
+        _fontSizeBox = CreateTextBox(FormatOptional(state.FontSizePt));
+        _fontFamilyBox = CreateTextBox(state.FontFamily);
+        _boldCheck = new CheckBox { Content = surface.BoldLabel, IsThreeState = true, IsChecked = state.Bold };
+        _italicCheck = new CheckBox { Content = surface.ItalicLabel, IsThreeState = true, IsChecked = state.Italic };
 
         var buttons = ChartOptionsDialogChrome.CreateActionRow(
             surface.OkLabel,
@@ -79,55 +76,36 @@ public sealed class ChartDataTableOptionsDialog : Free.Shared.Ribbon.Wpf.DialogW
     }
 
     internal ChartDataTableOptions BuildCommitPlanForTests()
-    {
-        UpdatePlannerFromControls();
-        return _planner.BuildCommitPlan();
-    }
+        => _session.BuildCommitPlan(ReadInput(), CultureInfo.CurrentCulture);
 
     private void OnOk()
     {
-        try
+        var result = _session.TryCommit(ReadInput(), CultureInfo.CurrentCulture);
+        if (!result.Succeeded)
         {
-            _editor.ApplyChartDataTableOptions(BuildCommitPlanForTests());
-            DialogResult = true;
+            MessageBox.Show(this, result.Error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
         }
-        catch (FormatException ex)
-        {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-        catch (ArgumentException ex)
-        {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
+
+        DialogResult = true;
     }
 
-    private void UpdatePlannerFromControls()
-    {
-        _planner.SetShowDataTable(_showTableCheck.IsChecked == true);
-        _planner.SetShowHorizontalBorder(_horizontalBorderCheck.IsChecked == true);
-        _planner.SetShowVerticalBorder(_verticalBorderCheck.IsChecked == true);
-        _planner.SetShowOutlineBorder(_outlineBorderCheck.IsChecked == true);
-        _planner.SetShowLegendKeys(_legendKeysCheck.IsChecked == true);
-        _planner.SetBackgroundColor(_backgroundColorBox.Text);
-        _planner.SetBorderColor(_borderColorBox.Text);
-        _planner.SetBorderWidth(ParseOptional(_borderWidthBox.Text, "Border width"));
-        _planner.SetTextColor(_textColorBox.Text);
-        _planner.SetFontSize(ParseOptional(_fontSizeBox.Text, "Font size"));
-        _planner.SetFontFamily(_fontFamilyBox.Text);
-        _planner.SetBold(_boldCheck.IsChecked);
-        _planner.SetItalic(_italicCheck.IsChecked);
-    }
+    private ChartDataTableOptionsDialogInput ReadInput() => new(
+        _showTableCheck.IsChecked == true,
+        _horizontalBorderCheck.IsChecked == true,
+        _verticalBorderCheck.IsChecked == true,
+        _outlineBorderCheck.IsChecked == true,
+        _legendKeysCheck.IsChecked == true,
+        _backgroundColorBox.Text,
+        _borderColorBox.Text,
+        _borderWidthBox.Text,
+        _textColorBox.Text,
+        _fontSizeBox.Text,
+        _fontFamilyBox.Text,
+        _boldCheck.IsChecked,
+        _italicCheck.IsChecked);
 
     private static TextBox CreateTextBox(string value) => new() { Text = value, MinWidth = 150 };
-
-    private static double? ParseOptional(string? text, string surface)
-    {
-        return ChartDialogOptionProjection.ParseOptionalDouble(
-            text,
-            CultureInfo.CurrentCulture,
-            value => double.IsFinite(value) && value > 0,
-            $"{surface} must be a positive finite number or blank.");
-    }
 
     private static string FormatOptional(double? value) =>
         ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture, "0.###");

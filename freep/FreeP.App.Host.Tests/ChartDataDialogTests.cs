@@ -652,9 +652,11 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartLayoutOptionsDialog.cs");
 
-        source.Should().Contain("ChartLayoutOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartLayoutOptions");
+        source.Should().Contain("new ChartLayoutOptionsDialogSession(editor)");
+        source.Should().Contain("_session.BuildCommitPlan(");
+        source.Should().Contain("_session.TryCommit(");
+        source.Should().NotContain("_planner.");
+        source.Should().NotContain("_editor.ApplyChartLayoutOptions");
         source.Should().NotContain("new SetChartLayoutOptionsCommand");
     }
 
@@ -663,11 +665,11 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartDataTableOptionsDialog.cs");
 
-        source.Should().Contain("ChartDataTableOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartDataTableOptions");
-        source.Should().Contain("_planner.SetBackgroundColor");
-        source.Should().Contain("_planner.SetFontSize");
+        source.Should().Contain("new ChartDataTableOptionsDialogSession(editor)");
+        source.Should().Contain("_session.BuildCommitPlan(");
+        source.Should().Contain("_session.TryCommit(");
+        source.Should().NotContain("_planner.");
+        source.Should().NotContain("_editor.ApplyChartDataTableOptions");
         source.Should().NotContain("new SetChartDataTableOptionsCommand");
     }
 
@@ -774,9 +776,11 @@ public sealed class ChartDataDialogTests : IDisposable
         var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs");
         var windowSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
 
-        source.Should().Contain("ChartPieOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartPieOptions");
+        source.Should().Contain("new ChartPieOptionsDialogSession(editor)");
+        source.Should().Contain("_session.BuildCommitPlan(");
+        source.Should().Contain("_session.TryCommit(");
+        source.Should().NotContain("_planner.");
+        source.Should().NotContain("_editor.ApplyChartPieOptions");
         source.Should().NotContain("new SetChartPieOptionsCommand");
         ribbonSource.Should().Contain("ChartPieOptionsPlanner.CommandId");
         windowSource.Should().Contain("OpenChartPieOptionsDialog");

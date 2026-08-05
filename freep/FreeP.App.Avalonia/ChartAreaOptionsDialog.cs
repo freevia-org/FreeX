@@ -11,8 +11,7 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class ChartAreaOptionsDialog : Window
 {
-    private readonly EditingSession _editor;
-    private readonly ChartAreaOptionsPlanner _planner;
+    private readonly ChartAreaOptionsDialogSession _session;
     private readonly ComboBox _targetCombo;
     private readonly TextBox _fillBox;
     private readonly TextBox _fillTransparencyBox;
@@ -23,8 +22,8 @@ internal sealed class ChartAreaOptionsDialog : Window
 
     internal ChartAreaOptionsDialog(EditingSession editor, ChartAreaFormattingTarget? initialTarget = null)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        _planner = ChartAreaOptionsPlanner.FromChart(editor.SelectedChart ?? throw new InvalidOperationException("No chart is currently selected."));
+        _session = new ChartAreaOptionsDialogSession(editor, initialTarget);
+        var state = _session.State;
         var surface = ChartAreaOptionsPlanner.BuildSurfacePlan();
         Title = surface.Title;
         Width = 400;
@@ -34,16 +33,15 @@ internal sealed class ChartAreaOptionsDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
-        _targetCombo = new ComboBox { ItemsSource = ChartAreaOptionsPlanner.TargetOptions.Select(x => x.Label).ToArray(), SelectedIndex = initialTarget == ChartAreaFormattingTarget.PlotArea ? 1 : 0, MinWidth = 190 };
-        _targetCombo.SelectionChanged += (_, _) => { _planner.SetTarget(SelectedTarget()); LoadControls(); };
+        _targetCombo = new ComboBox { ItemsSource = ChartAreaOptionsPlanner.TargetOptions.Select(x => x.Label).ToArray(), SelectedIndex = state.TargetIndex, MinWidth = 190 };
+        _targetCombo.SelectionChanged += (_, _) => LoadControls(_session.SelectTarget(_targetCombo.SelectedIndex));
         _fillBox = new TextBox { MinWidth = 190 };
         _fillTransparencyBox = new TextBox { MinWidth = 120 };
         _noFillCheck = new CheckBox { Content = surface.NoFillLabel };
         _outlineBox = new TextBox { MinWidth = 190 };
         _noOutlineCheck = new CheckBox { Content = surface.NoOutlineLabel };
         _widthBox = new TextBox { MinWidth = 120 };
-        _planner.SetTarget(SelectedTarget());
-        LoadControls();
+        LoadControls(state);
 
         var buttons = ChartOptionsDialogChrome.CreateActionRow(
             surface.OkLabel,
@@ -69,15 +67,7 @@ internal sealed class ChartAreaOptionsDialog : Window
     }
 
     internal ChartAreaOptions BuildCommitPlanForTests()
-    {
-        _planner.SetFillColor(_fillBox.Text);
-        _planner.SetFillTransparency(ParseOptional(_fillTransparencyBox.Text));
-        _planner.SetNoFill(_noFillCheck.IsChecked == true);
-        _planner.SetOutlineColor(_outlineBox.Text);
-        _planner.SetNoOutline(_noOutlineCheck.IsChecked == true);
-        _planner.SetOutlineWidth(ParseOptional(_widthBox.Text));
-        return _planner.BuildCommitPlan();
-    }
+        => _session.BuildCommitPlan(ReadInput(), CultureInfo.CurrentCulture);
 
     internal void SetOptionsForTests(ChartAreaFormattingTarget target, string? fill, string? outline, double? width, bool noFill = false, bool noOutline = false, double? fillTransparency = null)
     {
@@ -92,33 +82,31 @@ internal sealed class ChartAreaOptionsDialog : Window
 
     private void OnOk()
     {
-        try { _editor.ApplyChartAreaOptions(BuildCommitPlanForTests()); Close(true); }
-        catch (FormatException) { Close(false); }
+        var result = _session.TryCommit(ReadInput(), CultureInfo.CurrentCulture);
+        if (result.Succeeded)
+            Close(true);
+        else
+            Close(false);
     }
 
-    private void LoadControls()
+    private void LoadControls(ChartAreaOptionsDialogState state)
     {
-        _fillBox.Text = _planner.FillColor;
-        _fillTransparencyBox.Text = Format(_planner.FillTransparencyPercent);
-        _noFillCheck.IsChecked = _planner.NoFill;
-        _outlineBox.Text = _planner.OutlineColor;
-        _noOutlineCheck.IsChecked = _planner.NoOutline;
-        _widthBox.Text = Format(_planner.OutlineWidthPt);
+        _fillBox.Text = state.FillColor;
+        _fillTransparencyBox.Text = Format(state.FillTransparencyPercent);
+        _noFillCheck.IsChecked = state.NoFill;
+        _outlineBox.Text = state.OutlineColor;
+        _noOutlineCheck.IsChecked = state.NoOutline;
+        _widthBox.Text = Format(state.OutlineWidthPt);
     }
 
-    private ChartAreaFormattingTarget SelectedTarget() =>
-        ChartDialogOptionProjection.ValueAtOrDefault(
-            ChartAreaOptionsPlanner.TargetOptions,
-            _targetCombo.SelectedIndex,
-            option => option.Value,
-            ChartAreaFormattingTarget.ChartArea);
-
-    private static double? ParseOptional(string? text) =>
-        ChartDialogOptionProjection.ParseOptionalDouble(
-            text,
-            CultureInfo.CurrentCulture,
-            double.IsFinite,
-            "The value must be a finite number or blank.");
+    private ChartAreaOptionsDialogInput ReadInput() => new(
+        _targetCombo.SelectedIndex,
+        _fillBox.Text,
+        _fillTransparencyBox.Text,
+        _noFillCheck.IsChecked == true,
+        _outlineBox.Text,
+        _noOutlineCheck.IsChecked == true,
+        _widthBox.Text);
 
     private static string Format(double? value) =>
         ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);

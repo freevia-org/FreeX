@@ -9,8 +9,7 @@ namespace FreeP.App.Host;
 /// <summary>PowerPoint-style plot-area and legend manual-layout dialog.</summary>
 public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly EditingSession _editor;
-    private readonly ChartLayoutOptionsPlanner _planner;
+    private readonly ChartLayoutOptionsDialogSession _session;
     private readonly ComboBox _targetCombo;
     private readonly ComboBox _layoutTargetCombo;
     private readonly ComboBox _xModeCombo;
@@ -24,9 +23,8 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     public ChartLayoutOptionsDialog(EditingSession editor)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        var chart = editor.SelectedChart ?? throw new InvalidOperationException("No chart is currently selected.");
-        _planner = ChartLayoutOptionsPlanner.FromChart(chart);
+        _session = new ChartLayoutOptionsDialogSession(editor);
+        var state = _session.State;
         var surface = ChartLayoutOptionsPlanner.BuildSurfacePlan();
 
         Title = surface.Title;
@@ -39,16 +37,12 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         {
             ItemsSource = ChartLayoutOptionsPlanner.TargetOptions,
             DisplayMemberPath = nameof(ChartLayoutTargetOption.Label),
-            SelectedIndex = 0,
+            SelectedIndex = state.TargetIndex,
             MinWidth = 180,
         };
         _targetCombo.SelectionChanged += (_, _) =>
         {
-            if (_targetCombo.SelectedItem is ChartLayoutTargetOption option)
-            {
-                _planner.SetTarget(option.Value);
-                LoadControls();
-            }
+            LoadControls(_session.SelectTarget(_targetCombo.SelectedIndex));
         };
         _layoutTargetCombo = MakeLayoutTargetCombo();
         _xModeCombo = MakeModeCombo();
@@ -59,7 +53,7 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _yBox = new TextBox { MinWidth = 120 };
         _widthBox = new TextBox { MinWidth = 120 };
         _heightBox = new TextBox { MinWidth = 120 };
-        LoadControls();
+        LoadControls(state);
 
         var buttons = ChartOptionsDialogChrome.CreateActionRow(
             surface.OkLabel,
@@ -80,11 +74,8 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         Content = content;
     }
 
-    internal ChartLayoutOptions BuildCommitPlanForTests()
-    {
-        UpdatePlannerFromControls();
-        return _planner.BuildCommitPlan();
-    }
+    internal ChartLayoutOptions BuildCommitPlanForTests() =>
+        _session.BuildCommitPlan(ReadInput(), CultureInfo.CurrentCulture);
 
     internal void SetOptionsForTests(
         ChartLayoutTarget target,
@@ -112,41 +103,40 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     private void OnOk()
     {
-        try
+        var result = _session.TryCommit(ReadInput(), CultureInfo.CurrentCulture);
+        if (result.Succeeded)
         {
-            _editor.ApplyChartLayoutOptions(BuildCommitPlanForTests());
             DialogResult = true;
+            return;
         }
-        catch (FormatException ex)
-        {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
+
+        MessageBox.Show(this, result.Error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
-    private void LoadControls()
-    {
-        SelectLayoutTarget(_planner.LayoutTarget);
-        _xModeCombo.SelectedIndex = FindModeIndex(_planner.XMode);
-        _yModeCombo.SelectedIndex = FindModeIndex(_planner.YMode);
-        _widthModeCombo.SelectedIndex = FindModeIndex(_planner.WidthMode);
-        _heightModeCombo.SelectedIndex = FindModeIndex(_planner.HeightMode);
-        _xBox.Text = Format(_planner.X);
-        _yBox.Text = Format(_planner.Y);
-        _widthBox.Text = Format(_planner.Width);
-        _heightBox.Text = Format(_planner.Height);
-    }
+    private ChartLayoutOptionsDialogInput ReadInput() => new(
+        _targetCombo.SelectedIndex,
+        _layoutTargetCombo.SelectedIndex,
+        _xModeCombo.SelectedIndex,
+        _yModeCombo.SelectedIndex,
+        _widthModeCombo.SelectedIndex,
+        _heightModeCombo.SelectedIndex,
+        _xBox.Text,
+        _yBox.Text,
+        _widthBox.Text,
+        _heightBox.Text);
 
-    private void UpdatePlannerFromControls()
+    private void LoadControls(ChartLayoutOptionsDialogState state)
     {
-        _planner.SetLayoutTarget(SelectedLayoutTarget());
-        _planner.SetXMode(SelectedMode(_xModeCombo));
-        _planner.SetYMode(SelectedMode(_yModeCombo));
-        _planner.SetWidthMode(SelectedMode(_widthModeCombo));
-        _planner.SetHeightMode(SelectedMode(_heightModeCombo));
-        _planner.SetX(ParseOptional(_xBox.Text, surface: "X"));
-        _planner.SetY(ParseOptional(_yBox.Text, surface: "Y"));
-        _planner.SetWidth(ParseOptional(_widthBox.Text, surface: "Width"));
-        _planner.SetHeight(ParseOptional(_heightBox.Text, surface: "Height"));
+        _layoutTargetCombo.ItemsSource = state.LayoutTargetOptions;
+        _layoutTargetCombo.SelectedIndex = state.LayoutTargetIndex;
+        _xModeCombo.SelectedIndex = state.XModeIndex;
+        _yModeCombo.SelectedIndex = state.YModeIndex;
+        _widthModeCombo.SelectedIndex = state.WidthModeIndex;
+        _heightModeCombo.SelectedIndex = state.HeightModeIndex;
+        _xBox.Text = Format(state.X);
+        _yBox.Text = Format(state.Y);
+        _widthBox.Text = Format(state.Width);
+        _heightBox.Text = Format(state.Height);
     }
 
     private static ComboBox MakeModeCombo() => new()
@@ -162,16 +152,6 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         MinWidth = 180,
     };
 
-    private string? SelectedLayoutTarget()
-    {
-        var options = ChartLayoutOptionsPlanner.LayoutTargetOptionsFor(_planner.LayoutTarget);
-        return ChartDialogOptionProjection.ValueAtOrDefault(
-            options,
-            _layoutTargetCombo.SelectedIndex,
-            option => option.Value,
-            default(string?));
-    }
-
     private void SelectLayoutTarget(string? value)
     {
         var options = ChartLayoutOptionsPlanner.LayoutTargetOptionsFor(value);
@@ -181,22 +161,6 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
             value,
             option => option.Value,
             comparer: StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static ChartManualLayoutMode SelectedMode(ComboBox combo) =>
-        ChartDialogOptionProjection.ValueAtOrDefault(
-            ChartLayoutOptionsPlanner.ModeOptions,
-            combo.SelectedIndex,
-            option => option.Value,
-            ChartManualLayoutMode.Factor);
-
-    private static double? ParseOptional(string? text, string surface)
-    {
-        return ChartDialogOptionProjection.ParseOptionalDouble(
-            text,
-            CultureInfo.CurrentCulture,
-            double.IsFinite,
-            $"{surface} must be a finite number or blank.");
     }
 
     private static string Format(double? value) =>
