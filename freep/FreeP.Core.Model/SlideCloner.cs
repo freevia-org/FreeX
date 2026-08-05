@@ -718,6 +718,8 @@ public static class SlideCloner
             RepeatCount   = a.RepeatCount,
             RepeatIndefinitely = a.RepeatIndefinitely,
             AutoReverse   = a.AutoReverse,
+            Acceleration  = a.Acceleration,
+            Deceleration  = a.Deceleration,
             Direction     = a.Direction,
             WheelSpokeCount = a.WheelSpokeCount,
             EffectSubtype = a.EffectSubtype,

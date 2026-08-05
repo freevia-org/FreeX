@@ -364,6 +364,8 @@ public static class PresentationAnimationCommandPlanner
             RepeatCount = animation.RepeatCount,
             RepeatIndefinitely = animation.RepeatIndefinitely,
             AutoReverse = animation.AutoReverse,
+            Acceleration = animation.Acceleration,
+            Deceleration = animation.Deceleration,
             Direction = animation.Direction,
             WheelSpokeCount = animation.WheelSpokeCount,
             EffectSubtype = animation.EffectSubtype,

@@ -2557,6 +2557,8 @@ public static class PptxPackageWriter
                 new XAttribute("nodeType", "withEffect"),
                 RepeatAttributes(anim),
                 AutoReverseAttribute(anim),
+                AccelerationAttribute(anim),
+                DecelerationAttribute(anim),
                 new XElement(P + "stCondLst",
                     new XElement(P + "cond", new XAttribute("delay", delayStr))),
                 new XElement(P + "childTnLst",
@@ -2606,6 +2608,8 @@ public static class PptxPackageWriter
 
         if (animation.AutoReverse)
             attributes.Add(new XAttribute("autoRev", "1"));
+
+        AddAccelerationAttributes(attributes, animation);
     }
 
     private static XAttribute? RepeatAttributes(ShapeAnimation animation)
@@ -2617,6 +2621,24 @@ public static class PptxPackageWriter
 
     private static XAttribute? AutoReverseAttribute(ShapeAnimation animation)
         => animation.AutoReverse ? new XAttribute("autoRev", "1") : null;
+
+    private static void AddAccelerationAttributes(List<object> attributes, ShapeAnimation animation)
+    {
+        if (animation.Acceleration is int acceleration)
+            attributes.Add(new XAttribute("accel", Math.Clamp(acceleration, 0, 100000)));
+        if (animation.Deceleration is int deceleration)
+            attributes.Add(new XAttribute("decel", Math.Clamp(deceleration, 0, 100000)));
+    }
+
+    private static XAttribute? AccelerationAttribute(ShapeAnimation animation) =>
+        animation.Acceleration is int acceleration
+            ? new XAttribute("accel", Math.Clamp(acceleration, 0, 100000))
+            : null;
+
+    private static XAttribute? DecelerationAttribute(ShapeAnimation animation) =>
+        animation.Deceleration is int deceleration
+            ? new XAttribute("decel", Math.Clamp(deceleration, 0, 100000))
+            : null;
 
     // ── slideLayout.xml ──────────────────────────────────────────────────────────
 
