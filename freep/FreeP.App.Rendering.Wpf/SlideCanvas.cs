@@ -910,6 +910,32 @@ public sealed class SlideCanvas : FrameworkElement
                 dc.DrawRectangle(shadowBrush, null, shadowDest);
         }
 
+        if (plan.HasReflection)
+        {
+            double reflectionScale = Math.Abs(plan.ReflectionScaleY) < 0.001
+                ? -1.0
+                : plan.ReflectionScaleY;
+            double pivotY = dest.Bottom + plan.ReflectionDistDip / 2.0;
+            var reflectionMask = new LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+            };
+            reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
+                Color.FromArgb(plan.ReflectionAlpha, 255, 255, 255), 0));
+            reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
+                Color.FromArgb(0, 255, 255, 255),
+                Math.Clamp(plan.ReflectionEndPos, 0.001, 1.0)));
+            if (plan.ReflectionEndPos < 0.999)
+                reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
+                    Color.FromArgb(0, 255, 255, 255), 1));
+            dc.PushTransform(new ScaleTransform(1, reflectionScale, dest.Left + dest.Width / 2, pivotY));
+            dc.PushOpacityMask(reflectionMask);
+            dc.DrawImage(bitmap, dest);
+            dc.Pop();
+            dc.Pop();
+        }
+
         // 18A: apply alpha opacity layer if needed
         bool hasAlpha = plan.HasAlphaOpacity;
         if (hasAlpha)

@@ -1810,7 +1810,9 @@ public static class PptxPackageReader
             ReadZoomFrameBorderGlow(properties),
             ReadZoomFrameBorderGlowEnabled(properties),
             ReadZoomFrameBorderSoftEdge(properties),
-            ReadZoomFrameBorderSoftEdgeEnabled(properties));
+            ReadZoomFrameBorderSoftEdgeEnabled(properties),
+            ReadZoomFrameBorderReflection(properties),
+            ReadZoomFrameBorderReflectionEnabled(properties));
         return value.IsEmpty ? null : value;
     }
 
@@ -1909,6 +1911,44 @@ public static class PptxPackageReader
                 string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
         return effectList?.Elements().Any(element =>
             string.Equals(element.Name.LocalName, "softEdge", StringComparison.OrdinalIgnoreCase)) == true
+            ? true
+            : null;
+    }
+
+    private static ZoomFrameBorderReflection? ReadZoomFrameBorderReflection(XElement properties)
+    {
+        var reflection = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "reflection", StringComparison.OrdinalIgnoreCase));
+        if (reflection is null)
+            return null;
+
+        var alpha = ParseNullableInt(reflection.Attribute("stA")?.Value) ?? 50000;
+        var blur = ParseNullableLong(reflection.Attribute("blurRad")?.Value) ?? 0;
+        var distance = ParseNullableLong(reflection.Attribute("dist")?.Value) ?? 0;
+        var direction = ParseNullableInt(reflection.Attribute("dir")?.Value) ?? 5400000;
+        var scaleY = ParseNullableInt(reflection.Attribute("sy")?.Value) ?? -100000;
+        var endPosition = ParseNullableInt(reflection.Attribute("endPos")?.Value) ?? 100000;
+        if (alpha is < 0 or > 100000 || blur < 0 || distance < 0
+            || direction is < 0 or > 21600000
+            || scaleY is < -100000 or > 100000
+            || endPosition is < 0 or > 100000)
+            return null;
+
+        return new ZoomFrameBorderReflection(alpha, blur, distance, direction, scaleY, endPosition);
+    }
+
+    private static bool? ReadZoomFrameBorderReflectionEnabled(XElement properties)
+    {
+        var effectList = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
+        return effectList?.Elements().Any(element =>
+            string.Equals(element.Name.LocalName, "reflection", StringComparison.OrdinalIgnoreCase)) == true
             ? true
             : null;
     }
