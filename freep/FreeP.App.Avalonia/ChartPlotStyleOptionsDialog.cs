@@ -10,21 +10,15 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class ChartPlotStyleOptionsDialog : Window
 {
-    private readonly EditingSession _editor;
-    private readonly ChartPlotStyleOptionsPlanner _planner;
+    private readonly ChartPlotStyleOptionsDialogSession _session;
     private readonly ComboBox _scatterCombo;
     private readonly ComboBox _radarCombo;
 
     internal ChartPlotStyleOptionsDialog(EditingSession editor)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        var chart = editor.SelectedChart
-            ?? throw new InvalidOperationException("No chart is currently selected.");
-        if (chart.ChartType is not (ChartType.Scatter or ChartType.Radar))
-            throw new InvalidOperationException("Select a Scatter or Radar chart before editing plot style.");
-
-        _planner = ChartPlotStyleOptionsPlanner.FromChart(chart);
-        var surface = ChartPlotStyleOptionsPlanner.BuildSurfacePlan();
+        _session = new ChartPlotStyleOptionsDialogSession(editor);
+        var state = _session.State;
+        var surface = _session.Surface;
         Title = surface.Title;
         Width = ChartPlotStyleOptionsPlanner.DefaultDialogWidth;
         Height = ChartPlotStyleOptionsPlanner.DefaultDialogHeight;
@@ -35,16 +29,16 @@ internal sealed class ChartPlotStyleOptionsDialog : Window
 
         _scatterCombo = new ComboBox
         {
-            ItemsSource = ChartPlotStyleOptionsPlanner.ScatterStyleOptions.Select(option => option.Label).ToArray(),
-            SelectedIndex = FindScatterIndex(_planner.ScatterStyle),
-            IsEnabled = chart.ChartType == ChartType.Scatter,
+            ItemsSource = _session.ScatterStyleOptions.Select(option => option.Label).ToArray(),
+            SelectedIndex = state.ScatterStyleIndex,
+            IsEnabled = state.IsScatterEnabled,
             MinWidth = 190,
         };
         _radarCombo = new ComboBox
         {
-            ItemsSource = ChartPlotStyleOptionsPlanner.RadarStyleOptions.Select(option => option.Label).ToArray(),
-            SelectedIndex = FindRadarIndex(_planner.RadarStyle),
-            IsEnabled = chart.ChartType == ChartType.Radar,
+            ItemsSource = _session.RadarStyleOptions.Select(option => option.Label).ToArray(),
+            SelectedIndex = state.RadarStyleIndex,
+            IsEnabled = state.IsRadarEnabled,
             MinWidth = 190,
         };
 
@@ -68,47 +62,22 @@ internal sealed class ChartPlotStyleOptionsDialog : Window
         };
     }
 
-    internal ChartPlotStyleOptions BuildCommitPlanForTests()
-    {
-        UpdatePlannerFromControls();
-        return _planner.BuildCommitPlan();
-    }
+    internal ChartPlotStyleOptions BuildCommitPlanForTests() =>
+        _session.BuildCommitPlan(ReadInput());
 
     internal void SetOptionsForTests(ScatterStyle scatterStyle, RadarStyle radarStyle)
     {
-        _scatterCombo.SelectedIndex = FindScatterIndex(scatterStyle);
-        _radarCombo.SelectedIndex = FindRadarIndex(radarStyle);
+        _scatterCombo.SelectedIndex = _session.FindScatterIndex(scatterStyle);
+        _radarCombo.SelectedIndex = _session.FindRadarIndex(radarStyle);
     }
 
     private void OnOk()
     {
-        _editor.ApplyChartPlotStyleOptions(BuildCommitPlanForTests());
+        _session.Submit(ReadInput());
         Close(true);
     }
 
-    private void UpdatePlannerFromControls()
-    {
-        _planner.SetScatterStyle(ChartDialogOptionProjection.ValueAtOrDefault(
-            ChartPlotStyleOptionsPlanner.ScatterStyleOptions,
-            _scatterCombo.SelectedIndex,
-            option => option.Value,
-            _planner.ScatterStyle));
-        _planner.SetRadarStyle(ChartDialogOptionProjection.ValueAtOrDefault(
-            ChartPlotStyleOptionsPlanner.RadarStyleOptions,
-            _radarCombo.SelectedIndex,
-            option => option.Value,
-            _planner.RadarStyle));
-    }
-
-    private static int FindScatterIndex(ScatterStyle value) =>
-        ChartDialogOptionProjection.FindIndex(
-            ChartPlotStyleOptionsPlanner.ScatterStyleOptions,
-            value,
-            option => option.Value);
-
-    private static int FindRadarIndex(RadarStyle value) =>
-        ChartDialogOptionProjection.FindIndex(
-            ChartPlotStyleOptionsPlanner.RadarStyleOptions,
-            value,
-            option => option.Value);
+    private ChartPlotStyleOptionsDialogInput ReadInput() => new(
+        _scatterCombo.SelectedIndex,
+        _radarCombo.SelectedIndex);
 }

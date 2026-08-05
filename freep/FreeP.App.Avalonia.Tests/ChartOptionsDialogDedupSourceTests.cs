@@ -8,7 +8,9 @@ public sealed class ChartOptionsDialogDedupSourceTests
         foreach (var fileName in ChartOptionDialogFiles)
         {
             var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", fileName));
-            source.Should().Contain("ChartDialogOptionProjection.", fileName);
+            (source.Contains("ChartDialogOptionProjection.", StringComparison.Ordinal)
+                || source.Contains("OptionsDialogSession", StringComparison.Ordinal))
+                .Should().BeTrue(fileName);
             source.Should().Contain("ChartOptionsDialogChrome.", fileName);
             source.Should().NotContain("NumberStyles.", fileName);
             source.Should().NotContain("double.TryParse", fileName);

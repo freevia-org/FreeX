@@ -1,4 +1,3 @@
-using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -11,22 +10,16 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class ChartBubbleOptionsDialog : Window
 {
-    private readonly EditingSession _editor;
-    private readonly ChartBubbleOptionsPlanner _planner;
+    private readonly ChartBubbleOptionsDialogSession _session;
     private readonly TextBox _scaleBox;
     private readonly ComboBox _sizeRepresentsCombo;
     private readonly CheckBox _negativeBubblesCheck;
 
     internal ChartBubbleOptionsDialog(EditingSession editor)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        var chart = editor.SelectedChart
-            ?? throw new InvalidOperationException("No chart is currently selected.");
-        if (chart.ChartType != ChartType.Bubble)
-            throw new InvalidOperationException("Select a bubble chart before editing bubble options.");
-
-        _planner = ChartBubbleOptionsPlanner.FromChart(chart);
-        var surface = ChartBubbleOptionsPlanner.BuildSurfacePlan();
+        _session = new ChartBubbleOptionsDialogSession(editor);
+        var state = _session.State;
+        var surface = _session.Surface;
 
         Title = surface.Title;
         Width = ChartBubbleOptionsPlanner.DefaultDialogWidth;
@@ -36,14 +29,14 @@ internal sealed class ChartBubbleOptionsDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
-        _scaleBox = new TextBox { Text = _planner.BubbleScalePercent.ToString(CultureInfo.CurrentCulture), MinWidth = 150 };
+        _scaleBox = new TextBox { Text = state.BubbleScaleText, MinWidth = 150 };
         _sizeRepresentsCombo = new ComboBox
         {
-            ItemsSource = ChartBubbleOptionsPlanner.SizeRepresentsOptions.Select(option => option.Label).ToArray(),
-            SelectedIndex = FindSizeRepresentsIndex(_planner.SizeRepresents),
+            ItemsSource = _session.SizeRepresentsOptions.Select(option => option.Label).ToArray(),
+            SelectedIndex = state.SizeRepresentsIndex,
             MinWidth = 150,
         };
-        _negativeBubblesCheck = new CheckBox { Content = surface.ShowNegativeBubblesLabel, IsChecked = _planner.ShowNegativeBubbles };
+        _negativeBubblesCheck = new CheckBox { Content = surface.ShowNegativeBubblesLabel, IsChecked = state.ShowNegativeBubbles };
 
         var buttons = ChartOptionsDialogChrome.CreateActionRow(
             surface.OkLabel,
@@ -66,55 +59,25 @@ internal sealed class ChartBubbleOptionsDialog : Window
         };
     }
 
-    internal ChartBubbleOptions BuildCommitPlanForTests()
-    {
-        UpdatePlannerFromControls();
-        return _planner.BuildCommitPlan();
-    }
+    internal ChartBubbleOptions BuildCommitPlanForTests() =>
+        _session.BuildCommitPlan(ReadInput());
 
     internal void SetOptionsForTests(int bubbleScalePercent, BubbleSizeRepresentation sizeRepresents, bool showNegativeBubbles)
     {
-        _scaleBox.Text = bubbleScalePercent.ToString(CultureInfo.CurrentCulture);
-        _sizeRepresentsCombo.SelectedIndex = FindSizeRepresentsIndex(sizeRepresents);
+        _scaleBox.Text = _session.Format(bubbleScalePercent);
+        _sizeRepresentsCombo.SelectedIndex = _session.FindSizeRepresentsIndex(sizeRepresents);
         _negativeBubblesCheck.IsChecked = showNegativeBubbles;
     }
 
     private void OnOk()
     {
-        try
-        {
-            _editor.ApplyChartBubbleOptions(BuildCommitPlanForTests());
+        var result = _session.Submit(ReadInput());
+        if (result.ShouldClose)
             Close(true);
-        }
-        catch (FormatException)
-        {
-            // Keep the dialog open so the user can correct the scale.
-        }
     }
 
-    private void UpdatePlannerFromControls()
-    {
-        _planner.SetBubbleScalePercent(ParseScale(_scaleBox.Text));
-        _planner.SetSizeRepresents(ChartDialogOptionProjection.ValueAtOrDefault(
-            ChartBubbleOptionsPlanner.SizeRepresentsOptions,
-            _sizeRepresentsCombo.SelectedIndex,
-            option => option.Value,
-            BubbleSizeRepresentation.Area));
-        _planner.SetShowNegativeBubbles(_negativeBubblesCheck.IsChecked == true);
-    }
-
-    private static int ParseScale(string? text)
-    {
-        return ChartDialogOptionProjection.ParseRequiredInt(
-            text,
-            CultureInfo.CurrentCulture,
-            value => value is >= 0 and <= 300,
-            "Bubble scale must be a whole number from 0 to 300.");
-    }
-
-    private static int FindSizeRepresentsIndex(BubbleSizeRepresentation value) =>
-        ChartDialogOptionProjection.FindIndex(
-            ChartBubbleOptionsPlanner.SizeRepresentsOptions,
-            value,
-            option => option.Value);
+    private ChartBubbleOptionsDialogInput ReadInput() => new(
+        _scaleBox.Text,
+        _sizeRepresentsCombo.SelectedIndex,
+        _negativeBubblesCheck.IsChecked == true);
 }

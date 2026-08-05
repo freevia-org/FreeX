@@ -676,9 +676,11 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "Chart3DViewOptionsDialog.cs");
 
-        source.Should().Contain("Chart3DViewOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChart3DViewOptions");
+        source.Should().Contain("new Chart3DViewOptionsDialogSession(editor");
+        source.Should().Contain("_session.BuildCommitPlan(ReadInput())");
+        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().NotContain("_planner");
+        source.Should().NotContain("_editor");
         source.Should().NotContain("new SetChart3DViewOptionsCommand");
     }
 
@@ -755,9 +757,11 @@ public sealed class ChartDataDialogTests : IDisposable
         var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs");
         var windowSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
 
-        source.Should().Contain("ChartBubbleOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartBubbleOptions");
+        source.Should().Contain("new ChartBubbleOptionsDialogSession(editor");
+        source.Should().Contain("_session.BuildCommitPlan(ReadInput())");
+        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().NotContain("_planner");
+        source.Should().NotContain("_editor");
         source.Should().NotContain("new SetChartBubbleOptionsCommand");
         ribbonSource.Should().Contain("ChartBubbleOptionsPlanner.CommandId");
         windowSource.Should().Contain("OpenChartBubbleOptionsDialog");
@@ -785,9 +789,11 @@ public sealed class ChartDataDialogTests : IDisposable
         var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs");
         var windowSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
 
-        source.Should().Contain("ChartPlotStyleOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartPlotStyleOptions");
+        source.Should().Contain("new ChartPlotStyleOptionsDialogSession(editor");
+        source.Should().Contain("_session.BuildCommitPlan(ReadInput())");
+        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().NotContain("_planner");
+        source.Should().NotContain("_editor");
         source.Should().NotContain("new SetChartPlotStyleOptionsCommand");
         ribbonSource.Should().Contain("ChartPlotStyleOptionsPlanner.CommandId");
         windowSource.Should().Contain("OpenChartPlotStyleOptionsDialog");
@@ -798,9 +804,11 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartTextOptionsDialog.cs");
 
-        source.Should().Contain("ChartTextOptionsPlanner.FromChart(chart, target)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartTextOptions");
+        source.Should().Contain("new ChartTextOptionsDialogSession(editor, target)");
+        source.Should().Contain("_session.BuildCommitPlan(ReadInput())");
+        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().NotContain("_planner");
+        source.Should().NotContain("_editor");
         source.Should().NotContain("new SetChartTextOptionsCommand");
     }
 

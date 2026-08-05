@@ -1,4 +1,3 @@
-using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -11,8 +10,7 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class Chart3DViewOptionsDialog : Window
 {
-    private readonly EditingSession _editor;
-    private readonly Chart3DViewOptionsPlanner _planner;
+    private readonly Chart3DViewOptionsDialogSession _session;
     private readonly TextBox _rotationXBox;
     private readonly TextBox _rotationYBox;
     private readonly TextBox _perspectiveBox;
@@ -24,11 +22,9 @@ internal sealed class Chart3DViewOptionsDialog : Window
 
     internal Chart3DViewOptionsDialog(EditingSession editor)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        var chart = editor.SelectedChart
-            ?? throw new InvalidOperationException("No chart is currently selected.");
-        _planner = Chart3DViewOptionsPlanner.FromChart(chart);
-        var surface = Chart3DViewOptionsPlanner.BuildSurfacePlan();
+        _session = new Chart3DViewOptionsDialogSession(editor);
+        var state = _session.State;
+        var surface = _session.Surface;
 
         Title = surface.Title;
         Width = Chart3DViewOptionsPlanner.DefaultDialogWidth;
@@ -38,19 +34,19 @@ internal sealed class Chart3DViewOptionsDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
-        _rotationXBox = new TextBox { Text = Format(_planner.RotationX), MinWidth = 150 };
-        _rotationYBox = new TextBox { Text = Format(_planner.RotationY), MinWidth = 150 };
-        _perspectiveBox = new TextBox { Text = Format(_planner.Perspective), MinWidth = 150 };
-        _heightBox = new TextBox { Text = Format(_planner.HeightPercent), MinWidth = 150 };
-        _depthBox = new TextBox { Text = Format(_planner.DepthPercent), MinWidth = 150 };
+        _rotationXBox = new TextBox { Text = state.RotationXText, MinWidth = 150 };
+        _rotationYBox = new TextBox { Text = state.RotationYText, MinWidth = 150 };
+        _perspectiveBox = new TextBox { Text = state.PerspectiveText, MinWidth = 150 };
+        _heightBox = new TextBox { Text = state.HeightPercentText, MinWidth = 150 };
+        _depthBox = new TextBox { Text = state.DepthPercentText, MinWidth = 150 };
         _barGapDepthBox = new TextBox
         {
-            Text = Format(_planner.BarGapDepthPercent),
+            Text = state.BarGapDepthPercentText,
             MinWidth = 150,
-            IsEnabled = _planner.SupportsBarGapDepth,
+            IsEnabled = state.SupportsBarGapDepth,
         };
-        _rightAngleCombo = BuildBooleanCombo(_planner.RightAngleAxes);
-        _wireframeCombo = BuildBooleanCombo(_planner.Wireframe);
+        _rightAngleCombo = BuildBooleanCombo(state.RightAngleAxesIndex);
+        _wireframeCombo = BuildBooleanCombo(state.WireframeIndex);
 
         var buttons = ChartOptionsDialogChrome.CreateActionRow(
             surface.OkLabel,
@@ -78,11 +74,8 @@ internal sealed class Chart3DViewOptionsDialog : Window
         };
     }
 
-    internal Chart3DViewOptions BuildCommitPlanForTests()
-    {
-        UpdatePlannerFromControls();
-        return _planner.BuildCommitPlan();
-    }
+    internal Chart3DViewOptions BuildCommitPlanForTests() =>
+        _session.BuildCommitPlan(ReadInput());
 
     internal void SetOptionsForTests(
         int? rotationX,
@@ -94,72 +87,39 @@ internal sealed class Chart3DViewOptionsDialog : Window
         bool? wireframe,
         int? barGapDepthPercent = null)
     {
-        _rotationXBox.Text = Format(rotationX);
-        _rotationYBox.Text = Format(rotationY);
-        _perspectiveBox.Text = Format(perspective);
-        _heightBox.Text = Format(heightPercent);
-        _depthBox.Text = Format(depthPercent);
-        _barGapDepthBox.Text = Format(barGapDepthPercent);
-        _rightAngleCombo.SelectedIndex = FindBooleanIndex(rightAngleAxes);
-        _wireframeCombo.SelectedIndex = FindBooleanIndex(wireframe);
+        _rotationXBox.Text = _session.Format(rotationX);
+        _rotationYBox.Text = _session.Format(rotationY);
+        _perspectiveBox.Text = _session.Format(perspective);
+        _heightBox.Text = _session.Format(heightPercent);
+        _depthBox.Text = _session.Format(depthPercent);
+        _barGapDepthBox.Text = _session.Format(barGapDepthPercent);
+        _rightAngleCombo.SelectedIndex = _session.FindBooleanIndex(rightAngleAxes);
+        _wireframeCombo.SelectedIndex = _session.FindBooleanIndex(wireframe);
     }
 
     private void OnOk()
     {
-        try
-        {
-            _editor.ApplyChart3DViewOptions(BuildCommitPlanForTests());
+        var result = _session.Submit(ReadInput());
+        if (result.ShouldClose)
             Close(true);
-        }
-        catch (FormatException)
-        {
+        else
             Close(false);
-        }
     }
 
-    private void UpdatePlannerFromControls()
-    {
-        _planner.SetRotationX(ParseOptionalInt(_rotationXBox.Text, "Elevation", -90, 90));
-        _planner.SetRotationY(ParseOptionalInt(_rotationYBox.Text, "Rotation", 0, 360));
-        _planner.SetPerspective(ParseOptionalInt(_perspectiveBox.Text, "Perspective", 0, 240));
-        _planner.SetHeightPercent(ParseOptionalInt(_heightBox.Text, "Height", 0, 500));
-        _planner.SetDepthPercent(ParseOptionalInt(_depthBox.Text, "Depth", 0, 500));
-        _planner.SetBarGapDepthPercent(ParseOptionalInt(_barGapDepthBox.Text, "Gap depth", 0, 500));
-        _planner.SetRightAngleAxes(ReadBoolean(_rightAngleCombo));
-        _planner.SetWireframe(ReadBoolean(_wireframeCombo));
-    }
+    private Chart3DViewOptionsDialogInput ReadInput() => new(
+        _rotationXBox.Text,
+        _rotationYBox.Text,
+        _perspectiveBox.Text,
+        _heightBox.Text,
+        _depthBox.Text,
+        _barGapDepthBox.Text,
+        _rightAngleCombo.SelectedIndex,
+        _wireframeCombo.SelectedIndex);
 
-    private static ComboBox BuildBooleanCombo(bool? value) => new()
+    private ComboBox BuildBooleanCombo(int selectedIndex) => new()
     {
-        ItemsSource = Chart3DViewOptionsPlanner.BooleanOptions.Select(option => option.Label).ToArray(),
-        SelectedIndex = FindBooleanIndex(value),
+        ItemsSource = _session.BooleanOptions.Select(option => option.Label).ToArray(),
+        SelectedIndex = selectedIndex,
         MinWidth = 150,
     };
-
-    private static bool? ReadBoolean(ComboBox combo)
-    {
-        return ChartDialogOptionProjection.ValueAtOrDefault(
-            Chart3DViewOptionsPlanner.BooleanOptions,
-            combo.SelectedIndex,
-            option => option.Value,
-            default(bool?));
-    }
-
-    private static int FindBooleanIndex(bool? value) =>
-        ChartDialogOptionProjection.FindIndex(
-            Chart3DViewOptionsPlanner.BooleanOptions,
-            value,
-            option => option.Value);
-
-    private static int? ParseOptionalInt(string? text, string surface, int minimum, int maximum)
-    {
-        return ChartDialogOptionProjection.ParseOptionalInt(
-            text,
-            CultureInfo.CurrentCulture,
-            value => value >= minimum && value <= maximum,
-            $"{surface} must be a whole number from {minimum} to {maximum}, or blank.");
-    }
-
-    private static string Format(int? value) =>
-        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 }

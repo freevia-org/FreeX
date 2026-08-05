@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using FreeP.App.Compositor;
@@ -9,8 +8,7 @@ namespace FreeP.App.Host;
 /// <summary>PowerPoint-style chart-wide default text formatting dialog.</summary>
 public sealed class ChartTextOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly EditingSession _editor;
-    private readonly ChartTextOptionsPlanner _planner;
+    private readonly ChartTextOptionsDialogSession _session;
     private readonly TextBox _fontFamilyBox;
     private readonly TextBox _fontSizeBox;
     private readonly ComboBox _boldCombo;
@@ -19,11 +17,9 @@ public sealed class ChartTextOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     public ChartTextOptionsDialog(EditingSession editor, ChartTextTarget target = ChartTextTarget.Chart)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        var chart = editor.SelectedChart
-            ?? throw new InvalidOperationException("No chart is currently selected.");
-        _planner = ChartTextOptionsPlanner.FromChart(chart, target);
-        var surface = ChartTextOptionsPlanner.BuildSurfacePlan(target);
+        _session = new ChartTextOptionsDialogSession(editor, target);
+        var state = _session.State;
+        var surface = _session.Surface;
 
         Title = surface.Title;
         Width = ChartTextOptionsPlanner.DefaultDialogWidth;
@@ -31,11 +27,11 @@ public sealed class ChartTextOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
-        _fontFamilyBox = new TextBox { Text = _planner.FontFamily ?? string.Empty, MinWidth = 180 };
-        _fontSizeBox = new TextBox { Text = Format(_planner.FontSizePt), MinWidth = 180 };
-        _boldCombo = BuildBooleanCombo(_planner.Bold);
-        _italicCombo = BuildBooleanCombo(_planner.Italic);
-        _colorBox = new TextBox { Text = _planner.ColorText, MinWidth = 180 };
+        _fontFamilyBox = new TextBox { Text = state.FontFamilyText, MinWidth = 180 };
+        _fontSizeBox = new TextBox { Text = state.FontSizeText, MinWidth = 180 };
+        _boldCombo = BuildBooleanCombo(state.BoldIndex);
+        _italicCombo = BuildBooleanCombo(state.ItalicIndex);
+        _colorBox = new TextBox { Text = state.ColorText, MinWidth = 180 };
 
         var buttons = ChartOptionsDialogChrome.CreateActionRow(
             surface.OkLabel,
@@ -55,52 +51,33 @@ public sealed class ChartTextOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Content = content;
     }
 
-    internal ChartTextOptions BuildCommitPlanForTests()
-    {
-        UpdatePlannerFromControls();
-        return _planner.BuildCommitPlan();
-    }
+    internal ChartTextOptions BuildCommitPlanForTests() =>
+        _session.BuildCommitPlan(ReadInput());
 
     private void OnOk()
     {
-        try
+        var result = _session.Submit(ReadInput());
+        if (result.ShouldClose)
         {
-            _editor.ApplyChartTextOptions(BuildCommitPlanForTests());
             DialogResult = true;
+            return;
         }
-        catch (FormatException ex)
-        {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
+
+        MessageBox.Show(this, result.ValidationMessage, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
-    private void UpdatePlannerFromControls()
+    private ComboBox BuildBooleanCombo(int selectedIndex) => new()
     {
-        _planner.SetFontFamily(_fontFamilyBox.Text);
-        _planner.SetFontSizePt(ChartTextOptionsPlanner.ParseOptionalFontSize(_fontSizeBox.Text));
-        _planner.SetBold(ReadBoolean(_boldCombo));
-        _planner.SetItalic(ReadBoolean(_italicCombo));
-        _planner.SetColor(_colorBox.Text);
-    }
-
-    private static ComboBox BuildBooleanCombo(bool? value) => new()
-    {
-        ItemsSource = ChartTextOptionsPlanner.BooleanOptions,
+        ItemsSource = _session.BooleanOptions,
         DisplayMemberPath = nameof(ChartTextBooleanOption.Label),
-        SelectedIndex = ChartDialogOptionProjection.FindIndex(
-            ChartTextOptionsPlanner.BooleanOptions,
-            value,
-            option => option.Value),
+        SelectedIndex = selectedIndex,
         MinWidth = 180,
     };
 
-    private static bool? ReadBoolean(ComboBox combo) =>
-        ChartDialogOptionProjection.ValueAtOrDefault(
-            ChartTextOptionsPlanner.BooleanOptions,
-            combo.SelectedIndex,
-            option => option.Value,
-            default(bool?));
-
-    private static string Format(double? value) =>
-        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
+    private ChartTextOptionsDialogInput ReadInput() => new(
+        _fontFamilyBox.Text,
+        _fontSizeBox.Text,
+        _boldCombo.SelectedIndex,
+        _italicCombo.SelectedIndex,
+        _colorBox.Text);
 }

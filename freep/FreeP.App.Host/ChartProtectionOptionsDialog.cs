@@ -8,8 +8,7 @@ namespace FreeP.App.Host;
 /// <summary>PowerPoint-style chart object/data/formatting/selection protection dialog.</summary>
 public sealed class ChartProtectionOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly EditingSession _editor;
-    private readonly ChartProtectionOptionsPlanner _planner;
+    private readonly ChartProtectionOptionsDialogSession _session;
     private readonly ComboBox _chartObjectCombo;
     private readonly ComboBox _dataCombo;
     private readonly ComboBox _formattingCombo;
@@ -17,11 +16,9 @@ public sealed class ChartProtectionOptionsDialog : Free.Shared.Ribbon.Wpf.Dialog
 
     public ChartProtectionOptionsDialog(EditingSession editor)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        var chart = editor.SelectedChart
-            ?? throw new InvalidOperationException("No chart is currently selected.");
-        _planner = ChartProtectionOptionsPlanner.FromChart(chart);
-        var surface = ChartProtectionOptionsPlanner.BuildSurfacePlan();
+        _session = new ChartProtectionOptionsDialogSession(editor);
+        var state = _session.State;
+        var surface = _session.Surface;
 
         Title = surface.Title;
         Width = ChartProtectionOptionsPlanner.DefaultDialogWidth;
@@ -29,10 +26,10 @@ public sealed class ChartProtectionOptionsDialog : Free.Shared.Ribbon.Wpf.Dialog
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
-        _chartObjectCombo = BuildBooleanCombo(_planner.ChartObject);
-        _dataCombo = BuildBooleanCombo(_planner.Data);
-        _formattingCombo = BuildBooleanCombo(_planner.Formatting);
-        _selectionCombo = BuildBooleanCombo(_planner.Selection);
+        _chartObjectCombo = BuildBooleanCombo(state.ChartObjectIndex);
+        _dataCombo = BuildBooleanCombo(state.DataIndex);
+        _formattingCombo = BuildBooleanCombo(state.FormattingIndex);
+        _selectionCombo = BuildBooleanCombo(state.SelectionIndex);
 
         var buttons = ChartOptionsDialogChrome.CreateActionRow(
             surface.OkLabel,
@@ -51,52 +48,34 @@ public sealed class ChartProtectionOptionsDialog : Free.Shared.Ribbon.Wpf.Dialog
         Content = content;
     }
 
-    internal ChartProtectionOptions BuildCommitPlanForTests()
-    {
-        UpdatePlannerFromControls();
-        return _planner.BuildCommitPlan();
-    }
+    internal ChartProtectionOptions BuildCommitPlanForTests() =>
+        _session.BuildCommitPlan(ReadInput());
 
     internal void SetOptionsForTests(bool? chartObject, bool? data, bool? formatting, bool? selection)
     {
-        _chartObjectCombo.SelectedIndex = FindBooleanIndex(chartObject);
-        _dataCombo.SelectedIndex = FindBooleanIndex(data);
-        _formattingCombo.SelectedIndex = FindBooleanIndex(formatting);
-        _selectionCombo.SelectedIndex = FindBooleanIndex(selection);
+        _chartObjectCombo.SelectedIndex = _session.FindBooleanIndex(chartObject);
+        _dataCombo.SelectedIndex = _session.FindBooleanIndex(data);
+        _formattingCombo.SelectedIndex = _session.FindBooleanIndex(formatting);
+        _selectionCombo.SelectedIndex = _session.FindBooleanIndex(selection);
     }
 
     private void OnOk()
     {
-        _editor.ApplyChartProtectionOptions(BuildCommitPlanForTests());
+        _session.Submit(ReadInput());
         DialogResult = true;
     }
 
-    private void UpdatePlannerFromControls()
+    private ComboBox BuildBooleanCombo(int selectedIndex) => new()
     {
-        _planner.SetChartObject(ReadBoolean(_chartObjectCombo));
-        _planner.SetData(ReadBoolean(_dataCombo));
-        _planner.SetFormatting(ReadBoolean(_formattingCombo));
-        _planner.SetSelection(ReadBoolean(_selectionCombo));
-    }
-
-    private static ComboBox BuildBooleanCombo(bool? value) => new()
-    {
-        ItemsSource = ChartProtectionOptionsPlanner.BooleanOptions,
+        ItemsSource = _session.BooleanOptions,
         DisplayMemberPath = nameof(ChartProtectionBooleanOption.Label),
-        SelectedIndex = FindBooleanIndex(value),
+        SelectedIndex = selectedIndex,
         MinWidth = 180,
     };
 
-    private static bool? ReadBoolean(ComboBox combo) =>
-        ChartDialogOptionProjection.ValueAtOrDefault(
-            ChartProtectionOptionsPlanner.BooleanOptions,
-            combo.SelectedIndex,
-            option => option.Value,
-            default(bool?));
-
-    private static int FindBooleanIndex(bool? value) =>
-        ChartDialogOptionProjection.FindIndex(
-            ChartProtectionOptionsPlanner.BooleanOptions,
-            value,
-            option => option.Value);
+    private ChartProtectionOptionsDialogInput ReadInput() => new(
+        _chartObjectCombo.SelectedIndex,
+        _dataCombo.SelectedIndex,
+        _formattingCombo.SelectedIndex,
+        _selectionCombo.SelectedIndex);
 }
