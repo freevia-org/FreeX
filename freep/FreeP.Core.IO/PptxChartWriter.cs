@@ -232,9 +232,11 @@ internal static class PptxChartWriter
         XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
         if (chart.Legend is not { } position)
         {
-            // Clearing the legend is an explicit authoring edit. Remove the
-            // preserved native node instead of leaving it visible on save.
-            document.Root?.Element(cx + "chart")?.Element(cx + "legend")?.Remove();
+            // A null high-level value can mean that a preserved native legend
+            // has not been materialized yet. Remove it only after an explicit
+            // authoring command requested the clear.
+            if (chart.ChartExLegendEditRequested)
+                document.Root?.Element(cx + "chart")?.Element(cx + "legend")?.Remove();
             return;
         }
 
@@ -280,9 +282,10 @@ internal static class PptxChartWriter
         var title = chartElement.Element(cx + "title");
         if (chart.Title is null)
         {
-            // An empty title is an explicit authoring edit. Do not leave the
-            // preserved native title visible just because the model has no text.
-            title?.Remove();
+            // Preserve an untouched native title when the model has not
+            // materialized it; explicit authoring clears set the edit marker.
+            if (chart.ChartExTitleEditRequested)
+                title?.Remove();
             return;
         }
 

@@ -13,7 +13,8 @@ namespace FreeW.Core.Model;
 /// </para>
 /// <list type="bullet">
 /// <item>render with distinct TOC formatting once <see cref="EnsureStyles"/> has registered them;</item>
-/// <item>round-trip through docx as normal styled paragraphs (no I/O changes needed); and</item>
+/// <item>round-trip through docx as normal styled paragraphs, while imported native fields retain
+/// semantic ownership independently;</item>
 /// <item>act as a marker so a "refresh" can locate and replace a previously inserted TOC region
 /// via <see cref="IsTocParagraph"/>.</item>
 /// </list>
@@ -172,9 +173,15 @@ public static class TableOfContents
             && level >= 0;
     }
 
-    /// <summary>True when <paramref name="block"/> is a paragraph carrying a TOC style (see <see cref="IsTocStyleId"/>).</summary>
+    /// <summary>
+    /// True when <paramref name="block"/> is a paragraph carrying a TOC style or owned by a native
+    /// multi-paragraph <c>TOC</c> field.
+    /// </summary>
     public static bool IsTocParagraph(Block block) =>
-        block is Paragraph paragraph && IsTocStyleId(paragraph.StyleId);
+        block is Paragraph paragraph
+        && (paragraph.SpanningFieldOwner is { Keyword: "TOC" }
+            || paragraph.Runs.Any(run => run.ComplexField is { Keyword: "TOC" })
+            || IsTocStyleId(paragraph.StyleId));
 
     /// <summary>
     /// Registers the TOC styles (<see cref="HeadingStyleId"/> and <c>TOC1</c>..<c>TOC{MaxStyledLevel}</c>)

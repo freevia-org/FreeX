@@ -221,7 +221,19 @@ public class TableOfContentsTests
     public void IsTocParagraph_TrueOnlyForTocStyledParagraphs()
     {
         TableOfContents.IsTocParagraph(new Paragraph("x") { StyleId = "TOC1" }).Should().BeTrue();
+        TableOfContents.IsTocParagraph(new Paragraph("x")
+        {
+            SpanningFieldOwner = new ComplexField(" TOC \\o \"1-3\" ")
+        }).Should().BeTrue();
+        TableOfContents.IsTocParagraph(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" TOC \\o \"1-3\" ", "Chapter One\t1") }
+        }).Should().BeTrue();
         TableOfContents.IsTocParagraph(new Paragraph("x") { StyleId = "Heading1" }).Should().BeFalse();
+        TableOfContents.IsTocParagraph(new Paragraph("x")
+        {
+            SpanningFieldOwner = new ComplexField(" INDEX ")
+        }).Should().BeFalse();
         TableOfContents.IsTocParagraph(Table.Create(1, 1)).Should().BeFalse();
     }
 
