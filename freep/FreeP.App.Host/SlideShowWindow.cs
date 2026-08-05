@@ -57,8 +57,6 @@ public sealed class SlideShowWindow : Window
     // ── State ─────────────────────────────────────────────────────────────────────
 
     private readonly Presentation    _presentation;
-    private readonly SlideShowPlaybackRoute _playbackRoute;
-    private readonly SlideShowController _controller;
     private readonly SlideShowSessionController _session;
     private readonly Action<int, string?>? _setSlideNotesText;
     private readonly DispatcherTimer  _autoAdvanceTimer;
@@ -88,10 +86,6 @@ public sealed class SlideShowWindow : Window
     private readonly Canvas _inkOverlay;
     private readonly Rectangle _transitionFlashOverlay;
     private readonly Rectangle _screenModeOverlay;
-    private SlideShowScreenMode _screenMode;
-    private string _slideNumberBuffer = string.Empty;
-    private Slide? _revealedHiddenSlide;
-    private int _revealedHiddenSlideSourceIndex = -1;
 
     // Manages MediaElement lifecycle for the current slide's media shapes.
     private readonly SlideShowMediaController _mediaController;
@@ -170,20 +164,14 @@ public sealed class SlideShowWindow : Window
         int? preferredCaptionTrackIndex = null)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
-        _playbackRoute = playbackRoute ?? throw new ArgumentNullException(nameof(playbackRoute));
+        ArgumentNullException.ThrowIfNull(playbackRoute);
         _setSlideNotesText = setSlideNotesText;
         _preferredCaptionSlideIndex = preferredCaptionSlideIndex;
         _preferredCaptionShapeId = preferredCaptionShapeId;
         _preferredCaptionTrackIndex = preferredCaptionTrackIndex;
-        _controller = new SlideShowController(
-            _playbackRoute.Slides,
-            _playbackRoute.StartIndex,
-            _playbackRoute.AnimationStartIndex,
-            showWithAnimation: _presentation.ShowWithAnimation,
-            loopUntilStopped: _presentation.LoopUntilStopped);
         _session = new SlideShowSessionController(
             _presentation,
-            _playbackRoute,
+            playbackRoute,
             DateTimeOffset.UtcNow,
             captureBackend ?? CreateDefaultRecordingCaptureBackend());
 
@@ -350,7 +338,7 @@ public sealed class SlideShowWindow : Window
     /// </summary>
     public AdvanceResult ExecuteAdvance(DateTimeOffset? nowUtc = null)
     {
-        var command = SlideShowHostPlanner.PlanAdvance(_controller);
+        var command = _session.PlanAdvance();
         ApplyHostCommand(command, nowUtc);
         return command.AdvanceResult!;
     }
@@ -358,7 +346,7 @@ public sealed class SlideShowWindow : Window
     /// <summary>Execute a logical back step and return what happened.</summary>
     public BackResult ExecuteBack(DateTimeOffset? nowUtc = null)
     {
-        var command = SlideShowHostPlanner.PlanBack(_controller);
+        var command = _session.PlanBack();
         ApplyHostCommand(command, nowUtc);
         return command.BackResult!;
     }
@@ -366,50 +354,31 @@ public sealed class SlideShowWindow : Window
     /// <summary>Jump to a one-based slide number without playing its entrance transition.</summary>
     public void ExecuteSlideNumberJump(int oneBasedSlideNumber)
     {
-        _slideNumberBuffer = string.Empty;
-        ApplyHostCommand(SlideShowHostPlanner.PlanSlideNumberJump(
-            _controller,
-            _playbackRoute.Slides,
-            oneBasedSlideNumber,
-            _playbackRoute.SourceSlideIndices));
+        ApplyHostCommand(_session.PlanSlideNumberJump(oneBasedSlideNumber));
     }
 
     public Slide? ExecuteHiddenSlideReveal()
     {
-        if (_controller.CurrentSlideIndex < 0 ||
-            _controller.CurrentSlideIndex >= _playbackRoute.SourceSlideIndices.Count)
-        {
-            return null;
-        }
-
-        var currentSourceIndex = _revealedHiddenSlideSourceIndex >= 0
-            ? _revealedHiddenSlideSourceIndex
-            : _playbackRoute.SourceSlideIndices[_controller.CurrentSlideIndex];
-        var target = SlideShowHostPlanner.FindNextHiddenSlide(
-            _presentation,
-            _playbackRoute,
-            currentSourceIndex);
-        if (target is null)
+        var slide = _session.RevealNextHiddenSlide();
+        if (slide is null)
             return null;
 
-        _revealedHiddenSlide = target.Slide;
-        _revealedHiddenSlideSourceIndex = target.SourceSlideIndex;
         DisplayCurrentSlide(animated: false);
-        return _revealedHiddenSlide;
+        return slide;
     }
 
     /// <summary>The underlying state machine (for test assertions).</summary>
-    public SlideShowController Controller => _controller;
+    public SlideShowController Controller => _session.Controller;
 
     /// <summary>The presenter blank-screen mode currently covering the slide.</summary>
-    public SlideShowScreenMode ScreenMode => _screenMode;
+    public SlideShowScreenMode ScreenMode => _session.ScreenMode;
 
     /// <summary>Show the slide, a black screen, or a white screen during presentation.</summary>
     public void SetScreenMode(SlideShowScreenMode mode)
     {
-        _screenMode = mode;
+        _session.SetScreenMode(mode);
         _screenModeOverlay.Fill = mode == SlideShowScreenMode.White ? Brushes.White : Brushes.Black;
-        _screenModeOverlay.Visibility = SlideShowScreenModePlanner.IsBlank(mode)
+        _screenModeOverlay.Visibility = _session.IsScreenBlank
             ? Visibility.Visible
             : Visibility.Collapsed;
     }
@@ -438,11 +407,7 @@ public sealed class SlideShowWindow : Window
 
     public SlideShowInkExecutionState InkExecutionState => _session.InkExecutionState;
     public SlideShowPresenterSessionSummary PresenterSessionSummary =>
-        SlideShowPresenterSessionSummaryPlanner.BuildSummary(
-            _session.RecordingExecutionState,
-            _session.InkExecutionState,
-            _presentation,
-            _playbackRoute.GetSourceSlideIndex);
+        _session.PresenterSummary;
 
     public SlideShowRecordingReviewPlan RecordingReviewPlan =>
         _session.RecordingReviewPlan;
@@ -454,20 +419,13 @@ public sealed class SlideShowWindow : Window
     internal SlideShowShapeAnimationVisualFramePlan? LastAnimationFramePlanForTest => _lastAnimationFramePlan;
     internal IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> LastAnimationStepFrameEvidenceForTest => _lastAnimationStepFrameEvidence;
     internal SlideShowAnimationStepPlaybackReadinessPlan? LastAnimationStepPlaybackReadinessPlanForTest => _lastAnimationStepPlaybackReadinessPlan;
-    internal SlideShowPlaybackRoute PlaybackRoute => _playbackRoute;
+    internal SlideShowPlaybackRoute PlaybackRoute => _session.PlaybackRoute;
     internal int CurrentPresentationSlideIndex => _session.CurrentPresentationSlideIndex;
 
     public SlideShowPresenterState CreatePresenterState(
         DateTimeOffset nowUtc,
         SlideShowPresenterDisplayIntent? displayIntent = null) =>
-        SlideShowHostPlanner.BuildPresenterState(
-            _presentation,
-            _controller,
-            _playbackRoute.Slides,
-            _session.StartedAtUtc,
-            nowUtc,
-            displayIntent,
-            _session.ToolPlan);
+        _session.CreatePresenterState(nowUtc, displayIntent);
 
     /// <summary>Whether the synchronized presenter dashboard is currently open.</summary>
     public bool IsPresenterViewOpen => _presenterViewWindow?.IsVisible == true;
@@ -522,7 +480,6 @@ public sealed class SlideShowWindow : Window
             inkColorHex,
             inkThicknessDip,
             inkRetentionDecision,
-            _controller.CurrentSlideIndex,
             now);
 
         RefreshInkOverlay();
@@ -533,45 +490,27 @@ public sealed class SlideShowWindow : Window
         SlideShowPresenterPointerMode pointerMode,
         DateTimeOffset? nowUtc = null)
     {
-        var current = _session.ToolPlan;
-        return ApplyPresenterToolIntent(
-            current.Recording.TimingIntent,
-            current.Recording.MediaIntent,
-            pointerMode,
-            current.PointerInk.InkState.ColorHex,
-            current.PointerInk.InkState.ThicknessDip,
-            current.PointerInk.InkRetentionDecision,
-            nowUtc);
+        var plan = _session.SetPointerMode(pointerMode, nowUtc ?? DateTimeOffset.UtcNow);
+        RefreshInkOverlay();
+        return plan;
     }
 
     public SlideShowPresenterToolPlan SetPresenterTimingIntent(
         SlideShowTimingIntent timingIntent,
         DateTimeOffset? nowUtc = null)
     {
-        var current = _session.ToolPlan;
-        return ApplyPresenterToolIntent(
-            timingIntent,
-            current.Recording.MediaIntent,
-            current.PointerInk.PointerMode,
-            current.PointerInk.InkState.ColorHex,
-            current.PointerInk.InkState.ThicknessDip,
-            current.PointerInk.InkRetentionDecision,
-            nowUtc);
+        var plan = _session.SetTimingIntent(timingIntent, nowUtc ?? DateTimeOffset.UtcNow);
+        RefreshInkOverlay();
+        return plan;
     }
 
     public SlideShowPresenterToolPlan SetPresenterMediaIntent(
         SlideShowRecordingMediaIntent mediaIntent,
         DateTimeOffset? nowUtc = null)
     {
-        var current = _session.ToolPlan;
-        return ApplyPresenterToolIntent(
-            current.Recording.TimingIntent,
-            mediaIntent,
-            current.PointerInk.PointerMode,
-            current.PointerInk.InkState.ColorHex,
-            current.PointerInk.InkState.ThicknessDip,
-            current.PointerInk.InkRetentionDecision,
-            nowUtc);
+        var plan = _session.SetMediaIntent(mediaIntent, nowUtc ?? DateTimeOffset.UtcNow);
+        RefreshInkOverlay();
+        return plan;
     }
 
     public SlideShowInkExecutionResult BeginPresenterInkStroke(double canvasX, double canvasY) =>
@@ -617,62 +556,27 @@ public sealed class SlideShowWindow : Window
             return;
         }
 
-        if (TryHandleSlideNumberKey(e.Key.ToString()))
-        {
-            e.Handled = true;
-            return;
-        }
-
-        _slideNumberBuffer = string.Empty;
-
-        if (SlideShowScreenModePlanner.TryPlanKey(e.Key.ToString(), _screenMode, out var screenMode))
+        var plan = _session.PlanKeyboardInput(e.Key.ToString());
+        if (plan.ScreenMode is { } screenMode)
         {
             SetScreenMode(screenMode);
             e.Handled = true;
             return;
         }
 
-        var command = SlideShowHostPlanner.PlanKey(e.Key.ToString(), _controller, _playbackRoute.Slides);
-        ApplyHostCommand(command);
-        e.Handled = command.IsHandled;
-    }
-
-    private bool TryHandleSlideNumberKey(string keyName)
-    {
-        if (SlideShowSlideNumberPlanner.TryGetDigit(keyName, out var digit))
+        if (plan.ShouldExecuteHostCommand)
         {
-            _slideNumberBuffer = SlideShowSlideNumberPlanner.AppendDigit(_slideNumberBuffer, digit);
-            return true;
+            ApplyHostCommand(plan.HostCommand);
         }
 
-        if (keyName is "Escape" && _slideNumberBuffer.Length > 0)
-        {
-            _slideNumberBuffer = string.Empty;
-            return true;
-        }
-
-        if (keyName is not ("Enter" or "Return") || _slideNumberBuffer.Length == 0)
-            return false;
-
-        var buffer = _slideNumberBuffer;
-        _slideNumberBuffer = string.Empty;
-        if (SlideShowSlideNumberPlanner.TryParseSlideNumber(buffer, out var slideNumber))
-        {
-            ApplyHostCommand(SlideShowHostPlanner.PlanSlideNumberJump(
-                _controller,
-                _playbackRoute.Slides,
-                slideNumber,
-                _playbackRoute.SourceSlideIndices));
-        }
-
-        return true;
+        e.Handled = plan.IsHandled;
     }
 
     // ── Navigation helpers ────────────────────────────────────────────────────────
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        var slide = _revealedHiddenSlide ?? _controller.CurrentSlide;
+        var slide = _session.DisplaySlide;
         var clickPt = e.GetPosition(_slideCanvas);
         var inkResult = BeginPresenterInkStroke(clickPt.X, clickPt.Y);
         if (inkResult.IsHandled)
@@ -694,24 +598,20 @@ public sealed class SlideShowWindow : Window
             }
         }
 
-        var pointerIntent = SlideShowHostPlanner.PlanPointerClick(
-            slide,
+        var pointerIntent = _session.PlanPointerClick(
             SlideShowHostPlanner.MapCanvasPointToSlide(
                 clickPt.X,
                 clickPt.Y,
                 _slideCanvas.ActualWidth,
                 _slideCanvas.ActualHeight,
-                CurrentSlideMetrics()),
-            _presentation);
+                CurrentSlideMetrics()));
         switch (pointerIntent.Kind)
         {
             case SlideShowPointerClickIntentKind.Trigger when pointerIntent.TriggerShapeId is uint triggerShapeId:
                 PlayTriggerGroup(triggerShapeId);
                 break;
             case SlideShowPointerClickIntentKind.Zoom when pointerIntent.TargetSlideIndex is int targetSlideIndex:
-                ApplyHostCommand(SlideShowHostPlanner.PlanZoomNavigation(
-                    _controller,
-                    _presentation.Slides,
+                ApplyHostCommand(_session.PlanZoomNavigation(
                     targetSlideIndex,
                     pointerIntent.ReturnToParent,
                     pointerIntent.TransitionDurationMs,
@@ -737,7 +637,7 @@ public sealed class SlideShowWindow : Window
 
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
-        var slide = _revealedHiddenSlide ?? _controller.CurrentSlide;
+        var slide = _session.DisplaySlide;
         if (slide is null) { Cursor = Cursors.Arrow; return; }
         var pt = e.GetPosition(_slideCanvas);
         if (e.LeftButton == MouseButtonState.Pressed)
@@ -786,10 +686,7 @@ public sealed class SlideShowWindow : Window
         }
         else if (hlink.TargetSlideId is not null)
         {
-            ApplyHostCommand(SlideShowHostPlanner.PlanInternalSlideJump(
-                _controller,
-                _playbackRoute.Slides,
-                hlink.TargetSlideId));
+            ApplyHostCommand(_session.PlanInternalSlideJump(hlink.TargetSlideId));
         }
     }
 
@@ -957,17 +854,17 @@ public sealed class SlideShowWindow : Window
     /// </summary>
     private void PlayTriggerGroup(uint triggerShapeId)
     {
-        ApplyHostCommand(SlideShowHostPlanner.PlanTrigger(_controller, triggerShapeId));
+        ApplyHostCommand(_session.PlanTrigger(triggerShapeId));
     }
 
     private void DoAdvance()
     {
-        ApplyHostCommand(SlideShowHostPlanner.PlanAdvance(_controller, stopAutoAdvance: true));
+        ApplyHostCommand(_session.PlanAdvance(stopAutoAdvance: true));
     }
 
     private void DoBack()
     {
-        ApplyHostCommand(SlideShowHostPlanner.PlanBack(_controller, stopAutoAdvance: true));
+        ApplyHostCommand(_session.PlanBack(stopAutoAdvance: true));
     }
 
     private void CloseSlideShow(DateTimeOffset nowUtc)
@@ -983,42 +880,27 @@ public sealed class SlideShowWindow : Window
         int? zoomTransitionDurationMs = null,
         bool zoomShowBackground = true)
     {
-        _ = slide;  // passed for callers that need it; we use _controller.CurrentSlide
+        _ = slide;
         _ = index;
         DisplayCurrentSlide(animated, zoomTransitionDurationMs, zoomShowBackground);
     }
 
     private void ApplyHostCommand(SlideShowHostCommand command, DateTimeOffset? nowUtc = null)
     {
-        _revealedHiddenSlide = null;
-        _revealedHiddenSlideSourceIndex = -1;
         var now = nowUtc ?? DateTimeOffset.UtcNow;
-        if (command.StopAutoAdvance)
-            _autoAdvanceTimer.Stop();
-
-        switch (command.Kind)
-        {
-            case SlideShowHostCommandKind.Close:
-                CloseSlideShow(now);
-                break;
-            case SlideShowHostCommandKind.PlayAnimationStep when command.Step is not null:
-                PlayAnimationStep(command.Step);
-                break;
-            case SlideShowHostCommandKind.NavigateToSlide when command.Slide is not null:
-                MovePresenterTimingToSlide(command.SlideIndex, now);
-                NavigateToSlide(
-                    command.Slide,
-                    command.SlideIndex,
-                    command.AnimateSlide,
-                    command.TransitionDurationMs,
-                    command.UseDestinationBackground);
-                break;
-        }
-    }
-
-    private void MovePresenterTimingToSlide(int slideIndex, DateTimeOffset nowUtc)
-    {
-        _session.MoveToSlide(slideIndex, nowUtc);
+        _session.ExecuteHostCommand(
+            command,
+            now,
+            new SlideShowHostExecutionCallbacks(
+                _autoAdvanceTimer.Stop,
+                CloseSlideShow,
+                PlayAnimationStep,
+                navigation => NavigateToSlide(
+                    navigation.Slide,
+                    navigation.SlideIndex,
+                    navigation.AnimateSlide,
+                    navigation.TransitionDurationMs,
+                    navigation.UseDestinationBackground)));
     }
 
     // ── Slide display + transitions ───────────────────────────────────────────────
@@ -1032,14 +914,10 @@ public sealed class SlideShowWindow : Window
         int? zoomTransitionDurationMs = null,
         bool zoomShowBackground = true)
     {
-        var plan = SlideShowHostPlanner.BuildDisplayPlan(
-            _presentation,
-            _controller,
+        var plan = _session.BuildDisplayPlan(
             animated,
             zoomTransitionDurationMs,
             zoomShowBackground);
-        if (_revealedHiddenSlide is not null)
-            plan = plan with { Transition = null, AutoAdvanceAfterMs = null };
         _slideDipW = plan.Metrics.WidthDip;
         _slideDipH = plan.Metrics.HeightDip;
         _zoomShowBackgroundForTransition = plan.UseDestinationBackground;
@@ -1047,12 +925,10 @@ public sealed class SlideShowWindow : Window
         // Ink state follows the route through the shared session controller.
         RefreshInkOverlay();
 
-        var slide = _revealedHiddenSlide ?? plan.Slide;
+        var slide = plan.Slide;
         if (slide is null) return;
 
-        var captionSlideIndex = _revealedHiddenSlideSourceIndex >= 0
-            ? _revealedHiddenSlideSourceIndex
-            : CurrentPresentationSlideIndex;
+        var captionSlideIndex = _session.DisplaySourceSlideIndex;
 
         // Prepare animation overlay for the new slide.
         PrepareAnimationOverlay(slide);
@@ -1114,16 +990,12 @@ public sealed class SlideShowWindow : Window
         if (_session.IsClosed)
             return;
 
-        ApplyHostCommand(SlideShowHostPlanner.PlanIntent(
-            SlideShowHostIntent.FirstSlide,
-            _controller,
-            _playbackRoute.Slides,
-            stopAutoAdvance: true));
+        ApplyHostCommand(_session.PlanFirstSlide());
     }
 
     private void SyncMediaOverlayLayout()
     {
-        var slide = _revealedHiddenSlide ?? _controller.CurrentSlide;
+        var slide = _session.DisplaySlide;
         if (slide is null)
             return;
 
@@ -4100,7 +3972,7 @@ public sealed class SlideShowWindow : Window
                 slideWidthDip: _slideDipW,
                 slideHeightDip: _slideDipH);
 
-        var effectiveColorMap = (_revealedHiddenSlide ?? _controller.CurrentSlide)?.ColorMapOverride;
+        var effectiveColorMap = _session.DisplaySlide?.ColorMapOverride;
         foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step, _presentation, effectiveColorMap))
         {
             var anim = plan.Animation;

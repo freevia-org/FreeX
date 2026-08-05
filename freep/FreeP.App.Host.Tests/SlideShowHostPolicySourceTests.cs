@@ -29,23 +29,22 @@ public sealed class SlideShowHostPolicySourceTests
             "FreeP.App.Host",
             "SlideShowWindow.cs"));
 
-        source.Should().Contain("SlideShowHostPlanner.PlanKey(");
-        source.Should().Contain("SlideShowSlideNumberPlanner.TryGetDigit(");
-        source.Should().Contain("SlideShowHostPlanner.PlanSlideNumberJump(");
+        source.Should().Contain("_session.PlanKeyboardInput(");
+        source.Should().Contain("_session.PlanSlideNumberJump(");
         source.Should().Contain("ExecuteSlideNumberJump");
-        source.Should().Contain("SlideShowScreenModePlanner.TryPlanKey(");
+        source.Should().Contain("_session.SetScreenMode(mode);");
         source.Should().Contain("SetScreenMode(screenMode);");
-        source.Should().Contain("SlideShowHostPlanner.PlanAdvance(");
-        source.Should().Contain("SlideShowHostPlanner.PlanBack(");
-        source.Should().Contain("SlideShowHostPlanner.PlanTrigger(");
-        source.Should().Contain("SlideShowHostPlanner.PlanInternalSlideJump(");
-        source.Should().Contain("SlideShowHostPlanner.BuildDisplayPlan(");
-        source.Should().Contain("SlideShowHostPlanner.BuildPresenterState(");
-        source.Should().Contain("SlideShowPresenterSessionSummaryPlanner.BuildSummary(");
+        source.Should().Contain("_session.PlanAdvance(");
+        source.Should().Contain("_session.PlanBack(");
+        source.Should().Contain("_session.PlanTrigger(");
+        source.Should().Contain("_session.PlanInternalSlideJump(");
+        source.Should().Contain("_session.BuildDisplayPlan(");
+        source.Should().Contain("_session.CreatePresenterState(");
+        source.Should().Contain("_session.PresenterSummary");
         source.Should().Contain("SlideShowInkExecutionPlanner.BuildOverlayRenderPlan(");
         source.Should().Contain("SlideShowSessionController");
         source.Should().Contain("_session.ApplyPresenterToolIntent(");
-        source.Should().Contain("_session.MoveToSlide(");
+        source.Should().Contain("_session.ExecuteHostCommand(");
         source.Should().Contain("_session.Close(");
         source.Should().Contain("_session.BeginInkStroke(");
         source.Should().Contain("_session.AppendInkStroke(");
@@ -68,7 +67,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowHostPlanner.MapCanvasPointToSlide(");
         source.Should().Contain("SlideShowHostPlanner.HitTestHyperlink(");
         source.Should().Contain("SlideShowHostPlanner.HitTestTriggerShape(");
-        source.Should().Contain("SlideShowHostPlanner.PlanPointerClick(");
+        source.Should().Contain("_session.PlanPointerClick(");
         source.Should().Contain("SlideShowPlaybackPlanner.PlanTransition(_presentation, slide, t);");
         source.Should().Contain("t = plan.EffectiveTransition;");
         source.Should().Contain("PlaySplitTransition(");
@@ -204,6 +203,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().NotContain("private SlideShowTimingRecorderState _timingRecorderState");
         source.Should().NotContain("private SlideShowRecordingExecutionState _recordingExecutionState");
         source.Should().NotContain("private SlideShowInkExecutionState _inkExecutionState");
+        source.Should().NotContain("private readonly SlideShowController _controller");
+        source.Should().NotContain("private string _slideNumberBuffer");
     }
 
     [Fact]
@@ -215,8 +216,8 @@ public sealed class SlideShowHostPolicySourceTests
             "FreeP.App.Host",
             "SlideShowWindow.cs"));
 
-        source.Should().Contain("case SlideShowHostCommandKind.PlayAnimationStep when command.Step is not null:");
-        source.Should().Contain("PlayAnimationStep(command.Step);");
+        source.Should().Contain("new SlideShowHostExecutionCallbacks(");
+        source.Should().Contain("PlayAnimationStep,");
         source.Should().Contain("private void PlayAnimationStep(AnimationStep step)");
         source.Should().Contain("_lastAnimationStepFrameEvidence = SlideShowPlaybackFramePlanner.PlanAnimationStepCheckpoints(step, _slideDipW, _slideDipH);");
         source.Should().Contain("_lastAnimationStepPlaybackReadinessPlan =");

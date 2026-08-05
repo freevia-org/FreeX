@@ -25,26 +25,27 @@ public sealed class PresenterViewControlSourceTests
         slideshow.Should().Contain("public SlideShowPresenterToolPlan SetPresenterTimingIntent");
         slideshow.Should().Contain("SetPresenterMediaIntent(media)");
         slideshow.Should().Contain("public SlideShowPresenterToolPlan SetPresenterMediaIntent");
-        presenter.Should().Contain("_goBack?.Invoke();");
-        presenter.Should().Contain("_goNext?.Invoke();");
-        presenter.Should().Contain("SlideShowSlideNumberPlanner.TryParseSlideNumber");
+        presenter.Should().Contain("SlideShowPresenterViewSession");
+        presenter.Should().Contain("_session.GoBack(");
+        presenter.Should().Contain("_session.GoNext(");
+        presenter.Should().Contain("_session.GoToSlide(");
         presenter.Should().Contain("SubmitSlideNumber();");
         presenter.Should().Contain("_notesText.LostFocus");
-        presenter.Should().Contain("_setNotesText(index, _notesText.Text)");
-        presenter.Should().Contain("IsReadOnly = _setNotesText is null");
+        presenter.Should().Contain("_session.CommitNotes(");
+        presenter.Should().Contain("IsReadOnly = !_session.CanSetNotes");
         presenter.Should().Contain("SlideShowScreenMode.Black");
         presenter.Should().Contain("SlideShowScreenMode.White");
-        presenter.Should().Contain("_clearInk?.Invoke()");
-        presenter.Should().Contain("_selectPointerMode?.Invoke");
-        presenter.Should().Contain("Record timings");
-        presenter.Should().Contain("Rehearse timings");
-        presenter.Should().Contain("Narration + camera");
+        presenter.Should().Contain("_session.ClearInk");
+        presenter.Should().Contain("_session.SelectPointerMode");
+        presenter.Should().Contain("_session.ToggleTimingIntent(");
+        presenter.Should().Contain("_session.ToggleMediaIntent(");
         presenter.Should().Contain("SlideShowRecordingMediaIntent.Narration");
         presenter.Should().Contain("SlideShowRecordingMediaIntent.NarrationAndMedia");
         presenter.Should().Contain("SlideShowTimingIntent.RecordTimings");
         presenter.Should().Contain("SlideShowTimingIntent.RehearseTimings");
-        presenter.Should().Contain("_setTimingIntent");
         presenter.Should().Contain("plan.CanGoBack");
         presenter.Should().Contain("plan.CanAdvance");
+        presenter.Should().NotContain("SlideShowSlideNumberPlanner");
+        presenter.Should().NotContain("BuildRecordingSummary");
     }
 }

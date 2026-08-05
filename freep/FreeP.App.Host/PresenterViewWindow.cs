@@ -13,7 +13,7 @@ namespace FreeP.App.Host;
 public sealed class PresenterViewWindow : Window
 {
     private readonly Presentation _presentation;
-    private readonly Func<SlideShowPresenterState> _stateProvider;
+    private readonly SlideShowPresenterViewSession _session;
     private readonly DispatcherTimer _refreshTimer;
     private readonly SlideCanvas _currentPreview;
     private readonly SlideCanvas _nextPreview;
@@ -30,20 +30,9 @@ public sealed class PresenterViewWindow : Window
     private readonly Button _narrationAndMediaButton;
     private readonly Button _applyRecordingButton;
     private readonly TextBlock _recordingStatusText;
-    private readonly Action? _goBack;
-    private readonly Action? _goNext;
-    private readonly Action<int>? _goToSlide;
     private readonly TextBox _slideNumberBox;
     private readonly Button _goToSlideButton;
     private readonly ComboBox _pointerModeCombo;
-    private readonly Action<SlideShowScreenMode>? _setScreenMode;
-    private readonly Action<SlideShowPresenterPointerMode>? _selectPointerMode;
-    private readonly Action? _clearInk;
-    private readonly Action<SlideShowTimingIntent>? _setTimingIntent;
-    private readonly Action<SlideShowRecordingMediaIntent>? _setMediaIntent;
-    private readonly Func<SlideShowRecordingReviewPlan>? _recordingReviewProvider;
-    private readonly Func<SlideShowRecordingReviewApplyResult>? _applyRecordingReview;
-    private readonly Action<int, string?>? _setNotesText;
     private bool _notesDirty;
     private bool _refreshing;
 
@@ -63,18 +52,19 @@ public sealed class PresenterViewWindow : Window
         Action<int, string?>? setNotesText = null)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
-        _stateProvider = stateProvider ?? throw new ArgumentNullException(nameof(stateProvider));
-        _goBack = goBack;
-        _goNext = goNext;
-        _goToSlide = goToSlide;
-        _setScreenMode = setScreenMode;
-        _selectPointerMode = selectPointerMode;
-        _clearInk = clearInk;
-        _setTimingIntent = setTimingIntent;
-        _setMediaIntent = setMediaIntent;
-        _recordingReviewProvider = recordingReviewProvider;
-        _applyRecordingReview = applyRecordingReview;
-        _setNotesText = setNotesText;
+        _session = new SlideShowPresenterViewSession(
+            stateProvider,
+            goBack,
+            goNext,
+            setScreenMode,
+            selectPointerMode,
+            clearInk,
+            setTimingIntent,
+            setMediaIntent,
+            recordingReviewProvider,
+            applyRecordingReview,
+            goToSlide,
+            setNotesText);
 
         Title = "Presenter View";
         Width = 1200;
@@ -106,13 +96,13 @@ public sealed class PresenterViewWindow : Window
         _backButton = MakeActionButton("Previous", () =>
         {
             CommitNotes();
-            _goBack?.Invoke();
+            _session.GoBack(notesDirty: false, notesText: null);
             RefreshFromState();
         });
         _advanceButton = MakeActionButton("Next", () =>
         {
             CommitNotes();
-            _goNext?.Invoke();
+            _session.GoNext(notesDirty: false, notesText: null);
             RefreshFromState();
         });
         _slideNumberBox = new TextBox
@@ -132,59 +122,34 @@ public sealed class PresenterViewWindow : Window
             }
         };
         _goToSlideButton = MakeActionButton("Go", SubmitSlideNumber);
-        _goToSlideButton.IsEnabled = _goToSlide is not null;
+        _goToSlideButton.IsEnabled = _session.CanGoToSlide;
         _recordTimingsButton = MakeActionButton("Record timings", () =>
         {
-            if (_setTimingIntent is not null)
-            {
-                var current = _stateProvider().ToolPlan.Recording.TimingIntent;
-                _setTimingIntent(current == SlideShowTimingIntent.RecordTimings
-                    ? SlideShowTimingIntent.None
-                    : SlideShowTimingIntent.RecordTimings);
-                RefreshFromState();
-            }
+            _session.ToggleTimingIntent(SlideShowTimingIntent.RecordTimings);
+            RefreshFromState();
         });
         _rehearseTimingsButton = MakeActionButton("Rehearse timings", () =>
         {
-            if (_setTimingIntent is not null)
-            {
-                var current = _stateProvider().ToolPlan.Recording.TimingIntent;
-                _setTimingIntent(current == SlideShowTimingIntent.RehearseTimings
-                    ? SlideShowTimingIntent.None
-                    : SlideShowTimingIntent.RehearseTimings);
-                RefreshFromState();
-            }
+            _session.ToggleTimingIntent(SlideShowTimingIntent.RehearseTimings);
+            RefreshFromState();
         });
         _narrationButton = MakeActionButton("Narration", () =>
         {
-            if (_setMediaIntent is not null)
-            {
-                var current = _stateProvider().ToolPlan.Recording.MediaIntent;
-                _setMediaIntent(current == SlideShowRecordingMediaIntent.Narration
-                    ? SlideShowRecordingMediaIntent.None
-                    : SlideShowRecordingMediaIntent.Narration);
-                RefreshFromState();
-            }
+            _session.ToggleMediaIntent(SlideShowRecordingMediaIntent.Narration);
+            RefreshFromState();
         });
         _narrationAndMediaButton = MakeActionButton("Narration + camera", () =>
         {
-            if (_setMediaIntent is not null)
-            {
-                var current = _stateProvider().ToolPlan.Recording.MediaIntent;
-                _setMediaIntent(current == SlideShowRecordingMediaIntent.NarrationAndMedia
-                    ? SlideShowRecordingMediaIntent.None
-                    : SlideShowRecordingMediaIntent.NarrationAndMedia);
-                RefreshFromState();
-            }
+            _session.ToggleMediaIntent(SlideShowRecordingMediaIntent.NarrationAndMedia);
+            RefreshFromState();
         });
         _recordingStatusText = MakeText(13, FontWeights.Normal);
         _recordingStatusText.Foreground = new SolidColorBrush(Color.FromRgb(170, 178, 194));
         _recordingStatusText.Margin = new Thickness(0, 6, 0, 0);
         _applyRecordingButton = MakeActionButton("Apply recording", () =>
         {
-            if (_applyRecordingReview is not null)
+            if (_session.ApplyRecordingReview() is { } result)
             {
-                var result = _applyRecordingReview();
                 _recordingStatusText.Text = $"Applied {result.TotalArtifactCount} recording artifact(s).";
                 RefreshFromState();
             }
@@ -198,23 +163,23 @@ public sealed class PresenterViewWindow : Window
         controls.Children.Add(_narrationButton);
         controls.Children.Add(_narrationAndMediaButton);
         controls.Children.Add(_applyRecordingButton);
-        var normalButton = MakeActionButton("Show", () => _setScreenMode?.Invoke(SlideShowScreenMode.Normal));
-        var blackButton = MakeActionButton("Black", () => _setScreenMode?.Invoke(SlideShowScreenMode.Black));
-        var whiteButton = MakeActionButton("White", () => _setScreenMode?.Invoke(SlideShowScreenMode.White));
-        var clearInkButton = MakeActionButton("Clear ink", () => _clearInk?.Invoke());
-        normalButton.IsEnabled = _setScreenMode is not null;
-        blackButton.IsEnabled = _setScreenMode is not null;
-        whiteButton.IsEnabled = _setScreenMode is not null;
-        clearInkButton.IsEnabled = _clearInk is not null;
+        var normalButton = MakeActionButton("Show", () => _session.SetScreenMode(SlideShowScreenMode.Normal));
+        var blackButton = MakeActionButton("Black", () => _session.SetScreenMode(SlideShowScreenMode.Black));
+        var whiteButton = MakeActionButton("White", () => _session.SetScreenMode(SlideShowScreenMode.White));
+        var clearInkButton = MakeActionButton("Clear ink", _session.ClearInk);
+        normalButton.IsEnabled = _session.CanSetScreenMode;
+        blackButton.IsEnabled = _session.CanSetScreenMode;
+        whiteButton.IsEnabled = _session.CanSetScreenMode;
+        clearInkButton.IsEnabled = _session.CanClearInk;
         _pointerModeCombo = MakePointerModePicker(mode =>
         {
             if (!_refreshing && mode is not null)
             {
-                _selectPointerMode?.Invoke(mode.Value);
+                _session.SelectPointerMode(mode.Value);
                 RefreshFromState();
             }
         });
-        _pointerModeCombo.IsEnabled = _selectPointerMode is not null;
+        _pointerModeCombo.IsEnabled = _session.CanSelectPointerMode;
         controls.Children.Add(normalButton);
         controls.Children.Add(blackButton);
         controls.Children.Add(whiteButton);
@@ -252,7 +217,7 @@ public sealed class PresenterViewWindow : Window
         notesHeading.Margin = new Thickness(0, 0, 0, 6);
         _notesText = new TextBox
         {
-            IsReadOnly = _setNotesText is null,
+            IsReadOnly = !_session.CanSetNotes,
             TextWrapping = TextWrapping.Wrap,
             AcceptsReturn = true,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -263,7 +228,7 @@ public sealed class PresenterViewWindow : Window
         };
         _notesText.TextChanged += (_, _) =>
         {
-            if (!_refreshing && _setNotesText is not null)
+            if (!_refreshing && _session.CanSetNotes)
                 _notesDirty = true;
         };
         _notesText.LostKeyboardFocus += (_, _) => CommitNotes();
@@ -305,8 +270,7 @@ public sealed class PresenterViewWindow : Window
         if (!_notesText.IsKeyboardFocusWithin && _notesDirty)
             CommitNotes();
 
-        var state = _stateProvider();
-        var plan = SlideShowPresenterViewPlanner.Build(state);
+        var plan = _session.BuildViewPlan();
         _refreshing = true;
         try
         {
@@ -316,35 +280,20 @@ public sealed class PresenterViewWindow : Window
             _nextLabel.Text = plan.NextSlideLabel;
             if (!_notesText.IsKeyboardFocusWithin && !_notesDirty)
                 _notesText.Text = plan.NotesText;
-            if (!_slideNumberBox.IsKeyboardFocusWithin && state.HostState.CurrentSlideIndex >= 0)
-            {
-                _slideNumberBox.Text = (state.HostState.CurrentSlideIndex + 1)
-                    .ToString(CultureInfo.InvariantCulture);
-            }
-            _backButton.IsEnabled = plan.CanGoBack && _goBack is not null;
-            _advanceButton.IsEnabled = plan.CanAdvance && _goNext is not null;
-            _recordTimingsButton.Content = plan.IsRecordingTimings ? "Stop recording" : "Record timings";
-            _recordTimingsButton.IsEnabled = _setTimingIntent is not null;
-            _rehearseTimingsButton.Content = plan.IsRehearsingTimings ? "Stop rehearsal" : "Rehearse timings";
-            _rehearseTimingsButton.IsEnabled = _setTimingIntent is not null;
-            var mediaIntent = state.ToolPlan.Recording.MediaIntent;
-            _narrationButton.Content = mediaIntent == SlideShowRecordingMediaIntent.Narration
-                ? "Stop narration"
-                : "Narration";
-            _narrationButton.IsEnabled = _setMediaIntent is not null;
-            _narrationAndMediaButton.Content = mediaIntent == SlideShowRecordingMediaIntent.NarrationAndMedia
-                ? "Stop narration + camera"
-                : "Narration + camera";
-            _narrationAndMediaButton.IsEnabled = _setMediaIntent is not null;
-            var recordingReview = _recordingReviewProvider?.Invoke();
-            _recordingStatusText.Text = recordingReview is null
-                ? "Recording review unavailable."
-                : BuildRecordingSummary(recordingReview);
-            _applyRecordingButton.IsEnabled = _applyRecordingReview is not null &&
-                recordingReview is not null &&
-                (recordingReview.CanApplyRecordedTimings ||
-                 recordingReview.PersistableMediaArtifactCount > 0 ||
-                 recordingReview.PersistableCaptionArtifactCount > 0);
+            if (!_slideNumberBox.IsKeyboardFocusWithin && plan.CurrentSlideNumber is int currentSlideNumber)
+                _slideNumberBox.Text = currentSlideNumber.ToString(CultureInfo.InvariantCulture);
+            _backButton.IsEnabled = plan.CanGoBack;
+            _advanceButton.IsEnabled = plan.CanAdvance;
+            _recordTimingsButton.Content = plan.RecordTimingsButtonText;
+            _recordTimingsButton.IsEnabled = plan.CanSetTimingIntent;
+            _rehearseTimingsButton.Content = plan.RehearseTimingsButtonText;
+            _rehearseTimingsButton.IsEnabled = plan.CanSetTimingIntent;
+            _narrationButton.Content = plan.NarrationButtonText;
+            _narrationButton.IsEnabled = plan.CanSetMediaIntent;
+            _narrationAndMediaButton.Content = plan.NarrationAndMediaButtonText;
+            _narrationAndMediaButton.IsEnabled = plan.CanSetMediaIntent;
+            _recordingStatusText.Text = plan.RecordingStatusText;
+            _applyRecordingButton.IsEnabled = plan.CanApplyRecording;
             _pointerModeCombo.SelectedItem = plan.PointerMode;
             _currentPreview.Slide = plan.CurrentSlide;
             _nextPreview.Slide = plan.NextSlide;
@@ -367,30 +316,17 @@ public sealed class PresenterViewWindow : Window
 
     private void SubmitSlideNumber()
     {
-        CommitNotes();
-        if (_goToSlide is null ||
-            !SlideShowSlideNumberPlanner.TryParseSlideNumber(
-                _slideNumberBox.Text,
-                out var oneBasedSlideNumber))
-        {
+        var result = _session.GoToSlide(_slideNumberBox.Text, _notesDirty, _notesText.Text);
+        _notesDirty &= !result.NotesCommitted;
+        if (!result.CommandInvoked)
             return;
-        }
 
-        _goToSlide(oneBasedSlideNumber);
         RefreshFromState();
     }
 
     private void CommitNotes()
     {
-        if (!_notesDirty || _setNotesText is null)
-            return;
-
-        var slideIndex = _stateProvider().CurrentSlide?.SlideIndex;
-        if (slideIndex is not int index)
-            return;
-
-        _notesDirty = false;
-        _setNotesText(index, _notesText.Text);
+        _notesDirty &= !_session.CommitNotes(_notesDirty, _notesText.Text);
     }
 
     private static Border BuildPreviewPanel(
@@ -428,22 +364,6 @@ public sealed class PresenterViewWindow : Window
         Foreground = Brushes.White,
         VerticalAlignment = VerticalAlignment.Center,
     };
-
-    private static string BuildRecordingSummary(SlideShowRecordingReviewPlan plan)
-    {
-        if (plan.CompletedSegmentCount == 0)
-        {
-            return "Recording: no completed slides yet.";
-        }
-
-        return $"Recording: {plan.CompletedSegmentCount} slide(s), " +
-            $"{plan.TotalRecordedDurationMs / 1000d:F1}s; " +
-            $"{plan.PersistableMediaArtifactCount} media + " +
-            $"{plan.PersistableCaptionArtifactCount} caption(s) ready" +
-            (plan.DeferredMediaArtifactCount > 0
-                ? $"; {plan.DeferredMediaArtifactCount} deferred."
-                : ".");
-    }
 
     private static Button MakeActionButton(string label, Action action)
     {
