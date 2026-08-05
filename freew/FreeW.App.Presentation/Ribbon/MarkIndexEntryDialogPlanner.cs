@@ -34,6 +34,7 @@ public static class MarkIndexEntryDialogPlanner
     public const string BoldLabel = "Bold";
     public const string ItalicLabel = "Italic";
     public const string MarkButtonLabel = "Mark";
+    public const string MarkAllButtonLabel = "Mark All";
     public const string CancelButtonLabel = "Cancel";
     public const string DefaultCrossReference = "See ";
     public const string MissingMainEntryMessage = "Enter the main index entry before marking.";
@@ -47,6 +48,9 @@ public static class MarkIndexEntryDialogPlanner
             DefaultCrossReference,
             BoldPageNumber: false,
             ItalicPageNumber: false);
+
+    public static bool CanMarkAll(string? selectedText) =>
+        !string.IsNullOrWhiteSpace(selectedText);
 
     public static bool TryBuildMark(
         MarkIndexEntryDialogState state,

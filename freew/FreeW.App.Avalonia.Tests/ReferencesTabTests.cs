@@ -779,6 +779,45 @@ public sealed class ReferencesTabTests
     });
 
     [Fact]
+    public Task MarkIndexEntry_dialog_returns_mark_all_action_for_selected_text() => RunOnUiThread(() =>
+    {
+        var dialog = new MarkIndexEntryDialog("Alpha");
+
+        dialog.AcceptAllForTests().Should().BeTrue();
+        dialog.MarkAll.Should().BeTrue();
+        dialog.Mark.Should().Be(new IndexMark("Alpha"));
+    });
+
+    [Fact]
+    public void MarkAllIndexEntries_marks_matching_paragraphs_as_one_undoable_operation()
+    {
+        var view = ViewWith(
+            new Paragraph("Alpha first Alpha"),
+            new Paragraph("alphabet control"),
+            new Paragraph("Second ALPHA"));
+        var mark = new IndexMark("Alpha", "Topic", ItalicPageNumber: true);
+
+        view.MarkAllIndexEntries("Alpha", mark).Should().Be(3);
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(DocumentIndex.MarkedEntry)
+            .OfType<IndexMark>()
+            .Should().Equal(mark, mark, mark);
+
+        view.Undo();
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(DocumentIndex.MarkedEntry)
+            .Should().AllSatisfy(entry => entry.Should().BeNull());
+        view.Redo();
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(DocumentIndex.MarkedEntry)
+            .OfType<IndexMark>()
+            .Should().Equal(mark, mark, mark);
+    }
+
+    [Fact]
     public void Index_mark_ribbon_command_uses_owner_dialog_callback_when_available()
     {
         var view = ViewWith(new Paragraph("Transport"));

@@ -51,4 +51,16 @@ public sealed class MarkIndexEntryDialogTests
             BoldPageNumber: true,
             ItalicPageNumber: true));
     }
+
+    [StaFact]
+    public void Dialog_MarkAllRequiresSelectionAndReturnsRequestedAction()
+    {
+        MarkIndexEntryDialog.CreateForTest().MarkAllEnabledForTest.Should().BeFalse();
+        var dialog = MarkIndexEntryDialog.CreateForTest("Alpha");
+
+        dialog.MarkAllEnabledForTest.Should().BeTrue();
+        dialog.AcceptAllForTest().Should().BeTrue();
+        dialog.ResultForTest!.MarkAll.Should().BeTrue();
+        dialog.ResultForTest.Mark.Should().Be(new IndexMark("Alpha"));
+    }
 }

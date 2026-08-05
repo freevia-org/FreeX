@@ -16306,7 +16306,7 @@ public sealed class DocumentView : RichTextBox
             return;
         if (!TryGetCurrentBodyCaretTarget(out var paragraphIndex, out var textOffset)
             || _model.Blocks[paragraphIndex] is not ModelParagraph paragraph
-            || paragraph.Runs.Any(run => SameIndexMark(DocumentIndex.MarkedEntry(run), normalized)))
+            || paragraph.Runs.Any(run => DocumentIndex.MarksEquivalent(DocumentIndex.MarkedEntry(run), normalized)))
         {
             return;
         }
@@ -16316,12 +16316,39 @@ public sealed class DocumentView : RichTextBox
         PlaceCaretAtModelTextOffset(paragraphIndex, textOffset);
     }
 
-    private static bool SameIndexMark(IndexMark? left, IndexMark right) =>
-        left is not null
-        && string.Equals(left.EntryText, right.EntryText, StringComparison.OrdinalIgnoreCase)
-        && string.Equals(left.CrossReference, right.CrossReference, StringComparison.OrdinalIgnoreCase)
-        && left.BoldPageNumber == right.BoldPageNumber
-        && left.ItalicPageNumber == right.ItalicPageNumber;
+    /// <summary>Marks every matching body paragraph as one undoable Mark All operation.</summary>
+    public int MarkAllIndexEntries(string sourceText, IndexMark mark)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        CommitToModel();
+        var markRun = DocumentIndex.MarkRun(mark);
+        if (DocumentIndex.MarkedEntry(markRun) is not { MainEntry.Length: > 0 } normalized)
+            return 0;
+        var targets = DocumentIndex.MarkAllTargets(_model, sourceText, normalized);
+        if (targets.Count == 0)
+            return 0;
+
+        _commands.BeginUndoGroup();
+        try
+        {
+            foreach (var target in targets)
+            {
+                _commands.Execute(new ReplaceParagraphRunsCommand(target.BlockIndex, paragraph =>
+                    RevisionEditPlanner.InsertRunAtOffset(
+                        paragraph,
+                        target.TextOffset,
+                        DocumentIndex.MarkRun(normalized))));
+            }
+            _commands.CommitUndoGroup("Mark All Index Entries");
+        }
+        catch
+        {
+            _commands.AbortUndoGroup();
+            throw;
+        }
+
+        return targets.Count;
+    }
 
     /// <summary>
     /// Insert an index generated from the document's marked <see cref="TextDocument.IndexEntries"/> at the

@@ -68,4 +68,13 @@ public sealed class MarkIndexEntryDialogPlannerTests
             .Should().BeTrue();
         crossReferenceMark.Should().Be(new IndexMark("Alpha", CrossReference: "See Other"));
     }
+
+    [Theory]
+    [InlineData("Alpha", true)]
+    [InlineData("  ", false)]
+    [InlineData(null, false)]
+    public void CanMarkAll_RequiresSelectedSourceText(string? selectedText, bool expected)
+    {
+        MarkIndexEntryDialogPlanner.CanMarkAll(selectedText).Should().Be(expected);
+    }
 }
