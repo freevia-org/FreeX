@@ -27,25 +27,50 @@ public partial class HeaderFooterDialog : Window
     public bool ScaleWithDocument { get; private set; }
     public bool AlignWithMargins { get; private set; }
 
+    public HeaderFooterEditorState ResultState => new(
+        Header,
+        Footer,
+        FirstPageHeader,
+        FirstPageFooter,
+        EvenPageHeader,
+        EvenPageFooter,
+        HeaderPictures.DeepClone(),
+        FooterPictures.DeepClone(),
+        FirstPageHeaderPictures.DeepClone(),
+        FirstPageFooterPictures.DeepClone(),
+        EvenPageHeaderPictures.DeepClone(),
+        EvenPageFooterPictures.DeepClone(),
+        DifferentFirstPage,
+        DifferentOddEvenPages,
+        ScaleWithDocument,
+        AlignWithMargins);
+
     public HeaderFooterDialog(Sheet sheet)
+        : this(HeaderFooterEditorState.FromSheet(sheet))
     {
+    }
+
+    public HeaderFooterDialog(HeaderFooterEditorState initial)
+    {
+        ArgumentNullException.ThrowIfNull(initial);
+
         InitializeComponent();
-        Header = sheet.PageHeader;
-        Footer = sheet.PageFooter;
-        FirstPageHeader = sheet.FirstPageHeader;
-        FirstPageFooter = sheet.FirstPageFooter;
-        EvenPageHeader = sheet.EvenPageHeader;
-        EvenPageFooter = sheet.EvenPageFooter;
-        HeaderPictures = sheet.PageHeaderPictures.DeepClone();
-        FooterPictures = sheet.PageFooterPictures.DeepClone();
-        FirstPageHeaderPictures = sheet.FirstPageHeaderPictures.DeepClone();
-        FirstPageFooterPictures = sheet.FirstPageFooterPictures.DeepClone();
-        EvenPageHeaderPictures = sheet.EvenPageHeaderPictures.DeepClone();
-        EvenPageFooterPictures = sheet.EvenPageFooterPictures.DeepClone();
-        DifferentFirstPage = sheet.DifferentFirstPageHeaderFooter;
-        DifferentOddEvenPages = sheet.DifferentOddEvenHeaderFooter;
-        ScaleWithDocument = sheet.HeaderFooterScaleWithDocument;
-        AlignWithMargins = sheet.HeaderFooterAlignWithMargins;
+        Header = initial.Header;
+        Footer = initial.Footer;
+        FirstPageHeader = initial.FirstPageHeader;
+        FirstPageFooter = initial.FirstPageFooter;
+        EvenPageHeader = initial.EvenPageHeader;
+        EvenPageFooter = initial.EvenPageFooter;
+        HeaderPictures = initial.HeaderPictures.DeepClone();
+        FooterPictures = initial.FooterPictures.DeepClone();
+        FirstPageHeaderPictures = initial.FirstPageHeaderPictures.DeepClone();
+        FirstPageFooterPictures = initial.FirstPageFooterPictures.DeepClone();
+        EvenPageHeaderPictures = initial.EvenPageHeaderPictures.DeepClone();
+        EvenPageFooterPictures = initial.EvenPageFooterPictures.DeepClone();
+        DifferentFirstPage = initial.DifferentFirstPage;
+        DifferentOddEvenPages = initial.DifferentOddEvenPages;
+        ScaleWithDocument = initial.ScaleWithDocument;
+        AlignWithMargins = initial.AlignWithMargins;
 
         HeaderLeftBox.Text = Header.Left;
         HeaderCenterBox.Text = Header.Center;

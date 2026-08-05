@@ -128,6 +128,59 @@ public sealed class HeaderFooterEditorPlannerTests
             .Be(new HeaderFooterEditorTarget(HeaderFooterEditorScope.Footer, HeaderFooterEditorSection.Center));
     }
 
+    [Fact]
+    public void EditorState_RoundTripsSheetAndPageSetupFields()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1")
+        {
+            PageHeader = new WorksheetHeaderFooter("L", "C", "R"),
+            PageFooter = new WorksheetHeaderFooter("FL", "FC", "FR"),
+            PageHeaderPictures = new WorksheetHeaderFooterPictureSet(Picture("left.png"), null, null),
+            DifferentFirstPageHeaderFooter = true,
+            HeaderFooterScaleWithDocument = false,
+        };
+
+        var state = HeaderFooterEditorState.FromSheet(sheet);
+        var fields = state.ApplyTo(PageSetupDialogModel.FromSheet(new Sheet(SheetId.New(), "Target")));
+        var request = state.ToCommandRequest();
+
+        state.HeaderPictures.Should().NotBeSameAs(sheet.PageHeaderPictures);
+        fields.Header.Should().Be(sheet.PageHeader);
+        fields.Footer.Should().Be(sheet.PageFooter);
+        fields.DifferentFirstPage.Should().BeTrue();
+        fields.ScaleHeaderFooterWithDocument.Should().BeFalse();
+        request.Header.Should().Be(sheet.PageHeader);
+        request.HeaderPictures.Should().NotBeSameAs(state.HeaderPictures);
+    }
+
+    [Fact]
+    public void EditorState_PrunesAllPictureSetsThroughOnePortableOperation()
+    {
+        var picture = Picture("logo.png");
+        var state = new HeaderFooterEditorState(
+            new WorksheetHeaderFooter("&[Picture]", "", ""),
+            new WorksheetHeaderFooter("", "No token", ""),
+            new WorksheetHeaderFooter("", "", ""),
+            new WorksheetHeaderFooter("", "", ""),
+            new WorksheetHeaderFooter("", "", ""),
+            new WorksheetHeaderFooter("", "", ""),
+            new WorksheetHeaderFooterPictureSet(picture, null, null),
+            new WorksheetHeaderFooterPictureSet(null, picture, null),
+            WorksheetHeaderFooterPictureSet.Empty,
+            WorksheetHeaderFooterPictureSet.Empty,
+            WorksheetHeaderFooterPictureSet.Empty,
+            WorksheetHeaderFooterPictureSet.Empty,
+            false,
+            false,
+            true,
+            true);
+
+        var pruned = state.PrunePicturesWithoutTokens();
+
+        pruned.HeaderPictures.Left.Should().BeSameAs(picture);
+        pruned.FooterPictures.Center.Should().BeNull();
+    }
+
     private static WorksheetHeaderFooterPicture Picture(string fileName) =>
         new([1, 2, 3], "image/png", fileName, 120, 48);
 }

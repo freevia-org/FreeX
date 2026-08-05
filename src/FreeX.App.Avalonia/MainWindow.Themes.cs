@@ -3,7 +3,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using FreeX.App.Presentation.ThemeUI;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -41,7 +40,8 @@ public sealed partial class MainWindow
         if (picked is not { } chosen)
             return;
 
-        var result = _session.ExecuteReviewCommand(new SetWorkbookThemeCommand(chosen));
+        var plan = WorkbookThemeCommandPlanner.PlanApply(chosen);
+        var result = _session.ExecuteReviewCommand(plan.Command);
         RefreshShell(result.Success
             ? UiText.Format("WTA_Theme_Applied", chosen.Name)
             : result.ErrorMessage ?? UiText.Get("WTA_Theme_ApplyFailed"));
@@ -80,7 +80,7 @@ public sealed partial class MainWindow
 
         var option = options[chosen];
         ApplyDerivedTheme(
-            _session.Workbook.Theme.WithFonts(option.MajorFontName, option.MinorFontName),
+            option.ApplyFonts(_session.Workbook.Theme),
             UiText.Format("WTA_ThemeFonts_Applied", option.Label));
     }
 
@@ -97,13 +97,14 @@ public sealed partial class MainWindow
 
         var option = options[chosen];
         ApplyDerivedTheme(
-            _session.Workbook.Theme.WithEffects(option.EffectsName),
+            option.ApplyEffects(_session.Workbook.Theme),
             UiText.Format("WTA_ThemeEffects_Applied", option.Label));
     }
 
     private void ApplyDerivedTheme(WorkbookTheme theme, string successMessage)
     {
-        var result = _session.ExecuteReviewCommand(new SetWorkbookThemeCommand(theme));
+        var plan = WorkbookThemeCommandPlanner.PlanApply(theme);
+        var result = _session.ExecuteReviewCommand(plan.Command);
         RefreshShell(result.Success ? successMessage : result.ErrorMessage ?? UiText.Get("WTA_Theme_ApplyFailed"));
     }
 

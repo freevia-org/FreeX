@@ -935,19 +935,16 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("openFooterTab: false");
         source.Should().Contain("openFooterTab: true");
         source.Should().Contain("SelectedIndex = openFooterTab ? 1 : 0");
-        source.Should().Contain("HeaderFooterEditorState(");
+        source.Should().Contain("HeaderFooterEditorState CaptureHeaderFooterEditorState()");
+        source.Should().Contain("HeaderFooterEditorState.FromPageSetupFields(initial)");
         source.Should().Contain("headerPictures = edited.HeaderPictures");
         source.Should().Contain("footerPictures = edited.FooterPictures");
         source.Should().Contain("firstPageHeaderPictures = edited.FirstPageHeaderPictures");
         source.Should().Contain("firstPageFooterPictures = edited.FirstPageFooterPictures");
         source.Should().Contain("evenPageHeaderPictures = edited.EvenPageHeaderPictures");
         source.Should().Contain("evenPageFooterPictures = edited.EvenPageFooterPictures");
-        source.Should().Contain("HeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens");
-        source.Should().Contain("FooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens");
-        source.Should().Contain("FirstPageHeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens");
-        source.Should().Contain("FirstPageFooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens");
-        source.Should().Contain("EvenPageHeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens");
-        source.Should().Contain("EvenPageFooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens");
+        source.Should().Contain("}).PrunePicturesWithoutTokens();");
+        source.Should().NotContain("HeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens");
         source.Should().Contain("Width = 760");
         source.Should().Contain("Height = 600");
         source.Should().Contain("MinWidth = 700");
@@ -979,9 +976,9 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
 
         source.Should().Contain("private async Task ShowHeaderFooterDialogAsync()");
-        source.Should().Contain("GetCurrentGroupedEditSheetIds()");
-        source.Should().Contain("PageSetupCommandFactory.BuildHeaderFooterCommand(sheetId, request)");
-        source.Should().Contain("new CompositeWorkbookCommand(\"Header & Footer\", commands)");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanHeaderFooter(edited.ToCommandRequest())");
+        source.Should().NotContain("PageSetupCommandFactory.BuildHeaderFooterCommand(sheetId, request)");
+        source.Should().NotContain("new CompositeWorkbookCommand(\"Header & Footer\", commands)");
         source.Should().NotContain("ShowPageSetupDialogAsync(openHeaderFooterTab: true)");
     }
 
@@ -1027,8 +1024,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Insert)");
         source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Remove)");
         source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.ResetAll)");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.PlanPageBreakAction(");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheet.Id, plan)");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanPageBreakAction(");
+        source.Should().Contain("_session.ExecuteReviewCommand(plan.Command)");
         source.Should().NotContain("private enum PageBreakAction");
         source.Should().NotContain("new SetPageBreaksCommand(");
         source.Should().NotContain("PageBreakActionPlanner.Insert(");
@@ -1052,12 +1049,12 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         wireSource.Should().Contain("ApplyPageMarginsPreset(descriptor.MarginPreset!.Value)");
         wireSource.Should().Contain("ApplyPageOrientationPreset(descriptor.OrientationPreset!.Value)");
         wireSource.Should().Contain("ApplyPaperSizePreset(descriptor.PaperSizePreset!.Value)");
-        wireSource.Should().Contain("PageLayoutRibbonActionPlanner.PlanMarginsPreset(preset)");
-        wireSource.Should().Contain("PageLayoutRibbonActionPlanner.PlanOrientationPreset(preset)");
-        wireSource.Should().Contain("PageLayoutRibbonActionPlanner.PlanPaperSizePreset(preset)");
-        wireSource.Should().Contain("PageLayoutStatusPlanner.ForPreset(plan)");
-        wireSource.Should().Contain("PageLayoutStatusPlanner.PrintAreaSet");
-        wireSource.Should().Contain("PageLayoutStatusPlanner.PrintAreaClear");
+        wireSource.Should().Contain("CreatePageLayoutCommandSession().PlanMarginsPreset(preset)");
+        wireSource.Should().Contain("CreatePageLayoutCommandSession().PlanOrientationPreset(preset)");
+        wireSource.Should().Contain("CreatePageLayoutCommandSession().PlanPaperSizePreset(preset)");
+        wireSource.Should().Contain("CreatePageLayoutCommandSession().PlanSetPrintArea(_session.SelectedRange)");
+        wireSource.Should().Contain("CreatePageLayoutCommandSession().PlanClearPrintArea()");
+        wireSource.Should().Contain("plan.Status!");
 
         mainSource.Should().NotContain("[\"pageLayout.printArea\"] = () => _ = ShowPageSetupDialogAsync()");
         mainSource.Should().NotContain("[\"Normal\"] = () => ApplyPageMargins(");

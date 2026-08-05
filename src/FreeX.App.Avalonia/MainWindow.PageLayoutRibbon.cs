@@ -1,4 +1,3 @@
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FreeX.App.Presentation.PageLayout;
 
@@ -6,6 +5,9 @@ namespace FreeX.App.Avalonia;
 
 public partial class MainWindow
 {
+    private PageLayoutCommandSession CreatePageLayoutCommandSession() =>
+        new(_session.GetCurrentGroupedEditSheetIds());
+
     private void ApplyPageLayoutScaleWidth(string? text) =>
         ApplyPageLayoutScaleCommit(
             PageLayoutRibbonPolicyPlanner.PlanScaleWidthCommit(
@@ -34,13 +36,8 @@ public partial class MainWindow
             return;
         }
 
-        var commands = _session.GetCurrentGroupedEditSheetIds()
-            .Select(sheetId => PageLayoutRibbonCommandPlanner.BuildScaleToFitCommand(sheetId, plan.ScaleToFit))
-            .ToArray();
-        var command = commands.Length == 1
-            ? commands[0]
-            : new CompositeWorkbookCommand(PageLayoutRibbonActionPlanner.ScaleToFitCommandLabel, commands);
-        var result = _session.ExecuteReviewCommand(command);
+        var commandPlan = CreatePageLayoutCommandSession().PlanScaleToFit(plan.ScaleToFit);
+        var result = _session.ExecuteReviewCommand(commandPlan.Command);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Scale to fit failed.");

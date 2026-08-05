@@ -46,6 +46,9 @@ public static class PageLayoutRibbonActionPlanner
     public const string PrintAreaCommandLabel = "Print Area";
     public const string PageBreaksCommandLabel = "Page Breaks";
     public const string ScaleToFitCommandLabel = "Scale To Fit";
+    public const string BackgroundCommandLabel = "Sheet Background";
+    public const string ClearBackgroundCommandLabel = "Clear Sheet Background";
+    public const string HeaderFooterCommandLabel = "Header & Footer";
     public const string PrintGridlinesCommandLabel = "Print Gridlines";
     public const string PrintHeadingsCommandLabel = "Print Headings";
 

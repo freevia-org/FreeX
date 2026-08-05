@@ -147,15 +147,12 @@ public sealed partial class MainWindowSourceHygieneTests
         pageLayoutSource.Should().Contain("UiText.Format(\"MainWindowMessage_SheetBackgroundReadFailed\", ex.Message)");
         pageLayoutSource.Should().Contain("UiText.Get(\"MainWindowMessage_SheetBackgroundTitle\")");
         pageLayoutSource.Should().Contain("SheetBackgroundPickerPlanner.TryBuildBackgroundImage(bytes, result.FileName!, out var background)");
-        pageLayoutSource.Should().Contain("TryExecuteGroupedSheetCommand(");
-        pageLayoutSource.Should().Contain("\"Sheet Background\"");
-        pageLayoutSource.Should().Contain("PageLayoutRibbonCommandPlanner.BuildSetBackgroundCommand(sheetId, background)");
+        pageLayoutSource.Should().Contain("CreatePageLayoutCommandSession().PlanSetBackground(background)");
         pageLayoutSource.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
         pageLayoutSource.Should().NotContain("private static bool IsSupportedSheetBackgroundFile(string fileName)");
         pageLayoutSource.Should().NotContain("DrawingInputParser.GetImageContentType(result.FileName!)");
         pageLayoutSource.Should().Contain("private void BackgroundClearMenuItem_Click(");
-        pageLayoutSource.Should().Contain("\"Clear Sheet Background\"");
-        pageLayoutSource.Should().Contain("PageLayoutRibbonCommandPlanner.BuildClearBackgroundCommand(sheetId)");
+        pageLayoutSource.Should().Contain("CreatePageLayoutCommandSession().PlanClearBackground()");
     }
 
     [Fact]

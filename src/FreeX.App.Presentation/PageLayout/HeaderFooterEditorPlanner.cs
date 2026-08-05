@@ -23,6 +23,126 @@ public readonly record struct HeaderFooterEditorTarget(
     HeaderFooterEditorScope Scope,
     HeaderFooterEditorSection Section);
 
+public sealed record HeaderFooterEditorState(
+    WorksheetHeaderFooter Header,
+    WorksheetHeaderFooter Footer,
+    WorksheetHeaderFooter FirstPageHeader,
+    WorksheetHeaderFooter FirstPageFooter,
+    WorksheetHeaderFooter EvenPageHeader,
+    WorksheetHeaderFooter EvenPageFooter,
+    WorksheetHeaderFooterPictureSet HeaderPictures,
+    WorksheetHeaderFooterPictureSet FooterPictures,
+    WorksheetHeaderFooterPictureSet FirstPageHeaderPictures,
+    WorksheetHeaderFooterPictureSet FirstPageFooterPictures,
+    WorksheetHeaderFooterPictureSet EvenPageHeaderPictures,
+    WorksheetHeaderFooterPictureSet EvenPageFooterPictures,
+    bool DifferentFirstPage,
+    bool DifferentOddEvenPages,
+    bool ScaleWithDocument,
+    bool AlignWithMargins)
+{
+    public static HeaderFooterEditorState FromSheet(Sheet sheet)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        return new(
+            sheet.PageHeader,
+            sheet.PageFooter,
+            sheet.FirstPageHeader,
+            sheet.FirstPageFooter,
+            sheet.EvenPageHeader,
+            sheet.EvenPageFooter,
+            sheet.PageHeaderPictures.DeepClone(),
+            sheet.PageFooterPictures.DeepClone(),
+            sheet.FirstPageHeaderPictures.DeepClone(),
+            sheet.FirstPageFooterPictures.DeepClone(),
+            sheet.EvenPageHeaderPictures.DeepClone(),
+            sheet.EvenPageFooterPictures.DeepClone(),
+            sheet.DifferentFirstPageHeaderFooter,
+            sheet.DifferentOddEvenHeaderFooter,
+            sheet.HeaderFooterScaleWithDocument,
+            sheet.HeaderFooterAlignWithMargins);
+    }
+
+    public static HeaderFooterEditorState FromPageSetupFields(PageSetupDialogFields fields)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+
+        return new(
+            fields.Header,
+            fields.Footer,
+            fields.FirstPageHeader,
+            fields.FirstPageFooter,
+            fields.EvenPageHeader,
+            fields.EvenPageFooter,
+            fields.HeaderPictures.DeepClone(),
+            fields.FooterPictures.DeepClone(),
+            fields.FirstPageHeaderPictures.DeepClone(),
+            fields.FirstPageFooterPictures.DeepClone(),
+            fields.EvenPageHeaderPictures.DeepClone(),
+            fields.EvenPageFooterPictures.DeepClone(),
+            fields.DifferentFirstPage,
+            fields.DifferentOddEvenPages,
+            fields.ScaleHeaderFooterWithDocument,
+            fields.AlignHeaderFooterWithMargins);
+    }
+
+    public PageSetupDialogFields ApplyTo(PageSetupDialogFields fields)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+
+        return fields with
+        {
+            Header = Header,
+            Footer = Footer,
+            FirstPageHeader = FirstPageHeader,
+            FirstPageFooter = FirstPageFooter,
+            EvenPageHeader = EvenPageHeader,
+            EvenPageFooter = EvenPageFooter,
+            HeaderPictures = HeaderPictures.DeepClone(),
+            FooterPictures = FooterPictures.DeepClone(),
+            FirstPageHeaderPictures = FirstPageHeaderPictures.DeepClone(),
+            FirstPageFooterPictures = FirstPageFooterPictures.DeepClone(),
+            EvenPageHeaderPictures = EvenPageHeaderPictures.DeepClone(),
+            EvenPageFooterPictures = EvenPageFooterPictures.DeepClone(),
+            DifferentFirstPage = DifferentFirstPage,
+            DifferentOddEvenPages = DifferentOddEvenPages,
+            ScaleHeaderFooterWithDocument = ScaleWithDocument,
+            AlignHeaderFooterWithMargins = AlignWithMargins,
+        };
+    }
+
+    public PageSetupHeaderFooterRequest ToCommandRequest() => new()
+    {
+        Header = Header,
+        Footer = Footer,
+        FirstPageHeader = FirstPageHeader,
+        FirstPageFooter = FirstPageFooter,
+        EvenPageHeader = EvenPageHeader,
+        EvenPageFooter = EvenPageFooter,
+        HeaderPictures = HeaderPictures.DeepClone(),
+        FooterPictures = FooterPictures.DeepClone(),
+        FirstPageHeaderPictures = FirstPageHeaderPictures.DeepClone(),
+        FirstPageFooterPictures = FirstPageFooterPictures.DeepClone(),
+        EvenPageHeaderPictures = EvenPageHeaderPictures.DeepClone(),
+        EvenPageFooterPictures = EvenPageFooterPictures.DeepClone(),
+        DifferentFirstPage = DifferentFirstPage,
+        DifferentOddEvenPages = DifferentOddEvenPages,
+        ScaleHeaderFooterWithDocument = ScaleWithDocument,
+        AlignHeaderFooterWithMargins = AlignWithMargins,
+    };
+
+    public HeaderFooterEditorState PrunePicturesWithoutTokens() => this with
+    {
+        HeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(Header, HeaderPictures),
+        FooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(Footer, FooterPictures),
+        FirstPageHeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(FirstPageHeader, FirstPageHeaderPictures),
+        FirstPageFooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(FirstPageFooter, FirstPageFooterPictures),
+        EvenPageHeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(EvenPageHeader, EvenPageHeaderPictures),
+        EvenPageFooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(EvenPageFooter, EvenPageFooterPictures),
+    };
+}
+
 public static class HeaderFooterEditorPlanner
 {
     public const string PictureToken = "&[Picture]";

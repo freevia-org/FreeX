@@ -125,16 +125,15 @@ public sealed partial class MainWindow
     private void ApplyPageBreakAction(PageBreakMenuAction action)
     {
         var sheet = _session.ActiveSheet;
-        var plan = PageLayoutRibbonCommandPlanner.PlanPageBreakAction(
+        var plan = CreatePageLayoutCommandSession().PlanPageBreakAction(
             action,
             _session.SelectedRange,
             sheet.RowPageBreaks,
             sheet.ColumnPageBreaks);
 
-        var result = _session.ExecuteReviewCommand(
-            PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheet.Id, plan));
+        var result = _session.ExecuteReviewCommand(plan.Command);
         RefreshShell(result.Success
-            ? plan.Status
+            ? plan.SuccessStatusText ?? UiText.Get("PageBreak_Failed")
             : result.ErrorMessage ?? UiText.Get("PageBreak_Failed"));
     }
 }

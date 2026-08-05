@@ -18,6 +18,7 @@ public sealed class PageLayoutCommandSourceTests
             "MainWindow.Viewport.cs");
         var policySource = DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PageLayoutRibbonPolicyPlanner.cs");
         var actionSource = DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PageLayoutRibbonActionPlanner.cs");
+        var sessionSource = DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PageLayoutCommandSession.cs");
 
         source.Should().Contain("WorkbookThemeCatalog.FreeXColorfulThemePreset.CreateTheme()");
         source.Should().Contain("WorkbookThemeCatalog.GrayscaleThemePreset.CreateTheme()");
@@ -32,16 +33,17 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Theme)");
         source.Should().Contain("ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Colors)");
         source.Should().Contain("ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Effects)");
-        source.Should().Contain("new SetWorkbookThemeCommand(theme)");
+        source.Should().Contain("WorkbookThemeCommandPlanner.PlanApply(theme)");
+        source.Should().NotContain("new SetWorkbookThemeCommand(theme)");
         source.Should().Contain("ApplyPageMarginsPreset(PageLayoutMarginPreset.Normal)");
         source.Should().Contain("ApplyPageOrientationPreset(PageLayoutOrientationPreset.Portrait)");
         source.Should().Contain("ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.Letter)");
         source.Should().Contain("ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.B4)");
         source.Should().Contain("ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.B5)");
-        source.Should().Contain("PageLayoutRibbonActionPlanner.PlanMarginsPreset(preset)");
-        source.Should().Contain("PageLayoutRibbonActionPlanner.PlanOrientationPreset(preset)");
-        source.Should().Contain("PageLayoutRibbonActionPlanner.PlanPaperSizePreset(preset)");
-        source.Should().Contain("PageLayoutRibbonActionPlanner.ScaleToFitCommandLabel");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanMarginsPreset(preset)");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanOrientationPreset(preset)");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanPaperSizePreset(preset)");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanScaleToFit(scaleToFit)");
         actionSource.Should().Contain("PageLayoutRibbonPolicyPlanner.ResolveMargins(preset)");
         actionSource.Should().Contain("PageLayoutRibbonPolicyPlanner.ResolveOrientation(preset)");
         actionSource.Should().Contain("PageLayoutRibbonPolicyPlanner.ResolvePaperSize(preset)");
@@ -55,9 +57,9 @@ public sealed class PageLayoutCommandSourceTests
         policySource.Should().Contain("PageLayoutPaperSizePreset.Letter => WorksheetPaperSize.Letter");
         policySource.Should().Contain("PageLayoutPaperSizePreset.B4 => WorksheetPaperSize.B4");
         policySource.Should().Contain("PageLayoutPaperSizePreset.B5 => WorksheetPaperSize.B5");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildSetBackgroundCommand(sheetId, background)");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildClearBackgroundCommand(sheetId)");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, margins)");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanSetBackground(background)");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanClearBackground()");
+        sessionSource.Should().Contain("PageLayoutRibbonCommandPlanner.BuildMarginsCommand(");
         source.Should().NotContain("new SetPageMarginsCommand(sheetId, margins)");
         SourceMethodExtractor.ExtractMethodSource(source, "private void PageSetupDialogBtn_Click(")
             .Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.DialogButton);");
@@ -68,9 +70,9 @@ public sealed class PageLayoutCommandSourceTests
             .Should().Contain("OpenRibbonContextMenu(btn, cm);");
         SourceMethodExtractor.ExtractMethodSource(source, "private void BackgroundBtn_Click(")
             .Should().Contain("BackgroundChooseMenuItem_Click(sender, e);");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildSetPrintAreaCommand(sheetId, range)");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildClearPrintAreaCommand(sheetId)");
-        source.Should().Contain("PageLayoutRibbonActionPlanner.PrintAreaCommandLabel");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanSetPrintArea(range)");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanClearPrintArea()");
+        sessionSource.Should().Contain("PageLayoutRibbonActionPlanner.PrintAreaCommandLabel");
         source.Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ScaleToFit)");
         source.Should().Contain("InitializePageLayoutScaleToFitControls()");
         source.Should().Contain("PageLayoutRibbonPolicyPlanner.PlanScaleWidthCommit(current, text)");
@@ -79,28 +81,28 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId))");
         policySource.Should().Contain("PageLayoutInputParser.TryParseScalePages(text, out var pagesWide)");
         policySource.Should().Contain("PageLayoutRibbonCommandPlanner.ResolveScaleToFitFromPageDimensions(");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.PlanPageBreakAction(");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanPageBreakAction(");
         source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Insert)");
         source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Remove)");
         source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.ResetAll)");
         source.Should().Contain("PageBreakMenuAction.Insert");
         source.Should().Contain("PageBreakMenuAction.Remove");
-        source.Should().Contain("PageLayoutRibbonActionPlanner.PageBreaksCommandLabel");
+        sessionSource.Should().Contain("PageLayoutRibbonActionPlanner.PageBreaksCommandLabel");
         source.Should().NotContain("PageBreakActionPlanner.ResetAll()");
         source.Should().NotContain("PageLayoutRibbonCommandPlanner.PlanInsertPageBreaks(");
         source.Should().NotContain("PageLayoutRibbonCommandPlanner.PlanRemovePageBreaks(");
         source.Should().Contain("PageBreakDialogPlanner.BuildDefaultInput(SheetGrid.SelectedRange)");
         source.Should().Contain("PageBreakDialogPlanner.PlanPageBreaks(");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, plan)");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanPageBreaks(plan)");
         source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(sheet, fields, dialog.RequestedAction)");
         source.Should().Contain("TryBuildCompositeCommandForTargets(");
         source.Should().Contain("TryExecuteCommand(targetCommandBuild.Command!, PageSetupSubmissionPlanner.DefaultCommandLabel)");
         source.Should().NotContain("PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()");
         source.Should().Contain("NativePrintDialogService.ShowPrinterOptionsDialog(this)");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPrintGridlinesCommand(_currentSheetId, isChecked, sheet?.PrintHeadings ?? false)");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPrintHeadingsCommand(_currentSheetId, sheet?.PrintGridlines ?? false, isChecked)");
-        source.Should().Contain("PageLayoutRibbonActionPlanner.PrintGridlinesCommandLabel");
-        source.Should().Contain("PageLayoutRibbonActionPlanner.PrintHeadingsCommandLabel");
+        source.Should().Contain("new PageLayoutCommandSession([_currentSheetId]).PlanPrintGridlines(");
+        source.Should().Contain("new PageLayoutCommandSession([_currentSheetId]).PlanPrintHeadings(");
+        sessionSource.Should().Contain("PageLayoutRibbonActionPlanner.PrintGridlinesCommandLabel");
+        sessionSource.Should().Contain("PageLayoutRibbonActionPlanner.PrintHeadingsCommandLabel");
         source.Should().NotContain("\"Print Gridlines\");");
         source.Should().NotContain("\"Print Headings\");");
     }

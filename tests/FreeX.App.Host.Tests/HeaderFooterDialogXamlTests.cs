@@ -432,8 +432,8 @@ public sealed class HeaderFooterDialogXamlTests
         source.Should().NotContain("Split('|'");
         source.Should().NotContain("ToCombinedText");
         source.Should().NotContain("FromCombinedText");
-        source.Should().Contain("FirstPageHeader = new WorksheetHeaderFooter(");
-        source.Should().Contain("EvenPageFooter = new WorksheetHeaderFooter(");
+        source.Should().Contain("new WorksheetHeaderFooter(FirstHeaderLeftBox.Text");
+        source.Should().Contain("new WorksheetHeaderFooter(EvenFooterLeftBox.Text");
     }
 
     [Fact]
@@ -471,7 +471,7 @@ public sealed class HeaderFooterDialogXamlTests
 
                 dialog.HeaderPictures.Center.Should().BeNull();
                 dialog.FooterPictures.Left.Should().NotBeNull();
-                ReadHeaderFooterDialogSource().Should().Contain("HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(");
+                ReadHeaderFooterDialogSource().Should().Contain(".PrunePicturesWithoutTokens();");
             }
             finally
             {

@@ -78,73 +78,13 @@ public sealed partial class MainWindow
         var sheet = _session.ActiveSheet;
         var initial = PageSetupDialogModel.FromSheet(sheet);
         var edited = await ShowHeaderFooterEditorDialogAsync(
-            new HeaderFooterEditorState(
-                initial.Header,
-                initial.Footer,
-                initial.FirstPageHeader,
-                initial.FirstPageFooter,
-                initial.EvenPageHeader,
-                initial.EvenPageFooter,
-                initial.HeaderPictures,
-                initial.FooterPictures,
-                initial.FirstPageHeaderPictures,
-                initial.FirstPageFooterPictures,
-                initial.EvenPageHeaderPictures,
-                initial.EvenPageFooterPictures,
-                initial.DifferentFirstPage,
-                initial.DifferentOddEvenPages,
-                initial.ScaleHeaderFooterWithDocument,
-                initial.AlignHeaderFooterWithMargins),
+            HeaderFooterEditorState.FromPageSetupFields(initial),
             openFooterTab: false);
         if (edited is null)
             return;
 
-        var fields = initial with
-        {
-            Header = edited.Header,
-            Footer = edited.Footer,
-            FirstPageHeader = edited.FirstPageHeader,
-            FirstPageFooter = edited.FirstPageFooter,
-            EvenPageHeader = edited.EvenPageHeader,
-            EvenPageFooter = edited.EvenPageFooter,
-            HeaderPictures = edited.HeaderPictures,
-            FooterPictures = edited.FooterPictures,
-            FirstPageHeaderPictures = edited.FirstPageHeaderPictures,
-            FirstPageFooterPictures = edited.FirstPageFooterPictures,
-            EvenPageHeaderPictures = edited.EvenPageHeaderPictures,
-            EvenPageFooterPictures = edited.EvenPageFooterPictures,
-            DifferentFirstPage = edited.DifferentFirstPage,
-            DifferentOddEvenPages = edited.DifferentOddEvenPages,
-            ScaleHeaderFooterWithDocument = edited.ScaleWithDocument,
-            AlignHeaderFooterWithMargins = edited.AlignWithMargins,
-        };
-
-        var request = new PageSetupHeaderFooterRequest
-        {
-            Header = fields.Header,
-            Footer = fields.Footer,
-            FirstPageHeader = fields.FirstPageHeader,
-            FirstPageFooter = fields.FirstPageFooter,
-            EvenPageHeader = fields.EvenPageHeader,
-            EvenPageFooter = fields.EvenPageFooter,
-            DifferentFirstPage = fields.DifferentFirstPage,
-            DifferentOddEvenPages = fields.DifferentOddEvenPages,
-            ScaleHeaderFooterWithDocument = fields.ScaleHeaderFooterWithDocument,
-            AlignHeaderFooterWithMargins = fields.AlignHeaderFooterWithMargins,
-            HeaderPictures = fields.HeaderPictures,
-            FooterPictures = fields.FooterPictures,
-            FirstPageHeaderPictures = fields.FirstPageHeaderPictures,
-            FirstPageFooterPictures = fields.FirstPageFooterPictures,
-            EvenPageHeaderPictures = fields.EvenPageHeaderPictures,
-            EvenPageFooterPictures = fields.EvenPageFooterPictures,
-        };
-        var commands = _session.GetCurrentGroupedEditSheetIds()
-            .Select(sheetId => (IWorkbookCommand)PageSetupCommandFactory.BuildHeaderFooterCommand(sheetId, request))
-            .ToArray();
-        var command = commands.Length == 1
-            ? commands[0]
-            : new CompositeWorkbookCommand("Header & Footer", commands);
-        var result = _session.ExecuteReviewCommand(command);
+        var plan = CreatePageLayoutCommandSession().PlanHeaderFooter(edited.ToCommandRequest());
+        var result = _session.ExecuteReviewCommand(plan.Command);
         if (!result.Success)
         {
             ShowEditIssue(PageLayoutStatusPlanner.ResolveCommandStatus(
@@ -637,17 +577,15 @@ public sealed partial class MainWindow
         ApplyPageLayoutCheckBoxChrome(alignWithMarginsCheck);
         AutomationProperties.SetAutomationId(alignWithMarginsCheck, "PageSetupAlignWithMarginsCheck");
 
-        customHeaderButton.Click += async (_, _) =>
-        {
-            var edited = await ShowHeaderFooterEditorDialogAsync(new HeaderFooterEditorState(
-                header, footer, firstPageHeader, firstPageFooter, evenPageHeader, evenPageFooter,
-                headerPictures, footerPictures, firstPageHeaderPictures, firstPageFooterPictures,
-                evenPageHeaderPictures, evenPageFooterPictures,
-                differentFirstPageCheck.IsChecked == true, differentOddEvenCheck.IsChecked == true,
-                scaleWithDocumentCheck.IsChecked == true, alignWithMarginsCheck.IsChecked == true), openFooterTab: false);
-            if (edited is null)
-                return;
+        HeaderFooterEditorState CaptureHeaderFooterEditorState() => new(
+            header, footer, firstPageHeader, firstPageFooter, evenPageHeader, evenPageFooter,
+            headerPictures, footerPictures, firstPageHeaderPictures, firstPageFooterPictures,
+            evenPageHeaderPictures, evenPageFooterPictures,
+            differentFirstPageCheck.IsChecked == true, differentOddEvenCheck.IsChecked == true,
+            scaleWithDocumentCheck.IsChecked == true, alignWithMarginsCheck.IsChecked == true);
 
+        void ApplyHeaderFooterEditorState(HeaderFooterEditorState edited)
+        {
             header = edited.Header;
             footer = edited.Footer;
             firstPageHeader = edited.FirstPageHeader;
@@ -667,38 +605,21 @@ public sealed partial class MainWindow
             headerPresetBox.SelectedIndex = PageSetupDialogPlanner.ResolveHeaderPresetIndex(header);
             footerPresetBox.SelectedIndex = PageSetupDialogPlanner.ResolveFooterPresetIndex(footer);
             UpdateHeaderFooterPreview();
-        };
-        customFooterButton.Click += async (_, _) =>
+        }
+
+        async Task EditHeaderFooterAsync(bool openFooterTab)
         {
-            var edited = await ShowHeaderFooterEditorDialogAsync(new HeaderFooterEditorState(
-                header, footer, firstPageHeader, firstPageFooter, evenPageHeader, evenPageFooter,
-                headerPictures, footerPictures, firstPageHeaderPictures, firstPageFooterPictures,
-                evenPageHeaderPictures, evenPageFooterPictures,
-                differentFirstPageCheck.IsChecked == true, differentOddEvenCheck.IsChecked == true,
-                scaleWithDocumentCheck.IsChecked == true, alignWithMarginsCheck.IsChecked == true), openFooterTab: true);
+            var edited = await ShowHeaderFooterEditorDialogAsync(
+                CaptureHeaderFooterEditorState(),
+                openFooterTab);
             if (edited is null)
                 return;
 
-            header = edited.Header;
-            footer = edited.Footer;
-            firstPageHeader = edited.FirstPageHeader;
-            firstPageFooter = edited.FirstPageFooter;
-            evenPageHeader = edited.EvenPageHeader;
-            evenPageFooter = edited.EvenPageFooter;
-            headerPictures = edited.HeaderPictures;
-            footerPictures = edited.FooterPictures;
-            firstPageHeaderPictures = edited.FirstPageHeaderPictures;
-            firstPageFooterPictures = edited.FirstPageFooterPictures;
-            evenPageHeaderPictures = edited.EvenPageHeaderPictures;
-            evenPageFooterPictures = edited.EvenPageFooterPictures;
-            differentFirstPageCheck.IsChecked = edited.DifferentFirstPage;
-            differentOddEvenCheck.IsChecked = edited.DifferentOddEvenPages;
-            scaleWithDocumentCheck.IsChecked = edited.ScaleWithDocument;
-            alignWithMarginsCheck.IsChecked = edited.AlignWithMargins;
-            headerPresetBox.SelectedIndex = PageSetupDialogPlanner.ResolveHeaderPresetIndex(header);
-            footerPresetBox.SelectedIndex = PageSetupDialogPlanner.ResolveFooterPresetIndex(footer);
-            UpdateHeaderFooterPreview();
-        };
+            ApplyHeaderFooterEditorState(edited);
+        }
+
+        customHeaderButton.Click += async (_, _) => await EditHeaderFooterAsync(openFooterTab: false);
+        customFooterButton.Click += async (_, _) => await EditHeaderFooterAsync(openFooterTab: true);
         UpdateHeaderFooterPreview();
 
         // --- Sheet tab ---
@@ -1284,24 +1205,6 @@ public sealed partial class MainWindow
         return result;
     }
 
-    private sealed record HeaderFooterEditorState(
-        WorksheetHeaderFooter Header,
-        WorksheetHeaderFooter Footer,
-        WorksheetHeaderFooter FirstPageHeader,
-        WorksheetHeaderFooter FirstPageFooter,
-        WorksheetHeaderFooter EvenPageHeader,
-        WorksheetHeaderFooter EvenPageFooter,
-        WorksheetHeaderFooterPictureSet HeaderPictures,
-        WorksheetHeaderFooterPictureSet FooterPictures,
-        WorksheetHeaderFooterPictureSet FirstPageHeaderPictures,
-        WorksheetHeaderFooterPictureSet FirstPageFooterPictures,
-        WorksheetHeaderFooterPictureSet EvenPageHeaderPictures,
-        WorksheetHeaderFooterPictureSet EvenPageFooterPictures,
-        bool DifferentFirstPage,
-        bool DifferentOddEvenPages,
-        bool ScaleWithDocument,
-        bool AlignWithMargins);
-
     private async Task<HeaderFooterEditorState?> ShowHeaderFooterEditorDialogAsync(
         HeaderFooterEditorState initial,
         bool openFooterTab)
@@ -1786,7 +1689,7 @@ public sealed partial class MainWindow
             var editedFirstFooter = ReadEditorScope(HeaderFooterEditorScope.FirstPageFooter);
             var editedEvenHeader = ReadEditorScope(HeaderFooterEditorScope.EvenPageHeader);
             var editedEvenFooter = ReadEditorScope(HeaderFooterEditorScope.EvenPageFooter);
-            result = initial with
+            result = (initial with
             {
                 Header = editedHeader,
                 Footer = editedFooter,
@@ -1794,17 +1697,17 @@ public sealed partial class MainWindow
                 FirstPageFooter = editedFirstFooter,
                 EvenPageHeader = editedEvenHeader,
                 EvenPageFooter = editedEvenFooter,
-                HeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(editedHeader, headerPictures),
-                FooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(editedFooter, footerPictures),
-                FirstPageHeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(editedFirstHeader, firstPageHeaderPictures),
-                FirstPageFooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(editedFirstFooter, firstPageFooterPictures),
-                EvenPageHeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(editedEvenHeader, evenPageHeaderPictures),
-                EvenPageFooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(editedEvenFooter, evenPageFooterPictures),
+                HeaderPictures = headerPictures,
+                FooterPictures = footerPictures,
+                FirstPageHeaderPictures = firstPageHeaderPictures,
+                FirstPageFooterPictures = firstPageFooterPictures,
+                EvenPageHeaderPictures = evenPageHeaderPictures,
+                EvenPageFooterPictures = evenPageFooterPictures,
                 DifferentFirstPage = firstPageCheck.IsChecked == true,
                 DifferentOddEvenPages = oddEvenCheck.IsChecked == true,
                 ScaleWithDocument = scaleCheck.IsChecked == true,
                 AlignWithMargins = alignCheck.IsChecked == true,
-            };
+            }).PrunePicturesWithoutTokens();
             dialog.Close();
         };
         cancelButton.Click += (_, _) => Dispatcher.UIThread.Post(

@@ -27,46 +27,45 @@ public partial class PageSetupDialog
 
     private void CustomHeaderFooterButton_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = new Sheet(_sheetId, "Sheet")
-        {
-            PageHeader = Header,
-            PageFooter = Footer,
-            FirstPageHeader = FirstPageHeader,
-            FirstPageFooter = FirstPageFooter,
-            EvenPageHeader = EvenPageHeader,
-            EvenPageFooter = EvenPageFooter,
-            PageHeaderPictures = HeaderPictures.DeepClone(),
-            PageFooterPictures = FooterPictures.DeepClone(),
-            FirstPageHeaderPictures = FirstPageHeaderPictures.DeepClone(),
-            FirstPageFooterPictures = FirstPageFooterPictures.DeepClone(),
-            EvenPageHeaderPictures = EvenPageHeaderPictures.DeepClone(),
-            EvenPageFooterPictures = EvenPageFooterPictures.DeepClone(),
-            DifferentFirstPageHeaderFooter = DifferentFirstPageBox.IsChecked == true,
-            DifferentOddEvenHeaderFooter = DifferentOddEvenBox.IsChecked == true,
-            HeaderFooterScaleWithDocument = ScaleWithDocumentBox.IsChecked == true,
-            HeaderFooterAlignWithMargins = AlignWithMarginsBox.IsChecked == true
-        };
+        var initial = new HeaderFooterEditorState(
+            Header,
+            Footer,
+            FirstPageHeader,
+            FirstPageFooter,
+            EvenPageHeader,
+            EvenPageFooter,
+            HeaderPictures,
+            FooterPictures,
+            FirstPageHeaderPictures,
+            FirstPageFooterPictures,
+            EvenPageHeaderPictures,
+            EvenPageFooterPictures,
+            DifferentFirstPageBox.IsChecked == true,
+            DifferentOddEvenBox.IsChecked == true,
+            ScaleWithDocumentBox.IsChecked == true,
+            AlignWithMarginsBox.IsChecked == true);
 
-        var dialog = new HeaderFooterDialog(sheet) { Owner = this };
+        var dialog = new HeaderFooterDialog(initial) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        Header = dialog.Header;
-        Footer = dialog.Footer;
-        FirstPageHeader = dialog.FirstPageHeader;
-        FirstPageFooter = dialog.FirstPageFooter;
-        EvenPageHeader = dialog.EvenPageHeader;
-        EvenPageFooter = dialog.EvenPageFooter;
-        HeaderPictures = dialog.HeaderPictures.DeepClone();
-        FooterPictures = dialog.FooterPictures.DeepClone();
-        FirstPageHeaderPictures = dialog.FirstPageHeaderPictures.DeepClone();
-        FirstPageFooterPictures = dialog.FirstPageFooterPictures.DeepClone();
-        EvenPageHeaderPictures = dialog.EvenPageHeaderPictures.DeepClone();
-        EvenPageFooterPictures = dialog.EvenPageFooterPictures.DeepClone();
-        DifferentFirstPage = dialog.DifferentFirstPage;
-        DifferentOddEvenPages = dialog.DifferentOddEvenPages;
-        ScaleHeaderFooterWithDocument = dialog.ScaleWithDocument;
-        AlignHeaderFooterWithMargins = dialog.AlignWithMargins;
+        var result = dialog.ResultState;
+        Header = result.Header;
+        Footer = result.Footer;
+        FirstPageHeader = result.FirstPageHeader;
+        FirstPageFooter = result.FirstPageFooter;
+        EvenPageHeader = result.EvenPageHeader;
+        EvenPageFooter = result.EvenPageFooter;
+        HeaderPictures = result.HeaderPictures;
+        FooterPictures = result.FooterPictures;
+        FirstPageHeaderPictures = result.FirstPageHeaderPictures;
+        FirstPageFooterPictures = result.FirstPageFooterPictures;
+        EvenPageHeaderPictures = result.EvenPageHeaderPictures;
+        EvenPageFooterPictures = result.EvenPageFooterPictures;
+        DifferentFirstPage = result.DifferentFirstPage;
+        DifferentOddEvenPages = result.DifferentOddEvenPages;
+        ScaleHeaderFooterWithDocument = result.ScaleWithDocument;
+        AlignHeaderFooterWithMargins = result.AlignWithMargins;
         DifferentFirstPageBox.IsChecked = DifferentFirstPage;
         DifferentOddEvenBox.IsChecked = DifferentOddEvenPages;
         ScaleWithDocumentBox.IsChecked = ScaleHeaderFooterWithDocument;

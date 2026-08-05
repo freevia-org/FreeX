@@ -50,4 +50,40 @@ public sealed class PageLayoutSourceGuardTests
         commentsSource.Should().NotContain("result.Sort(static (left, right) =>");
         commentsSource.Should().NotContain("BuildCommentSummaryPages(");
     }
+
+    [Fact]
+    public void PlatformPageLayoutHandlers_DelegateCommandCompositionToPortableSessions()
+    {
+        var wpfDirectory = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Host");
+        var avaloniaDirectory = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Avalonia");
+        var wpfSource = File.ReadAllText(Path.Combine(wpfDirectory, "MainWindow.PageLayout.cs"));
+        var avaloniaSource = string.Join(
+            Environment.NewLine,
+            new[]
+            {
+                "MainWindow.PageLayout.cs",
+                "MainWindow.PageLayoutRibbon.cs",
+                "MainWindow.PageBreakActions.cs",
+                "MainWindow.RibbonMenuWires.cs",
+                "MainWindow.SheetOptionsNotes.cs",
+                "MainWindow.Themes.cs",
+            }
+                .Select(fileName => File.ReadAllText(Path.Combine(avaloniaDirectory, fileName))));
+        var combinedSource = wpfSource + Environment.NewLine + avaloniaSource;
+
+        combinedSource.Should().Contain("PageLayoutCommandSession");
+        combinedSource.Should().Contain("WorkbookThemeCommandPlanner.PlanApply(");
+        combinedSource.Should().NotContain("PageLayoutRibbonCommandPlanner.Build");
+        combinedSource.Should().NotContain("PageSetupCommandFactory.BuildHeaderFooterCommand");
+        combinedSource.Should().NotContain("new SetWorkbookThemeCommand(");
+        combinedSource.Should().NotContain("new SetPageMarginsCommand(");
+        combinedSource.Should().NotContain("new SetPageOrientationCommand(");
+        combinedSource.Should().NotContain("new SetPaperSizeCommand(");
+        combinedSource.Should().NotContain("new SetScaleToFitCommand(");
+        combinedSource.Should().NotContain("new SetPageBreaksCommand(");
+        combinedSource.Should().NotContain("new SetWorksheetBackgroundCommand(");
+        combinedSource.Should().NotContain("new ClearWorksheetBackgroundCommand(");
+        avaloniaSource.Should().NotContain("private sealed record HeaderFooterEditorState");
+        avaloniaSource.Should().NotContain("new CompositeWorkbookCommand(\"Header & Footer\"");
+    }
 }

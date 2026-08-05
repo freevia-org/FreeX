@@ -16,7 +16,6 @@ using Avalonia.Styling;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.PageLayout;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -66,7 +65,9 @@ public sealed partial class MainWindow
                     ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_GridlinesFailed"));
                 return result.Success;
             },
-            buildPrintCommand: (sheet, print) => PageLayoutRibbonCommandPlanner.BuildPrintGridlinesCommand(sheet, print));
+            planPrintCommand: print => CreatePageLayoutCommandSession().PlanPrintGridlines(
+                print,
+                _session.ActiveSheet.PrintHeadings));
 
     /// <summary>
     /// Page Layout ▸ Sheet Options ▸ Headings. Two-checkbox popup: View + Print.
@@ -91,7 +92,9 @@ public sealed partial class MainWindow
                 RefreshViewportSizeForZoom();
                 return true;
             },
-            buildPrintCommand: (sheet, print) => PageLayoutRibbonCommandPlanner.BuildPrintHeadingsCommand(sheet, print));
+            planPrintCommand: print => CreatePageLayoutCommandSession().PlanPrintHeadings(
+                _session.ActiveSheet.PrintGridlines,
+                print));
 
     private async Task ShowSheetOptionTwoToggleAsync(
         string title,
@@ -99,7 +102,7 @@ public sealed partial class MainWindow
         Func<bool> getView,
         Func<bool> getPrint,
         Func<bool, bool> setView,
-        Func<Sheet, bool, IWorkbookCommand> buildPrintCommand)
+        Func<bool, PageLayoutCommandExecutionPlan> planPrintCommand)
     {
         if (_isOpening || _isSaving)
             return;
@@ -168,8 +171,8 @@ public sealed partial class MainWindow
         // Print half via a rebuilt page-setup command (undo/redo aware).
         if (wantPrint != getPrint())
         {
-            var sheet = _session.ActiveSheet;
-            var result = _session.ExecuteReviewCommand(buildPrintCommand(sheet, wantPrint));
+            var plan = planPrintCommand(wantPrint);
+            var result = _session.ExecuteReviewCommand(plan.Command);
             if (!result.Success)
             {
                 ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotUpdatePrintOptions"));
