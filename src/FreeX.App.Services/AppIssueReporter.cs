@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using Free.Shared.AppServices;
 
 namespace FreeX.App.Services;
 
@@ -24,9 +25,9 @@ public static partial class AppIssueReporter
         bool diagnosticsEnabled,
         Assembly? assembly = null)
     {
-        var informationalVersion = (assembly ?? typeof(AppIssueReporter).Assembly)
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-            ?.InformationalVersion;
+        var informationalVersion = AssemblyVersionMetadata
+            .FromAssembly(assembly ?? typeof(AppIssueReporter).Assembly)
+            .InformationalVersion;
 
         return new AppIssueReportContext(
             issueBaseUrl,

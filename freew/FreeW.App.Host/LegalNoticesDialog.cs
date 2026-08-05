@@ -1,4 +1,6 @@
 using Free.Shared.Shell.Wpf;
+using Free.Shared.Shell;
+using FreeW.App.Presentation;
 
 namespace FreeW.App.Host;
 
@@ -10,7 +12,17 @@ namespace FreeW.App.Host;
 public sealed partial class LegalNoticesDialog : SharedLegalNoticesDialog
 {
     public LegalNoticesDialog()
-        : this(FreeWLegalNoticeProvider.GetDocuments())
+        : this(FreeWLegalNoticeProvider.GetDocuments(typeof(LegalNoticesDialog).Assembly))
+    {
+    }
+
+    internal LegalNoticesDialog(IReadOnlyList<LegalNoticeDocument> notices)
+        : base(
+            windowTitle: "Legal Notices",
+            notices: notices,
+            introText: "These notices are packaged with FreeW for offline review.",
+            closeButtonContent: "Close",
+            helpText: "Shows the legal, privacy, and third-party notices packaged with this FreeW executable.")
     {
     }
 

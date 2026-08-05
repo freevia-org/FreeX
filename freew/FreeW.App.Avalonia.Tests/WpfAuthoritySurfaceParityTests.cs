@@ -14,6 +14,7 @@ using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 using Free.Shared.Shell;
+using FreeW.App.Presentation;
 using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -99,7 +100,7 @@ public sealed class WpfAuthoritySurfaceParityTests
     {
         await Session.Dispatch(() =>
         {
-            var documents = FreeWLegalNoticeProvider.GetDocuments();
+            var documents = FreeWLegalNoticeProvider.GetDocuments(typeof(LegalNoticesDialog).Assembly);
             documents.Select(document => document.Title).Should().Equal(
                 "Project License",
                 "Legal Notices",

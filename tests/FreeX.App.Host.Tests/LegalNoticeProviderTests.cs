@@ -1,6 +1,7 @@
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
+using Free.Shared.Shell;
 using FreeX.App.Host;
 using FreeX.App.Services;
 

@@ -9,9 +9,7 @@ internal sealed class LegalNoticesDialog : AvaloniaLegalNoticesDialog
     public LegalNoticesDialog()
         : base(
             windowTitle: UiText.Get("LegalNotices_LegalNotices"),
-            notices: LegalNoticeProvider.GetDocuments()
-                .Select(document => (document.Title, document.Text))
-                .ToArray(),
+            notices: LegalNoticeProvider.GetDocuments(),
             introText: UiText.Get("LegalNotices_TheseNoticesArePackagedWithThisFreeXExecutableForOfflineReview"),
             closeButtonContent: UiText.Get("LegalNotices_CloseButton"),
             helpText: UiText.Get("LegalNotices_ShowsTheLegalPrivacyAndThirdPartyNoticesPackagedWithThisFreeXExecutable"),

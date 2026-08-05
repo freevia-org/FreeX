@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Free.Shared.Shell;
+using FreeW.App.Presentation;
 
 namespace FreeW.App.Host.Tests;
 
@@ -35,7 +36,7 @@ public sealed class FreeWHelpInfoTests
     [Fact]
     public void LegalNoticeProvider_LoadsPackagedOfflineDocuments()
     {
-        var documents = FreeWLegalNoticeProvider.GetDocuments();
+        var documents = FreeWLegalNoticeProvider.GetDocuments(typeof(FreeWAppInfo).Assembly);
 
         documents.Select(document => document.Title)
             .Should()

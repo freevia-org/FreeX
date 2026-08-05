@@ -18,6 +18,21 @@ public partial class SharedLegalNoticesDialog : DialogWindow
     private static readonly Regex NonAutomationIdCharacter = new("[^A-Za-z0-9]+", RegexOptions.Compiled);
     private readonly TabControl _tabControl = new();
 
+    public SharedLegalNoticesDialog(
+        string windowTitle,
+        IReadOnlyList<LegalNoticeDocument> notices,
+        string introText,
+        string closeButtonContent,
+        string helpText)
+        : this(
+            windowTitle,
+            ToDisplayDocuments(notices),
+            introText,
+            closeButtonContent,
+            helpText)
+    {
+    }
+
     /// <param name="windowTitle">Window title (e.g. "Legal Notices").</param>
     /// <param name="notices">Ordered list of (Title, Text) tuples from the app's legal resources.</param>
     /// <param name="introText">Sentence shown above the tabs (app-specific).</param>
@@ -89,6 +104,13 @@ public partial class SharedLegalNoticesDialog : DialogWindow
         root.Children.Add(_tabControl);
 
         return root;
+    }
+
+    private static IReadOnlyList<(string Title, string Text)> ToDisplayDocuments(
+        IReadOnlyList<LegalNoticeDocument> notices)
+    {
+        ArgumentNullException.ThrowIfNull(notices);
+        return notices.Select(notice => (notice.Title, notice.Text)).ToArray();
     }
 
     private static TabItem CreateTabItem((string Title, string Text) notice)

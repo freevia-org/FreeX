@@ -1,4 +1,5 @@
 using Free.Shared.Shell.Wpf;
+using Free.Shared.Shell;
 using FreeX.App.Services;
 
 namespace FreeX.App.Host;

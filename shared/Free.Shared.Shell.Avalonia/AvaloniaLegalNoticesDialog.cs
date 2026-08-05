@@ -11,6 +11,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
+using Free.Shared.Shell;
 
 namespace Free.Shared.Shell.Avalonia;
 
@@ -35,6 +36,29 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
     private readonly string _readOnlyTextHelpText;
     private readonly string _sectionHelpText;
     private readonly bool _acceptsTab;
+
+    public AvaloniaLegalNoticesDialog(
+        string windowTitle,
+        IReadOnlyList<LegalNoticeDocument> notices,
+        string introText,
+        string closeButtonContent,
+        string helpText,
+        string? readOnlyTextHelpText = null,
+        string? sectionHelpText = null,
+        bool acceptsTab = true,
+        bool enableKeyboardLifecycle = false)
+        : this(
+            windowTitle,
+            ToDisplayDocuments(notices),
+            introText,
+            closeButtonContent,
+            helpText,
+            readOnlyTextHelpText,
+            sectionHelpText,
+            acceptsTab,
+            enableKeyboardLifecycle)
+    {
+    }
 
     public AvaloniaLegalNoticesDialog(
         string windowTitle,
@@ -83,6 +107,13 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
     }
 
     internal TabControl SectionTabsForTest => _tabControl;
+
+    private static IReadOnlyList<(string Title, string Text)> ToDisplayDocuments(
+        IReadOnlyList<LegalNoticeDocument> notices)
+    {
+        ArgumentNullException.ThrowIfNull(notices);
+        return notices.Select(notice => (notice.Title, notice.Text)).ToArray();
+    }
 
     private Control CreateContent(
         IReadOnlyList<(string Title, string Text)> notices,

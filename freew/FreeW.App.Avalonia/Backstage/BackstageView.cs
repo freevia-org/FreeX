@@ -545,11 +545,10 @@ internal sealed class BackstageView : Window
 
     private Control BuildAccountPane()
     {
-        var version = typeof(BackstageView).Assembly.GetName().Version?.ToString() ?? "1.0.0";
         var surface = BackstagePaneSurfacePlanner.BuildAccountPane(
             SisterBackstageAccountPaneContextPlanner.BuildLocal(
                 BackstageViewTextResources.ProductName,
-                version,
+                EntryAssemblyVersion.Resolve(),
                 _callbacks.GetDataFolder()),
             openOptions: DismissThen(_callbacks.OpenOptions));
 
