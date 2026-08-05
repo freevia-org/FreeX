@@ -26,7 +26,7 @@ public static class WpfThemeApplier
     /// Builds a <see cref="ResourceDictionary"/> containing a frozen
     /// <see cref="SolidColorBrush"/> for each of the 22 color roles, double values for
     /// the 6 metrics, and <see cref="FontFamily"/> resources for the 5 typography roles,
-    /// plus 5 prefix-free neutral keys (<c>ThemeNeutral*Brush</c>, WS-G round 8) and
+    /// plus 7 prefix-free neutral keys (<c>ThemeNeutral*Brush</c>, WS-G round 8) and
     /// 5 prefix-free accent keys (<c>ThemeAccent*Brush</c> / <c>ThemeRibbonButtonHoverBrush</c>,
     /// WS-G round 9).
     /// Keys follow the pattern <c>{keyPrefix}{Role}Brush</c> / <c>{keyPrefix}{MetricName}</c>
@@ -117,6 +117,8 @@ public static class WpfThemeApplier
         AddNeutralBrush(dict, "White",        c.White);
         AddNeutralBrush(dict, "Danger",       c.Danger);
         AddNeutralBrush(dict, "SheetSurface", c.SheetSurface);
+        AddNeutralBrush(dict, "Border",       c.Border);
+        AddNeutralBrush(dict, "BorderStrong", c.BorderStrong);
 
         // ── Accent keys (WS-G round 9) ──────────────────────────────────────────
         // Unlike the neutral keys above (byte-identical across all apps), accent keys are

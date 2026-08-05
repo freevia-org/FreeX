@@ -6,7 +6,7 @@ using Free.Shared.Theme.Wpf;
 namespace FreeX.App.Host.Tests;
 
 /// <summary>
-/// WS-G round 8: proves that <see cref="WpfThemeApplier.BuildResources"/> emits the five
+/// WS-G round 8: proves that <see cref="WpfThemeApplier.BuildResources"/> emits the shared
 /// <c>ThemeNeutral*Brush</c> keys needed by the shared ribbon renderer, and that applying any
 /// of the three brand themes yields <em>byte-identical</em> neutral brush values — confirming
 /// that the shared ribbon neutral chrome is truly app-neutral.
@@ -55,10 +55,26 @@ public sealed class ThemeApplierWpfRound8Tests
         brush.Color.Should().Be(Color.FromRgb(0xF3, 0xF3, 0xF3));
     }
 
+    [Fact]
+    public void WpfApplier_FreeX_NeutralBorderBrush_Is_DADCE0()
+    {
+        var dict = WpfThemeApplier.BuildResources(BrandThemes.FreeX, "FreeX");
+        var brush = (SolidColorBrush)dict["ThemeNeutralBorderBrush"];
+        brush.Color.Should().Be(Color.FromRgb(0xDA, 0xDC, 0xE0));
+    }
+
+    [Fact]
+    public void WpfApplier_FreeX_NeutralBorderStrongBrush_Is_C8CCD0()
+    {
+        var dict = WpfThemeApplier.BuildResources(BrandThemes.FreeX, "FreeX");
+        var brush = (SolidColorBrush)dict["ThemeNeutralBorderStrongBrush"];
+        brush.Color.Should().Be(Color.FromRgb(0xC8, 0xCC, 0xD0));
+    }
+
     // ── All five keys are present ─────────────────────────────────────────────
 
     [Fact]
-    public void WpfApplier_AllFiveNeutralKeysPresent_ForFreeX()
+    public void WpfApplier_AllNeutralKeysPresent_ForFreeX()
     {
         var dict = WpfThemeApplier.BuildResources(BrandThemes.FreeX, "FreeX");
         var expectedNeutralKeys = new[]
@@ -68,6 +84,8 @@ public sealed class ThemeApplierWpfRound8Tests
             "ThemeNeutralWhiteBrush",
             "ThemeNeutralDangerBrush",
             "ThemeNeutralSheetSurfaceBrush",
+            "ThemeNeutralBorderBrush",
+            "ThemeNeutralBorderStrongBrush",
         };
         foreach (var key in expectedNeutralKeys)
             dict.Contains(key).Should().BeTrue(because: $"neutral key '{key}' must be registered");
@@ -83,6 +101,8 @@ public sealed class ThemeApplierWpfRound8Tests
     [InlineData("ThemeNeutralWhiteBrush")]
     [InlineData("ThemeNeutralDangerBrush")]
     [InlineData("ThemeNeutralSheetSurfaceBrush")]
+    [InlineData("ThemeNeutralBorderBrush")]
+    [InlineData("ThemeNeutralBorderStrongBrush")]
     public void NeutralBrush_IsIdentical_AcrossFreeX_FreeW_FreeP(string key)
     {
         var freexDict = WpfThemeApplier.BuildResources(BrandThemes.FreeX, "FreeX");
