@@ -2165,12 +2165,14 @@ public sealed class ChartTests : IDisposable
         var imported = PptxPackageReader.Read(path).Slides[0].Shapes
             .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
         imported.Title.Should().Be("Native title");
+        imported.TitleOverlay.Should().BeFalse();
         imported.TitleStyle.Should().NotBeNull();
         imported.TitleStyle!.FontSizePt.Should().Be(12);
         imported.TitleStyle.Bold.Should().BeTrue();
         imported.TitleStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
 
         imported.Title = "Edited title";
+        imported.TitleOverlay = true;
         imported.TitleStyle = new ChartTextStyle
         {
             FontSizePt = 16,
@@ -2183,7 +2185,7 @@ public sealed class ChartTests : IDisposable
         var title = edited.Descendants(cxNs + "title").Single();
         title.Attribute("pos")!.Value.Should().Be("t");
         title.Attribute("align")!.Value.Should().Be("ctr");
-        title.Attribute("overlay")!.Value.Should().Be("0");
+        title.Attribute("overlay")!.Value.Should().Be("1");
         title.Descendants(cxNs + "v").Single().Value.Should().Be("Edited title");
         var defRPr = title.Element(cxNs + "txPr")!
             .Element(aNs + "p")!
@@ -2199,6 +2201,7 @@ public sealed class ChartTests : IDisposable
             IsChartEx = true,
             ChartExLayoutId = "histogram",
             Title = "Fresh title",
+            TitleOverlay = false,
             TitleStyle = new ChartTextStyle { FontSizePt = 11, Bold = true }
         };
         fresh.Categories.Add("Q1");
@@ -2208,7 +2211,9 @@ public sealed class ChartTests : IDisposable
         var freshPath = WriteToPptx(BuildPresWithChart(fresh));
         using var freshArchive = ZipFile.OpenRead(freshPath);
         var freshChart = XDocument.Load(freshArchive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
-        freshChart.Descendants(cxNs + "title").Single()
+        var freshTitle = freshChart.Descendants(cxNs + "title").Single();
+        freshTitle.Attribute("overlay")!.Value.Should().Be("0");
+        freshTitle
             .Element(cxNs + "txPr")!.Element(aNs + "p")!
             .Element(aNs + "pPr")!.Element(aNs + "defRPr")!
             .Attribute("b")!.Value.Should().Be("1");
