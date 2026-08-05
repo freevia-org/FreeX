@@ -154,6 +154,95 @@ public sealed class AutomaticHyphenationRenderTests
         limitedGlyphs.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public async Task Table_cell_wrap_paints_display_only_hyphen_without_consuming_model_or_caret_offsets()
+    {
+        IReadOnlyList<(int Block, int BreakOffset, double X, double Y, double W, double LineHeight)>? glyphs = null;
+        IReadOnlyList<(char Ch, double X, double Y, double LineHeight, bool Sentinel, int ParaOffset)>? placed = null;
+        string? modelText = null;
+        string? pdfText = null;
+
+        await OnUiThread(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 100;
+            document.Page.HeightPt = 300;
+            document.Page.MarginLeftPt = 20;
+            document.Page.MarginRightPt = 20;
+            document.Page.MarginTopPt = 20;
+            document.Page.MarginBottomPt = 20;
+            document.Page.AutoHyphenation = true;
+
+            var paragraph = new Paragraph(LongWord);
+            paragraph.Runs[0].Formatting = paragraph.Runs[0].Formatting with { FontSizePt = 24 };
+            var table = Table.Create(1, 1);
+            table.Rows[0].Cells[0].Paragraphs.Clear();
+            table.Rows[0].Cells[0].Paragraphs.Add(paragraph);
+            document.Blocks.Add(table);
+
+            var view = Layout(document);
+            glyphs = view.AutomaticHyphenGlyphs.Where(glyph => glyph.Block == 0).ToList();
+            placed = view.GetCellPlaced(0, row: 0, col: 0, paraIdx: 0);
+            modelText = paragraph.PlainText;
+            pdfText = string.Concat(view.BuildPdfContent().Pages
+                .SelectMany(page => page.Ops)
+                .OfType<Free.Shared.Pdf.PdfText>()
+                .Select(text => text.Text));
+        });
+
+        glyphs.Should().NotBeNullOrEmpty();
+        var cellPlacement = placed!;
+        var sourceGlyphs = cellPlacement.Where(item => !item.Sentinel).ToList();
+        sourceGlyphs.Select(item => item.Ch).Should().Equal(LongWord);
+        sourceGlyphs.Select(item => item.ParaOffset).Should().Equal(Enumerable.Range(0, LongWord.Length));
+        cellPlacement.Where(item => item.Sentinel).Should().ContainSingle()
+            .Which.ParaOffset.Should().Be(LongWord.Length);
+        sourceGlyphs.Select(item => item.Ch).Should().NotContain('-');
+        sourceGlyphs.Select(item => item.Ch).Should().NotContain(Hyphenator.SoftHyphen);
+        modelText.Should().Be(LongWord);
+        pdfText.Should().Contain("-");
+        pdfText.Should().NotContain(Hyphenator.SoftHyphen.ToString());
+    }
+
+    [Fact]
+    public async Task Table_cell_wrap_honors_consecutive_hyphen_limit()
+    {
+        var unlimitedGlyphs = -1;
+        var limitedGlyphs = -1;
+
+        await OnUiThread(() =>
+        {
+            int CountGlyphs(int consecutiveHyphenLimit)
+            {
+                var document = TextDocument.CreateEmpty();
+                document.Blocks.Clear();
+                document.Page.WidthPt = 100;
+                document.Page.HeightPt = 600;
+                document.Page.MarginLeftPt = 20;
+                document.Page.MarginRightPt = 20;
+                document.Page.MarginTopPt = 20;
+                document.Page.MarginBottomPt = 20;
+                document.Page.AutoHyphenation = true;
+                document.Page.ConsecutiveHyphenLimit = consecutiveHyphenLimit;
+
+                var paragraph = new Paragraph(string.Join(' ', Enumerable.Repeat(LongWord, 3)));
+                paragraph.Runs[0].Formatting = paragraph.Runs[0].Formatting with { FontSizePt = 24 };
+                var table = Table.Create(1, 1);
+                table.Rows[0].Cells[0].Paragraphs.Clear();
+                table.Rows[0].Cells[0].Paragraphs.Add(paragraph);
+                document.Blocks.Add(table);
+                return Layout(document).AutomaticHyphenGlyphs.Count;
+            }
+
+            unlimitedGlyphs = CountGlyphs(0);
+            limitedGlyphs = CountGlyphs(1);
+        });
+
+        unlimitedGlyphs.Should().BeGreaterThan(limitedGlyphs);
+        limitedGlyphs.Should().BeGreaterThan(0);
+    }
+
     private static (TextDocument Document, Paragraph Paragraph) BuildDocument(
         bool autoHyphenation,
         bool suppressAutoHyphens = false,
