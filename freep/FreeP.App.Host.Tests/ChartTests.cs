@@ -1892,6 +1892,62 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void Edit_NativeChartExTitle_RoundTripsThroughModelAndPreservedPayload()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XElement(cxNs + "chartData",
+                    new XElement(cxNs + "data", new XAttribute("id", 0))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "title",
+                        new XElement(cxNs + "tx",
+                            new XElement(cxNs + "txData",
+                                new XElement(cxNs + "v", "Native title")))),
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData",
+                                        new XElement(cxNs + "v", "Value"))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0))))))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+
+        var path = WriteToPptx(BuildPresWithChart(chart));
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartEx = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+            chartEx.Descendants(cxNs + "title").Single()
+                .Descendants(cxNs + "v").Single().Value.Should().Be("Native title");
+        }
+        var reloaded = PptxPackageReader.Read(path).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        reloaded.Title.Should().Be("Native title");
+
+        reloaded.Title = "Edited title";
+        var editedPath = WriteToPptx(BuildPresWithChart(reloaded));
+        using (var archive = ZipFile.OpenRead(editedPath))
+        {
+            var chartEx = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+            chartEx.Descendants(cxNs + "title").Single()
+                .Descendants(cxNs + "v").Single().Value.Should().Be("Edited title");
+        }
+
+        var edited = PptxPackageReader.Read(editedPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        edited.Title.Should().Be("Edited title");
+    }
+
+    [Fact]
     public void Edit_NativeSingleSeriesChartEx_UpdatesDataWithoutChangingFamilyPayload()
     {
         const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
