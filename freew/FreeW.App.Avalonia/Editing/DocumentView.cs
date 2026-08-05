@@ -17931,13 +17931,18 @@ public sealed class DocumentView : Control
             return;
         }
 
-        if (NormalizedSelection() is not null)
-            DeleteSelection();
-        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+        var bodyRange = CurrentBodyTextRange();
+        var bodyStart = bodyRange.Normalize().Start;
+        if (bodyStart.BlockIndex < 0
+            || bodyStart.BlockIndex >= _doc.Blocks.Count
+            || _doc.Blocks[bodyStart.BlockIndex] is not Paragraph paragraph
+            || !IsEditable(paragraph))
+        {
             return;
+        }
 
-        var block = _caret.Block;
-        var bodyOffset = _caret.Offset;
+        var block = bodyStart.BlockIndex;
+        var bodyOffset = bodyStart.Offset;
         // BZ5: use pending format if set (from collapsed-caret Font dialog apply), otherwise
         // inherit from the character at the caret position.
         var pendingFmt = _pendingRunFmt;
@@ -17948,24 +17953,39 @@ public sealed class DocumentView : Control
         // AV-LINK: typing strictly inside a hyperlink span extends that link (Word's behaviour); typing at a
         // link's edge or outside a link inserts plain (un-linked) text.
         var insLink = ActiveLink(paragraph, bodyOffset);
-        if (TrackChangesEnabled)
+        var applied = TrackChangesEnabled
+            ? _editingSession.TryReplaceTrackedBodyText(
+                bodyRange,
+                text,
+                bodyFmt,
+                insLink is { } activeTrackedLink
+                    ? new DocumentTextHyperlink(activeTrackedLink.Url, activeTrackedLink.Anchor, activeTrackedLink.Tooltip)
+                    : (DocumentTextHyperlink?)null,
+                out var result)
+            : _editingSession.TryReplaceBodyText(
+                bodyRange,
+                text,
+                bodyFmt,
+                insLink is { } activeBodyLink
+                    ? new DocumentTextHyperlink(activeBodyLink.Url, activeBodyLink.Anchor, activeBodyLink.Tooltip)
+                    : (DocumentTextHyperlink?)null,
+                out result);
+        if (applied)
         {
-            var hyperlink = insLink is { } activeLink
-                ? new DocumentTextHyperlink(activeLink.Url, activeLink.Anchor, activeLink.Tooltip)
-                : (DocumentTextHyperlink?)null;
-            if (_editingSession.TryInsertTrackedBodyText(
-                    new DocumentTextPosition(block, bodyOffset),
-                    text,
-                    bodyFmt,
-                    hyperlink,
-                    out var result))
-            {
-                _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
-                _selectionAnchor = _caret;
-            }
+            _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
+            _selectionAnchor = _caret;
             return;
         }
 
+        // Structurally special paragraphs stay on the renderer-owned path.
+        if (NormalizedSelection() is not null)
+            DeleteSelection();
+        if (CurrentParagraph() is not { } fallbackParagraph || !IsEditable(fallbackParagraph))
+            return;
+        block = _caret.Block;
+        bodyOffset = _caret.Offset;
+        bodyFmt = pendingFmt ?? ActiveFormatting(fallbackParagraph, bodyOffset);
+        insLink = ActiveLink(fallbackParagraph, bodyOffset);
         _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
         {
             // BE4 (body parity): insert at an incrementing position so multi-char text (paste / IME /
@@ -17975,13 +17995,18 @@ public sealed class DocumentView : Control
                 bodyOffset,
                 text,
                 bodyFmt,
-                new RevisionEditPlanner.InsertOptions(
-                    RevisionKind.None,
-                    null,
-                    null,
-                    insLink?.Url,
-                    insLink?.Anchor,
-                    insLink?.Tooltip));
+                TrackChangesEnabled
+                    ? new RevisionEditPlanner.InsertOptions(
+                        RevisionKind.Inserted,
+                        RevisionAuthor,
+                        CurrentRevisionDateXml(),
+                        insLink?.Url,
+                        insLink?.Anchor,
+                        insLink?.Tooltip)
+                    : new RevisionEditPlanner.InsertOptions(
+                        HyperlinkUrl: insLink?.Url,
+                        HyperlinkAnchor: insLink?.Anchor,
+                        HyperlinkTooltip: insLink?.Tooltip));
             CoalesceAdjacentPlainTextRuns(p);
             CoalesceAdjacentHyperlinkRuns(p);
         }));
@@ -18404,20 +18429,38 @@ public sealed class DocumentView : Control
             }
             else
             {
-                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                var range = new DocumentTextRange(
+                    new DocumentTextPosition(block, offset - 1),
+                    new DocumentTextPosition(block, offset));
+                if (_editingSession.TryDeleteBodyText(range, out var result))
                 {
-                    var cells = ParaCells(p);
-                    if (offset - 1 < cells.Count)
-                        cells.RemoveAt(offset - 1);
-                    SetRuns(p, cells);
-                }));
-                _caret = new DocPosition(block, offset - 1);
+                    _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
+                }
+                else
+                {
+                    _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                    {
+                        var cells = ParaCells(p);
+                        if (offset - 1 < cells.Count)
+                            cells.RemoveAt(offset - 1);
+                        SetRuns(p, cells);
+                    }));
+                    _caret = new DocPosition(block, offset - 1);
+                }
             }
             _selectionAnchor = _caret;
         }
         else
         {
-            MergeWithPrevious();
+            if (_editingSession.TryMergeBodyParagraphWithPrevious(_caret.Block, out var result))
+            {
+                _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
+                _selectionAnchor = _caret;
+            }
+            else
+            {
+                MergeWithPrevious();
+            }
         }
     }
 
@@ -18533,14 +18576,25 @@ public sealed class DocumentView : Control
             }
             else
             {
-                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                var range = new DocumentTextRange(
+                    new DocumentTextPosition(block, offset),
+                    new DocumentTextPosition(block, offset + 1));
+                if (!_editingSession.TryDeleteBodyText(range, out _))
                 {
-                    var cells = ParaCells(p);
-                    if (offset < cells.Count)
-                        cells.RemoveAt(offset);
-                    SetRuns(p, cells);
-                }));
+                    _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                    {
+                        var cells = ParaCells(p);
+                        if (offset < cells.Count)
+                            cells.RemoveAt(offset);
+                        SetRuns(p, cells);
+                    }));
+                }
             }
+        }
+        else if (_editingSession.TryMergeBodyParagraphWithNext(_caret.Block, out var mergeResult))
+        {
+            _caret = new DocPosition(mergeResult.Caret.BlockIndex, mergeResult.Caret.Offset);
+            _selectionAnchor = _caret;
         }
     }
 
@@ -18619,6 +18673,14 @@ public sealed class DocumentView : Control
             _cellCaret = cc with { ParaIdx = cc.ParaIdx + 1, Offset = 0 };
             _cellAnchor = _cellCaret;
             _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx + 1, 0));
+            _selectionAnchor = _caret;
+            return;
+        }
+
+        var bodyRange = CurrentBodyTextRange();
+        if (_editingSession.TryInsertBodyParagraphBreak(bodyRange, out var bodyResult))
+        {
+            _caret = new DocPosition(bodyResult.Caret.BlockIndex, bodyResult.Caret.Offset);
             _selectionAnchor = _caret;
             return;
         }
@@ -19028,6 +19090,22 @@ public sealed class DocumentView : Control
         if (NormalizedSelection() is not { } sel)
             return;
 
+        var bodyRange = new DocumentTextRange(
+            new DocumentTextPosition(sel.Start.Block, sel.Start.Offset),
+            new DocumentTextPosition(sel.End.Block, sel.End.Offset));
+        var sharedApplied = TrackChangesEnabled
+            ? _editingSession.TryDeleteTrackedBodyText(
+                bodyRange,
+                advancePastKeptText: false,
+                out var sharedResult)
+            : _editingSession.TryDeleteBodyText(bodyRange, out sharedResult);
+        if (sharedApplied)
+        {
+            _caret = new DocPosition(sharedResult.Caret.BlockIndex, sharedResult.Caret.Offset);
+            _selectionAnchor = _caret;
+            return;
+        }
+
         if (sel.Start.Block == sel.End.Block)
         {
             var block = sel.Start.Block;
@@ -19081,6 +19159,19 @@ public sealed class DocumentView : Control
         }
 
         _selectionAnchor = _caret;
+    }
+
+    private DocumentTextRange CurrentBodyTextRange()
+    {
+        if (NormalizedSelection() is { } selection)
+        {
+            return new DocumentTextRange(
+                new DocumentTextPosition(selection.Start.Block, selection.Start.Offset),
+                new DocumentTextPosition(selection.End.Block, selection.End.Offset));
+        }
+
+        var caret = new DocumentTextPosition(_caret.Block, _caret.Offset);
+        return new DocumentTextRange(caret, caret);
     }
 
     // ---- Formatting -----------------------------------------------------------------------------

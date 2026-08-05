@@ -156,6 +156,32 @@ public sealed class DocumentEditingSessionTests
     }
 
     [Fact]
+    public void ReplaceTrackedBodyText_PreservesExplicitHyperlinkEdgePolicy()
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("link", RunFormatting.Default)
+        {
+            HyperlinkUrl = "https://example.test",
+        });
+        var document = new TextDocument();
+        document.Blocks.Add(paragraph);
+        var session = DeterministicTrackedSession();
+        session.LoadDocument(document);
+
+        session.TryReplaceTrackedBodyText(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 4),
+                    new DocumentTextPosition(0, 4)),
+                "X",
+                RunFormatting.Default,
+                hyperlink: null,
+                out _)
+            .Should().BeTrue();
+
+        paragraph.Runs.Single(run => run.Text == "X").HyperlinkUrl.Should().BeNull();
+    }
+
+    [Fact]
     public void InsertTrackedBodyText_CanInheritThePreviousModelLink()
     {
         var paragraph = new Paragraph();
@@ -251,6 +277,209 @@ public sealed class DocumentEditingSessionTests
         session.Commands.CanUndo.Should().BeFalse();
     }
 
+    [Fact]
+    public void ReplaceBodyText_ReplacesSelectionAndUndoesAsOneEdit()
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("abcdef", RunFormatting.Default with { Italic = true }));
+        var document = new TextDocument();
+        document.Blocks.Add(paragraph);
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+        var changed = 0;
+        session.Changed += () => changed++;
+
+        session.TryReplaceBodyText(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 5),
+                    new DocumentTextPosition(0, 2)),
+                "Z",
+                formatting: null,
+                out var result)
+            .Should().BeTrue();
+
+        result.Caret.Should().Be(new DocumentTextPosition(0, 3));
+        paragraph.PlainText.Should().Be("abZf");
+        paragraph.Runs.Should().ContainSingle();
+        paragraph.Runs[0].Formatting.Italic.Should().BeTrue();
+        changed.Should().Be(1);
+
+        session.Commands.Undo().Should().BeTrue();
+        paragraph.PlainText.Should().Be("abcdef");
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ReplaceBodyText_AcrossParagraphsPreservesPrefixSuffixAndOneUndoEntry()
+    {
+        var document = DocumentWith("first", "middle", "last");
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.TryReplaceBodyText(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 2),
+                    new DocumentTextPosition(2, 2)),
+                "X",
+                RunFormatting.Default with { Bold = true },
+                hyperlink: null,
+                out var result)
+            .Should().BeTrue();
+
+        document.Blocks.Should().ContainSingle();
+        ((Paragraph)document.Blocks[0]).PlainText.Should().Be("fiXst");
+        result.Caret.Should().Be(new DocumentTextPosition(0, 3));
+
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Cast<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().Equal("first", "middle", "last");
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DeleteBodyText_HandlesCharacterAndCrossParagraphRanges()
+    {
+        var document = DocumentWith("abc", "def");
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.TryDeleteBodyText(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 1),
+                    new DocumentTextPosition(0, 2)),
+                out var characterResult)
+            .Should().BeTrue();
+        ((Paragraph)document.Blocks[0]).PlainText.Should().Be("ac");
+        characterResult.Caret.Should().Be(new DocumentTextPosition(0, 1));
+
+        session.TryDeleteBodyText(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 1),
+                    new DocumentTextPosition(1, 1)),
+                out var rangeResult)
+            .Should().BeTrue();
+        document.Blocks.Should().ContainSingle();
+        ((Paragraph)document.Blocks[0]).PlainText.Should().Be("aef");
+        rangeResult.Caret.Should().Be(new DocumentTextPosition(0, 1));
+
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Cast<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().Equal("ac", "def");
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Cast<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().Equal("abc", "def");
+    }
+
+    [Fact]
+    public void MergeBodyParagraphs_UsesImmediateBoundariesAndOneUndoEntry()
+    {
+        var document = DocumentWith("first", "second", "third");
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.TryMergeBodyParagraphWithPrevious(1, out var backward).Should().BeTrue();
+        backward.Caret.Should().Be(new DocumentTextPosition(0, 5));
+        document.Blocks.Cast<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().Equal("firstsecond", "third");
+        session.Commands.Undo().Should().BeTrue();
+
+        session.TryMergeBodyParagraphWithNext(1, out var forward).Should().BeTrue();
+        forward.Caret.Should().Be(new DocumentTextPosition(1, 6));
+        document.Blocks.Cast<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().Equal("first", "secondthird");
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Cast<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().Equal("first", "second", "third");
+    }
+
+    [Fact]
+    public void InsertBodyParagraphBreak_SplitsSelectionAndContinuesListFormatting()
+    {
+        var paragraph = new Paragraph("abcdef")
+        {
+            StyleId = "List Paragraph",
+            Formatting = ParagraphFormatting.Default with
+            {
+                ListKind = ListKind.Number,
+                ListLevel = 2,
+            },
+        };
+        var document = new TextDocument();
+        document.Blocks.Add(paragraph);
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.TryInsertBodyParagraphBreak(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 2),
+                    new DocumentTextPosition(0, 4)),
+                out var result)
+            .Should().BeTrue();
+
+        result.Caret.Should().Be(new DocumentTextPosition(1, 0));
+        document.Blocks.Cast<Paragraph>().Select(item => item.PlainText)
+            .Should().Equal("ab", "ef");
+        document.Blocks.Cast<Paragraph>().Should().OnlyContain(item =>
+            item.Formatting.ListKind == ListKind.Number && item.Formatting.ListLevel == 2);
+        ((Paragraph)document.Blocks[0]).StyleId.Should().Be("List Paragraph");
+        ((Paragraph)document.Blocks[1]).StyleId.Should().BeNull();
+
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Should().ContainSingle();
+        ((Paragraph)document.Blocks[0]).PlainText.Should().Be("abcdef");
+    }
+
+    [Fact]
+    public void InsertBodyParagraphBreak_OnEmptyListItemExitsListWithoutAddingBlock()
+    {
+        var paragraph = new Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                ListKind = ListKind.Bullet,
+                ListLevel = 1,
+            },
+        };
+        var document = new TextDocument();
+        document.Blocks.Add(paragraph);
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.TryInsertBodyParagraphBreak(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 0),
+                    new DocumentTextPosition(0, 0)),
+                out var result)
+            .Should().BeTrue();
+
+        document.Blocks.Should().ContainSingle();
+        ((Paragraph)document.Blocks[0]).Formatting.ListKind.Should().Be(ListKind.None);
+        ((Paragraph)document.Blocks[0]).Formatting.ListLevel.Should().Be(0);
+        result.Caret.Should().Be(new DocumentTextPosition(0, 0));
+        session.Commands.Undo().Should().BeTrue();
+        ((Paragraph)document.Blocks[0]).Formatting.ListKind.Should().Be(ListKind.Bullet);
+    }
+
+    [Fact]
+    public void OrdinaryBodyOperations_RejectTableAndStructuredParagraphBoundaries()
+    {
+        var document = DocumentWith("before", "after");
+        document.Blocks.Insert(1, new Table());
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.TryDeleteBodyText(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 2),
+                    new DocumentTextPosition(2, 2)),
+                out _)
+            .Should().BeFalse();
+        session.TryMergeBodyParagraphWithPrevious(2, out _).Should().BeFalse();
+        session.TryMergeBodyParagraphWithNext(0, out _).Should().BeFalse();
+        session.Commands.CanUndo.Should().BeFalse();
+        document.Blocks.Should().HaveCount(3);
+    }
+
     private static DocumentEditingSession DeterministicTrackedSession() =>
         new(() => "Ada", () => "2026-08-05T10:20:30Z");
 
@@ -281,6 +510,11 @@ public sealed class DocumentEditingSessionSourceOwnershipTests
             source.Should().Contain("_editingSession.RemoveBookmark(name)");
             source.Should().Contain("new DocumentTextPosition(");
             source.Should().Contain("_editingSession.TryDeleteTrackedBodyText(");
+            source.Should().Contain("_editingSession.TryReplaceBodyText(");
+            source.Should().Contain("_editingSession.TryDeleteBodyText(");
+            source.Should().Contain("_editingSession.TryInsertBodyParagraphBreak(");
+            source.Should().Contain("_editingSession.TryMergeBodyParagraphWithPrevious(");
+            source.Should().Contain("_editingSession.TryMergeBodyParagraphWithNext(");
             source.Should().NotContain("new DocumentCommandBus(");
             source.Should().NotContain("new RemoveBookmarkCommand(");
             source.Should().NotContain("class ViewContext");
@@ -289,7 +523,9 @@ public sealed class DocumentEditingSessionSourceOwnershipTests
         wpf.Should().Contain("_editingSession.TryReplaceTrackedBodyText(");
         wpf.Should().NotContain("RevisionEditPlanner.DeleteRangeAsRevision(");
         wpf.Should().NotContain("RevisionEditPlanner.InsertText(");
-        avalonia.Should().Contain("_editingSession.TryInsertTrackedBodyText(");
+        avalonia.Should().Contain("_editingSession.TryReplaceTrackedBodyText(");
+        avalonia.Should().Contain("_editingSession.TryMergeBodyParagraphWithPrevious(");
+        avalonia.Should().Contain("_editingSession.TryMergeBodyParagraphWithNext(");
         System.Text.RegularExpressions.Regex.Matches(
                 avalonia,
                 "_editingSession\\.TryDeleteTrackedBodyText\\(")

@@ -639,9 +639,8 @@ public sealed class DocumentView : RichTextBox
             e.Handled = true;
             return;
         }
-        if (TrackChangesEnabled
-            && !string.IsNullOrEmpty(e.Text)
-            && TryRecordTrackedTextInput(e.Text))
+        if (!string.IsNullOrEmpty(e.Text)
+            && TryApplyBodyTextInput(e.Text))
         {
             e.Handled = true;
             return;
@@ -664,13 +663,19 @@ public sealed class DocumentView : RichTextBox
             return;
         }
 
-        if (TrackChangesEnabled
-            && Keyboard.Modifiers == ModifierKeys.None
+        if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.Enter
+            && TryApplyBodyParagraphBreak())
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (Keyboard.Modifiers == ModifierKeys.None
             && (e.Key == Key.Back || e.Key == Key.Delete))
         {
             var handled = e.Key == Key.Back
-                ? TryRecordTrackedBackspace()
-                : TryRecordTrackedDeleteForward();
+                ? TryApplyBodyBackspace()
+                : TryApplyBodyDeleteForward();
             if (handled)
             {
                 e.Handled = true;
@@ -695,14 +700,7 @@ public sealed class DocumentView : RichTextBox
 
         if (AutoCorrectEnabled && Selection.IsEmpty && TryAutoCorrect(c))
             return true;
-        if (TrackChangesEnabled)
-        {
-            InsertText(c.ToString());
-            return false;
-        }
-        // No rule fired: insert the literal character at the caret (mirroring the RichTextBox's own insert).
-        CaretPosition.InsertTextInRun(c.ToString());
-        CaretPosition = CaretPosition.GetPositionAtOffset(1, LogicalDirection.Forward) ?? CaretPosition;
+        InsertText(c.ToString());
         return false;
     }
 
@@ -14859,10 +14857,9 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Insert plain text at the caret through the RichTextBox's own edit path, so it joins the run the
-    /// caret sits in (inheriting its formatting), replaces any active selection, and is captured by the
-    /// existing undo stack. A no-op for null/empty text. Used by Insert &gt; Symbol and Date &amp; Time,
-    /// which just drop ordinary text runs at the caret — no model or docx changes.
+    /// Insert plain text at the caret through the portable body-edit session, translating the WPF caret
+    /// and selection to model positions while preserving native focus, formatting, and fallback behavior.
+    /// A no-op for null/empty text. Used by Insert &gt; Symbol and Date &amp; Time.
     /// </summary>
     public void InsertText(string text)
     {
@@ -14873,7 +14870,7 @@ public sealed class DocumentView : RichTextBox
             return;
 
         Focus();
-        if (TrackChangesEnabled && TryRecordTrackedTextInput(text))
+        if (TryApplyBodyTextInput(text))
             return;
 
         var selection = Selection;
@@ -14891,72 +14888,23 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
-    private bool TryRecordTrackedTextInput(string text)
+    private bool TryApplyBodyTextInput(string text)
     {
-        if (!TrackChangesEnabled
-            || string.IsNullOrEmpty(text)
+        if (string.IsNullOrEmpty(text)
             || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
-            || !TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out _))
+            || !TryGetCurrentBodyTextRange(out var range, out var hasSelection))
         {
             return false;
         }
 
+        var formatting = !TrackChangesEnabled && !hasSelection
+            ? CaptureSelectionRunFormatting()
+            : null;
         CommitToModel();
-        var range = new DocumentTextRange(
-            new DocumentTextPosition(paragraphIndex, startOffset),
-            new DocumentTextPosition(paragraphIndex, endOffset));
-        if (!_editingSession.TryReplaceTrackedBodyText(
-                range,
-                text,
-                formatting: null,
-                out var result))
-        {
-            return false;
-        }
-
-        PlaceCaretAtModelTextOffset(result.Caret.BlockIndex, result.Caret.Offset);
-        return true;
-    }
-
-    private bool TryRecordTrackedBackspace()
-    {
-        if (!TrackChangesEnabled || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
-            return false;
-        if (!TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
-            return false;
-        if (hasSelection)
-            return TryRecordTrackedDeletion(paragraphIndex, startOffset, endOffset, placeAfterKeptForwardDelete: false);
-        if (startOffset <= 0)
-            return false;
-        return TryRecordTrackedDeletion(paragraphIndex, startOffset - 1, startOffset, placeAfterKeptForwardDelete: false);
-    }
-
-    private bool TryRecordTrackedDeleteForward()
-    {
-        if (!TrackChangesEnabled || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
-            return false;
-        if (!TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
-            return false;
-        if (hasSelection)
-            return TryRecordTrackedDeletion(paragraphIndex, startOffset, endOffset, placeAfterKeptForwardDelete: false);
-        CommitToModel();
-        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph paragraph)
-            return false;
-        if (startOffset >= paragraph.PlainText.Length)
-            return false;
-        return TryRecordTrackedDeletion(paragraphIndex, startOffset, startOffset + 1, placeAfterKeptForwardDelete: true);
-    }
-
-    private bool TryRecordTrackedDeletion(int paragraphIndex, int startOffset, int endOffset, bool placeAfterKeptForwardDelete)
-    {
-        CommitToModel();
-        var range = new DocumentTextRange(
-            new DocumentTextPosition(paragraphIndex, startOffset),
-            new DocumentTextPosition(paragraphIndex, endOffset));
-        if (!_editingSession.TryDeleteTrackedBodyText(
-                range,
-                placeAfterKeptForwardDelete,
-                out var result))
+        var applied = TrackChangesEnabled
+            ? _editingSession.TryReplaceTrackedBodyText(range, text, formatting: null, out var result)
+            : _editingSession.TryReplaceBodyText(range, text, formatting, out result);
+        if (!applied)
         {
             return false;
         }
@@ -14965,44 +14913,120 @@ public sealed class DocumentView : RichTextBox
         return true;
     }
 
-    private bool TryGetCurrentBodyTextTarget(
-        out int paragraphIndex,
-        out int startOffset,
-        out int endOffset,
+    private bool TryApplyBodyBackspace() => TryApplyBodyDeletion(backward: true);
+
+    private bool TryApplyBodyDeleteForward() => TryApplyBodyDeletion(backward: false);
+
+    private bool TryApplyBodyDeletion(bool backward)
+    {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
+            || !TryGetCurrentBodyTextRange(out var range, out var hasSelection))
+        {
+            return false;
+        }
+
+        CommitToModel();
+        var normalized = range.Normalize();
+        if (hasSelection)
+        {
+            var applied = TrackChangesEnabled
+                ? _editingSession.TryDeleteTrackedBodyText(
+                    normalized,
+                    advancePastKeptText: false,
+                    out var trackedResult)
+                : _editingSession.TryDeleteBodyText(normalized, out trackedResult);
+            if (!applied)
+                return false;
+            PlaceCaretAtModelTextOffset(trackedResult.Caret.BlockIndex, trackedResult.Caret.Offset);
+            return true;
+        }
+
+        var caret = normalized.Start;
+        if (caret.BlockIndex < 0
+            || caret.BlockIndex >= _model.Blocks.Count
+            || _model.Blocks[caret.BlockIndex] is not ModelParagraph paragraph)
+        {
+            return false;
+        }
+
+        var paragraphLength = paragraph.PlainText.Length;
+        if (backward && caret.Offset > 0 || !backward && caret.Offset < paragraphLength)
+        {
+            var deleteRange = backward
+                ? new DocumentTextRange(
+                    new DocumentTextPosition(caret.BlockIndex, caret.Offset - 1),
+                    caret)
+                : new DocumentTextRange(
+                    caret,
+                    new DocumentTextPosition(caret.BlockIndex, caret.Offset + 1));
+            var applied = TrackChangesEnabled
+                ? _editingSession.TryDeleteTrackedBodyText(
+                    deleteRange,
+                    advancePastKeptText: !backward,
+                    out var deleteResult)
+                : _editingSession.TryDeleteBodyText(deleteRange, out deleteResult);
+            if (!applied)
+                return false;
+            PlaceCaretAtModelTextOffset(deleteResult.Caret.BlockIndex, deleteResult.Caret.Offset);
+            return true;
+        }
+
+        if (backward && paragraph.Formatting.ListKind != ListKind.None)
+            return false;
+        var merged = backward
+            ? _editingSession.TryMergeBodyParagraphWithPrevious(caret.BlockIndex, out var mergeResult)
+            : _editingSession.TryMergeBodyParagraphWithNext(caret.BlockIndex, out mergeResult);
+        if (!merged)
+            return false;
+        PlaceCaretAtModelTextOffset(mergeResult.Caret.BlockIndex, mergeResult.Caret.Offset);
+        return true;
+    }
+
+    private bool TryApplyBodyParagraphBreak()
+    {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
+            || !TryGetCurrentBodyTextRange(out var range, out _))
+        {
+            return false;
+        }
+
+        CommitToModel();
+        if (!_editingSession.TryInsertBodyParagraphBreak(range, out var result))
+            return false;
+        PlaceCaretAtModelTextOffset(result.Caret.BlockIndex, result.Caret.Offset);
+        return true;
+    }
+
+    private bool TryGetCurrentBodyTextRange(
+        out DocumentTextRange range,
         out bool hasSelection)
     {
-        paragraphIndex = -1;
-        startOffset = 0;
-        endOffset = 0;
-        hasSelection = false;
-
-        WpfParagraph? paragraph;
-        if (!Selection.IsEmpty)
-        {
-            paragraph = Selection.Start.Paragraph;
-            if (paragraph is null || !ReferenceEquals(paragraph, Selection.End.Paragraph))
-                return false;
-            startOffset = OffsetInParagraph(paragraph, Selection.Start);
-            endOffset = OffsetInParagraph(paragraph, Selection.End);
-            hasSelection = startOffset != endOffset;
-        }
-        else
-        {
-            paragraph = CaretPosition?.Paragraph;
-            if (paragraph is null || CaretPosition is null)
-                return false;
-            startOffset = OffsetInParagraph(paragraph, CaretPosition);
-            endOffset = startOffset;
-        }
-
-        var indexOf = new Dictionary<WpfParagraph, int>();
-        var modelIndex = 0;
-        foreach (var block in Document.Blocks)
-            NumberLeafBlocks(block, indexOf, ref modelIndex);
-        if (!indexOf.TryGetValue(paragraph, out var visibleIndex))
+        range = default;
+        hasSelection = !Selection.IsEmpty;
+        var startParagraph = hasSelection ? Selection.Start.Paragraph : CaretPosition?.Paragraph;
+        var endParagraph = hasSelection ? Selection.End.Paragraph : startParagraph;
+        if (startParagraph is null || endParagraph is null)
             return false;
 
-        paragraphIndex = ModelIndexFromVisible(visibleIndex);
+        var indexOf = new Dictionary<WpfParagraph, int>();
+        var visibleIndex = 0;
+        foreach (var block in Document.Blocks)
+            NumberLeafBlocks(block, indexOf, ref visibleIndex);
+        if (!indexOf.TryGetValue(startParagraph, out var startVisible)
+            || !indexOf.TryGetValue(endParagraph, out var endVisible))
+        {
+            return false;
+        }
+
+        var startOffset = OffsetInParagraph(
+            startParagraph,
+            hasSelection ? Selection.Start : CaretPosition!);
+        var endOffset = OffsetInParagraph(
+            endParagraph,
+            hasSelection ? Selection.End : CaretPosition!);
+        range = new DocumentTextRange(
+            new DocumentTextPosition(ModelIndexFromVisible(startVisible), startOffset),
+            new DocumentTextPosition(ModelIndexFromVisible(endVisible), endOffset));
         return true;
     }
 
@@ -15088,14 +15112,20 @@ public sealed class DocumentView : RichTextBox
 
     internal void BackspaceForTest()
     {
-        if (!TryRecordTrackedBackspace())
+        if (!TryApplyBodyBackspace())
             EditingCommands.Backspace.Execute(null, this);
     }
 
     internal void DeleteForwardForTest()
     {
-        if (!TryRecordTrackedDeleteForward())
+        if (!TryApplyBodyDeleteForward())
             EditingCommands.Delete.Execute(null, this);
+    }
+
+    internal void InsertParagraphBreakForTest()
+    {
+        if (!TryApplyBodyParagraphBreak())
+            EditingCommands.EnterParagraphBreak.Execute(null, this);
     }
 
     /// <summary>
