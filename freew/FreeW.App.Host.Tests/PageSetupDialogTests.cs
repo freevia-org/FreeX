@@ -145,7 +145,11 @@ public sealed class PageSetupDialogTests
         Assert.Contains("PageSetupDialogPlanner.CreateSession(", source);
         Assert.Contains("_session.PlanPaperSelection(", source);
         Assert.Contains("_session.PlanDimensionEdit(", source);
-        Assert.Contains("_session.PlanAcceptance(this)", source);
+        Assert.Contains("_session.PlanAcceptance(this, followUp)", source);
+        Assert.Contains("ApplyFocus(_session.InitialFocusPlan)", source);
+        Assert.Contains("ApplyFocus(acceptance.FocusPlan!)", source);
+        Assert.Contains("Accept(PageSetupDialogFollowUp.LineNumbers)", source);
+        Assert.Contains("Accept(PageSetupDialogFollowUp.Borders)", source);
         Assert.Contains("ApplyEnabledState(_session.EnabledState)", source);
         Assert.DoesNotContain("PaperSizes =", source);
         Assert.DoesNotContain("SectionStartValues =", source);
@@ -157,6 +161,9 @@ public sealed class PageSetupDialogTests
         Assert.DoesNotContain("PageSetupDialogPlanner.TryBuildResult(", source);
         Assert.DoesNotContain("double.TryParse(", source);
         Assert.DoesNotContain("new PageSetupDialogResult(", source);
+        Assert.DoesNotContain("_lineNumbersRequested", source);
+        Assert.DoesNotContain("_bordersRequested", source);
+        Assert.DoesNotContain("FocusAndSelect(_top)", source);
         Assert.DoesNotContain("ToHostResult", source);
         Assert.Contains("PageSetupDialogPlanner.PresentationMetrics", source);
         Assert.Contains("IPageSetupDialogControlSource", source);

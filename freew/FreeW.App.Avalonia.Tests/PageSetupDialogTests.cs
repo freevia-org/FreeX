@@ -641,7 +641,11 @@ public sealed class PageSetupDialogTests
         source.Should().Contain("PageSetupDialogPlanner.CreateSession(");
         source.Should().Contain("_session.PlanPaperSelection(");
         source.Should().Contain("_session.PlanDimensionEdit(");
-        source.Should().Contain("_session.PlanAcceptance(this)");
+        source.Should().Contain("_session.PlanAcceptance(this, followUp)");
+        source.Should().Contain("ApplyFocus(_session.InitialFocusPlan)");
+        source.Should().Contain("ApplyFocus(acceptance.FocusPlan!)");
+        source.Should().Contain("Accept(PageSetupDialogFollowUp.LineNumbers)");
+        source.Should().Contain("Accept(PageSetupDialogFollowUp.Borders)");
         source.Should().Contain("ApplyEnabledState(_session.EnabledState)");
         source.Should().NotContain("PaperSizes =");
         source.Should().NotContain("TryParseNonNeg(");
@@ -653,6 +657,9 @@ public sealed class PageSetupDialogTests
         source.Should().NotContain("PageSetupDialogPlanner.TryBuildResult(");
         source.Should().NotContain("double.TryParse(");
         source.Should().NotContain("new PageSetupDialogResult(");
+        source.Should().NotContain("_lineNumbersRequested");
+        source.Should().NotContain("_bordersRequested");
+        source.Should().NotContain("FocusAndSelect(_top)");
         source.Should().Contain("IPageSetupDialogControlSource");
     }
 

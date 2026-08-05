@@ -62,14 +62,13 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow, IPa
     private readonly Window? _owner;
     private readonly PageSetupDialogSession _session;
     private PageSetupDialogResult? _result;
-    private bool _lineNumbersRequested;
-    private bool _bordersRequested;
+    private PageSetupDialogFollowUp _acceptedFollowUp;
 
     /// <summary>True when the user clicked the Line Numbers… launcher and accepted the dialog.</summary>
-    public bool LineNumbersRequested => _lineNumbersRequested;
+    public bool LineNumbersRequested => _acceptedFollowUp == PageSetupDialogFollowUp.LineNumbers;
 
     /// <summary>True when the user clicked the Borders… launcher and accepted the dialog.</summary>
-    public bool BordersRequested => _bordersRequested;
+    public bool BordersRequested => _acceptedFollowUp == PageSetupDialogFollowUp.Borders;
 
     private PageSetupDialog(Window? owner, PageSettings page, SectionBreakKind sectionStart, Tab initialTab)
     {
@@ -130,7 +129,7 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow, IPa
         root.Children.Add(tabs);
         Content = root;
 
-        DialogFocus.FocusAndSelect(_top);
+        ApplyFocus(_session.InitialFocusPlan);
     }
 
     private UIElement BuildMarginsTab()
@@ -175,12 +174,12 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow, IPa
         checks.Children.Add(_differentFirstPage);
         checks.Children.Add(_differentOddEven);
 
-        // Line Numbers… / Borders… launchers, matching Word's Layout tab. Each sets a flag and accepts the
-        // dialog so the ribbon command can open the corresponding existing FreeW feature afterwards.
+        // Line Numbers… / Borders… launchers, matching Word's Layout tab. The session returns the follow-up
+        // only after validation succeeds so the ribbon command can open the corresponding FreeW feature.
         var lineNumbers = new Button { Content = "_" + PageSetupDialogPlanner.LineNumbersLabel, MinWidth = metrics.LauncherButtonWidth, Margin = new Thickness(0, 0, metrics.LauncherSpacing, 0) };
-        lineNumbers.Click += (_, _) => { _lineNumbersRequested = true; Accept(); };
+        lineNumbers.Click += (_, _) => Accept(PageSetupDialogFollowUp.LineNumbers);
         var borders = new Button { Content = "_" + PageSetupDialogPlanner.BordersLabel, MinWidth = metrics.LauncherButtonWidth };
-        borders.Click += (_, _) => { _bordersRequested = true; Accept(); };
+        borders.Click += (_, _) => Accept(PageSetupDialogFollowUp.Borders);
         var launchers = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -269,15 +268,44 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow, IPa
 
     private void Accept()
     {
-        var acceptance = _session.PlanAcceptance(this);
+        Accept(PageSetupDialogFollowUp.None);
+    }
+
+    private void Accept(PageSetupDialogFollowUp followUp)
+    {
+        var acceptance = _session.PlanAcceptance(this, followUp);
         if (!acceptance.IsAccepted)
         {
             DialogMessageHelper.ShowWarning(this, acceptance.ErrorMessage!);
+            ApplyFocus(acceptance.FocusPlan!);
             return;
         }
 
         _result = acceptance.Result!;
+        _acceptedFollowUp = acceptance.FollowUp;
         Close();
+    }
+
+    private void ApplyFocus(PageSetupDialogFocusPlan plan)
+    {
+        var target = plan.Field switch
+        {
+            PageSetupDialogField.MarginTop => _top,
+            PageSetupDialogField.MarginBottom => _bottom,
+            PageSetupDialogField.MarginLeft => _left,
+            PageSetupDialogField.MarginRight => _right,
+            PageSetupDialogField.Gutter => _gutter,
+            PageSetupDialogField.PageWidth => _width,
+            PageSetupDialogField.PageHeight => _height,
+            PageSetupDialogField.HeaderDistance => _headerDistance,
+            PageSetupDialogField.FooterDistance => _footerDistance,
+            _ => _top,
+        };
+
+        if (plan.SelectAllOnFocus)
+            DialogFocus.FocusAndSelect(target);
+        else
+            DialogFocus.Focus(target);
     }
 
     private void ApplyPaperProjection(PageSetupPaperSelectionPlan plan)

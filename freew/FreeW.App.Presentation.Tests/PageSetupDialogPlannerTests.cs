@@ -95,6 +95,8 @@ public sealed class PageSetupDialogPlannerTests
             SectionBreakKind.NextPage,
             CultureInfo.InvariantCulture);
 
+        session.InitialFocusPlan.Should().Be(
+            new PageSetupDialogFocusPlan(PageSetupDialogField.MarginTop, SelectAllOnFocus: true));
         session.InitialState.PaperSizeIndex.Should().Be(0);
         session.InitialState.WidthText.Should().Be("612.4");
         session.InitialState.HeightText.Should().Be("791.6");
@@ -163,9 +165,11 @@ public sealed class PageSetupDialogPlannerTests
         projected.GutterPositionIndex.Should().Be(1);
         projected.PaperSizeIndex.Should().Be(PageSetupDialogPlanner.CustomIndex(session.PaperOptions));
 
-        var acceptance = session.PlanAcceptance(source);
+        var acceptance = session.PlanAcceptance(source, PageSetupDialogFollowUp.Borders);
         acceptance.IsAccepted.Should().BeTrue();
         acceptance.ErrorMessage.Should().BeNull();
+        acceptance.FocusPlan.Should().BeNull();
+        acceptance.FollowUp.Should().Be(PageSetupDialogFollowUp.Borders);
         acceptance.Result.Should().Be(new PageSetupDialogResult(
             MarginTopPt: 50,
             MarginBottomPt: 72,
@@ -199,6 +203,50 @@ public sealed class PageSetupDialogPlannerTests
         acceptance.IsAccepted.Should().BeFalse();
         acceptance.Result.Should().BeNull();
         acceptance.ErrorMessage.Should().Be(PageSetupDialogPlanner.UnifiedValidationMessage);
+        acceptance.FocusPlan.Should().Be(
+            new PageSetupDialogFocusPlan(PageSetupDialogField.MarginTop, SelectAllOnFocus: true));
+        acceptance.FollowUp.Should().Be(PageSetupDialogFollowUp.None);
+    }
+
+    [Theory]
+    [InlineData(PageSetupDialogField.MarginTop)]
+    [InlineData(PageSetupDialogField.MarginBottom)]
+    [InlineData(PageSetupDialogField.MarginLeft)]
+    [InlineData(PageSetupDialogField.MarginRight)]
+    [InlineData(PageSetupDialogField.Gutter)]
+    [InlineData(PageSetupDialogField.PageWidth)]
+    [InlineData(PageSetupDialogField.PageHeight)]
+    [InlineData(PageSetupDialogField.HeaderDistance)]
+    [InlineData(PageSetupDialogField.FooterDistance)]
+    public void Session_ValidationFailureOwnsFieldFocusAndRejectsFollowUpIntent(PageSetupDialogField field)
+    {
+        var session = PageSetupDialogPlanner.CreateSession(
+            new PageSettings(),
+            SectionBreakKind.NextPage,
+            CultureInfo.InvariantCulture);
+        var state = InvalidField(ValidControlState(), field);
+
+        var acceptance = session.PlanAcceptance(state, PageSetupDialogFollowUp.LineNumbers);
+
+        acceptance.IsAccepted.Should().BeFalse();
+        acceptance.Result.Should().BeNull();
+        acceptance.ErrorMessage.Should().Be(PageSetupDialogPlanner.UnifiedValidationMessage);
+        acceptance.FocusPlan.Should().Be(new PageSetupDialogFocusPlan(field, SelectAllOnFocus: true));
+        acceptance.FollowUp.Should().Be(PageSetupDialogFollowUp.None);
+    }
+
+    [Fact]
+    public void BuildInitialState_OwnsHeaderAndFooterFallbackDefaults()
+    {
+        var state = PageSetupDialogPlanner.CreateSession(
+            new PageSettings { HeaderDistancePt = 0, FooterDistancePt = -1 },
+            SectionBreakKind.NextPage,
+            CultureInfo.InvariantCulture).InitialState;
+
+        PageSetupDialogPlanner.DefaultHeaderDistancePt.Should().Be(36);
+        PageSetupDialogPlanner.DefaultFooterDistancePt.Should().Be(36);
+        state.HeaderDistanceText.Should().Be("36");
+        state.FooterDistanceText.Should().Be("36");
     }
 
     [Fact]
@@ -424,6 +472,23 @@ public sealed class PageSetupDialogPlannerTests
         HeaderDistanceText: "36",
         FooterDistanceText: "36",
         VerticalAlignmentIndex: 0);
+
+    private static PageSetupDialogControlState InvalidField(
+        PageSetupDialogControlState state,
+        PageSetupDialogField field) =>
+        field switch
+        {
+            PageSetupDialogField.MarginTop => state with { MarginTopText = "-1" },
+            PageSetupDialogField.MarginBottom => state with { MarginBottomText = "-1" },
+            PageSetupDialogField.MarginLeft => state with { MarginLeftText = "-1" },
+            PageSetupDialogField.MarginRight => state with { MarginRightText = "-1" },
+            PageSetupDialogField.Gutter => state with { GutterText = "-1" },
+            PageSetupDialogField.PageWidth => state with { WidthText = "0" },
+            PageSetupDialogField.PageHeight => state with { HeightText = "0" },
+            PageSetupDialogField.HeaderDistance => state with { HeaderDistanceText = "-1" },
+            PageSetupDialogField.FooterDistance => state with { FooterDistanceText = "-1" },
+            _ => throw new ArgumentOutOfRangeException(nameof(field)),
+        };
 
     private sealed record TestControlSource(
         string? MarginTopText,

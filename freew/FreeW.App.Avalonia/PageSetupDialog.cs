@@ -59,8 +59,6 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
     private readonly TextBlock _status = PageLayoutDialogChrome.Status();
     private readonly PageSetupDialogSession _session;
     private bool _suppressPaperSync;
-    private bool _lineNumbersRequested;
-    private bool _bordersRequested;
 
     public PageSetupDialog(
         PageSettings current,
@@ -150,7 +148,7 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
         {
             foreach (var button in ((Panel)actions).Children.OfType<Button>())
                 AvaloniaCompactDialogChrome.ApplyButton(button, actionStyle, metrics.ActionButtonWidth);
-            PageLayoutDialogChrome.FocusAndSelect(_top);
+            ApplyFocus(_session.InitialFocusPlan);
         };
         PageLayoutDialogChrome.WireEscape<PageSetupDialogOutcome?>(this);
     }
@@ -205,13 +203,11 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
         AvaloniaCompactDialogChrome.ApplyButton(borders, DialogChromeStyle, minWidth: metrics.LauncherButtonWidth);
         lineNumbers.Click += (_, _) =>
         {
-            _lineNumbersRequested = true;
-            Accept();
+            Accept(PageSetupDialogFollowUp.LineNumbers);
         };
         borders.Click += (_, _) =>
         {
-            _bordersRequested = true;
-            Accept();
+            Accept(PageSetupDialogFollowUp.Borders);
         };
         launchers.Children.Add(lineNumbers);
         launchers.Children.Add(borders);
@@ -237,14 +233,45 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
 
     private void Accept()
     {
-        var acceptance = _session.PlanAcceptance(this);
+        Accept(PageSetupDialogFollowUp.None);
+    }
+
+    private void Accept(PageSetupDialogFollowUp followUp)
+    {
+        var acceptance = _session.PlanAcceptance(this, followUp);
         if (!acceptance.IsAccepted)
         {
             PageLayoutDialogChrome.ShowError(_status, acceptance.ErrorMessage!);
+            ApplyFocus(acceptance.FocusPlan!);
             return;
         }
 
-        Close(new PageSetupDialogOutcome(acceptance.Result!, _lineNumbersRequested, _bordersRequested));
+        Close(new PageSetupDialogOutcome(
+            acceptance.Result!,
+            acceptance.FollowUp == PageSetupDialogFollowUp.LineNumbers,
+            acceptance.FollowUp == PageSetupDialogFollowUp.Borders));
+    }
+
+    private void ApplyFocus(PageSetupDialogFocusPlan plan)
+    {
+        var target = plan.Field switch
+        {
+            PageSetupDialogField.MarginTop => _top,
+            PageSetupDialogField.MarginBottom => _bottom,
+            PageSetupDialogField.MarginLeft => _left,
+            PageSetupDialogField.MarginRight => _right,
+            PageSetupDialogField.Gutter => _gutter,
+            PageSetupDialogField.PageWidth => _width,
+            PageSetupDialogField.PageHeight => _height,
+            PageSetupDialogField.HeaderDistance => _headerDistance,
+            PageSetupDialogField.FooterDistance => _footerDistance,
+            _ => _top,
+        };
+
+        if (plan.SelectAllOnFocus)
+            PageLayoutDialogChrome.FocusAndSelect(target);
+        else
+            target.Focus();
     }
 
     private void ApplyPaperProjection(PageSetupPaperSelectionPlan plan)
