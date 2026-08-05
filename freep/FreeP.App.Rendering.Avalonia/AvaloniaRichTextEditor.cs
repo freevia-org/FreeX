@@ -1144,6 +1144,11 @@ internal sealed class AvaloniaRichTextEditor : Grid
         item.Set(
             OperatingSystem.IsWindows() ? ExternalRtfWindowsFormat : ExternalRtfLinuxFormat,
             ExternalRichTextClipboardPlanner.SerializeRtf(payload));
+        item.Set(
+            OperatingSystem.IsWindows()
+                ? ExternalXamlPackageWindowsFormat
+                : ExternalXamlPackageLinuxFormat,
+            ExternalXamlClipboardPlanner.SerializeXamlPackage(payload));
         item.SetText(payload.PlainText);
 
         var transfer = new DataTransfer();

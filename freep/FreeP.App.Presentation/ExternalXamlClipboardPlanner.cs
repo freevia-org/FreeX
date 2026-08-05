@@ -59,6 +59,13 @@ public static class ExternalXamlClipboardPlanner
         return null;
     }
 
+    /// <summary>
+    /// Projects the renderer-neutral rich fragment to the bounded WPF XamlPackage clipboard
+    /// format. FreeP-only resources remain available through the private clipboard payload.
+    /// </summary>
+    public static byte[] SerializeXamlPackage(InCanvasRichClipboardPayload payload) =>
+        ExternalXamlClipboardWriter.Serialize(payload);
+
     internal static InCanvasRichClipboardPayload? TryParseXaml(
         string? xml,
         Func<string, (byte[]? Bytes, string? ContentType)>? resolveImage = null)

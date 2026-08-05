@@ -1106,6 +1106,69 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void SerializeXamlPackage_RoundTripsRichRunsAndInlineTableCell()
+    {
+        var table = new TableShape();
+        var row = new TableRow();
+        row.Cells.Add(new TableCell
+        {
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cell", Bold = true, FontSizePt = 16 } },
+                    },
+                },
+            },
+            Fill = new ShapeFill.Solid(new SrgbColor(0x20, 0x40, 0x60)),
+            Anchor = TableCellAnchor.Middle,
+        });
+        table.Rows.Add(row);
+        var body = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run { Text = "Before " },
+                        new Run { Text = "\uFFFC", InlineTable = new InlineTableInfo { Table = table } },
+                        new Run { Text = " after" },
+                    },
+                },
+            },
+        };
+        var payload = new InCanvasRichClipboardPayload(
+            body,
+            InCanvasTextEditPlanner.ExtractPlainText(body));
+
+        var packageBytes = ExternalXamlClipboardPlanner.SerializeXamlPackage(payload);
+        using (var package = new ZipArchive(
+                   new MemoryStream(packageBytes, writable: false),
+                   ZipArchiveMode.Read))
+        {
+            package.Entries.Select(entry => entry.FullName)
+                .Should().Contain("Xaml/Document.xaml");
+        }
+
+        var restored = ExternalXamlClipboardPlanner.TryParseXamlPackage(packageBytes);
+        restored.Should().NotBeNull();
+        restored!.ContainsTable.Should().BeTrue();
+        restored.Body.Paragraphs.Should().HaveCount(3);
+        restored.Body.Paragraphs[0].Runs.Single().Text.Should().Be("Before ");
+        restored.Body.Paragraphs[1].Runs.Single().Text.Should().Be("Cell");
+        restored.Body.Paragraphs[1].Runs.Single().Bold.Should().BeTrue();
+        restored.Body.Paragraphs[1].Runs.Single().FontSizePt
+            .Should().BeApproximately(16, 0.001);
+        restored.Body.Paragraphs[2].Runs.Single().Text.Should().Be(" after");
+        restored.TableCellStyles.Should().ContainSingle();
+        restored.TableCellStyles!.Single().FillRgb.Should().Be(0x204060);
+    }
+
+    [Fact]
     public void RtfCharacterDirection_RtlchAndLtrch_PreserveMixedRunOverrides()
     {
         const string rtf =
