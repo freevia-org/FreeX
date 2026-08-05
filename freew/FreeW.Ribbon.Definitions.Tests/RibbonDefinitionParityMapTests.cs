@@ -39,6 +39,13 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
     [InlineData("insert", "CDE6CB1B0682F56F84BCBB2F3775F71CE67D5BAB9E2B9245A7B0AA0DE93AD149", "4C2CA0C7C39E93EF1DB3BAD06B7EA3388F6BB88952B3C015079849A765734169")]
     [InlineData("references", "E45FFB1DFBE9D61F7D883E43AFB232E82F8F8465C6F8E54B15AA5E902BEB504A", "CFE21A6FCDC9FAB33072CB6D7158FA02F36050AA404C55699F95F54E21CE20FB")]
     [InlineData("review", "0C8DB7D034E83F9B916B024D09E3FCFBF335788384DDC513EE1CFDE3736F1229", "99C0BDD4F259BB161D2A4C472E599E9F95BD2FB60709C2628462EB9DDC4C098A")]
+    [InlineData("picture-format", "41DB277D9F8020B6D2D5F7C3219277E1B4AB237534E9D017CEB43B2A57616C36", "6A870A4B03BDE0BD8FC621733A2C5F6E9285DC0FCC41A97DBB0C9CEFA12A6AC2")]
+    [InlineData("drawing-format", "8AFC55553834293FEE94A4F2533397D06185ADDF5CC0142FCD8C181DFA18001B", "8676F2ADE3B3D40F44C37D744AB22EC8F01A4ED7AB3D60FADA115EDA192F7596")]
+    [InlineData("chart-design", "DF95A211B1E9347C05BC69E46FAAE61ACD7C0F0C8AF973DC5E8DD605E42F8481", "D8D06B5AD20E7754723A65015BF47EEF98EFE81F86732F6EE9CD0FCA949F6302")]
+    [InlineData("chart-format", "507941161285E53E4C35D78207EEE011D7183F03FE64D096166D684E18EF6627", "853C21868195CFE51E6552BF28561CE28E4ED4B038F56B769619DFC2F06AE702")]
+    [InlineData("smartart-design", "F7D06880C58251873E9F6D8AD0847D193C5FB7089E8359D6B295BB58D14F4E57", "81673F9766834D02E289D8790817976BD4F15D481E5C2815B00E5D7AB99FDA1C")]
+    [InlineData("table-design", "BFB4E5C19244C2BA166E24B59292F5E545134E456FE0C0EED697D0A49B4E63AC", "148AFFF6A81095FF1EC4B50EF153174585A3D136870E348407DD92F7A98AD83D")]
+    [InlineData("table-layout", "3898F1D24BEED766E973B825FAB541D482927949F287704B27F536BF75BC7B02", "5CACC32C46561EA56796672E78073057B02D78EA9631E106E1F8EE41BDB7E8A4")]
     public void Canonical_tab_profiles_preserve_existing_structure(
         string tabId,
         string expectedWpfHash,
@@ -52,12 +59,44 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
     }
 
     [Fact]
+    public void Contextual_tab_profile_order_is_preserved()
+    {
+        FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf).Tabs
+            .Where(tab => tab.IsContextual)
+            .Select(tab => tab.Id)
+            .Should().Equal(
+                "drawing-format",
+                "picture-format",
+                "chart-design",
+                "chart-format",
+                "smartart-design",
+                "table-design",
+                "table-layout",
+                "header-footer-design");
+
+        FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia).Tabs
+            .Where(tab => tab.IsContextual)
+            .Select(tab => tab.Id)
+            .Should().Equal(
+                "table-design",
+                "table-layout",
+                "header-footer-design",
+                "picture-format",
+                "drawing-format",
+                "chart-design",
+                "chart-format",
+                "smartart-design");
+    }
+
+    [Fact]
     public void Canonical_tabs_have_one_topology_source()
     {
         var canonical = ReadRepositoryFile(
                 "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.cs")
             + ReadRepositoryFile(
-                "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs");
+                "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs")
+            + ReadRepositoryFile(
+                "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Contextual.cs");
         var wpf = ReadRepositoryFile(
             "freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
         var avalonia = ReadRepositoryFile(
@@ -78,6 +117,17 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
         wpf.Should().NotContain(".ContextualTab(\"header-footer-design\"");
         avalonia.Should().NotContain(".ContextualTab(\"header-footer-design\"");
 
+        foreach (var tabId in new[]
+                 {
+                     "picture-format", "drawing-format", "chart-design", "chart-format",
+                     "smartart-design", "table-design", "table-layout",
+                 })
+        {
+            canonical.Should().Contain($".ContextualTab(\"{tabId}\"");
+            wpf.Should().NotContain($".ContextualTab(\"{tabId}\"");
+            avalonia.Should().NotContain($".ContextualTab(\"{tabId}\"");
+        }
+
         foreach (var method in new[]
                  {
                      "AddHomeTab(capabilities)",
@@ -91,6 +141,11 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
                      "AddHelpTab(capabilities)",
                      "AddDeveloperTab(capabilities)",
                      "AddHeaderFooterDesignTab(capabilities)",
+                     "AddPictureContextualTab(capabilities)",
+                     "AddDrawingContextualTab(capabilities)",
+                     "AddChartContextualTabs(capabilities)",
+                     "AddSmartArtContextualTab(capabilities)",
+                     "AddTableContextualTabs(capabilities)",
                  })
         {
             wpf.Should().Contain(method);
