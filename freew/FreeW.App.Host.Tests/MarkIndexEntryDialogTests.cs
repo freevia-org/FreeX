@@ -12,6 +12,7 @@ public sealed class MarkIndexEntryDialogTests
         var dialog = MarkIndexEntryDialog.CreateForTest("  Animals  ");
 
         dialog.CrossReferenceEnabledForTest.Should().BeFalse();
+        dialog.PageNumberFormattingEnabledForTest.Should().BeTrue();
         dialog.AcceptForTest().Should().BeTrue();
         dialog.ResultForTest!.Mark.Should().Be(new IndexMark("Animals"));
     }
@@ -23,6 +24,7 @@ public sealed class MarkIndexEntryDialogTests
         dialog.SetForTest(" Animals ", " Cats ", true, " See Pet care ");
 
         dialog.CrossReferenceEnabledForTest.Should().BeTrue();
+        dialog.PageNumberFormattingEnabledForTest.Should().BeFalse();
         dialog.AcceptForTest().Should().BeTrue();
         dialog.ResultForTest!.Mark.Should().Be(new IndexMark("Animals", "Cats", "See Pet care"));
     }
@@ -35,5 +37,18 @@ public sealed class MarkIndexEntryDialogTests
 
         dialog.AcceptForTest().Should().BeFalse();
         dialog.ResultForTest.Should().BeNull();
+    }
+
+    [StaFact]
+    public void Dialog_CarriesBoldAndItalicCurrentPageFormatting()
+    {
+        var dialog = MarkIndexEntryDialog.CreateForTest();
+        dialog.SetForTest("Alpha", null, false, null, boldPageNumber: true, italicPageNumber: true);
+
+        dialog.AcceptForTest().Should().BeTrue();
+        dialog.ResultForTest!.Mark.Should().Be(new IndexMark(
+            "Alpha",
+            BoldPageNumber: true,
+            ItalicPageNumber: true));
     }
 }

@@ -14,14 +14,16 @@ public sealed class MarkIndexEntryDialogPlannerTests
             "Animals",
             string.Empty,
             UseCrossReference: false,
-            MarkIndexEntryDialogPlanner.DefaultCrossReference));
+            MarkIndexEntryDialogPlanner.DefaultCrossReference,
+            BoldPageNumber: false,
+            ItalicPageNumber: false));
     }
 
     [Fact]
     public void TryBuildMark_TrimsHierarchyAndCarriesCrossReference()
     {
         MarkIndexEntryDialogPlanner.TryBuildMark(
-                new MarkIndexEntryDialogState(" Animals ", " Cats:Longhair ", true, " See Pet care "),
+                new MarkIndexEntryDialogState(" Animals ", " Cats:Longhair ", true, " See Pet care ", true, true),
                 out var mark,
                 out var validation)
             .Should().BeTrue();
@@ -40,12 +42,30 @@ public sealed class MarkIndexEntryDialogPlannerTests
         string message)
     {
         MarkIndexEntryDialogPlanner.TryBuildMark(
-                new MarkIndexEntryDialogState(mainEntry, string.Empty, useCrossReference, crossReference),
+                new MarkIndexEntryDialogState(mainEntry, string.Empty, useCrossReference, crossReference, false, false),
                 out var mark,
                 out var validation)
             .Should().BeFalse();
 
         mark.Should().BeNull();
         validation.Should().Be(new MarkIndexEntryValidation(message));
+    }
+
+    [Fact]
+    public void TryBuildMark_CarriesPageNumberFormattingOnlyForCurrentPageOption()
+    {
+        MarkIndexEntryDialogPlanner.TryBuildMark(
+                new MarkIndexEntryDialogState("Alpha", string.Empty, false, "See Other", true, true),
+                out var pageMark,
+                out _)
+            .Should().BeTrue();
+        pageMark.Should().Be(new IndexMark("Alpha", BoldPageNumber: true, ItalicPageNumber: true));
+
+        MarkIndexEntryDialogPlanner.TryBuildMark(
+                new MarkIndexEntryDialogState("Alpha", string.Empty, true, "See Other", true, true),
+                out var crossReferenceMark,
+                out _)
+            .Should().BeTrue();
+        crossReferenceMark.Should().Be(new IndexMark("Alpha", CrossReference: "See Other"));
     }
 }

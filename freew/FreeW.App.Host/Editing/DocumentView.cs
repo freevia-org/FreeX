@@ -16319,7 +16319,9 @@ public sealed class DocumentView : RichTextBox
     private static bool SameIndexMark(IndexMark? left, IndexMark right) =>
         left is not null
         && string.Equals(left.EntryText, right.EntryText, StringComparison.OrdinalIgnoreCase)
-        && string.Equals(left.CrossReference, right.CrossReference, StringComparison.OrdinalIgnoreCase);
+        && string.Equals(left.CrossReference, right.CrossReference, StringComparison.OrdinalIgnoreCase)
+        && left.BoldPageNumber == right.BoldPageNumber
+        && left.ItalicPageNumber == right.ItalicPageNumber;
 
     /// <summary>
     /// Insert an index generated from the document's marked <see cref="TextDocument.IndexEntries"/> at the
