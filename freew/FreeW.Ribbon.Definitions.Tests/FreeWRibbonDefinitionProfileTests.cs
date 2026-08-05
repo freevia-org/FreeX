@@ -1240,6 +1240,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
     {
         var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
         var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+        var canonicalSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.cs");
         var dataSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbonDefinitionData.cs");
         var hostCommands = ReadRepositoryFile("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
 
@@ -1252,7 +1253,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         wpfSource.Should().NotContain("g.Medium(\"freew.page-color\", \"Page Color\"");
         wpfSource.Should().Contain("FreeWRibbonText.ParagraphGroup");
         wpfSource.Should().Contain("FreeWRibbonText.SymbolsGroup");
-        wpfSource.Should().Contain("FreeWRibbonText.PageBackgroundGroup");
+        wpfSource.Should().NotContain("FreeWRibbonText.PageBackgroundGroup");
 
         avaloniaSource.Should().NotContain("tab.Group(\"paragraph\", \"Paragraph\"");
         avaloniaSource.Should().NotContain("g.Toggle(\"freew.bullets\",           \"Bullets\"");
@@ -1261,8 +1262,12 @@ public sealed class FreeWRibbonDefinitionProfileTests
         avaloniaSource.Should().NotContain("private static readonly (string CommandId, string Label)[] PageColors");
         avaloniaSource.Should().Contain("FreeWRibbonText.ParagraphGroup");
         avaloniaSource.Should().Contain("FreeWRibbonText.SymbolCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonDefinitionData.PageColors");
+        avaloniaSource.Should().NotContain("FreeWRibbonDefinitionData.PageColors");
         avaloniaSource.Should().NotContain("FreeWRibbonDefinitionData.Symbols");
+
+        canonicalSource.Should().Contain("FreeWRibbonText.PageBackgroundGroup");
+        canonicalSource.Should().Contain("FreeWRibbonText.PageColorCommand");
+        canonicalSource.Should().Contain("FreeWRibbonDefinitionData.PageColors");
 
         dataSource.Should().NotContain("(\"freew.page-color.none\", \"No Color\")");
         dataSource.Should().NotContain("\"Outline: 1. / 1.1. / 1.1.1.\"");

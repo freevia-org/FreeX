@@ -135,18 +135,6 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("Show Revisions in Balloons", new RibbonCommandId("freew.show-markup-balloons")),
         });
 
-    private static RibbonMenu BuildReadModeMenu() =>
-        new(new RibbonMenuItem[]
-        {
-            new("Narrow Column Width", new RibbonCommandId("freew.read-mode-column-narrow")),
-            new("Default Column Width", new RibbonCommandId("freew.read-mode-column-default")),
-            new("Wide Column Width", new RibbonCommandId("freew.read-mode-column-wide")),
-            RibbonMenuItem.Separator(),
-            new("No Color", new RibbonCommandId("freew.read-mode-color-none")),
-            new("Sepia", new RibbonCommandId("freew.read-mode-color-sepia")),
-            new("Inverse (Dark Mode)", new RibbonCommandId("freew.read-mode-color-inverse")),
-        });
-
     // AV-PICTAB: wrap-mode menu shared by the Picture / Drawing Format "Wrap Text" dropdown.
     // <paramref name="prefix"/> is "image" or "shape" so the command ids match the WPF host
     // (freew.image-wrap-* / freew.shape-wrap-*).
@@ -282,49 +270,6 @@ internal static class FreeWAvaloniaRibbonDefinition
         });
 
     /// <summary>AV-REF: References &gt; Insert Caption dropdown — Figure / Table caption labels.</summary>
-    private static RibbonMenu BuildMarginsMenu() =>
-        new(new RibbonMenuItem[]
-        {
-            new("Normal", new RibbonCommandId("freew.page-margins-normal")),
-            new("Narrow", new RibbonCommandId("freew.page-margins-narrow")),
-            new("Wide", new RibbonCommandId("freew.page-margins-wide")),
-            RibbonMenuItem.Separator(),
-            new("Custom Margins...", new RibbonCommandId("freew.custom-margins")),
-        });
-
-    private static RibbonMenu BuildPageSizeMenu() =>
-        new(new RibbonMenuItem[]
-        {
-            new("Letter", new RibbonCommandId("freew.page-size-letter")),
-            new("A4", new RibbonCommandId("freew.page-size-a4")),
-            RibbonMenuItem.Separator(),
-            new("More Paper Sizes...", new RibbonCommandId("freew.more-paper-sizes")),
-        });
-
-    private static RibbonMenu BuildColumnsMenu() =>
-        new(new RibbonMenuItem[]
-        {
-            new("One", new RibbonCommandId("freew.columns-one")),
-            new("Two", new RibbonCommandId("freew.columns-two")),
-            new("Three", new RibbonCommandId("freew.columns-three")),
-            new("Left", new RibbonCommandId("freew.columns-left")),
-            new("Right", new RibbonCommandId("freew.columns-right")),
-            RibbonMenuItem.Separator(),
-            new("More Columns...", new RibbonCommandId("freew.columns-more")),
-        });
-
-    private static RibbonMenu BuildBreaksMenu() =>
-        new(new RibbonMenuItem[]
-        {
-            new("Page Break", new RibbonCommandId("freew.page-break")),
-            new("Column Break", new RibbonCommandId("freew.column-break")),
-            RibbonMenuItem.Separator(),
-            new("Next Page", new RibbonCommandId("freew.section-break-next-page")),
-            new("Continuous", new RibbonCommandId("freew.section-break-continuous")),
-            new("Even Page", new RibbonCommandId("freew.section-break-even-page")),
-            new("Odd Page", new RibbonCommandId("freew.section-break-odd-page")),
-        });
-
     private static RibbonMenu BuildCaptionMenu() =>
         new(new RibbonMenuItem[]
         {
@@ -479,96 +424,7 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("Group Character",     new RibbonCommandId("freew.equation.groupchr")),
         });
 
-    /// <summary>
-    /// AV-DESIGN: Design &gt; Themes dropdown — one item per built-in <see cref="DocumentTheme.Catalog"/>
-    /// entry. Command ids are <c>freew.theme.&lt;name&gt;</c> (lower-case), matching the registry wiring.
-    /// </summary>
-    private static RibbonMenu BuildThemeMenu() =>
-        new(DocumentTheme.Catalog
-            .Select(t => new RibbonMenuItem(t.Name,
-                new RibbonCommandId($"freew.theme.{t.Name.ToLowerInvariant()}")))
-            .ToArray());
-
-    /// <summary>AV-DESIGN: Design &gt; Colors dropdown — one item per theme palette.</summary>
-    private static RibbonMenu BuildThemeColorsMenu() =>
-        new(DocumentTheme.Catalog
-            .Select(t => new RibbonMenuItem(t.Name,
-                new RibbonCommandId($"freew.theme-colors.{t.Name.ToLowerInvariant()}")))
-            .Concat([RibbonMenuItem.Separator(), new RibbonMenuItem("Customize Colors...", new RibbonCommandId("freew.customize-colors"))])
-            .ToArray());
-
-    /// <summary>AV-DESIGN: Design &gt; Fonts dropdown — one item per <see cref="DocumentFontSet.Catalog"/> entry.</summary>
-    private static RibbonMenu BuildThemeFontsMenu() =>
-        new(DocumentFontSet.Catalog
-            .Select(f => new RibbonMenuItem($"{f.Name}  ({f.HeadingFont} / {f.BodyFont})",
-                new RibbonCommandId($"freew.theme-fonts.{f.Name.ToLowerInvariant()}")))
-            .Concat([RibbonMenuItem.Separator(), new RibbonMenuItem("Customize Fonts...", new RibbonCommandId("freew.customize-fonts"))])
-            .ToArray());
-
-    /// <summary>AV-DESIGN: Design &gt; Paragraph Spacing dropdown — one item per spacing preset.</summary>
-    private static RibbonMenu BuildParaSpacingMenu() =>
-        new(DocumentParagraphSpacingSet.Catalog
-            .Select(s => new RibbonMenuItem(s.Name,
-                new RibbonCommandId($"freew.para-spacing.{ParaSpacingId(s.Name)}")))
-            .Concat(new[]
-            {
-                RibbonMenuItem.Separator(),
-                new RibbonMenuItem("Custom Paragraph Spacing...", new RibbonCommandId("freew.custom-paragraph-spacing")),
-            })
-            .ToArray());
-
-    private static RibbonMenu BuildLineNumbersMenu() =>
-        new(new RibbonMenuItem[]
-        {
-            new("None", new RibbonCommandId("freew.line-numbers-none")),
-            new("Continuous", new RibbonCommandId("freew.line-numbers-continuous")),
-            new("Restart Each Page", new RibbonCommandId("freew.line-numbers-restart-page")),
-            new("Restart Each Section", new RibbonCommandId("freew.line-numbers-restart-section")),
-            RibbonMenuItem.Separator(),
-            new("Line Numbering Options...", new RibbonCommandId("freew.line-numbers-options")),
-        });
-
-    private static RibbonMenu BuildHyphenationMenu() =>
-        new(new RibbonMenuItem[]
-        {
-            new("None", new RibbonCommandId("freew.hyphenation-none")),
-            new("Automatic", new RibbonCommandId("freew.hyphenation-auto")),
-            new("Manual", new RibbonCommandId("freew.hyphenation-manual")),
-            RibbonMenuItem.Separator(),
-            new("Hyphenation Options...", new RibbonCommandId("freew.hyphenation-options")),
-        });
-
-    private static RibbonMenu BuildEffectsMenu() => FreeWContextMenuPlanner.BuildEffects();
-
     private static RibbonMenu BuildTableStylesMenu() => FreeWContextMenuPlanner.BuildTableStyles();
-
-    /// <summary>Normalises a spacing-set display name to a stable command-id suffix (e.g. "No Paragraph Space" → "no-paragraph-space").</summary>
-    private static string ParaSpacingId(string name) => FreeWRibbonDefinitionData.ParaSpacingId(name);
-
-    /// <summary>
-    /// AV-DESIGN: Design &gt; Page Color swatch palette + No Color. Command ids are
-    /// <c>freew.page-color.&lt;name&gt;</c>; "No Color" clears the background.
-    /// </summary>
-    private static RibbonMenu BuildPageColorMenu() =>
-        new(FreeWRibbonDefinitionData.PageColors
-            .Select(pc => new RibbonMenuItem(pc.Label, new RibbonCommandId(pc.CommandId)))
-            .ToArray());
-
-    /// <summary>
-    /// AV-DESIGN: Design &gt; Watermark gallery — the built-in presets (CONFIDENTIAL / DRAFT / …), a custom
-    /// opener, and a Remove entry. Command ids are <c>freew.watermark.&lt;preset&gt;</c>.
-    /// </summary>
-    private static RibbonMenu BuildWatermarkMenu() =>
-        new(new RibbonMenuItem[]
-        {
-            new("CONFIDENTIAL", new RibbonCommandId("freew.watermark.confidential")),
-            new("DO NOT COPY",  new RibbonCommandId("freew.watermark.do-not-copy")),
-            new("DRAFT",        new RibbonCommandId("freew.watermark.draft")),
-            new("URGENT",       new RibbonCommandId("freew.watermark.urgent")),
-            RibbonMenuItem.Separator(),
-            new("Custom Watermark…", new RibbonCommandId("freew.watermark.custom")),
-            new("Remove Watermark",  new RibbonCommandId("freew.watermark.none")),
-        });
 
     internal static RibbonDefinition Build(FreeWRibbonCapabilities capabilities) =>
         new RibbonDefinitionBuilder()
@@ -847,142 +703,9 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Dropdown("freew.equation", "Equation", BuildEquationMenu());
                 });
             })
-            .Tab("layout", "Layout", "L", tab =>
-            {
-                // AV-PAGE: page-setup group — dialog launcher + quick orientation/margins/size.
-                tab.Group("page-setup", "Page Setup", null, 100, g =>
-                {
-                    g.Dropdown("freew.margins", "Margins", BuildMarginsMenu());
-                    g.Button("freew.orientation", "Orientation");
-                    g.Dropdown("freew.size", "Size", BuildPageSizeMenu());
-                    g.Dropdown("freew.columns", "Columns", BuildColumnsMenu());
-                    g.Dropdown("freew.breaks", "Breaks", BuildBreaksMenu());
-                    g.Dropdown("freew.line-numbers", "Line Numbers", BuildLineNumbersMenu());
-                    g.Dropdown("freew.hyphenation", "Hyphenation", BuildHyphenationMenu());
-                    g.Toggle("freew.different-first-page", "Different First Page");
-                    g.Button("freew.page-valign", "Vertical Align");
-                    g.Button("freew.page-setup", "Page Setup...");
-                });
-                tab.Group("paragraph", FreeWRibbonText.ParagraphGroup.Label, null, 92, g =>
-                {
-                    g.Button("freew.indent-decrease", "Decrease Indent");
-                    g.Button("freew.indent-increase", "Increase Indent");
-                    g.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", c => c with
-                    {
-                        Items = new[] { "1.0", "1.15", "1.5", "2.0" },
-                        Width = 52
-                    });
-                    g.ComboBox("freew.indent-left", "Indent Left", c => c with
-                    {
-                        Items = new[] { "0", "18", "36", "54", "72" },
-                        Width = 52
-                    });
-                    g.ComboBox("freew.indent-right", "Indent Right", c => c with
-                    {
-                        Items = new[] { "0", "18", "36", "54", "72" },
-                        Width = 52
-                    });
-                    g.Button("freew.space-before-toggle", "Add Space Before Paragraph");
-                    g.Button("freew.space-after-toggle", "Add Space After Paragraph");
-                    g.ComboBox("freew.space-before", "Spacing Before", c => c with
-                    {
-                        Items = new[] { "0", "6", "12", "18", "24" },
-                        Width = 52
-                    });
-                    g.ComboBox("freew.space-after", "Spacing After", c => c with
-                    {
-                        Items = new[] { "0", "6", "8", "12", "18", "24" },
-                        Width = 52
-                    });
-                    g.Button("freew.paragraph-dialog", "Paragraph Settings");
-                    g.Button("freew.tabs-dialog", "Tabs");
-                });
-                tab.Group("data", "Data", null, 95, g =>
-                {
-                    g.Button("freew.text-to-table", "Text to Table");
-                    g.Button("freew.table-to-text", "Table to Text");
-                });
-                tab.Group("preview", "Preview", null, 90, g =>
-                {
-                    g.Button("freew.print-preview", "Print Preview");
-                });
-            })
-            .Tab("design", "Design", "G", tab =>
-            {
-                // AV-DESIGN: Document Formatting — Themes + Colors / Fonts / Paragraph Spacing galleries.
-                tab.Group("themes", "Themes", null, 110, g =>
-                {
-                    g.Dropdown("freew.theme", "Themes", BuildThemeMenu());
-                });
-                tab.Group("document-formatting", "Document Formatting", null, 100, g =>
-                {
-                    g.Dropdown("freew.theme-colors", "Colors", BuildThemeColorsMenu());
-                    g.ComboBox("freew.style-set", "Style Sets", c => c with
-                    {
-                        Items = DocumentStyleSet.Catalog.Select(s => s.Name).ToArray(),
-                        Width = 128
-                    });
-                    g.Button("freew.reset-style-set", "Reset to Default Style Set", b => b with
-                    {
-                        PreferredLayout = RibbonCommandLayoutKind.Small,
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Refresh)
-                    });
-                    g.Dropdown("freew.theme-fonts",  "Fonts",  BuildThemeFontsMenu());
-                    g.Dropdown("freew.para-spacing", "Paragraph Spacing", BuildParaSpacingMenu());
-                    g.Dropdown("freew.theme-effects", "Effects", BuildEffectsMenu());
-                });
-                // AV-DESIGN: Page Background — Watermark, Page Color, Page Borders.
-                tab.Group("page-background", FreeWRibbonText.PageBackgroundGroup.Label, null, 90, g =>
-                {
-                    g.Dropdown("freew.watermark",  FreeWRibbonText.WatermarkCommand.Label,  BuildWatermarkMenu());
-                    g.Dropdown("freew.page-color", FreeWRibbonText.PageColorCommand.Label, BuildPageColorMenu());
-                    g.Button("freew.page-borders", FreeWRibbonText.PageBordersCommand.Label);
-                });
-            })
-            .Tab("view", "View", "V", tab =>
-            {
-                tab.Group("views", "Views", null, 110, g =>
-                {
-                    g.Dropdown("freew.read-mode", "Read Mode", BuildReadModeMenu(), d => d with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.ReadMode)
-                    });
-                    g.Button("freew.print-layout", "Print Layout");
-                    g.Button("freew.web-layout",   "Web Layout");
-                    g.Toggle("freew.outline-view", "Outline");
-                    g.Button("freew.draft-view",   "Draft");
-                    g.Toggle("freew.paged-edit-view", "Page Edit");
-                });
-                tab.Group("show", "Show", null, 100, g =>
-                {
-                    // AV-VIEW: layout gridlines + ruler toggles (DocumentView render chrome).
-                    g.Toggle("freew.ruler",             "Ruler");
-                    g.Toggle("freew.gridlines",         "Gridlines");
-                    g.Toggle("freew.nav-pane",          "Navigation Pane");
-                    // AV-VIEW: surface the Reviewing Pane toggle on View as well (also on Review tab).
-                    g.Toggle("freew.reviewing-pane",    "Reviewing Pane");
-                    g.Toggle("freew.reveal-formatting", "Reveal Formatting");
-                });
-                tab.Group("zoom", "Zoom", null, 90, g =>
-                {
-                    // AV-VIEW: full Zoom dialog (presets + custom %) alongside the quick controls.
-                    g.Button("freew.zoom-dialog", "Zoom");
-                    g.Button("freew.zoom-in",  "Zoom In");
-                    g.Button("freew.zoom-out", "Zoom Out");
-                    g.Button("freew.zoom-100", "100%");
-                    g.Button("freew.zoom-one-page", "One Page");
-                    g.Button("freew.zoom-page-width", "Page Width");
-                    g.Toggle("freew.zoom-multiple-pages", "Multiple Pages");
-                    g.Toggle("freew.zoom-side-to-side", "Side to Side");
-                });
-                // AV-VIEW: Window group — new window, Arrange All, and split.
-                tab.Group("window", "Window", null, 80, g =>
-                {
-                    g.Button("freew.new-window", "New Window");
-                    g.Button("freew.arrange-all", "Arrange All");
-                    g.Toggle("freew.split",      "Split");
-                });
-            })
+            .AddLayoutTab(capabilities)
+            .AddDesignTab(capabilities)
+            .AddViewTab(capabilities)
             .Tab("review", "Review", "R", tab =>
             {
                 // AV-REVIEW: Proofing group — word count dialog.

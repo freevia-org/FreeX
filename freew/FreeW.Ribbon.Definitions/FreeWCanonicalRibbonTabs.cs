@@ -1,4 +1,6 @@
 using Free.Shared.Ribbon;
+using FreeW.App.Presentation.ContextMenus;
+using FreeW.Core.Model;
 
 namespace FreeW.Ribbon.Definitions;
 
@@ -8,6 +10,370 @@ namespace FreeW.Ribbon.Definitions;
 /// </summary>
 internal static class FreeWCanonicalRibbonTabs
 {
+    internal static RibbonDefinitionBuilder AddLayoutTab(
+        this RibbonDefinitionBuilder builder,
+        FreeWRibbonCapabilities capabilities)
+    {
+        var avalonia = capabilities.UseAvaloniaBackedSurface;
+
+        return builder.Tab("layout", "Layout", "L", tab =>
+        {
+            if (avalonia)
+                AddAvaloniaLayoutGroups(tab);
+            else
+                AddWpfLayoutGroups(tab);
+        });
+    }
+
+    internal static RibbonDefinitionBuilder AddDesignTab(
+        this RibbonDefinitionBuilder builder,
+        FreeWRibbonCapabilities capabilities)
+    {
+        var avalonia = capabilities.UseAvaloniaBackedSurface;
+
+        return builder.Tab("design", "Design", "G", tab =>
+        {
+            if (avalonia)
+                AddAvaloniaDesignGroups(tab);
+            else
+                AddWpfDesignGroups(tab);
+        });
+    }
+
+    internal static RibbonDefinitionBuilder AddViewTab(
+        this RibbonDefinitionBuilder builder,
+        FreeWRibbonCapabilities capabilities)
+    {
+        var avalonia = capabilities.UseAvaloniaBackedSurface;
+
+        return builder.Tab("view", "View", avalonia ? "V" : "W", tab =>
+        {
+            if (avalonia)
+                AddAvaloniaViewGroups(tab);
+            else
+                AddWpfViewGroups(tab);
+        });
+    }
+
+    private static void AddWpfLayoutGroups(RibbonTabBuilder tab)
+    {
+        tab.Group("page-setup", "Page Setup", "P", 100, group =>
+        {
+            group.Large("freew.margins", "Margins", RibbonCommandIconKind.Margins, "M", menu: menu =>
+            {
+                menu.Item("freew.margins", "Normal / Narrow (toggle)", "N");
+                menu.Item("freew.custom-margins", "Custom Margins\u2026", "A");
+            });
+            group.Medium("freew.orientation", "Orientation", RibbonCommandIconKind.Orientation, dropdown: true);
+            group.Medium("freew.size", "Size", RibbonCommandIconKind.OnePage, "Z", menu: menu =>
+            {
+                menu.Item("freew.size", "Letter / A4 (toggle)", "L");
+                menu.Item("freew.more-paper-sizes", "More Paper Sizes\u2026", "M");
+            });
+            group.Medium("freew.columns", "Columns", RibbonCommandIconKind.TextColumns, menu: menu =>
+            {
+                menu.Item("freew.columns-one", "One", "O");
+                menu.Item("freew.columns-two", "Two", "T");
+                menu.Item("freew.columns-three", "Three", "H");
+                menu.Item("freew.columns-left", "Left", "L");
+                menu.Item("freew.columns-right", "Right", "R");
+                menu.Item("freew.columns-more", "More Columns...", "M");
+            });
+            group.Medium("freew.breaks", "Breaks", RibbonCommandIconKind.PageBreak, "B", menu: menu =>
+            {
+                menu.Item("freew.page-break", "Page Break", "P");
+                menu.Item("freew.column-break", "Column Break", "C");
+                menu.Separator();
+                menu.Item("freew.section-break-next-page", "Next Page", "N");
+                menu.Item("freew.section-break-continuous", "Continuous", "O");
+                menu.Item("freew.section-break-even-page", "Even Page", "E");
+                menu.Item("freew.section-break-odd-page", "Odd Page", "D");
+            });
+            group.RowBreak();
+            group.Icon("freew.page-setup", "Page Setup", RibbonCommandIconKind.Margins, "G");
+            group.Icon("freew.line-numbers", "Line Numbers", RibbonCommandIconKind.Number, menu: menu =>
+            {
+                menu.Item("freew.line-numbers-none", "None", "N");
+                menu.Item("freew.line-numbers-continuous", "Continuous", "C");
+                menu.Item("freew.line-numbers-restart-page", "Restart Each Page", "P");
+                menu.Item("freew.line-numbers-restart-section", "Restart Each Section", "S");
+                menu.Item("freew.line-numbers-options", "Line Numbering Options...", "O");
+            });
+            group.Icon("freew.hyphenation", "Hyphenation", RibbonCommandIconKind.Hyphenation, "HY", menu: menu =>
+            {
+                menu.Item("freew.hyphenation-none", "None", "N");
+                menu.Item("freew.hyphenation-auto", "Automatic", "A");
+                menu.Item("freew.hyphenation-manual", "Manual", "M");
+                menu.Item("freew.hyphenation-options", "Hyphenation Options\u2026", "H");
+            });
+            group.Icon("freew.page-valign", "Vertical Align", RibbonCommandIconKind.AlignJustify);
+            group.Icon("freew.different-first-page", "Different First Page", RibbonCommandIconKind.CoverPage);
+        });
+        tab.Group("paragraph", FreeWRibbonText.ParagraphGroup.Label, "A", 76, group =>
+        {
+            group.Icon("freew.indent-decrease", "Decrease Indent", RibbonCommandIconKind.IndentDecrease);
+            group.Icon("freew.indent-increase", "Increase Indent", RibbonCommandIconKind.IndentIncrease);
+            group.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", control => control with
+            {
+                Items = new[] { "1.0", "1.15", "1.5", "2.0" },
+                Icon = new RibbonCommandIcon(RibbonCommandIconKind.LineSpacing),
+                Width = 52,
+            });
+            group.ComboBox("freew.indent-left", "Indent Left", control => control with
+            {
+                Items = new[] { "0", "18", "36", "54", "72" },
+                Icon = new RibbonCommandIcon(RibbonCommandIconKind.IndentIncrease),
+                Width = 52,
+            });
+            group.ComboBox("freew.indent-right", "Indent Right", control => control with
+            {
+                Items = new[] { "0", "18", "36", "54", "72" },
+                Icon = new RibbonCommandIcon(RibbonCommandIconKind.IndentDecrease),
+                Width = 52,
+            });
+            group.RowBreak();
+            group.Icon("freew.space-before-toggle", "Add Space Before Paragraph", RibbonCommandIconKind.SpaceBefore);
+            group.Icon("freew.space-after-toggle", "Add Space After Paragraph", RibbonCommandIconKind.SpaceAfter);
+            group.ComboBox("freew.space-before", "Spacing Before", control => control with
+            {
+                Items = new[] { "0", "6", "12", "18", "24" },
+                Icon = new RibbonCommandIcon(RibbonCommandIconKind.SpaceBefore),
+                Width = 52,
+            });
+            group.ComboBox("freew.space-after", "Spacing After", control => control with
+            {
+                Items = new[] { "0", "6", "8", "12", "18", "24" },
+                Icon = new RibbonCommandIcon(RibbonCommandIconKind.SpaceAfter),
+                Width = 52,
+            });
+            group.Icon("freew.paragraph-dialog", "Paragraph Settings", RibbonCommandIconKind.TextFunction);
+            group.Icon("freew.tabs-dialog", "Tabs", RibbonCommandIconKind.Ruler);
+        });
+        tab.Group("preview", "Preview", "V", 90, group =>
+            group.Large("freew.print-preview", "Print Preview", RibbonCommandIconKind.Print));
+        tab.Group("data", "Data", "D", 88, group =>
+        {
+            group.Medium("freew.text-to-table", "Text to Table", RibbonCommandIconKind.Table,
+                accent: RibbonCommandIconAccent.Green);
+            group.Medium("freew.table-to-text", "Table to Text", RibbonCommandIconKind.TextFunction);
+        });
+    }
+
+    private static void AddAvaloniaLayoutGroups(RibbonTabBuilder tab)
+    {
+        tab.Group("page-setup", "Page Setup", null, 100, group =>
+        {
+            group.Dropdown("freew.margins", "Margins", BuildAvaloniaMarginsMenu());
+            group.Button("freew.orientation", "Orientation");
+            group.Dropdown("freew.size", "Size", BuildAvaloniaPageSizeMenu());
+            group.Dropdown("freew.columns", "Columns", BuildAvaloniaColumnsMenu());
+            group.Dropdown("freew.breaks", "Breaks", BuildAvaloniaBreaksMenu());
+            group.Dropdown("freew.line-numbers", "Line Numbers", BuildAvaloniaLineNumbersMenu());
+            group.Dropdown("freew.hyphenation", "Hyphenation", BuildAvaloniaHyphenationMenu());
+            group.Toggle("freew.different-first-page", "Different First Page");
+            group.Button("freew.page-valign", "Vertical Align");
+            group.Button("freew.page-setup", "Page Setup...");
+        });
+        tab.Group("paragraph", FreeWRibbonText.ParagraphGroup.Label, null, 92, group =>
+        {
+            group.Button("freew.indent-decrease", "Decrease Indent");
+            group.Button("freew.indent-increase", "Increase Indent");
+            group.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", control => control with
+            {
+                Items = new[] { "1.0", "1.15", "1.5", "2.0" },
+                Width = 52,
+            });
+            group.ComboBox("freew.indent-left", "Indent Left", control => control with
+            {
+                Items = new[] { "0", "18", "36", "54", "72" },
+                Width = 52,
+            });
+            group.ComboBox("freew.indent-right", "Indent Right", control => control with
+            {
+                Items = new[] { "0", "18", "36", "54", "72" },
+                Width = 52,
+            });
+            group.Button("freew.space-before-toggle", "Add Space Before Paragraph");
+            group.Button("freew.space-after-toggle", "Add Space After Paragraph");
+            group.ComboBox("freew.space-before", "Spacing Before", control => control with
+            {
+                Items = new[] { "0", "6", "12", "18", "24" },
+                Width = 52,
+            });
+            group.ComboBox("freew.space-after", "Spacing After", control => control with
+            {
+                Items = new[] { "0", "6", "8", "12", "18", "24" },
+                Width = 52,
+            });
+            group.Button("freew.paragraph-dialog", "Paragraph Settings");
+            group.Button("freew.tabs-dialog", "Tabs");
+        });
+        tab.Group("data", "Data", null, 95, group =>
+        {
+            group.Button("freew.text-to-table", "Text to Table");
+            group.Button("freew.table-to-text", "Table to Text");
+        });
+        tab.Group("preview", "Preview", null, 90, group =>
+            group.Button("freew.print-preview", "Print Preview"));
+    }
+
+    private static void AddWpfDesignGroups(RibbonTabBuilder tab)
+    {
+        tab.Group("themes", "Document Formatting", "T", 100, group =>
+        {
+            group.ComboBox("freew.theme", "Themes", control => control with
+            {
+                Items = DocumentTheme.Catalog.Select(theme => theme.Name).ToArray(),
+                Icon = new RibbonCommandIcon(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme),
+                Width = 140,
+            });
+            group.ComboBox("freew.style-set", "Style Sets", control => control with
+            {
+                Items = DocumentStyleSet.Catalog.Select(style => style.Name).ToArray(),
+                Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font, RibbonCommandIconAccent.Theme),
+                Width = 140,
+            });
+            group.Icon("freew.reset-style-set", "Reset to Default Style Set", RibbonCommandIconKind.Refresh);
+            group.Medium("freew.theme-colors", "Colors", RibbonCommandIconKind.Color, "C",
+                menu: menu => BuildWpfThemeMenu("freew.theme-colors", menu),
+                accent: RibbonCommandIconAccent.Color);
+            group.Medium("freew.theme-fonts", "Fonts", RibbonCommandIconKind.Font, "F",
+                menu: menu => BuildWpfFontSetMenu("freew.theme-fonts", menu),
+                accent: RibbonCommandIconAccent.Theme);
+            group.Medium("freew.paragraph-spacing", "Paragraph Spacing", RibbonCommandIconKind.LineSpacing, "P",
+                menu: menu => BuildWpfParagraphSpacingMenu("freew.paragraph-spacing", menu),
+                accent: RibbonCommandIconAccent.Theme);
+            group.Medium("freew.theme-effects", "Effects", RibbonCommandIconKind.Effects, "E",
+                menu: menu => BuildWpfEffectsMenu("freew.theme-effects", menu),
+                accent: RibbonCommandIconAccent.Theme);
+        });
+        tab.Group("page-background", FreeWRibbonText.PageBackgroundGroup.Label,
+            FreeWRibbonText.PageBackgroundGroup.KeyTip, 90, group =>
+        {
+            group.Medium("freew.watermark", FreeWRibbonText.WatermarkCommand.Label,
+                RibbonCommandIconKind.Watermark);
+            group.Medium("freew.page-color", FreeWRibbonText.PageColorCommand.Label,
+                RibbonCommandIconKind.Fill, accent: RibbonCommandIconAccent.Fill, dropdown: true);
+            group.Medium("freew.page-border", FreeWRibbonText.PageBordersCommand.Label,
+                RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
+        });
+    }
+
+    private static void AddAvaloniaDesignGroups(RibbonTabBuilder tab)
+    {
+        tab.Group("themes", "Themes", null, 110, group =>
+            group.Dropdown("freew.theme", "Themes", BuildAvaloniaThemeMenu()));
+        tab.Group("document-formatting", "Document Formatting", null, 100, group =>
+        {
+            group.Dropdown("freew.theme-colors", "Colors", BuildAvaloniaThemeColorsMenu());
+            group.ComboBox("freew.style-set", "Style Sets", control => control with
+            {
+                Items = DocumentStyleSet.Catalog.Select(style => style.Name).ToArray(),
+                Width = 128,
+            });
+            group.Button("freew.reset-style-set", "Reset to Default Style Set", button => button with
+            {
+                PreferredLayout = RibbonCommandLayoutKind.Small,
+                Icon = new RibbonCommandIcon(RibbonCommandIconKind.Refresh),
+            });
+            group.Dropdown("freew.theme-fonts", "Fonts", BuildAvaloniaThemeFontsMenu());
+            group.Dropdown("freew.para-spacing", "Paragraph Spacing", BuildAvaloniaParagraphSpacingMenu());
+            group.Dropdown("freew.theme-effects", "Effects", FreeWContextMenuPlanner.BuildEffects());
+        });
+        tab.Group("page-background", FreeWRibbonText.PageBackgroundGroup.Label, null, 90, group =>
+        {
+            group.Dropdown("freew.watermark", FreeWRibbonText.WatermarkCommand.Label,
+                BuildAvaloniaWatermarkMenu());
+            group.Dropdown("freew.page-color", FreeWRibbonText.PageColorCommand.Label,
+                BuildAvaloniaPageColorMenu());
+            group.Button("freew.page-borders", FreeWRibbonText.PageBordersCommand.Label);
+        });
+    }
+
+    private static void AddWpfViewGroups(RibbonTabBuilder tab)
+    {
+        tab.Group("views", "Views", "V", 100, group =>
+        {
+            group.Medium("freew.read-mode", "Read Mode", RibbonCommandIconKind.ReadMode, menu: menu =>
+            {
+                menu.Item("freew.read-mode-column-narrow", "Narrow Column Width", "N");
+                menu.Item("freew.read-mode-column-default", "Default Column Width", "D");
+                menu.Item("freew.read-mode-column-wide", "Wide Column Width", "W");
+                menu.Separator();
+                menu.Item("freew.read-mode-color-none", FreeWRibbonText.PageColorNoColorOption, "O");
+                menu.Item("freew.read-mode-color-sepia", "Sepia", "S");
+                menu.Item("freew.read-mode-color-inverse", "Inverse (Dark Mode)", "I");
+            });
+            group.MediumToggle("freew.print-layout", "Print Layout", RibbonCommandIconKind.PrintLayout);
+            group.MediumToggle("freew.web-layout", "Web Layout", RibbonCommandIconKind.WebLayout);
+            group.MediumToggle("freew.outline-view", "Outline", RibbonCommandIconKind.MultilevelList);
+            group.MediumToggle("freew.draft-view", "Draft", RibbonCommandIconKind.Draft);
+            group.MediumToggle("freew.paged-edit-view", "Page Edit", RibbonCommandIconKind.PrintLayout);
+        });
+        tab.Group("show", "Show", "S", 90, group =>
+        {
+            group.MediumToggle("freew.ruler", "Ruler", RibbonCommandIconKind.Ruler);
+            group.MediumToggle("freew.nav-pane", "Navigation Pane", RibbonCommandIconKind.NavigationPane);
+            group.MediumToggle("freew.gridlines", "Gridlines", RibbonCommandIconKind.Grid);
+        });
+        tab.Group("zoom", "Zoom", "Z", 80, group =>
+        {
+            group.Large("freew.zoom-dialog", "Zoom", RibbonCommandIconKind.Zoom);
+            group.Medium("freew.zoom-100", "100%", RibbonCommandIconKind.Zoom);
+            group.Medium("freew.zoom-one-page", "One Page", RibbonCommandIconKind.OnePage);
+            group.Medium("freew.zoom-page-width", "Page Width", RibbonCommandIconKind.Scale);
+            group.MediumToggle("freew.zoom-multiple-pages", "Multiple Pages", RibbonCommandIconKind.PreviewResults);
+            group.MediumToggle("freew.zoom-side-to-side", "Side to Side", RibbonCommandIconKind.OnePage);
+        });
+        tab.Group("window", "Window", "N", 70, group =>
+        {
+            group.MediumToggle("freew.split-window", "Split", RibbonCommandIconKind.Scale);
+            group.Medium("freew.new-window", "New Window", RibbonCommandIconKind.Page);
+            group.Medium("freew.arrange-all", "Arrange All", RibbonCommandIconKind.Grid);
+        });
+    }
+
+    private static void AddAvaloniaViewGroups(RibbonTabBuilder tab)
+    {
+        tab.Group("views", "Views", null, 110, group =>
+        {
+            group.Dropdown("freew.read-mode", "Read Mode", BuildAvaloniaReadModeMenu(), dropdown => dropdown with
+            {
+                Icon = new RibbonCommandIcon(RibbonCommandIconKind.ReadMode),
+            });
+            group.Button("freew.print-layout", "Print Layout");
+            group.Button("freew.web-layout", "Web Layout");
+            group.Toggle("freew.outline-view", "Outline");
+            group.Button("freew.draft-view", "Draft");
+            group.Toggle("freew.paged-edit-view", "Page Edit");
+        });
+        tab.Group("show", "Show", null, 100, group =>
+        {
+            group.Toggle("freew.ruler", "Ruler");
+            group.Toggle("freew.gridlines", "Gridlines");
+            group.Toggle("freew.nav-pane", "Navigation Pane");
+            group.Toggle("freew.reviewing-pane", "Reviewing Pane");
+            group.Toggle("freew.reveal-formatting", "Reveal Formatting");
+        });
+        tab.Group("zoom", "Zoom", null, 90, group =>
+        {
+            group.Button("freew.zoom-dialog", "Zoom");
+            group.Button("freew.zoom-in", "Zoom In");
+            group.Button("freew.zoom-out", "Zoom Out");
+            group.Button("freew.zoom-100", "100%");
+            group.Button("freew.zoom-one-page", "One Page");
+            group.Button("freew.zoom-page-width", "Page Width");
+            group.Toggle("freew.zoom-multiple-pages", "Multiple Pages");
+            group.Toggle("freew.zoom-side-to-side", "Side to Side");
+        });
+        tab.Group("window", "Window", null, 80, group =>
+        {
+            group.Button("freew.new-window", "New Window");
+            group.Button("freew.arrange-all", "Arrange All");
+            group.Toggle("freew.split", "Split");
+        });
+    }
+
     internal static RibbonDefinitionBuilder AddMailingsTab(
         this RibbonDefinitionBuilder builder,
         FreeWRibbonCapabilities capabilities)
@@ -186,6 +552,155 @@ internal static class FreeWCanonicalRibbonTabs
                         RibbonCommandIconKind.WindowClose));
             });
     }
+
+    private static void BuildWpfThemeMenu(string commandId, RibbonMenuBuilder menu)
+    {
+        foreach (var theme in DocumentTheme.Catalog)
+            menu.Item(commandId, theme.Name, theme.Name[0].ToString());
+        menu.Separator();
+        menu.Item("freew.customize-colors", "Customize Colors\u2026", "Z");
+    }
+
+    private static void BuildWpfFontSetMenu(string commandId, RibbonMenuBuilder menu)
+    {
+        foreach (var fontSet in DocumentFontSet.Catalog)
+            menu.Item(commandId, fontSet.Name, fontSet.Name[0].ToString());
+        menu.Separator();
+        menu.Item("freew.customize-fonts", "Customize Fonts\u2026", "Z");
+    }
+
+    private static void BuildWpfParagraphSpacingMenu(string commandId, RibbonMenuBuilder menu)
+    {
+        foreach (var spacingSet in DocumentParagraphSpacingSet.Catalog)
+            menu.Item(commandId, spacingSet.Name, spacingSet.Name[0].ToString());
+        menu.Separator();
+        menu.Item("freew.custom-paragraph-spacing", "Custom Paragraph Spacing\u2026", "U");
+    }
+
+    private static void BuildWpfEffectsMenu(string commandId, RibbonMenuBuilder menu)
+    {
+        foreach (var effectSet in DocumentEffectSet.Catalog)
+            menu.Item(commandId, effectSet.Name, effectSet.Name[0].ToString());
+    }
+
+    private static RibbonMenu BuildAvaloniaMarginsMenu() => new(
+    [
+        new("Normal", new RibbonCommandId("freew.page-margins-normal")),
+        new("Narrow", new RibbonCommandId("freew.page-margins-narrow")),
+        new("Wide", new RibbonCommandId("freew.page-margins-wide")),
+        RibbonMenuItem.Separator(),
+        new("Custom Margins...", new RibbonCommandId("freew.custom-margins")),
+    ]);
+
+    private static RibbonMenu BuildAvaloniaPageSizeMenu() => new(
+    [
+        new("Letter", new RibbonCommandId("freew.page-size-letter")),
+        new("A4", new RibbonCommandId("freew.page-size-a4")),
+        RibbonMenuItem.Separator(),
+        new("More Paper Sizes...", new RibbonCommandId("freew.more-paper-sizes")),
+    ]);
+
+    private static RibbonMenu BuildAvaloniaColumnsMenu() => new(
+    [
+        new("One", new RibbonCommandId("freew.columns-one")),
+        new("Two", new RibbonCommandId("freew.columns-two")),
+        new("Three", new RibbonCommandId("freew.columns-three")),
+        new("Left", new RibbonCommandId("freew.columns-left")),
+        new("Right", new RibbonCommandId("freew.columns-right")),
+        RibbonMenuItem.Separator(),
+        new("More Columns...", new RibbonCommandId("freew.columns-more")),
+    ]);
+
+    private static RibbonMenu BuildAvaloniaBreaksMenu() => new(
+    [
+        new("Page Break", new RibbonCommandId("freew.page-break")),
+        new("Column Break", new RibbonCommandId("freew.column-break")),
+        RibbonMenuItem.Separator(),
+        new("Next Page", new RibbonCommandId("freew.section-break-next-page")),
+        new("Continuous", new RibbonCommandId("freew.section-break-continuous")),
+        new("Even Page", new RibbonCommandId("freew.section-break-even-page")),
+        new("Odd Page", new RibbonCommandId("freew.section-break-odd-page")),
+    ]);
+
+    private static RibbonMenu BuildAvaloniaLineNumbersMenu() => new(
+    [
+        new("None", new RibbonCommandId("freew.line-numbers-none")),
+        new("Continuous", new RibbonCommandId("freew.line-numbers-continuous")),
+        new("Restart Each Page", new RibbonCommandId("freew.line-numbers-restart-page")),
+        new("Restart Each Section", new RibbonCommandId("freew.line-numbers-restart-section")),
+        RibbonMenuItem.Separator(),
+        new("Line Numbering Options...", new RibbonCommandId("freew.line-numbers-options")),
+    ]);
+
+    private static RibbonMenu BuildAvaloniaHyphenationMenu() => new(
+    [
+        new("None", new RibbonCommandId("freew.hyphenation-none")),
+        new("Automatic", new RibbonCommandId("freew.hyphenation-auto")),
+        new("Manual", new RibbonCommandId("freew.hyphenation-manual")),
+        RibbonMenuItem.Separator(),
+        new("Hyphenation Options...", new RibbonCommandId("freew.hyphenation-options")),
+    ]);
+
+    private static RibbonMenu BuildAvaloniaThemeMenu() => new(
+        DocumentTheme.Catalog
+            .Select(theme => new RibbonMenuItem(theme.Name,
+                new RibbonCommandId($"freew.theme.{theme.Name.ToLowerInvariant()}")))
+            .ToArray());
+
+    private static RibbonMenu BuildAvaloniaThemeColorsMenu() => new(
+        DocumentTheme.Catalog
+            .Select(theme => new RibbonMenuItem(theme.Name,
+                new RibbonCommandId($"freew.theme-colors.{theme.Name.ToLowerInvariant()}")))
+            .Concat([RibbonMenuItem.Separator(),
+                new RibbonMenuItem("Customize Colors...", new RibbonCommandId("freew.customize-colors"))])
+            .ToArray());
+
+    private static RibbonMenu BuildAvaloniaThemeFontsMenu() => new(
+        DocumentFontSet.Catalog
+            .Select(fontSet => new RibbonMenuItem(
+                $"{fontSet.Name}  ({fontSet.HeadingFont} / {fontSet.BodyFont})",
+                new RibbonCommandId($"freew.theme-fonts.{fontSet.Name.ToLowerInvariant()}")))
+            .Concat([RibbonMenuItem.Separator(),
+                new RibbonMenuItem("Customize Fonts...", new RibbonCommandId("freew.customize-fonts"))])
+            .ToArray());
+
+    private static RibbonMenu BuildAvaloniaParagraphSpacingMenu() => new(
+        DocumentParagraphSpacingSet.Catalog
+            .Select(spacingSet => new RibbonMenuItem(spacingSet.Name,
+                new RibbonCommandId($"freew.para-spacing.{FreeWRibbonDefinitionData.ParaSpacingId(spacingSet.Name)}")))
+            .Concat([
+                RibbonMenuItem.Separator(),
+                new RibbonMenuItem("Custom Paragraph Spacing...",
+                    new RibbonCommandId("freew.custom-paragraph-spacing")),
+            ])
+            .ToArray());
+
+    private static RibbonMenu BuildAvaloniaPageColorMenu() => new(
+        FreeWRibbonDefinitionData.PageColors
+            .Select(color => new RibbonMenuItem(color.Label, new RibbonCommandId(color.CommandId)))
+            .ToArray());
+
+    private static RibbonMenu BuildAvaloniaWatermarkMenu() => new(
+    [
+        new("CONFIDENTIAL", new RibbonCommandId("freew.watermark.confidential")),
+        new("DO NOT COPY", new RibbonCommandId("freew.watermark.do-not-copy")),
+        new("DRAFT", new RibbonCommandId("freew.watermark.draft")),
+        new("URGENT", new RibbonCommandId("freew.watermark.urgent")),
+        RibbonMenuItem.Separator(),
+        new("Custom Watermark\u2026", new RibbonCommandId("freew.watermark.custom")),
+        new("Remove Watermark", new RibbonCommandId("freew.watermark.none")),
+    ]);
+
+    private static RibbonMenu BuildAvaloniaReadModeMenu() => new(
+    [
+        new("Narrow Column Width", new RibbonCommandId("freew.read-mode-column-narrow")),
+        new("Default Column Width", new RibbonCommandId("freew.read-mode-column-default")),
+        new("Wide Column Width", new RibbonCommandId("freew.read-mode-column-wide")),
+        RibbonMenuItem.Separator(),
+        new("No Color", new RibbonCommandId("freew.read-mode-color-none")),
+        new("Sepia", new RibbonCommandId("freew.read-mode-color-sepia")),
+        new("Inverse (Dark Mode)", new RibbonCommandId("freew.read-mode-color-inverse")),
+    ]);
 
     private static void AddProfiledButton(
         RibbonGroupBuilder group,

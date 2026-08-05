@@ -23,6 +23,18 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
         "header-footer-design",
         "73F64F4CB1B827C725BB0B7D859AEE64C0B4334790C7775CB26DE6BDD7B4F85D",
         "192200D0E46A349DFC699AB8F4C61C258E48E14BC227D14CB865862BD0FD4FA1")]
+    [InlineData(
+        "layout",
+        "ABB78A14EAD7FE7C4DB07C1641A959452B591378344EC41D59168446BEF469E5",
+        "AC664FAD5AB943B6B9B44C58C7E61F7B6E3C62EA65F3D3FAF5058A8D5B5EC809")]
+    [InlineData(
+        "design",
+        "F5FD66D827A1307E1DA12499C801B6935A8DC99E719BD9AD81EA45173E762E1D",
+        "052B10D319879EB041E658D90160F3377C1C8505F42AEF7785E76ECDC750A1DB")]
+    [InlineData(
+        "view",
+        "CB9249AAD3A6B6A5BB00C86AE16F2FF13697EAE694B5F54E0F33911D9D5A63BF",
+        "4B41DCA044EF9FF14EB2A0B3239D4722C5EC13D41B1C127D1AEF1602C9D648D1")]
     public void Canonical_tab_profiles_preserve_existing_structure(
         string tabId,
         string expectedWpfHash,
@@ -45,7 +57,7 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
         var avalonia = ReadRepositoryFile(
             "freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
 
-        foreach (var tabId in new[] { "mailings", "help", "developer" })
+        foreach (var tabId in new[] { "layout", "design", "view", "mailings", "help", "developer" })
         {
             canonical.Should().Contain($"builder.Tab(\"{tabId}\"");
             wpf.Should().NotContain($".Tab(\"{tabId}\"");
@@ -58,6 +70,9 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
 
         foreach (var method in new[]
                  {
+                     "AddLayoutTab(capabilities)",
+                     "AddDesignTab(capabilities)",
+                     "AddViewTab(capabilities)",
                      "AddMailingsTab(capabilities)",
                      "AddHelpTab(capabilities)",
                      "AddDeveloperTab(capabilities)",
