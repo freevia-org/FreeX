@@ -34,6 +34,8 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderGlow(");
         source.Should().Contain("Use border soft edge");
         source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderSoftEdge(");
+        source.Should().Contain("Use border reflection");
+        source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderReflection(");
         source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameGeometry(");
         source.Should().Contain("Frame shape:");
         source.Should().Contain("_frameBorderColor.IsEnabled");
@@ -85,6 +87,7 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderShadowMessage");
         source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderGlowMessage");
         source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderSoftEdgeMessage");
+        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderReflectionMessage");
         source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameGeometryMessage");
         source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidCropEdgesMessage");
         source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidSummaryTileLayoutMessage");

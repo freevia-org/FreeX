@@ -59,7 +59,9 @@ public sealed record ZoomObjectProperties(
     ZoomFrameBorderGlow? FrameBorderGlow = null,
     bool? FrameBorderGlowEnabled = null,
     ZoomFrameBorderSoftEdge? FrameBorderSoftEdge = null,
-    bool? FrameBorderSoftEdgeEnabled = null)
+    bool? FrameBorderSoftEdgeEnabled = null,
+    ZoomFrameBorderReflection? FrameBorderReflection = null,
+    bool? FrameBorderReflectionEnabled = null)
 {
     public bool IsEmpty => ReturnToParent is null
         && ImageType is null
@@ -82,7 +84,9 @@ public sealed record ZoomObjectProperties(
         && FrameBorderGlow is null
         && FrameBorderGlowEnabled is null
         && FrameBorderSoftEdge is null
-        && FrameBorderSoftEdgeEnabled is null;
+        && FrameBorderSoftEdgeEnabled is null
+        && FrameBorderReflection is null
+        && FrameBorderReflectionEnabled is null;
 }
 
 /// <summary>
@@ -111,6 +115,19 @@ public sealed record ZoomFrameBorderGlow(
 /// Radius is stored in the OOXML EMU unit used by <c>a:softEdge/@rad</c>.
 /// </summary>
 public sealed record ZoomFrameBorderSoftEdge(long RadiusEmu = 127000);
+
+/// <summary>
+/// A native DrawingML reflection on a Zoom preview frame.
+/// Values use the same units as <c>a:reflection</c> and are intentionally
+/// retained separately from shadow/glow/soft-edge state.
+/// </summary>
+public sealed record ZoomFrameBorderReflection(
+    int Alpha = 50000,
+    long BlurRadiusEmu = 0,
+    long DistanceEmu = 0,
+    int Direction = 5400000,
+    int ScaleY = -100000,
+    int EndPosition = 100000);
 
 /// <summary>
 /// Payload for a preserved modern object (SlideShapeKind.Zoom / Ink / Model3d / PreservedObject).
