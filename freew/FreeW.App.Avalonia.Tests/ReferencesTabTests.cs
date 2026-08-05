@@ -182,6 +182,30 @@ public sealed class ReferencesTabTests
             .Should().Contain("Chapter Two\tV");
     }
 
+    [Fact]
+    public void UpdateTableOfContents_ReplacesNativeOwnedResultWithoutDeletingSourceHeading()
+    {
+        var field = new ComplexField(" TOC \\o \"1-3\" ");
+        var view = ViewWith(
+            new Paragraph("Old Heading\t9")
+            {
+                StyleId = "Normal",
+                SpanningFieldStart = field,
+                SpanningFieldOwner = field,
+                EndsSpanningField = true
+            },
+            Heading("Source Heading", 1));
+
+        view.UpdateTableOfContents();
+
+        view.Document.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Source Heading");
+        view.Document.Blocks.Where(TableOfContents.IsTocParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Source Heading\t1").And.NotContain("Old Heading\t9");
+    }
+
     // ── Caption ─────────────────────────────────────────────────────────────────────
 
     [Fact]
