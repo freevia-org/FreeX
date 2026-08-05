@@ -45,8 +45,23 @@ public abstract class LocalizedResourceCatalog<TCatalog>
 
     public static string CreateMissingText(string key) => Resources.CreateMissingText(key);
 
-    private static LocalizedResourceCatalogAttribute GetCatalogDefinition() =>
-        typeof(TCatalog).GetCustomAttribute<LocalizedResourceCatalogAttribute>()
-        ?? throw new InvalidOperationException(
-            $"Localization catalog type '{typeof(TCatalog).FullName}' must declare {nameof(LocalizedResourceCatalogAttribute)}.");
+    private static LocalizedResourceCatalogAttribute GetCatalogDefinition()
+    {
+        var catalogType = typeof(TCatalog);
+        var explicitDefinition = catalogType.GetCustomAttribute<LocalizedResourceCatalogAttribute>();
+        if (explicitDefinition is not null)
+            return explicitDefinition;
+
+        var catalogNamespace = catalogType.Namespace;
+        var assemblyName = catalogType.Assembly.GetName().Name;
+        if (string.IsNullOrWhiteSpace(catalogNamespace) || string.IsNullOrWhiteSpace(assemblyName))
+        {
+            throw new InvalidOperationException(
+                $"Localization catalog type '{catalogType.FullName}' must have a namespace and assembly name or declare {nameof(LocalizedResourceCatalogAttribute)}.");
+        }
+
+        return new LocalizedResourceCatalogAttribute(
+            $"{catalogNamespace}.Resources.Strings",
+            $"{assemblyName}.resources.dll");
+    }
 }

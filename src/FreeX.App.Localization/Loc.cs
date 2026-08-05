@@ -13,7 +13,6 @@ namespace FreeX.App.Localization;
 /// <c>qps-ploc</c> pseudo-localization culture expands neutral English so layout/format bugs
 /// surface in tests and manual smoke runs.
 /// </summary>
-[LocalizedResourceCatalog("FreeX.App.Localization.Resources.Strings", "FreeX.App.Localization.resources.dll")]
 public abstract class Loc : LocalizedResourceCatalog<Loc>
 {
     protected Loc()

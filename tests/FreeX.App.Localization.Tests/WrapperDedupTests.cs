@@ -6,13 +6,11 @@ namespace FreeX.App.Localization.Tests;
 public sealed class WrapperDedupTests
 {
     [Fact]
-    public void AppWrappers_UseSharedContractsAndKeepProductMetadata() =>
+    public void AppWrappers_UseSharedContractsAndConventionOwnedResourceMetadata() =>
         LocalizationWrapperContractTestSupport.AssertAppWrappers<
             Loc,
             LocalizedUiText,
             AppLanguageOption,
             AppLanguageCatalog>(
-            ["src", "FreeX.App.Localization"],
-            "FreeX.App.Localization.Resources.Strings",
-            "FreeX.App.Localization.resources.dll");
+            ["src", "FreeX.App.Localization"]);
 }
