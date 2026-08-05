@@ -232,6 +232,7 @@ internal static class PptxChartReader
 
         var chartSpace = doc.Root;
         var chart = chartSpace?.Element(Cx + "chart");
+        var chartExTitle = chart?.Element(Cx + "title");
         var region = chart?.Element(Cx + "plotArea")?.Element(Cx + "plotAreaRegion");
         var seriesEl = region?.Element(Cx + "series");
         if (chartSpace is null || chart is null || region is null || seriesEl is null)
@@ -260,7 +261,24 @@ internal static class PptxChartReader
                 .Distinct()
                 .OrderBy(index => index)
                 .ToList(),
-            Title = ReadChartExTitle(chart.Element(Cx + "title")),
+            Title = ReadChartExTitle(chartExTitle),
+            TitleOverlay = ParseNullableBoolAttr(chartExTitle?.Attribute("overlay")?.Value),
+            ChartExTitlePosition = chartExTitle?.Attribute("pos")?.Value switch
+            {
+                "t" => ChartExTitlePosition.Top,
+                "b" => ChartExTitlePosition.Bottom,
+                "l" => ChartExTitlePosition.Left,
+                "r" => ChartExTitlePosition.Right,
+                _ => null,
+            },
+            ChartExTitleAlignment = chartExTitle?.Attribute("align")?.Value switch
+            {
+                "near" => ChartExTitleAlignment.Near,
+                "ctr" => ChartExTitleAlignment.Center,
+                "far" => ChartExTitleAlignment.Far,
+                _ => null,
+            },
+            TitleStyle = ReadChartTextStyle(chartExTitle?.Element(Cx + "txPr"), scheme),
         };
         var legend = chart.Element(Cx + "legend");
         if (legend is not null)
@@ -274,6 +292,7 @@ internal static class PptxChartReader
                 _ => null,
             };
             shape.LegendOverlay = ParseNullableBoolAttr(legend.Attribute("overlay")?.Value);
+            shape.LegendTextStyle = ReadChartTextStyle(legend.Element(Cx + "txPr"), scheme);
         }
         shape.Categories.AddRange(categories);
 

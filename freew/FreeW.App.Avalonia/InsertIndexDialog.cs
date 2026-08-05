@@ -11,11 +11,20 @@ internal sealed class InsertIndexDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly TextBox _identifier = new() { MinWidth = 300 };
+    private readonly string _actionLabel;
 
     internal InsertIndexDialog(string? identifier = null)
+        : this(isUpdate: false, identifier)
+    {
+    }
+
+    private InsertIndexDialog(bool isUpdate, string? identifier)
     {
         var state = InsertIndexDialogPlanner.BuildInitialState(identifier);
-        Title = InsertIndexDialogPlanner.Title;
+        Title = isUpdate ? InsertIndexDialogPlanner.UpdateTitle : InsertIndexDialogPlanner.Title;
+        _actionLabel = isUpdate
+            ? InsertIndexDialogPlanner.UpdateButtonLabel
+            : InsertIndexDialogPlanner.InsertButtonLabel;
         Width = InsertIndexDialogPlanner.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -25,7 +34,7 @@ internal sealed class InsertIndexDialog : FreeWDialogWindow
         _identifier.Text = state.Identifier;
         AvaloniaCompactDialogChrome.ApplyTextBox(_identifier, Chrome);
 
-        var insert = Button(InsertIndexDialogPlanner.InsertButtonLabel, Accept, isDefault: true);
+        var insert = Button(_actionLabel, Accept, isDefault: true);
         var cancel = Button("Cancel", () => Close(null), isCancel: true);
         Content = new StackPanel
         {
@@ -59,6 +68,14 @@ internal sealed class InsertIndexDialog : FreeWDialogWindow
 
     internal static Task<InsertIndexDialogResult?> ShowAsync(Window owner, string? identifier = null) =>
         new InsertIndexDialog(identifier).ShowDialog<InsertIndexDialogResult?>(owner);
+
+    internal static Task<InsertIndexDialogResult?> ShowUpdateAsync(Window owner, string? identifier = null) =>
+        new InsertIndexDialog(isUpdate: true, identifier).ShowDialog<InsertIndexDialogResult?>(owner);
+
+    internal static InsertIndexDialog CreateUpdateForTests(string? identifier = null) =>
+        new(isUpdate: true, identifier);
+
+    internal string ActionLabelForTests => _actionLabel;
 
     internal InsertIndexDialogResult BuildResultForTests(string? identifier)
     {

@@ -1227,7 +1227,7 @@ internal static class FreeWRibbonCommands
         // insert an alphabetical index built from the marked terms at the caret (reversibly via the bus).
         registry.Register("freew.index-mark", new MarkIndexEntryCommand(editor));
         registry.Register("freew.index-insert", new InsertIndexCommand(editor));
-        registry.Register("freew.index-refresh", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshIndex(); }));
+        registry.Register("freew.index-refresh", new UpdateIndexCommand(editor));
         // Insert tab — References: generate a Table of Figures from the document's figure captions at the
         // caret, and rebuild it in place (remove the prior region + re-insert). Both route through the bus.
         registry.Register("freew.tof", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(); }));
@@ -5192,6 +5192,30 @@ internal static class FreeWRibbonCommands
                 return;
 
             editor.InsertIndex(result.Identifier);
+        }
+    }
+
+    // References > Index > Update Index: rebuild only the index selected by its optional XE identifier.
+    private sealed class UpdateIndexCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+
+            // Registry contracts use a detached editor; preserve their non-modal default-index exercise.
+            if (!editor.IsLoaded)
+            {
+                editor.RefreshIndex();
+                return;
+            }
+
+            var result = InsertIndexDialog.PromptForUpdate(
+                Window.GetWindow(editor),
+                InsertIndexDialogPlanner.BuildInitialState());
+            if (result is null)
+                return;
+
+            editor.RefreshIndex(result.Identifier);
         }
     }
 

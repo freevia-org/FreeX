@@ -73,6 +73,12 @@ public enum ChartMarkerSymbol
 /// <summary>Position of the chart legend relative to the plot area.</summary>
 public enum LegendPosition { Right, Left, Top, Bottom }
 
+/// <summary>Native ChartEx title side position from <c>cx:title/@pos</c>.</summary>
+public enum ChartExTitlePosition { Top, Bottom, Left, Right }
+
+/// <summary>Native ChartEx title alignment along its side from <c>cx:title/@align</c>.</summary>
+public enum ChartExTitleAlignment { Near, Center, Far }
+
 /// <summary>Which chart surface receives an authored fill and outline.</summary>
 public enum ChartAreaFormattingTarget { ChartArea, PlotArea }
 
@@ -760,11 +766,24 @@ public sealed class ChartShape
     public string? Title { get; set; }
 
     /// <summary>
-    /// Explicit PowerPoint chart-title overlay state from <c>c:title/c:overlay</c>.
+    /// Explicit PowerPoint chart-title overlay state from <c>c:title/c:overlay</c>
+    /// or native ChartEx <c>cx:title/@overlay</c>.
     /// Null means the source did not author the token; false is the normal above-plot
     /// placement and true places the title over the plot area.
     /// </summary>
     public bool? TitleOverlay { get; set; }
+
+    /// <summary>
+    /// Optional native ChartEx title side position. Null preserves an absent source
+    /// token and lets ChartEx apply its default of top.
+    /// </summary>
+    public ChartExTitlePosition? ChartExTitlePosition { get; set; }
+
+    /// <summary>
+    /// Optional native ChartEx title alignment along its side. Null preserves an
+    /// absent source token and lets ChartEx apply its default of center.
+    /// </summary>
+    public ChartExTitleAlignment? ChartExTitleAlignment { get; set; }
 
     /// <summary>Optional independent formatting for the chart title text.</summary>
     public ChartTextStyle? TitleStyle { get; set; }

@@ -8058,6 +8058,7 @@ public sealed class MainWindowHeadlessTests
             var window = new MainWindow(Array.Empty<string>());
             var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
             chartShape.Chart!.ChartType = ChartType.Stock;
+            chartShape.Chart.IsChartEx = true;
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartDisplayOptionsDialog(window.Editor);
@@ -8083,6 +8084,8 @@ public sealed class MainWindowHeadlessTests
                 labelColor: "#2F5496",
                 showBubbleSize: true);
             dialog.SetTitleOverlayForTests(true);
+            dialog.SetTitlePositionForTests(ChartExTitlePosition.Right);
+            dialog.SetTitleAlignmentForTests(ChartExTitleAlignment.Far);
             dialog.SetPlotVisibleOnlyForTests(false);
             dialog.SetRoundedCornersForTests(true);
             dialog.SetVaryColorsForTests(true);
@@ -8097,6 +8100,8 @@ public sealed class MainWindowHeadlessTests
         options.Should().NotBeNull();
         options!.Title.Should().Be("Revenue");
         options.TitleOverlay.Should().BeTrue();
+        options.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Right);
+        options.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Far);
         options.PlotVisibleOnly.Should().BeFalse();
         options.RoundedCorners.Should().BeTrue();
         options.Legend.Should().Be(LegendPosition.Bottom);

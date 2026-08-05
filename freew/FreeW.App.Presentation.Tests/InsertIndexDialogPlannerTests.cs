@@ -6,6 +6,15 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class InsertIndexDialogPlannerTests
 {
     [Fact]
+    public void Labels_DistinguishInsertAndUpdateActions()
+    {
+        InsertIndexDialogPlanner.Title.Should().Be("Insert Index");
+        InsertIndexDialogPlanner.InsertButtonLabel.Should().Be("Insert");
+        InsertIndexDialogPlanner.UpdateTitle.Should().Be("Update Index");
+        InsertIndexDialogPlanner.UpdateButtonLabel.Should().Be("Update");
+    }
+
+    [Fact]
     public void BuildInitialState_NormalizesSeed()
     {
         InsertIndexDialogPlanner.BuildInitialState(" People ")

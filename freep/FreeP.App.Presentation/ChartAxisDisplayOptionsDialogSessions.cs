@@ -363,6 +363,9 @@ public sealed class ChartAxisOptionsDialogSession
 public sealed record ChartDisplayOptionsDialogState(
     string Title,
     bool TitleOverlay,
+    int TitlePositionIndex,
+    int TitleAlignmentIndex,
+    bool SupportsChartExTitleLayout,
     bool PlotVisibleOnly,
     bool RoundedCorners,
     int StyleIndex,
@@ -405,6 +408,8 @@ public sealed record ChartDisplayOptionsDialogState(
 public sealed record ChartDisplayOptionsDialogInput(
     string? Title,
     bool TitleOverlay,
+    int TitlePositionIndex,
+    int TitleAlignmentIndex,
     bool PlotVisibleOnly,
     bool RoundedCorners,
     int StyleIndex,
@@ -469,6 +474,12 @@ public sealed class ChartDisplayOptionsDialogSession
     public IReadOnlyList<string> LegendOptions { get; } =
         ChartDisplayOptionsPlanner.LegendOptions.Select(option => option.Label).ToArray();
 
+    public IReadOnlyList<string> TitlePositionOptions { get; } =
+        ChartDisplayOptionsPlanner.TitlePositionOptions.Select(option => option.Label).ToArray();
+
+    public IReadOnlyList<string> TitleAlignmentOptions { get; } =
+        ChartDisplayOptionsPlanner.TitleAlignmentOptions.Select(option => option.Label).ToArray();
+
     public IReadOnlyList<string> LabelPositionOptions { get; } =
         ChartDisplayOptionsPlanner.LabelPositionOptions.Select(option => option.Label).ToArray();
 
@@ -494,6 +505,26 @@ public sealed class ChartDisplayOptionsDialogSession
         _planner.SetTitle(input.Title);
         if (input.TitleOverlay != _state.TitleOverlay)
             _planner.SetTitleOverlay(input.TitleOverlay);
+        if (_planner.SupportsChartExTitleLayout)
+        {
+            if (input.TitlePositionIndex != _state.TitlePositionIndex)
+            {
+                _planner.SetTitlePosition(ValueAt(
+                    ChartDisplayOptionsPlanner.TitlePositionOptions,
+                    input.TitlePositionIndex,
+                    option => option.Value,
+                    _planner.TitlePosition));
+            }
+
+            if (input.TitleAlignmentIndex != _state.TitleAlignmentIndex)
+            {
+                _planner.SetTitleAlignment(ValueAt(
+                    ChartDisplayOptionsPlanner.TitleAlignmentOptions,
+                    input.TitleAlignmentIndex,
+                    option => option.Value,
+                    _planner.TitleAlignment));
+            }
+        }
         if (input.PlotVisibleOnly != _state.PlotVisibleOnly)
             _planner.SetPlotVisibleOnly(input.PlotVisibleOnly);
         if (input.RoundedCorners != _state.RoundedCorners)
@@ -577,6 +608,16 @@ public sealed class ChartDisplayOptionsDialogSession
         value,
         option => option.Value);
 
+    public int FindTitlePositionIndex(ChartExTitlePosition value) => FindIndex(
+        ChartDisplayOptionsPlanner.TitlePositionOptions,
+        value,
+        option => option.Value);
+
+    public int FindTitleAlignmentIndex(ChartExTitleAlignment value) => FindIndex(
+        ChartDisplayOptionsPlanner.TitleAlignmentOptions,
+        value,
+        option => option.Value);
+
     public int FindLabelPositionIndex(DataLabelPosition value) => FindIndex(
         ChartDisplayOptionsPlanner.LabelPositionOptions,
         value,
@@ -590,6 +631,9 @@ public sealed class ChartDisplayOptionsDialogSession
     private ChartDisplayOptionsDialogState BuildState() => new(
         _planner.Title,
         _planner.TitleOverlay,
+        FindTitlePositionIndex(_planner.TitlePosition),
+        FindTitleAlignmentIndex(_planner.TitleAlignment),
+        _planner.SupportsChartExTitleLayout,
         _planner.PlotVisibleOnly,
         _planner.RoundedCorners,
         FindStyleIndex(_planner.StyleId),

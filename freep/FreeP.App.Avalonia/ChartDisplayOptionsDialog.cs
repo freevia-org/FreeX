@@ -13,6 +13,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private readonly ChartDisplayOptionsDialogSession _session;
     private readonly TextBox _titleBox;
     private readonly CheckBox _titleOverlayCheck;
+    private readonly ComboBox _titlePositionCombo;
+    private readonly ComboBox _titleAlignmentCombo;
     private readonly CheckBox _plotVisibleOnlyCheck;
     private readonly CheckBox _roundedCornersCheck;
     private readonly ComboBox _styleCombo;
@@ -65,6 +67,20 @@ internal sealed class ChartDisplayOptionsDialog : Window
         {
             Content = surface.TitleOverlayLabel,
             IsChecked = state.TitleOverlay,
+        };
+        _titlePositionCombo = new ComboBox
+        {
+            ItemsSource = _session.TitlePositionOptions,
+            SelectedIndex = state.TitlePositionIndex,
+            MinWidth = 150,
+            IsEnabled = state.SupportsChartExTitleLayout,
+        };
+        _titleAlignmentCombo = new ComboBox
+        {
+            ItemsSource = _session.TitleAlignmentOptions,
+            SelectedIndex = state.TitleAlignmentIndex,
+            MinWidth = 150,
+            IsEnabled = state.SupportsChartExTitleLayout,
         };
         _plotVisibleOnlyCheck = new CheckBox
         {
@@ -219,6 +235,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
             {
                 ChartOptionsDialogChrome.CreateRow(surface.ChartTitleLabel, _titleBox),
                 _titleOverlayCheck,
+                ChartOptionsDialogChrome.CreateRow(surface.TitlePositionLabel, _titlePositionCombo),
+                ChartOptionsDialogChrome.CreateRow(surface.TitleAlignmentLabel, _titleAlignmentCombo),
                 _plotVisibleOnlyCheck,
                 _roundedCornersCheck,
                 ChartOptionsDialogChrome.CreateRow(surface.ChartStyleLabel, _styleCombo),
@@ -263,6 +281,12 @@ internal sealed class ChartDisplayOptionsDialog : Window
     internal void SetVaryColorsForTests(bool value) => _varyColorsCheck.IsChecked = value;
 
     internal void SetTitleOverlayForTests(bool value) => _titleOverlayCheck.IsChecked = value;
+
+    internal void SetTitlePositionForTests(ChartExTitlePosition value) =>
+        _titlePositionCombo.SelectedIndex = _session.FindTitlePositionIndex(value);
+
+    internal void SetTitleAlignmentForTests(ChartExTitleAlignment value) =>
+        _titleAlignmentCombo.SelectedIndex = _session.FindTitleAlignmentIndex(value);
 
     internal void SetPlotVisibleOnlyForTests(bool value) => _plotVisibleOnlyCheck.IsChecked = value;
 
@@ -345,6 +369,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private ChartDisplayOptionsDialogInput ReadInput() => new(
         _titleBox.Text,
         _titleOverlayCheck.IsChecked == true,
+        _titlePositionCombo.SelectedIndex,
+        _titleAlignmentCombo.SelectedIndex,
         _plotVisibleOnlyCheck.IsChecked == true,
         _roundedCornersCheck.IsChecked == true,
         _styleCombo.SelectedIndex,

@@ -171,6 +171,35 @@ public sealed class ChartAxisDisplayOptionsDialogSessionTests
     }
 
     [Fact]
+    public void DisplaySession_ProjectsAndDispatchesChartExTitleLayoutWithUndo()
+    {
+        var chart = new ChartShape
+        {
+            IsChartEx = true,
+            ChartExTitlePosition = ChartExTitlePosition.Top,
+            ChartExTitleAlignment = ChartExTitleAlignment.Center,
+        };
+        var editor = CreateEditor(chart);
+        var session = new ChartDisplayOptionsDialogSession(editor, CultureInfo.InvariantCulture);
+
+        session.State.SupportsChartExTitleLayout.Should().BeTrue();
+        var result = session.Submit(DisplayInput(session.State) with
+        {
+            TitlePositionIndex = session.FindTitlePositionIndex(ChartExTitlePosition.Left),
+            TitleAlignmentIndex = session.FindTitleAlignmentIndex(ChartExTitleAlignment.Far),
+        });
+
+        result.ShouldClose.Should().BeTrue();
+        chart.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Left);
+        chart.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Far);
+
+        editor.Undo();
+
+        chart.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Top);
+        chart.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Center);
+    }
+
+    [Fact]
     public void DisplaySession_InvalidPercentReturnsEstablishedMessageWithoutDispatch()
     {
         var chart = new ChartShape { BarGapWidthPercent = 80 };
@@ -219,6 +248,8 @@ public sealed class ChartAxisDisplayOptionsDialogSessionTests
     private static ChartDisplayOptionsDialogInput DisplayInput(ChartDisplayOptionsDialogState state) => new(
         state.Title,
         state.TitleOverlay,
+        state.TitlePositionIndex,
+        state.TitleAlignmentIndex,
         state.PlotVisibleOnly,
         state.RoundedCorners,
         state.StyleIndex,

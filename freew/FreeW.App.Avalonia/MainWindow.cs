@@ -1078,6 +1078,14 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
+    private async Task OpenUpdateIndexDialogAsync()
+    {
+        var result = await InsertIndexDialog.ShowUpdateAsync(this);
+        if (result is not null)
+            _editor.RefreshIndex(result.Identifier);
+        _editor.Focus();
+    }
+
     private static MasterSourceStore CreateMasterSourceStore(IReadOnlyList<Source> sources) =>
         new()
         {
@@ -1836,6 +1844,7 @@ public sealed partial class MainWindow : Window
             OpenManageSourcesDialog: () => _ = OpenManageSourcesDialogAsync(),
             OpenMarkIndexEntryDialog: () => _ = OpenMarkIndexEntryDialogAsync(),
             OpenInsertIndexDialog: () => _ = OpenInsertIndexDialogAsync(),
+            OpenUpdateIndexDialog: () => _ = OpenUpdateIndexDialogAsync(),
             OpenMarkCitationDialog: () => _ = OpenMarkCitationDialogAsync(),
             OpenFootnoteDialog: () => _ = OpenNoteDialogAsync(footnote: true),
             OpenEndnoteDialog: () => _ = OpenNoteDialogAsync(footnote: false),

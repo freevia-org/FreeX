@@ -1339,6 +1339,37 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartDisplayOptions_ChartExTitleLayout_ChangesAndUndoRestoresIt()
+    {
+        var (presentation, bus, id) = MakeChartPresentation();
+        var chart = presentation.Slides[0].Shapes[0].Chart!;
+        chart.IsChartEx = true;
+        chart.ChartExTitlePosition = ChartExTitlePosition.Left;
+        chart.ChartExTitleAlignment = ChartExTitleAlignment.Near;
+
+        bus.Execute(new SetChartDisplayOptionsCommand(
+            0,
+            id,
+            new ChartDisplayOptions(
+                null,
+                null,
+                false,
+                DataLabelPosition.Center,
+                false,
+                false,
+                ChartExTitlePosition: ChartExTitlePosition.Right,
+                ChartExTitleAlignment: ChartExTitleAlignment.Far)));
+
+        chart.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Right);
+        chart.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Far);
+
+        bus.Undo();
+
+        chart.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Left);
+        chart.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Near);
+    }
+
+    [Fact]
     public void SetChartDisplayOptions_WaterfallConnectorLines_RoundTripsAndUndo()
     {
         var (p, bus, id) = MakeChartPresentation();

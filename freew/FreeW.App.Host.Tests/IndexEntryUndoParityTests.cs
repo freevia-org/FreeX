@@ -47,7 +47,7 @@ public sealed class IndexEntryUndoParityTests
         editor.Model.Blocks.OfType<Paragraph>()
             .Where(DocumentIndex.IsIndexParagraph)
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Index", "Alpha, IV, V", "Beta, V");
+            .Should().Equal("A", "Alpha, IV, V", "B", "Beta, V");
     }
 
     [StaFact]
@@ -71,8 +71,8 @@ public sealed class IndexEntryUndoParityTests
         editor.InsertIndex();
         editor.InsertIndex("People");
 
-        IndexText(editor, identifier: null).Should().Equal("Index", "Alpha, 1");
-        IndexText(editor, "People").Should().Equal("Index", "Ada, 1");
+        IndexText(editor, identifier: null).Should().Equal("A", "Alpha, 1");
+        IndexText(editor, "People").Should().Equal("A", "Ada, 1");
         editor.Model.Blocks.Should().NotContain(block => DocumentIndex.IsIndexParagraph(block, "Places"));
     }
 
@@ -126,7 +126,7 @@ public sealed class IndexEntryUndoParityTests
             .Cast<Paragraph>()
             .ToArray();
         defaultRegionAfter.Should().BeEquivalentTo(defaultRegionBefore, options => options.WithStrictOrdering());
-        IndexText(editor, "People").Should().Equal("Index", "Ada, 1", "Grace, 1");
+        IndexText(editor, "People").Should().Equal("A", "Ada, 1", "G", "Grace, 1");
         editor.Model.Blocks
             .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
             .Should().NotContain(peopleHeading)
