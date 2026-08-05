@@ -133,6 +133,7 @@ public enum ZoomObjectPropertiesDialogField
     FrameBorderDash,
     FrameBorderGradient,
     FrameBorderPattern,
+    FrameBorderShadow,
     FrameGeometry,
     CropEdges,
     SummaryTileLayout,
@@ -167,7 +168,9 @@ public sealed record ZoomObjectPropertiesDialogEnablement(
     bool FrameBorderPatternFields,
     bool FrameBorderNoFillToggle,
     bool FrameBorderThemeToggle,
-    bool FrameBorderThemeColor);
+    bool FrameBorderThemeColor,
+    bool FrameBorderShadowToggle,
+    bool FrameBorderShadowFields);
 
 public sealed record ZoomObjectPropertiesDialogFields(
     bool ReturnToParent,
@@ -190,6 +193,12 @@ public sealed record ZoomObjectPropertiesDialogFields(
     string FrameBorderPatternForeground,
     string FrameBorderPatternBackground,
     bool FrameBorderNoFillEnabled,
+    bool FrameBorderShadowEnabled,
+    string FrameBorderShadowColor,
+    string FrameBorderShadowAlpha,
+    string FrameBorderShadowBlur,
+    string FrameBorderShadowDistance,
+    string FrameBorderShadowDirection,
     string FrameGeometry,
     string CropEdges,
     string SummaryOffset,
@@ -216,6 +225,12 @@ public sealed record ZoomObjectPropertiesDialogInput(
     string? FrameBorderPatternForeground,
     string? FrameBorderPatternBackground,
     bool FrameBorderNoFillEnabled,
+    bool FrameBorderShadowEnabled,
+    string? FrameBorderShadowColor,
+    string? FrameBorderShadowAlpha,
+    string? FrameBorderShadowBlur,
+    string? FrameBorderShadowDistance,
+    string? FrameBorderShadowDirection,
     string? FrameGeometry,
     string? CropEdges,
     int SummaryTileIndex,
@@ -378,6 +393,19 @@ public sealed class ZoomObjectPropertiesDialogSession
             frameBorderPattern = null;
         }
 
+        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderShadow(
+                input.FrameBorderShadowColor,
+                input.FrameBorderShadowAlpha,
+                input.FrameBorderShadowBlur,
+                input.FrameBorderShadowDistance,
+                input.FrameBorderShadowDirection,
+                input.FrameBorderShadowEnabled,
+                out var frameBorderShadow))
+            return Invalid(
+                ZoomObjectPropertiesDialogField.FrameBorderShadow,
+                ZoomObjectPropertiesPlanner.InvalidFrameBorderShadowMessage,
+                out validation);
+
         if (!ZoomObjectPropertiesPlanner.TryParseFrameGeometry(
                 input.FrameGeometry,
                 out var frameGeometry))
@@ -440,7 +468,9 @@ public sealed class ZoomObjectPropertiesDialogSession
             frameBorderGradient,
             frameBorderPattern,
             noFillEnabled ? true : null,
-            themeColor);
+            themeColor,
+            frameBorderShadow,
+            input.FrameBorderShadowEnabled ? true : false);
 
         ZoomObjectPropertiesPlanner.SummaryZoomTilePropertiesEdit? summaryTileProperties = null;
         var applyToAll = _summaryTargets.Count > 0 && input.ApplySummaryPropertiesToAllTiles;
@@ -473,7 +503,8 @@ public sealed class ZoomObjectPropertiesDialogSession
         bool gradientEnabled,
         bool patternEnabled,
         bool noFillEnabled,
-        bool themeEnabled)
+        bool themeEnabled,
+        bool shadowEnabled)
     {
         var noFill = frameBorderEnabled && noFillEnabled;
         var gradient = frameBorderEnabled && gradientEnabled && !noFill;
@@ -490,7 +521,9 @@ public sealed class ZoomObjectPropertiesDialogSession
             FrameBorderPatternFields: pattern,
             FrameBorderNoFillToggle: frameBorderEnabled,
             FrameBorderThemeToggle: frameBorderEnabled,
-            FrameBorderThemeColor: theme);
+            FrameBorderThemeColor: theme,
+            FrameBorderShadowToggle: frameBorderEnabled,
+            FrameBorderShadowFields: frameBorderEnabled && shadowEnabled);
     }
 
     private ZoomObjectPropertiesDialogFields BuildFields(int summaryTileIndex)
@@ -520,6 +553,12 @@ public sealed class ZoomObjectPropertiesDialogSession
             FrameBorderPatternForeground: ZoomObjectPropertiesPlanner.FormatFrameBorderPatternForeground(properties),
             FrameBorderPatternBackground: ZoomObjectPropertiesPlanner.FormatFrameBorderPatternBackground(properties),
             FrameBorderNoFillEnabled: ZoomObjectPropertiesPlanner.IsFrameBorderNoFillEnabled(properties),
+            FrameBorderShadowEnabled: ZoomObjectPropertiesPlanner.IsFrameBorderShadowEnabled(properties),
+            FrameBorderShadowColor: ZoomObjectPropertiesPlanner.FormatFrameBorderShadowColor(properties),
+            FrameBorderShadowAlpha: ZoomObjectPropertiesPlanner.FormatFrameBorderShadowAlpha(properties),
+            FrameBorderShadowBlur: ZoomObjectPropertiesPlanner.FormatFrameBorderShadowBlur(properties),
+            FrameBorderShadowDistance: ZoomObjectPropertiesPlanner.FormatFrameBorderShadowDistance(properties),
+            FrameBorderShadowDirection: ZoomObjectPropertiesPlanner.FormatFrameBorderShadowDirection(properties),
             FrameGeometry: ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
                 geometry => string.Equals(geometry, properties.FrameGeometry, StringComparison.OrdinalIgnoreCase))
                 ?? "rect",

@@ -82,6 +82,57 @@ public class ComplexFieldRoundTripTests
     }
 
     [Fact]
+    public void IndexMark_EmitsInstructionOnlyXeFieldAndReopensAsDurableOccurrence()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("Alpha"), DocumentIndex.MarkRun("Alpha topic") }
+        });
+
+        var root = DocumentXml(doc);
+        root.Descendants(W + "fldChar")
+            .Select(element => element.Attribute(W + "fldCharType")?.Value)
+            .Should().Equal("begin", "end");
+        root.Descendants(W + "instrText").Single().Value.Should().Be(" XE \"Alpha topic\" ");
+
+        var reopened = RoundTrip(doc);
+        var mark = reopened.Blocks.OfType<Paragraph>().Single().Runs.Single(run => run.ComplexField is not null);
+        DocumentIndex.MarkedTerm(mark).Should().Be("Alpha topic");
+        DocumentIndex.Build(reopened).Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Alpha topic, 1");
+    }
+
+    [Fact]
+    public void HierarchicalCrossReferenceIndexMark_RoundTripsExactXeSwitches()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Transport"),
+                DocumentIndex.MarkRun(new IndexMark("Transportation", "Rail", "See Trains"))
+            }
+        });
+
+        var root = DocumentXml(doc);
+        root.Descendants(W + "fldChar")
+            .Select(element => element.Attribute(W + "fldCharType")?.Value)
+            .Should().Equal("begin", "end");
+        root.Descendants(W + "instrText").Single().Value
+            .Should().Be(" XE \"Transportation:Rail\" \\t \"See Trains\" ");
+
+        var reopened = RoundTrip(doc);
+        var run = reopened.Blocks.OfType<Paragraph>().Single().Runs.Single(candidate => candidate.ComplexField is not null);
+        DocumentIndex.MarkedEntry(run).Should().Be(new IndexMark("Transportation", "Rail", "See Trains"));
+        DocumentIndex.Build(reopened).Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Transportation", "Rail. See Trains");
+    }
+
+    [Fact]
     public void NativeMailMergeControlFields_EmitInstructionsAndRoundTripCachedLabels()
     {
         var doc = TextDocument.CreateEmpty();

@@ -16223,19 +16223,38 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Marks <paramref name="term"/> for the document index (appends it to
-    /// <see cref="TextDocument.IndexEntries"/>). Blank terms and exact case-insensitive duplicates are
-    /// ignored so the side-store stays clean; the generated index also de-duplicates. Does not touch the
-    /// visible flow.
+    /// Marks <paramref name="term"/> for the document index by inserting Word's hidden <c>XE</c> field at
+    /// the caret. Blank terms and case-insensitive duplicates in the same paragraph are ignored; repeated
+    /// marks in different paragraphs contribute distinct page occurrences. The textless field does not
+    /// change visible flow and is undoable through the shared command bus.
     /// </summary>
     public void MarkIndexEntry(string term)
+        => MarkIndexEntry(new IndexMark(term ?? string.Empty));
+
+    /// <summary>Marks a structured main/subentry or cross-reference index entry at the caret.</summary>
+    public void MarkIndexEntry(IndexMark mark)
     {
+        ArgumentNullException.ThrowIfNull(mark);
         CommitToModel();
-        var trimmed = term?.Trim() ?? string.Empty;
-        if (trimmed.Length == 0)
+        var markRun = DocumentIndex.MarkRun(mark);
+        if (DocumentIndex.MarkedEntry(markRun) is not { MainEntry.Length: > 0 } normalized)
             return;
-        _commands.Execute(new AddIndexEntryCommand(trimmed));
+        if (!TryGetCurrentBodyCaretTarget(out var paragraphIndex, out var textOffset)
+            || _model.Blocks[paragraphIndex] is not ModelParagraph paragraph
+            || paragraph.Runs.Any(run => SameIndexMark(DocumentIndex.MarkedEntry(run), normalized)))
+        {
+            return;
+        }
+
+        _commands.Execute(new ReplaceParagraphRunsCommand(paragraphIndex, target =>
+            RevisionEditPlanner.InsertRunAtOffset(target, textOffset, markRun)));
+        PlaceCaretAtModelTextOffset(paragraphIndex, textOffset);
     }
+
+    private static bool SameIndexMark(IndexMark? left, IndexMark right) =>
+        left is not null
+        && string.Equals(left.EntryText, right.EntryText, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(left.CrossReference, right.CrossReference, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Insert an index generated from the document's marked <see cref="TextDocument.IndexEntries"/> at the
@@ -16255,7 +16274,7 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
 
-        var entries = DocumentIndex.Build(_model);
+        var entries = DocumentIndex.Build(_model, BuildGeneratedPageTextResolver());
         foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
     }
@@ -16284,7 +16303,7 @@ public sealed class DocumentView : RichTextBox
         for (var i = indexParagraphs.Count - 1; i >= 0; i--)
             _commands.Execute(new DeleteParagraphCommand(indexParagraphs[i]));
 
-        var entries = DocumentIndex.Build(_model);
+        var entries = DocumentIndex.Build(_model, BuildGeneratedPageTextResolver());
         var index = Math.Clamp(insertAt, 0, _model.Blocks.Count);
         foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));

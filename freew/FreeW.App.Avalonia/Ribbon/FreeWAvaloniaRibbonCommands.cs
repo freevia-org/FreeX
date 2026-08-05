@@ -1395,7 +1395,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.tof-refresh.figure", new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Figure)));
         r.Register("freew.tof-refresh.table", new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Table)));
         r.Register("freew.tof-refresh.equation", new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Equation)));
-        r.Register("freew.index-mark", new ActionRibbonCommand(() => editor.MarkIndexEntry()));
+        r.Register("freew.index-mark", new ActionRibbonCommand(
+            callbacks.OpenMarkIndexEntryDialog ?? (() => editor.MarkIndexEntry())));
         r.Register("freew.index-insert", new ActionRibbonCommand(editor.InsertIndex));
         r.Register("freew.index-refresh", new ActionRibbonCommand(editor.RefreshIndex));
         r.Register("freew.mark-citation", new ActionRibbonCommand(callbacks.OpenMarkCitationDialog ?? (() => { })));

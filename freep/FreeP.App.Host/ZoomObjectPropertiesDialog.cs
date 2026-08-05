@@ -16,10 +16,16 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private readonly CheckBox _frameBorderPatternEnabled;
     private readonly CheckBox _frameBorderNoFillEnabled;
     private readonly CheckBox _frameBorderThemeEnabled;
+    private readonly CheckBox _frameBorderShadowEnabled;
     private readonly ComboBox _imageType;
     private readonly TextBox _transitionDuration;
     private readonly TextBox _frameBorderColor;
     private readonly ComboBox _frameBorderThemeColor;
+    private readonly TextBox _frameBorderShadowColor;
+    private readonly TextBox _frameBorderShadowAlpha;
+    private readonly TextBox _frameBorderShadowBlur;
+    private readonly TextBox _frameBorderShadowDistance;
+    private readonly TextBox _frameBorderShadowDirection;
     private readonly TextBox _frameBorderWidth;
     private readonly ComboBox _frameBorderDash;
     private readonly TextBox _frameBorderGradientStart;
@@ -183,6 +189,35 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _frameBorderPatternEnabled.Unchecked += (_, _) => SyncFrameBorderState();
         _frameBorderNoFillEnabled.Unchecked += (_, _) => SyncFrameBorderState();
         _frameBorderThemeEnabled.Unchecked += (_, _) => SyncFrameBorderState();
+        _frameBorderShadowEnabled = new CheckBox
+        {
+            Content = "Use outer border shadow",
+            IsChecked = fields.FrameBorderShadowEnabled,
+        };
+        _frameBorderShadowColor = new TextBox
+        {
+            Text = fields.FrameBorderShadowColor,
+            MinWidth = 180,
+            ToolTip = "six-digit RGB value; for example 404040",
+        };
+        _frameBorderShadowAlpha = new TextBox
+        {
+            Text = fields.FrameBorderShadowAlpha, MinWidth = 180,
+        };
+        _frameBorderShadowBlur = new TextBox
+        {
+            Text = fields.FrameBorderShadowBlur, MinWidth = 180,
+        };
+        _frameBorderShadowDistance = new TextBox
+        {
+            Text = fields.FrameBorderShadowDistance, MinWidth = 180,
+        };
+        _frameBorderShadowDirection = new TextBox
+        {
+            Text = fields.FrameBorderShadowDirection, MinWidth = 180,
+        };
+        _frameBorderShadowEnabled.Checked += (_, _) => SyncFrameBorderState();
+        _frameBorderShadowEnabled.Unchecked += (_, _) => SyncFrameBorderState();
         _frameGeometry = new ComboBox
         {
             ItemsSource = ZoomObjectPropertiesPlanner.FrameGeometryOptions,
@@ -215,7 +250,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         }
 
         var grid = new Grid { Margin = new Thickness(14) };
-        for (var i = 0; i < 23 + (_session.HasSummaryTargets ? 4 : 0); i++)
+        for (var i = 0; i < 29 + (_session.HasSummaryTargets ? 4 : 0); i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -234,6 +269,14 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         Grid.SetColumnSpan(_frameBorderThemeEnabled, 2);
         grid.Children.Add(_frameBorderThemeEnabled);
         AddRow(grid, row++, "Theme color:", _frameBorderThemeColor);
+        Grid.SetRow(_frameBorderShadowEnabled, row++);
+        Grid.SetColumnSpan(_frameBorderShadowEnabled, 2);
+        grid.Children.Add(_frameBorderShadowEnabled);
+        AddRow(grid, row++, "Shadow color:", _frameBorderShadowColor);
+        AddRow(grid, row++, "Shadow alpha (%):", _frameBorderShadowAlpha);
+        AddRow(grid, row++, "Shadow blur (pt):", _frameBorderShadowBlur);
+        AddRow(grid, row++, "Shadow distance (pt):", _frameBorderShadowDistance);
+        AddRow(grid, row++, "Shadow direction (deg):", _frameBorderShadowDirection);
         AddRow(grid, row++, "Border width (pt):", _frameBorderWidth);
         AddRow(grid, row++, "Border dash:", _frameBorderDash);
         Grid.SetRow(_frameBorderGradientEnabled, row++);
@@ -323,6 +366,12 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             FrameBorderPatternForeground: _frameBorderPatternForeground.Text,
             FrameBorderPatternBackground: _frameBorderPatternBackground.Text,
             FrameBorderNoFillEnabled: _frameBorderNoFillEnabled.IsChecked == true,
+            FrameBorderShadowEnabled: _frameBorderShadowEnabled.IsChecked == true,
+            FrameBorderShadowColor: _frameBorderShadowColor.Text,
+            FrameBorderShadowAlpha: _frameBorderShadowAlpha.Text,
+            FrameBorderShadowBlur: _frameBorderShadowBlur.Text,
+            FrameBorderShadowDistance: _frameBorderShadowDistance.Text,
+            FrameBorderShadowDirection: _frameBorderShadowDirection.Text,
             FrameGeometry: _frameGeometry.SelectedItem?.ToString(),
             CropEdges: _cropEdges.Text,
             SummaryTileIndex: _summaryTile?.SelectedIndex ?? -1,
@@ -368,6 +417,12 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _frameBorderNoFillEnabled.IsChecked = fields.FrameBorderNoFillEnabled;
         _frameBorderThemeEnabled.IsChecked = fields.FrameBorderThemeEnabled;
         _frameBorderThemeColor.SelectedItem = fields.FrameBorderThemeColor;
+        _frameBorderShadowEnabled.IsChecked = fields.FrameBorderShadowEnabled;
+        _frameBorderShadowColor.Text = fields.FrameBorderShadowColor;
+        _frameBorderShadowAlpha.Text = fields.FrameBorderShadowAlpha;
+        _frameBorderShadowBlur.Text = fields.FrameBorderShadowBlur;
+        _frameBorderShadowDistance.Text = fields.FrameBorderShadowDistance;
+        _frameBorderShadowDirection.Text = fields.FrameBorderShadowDirection;
         SyncFrameBorderState();
         _frameGeometry.SelectedItem = fields.FrameGeometry;
         _cropEdges.Text = fields.CropEdges;
@@ -399,7 +454,8 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             _frameBorderGradientEnabled.IsChecked == true,
             _frameBorderPatternEnabled.IsChecked == true,
             _frameBorderNoFillEnabled.IsChecked == true,
-            _frameBorderThemeEnabled.IsChecked == true);
+            _frameBorderThemeEnabled.IsChecked == true,
+            _frameBorderShadowEnabled.IsChecked == true);
         _transitionDuration.IsEnabled = enablement.TransitionDuration;
         _frameBorderColor.IsEnabled = enablement.FrameBorderColor;
         _frameBorderWidth.IsEnabled = enablement.FrameBorderWidth;
@@ -415,5 +471,11 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _frameBorderNoFillEnabled.IsEnabled = enablement.FrameBorderNoFillToggle;
         _frameBorderThemeEnabled.IsEnabled = enablement.FrameBorderThemeToggle;
         _frameBorderThemeColor.IsEnabled = enablement.FrameBorderThemeColor;
+        _frameBorderShadowEnabled.IsEnabled = enablement.FrameBorderShadowToggle;
+        _frameBorderShadowColor.IsEnabled = enablement.FrameBorderShadowFields;
+        _frameBorderShadowAlpha.IsEnabled = enablement.FrameBorderShadowFields;
+        _frameBorderShadowBlur.IsEnabled = enablement.FrameBorderShadowFields;
+        _frameBorderShadowDistance.IsEnabled = enablement.FrameBorderShadowFields;
+        _frameBorderShadowDirection.IsEnabled = enablement.FrameBorderShadowFields;
     }
 }

@@ -26,7 +26,9 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("Use pattern border");
         source.Should().Contain("Use no-fill border");
         source.Should().Contain("Use theme border color");
+        source.Should().Contain("Use outer border shadow");
         source.Should().Contain("FrameBorderThemeColor");
+        source.Should().Contain("FrameBorderShadowEnabled:");
         source.Should().Contain("Frame shape:");
         source.Should().Contain("_frameBorderColor.IsEnabled");
         source.Should().Contain("Apply format to all Summary Zoom tiles");
@@ -73,6 +75,7 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("validation!.Message");
         source.Should().Contain("AvaloniaUserMessageDialog.ShowWarningAsync(");
         source.Should().NotContain("InvalidTransitionDurationMessage");
+        source.Should().NotContain("InvalidFrameBorderShadowMessage");
         source.Should().NotContain("TryParseTransitionDuration");
         source.Should().NotContain("_validation");
     }

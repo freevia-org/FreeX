@@ -21677,20 +21677,48 @@ public sealed class DocumentView : Control
         if (resolved.Length == 0)
             return;
 
-        _bus.Execute(new AddIndexEntryCommand(resolved));
+        MarkIndexEntry(new IndexMark(resolved));
+    }
+
+    public void MarkIndexEntry(IndexMark mark)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        var markRun = DocumentIndex.MarkRun(mark);
+        if (DocumentIndex.MarkedEntry(markRun) is not { MainEntry.Length: > 0 } normalized)
+            return;
+
+        var hostIndex = ResolveReferenceHostBlock();
+        if (hostIndex < 0
+            || _doc.Blocks[hostIndex] is not Paragraph paragraph
+            || paragraph.Runs.Any(run => SameIndexMark(DocumentIndex.MarkedEntry(run), normalized)))
+        {
+            return;
+        }
+
+        var offset = ReferenceInsertionOffset(hostIndex);
+        _bus.Execute(new ReplaceParagraphRunsCommand(hostIndex, target =>
+            InsertRunAtOffset(target, offset, markRun)));
+        _cellCaret = null;
+        _caret = new DocPosition(hostIndex, Math.Clamp(offset, 0, BlockLength(hostIndex)));
+        _selectionAnchor = _caret;
         Focus();
     }
+
+    private static bool SameIndexMark(IndexMark? left, IndexMark right) =>
+        left is not null
+        && string.Equals(left.EntryText, right.EntryText, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(left.CrossReference, right.CrossReference, StringComparison.OrdinalIgnoreCase);
 
     public void InsertIndex()
     {
         DocumentIndex.EnsureStyles(_doc);
-        InsertGeneratedReferenceBlocks(DocumentIndex.Build(_doc), "Insert Index", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+        InsertGeneratedReferenceBlocks(DocumentIndex.Build(_doc, BuildGeneratedPageTextResolver()), "Insert Index", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
     }
 
     public void RefreshIndex()
     {
         DocumentIndex.EnsureStyles(_doc);
-        RefreshGeneratedReferenceBlocks(DocumentIndex.IsIndexParagraph, () => DocumentIndex.Build(_doc), "Update Index");
+        RefreshGeneratedReferenceBlocks(DocumentIndex.IsIndexParagraph, () => DocumentIndex.Build(_doc, BuildGeneratedPageTextResolver()), "Update Index");
     }
 
     public void InsertTableOfFigures(CaptionLabel label = CaptionLabel.Figure)

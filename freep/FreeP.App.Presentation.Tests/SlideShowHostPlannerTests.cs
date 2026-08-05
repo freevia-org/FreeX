@@ -595,6 +595,19 @@ public sealed class SlideShowHostPlannerTests
     }
 
     [Fact]
+    public void BuildPresenterState_UsesAuthoredPenColorWhenNoSessionToolPlanIsProvided()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.PresenterPenColor = new ThemeAwareColor(SrgbColor.FromRgb(0x123456));
+        var controller = new SlideShowController(presentation.Slides, startIndex: 0);
+        var now = new DateTimeOffset(2026, 8, 5, 12, 0, 0, TimeSpan.Zero);
+
+        var state = SlideShowHostPlanner.BuildPresenterState(presentation, controller, now, now);
+
+        state.ToolPlan.PointerInk.InkState.ColorHex.Should().Be("#123456");
+    }
+
+    [Fact]
     public void HitTesting_UsesSharedSlideGeometryForTriggersAndHyperlinks()
     {
         var slide = new Slide();

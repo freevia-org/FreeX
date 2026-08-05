@@ -43,6 +43,9 @@ internal static class AvaloniaManagedContextMenu
         menu.Closed += (_, _) => Dispatcher.UIThread.Post(() => anchor.Focus());
         menu.KeyDown += (_, args) =>
         {
+            if (!menu.IsOpen)
+                return;
+
             if (args.Key == Key.Escape)
             {
                 menu.Close();

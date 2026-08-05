@@ -183,6 +183,8 @@ public sealed record SlideShowShapeAnimationPlaybackPlan(
     public int? RepeatCount { get; init; }
     public bool RepeatIndefinitely { get; init; }
     public bool AutoReverse { get; init; }
+    public int? Acceleration { get; init; }
+    public int? Deceleration { get; init; }
     /// <summary>Resolved authored RGB source color for a native color emphasis effect.</summary>
     public string? ColorFromHex { get; init; }
     /// <summary>Resolved authored RGB destination color for a native color emphasis effect.</summary>
@@ -407,6 +409,8 @@ public static class SlideShowPlaybackPlanner
             RepeatCount = animation.RepeatCount,
             RepeatIndefinitely = animation.RepeatIndefinitely,
             AutoReverse = animation.AutoReverse,
+            Acceleration = animation.Acceleration,
+            Deceleration = animation.Deceleration,
             ColorFromHex = colorFromHex,
             ColorToHex = colorToHex,
             FromScaleX = fromScaleX,
@@ -676,6 +680,39 @@ public static class SlideShowPlaybackPlanner
             && animation.Preset is AnimationPreset.Spiral or AnimationPreset.Swivel
             ? -360
             : 360;
+
+    /// <summary>
+    /// Applies the authored PowerPoint acceleration/deceleration envelope to normalized
+    /// effect time. Overlapping malformed values are proportionally reduced while keeping
+    /// the effect duration and endpoints intact.
+    /// </summary>
+    public static double ApplyTimingEasing(double progress, int? acceleration, int? deceleration)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        var accel = Math.Clamp((acceleration ?? 0) / 100000d, 0, 1);
+        var decel = Math.Clamp((deceleration ?? 0) / 100000d, 0, 1);
+        if (accel + decel > 1)
+        {
+            var scale = 1 / (accel + decel);
+            accel *= scale;
+            decel *= scale;
+        }
+
+        if (accel > 0 && progress < accel)
+        {
+            var t = progress / accel;
+            return accel * t * t * (3 - 2 * t);
+        }
+
+        var decelStart = 1 - decel;
+        if (decel > 0 && progress > decelStart)
+        {
+            var t = (progress - decelStart) / decel;
+            return decelStart + decel * t * t * (3 - 2 * t);
+        }
+
+        return progress;
+    }
 
     private static (double X, double Y) ResolveFlyInOffset(AnimationDirection? direction) =>
         direction switch

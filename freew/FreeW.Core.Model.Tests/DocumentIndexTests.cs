@@ -54,8 +54,94 @@ public class DocumentIndexTests
 
         index.Select(p => p.PlainText).Should().Equal(
             DocumentIndex.HeadingText,
-            "alpha",
-            "Zebra");
+            "alpha, 1",
+            "Zebra, 1");
+    }
+
+    [Fact]
+    public void Build_HiddenMarksAggregateDistinctLogicalPagesAndOverrideLegacySideStore()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("First"), DocumentIndex.MarkRun("Alpha") }
+        });
+        doc.Blocks.Add(DocumentOps.CreatePageBreak());
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Second"),
+                DocumentIndex.MarkRun("alpha"),
+                DocumentIndex.MarkRun("Beta"),
+                DocumentIndex.MarkRun("Alpha")
+            }
+        });
+        doc.IndexEntries.Add(new IndexEntry("Alpha"));
+
+        var index = DocumentIndex.Build(doc, blockIndex => blockIndex == 0 ? "iv" : "1");
+
+        index.Select(paragraph => paragraph.PlainText).Should().Equal(
+            DocumentIndex.HeadingText,
+            "Alpha, iv, 1",
+            "Beta, 1");
+    }
+
+    [Fact]
+    public void MarkRun_RoundTripsQuotedTermThroughFieldInstructionParser()
+    {
+        var mark = DocumentIndex.MarkRun("  Alpha \\\"quoted\\\"  ");
+
+        mark.Text.Should().BeEmpty();
+        mark.ComplexField!.Keyword.Should().Be("XE");
+        DocumentIndex.MarkedTerm(mark).Should().Be("Alpha \\\"quoted\\\"");
+        DocumentIndex.MarkedTerm(new Run("Alpha")).Should().BeNull();
+    }
+
+    [Fact]
+    public void Build_HierarchicalXeMarksEmitIndentedSubentriesAndCrossReferenceWithoutPage()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("Cats"), DocumentIndex.MarkRun(new IndexMark("Animals", "Cats")) } });
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("Dogs"), DocumentIndex.MarkRun(new IndexMark("Animals", "Dogs")) } });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Transport"),
+                DocumentIndex.MarkRun(new IndexMark("Transportation", CrossReference: "See Vehicles"))
+            }
+        });
+
+        var index = DocumentIndex.Build(doc, _ => "1");
+
+        index.Select(paragraph => paragraph.PlainText).Should().Equal(
+            DocumentIndex.HeadingText,
+            "Animals",
+            "Cats, 1",
+            "Dogs, 1",
+            "Transportation. See Vehicles");
+        index[1].Formatting.Should().Match<ParagraphFormatting>(format =>
+            format.IndentLeftPt == 12 && format.FirstLineIndentPt == -12);
+        index[2].Formatting.Should().Match<ParagraphFormatting>(format =>
+            format.IndentLeftPt == 24 && format.FirstLineIndentPt == -12);
+        index[4].PlainText.Should().NotContain(", 1");
+    }
+
+    [Fact]
+    public void MarkRun_SerializesAndParsesSubentryAndCrossReference()
+    {
+        var run = DocumentIndex.MarkRun(new IndexMark(
+            "  Animals  ",
+            " Cats:Longhair ",
+            " See Pet care "));
+
+        run.ComplexField!.Instruction.Should().Be(" XE \"Animals:Cats:Longhair\" \\t \"See Pet care\" ");
+        DocumentIndex.MarkedEntry(run).Should().Be(new IndexMark(
+            "Animals",
+            "Cats:Longhair",
+            "See Pet care"));
+        DocumentIndex.MarkedTerm(run).Should().Be("Animals:Cats:Longhair");
     }
 
     [Fact]

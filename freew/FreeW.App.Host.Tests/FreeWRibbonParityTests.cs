@@ -423,7 +423,7 @@ public sealed class FreeWRibbonParityTests
             .Where(DocumentIndex.IsIndexParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Equal("Index", "Alpha", "Beta", "Gamma");
+            .Equal("Index", "Alpha, 1", "Beta, 1", "Gamma, 1");
         editor.Model.Blocks.OfType<Paragraph>()
             .Count(paragraph => paragraph.StyleId == DocumentIndex.HeadingStyleId)
             .Should()

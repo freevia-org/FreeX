@@ -213,6 +213,10 @@ public static class PptxPackageReader
         // Notes master: retain the native part and expose its placeholder geometry/styles to the
         // shared notes-page planner.  This runs after slide-master themes are loaded so
         // theme-dependent notes styles resolve against the presentation's actual first theme.
+        // Re-read show properties after the first master theme is available so a theme-based
+        // p:penClr resolves against the authored presentation theme rather than the fallback.
+        ReadShowProperties(archive, presRels, presDir, presentation);
+
         var notesMasterTarget = OpcRelationships.FirstTargetByType(presRels, NotesMasterRelType);
         if (notesMasterTarget is not null)
         {
@@ -376,6 +380,9 @@ public static class PptxPackageReader
         presentation.ShowSpecialPlaceholdersOnTitleSlide = ReadBooleanOrDefault(
             showPr.Attribute("showSpecialPlsOnTitleSld")?.Value,
             defaultValue: false);
+        presentation.PresenterPenColor = PptxColorReader.TryReadColor(
+            showPr.Element(P + "penClr"),
+            presentation.Theme.ColorScheme);
         var browse = showPr.Element(P + "browse");
         var kiosk = showPr.Element(P + "kiosk");
         presentation.ShowType = browse is not null
@@ -1797,8 +1804,49 @@ public static class PptxPackageReader
             ReadZoomFrameBorderGradient(properties),
             ReadZoomFrameBorderPattern(properties),
             ReadZoomFrameBorderNoFill(properties),
-            ReadZoomFrameBorderThemeColor(properties));
+            ReadZoomFrameBorderThemeColor(properties),
+            ReadZoomFrameBorderShadow(properties),
+            ReadZoomFrameBorderShadowEnabled(properties));
         return value.IsEmpty ? null : value;
+    }
+
+    private static ZoomFrameBorderShadow? ReadZoomFrameBorderShadow(XElement properties)
+    {
+        var shadow = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "outerShdw", StringComparison.OrdinalIgnoreCase));
+        var color = shadow?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value?.Trim().TrimStart('#');
+        if (color is not { Length: 6 } || !color.All(Uri.IsHexDigit))
+            return null;
+
+        var alpha = ParseNullableInt(shadow?.Descendants().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "alpha", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value) ?? 50000;
+        var blur = ParseNullableLong(shadow?.Attribute("blurRad")?.Value) ?? 0;
+        var distance = ParseNullableLong(shadow?.Attribute("dist")?.Value) ?? 0;
+        var direction = ParseNullableInt(shadow?.Attribute("dir")?.Value) ?? 0;
+        if (alpha is < 0 or > 100000 || blur < 0 || distance < 0
+            || direction is < 0 or > 21600000)
+            return null;
+
+        return new ZoomFrameBorderShadow(color.ToUpperInvariant(), alpha, blur, distance, direction);
+    }
+
+    private static bool? ReadZoomFrameBorderShadowEnabled(XElement properties)
+    {
+        var shapeProperties = properties.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase));
+        var effectList = shapeProperties?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
+        return effectList?.Elements().Any(element =>
+            string.Equals(element.Name.LocalName, "outerShdw", StringComparison.OrdinalIgnoreCase)) == true
+            ? true
+            : null;
     }
 
     private static string? ReadZoomFrameGeometry(XElement properties)
@@ -6671,6 +6719,8 @@ public static class PptxPackageReader
 
         var repeatInfo = ReadRepeat(cTn);
         var autoReverse = ReadBoolean(cTn.Attribute("autoRev")?.Value);
+        var acceleration = ReadTimingPercentage(cTn.Attribute("accel")?.Value);
+        var deceleration = ReadTimingPercentage(cTn.Attribute("decel")?.Value);
 
         var spTgt = FindSpTgt(buildPar);
         if (spTgt is null) return null;
@@ -6705,6 +6755,8 @@ public static class PptxPackageReader
             RepeatCount    = repeatInfo.Count,
             RepeatIndefinitely = repeatInfo.Indefinite,
             AutoReverse    = autoReverse,
+            Acceleration   = acceleration,
+            Deceleration   = deceleration,
             Direction      = direction,
             WheelSpokeCount = wheelSpokeCount,
             EffectSubtype  = authoredEffectSubtype,
@@ -6776,6 +6828,11 @@ public static class PptxPackageReader
 
     private static bool ReadBoolean(string? value)
         => value is "1" or "true" or "on";
+
+    private static int? ReadTimingPercentage(string? value) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? Math.Clamp(parsed, 0, 100000)
+            : null;
 
     private static int? ReadWheelSpokeCountFromFilter(string? filter)
     {
@@ -6867,6 +6924,8 @@ public static class PptxPackageReader
             RepeatCount    = repeatCount,
             RepeatIndefinitely = repeatIndefinitely,
             AutoReverse    = autoReverse,
+            Acceleration   = ReadTimingPercentage(buildPar.Element(P + "cTn")?.Attribute("accel")?.Value),
+            Deceleration   = ReadTimingPercentage(buildPar.Element(P + "cTn")?.Attribute("decel")?.Value),
             Motion         = motion,
             TriggerShapeId = triggerShapeId,
         };
@@ -7348,6 +7407,11 @@ public static class PptxPackageReader
 
     private static int? ParseNullableInt(string? value) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+
+    private static long? ParseNullableLong(string? value) =>
+        long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : null;
 

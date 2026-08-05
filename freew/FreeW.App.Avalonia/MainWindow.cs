@@ -1052,6 +1052,15 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
+    private async Task OpenMarkIndexEntryDialogAsync()
+    {
+        var dialog = new MarkIndexEntryDialog(_editor.SelectedText.Trim());
+        await dialog.ShowDialog(this);
+        if (dialog.Mark is { } mark)
+            _editor.MarkIndexEntry(mark);
+        _editor.Focus();
+    }
+
     private static MasterSourceStore CreateMasterSourceStore(IReadOnlyList<Source> sources) =>
         new()
         {
@@ -1808,6 +1817,7 @@ public sealed partial class MainWindow : Window
             OpenCrossReferenceDialog: () => _ = OpenCrossReferenceDialogAsync(),
             OpenCitationDialog: () => _ = OpenCitationDialogAsync(),
             OpenManageSourcesDialog: () => _ = OpenManageSourcesDialogAsync(),
+            OpenMarkIndexEntryDialog: () => _ = OpenMarkIndexEntryDialogAsync(),
             OpenMarkCitationDialog: () => _ = OpenMarkCitationDialogAsync(),
             OpenFootnoteDialog: () => _ = OpenNoteDialogAsync(footnote: true),
             OpenEndnoteDialog: () => _ = OpenNoteDialogAsync(footnote: false),

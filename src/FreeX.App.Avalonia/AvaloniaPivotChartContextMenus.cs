@@ -1,6 +1,7 @@
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Free.Shared.Ribbon.KeyTips;
 using FreeX.App.Services.Ribbon;
 
 namespace FreeX.App.Avalonia;
@@ -69,7 +70,19 @@ internal static class AvaloniaPivotChartFieldContextMenu
             items.Add(item);
         }
 
+        AssignUniqueKeyTips(items.OfType<MenuItem>());
         return items;
+    }
+
+    private static void AssignUniqueKeyTips(IEnumerable<MenuItem> items)
+    {
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in items)
+        {
+            var keyTip = RibbonKeyTipText.CreateUniqueKeyTip(item.Header?.ToString(), used);
+            item.InputGesture = KeyGesture.Parse(keyTip);
+            used.Add(keyTip);
+        }
     }
 }
 

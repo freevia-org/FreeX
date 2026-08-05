@@ -1921,9 +1921,9 @@ public sealed class Source
 }
 
 /// <summary>
-/// A marked index entry: a single term the document wants to list in its generated index (see
-/// <see cref="DocumentIndex"/>). Kept deliberately small (just the <see cref="Term"/>) and as a model
-/// side-store on <see cref="TextDocument.IndexEntries"/> rather than a run-level mark, so marking text
+/// A legacy side-store index term used by model-only callers. Interactive and imported marks use hidden
+/// <c>XE</c> <see cref="Run.ComplexField"/> instances so occurrence locations survive DOCX round-trip and
+/// generated indexes can resolve page references. Writing a legacy side-store term
 /// for the index never disturbs run storage and needs no docx I/O changes — the generated index is
 /// ordinary styled paragraphs that already round-trip.
 /// </summary>
@@ -3923,8 +3923,8 @@ public sealed class TextDocument
     public CitationStyle BibliographyStyle { get; set; } = CitationStyle.Apa;
 
     /// <summary>
-    /// The terms marked for the document index, in mark order. <see cref="DocumentIndex.Build(TextDocument)"/>
-    /// renders the distinct, alphabetically sorted terms as ordinary styled paragraphs. Like
+    /// Legacy document-level index terms, retained for model-only callers. They render only when no
+    /// durable body <c>XE</c> mark exists for the same term. Like
     /// <see cref="Sources"/> these are pure model data (no docx part of their own) — the generated index is
     /// ordinary styled paragraphs that already round-trip. Empty when nothing has been marked.
     /// </summary>

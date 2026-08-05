@@ -288,6 +288,157 @@ internal sealed class CitationSourcePickerDialog : FreeWDialogWindow
     }
 }
 
+internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
+{
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
+
+    private readonly TextBox _mainEntry = new() { MinWidth = 300 };
+    private readonly TextBox _subentry = new() { MinWidth = 300 };
+    private readonly RadioButton _currentPage = new()
+    {
+        Content = MarkIndexEntryDialogPlanner.CurrentPageLabel,
+        GroupName = "IndexEntryOption"
+    };
+    private readonly RadioButton _crossReferenceOption = new()
+    {
+        Content = MarkIndexEntryDialogPlanner.CrossReferenceLabel,
+        GroupName = "IndexEntryOption"
+    };
+    private readonly TextBox _crossReference = new() { MinWidth = 300 };
+    private readonly TextBlock _status = new()
+    {
+        Foreground = Brushes.DarkRed,
+        Margin = new Thickness(16, 6, 16, 0),
+        IsVisible = false
+    };
+
+    public IndexMark? Mark { get; private set; }
+
+    public MarkIndexEntryDialog(string? selectedText = null)
+    {
+        Title = MarkIndexEntryDialogPlanner.Title;
+        Width = MarkIndexEntryDialogPlanner.DialogWidth;
+        SizeToContent = SizeToContent.Height;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        CanResize = false;
+        ShowInTaskbar = false;
+
+        var state = MarkIndexEntryDialogPlanner.BuildInitialState(selectedText);
+        _mainEntry.Text = state.MainEntry;
+        _subentry.Text = state.Subentry;
+        _currentPage.IsChecked = !state.UseCrossReference;
+        _crossReferenceOption.IsChecked = state.UseCrossReference;
+        _crossReference.Text = state.CrossReference;
+        foreach (var textBox in new[] { _mainEntry, _subentry, _crossReference })
+            AvaloniaCompactDialogChrome.ApplyTextBox(textBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyRadioButton(_currentPage, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyRadioButton(_crossReferenceOption, DialogChromeStyle);
+        _currentPage.IsCheckedChanged += (_, _) => UpdateCrossReferenceState();
+        _crossReferenceOption.IsCheckedChanged += (_, _) => UpdateCrossReferenceState();
+
+        var fields = new StackPanel
+        {
+            Margin = new Thickness(
+                MarkIndexEntryDialogPlanner.ContentHorizontalMargin,
+                MarkIndexEntryDialogPlanner.ContentTopMargin,
+                MarkIndexEntryDialogPlanner.ContentHorizontalMargin,
+                0)
+        };
+        AddLabeledField(fields, MarkIndexEntryDialogPlanner.MainEntryLabel, _mainEntry);
+        AddLabeledField(fields, MarkIndexEntryDialogPlanner.SubentryLabel, _subentry);
+        fields.Children.Add(new TextBlock
+        {
+            Text = MarkIndexEntryDialogPlanner.OptionsLabel,
+            Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.LabelBottomMargin)
+        });
+        _currentPage.Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.OptionBottomMargin);
+        _crossReferenceOption.Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.OptionBottomMargin);
+        fields.Children.Add(_currentPage);
+        fields.Children.Add(_crossReferenceOption);
+        _crossReference.Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.FieldBottomMargin);
+        fields.Children.Add(_crossReference);
+
+        var markButton = Button(MarkIndexEntryDialogPlanner.MarkButtonLabel, () => Accept(), isDefault: true);
+        var cancelButton = Button(MarkIndexEntryDialogPlanner.CancelButtonLabel, () => Close(), isCancel: true);
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
+            [markButton, cancelButton],
+            new Thickness(
+                MarkIndexEntryDialogPlanner.ContentHorizontalMargin,
+                MarkIndexEntryDialogPlanner.ActionRowTopMargin,
+                MarkIndexEntryDialogPlanner.ContentHorizontalMargin,
+                MarkIndexEntryDialogPlanner.ActionRowBottomMargin));
+
+        var body = new StackPanel();
+        body.Children.Add(fields);
+        body.Children.Add(_status);
+        body.Children.Add(buttons);
+        Content = body;
+        UpdateCrossReferenceState();
+        Opened += (_, _) =>
+        {
+            _mainEntry.Focus();
+            _mainEntry.SelectAll();
+        };
+    }
+
+    internal void SetForTests(string? mainEntry, string? subentry, bool useCrossReference, string? crossReference)
+    {
+        _mainEntry.Text = mainEntry;
+        _subentry.Text = subentry;
+        _currentPage.IsChecked = !useCrossReference;
+        _crossReferenceOption.IsChecked = useCrossReference;
+        _crossReference.Text = crossReference;
+        UpdateCrossReferenceState();
+    }
+
+    internal bool AcceptForTests() => Accept(closeOnSuccess: false);
+    internal bool CrossReferenceEnabledForTests => _crossReference.IsEnabled;
+
+    private MarkIndexEntryDialogState CurrentState() => new(
+        _mainEntry.Text ?? string.Empty,
+        _subentry.Text ?? string.Empty,
+        _crossReferenceOption.IsChecked == true,
+        _crossReference.Text ?? string.Empty);
+
+    private bool Accept(bool closeOnSuccess = true)
+    {
+        if (!MarkIndexEntryDialogPlanner.TryBuildMark(CurrentState(), out var mark, out var validation))
+        {
+            _status.Text = validation?.Message ?? MarkIndexEntryDialogPlanner.MissingMainEntryMessage;
+            _status.IsVisible = true;
+            return false;
+        }
+
+        _status.IsVisible = false;
+        Mark = mark;
+        if (closeOnSuccess)
+            Close();
+        return true;
+    }
+
+    private void UpdateCrossReferenceState() =>
+        _crossReference.IsEnabled = _crossReferenceOption.IsChecked == true;
+
+    private static void AddLabeledField(StackPanel panel, string label, Control field)
+    {
+        panel.Children.Add(new TextBlock
+        {
+            Text = label,
+            Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.LabelBottomMargin)
+        });
+        field.Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.FieldBottomMargin);
+        panel.Children.Add(field);
+    }
+
+    private static Button Button(string label, Action click, bool isDefault = false, bool isCancel = false)
+    {
+        var button = new Button { Content = label, IsDefault = isDefault, IsCancel = isCancel };
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 84, isDefault: isDefault);
+        button.Click += (_, _) => click();
+        return button;
+    }
+}
+
 internal sealed class MarkCitationDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;

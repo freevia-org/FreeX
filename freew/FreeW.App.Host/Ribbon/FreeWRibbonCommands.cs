@@ -5164,20 +5164,20 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Insert > References > Mark Entry: mark a term for the document index. Seeds from the current
-    // selection's text (the usual "select then mark" gesture) and lets the user confirm or edit the term;
-    // with no selection the prompt starts blank. The view appends the term to the model's index entries
-    // (ignoring blanks/duplicates). The matching index is built later by Insert Index.
+    // Insert > References > Mark Entry: preserve Word's main/subentry and page/cross-reference choices in
+    // the hidden XE field. The selected text seeds the main entry.
     private sealed class MarkIndexEntryCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
             var seed = editor.Selection.Text?.Trim() ?? string.Empty;
-            var term = TextPrompt.Ask(Window.GetWindow(editor), "Mark Index Entry", "Index term:", seed);
-            if (string.IsNullOrWhiteSpace(term))
+            var result = MarkIndexEntryDialog.Prompt(
+                Window.GetWindow(editor),
+                MarkIndexEntryDialogPlanner.BuildInitialState(seed));
+            if (result is null)
                 return; // cancelled or empty — nothing to mark
-            editor.MarkIndexEntry(term.Trim());
+            editor.MarkIndexEntry(result.Mark);
         }
     }
 
