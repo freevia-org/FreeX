@@ -85,16 +85,31 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
 
     private void Accept()
     {
-        var categoryFilter = (_categoryCombo.SelectedItem as TableOfAuthoritiesCategoryChoice)?.Category;
-        var leader = (_leaderCombo.SelectedItem as TableOfAuthoritiesTabLeaderChoice)?.Leader ?? ToaTabLeader.Dots;
-        var state = new TableOfAuthoritiesDialogState(
-            _passimBox.IsChecked == true,
-            _keepFormattingBox.IsChecked == true,
-            categoryFilter,
-            leader);
+        var acceptance = BuildAcceptance();
+        if (!acceptance.IsAccepted)
+        {
+            FocusValidation(acceptance.Validation?.Field);
+            return;
+        }
 
-        _result = new Result(TableOfAuthoritiesDialogPlanner.BuildOptions(state));
+        _result = new Result(acceptance.Options!);
         Close();
+    }
+
+    private TableOfAuthoritiesDialogAcceptance BuildAcceptance() =>
+        TableOfAuthoritiesDialogPlanner.PlanAcceptance(
+            new TableOfAuthoritiesDialogInput(
+                _passimBox.IsChecked,
+                _keepFormattingBox.IsChecked,
+                _categoryCombo.SelectedItem as TableOfAuthoritiesCategoryChoice,
+                _leaderCombo.SelectedItem as TableOfAuthoritiesTabLeaderChoice));
+
+    private void FocusValidation(TableOfAuthoritiesDialogField? field)
+    {
+        var target = field == TableOfAuthoritiesDialogField.TabLeader
+            ? _leaderCombo
+            : _categoryCombo;
+        target.Focus();
     }
 
     // -----------------------------------------------------------------------

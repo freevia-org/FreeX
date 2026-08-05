@@ -78,6 +78,18 @@ public sealed class TableOfAuthoritiesDialogVisualParityTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task Dialog_DoesNotBuildResultWhenCategorySelectionIsMissing()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = CreateDialog();
+            Field<ComboBox>(dialog, "_category").SelectedIndex = -1;
+
+            Invoke(dialog, "BuildResultForTest").Should().BeNull();
+        }, CancellationToken.None);
+    }
+
     [Theory]
     [InlineData("initial")]
     [InlineData("populated")]

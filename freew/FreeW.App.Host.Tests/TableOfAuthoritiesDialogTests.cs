@@ -2,6 +2,8 @@ using FreeW.App.Host;
 using FreeW.Core.Model;
 using Xunit;
 using FluentAssertions;
+using System.Reflection;
+using System.Windows.Controls;
 
 namespace FreeW.App.Host.Tests;
 
@@ -98,5 +100,17 @@ public sealed class TableOfAuthoritiesDialogTests
         result.Should().NotBeNull();
         result!.Options.Should().BeEquivalentTo(
             FreeW.App.Presentation.Ribbon.TableOfAuthoritiesDialogPlanner.BuildOptions(state));
+    }
+
+    [StaFact]
+    public void Dialog_DoesNotAcceptWhenLeaderSelectionIsMissing()
+    {
+        var dlg = TableOfAuthoritiesDialog.CreateForTest();
+        var leader = (ComboBox)(typeof(TableOfAuthoritiesDialog)
+            .GetField("_leaderCombo", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(dlg)!);
+        leader.SelectedIndex = -1;
+
+        dlg.AcceptForTest().Should().BeNull();
     }
 }

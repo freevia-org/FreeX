@@ -84,14 +84,35 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
     public static Task<ToaOptions?> ShowAsync(Window owner, ToaOptions? options = null) =>
         new TableOfAuthoritiesDialog(options ?? ToaOptions.Default).ShowDialog<ToaOptions?>(owner);
 
-    internal ToaOptions BuildResultForTest() => TableOfAuthoritiesDialogPlanner.BuildOptions(
-        new TableOfAuthoritiesDialogState(
-            _passim.IsChecked == true,
-            _keepFormatting.IsChecked == true,
-            _category.SelectedIndex >= 0 ? _categories[_category.SelectedIndex].Category : null,
-            _leader.SelectedIndex >= 0 ? _leaders[_leader.SelectedIndex].Leader : ToaTabLeader.Dots));
+    internal ToaOptions? BuildResultForTest() => BuildAcceptance().Options;
 
-    private void Accept() => Close(BuildResultForTest());
+    private void Accept()
+    {
+        var acceptance = BuildAcceptance();
+        if (!acceptance.IsAccepted)
+        {
+            FocusValidation(acceptance.Validation?.Field);
+            return;
+        }
+
+        Close(acceptance.Options);
+    }
+
+    private TableOfAuthoritiesDialogAcceptance BuildAcceptance() =>
+        TableOfAuthoritiesDialogPlanner.PlanAcceptance(
+            new TableOfAuthoritiesDialogInput(
+                _passim.IsChecked,
+                _keepFormatting.IsChecked,
+                _category.SelectedItem as TableOfAuthoritiesCategoryChoice,
+                _leader.SelectedItem as TableOfAuthoritiesTabLeaderChoice));
+
+    private void FocusValidation(TableOfAuthoritiesDialogField? field)
+    {
+        var target = field == TableOfAuthoritiesDialogField.TabLeader
+            ? _leader
+            : _category;
+        target.Focus();
+    }
 
     private static ComboBox Combo(IEnumerable<object> items, int selectedIndex)
     {

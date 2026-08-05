@@ -18,6 +18,29 @@ public sealed record TableOfAuthoritiesDialogState(
     CitationCategory? CategoryFilter,
     ToaTabLeader TabLeader);
 
+public sealed record TableOfAuthoritiesDialogInput(
+    bool? UsePassim,
+    bool? KeepOriginalFormatting,
+    TableOfAuthoritiesCategoryChoice? CategorySelection,
+    TableOfAuthoritiesTabLeaderChoice? TabLeaderSelection);
+
+public enum TableOfAuthoritiesDialogField
+{
+    Category,
+    TabLeader
+}
+
+public sealed record TableOfAuthoritiesDialogValidation(
+    TableOfAuthoritiesDialogField Field,
+    string Message);
+
+public sealed record TableOfAuthoritiesDialogAcceptance(
+    ToaOptions? Options,
+    TableOfAuthoritiesDialogValidation? Validation)
+{
+    public bool IsAccepted => Options is not null && Validation is null;
+}
+
 public static class TableOfAuthoritiesDialogPlanner
 {
     public const string Title = "Table of Authorities";
@@ -26,6 +49,8 @@ public static class TableOfAuthoritiesDialogPlanner
     public const string KeepOriginalFormattingLabel = "Keep original formatting";
     public const string TabLeaderLabel = "Tab leader:";
     public const string AllCategoriesLabel = "(All)";
+    public const string MissingCategoryMessage = "Select a category.";
+    public const string MissingTabLeaderMessage = "Select a tab leader.";
 
     public static TableOfAuthoritiesDialogState DefaultState { get; } =
         BuildInitialState(ToaOptions.Default);
@@ -96,6 +121,40 @@ public static class TableOfAuthoritiesDialogPlanner
             CategoryFilter = state.CategoryFilter,
             TabLeader = state.TabLeader
         };
+
+    public static TableOfAuthoritiesDialogAcceptance PlanAcceptance(
+        TableOfAuthoritiesDialogInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        var category = input.CategorySelection;
+        if (category is null
+            || category.Category is { } selectedCategory && !Enum.IsDefined(selectedCategory))
+        {
+            return new TableOfAuthoritiesDialogAcceptance(
+                Options: null,
+                new TableOfAuthoritiesDialogValidation(
+                    TableOfAuthoritiesDialogField.Category,
+                    MissingCategoryMessage));
+        }
+
+        var tabLeader = input.TabLeaderSelection;
+        if (tabLeader is null || !Enum.IsDefined(tabLeader.Leader))
+        {
+            return new TableOfAuthoritiesDialogAcceptance(
+                Options: null,
+                new TableOfAuthoritiesDialogValidation(
+                    TableOfAuthoritiesDialogField.TabLeader,
+                    MissingTabLeaderMessage));
+        }
+
+        var state = new TableOfAuthoritiesDialogState(
+            input.UsePassim is true,
+            input.KeepOriginalFormatting is true,
+            category.Category,
+            tabLeader.Leader);
+        return new TableOfAuthoritiesDialogAcceptance(BuildOptions(state), Validation: null);
+    }
 
     public static int SelectCategoryIndex(
         IReadOnlyList<TableOfAuthoritiesCategoryChoice> choices,
