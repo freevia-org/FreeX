@@ -214,6 +214,29 @@ public class ComplexFieldRoundTripTests
     }
 
     [Fact]
+    public void AlternateIndexGeneratedRegion_RoundTripsIdentifierSpecificStyles()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People")) }
+        });
+        DocumentIndex.EnsureStyles(doc, "People");
+        doc.Blocks.AddRange(DocumentIndex.Build(doc, identifier: "People"));
+
+        var reopened = RoundTrip(doc);
+        var region = reopened.Blocks.Where(block => DocumentIndex.IsIndexParagraph(block, "People")).ToArray();
+
+        region.Should().HaveCount(2);
+        region.Cast<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Ada, 1");
+        region.Should().OnlyContain(block => !DocumentIndex.IsIndexParagraph(block, identifier: null));
+        reopened.Styles.Should().ContainKey(DocumentIndex.HeadingStyleIdFor("People"));
+        reopened.Styles.Should().ContainKey(DocumentIndex.EntryStyleIdFor("People"));
+    }
+
+    [Fact]
     public void NativeMailMergeControlFields_EmitInstructionsAndRoundTripCachedLabels()
     {
         var doc = TextDocument.CreateEmpty();
