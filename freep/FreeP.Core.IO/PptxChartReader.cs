@@ -278,12 +278,79 @@ internal static class PptxChartReader
                 series.Values.AddRange(ReadChartExValues(valueLevel));
             }
 
+            ReadChartExDataPoints(seriesElement, scheme, series);
             ReadChartExDataLabels(seriesElement.Element(Cx + "dataLabels"), scheme, series);
 
             shape.Series.Add(series);
         }
 
         return shape;
+    }
+
+    private static void ReadChartExDataPoints(
+        XElement seriesElement,
+        PresentationColorScheme scheme,
+        ChartSeries series)
+    {
+        foreach (var dataPoint in seriesElement.Elements(Cx + "dataPt"))
+        {
+            if (!int.TryParse(
+                    dataPoint.Attribute("idx")?.Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var index)
+                || index < 0)
+                continue;
+
+            var shapeProperties = dataPoint.Element(Cx + "spPr");
+            if (shapeProperties is null)
+                continue;
+
+            var style = new ChartPointStyle();
+            var fill = PptxColorReader.TryReadFill(shapeProperties, scheme);
+            switch (fill)
+            {
+                case ShapeFill.None:
+                    style.Fill = fill;
+                    break;
+                case ShapeFill.Solid solid:
+                    style.FillColor = solid.Color;
+                    break;
+                case ShapeFill.Gradient gradient:
+                    style.Fill = gradient;
+                    break;
+                case ShapeFill.Pattern pattern:
+                    style.Fill = pattern;
+                    break;
+            }
+
+            var outline = PptxColorReader.TryReadOutline(
+                shapeProperties.Element(A + "ln"), scheme);
+            if (outline is ShapeOutline.Visible visible)
+            {
+                style.StrokeColor = visible.Color;
+                style.StrokeWidthPt = visible.WidthPt;
+            }
+            else if (outline is ShapeOutline.GradientVisible gradientOutline)
+            {
+                style.StrokeWidthPt = gradientOutline.WidthPt;
+            }
+
+            if (style.Fill is not null
+                || style.FillColor is not null
+                || style.StrokeColor is not null
+                || style.StrokeWidthPt is not null)
+            {
+                if (series.PointStyles.TryGetValue(index, out var existing))
+                {
+                    style.DataLabels = existing.DataLabels;
+                    style.Marker = existing.Marker;
+                    style.ExplosionPercent = existing.ExplosionPercent;
+                }
+
+                series.PointStyles[index] = style;
+            }
+        }
     }
 
     private static void ReadChartExDataLabels(
