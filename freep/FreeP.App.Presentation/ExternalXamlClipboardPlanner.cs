@@ -83,7 +83,7 @@ public static class ExternalXamlClipboardPlanner
                 .Select(element => new
                 {
                     Element = element,
-                    Source = AttributeValue(element, "Source"),
+                    Source = ImageSourceValue(element),
                 })
                 .Where(static image => !string.IsNullOrWhiteSpace(image.Source))
                 .Select(image =>
@@ -410,7 +410,7 @@ public static class ExternalXamlClipboardPlanner
         }
         if (element.Name.LocalName.Equals("Image", StringComparison.OrdinalIgnoreCase))
         {
-            var source = AttributeValue(element, "Source");
+            var source = ImageSourceValue(element);
             var resolved = !string.IsNullOrWhiteSpace(source)
                 ? resolveImage?.Invoke(source!) ?? (null, null)
                 : (null, null);
@@ -1174,6 +1174,8 @@ public static class ExternalXamlClipboardPlanner
         normalized = normalized.Split('?', '#')[0]
             .Replace('\\', '/')
             .TrimStart('/');
+        while (normalized.StartsWith("./", StringComparison.Ordinal))
+            normalized = normalized[2..];
         if (Uri.TryCreate(normalized, UriKind.RelativeOrAbsolute, out var decodedUri))
             normalized = Uri.UnescapeDataString(decodedUri.ToString());
 
@@ -1199,6 +1201,14 @@ public static class ExternalXamlClipboardPlanner
         stream.CopyTo(memory);
         return (memory.ToArray(), ContentTypeFor(entry.FullName));
     }
+
+    private static string? ImageSourceValue(XElement element) =>
+        AttributeValue(element, "Source")
+        ?? element.Elements()
+            .FirstOrDefault(child => child.Name.LocalName.Equals("Image.Source", StringComparison.OrdinalIgnoreCase))
+            ?.DescendantsAndSelf()
+            .Select(child => AttributeValue(child, "UriSource"))
+            .FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value));
 
     private static string ContentTypeFor(string path) =>
         Path.GetExtension(path).ToLowerInvariant() switch

@@ -12,6 +12,74 @@ namespace FreeP.App.Host.Tests;
 public sealed class WpfRichTextClipboardAdapterTests
 {
     [StaFact]
+    public void BuildDataObject_NativeXamlPackagePublishesInlineImagePartAndLoads()
+    {
+        var png = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+        var source = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run { Text = "Before " },
+                        new Run
+                        {
+                            Text = "\uFFFC",
+                            InlineImage = new ImagePart { Bytes = png, ContentType = "image/png" },
+                            InlineImageWidthEmu = 228_600,
+                            InlineImageHeightEmu = 114_300,
+                        },
+                        new Run { Text = " After" },
+                    },
+                },
+            },
+        };
+        var box = new RichTextBox
+        {
+            Document = TextBodyFlowDocumentConverter.ToFlowDocument(source, 12),
+        };
+        box.SelectAll();
+        var payload = new InCanvasRichClipboardPayload(
+            source,
+            InCanvasTextEditPlanner.ExtractPlainText(source));
+
+        var data = WpfRichTextClipboardAdapter.BuildDataObject(box, payload);
+        var packageBytes = ((MemoryStream)data.GetData(
+            DataFormats.XamlPackage,
+            autoConvert: false)!).ToArray();
+        using (var package = new ZipArchive(
+                   new MemoryStream(packageBytes, writable: false),
+                   ZipArchiveMode.Read))
+        {
+            package.Entries.Should().Contain(entry =>
+                entry.FullName.EndsWith(".png", StringComparison.OrdinalIgnoreCase));
+        }
+
+        var document = new System.Windows.Documents.FlowDocument();
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        new System.Windows.Documents.TextRange(document.ContentStart, document.ContentEnd)
+            .Load(stream, DataFormats.XamlPackage);
+
+        var paragraph = document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        var inlines = paragraph.Inlines.ToArray();
+        inlines.Select(inline => inline is System.Windows.Documents.InlineUIContainer ? "image" : "text")
+            .Should().Equal("text", "image", "text");
+        new System.Windows.Documents.TextRange(
+                paragraph.ContentStart,
+                ((System.Windows.Documents.InlineUIContainer)inlines[1]).ContentEnd)
+            .Text.Should().Contain("Before ");
+        ((System.Windows.Documents.InlineUIContainer)inlines[1]).Child
+            .Should().BeOfType<Image>();
+        new System.Windows.Documents.TextRange(
+                ((System.Windows.Documents.InlineUIContainer)inlines[1]).ContentEnd,
+                paragraph.ContentEnd)
+            .Text.Should().Contain(" After");
+    }
+
+    [StaFact]
     public void InlineOleRun_RoundTripsThroughWpfFlowDocument()
     {
         var source = new TextBody();
@@ -415,6 +483,63 @@ public sealed class WpfRichTextClipboardAdapterTests
         run.Text.Should().Be("sixteen");
         run.FontWeight.Should().Be(FontWeights.Bold);
         run.FontSize.Should().BeApproximately(16 / 0.75, 0.01);
+    }
+
+    [StaFact]
+    public void SharedXamlPackage_WithInlineImage_IsAcceptedByNativeWpfTextRangeLoader()
+    {
+        var imageBytes = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+        var source = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run { Text = "Before " },
+                        new Run
+                        {
+                            Text = "\uFFFC",
+                            InlineImage = new ImagePart
+                            {
+                                Bytes = imageBytes,
+                                ContentType = "image/png",
+                            },
+                            InlineImageWidthEmu = 228_600,
+                            InlineImageHeightEmu = 114_300,
+                        },
+                        new Run { Text = " after" },
+                    },
+                },
+            },
+        };
+        var payload = new InCanvasRichClipboardPayload(
+            source,
+            InCanvasTextEditPlanner.ExtractPlainText(source));
+        var packageBytes = ExternalXamlClipboardPlanner.SerializeXamlPackage(payload);
+
+        var document = new System.Windows.Documents.FlowDocument();
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        new System.Windows.Documents.TextRange(document.ContentStart, document.ContentEnd)
+            .Load(stream, DataFormats.XamlPackage);
+
+        var paragraph = document.Blocks.Should().ContainSingle()
+            .Which.Should().BeOfType<System.Windows.Documents.Paragraph>().Subject;
+        paragraph.Inlines.Select(inline => inline.GetType().Name)
+            .Should().Equal("Run", "InlineUIContainer", "Run");
+        paragraph.Inlines.OfType<System.Windows.Documents.Run>()
+            .Select(run => run.Text).Should().Equal("Before ", " after");
+        var imageHost = paragraph.Inlines.ElementAt(1)
+            .Should().BeOfType<System.Windows.Documents.InlineUIContainer>().Subject;
+        var image = imageHost.Child.Should().BeOfType<System.Windows.Controls.Image>().Subject;
+        image.Width.Should().BeApproximately(24, 0.01);
+        image.Height.Should().BeApproximately(12, 0.01);
+        image.Source.Should().BeOfType<System.Windows.Media.Imaging.BitmapImage>();
+        var bitmap = (System.Windows.Media.Imaging.BitmapImage)image.Source;
+        bitmap.PixelWidth.Should().Be(1);
+        bitmap.PixelHeight.Should().Be(1);
     }
 
     [StaFact]
