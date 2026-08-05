@@ -668,6 +668,13 @@ public sealed class EditingSession
         return Presentation.Slides[slideIndex].IsHidden == isHidden;
     }
 
+    /// <summary>Sets the presentation-wide slideshow media-control visibility through the undo bus.</summary>
+    public bool SetShowMediaControls(bool show)
+    {
+        Bus.Execute(new SetShowMediaControlsCommand(Presentation.ShowMediaControls, show));
+        return Presentation.ShowMediaControls == show;
+    }
+
     /// <summary>Toggles the current slide's hidden/show state.</summary>
     public bool ToggleCurrentSlideHidden()
     {

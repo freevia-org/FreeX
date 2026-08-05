@@ -100,6 +100,12 @@ public sealed class Presentation
     /// </summary>
     public PresentationPackageKind PackageKind { get; set; } = PresentationPackageKind.Presentation;
 
+    /// <summary>
+    /// Whether PowerPoint should show media user-interface controls during a slide show.
+    /// The PresentationML default is enabled; the value is serialized only when disabled.
+    /// </summary>
+    public bool ShowMediaControls { get; set; } = true;
+
     /// <summary>Core document properties (title, author, subject, …).</summary>
     public DocumentProperties Properties { get; } = new();
 

@@ -676,6 +676,27 @@ public sealed class SetSlideHiddenCommand : IPresentationCommand
     }
 }
 
+/// <summary>Sets whether slideshow media controls are shown for the presentation.</summary>
+public sealed class SetShowMediaControlsCommand : IPresentationCommand
+{
+    private readonly bool _newValue;
+    private readonly bool _oldValue;
+
+    public SetShowMediaControlsCommand(bool oldValue, bool newValue)
+    {
+        _oldValue = oldValue;
+        _newValue = newValue;
+    }
+
+    public string Label => _newValue ? "Show Media Controls" : "Hide Media Controls";
+
+    public bool HasEffect(Presentation p) => p.ShowMediaControls != _newValue;
+
+    public void Apply(Presentation p) => p.ShowMediaControls = _newValue;
+
+    public void Revert(Presentation p) => p.ShowMediaControls = _oldValue;
+}
+
 /// <summary>Sets whether a slide object, including a grouped child, is hidden in the editing view.</summary>
 public sealed class SetShapeHiddenCommand : IPresentationCommand
 {

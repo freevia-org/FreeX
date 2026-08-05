@@ -36,6 +36,7 @@ internal sealed class AvaloniaSlideShowMediaController
     private IMediaPlaybackSession? _transitionSoundSession;
     private IReadOnlyList<SlideShowMediaShapePlan> _active = Array.Empty<SlideShowMediaShapePlan>();
     private Slide? _activeSlide;
+    private bool _showMediaControls = true;
     private double _slideDipW;
     private double _slideDipH;
     private double _canvasW;
@@ -135,7 +136,8 @@ internal sealed class AvaloniaSlideShowMediaController
         uint? preferredCaptionShapeId = null,
         int? preferredCaptionTrackIndex = null,
         int? captionSlideIndex = null,
-        int? preferredCaptionSlideIndex = null)
+        int? preferredCaptionSlideIndex = null,
+        bool showMediaControls = true)
     {
         ArgumentNullException.ThrowIfNull(slide);
         SetCanvasBounds(canvasW, canvasH);
@@ -143,8 +145,9 @@ internal sealed class AvaloniaSlideShowMediaController
         _slideDipH = slideDipH;
         TeardownPlayback();
         _activeSlide = slide;
+        _showMediaControls = showMediaControls;
         _active = SlideShowMediaInteractionPlanner.BuildSlidePlan(
-            slide, slideDipW, slideDipH, canvasW, canvasH);
+            slide, slideDipW, slideDipH, canvasW, canvasH, showMediaControls);
 
         if (!_active.Any(plan => plan.HasSource) || !EnsureBackend())
             return;
@@ -235,7 +238,8 @@ internal sealed class AvaloniaSlideShowMediaController
             canvasW,
             canvasH,
             canvasX,
-            canvasY);
+            canvasY,
+            _showMediaControls);
         if (!LastClick.IsHandled)
             return false;
 
