@@ -3,6 +3,7 @@ using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Smoke;
+using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Avalonia;
 
@@ -10,16 +11,12 @@ public sealed class App : Application
 {
     public static IReadOnlyList<string> StartupArguments { get; set; } = [];
     internal static LaunchSmokeOptions? LaunchSmokeOptions { get; set; }
-    internal static Theme ActiveTheme { get; private set; } = BrandThemes.FreeW;
+    internal static Theme ActiveTheme { get; private set; } = FreeWApplicationStartup.Theme.DefaultTheme;
 
     public override void OnFrameworkInitializationCompleted()
     {
-        var theme = string.Equals(
-            Environment.GetEnvironmentVariable("FREEW_THEME"),
-            "midnight",
-            StringComparison.OrdinalIgnoreCase)
-            ? BrandThemes.FreeXMidnight
-            : BrandThemes.FreeW;
+        var themePlan = FreeWApplicationStartup.Theme;
+        var theme = themePlan.Resolve(Environment.GetEnvironmentVariable(themePlan.EnvironmentVariableName));
         ActiveTheme = theme;
         Resources.MergedDictionaries.Add(AvaloniaThemeApplier.BuildResources(theme, "FreeW"));
 

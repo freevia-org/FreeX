@@ -1,7 +1,7 @@
 using Avalonia;
 using Avalonia.Fonts.Inter;
 using FreeW.App.Avalonia.Smoke;
-using Free.Shared.AppServices;
+using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Avalonia;
 
@@ -17,7 +17,7 @@ internal static class Program
     public static int Main(string[] args)
     {
         // Same contract FreeX uses: set identity before any shared storage path is resolved.
-        AppProduct.Current = new AppProductIdentity("FreeW", "FREEW_DIAGNOSTICS", "FreeW");
+        AppProduct.Current = FreeWApplicationStartup.ProductIdentity;
 
         // Headless engine smoke (no display): exercise the model + DOCX round-trip and exit.
         if (PackagingSmoke.TryRun(args, Console.Out, Console.Error, out var packagingExit))

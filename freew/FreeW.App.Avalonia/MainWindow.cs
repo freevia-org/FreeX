@@ -299,7 +299,9 @@ public sealed partial class MainWindow : Window
             if (result is not null)
                 _editor.SetCellText(req.Block, req.Row, req.Col, result);
         };
-        var startupDocument = LoadStartupDocument(startupArguments);
+        var startupDocument = FreeWApplicationStartup.TryOpenStartupDocument(
+            startupArguments,
+            _documentPersistence);
         if (startupDocument is null)
             LoadDocumentAsSaved(SampleDocument.Create(), path: null);
         else
@@ -1723,21 +1725,6 @@ public sealed partial class MainWindow : Window
     {
         if (PageLayoutCommandPlanner.TryParsePaperSize(name, out var parsed))
             _editor.ApplyPageSettings(page => PageLayoutCommandPlanner.ApplyPaperSize(page, parsed));
-    }
-
-    private DocumentOpenResult? LoadStartupDocument(IReadOnlyList<string> startupArguments)
-    {
-        var path = startupArguments.FirstOrDefault(a => File.Exists(a) && _documentPersistence.CanOpenPath(a));
-        if (path is null)
-            return null;
-        try
-        {
-            return _documentPersistence.Open(path);
-        }
-        catch (Exception)
-        {
-            return null;
-        }
     }
 
     private Control BuildRibbon()
