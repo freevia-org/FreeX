@@ -164,7 +164,7 @@ public static class PptxPackageReader
         // Rels for presentation.xml
         var presRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(presPath));
         presentation.DocumentMathProperties = ReadDocumentMathProperties(archive, presRels, presDir);
-        ReadShowMediaControls(archive, presRels, presDir, presentation);
+        ReadShowProperties(archive, presRels, presDir, presentation);
 
         // Table styles (keyed by style GUID)
         var tableStyles = new Dictionary<string, TableStyleData>(StringComparer.OrdinalIgnoreCase);
@@ -352,7 +352,7 @@ public static class PptxPackageReader
         return presentation;
     }
 
-    private static void ReadShowMediaControls(
+    private static void ReadShowProperties(
         ZipArchive archive,
         IReadOnlyList<OpcRelationshipTarget> presentationRelationships,
         string presentationDirectory,
@@ -368,6 +368,10 @@ public static class PptxPackageReader
         if (showPr is null)
             return;
 
+        presentation.UseSlideTimings = ReadBooleanOrDefault(showPr.Attribute("useTimings")?.Value, defaultValue: true);
+        presentation.ShowWithAnimation = ReadBooleanOrDefault(showPr.Attribute("showAnimation")?.Value, defaultValue: true);
+        presentation.LoopUntilStopped = ReadBooleanOrDefault(showPr.Attribute("loop")?.Value, defaultValue: false);
+
         var mediaControls = showPr.Element(P14 + "showMediaCtrls")
             ?? showPr.Element(P + "extLst")?
                 .Elements(P + "ext")
@@ -377,6 +381,9 @@ public static class PptxPackageReader
         if (mediaControls is not null)
             presentation.ShowMediaControls = ReadBoolean(mediaControls.Attribute("val")?.Value);
     }
+
+    private static bool ReadBooleanOrDefault(string? value, bool defaultValue) =>
+        value is null ? defaultValue : ReadBoolean(value);
 
     /// <summary>
     /// Reads document-level OMML defaults only from a related settings part.

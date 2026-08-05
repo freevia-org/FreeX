@@ -188,7 +188,9 @@ public sealed class SlideShowWindow : Window
         _controller = new SlideShowController(
             _playbackRoute.Slides,
             _playbackRoute.StartIndex,
-            _playbackRoute.AnimationStartIndex);
+            _playbackRoute.AnimationStartIndex,
+            showWithAnimation: _presentation.ShowWithAnimation,
+            loopUntilStopped: _presentation.LoopUntilStopped);
         _session = new SlideShowSessionController(
             _presentation,
             _playbackRoute,

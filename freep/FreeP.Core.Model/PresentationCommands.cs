@@ -697,6 +697,54 @@ public sealed class SetShowMediaControlsCommand : IPresentationCommand
     public void Revert(Presentation p) => p.ShowMediaControls = _oldValue;
 }
 
+/// <summary>Sets the presentation-wide slideshow playback settings as one undoable edit.</summary>
+public sealed class SetSlideShowSettingsCommand : IPresentationCommand
+{
+    private readonly bool _oldUseSlideTimings;
+    private readonly bool _oldShowWithAnimation;
+    private readonly bool _oldLoopUntilStopped;
+    private readonly bool _newUseSlideTimings;
+    private readonly bool _newShowWithAnimation;
+    private readonly bool _newLoopUntilStopped;
+
+    public SetSlideShowSettingsCommand(
+        bool oldUseSlideTimings,
+        bool oldShowWithAnimation,
+        bool oldLoopUntilStopped,
+        bool newUseSlideTimings,
+        bool newShowWithAnimation,
+        bool newLoopUntilStopped)
+    {
+        _oldUseSlideTimings = oldUseSlideTimings;
+        _oldShowWithAnimation = oldShowWithAnimation;
+        _oldLoopUntilStopped = oldLoopUntilStopped;
+        _newUseSlideTimings = newUseSlideTimings;
+        _newShowWithAnimation = newShowWithAnimation;
+        _newLoopUntilStopped = newLoopUntilStopped;
+    }
+
+    public string Label => "Set Slide Show Settings";
+
+    public bool HasEffect(Presentation p) =>
+        p.UseSlideTimings != _newUseSlideTimings ||
+        p.ShowWithAnimation != _newShowWithAnimation ||
+        p.LoopUntilStopped != _newLoopUntilStopped;
+
+    public void Apply(Presentation p)
+    {
+        p.UseSlideTimings = _newUseSlideTimings;
+        p.ShowWithAnimation = _newShowWithAnimation;
+        p.LoopUntilStopped = _newLoopUntilStopped;
+    }
+
+    public void Revert(Presentation p)
+    {
+        p.UseSlideTimings = _oldUseSlideTimings;
+        p.ShowWithAnimation = _oldShowWithAnimation;
+        p.LoopUntilStopped = _oldLoopUntilStopped;
+    }
+}
+
 /// <summary>Sets whether a slide object, including a grouped child, is hidden in the editing view.</summary>
 public sealed class SetShapeHiddenCommand : IPresentationCommand
 {
