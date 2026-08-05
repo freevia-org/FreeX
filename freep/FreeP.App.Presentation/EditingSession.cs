@@ -763,6 +763,12 @@ public sealed class EditingSession
             FrameBorderShadowEnabled = properties.FrameBorderShadow is not null
                 ? true
                 : properties.FrameBorderShadowEnabled == false ? false : null,
+            FrameBorderGlow = properties.FrameBorderGlow is { } glow
+                ? glow with { Color = glow.Color.Trim().TrimStart('#').ToUpperInvariant() }
+                : null,
+            FrameBorderGlowEnabled = properties.FrameBorderGlow is not null
+                ? true
+                : properties.FrameBorderGlowEnabled == false ? false : null,
         };
         return Equals(shape.PreservedObject.ZoomProperties, normalized);
     }

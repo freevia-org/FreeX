@@ -19,6 +19,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private readonly CheckBox _frameBorderNoFillEnabled;
     private readonly CheckBox _frameBorderThemeEnabled;
     private readonly CheckBox _frameBorderShadowEnabled;
+    private readonly CheckBox _frameBorderGlowEnabled;
     private readonly ComboBox _imageType;
     private readonly TextBox _transitionDuration;
     private readonly TextBox _frameBorderColor;
@@ -28,6 +29,9 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private readonly TextBox _frameBorderShadowBlur;
     private readonly TextBox _frameBorderShadowDistance;
     private readonly TextBox _frameBorderShadowDirection;
+    private readonly TextBox _frameBorderGlowColor;
+    private readonly TextBox _frameBorderGlowAlpha;
+    private readonly TextBox _frameBorderGlowRadius;
     private readonly TextBox _frameBorderWidth;
     private readonly ComboBox _frameBorderDash;
     private readonly TextBox _frameBorderGradientStart;
@@ -260,6 +264,26 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowDirection(current), MinWidth = 180,
         };
         _frameBorderShadowEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
+        _frameBorderGlowEnabled = new CheckBox
+        {
+            Content = "Use border glow",
+            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderGlowEnabled(current),
+        };
+        _frameBorderGlowColor = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowColor(current),
+            MinWidth = 180,
+            PlaceholderText = "six-digit RGB value",
+        };
+        _frameBorderGlowAlpha = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowAlpha(current), MinWidth = 180,
+        };
+        _frameBorderGlowRadius = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowRadius(current), MinWidth = 180,
+        };
+        _frameBorderGlowEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
         _frameGeometry = new ComboBox
         {
             ItemsSource = ZoomObjectPropertiesPlanner.FrameGeometryOptions,
@@ -323,6 +347,10 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             Row("Shadow blur (pt):", _frameBorderShadowBlur),
             Row("Shadow distance (pt):", _frameBorderShadowDistance),
             Row("Shadow direction (deg):", _frameBorderShadowDirection),
+            _frameBorderGlowEnabled,
+            Row("Glow color:", _frameBorderGlowColor),
+            Row("Glow alpha (%):", _frameBorderGlowAlpha),
+            Row("Glow radius (pt):", _frameBorderGlowRadius),
             Row("Border width (pt):", _frameBorderWidth),
             Row("Border dash:", _frameBorderDash),
             _frameBorderGradientEnabled,
@@ -502,6 +530,19 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                 ZoomObjectPropertiesPlanner.DialogTitle);
             return;
         }
+        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderGlow(
+                _frameBorderGlowColor.Text,
+                _frameBorderGlowAlpha.Text,
+                _frameBorderGlowRadius.Text,
+                _frameBorderGlowEnabled.IsChecked == true,
+                out var frameBorderGlow))
+        {
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                this,
+                ZoomObjectPropertiesPlanner.InvalidFrameBorderGlowMessage,
+                ZoomObjectPropertiesPlanner.DialogTitle);
+            return;
+        }
         if (!ZoomObjectPropertiesPlanner.TryParseFrameGeometry(
                 _frameGeometry.SelectedItem?.ToString(), out var frameGeometry))
         {
@@ -557,7 +598,9 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             noFillEnabled ? true : null,
             themeColor,
             frameBorderShadow,
-            _frameBorderShadowEnabled.IsChecked == true ? true : false);
+            _frameBorderShadowEnabled.IsChecked == true ? true : false,
+            frameBorderGlow,
+            _frameBorderGlowEnabled.IsChecked == true ? true : false);
         if (_summaryTile is not null && _summaryTile.SelectedIndex >= 0
             && _summaryTile.SelectedIndex < _summaryTargets.Count)
         {
@@ -607,6 +650,10 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         _frameBorderShadowBlur.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowBlur(properties);
         _frameBorderShadowDistance.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowDistance(properties);
         _frameBorderShadowDirection.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowDirection(properties);
+        _frameBorderGlowEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderGlowEnabled(properties);
+        _frameBorderGlowColor.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowColor(properties);
+        _frameBorderGlowAlpha.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowAlpha(properties);
+        _frameBorderGlowRadius.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowRadius(properties);
         SyncFrameBorderState();
         _frameGeometry.SelectedItem = ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
             geometry => string.Equals(geometry, properties.FrameGeometry, StringComparison.OrdinalIgnoreCase))
@@ -650,6 +697,10 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         _frameBorderShadowBlur.IsEnabled = _frameBorderShadowColor.IsEnabled;
         _frameBorderShadowDistance.IsEnabled = _frameBorderShadowColor.IsEnabled;
         _frameBorderShadowDirection.IsEnabled = _frameBorderShadowColor.IsEnabled;
+        _frameBorderGlowEnabled.IsEnabled = enabled;
+        _frameBorderGlowColor.IsEnabled = enabled && _frameBorderGlowEnabled.IsChecked == true;
+        _frameBorderGlowAlpha.IsEnabled = _frameBorderGlowColor.IsEnabled;
+        _frameBorderGlowRadius.IsEnabled = _frameBorderGlowColor.IsEnabled;
     }
 
     private static Button MakeButton(string label, bool isDefault, Action action)
