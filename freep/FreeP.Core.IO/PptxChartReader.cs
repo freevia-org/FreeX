@@ -262,6 +262,19 @@ internal static class PptxChartReader
                 .ToList(),
             Title = ReadChartExTitle(chart.Element(Cx + "title")),
         };
+        var legend = chart.Element(Cx + "legend");
+        if (legend is not null)
+        {
+            shape.Legend = legend.Attribute("pos")?.Value switch
+            {
+                "l" => LegendPosition.Left,
+                "t" => LegendPosition.Top,
+                "b" => LegendPosition.Bottom,
+                "r" => LegendPosition.Right,
+                _ => null,
+            };
+            shape.LegendOverlay = ParseNullableBoolAttr(legend.Attribute("overlay")?.Value);
+        }
         shape.Categories.AddRange(categories);
 
         foreach (var seriesElement in region.Elements(Cx + "series"))
@@ -278,12 +291,132 @@ internal static class PptxChartReader
                 series.Values.AddRange(ReadChartExValues(valueLevel));
             }
 
+            var seriesShapeProperties = seriesElement.Element(Cx + "spPr");
+            if (seriesShapeProperties is not null)
+                ReadSeriesShapeProperties(seriesShapeProperties, scheme, series);
+
+            series.ValueColorScale = ReadChartExValueColorScale(seriesElement, scheme);
+            ReadChartExDataPoints(seriesElement, scheme, series);
             ReadChartExDataLabels(seriesElement.Element(Cx + "dataLabels"), scheme, series);
 
             shape.Series.Add(series);
         }
 
         return shape;
+    }
+
+    private static ChartValueColorScale? ReadChartExValueColorScale(
+        XElement seriesElement,
+        PresentationColorScheme scheme)
+    {
+        var colors = seriesElement.Element(Cx + "valueColors");
+        var positions = seriesElement.Element(Cx + "valueColorPositions");
+        if (colors is null && positions is null)
+            return null;
+
+        var scale = new ChartValueColorScale
+        {
+            MinColor = ReadChartExValueColor(colors?.Element(Cx + "minColor"), scheme),
+            MidColor = ReadChartExValueColor(colors?.Element(Cx + "midColor"), scheme),
+            MaxColor = ReadChartExValueColor(colors?.Element(Cx + "maxColor"), scheme),
+            PositionCount = ParseNullableInt(positions?.Attribute("count")?.Value),
+            MinPosition = ReadChartExValueColorPosition(positions?.Element(Cx + "min")),
+            MidPosition = ReadChartExValueColorPosition(positions?.Element(Cx + "mid")),
+            MaxPosition = ReadChartExValueColorPosition(positions?.Element(Cx + "max")),
+        };
+        return scale;
+    }
+
+    private static ThemeAwareColor? ReadChartExValueColor(
+        XElement? element,
+        PresentationColorScheme scheme) =>
+        element is null
+            ? null
+            : PptxColorReader.TryReadColor(element.Element(A + "solidFill"), scheme);
+
+    private static ChartValueColorPosition? ReadChartExValueColorPosition(XElement? element)
+    {
+        if (element is null)
+            return null;
+
+        if (element.Element(Cx + "extremeValue") is not null)
+            return new ChartValueColorPosition { IsExtreme = true };
+
+        var number = element.Element(Cx + "number")?.Attribute("val")?.Value;
+        if (double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out var numberValue))
+            return new ChartValueColorPosition { Number = numberValue };
+
+        var percent = element.Element(Cx + "percent")?.Attribute("val")?.Value;
+        if (double.TryParse(percent, NumberStyles.Float, CultureInfo.InvariantCulture, out var percentValue))
+            return new ChartValueColorPosition { Percent = percentValue };
+
+        return null;
+    }
+
+    private static void ReadChartExDataPoints(
+        XElement seriesElement,
+        PresentationColorScheme scheme,
+        ChartSeries series)
+    {
+        foreach (var dataPoint in seriesElement.Elements(Cx + "dataPt"))
+        {
+            if (!int.TryParse(
+                    dataPoint.Attribute("idx")?.Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var index)
+                || index < 0)
+                continue;
+
+            var shapeProperties = dataPoint.Element(Cx + "spPr");
+            if (shapeProperties is null)
+                continue;
+
+            var style = new ChartPointStyle();
+            var fill = PptxColorReader.TryReadFill(shapeProperties, scheme);
+            switch (fill)
+            {
+                case ShapeFill.None:
+                    style.Fill = fill;
+                    break;
+                case ShapeFill.Solid solid:
+                    style.FillColor = solid.Color;
+                    break;
+                case ShapeFill.Gradient gradient:
+                    style.Fill = gradient;
+                    break;
+                case ShapeFill.Pattern pattern:
+                    style.Fill = pattern;
+                    break;
+            }
+
+            var outline = PptxColorReader.TryReadOutline(
+                shapeProperties.Element(A + "ln"), scheme);
+            if (outline is ShapeOutline.Visible visible)
+            {
+                style.StrokeColor = visible.Color;
+                style.StrokeWidthPt = visible.WidthPt;
+            }
+            else if (outline is ShapeOutline.GradientVisible gradientOutline)
+            {
+                style.StrokeWidthPt = gradientOutline.WidthPt;
+            }
+
+            if (style.Fill is not null
+                || style.FillColor is not null
+                || style.StrokeColor is not null
+                || style.StrokeWidthPt is not null)
+            {
+                if (series.PointStyles.TryGetValue(index, out var existing))
+                {
+                    style.DataLabels = existing.DataLabels;
+                    style.Marker = existing.Marker;
+                    style.ExplosionPercent = existing.ExplosionPercent;
+                }
+
+                series.PointStyles[index] = style;
+            }
+        }
     }
 
     private static void ReadChartExDataLabels(

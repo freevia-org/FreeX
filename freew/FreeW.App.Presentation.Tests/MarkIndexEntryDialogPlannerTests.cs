@@ -13,6 +13,7 @@ public sealed class MarkIndexEntryDialogPlannerTests
         state.Should().Be(new MarkIndexEntryDialogState(
             "Animals",
             string.Empty,
+            string.Empty,
             IndexEntryReferenceKind.CurrentPage,
             BookmarkName: string.Empty,
             MarkIndexEntryDialogPlanner.DefaultCrossReference,
@@ -27,6 +28,7 @@ public sealed class MarkIndexEntryDialogPlannerTests
                 new MarkIndexEntryDialogState(
                     " Animals ",
                     " Cats:Longhair ",
+                    " People ",
                     IndexEntryReferenceKind.CrossReference,
                     string.Empty,
                     " See Pet care ",
@@ -37,7 +39,11 @@ public sealed class MarkIndexEntryDialogPlannerTests
             .Should().BeTrue();
 
         validation.Should().BeNull();
-        mark.Should().Be(new IndexMark("Animals", "Cats:Longhair", "See Pet care"));
+        mark.Should().Be(new IndexMark(
+            "Animals",
+            "Cats:Longhair",
+            "See Pet care",
+            Identifier: "People"));
     }
 
     [Theory]
@@ -54,6 +60,7 @@ public sealed class MarkIndexEntryDialogPlannerTests
         MarkIndexEntryDialogPlanner.TryBuildMark(
                 new MarkIndexEntryDialogState(
                     mainEntry,
+                    string.Empty,
                     string.Empty,
                     referenceKind,
                     bookmarkName,
@@ -75,6 +82,7 @@ public sealed class MarkIndexEntryDialogPlannerTests
                 new MarkIndexEntryDialogState(
                     "Alpha",
                     string.Empty,
+                    string.Empty,
                     IndexEntryReferenceKind.CurrentPage,
                     string.Empty,
                     "See Other",
@@ -89,6 +97,7 @@ public sealed class MarkIndexEntryDialogPlannerTests
                 new MarkIndexEntryDialogState(
                     "Alpha",
                     string.Empty,
+                    "People",
                     IndexEntryReferenceKind.PageRange,
                     " TopicRange ",
                     "See Other",
@@ -101,11 +110,13 @@ public sealed class MarkIndexEntryDialogPlannerTests
             "Alpha",
             BoldPageNumber: true,
             ItalicPageNumber: true,
-            BookmarkName: "TopicRange"));
+            BookmarkName: "TopicRange",
+            Identifier: "People"));
 
         MarkIndexEntryDialogPlanner.TryBuildMark(
                 new MarkIndexEntryDialogState(
                     "Alpha",
+                    string.Empty,
                     string.Empty,
                     IndexEntryReferenceKind.CrossReference,
                     string.Empty,

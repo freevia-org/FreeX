@@ -712,6 +712,159 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void Index_commands_insert_default_and_selective_regions_with_matching_entries_only()
+    {
+        var view = ViewWith(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Entries"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha")),
+                DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People")),
+                DocumentIndex.MarkRun(new IndexMark("Ignored", Identifier: "Places"))
+            }
+        });
+
+        view.InsertIndex();
+        view.InsertIndex("People");
+
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, identifier: null))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Alpha, 1");
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Ada, 1");
+        view.Document.Blocks
+            .Should().NotContain(block => DocumentIndex.IsIndexParagraph(block, "Places"));
+    }
+
+    [Fact]
+    public Task InsertIndex_dialog_returns_default_or_trimmed_identifier() => RunOnUiThread(() =>
+    {
+        var dialog = new InsertIndexDialog();
+
+        dialog.Width.Should().Be(InsertIndexDialogPlanner.DialogWidth);
+        dialog.BuildResultForTests("   ").Identifier.Should().BeNull();
+        dialog.BuildResultForTests(" People ").Identifier.Should().Be("People");
+    });
+
+    [Fact]
+    public void Index_insert_ribbon_command_uses_owner_dialog_callback_for_selective_index()
+    {
+        var view = ViewWith(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Entries"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha")),
+                DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People")),
+                DocumentIndex.MarkRun(new IndexMark("Ignored", Identifier: "Places"))
+            }
+        });
+        var calls = 0;
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks() with
+        {
+            OpenInsertIndexDialog = () =>
+            {
+                calls++;
+                view.InsertIndex("People");
+            }
+        });
+
+        Execute(registry, "freew.index-insert");
+
+        calls.Should().Be(1);
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Ada, 1");
+        view.Document.Blocks.Should().NotContain(block =>
+            DocumentIndex.IsIndexParagraph(block, identifier: null)
+            || DocumentIndex.IsIndexParagraph(block, "Places"));
+    }
+
+    [Fact]
+    public void Index_insert_ribbon_command_without_callback_inserts_default_index()
+    {
+        var view = ViewWith(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Entries"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha")),
+                DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People"))
+            }
+        });
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.index-insert");
+
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, identifier: null))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Alpha, 1");
+        view.Document.Blocks.Should().NotContain(block =>
+            DocumentIndex.IsIndexParagraph(block, "People"));
+    }
+
+    [Fact]
+    public void RefreshIndex_selective_region_updates_people_and_leaves_default_region_untouched()
+    {
+        var defaultHeading = new Paragraph(DocumentIndex.HeadingText)
+        {
+            StyleId = DocumentIndex.HeadingStyleIdFor(identifier: null)
+        };
+        var defaultEntry = new Paragraph("Alpha, 7")
+        {
+            StyleId = DocumentIndex.EntryStyleIdFor(identifier: null)
+        };
+        var peopleHeading = new Paragraph(DocumentIndex.HeadingText)
+        {
+            StyleId = DocumentIndex.HeadingStyleIdFor("People")
+        };
+        var peopleEntry = new Paragraph("Old Person, 9")
+        {
+            StyleId = DocumentIndex.EntryStyleIdFor("People")
+        };
+        var view = ViewWith(
+            defaultHeading,
+            defaultEntry,
+            peopleHeading,
+            peopleEntry,
+            new Paragraph
+            {
+                Runs =
+                {
+                    new Run("Entries"),
+                    DocumentIndex.MarkRun(new IndexMark("Beta")),
+                    DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People")),
+                    DocumentIndex.MarkRun(new IndexMark("Grace", Identifier: "People"))
+                }
+            });
+
+        view.RefreshIndex("People");
+
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, identifier: null))
+            .Should().Equal(defaultHeading, defaultEntry);
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Ada, 1", "Grace, 1");
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
+            .Should().NotContain(peopleHeading)
+            .And.NotContain(peopleEntry);
+    }
+
+    [Fact]
     public void Table_of_figures_commands_insert_and_refresh_caption_table()
     {
         var view = ViewWith();
@@ -779,6 +932,16 @@ public sealed class ReferencesTabTests
     });
 
     [Fact]
+    public Task MarkIndexEntry_dialog_carries_trimmed_optional_identifier() => RunOnUiThread(() =>
+    {
+        var dialog = new MarkIndexEntryDialog("Alpha");
+        dialog.SetForTests("Alpha", null, false, null, identifier: " People ");
+
+        dialog.AcceptForTests().Should().BeTrue();
+        dialog.Mark.Should().Be(new IndexMark("Alpha", Identifier: "People"));
+    });
+
+    [Fact]
     public Task MarkIndexEntry_dialog_returns_mark_all_action_for_selected_text() => RunOnUiThread(() =>
     {
         var dialog = new MarkIndexEntryDialog("Alpha");
@@ -787,6 +950,7 @@ public sealed class ReferencesTabTests
         dialog.AcceptAllForTests().Should().BeTrue();
         dialog.MarkAll.Should().BeTrue();
         dialog.Mark.Should().Be(new IndexMark("Alpha"));
+        dialog.Mark!.Identifier.Should().BeEmpty();
     });
 
     [Fact]
