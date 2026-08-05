@@ -371,7 +371,7 @@ public sealed class WpfAuthoritySurfaceParityTests
                 positioningCombos.Should().OnlyContain(combo => !combo.IsEffectivelyEnabled);
                 positioningCombos.SelectMany(combo => combo.GetVisualDescendants()
                         .OfType<Border>()
-                        .Where(border => border.Name == "PART_LayoutRoot"))
+                        .Where(border => border.Name is "PART_LayoutRoot" or "Background"))
                     .Should().OnlyContain(surface => surface.Background == positioningCombos[0].Background);
             }
             finally

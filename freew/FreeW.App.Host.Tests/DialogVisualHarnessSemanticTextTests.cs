@@ -28,7 +28,8 @@ public sealed class DialogVisualHarnessSemanticTextTests
             187,
             279,
             baselineRows,
-            new Dictionary<string, int> { ["genuine-visual-mismatch"] = 3, ["pass"] = 1, ["avalonia-extension"] = 1 });
+            new Dictionary<string, int> { ["genuine-visual-mismatch"] = 3, ["pass"] = 1, ["avalonia-extension"] = 1 },
+            new Harness::ComparisonScope("canonical-inputs-only", "test baseline", "test refresh"));
         var refreshedRows = new[]
         {
             new Harness::ComparisonRow("multilevel-list.initial", "captured/captured", "pass", null, null, "heatmaps/multilevel-list.initial.png", null),
@@ -70,7 +71,8 @@ public sealed class DialogVisualHarnessSemanticTextTests
                 new Harness::ComparisonRow("multilevel-list.validation-error", "captured/captured", "pass", null, null, "old-validation", null),
                 new Harness::ComparisonRow("other-route.initial", "captured/captured", "pass", null, null, "other", null)
             },
-            new Dictionary<string, int>());
+            new Dictionary<string, int>(),
+            new Harness::ComparisonScope("canonical-inputs-only", "test baseline", "test refresh"));
         var refreshed = new[]
         {
             new Harness::ComparisonRow("multilevel-list.initial", "captured/captured", "genuine-visual-mismatch", null, null, "new-initial", null),
