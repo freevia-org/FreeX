@@ -91,6 +91,7 @@ public static class CanvasTransformPreviewComposer
             RotationDeg = transform.RotationDeg,
             Outline = source.Outline,
             IsMedia = source.IsMedia,
+            IsCover = source.IsCover,
             CropLeft = source.CropLeft,
             CropTop = source.CropTop,
             CropRight = source.CropRight,

@@ -364,6 +364,15 @@ public sealed class SlideCompositorTests
         border.Dash.Should().Be(OutlineDash.DashDot);
         pictures[0].PictureFrameGeometry.Should().Be("ellipse");
         pictures[1].HasCrop.Should().BeFalse();
+
+        session.SetZoomObjectProperties(
+            slideZoom.Id,
+            new ZoomObjectProperties(ImageType: "cover")).Should().BeTrue();
+        var coverPictures = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Picture>()
+            .ToArray();
+        coverPictures[0].IsCover.Should().BeTrue();
+        coverPictures[1].IsCover.Should().BeFalse();
     }
 
     [Fact]

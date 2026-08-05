@@ -82,13 +82,59 @@ public static class PictureRenderPlanner
         int pixelWidth,
         int pixelHeight)
     {
-        if (!picture.HasCrop)
+        if (picture.HasCrop)
+            return PlanSourceRect(
+                pixelWidth,
+                pixelHeight,
+                picture.CropLeft,
+                picture.CropTop,
+                picture.CropRight,
+                picture.CropBottom);
+
+        if (!picture.IsCover)
             return new PictureSourceRectPixels(0, 0, pixelWidth, pixelHeight);
 
-        int x = (int)Math.Round(picture.CropLeft * pixelWidth);
-        int y = (int)Math.Round(picture.CropTop * pixelHeight);
-        int width = (int)Math.Round((1.0 - picture.CropLeft - picture.CropRight) * pixelWidth);
-        int height = (int)Math.Round((1.0 - picture.CropTop - picture.CropBottom) * pixelHeight);
+        var sourceAspect = pixelWidth / (double)pixelHeight;
+        var destinationAspect = picture.DestDip.Width / picture.DestDip.Height;
+        if (!double.IsFinite(destinationAspect) || destinationAspect <= 0)
+            return new PictureSourceRectPixels(0, 0, pixelWidth, pixelHeight);
+
+        var cropLeft = 0d;
+        var cropTop = 0d;
+        var cropRight = 0d;
+        var cropBottom = 0d;
+        if (sourceAspect > destinationAspect)
+        {
+            var horizontalCrop = Math.Clamp(1 - destinationAspect / sourceAspect, 0, 1);
+            cropLeft = cropRight = horizontalCrop / 2;
+        }
+        else if (sourceAspect < destinationAspect)
+        {
+            var verticalCrop = Math.Clamp(1 - sourceAspect / destinationAspect, 0, 1);
+            cropTop = cropBottom = verticalCrop / 2;
+        }
+
+        return PlanSourceRect(
+            pixelWidth,
+            pixelHeight,
+            cropLeft,
+            cropTop,
+            cropRight,
+            cropBottom);
+    }
+
+    private static PictureSourceRectPixels PlanSourceRect(
+        int pixelWidth,
+        int pixelHeight,
+        double cropLeft,
+        double cropTop,
+        double cropRight,
+        double cropBottom)
+    {
+        int x = (int)Math.Round(cropLeft * pixelWidth);
+        int y = (int)Math.Round(cropTop * pixelHeight);
+        int width = (int)Math.Round((1.0 - cropLeft - cropRight) * pixelWidth);
+        int height = (int)Math.Round((1.0 - cropTop - cropBottom) * pixelHeight);
 
         x = Math.Max(0, Math.Min(x, pixelWidth - 1));
         y = Math.Max(0, Math.Min(y, pixelHeight - 1));

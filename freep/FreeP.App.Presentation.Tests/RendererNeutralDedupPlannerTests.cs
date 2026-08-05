@@ -703,6 +703,54 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void PictureRenderPlanner_CoverCropsWideSourceToFillTallFrame()
+    {
+        var picture = new DrawOp.Picture
+        {
+            DestDip = new LayoutRect(0, 0, 200, 300),
+            IsCover = true,
+        };
+
+        var plan = PictureRenderPlanner.Plan(picture, pixelWidth: 1600, pixelHeight: 900);
+
+        plan.SourceRectPixels.Should().Be(new PictureSourceRectPixels(500, 0, 600, 900));
+        plan.HasCrop.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PictureRenderPlanner_CoverCropsTallSourceToFillWideFrame()
+    {
+        var picture = new DrawOp.Picture
+        {
+            DestDip = new LayoutRect(0, 0, 300, 200),
+            IsCover = true,
+        };
+
+        var plan = PictureRenderPlanner.Plan(picture, pixelWidth: 900, pixelHeight: 1600);
+
+        plan.SourceRectPixels.Should().Be(new PictureSourceRectPixels(0, 500, 900, 600));
+        plan.HasCrop.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PictureRenderPlanner_ExplicitCropOverridesCoverMode()
+    {
+        var picture = new DrawOp.Picture
+        {
+            DestDip = new LayoutRect(0, 0, 300, 200),
+            IsCover = true,
+            CropLeft = 0.1,
+            CropTop = 0.2,
+            CropRight = 0.3,
+            CropBottom = 0.4,
+        };
+
+        var plan = PictureRenderPlanner.Plan(picture, pixelWidth: 100, pixelHeight: 50);
+
+        plan.SourceRectPixels.Should().Be(new PictureSourceRectPixels(10, 10, 60, 20));
+    }
+
+    [Fact]
     public void PictureRenderPlanner_CropSourceRectangleRoundsAndClamps()
     {
         var picture = new DrawOp.Picture
