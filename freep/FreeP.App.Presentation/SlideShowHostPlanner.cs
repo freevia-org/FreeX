@@ -526,7 +526,8 @@ public static class SlideShowHostPlanner
                 AdvanceAfterMs = slide.Transition?.AdvanceAfterMs,
             };
         }
-        int? autoAdvanceAfterMs = slide.Transition?.AdvanceAfterMs is int advMs && advMs > 0
+        int? autoAdvanceAfterMs = presentation.UseSlideTimings &&
+            slide.Transition?.AdvanceAfterMs is int advMs && advMs > 0
             ? advMs
             : null;
 
