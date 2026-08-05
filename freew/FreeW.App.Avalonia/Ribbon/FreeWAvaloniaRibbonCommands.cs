@@ -1475,7 +1475,8 @@ internal static class FreeWAvaloniaRibbonCommands
             callbacks.OpenMarkIndexEntryDialog ?? (() => editor.MarkIndexEntry())));
         r.Register("freew.index-insert", new ActionRibbonCommand(
             callbacks.OpenInsertIndexDialog ?? (() => editor.InsertIndex())));
-        r.Register("freew.index-refresh", new ActionRibbonCommand(editor.RefreshIndex));
+        r.Register("freew.index-refresh", new ActionRibbonCommand(
+            callbacks.OpenUpdateIndexDialog ?? (() => editor.RefreshIndex())));
         r.Register("freew.mark-citation", new ActionRibbonCommand(callbacks.OpenMarkCitationDialog ?? (() => { })));
         r.Register("freew.table-of-authorities", new ActionRibbonCommand(
             callbacks.ShowTableOfAuthoritiesDialog ?? (() =>

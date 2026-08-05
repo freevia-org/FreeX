@@ -748,8 +748,15 @@ public sealed class ReferencesTabTests
         var dialog = new InsertIndexDialog();
 
         dialog.Width.Should().Be(InsertIndexDialogPlanner.DialogWidth);
+        dialog.Title.Should().Be(InsertIndexDialogPlanner.Title);
+        dialog.ActionLabelForTests.Should().Be(InsertIndexDialogPlanner.InsertButtonLabel);
         dialog.BuildResultForTests("   ").Identifier.Should().BeNull();
         dialog.BuildResultForTests(" People ").Identifier.Should().Be("People");
+
+        var updateDialog = InsertIndexDialog.CreateUpdateForTests("People");
+        updateDialog.Title.Should().Be(InsertIndexDialogPlanner.UpdateTitle);
+        updateDialog.ActionLabelForTests.Should().Be(InsertIndexDialogPlanner.UpdateButtonLabel);
+        updateDialog.BuildResultForTests(" People ").Identifier.Should().Be("People");
     });
 
     [Fact]
@@ -811,6 +818,89 @@ public sealed class ReferencesTabTests
             .Should().Equal("Index", "Alpha, 1");
         view.Document.Blocks.Should().NotContain(block =>
             DocumentIndex.IsIndexParagraph(block, "People"));
+    }
+
+    [Fact]
+    public void Index_update_ribbon_command_uses_owner_dialog_callback_for_selective_index()
+    {
+        var view = ViewWith(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Entries"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha")),
+                DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People"))
+            }
+        });
+        view.InsertIndex();
+        view.InsertIndex("People");
+        var defaultRegion = view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, identifier: null))
+            .ToArray();
+        view.Document.Blocks.Add(new Paragraph
+        {
+            Runs = { DocumentIndex.MarkRun(new IndexMark("Grace", Identifier: "People")) }
+        });
+        var calls = 0;
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks() with
+        {
+            OpenUpdateIndexDialog = () =>
+            {
+                calls++;
+                view.RefreshIndex("People");
+            }
+        });
+
+        Execute(registry, "freew.index-refresh");
+
+        calls.Should().Be(1);
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, identifier: null))
+            .Should().Equal(defaultRegion);
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Ada, 1", "Grace, 1");
+    }
+
+    [Fact]
+    public void Index_update_ribbon_command_without_callback_refreshes_default_index_only()
+    {
+        var view = ViewWith(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Entries"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha")),
+                DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People"))
+            }
+        });
+        view.InsertIndex();
+        view.InsertIndex("People");
+        var peopleRegion = view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
+            .ToArray();
+        view.Document.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                DocumentIndex.MarkRun(new IndexMark("Beta")),
+                DocumentIndex.MarkRun(new IndexMark("Grace", Identifier: "People"))
+            }
+        });
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.index-refresh");
+
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, identifier: null))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Alpha, 1", "Beta, 1");
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
+            .Should().Equal(peopleRegion);
     }
 
     [Fact]
