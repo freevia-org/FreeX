@@ -2,10 +2,18 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Ribbon;
 
+public enum IndexEntryReferenceKind
+{
+    CurrentPage,
+    PageRange,
+    CrossReference
+}
+
 public sealed record MarkIndexEntryDialogState(
     string MainEntry,
     string Subentry,
-    bool UseCrossReference,
+    IndexEntryReferenceKind ReferenceKind,
+    string BookmarkName,
     string CrossReference,
     bool BoldPageNumber,
     bool ItalicPageNumber);
@@ -29,6 +37,7 @@ public static class MarkIndexEntryDialogPlanner
     public const string SubentryLabel = "Subentry (optional):";
     public const string OptionsLabel = "Options:";
     public const string CurrentPageLabel = "Current page";
+    public const string PageRangeLabel = "Page range:";
     public const string CrossReferenceLabel = "Cross-reference:";
     public const string PageNumberFormatLabel = "Page number format:";
     public const string BoldLabel = "Bold";
@@ -39,18 +48,21 @@ public static class MarkIndexEntryDialogPlanner
     public const string DefaultCrossReference = "See ";
     public const string MissingMainEntryMessage = "Enter the main index entry before marking.";
     public const string MissingCrossReferenceMessage = "Enter the cross-reference text before marking.";
+    public const string MissingBookmarkMessage = "Select a bookmark for the page range before marking.";
 
     public static MarkIndexEntryDialogState BuildInitialState(string? selectedText) =>
         new(
             (selectedText ?? string.Empty).Trim(),
             string.Empty,
-            false,
+            IndexEntryReferenceKind.CurrentPage,
+            string.Empty,
             DefaultCrossReference,
             BoldPageNumber: false,
             ItalicPageNumber: false);
 
-    public static bool CanMarkAll(string? selectedText) =>
-        !string.IsNullOrWhiteSpace(selectedText);
+    public static bool CanMarkAll(string? selectedText, IndexEntryReferenceKind referenceKind) =>
+        !string.IsNullOrWhiteSpace(selectedText)
+        && referenceKind != IndexEntryReferenceKind.PageRange;
 
     public static bool TryBuildMark(
         MarkIndexEntryDialogState state,
@@ -66,11 +78,23 @@ public static class MarkIndexEntryDialogPlanner
             return false;
         }
 
-        var crossReference = state.UseCrossReference ? state.CrossReference.Trim() : string.Empty;
-        if (state.UseCrossReference && crossReference.Length == 0)
+        var crossReference = state.ReferenceKind == IndexEntryReferenceKind.CrossReference
+            ? state.CrossReference.Trim()
+            : string.Empty;
+        if (state.ReferenceKind == IndexEntryReferenceKind.CrossReference && crossReference.Length == 0)
         {
             mark = null;
             validation = new MarkIndexEntryValidation(MissingCrossReferenceMessage);
+            return false;
+        }
+
+        var bookmarkName = state.ReferenceKind == IndexEntryReferenceKind.PageRange
+            ? state.BookmarkName.Trim()
+            : string.Empty;
+        if (state.ReferenceKind == IndexEntryReferenceKind.PageRange && bookmarkName.Length == 0)
+        {
+            mark = null;
+            validation = new MarkIndexEntryValidation(MissingBookmarkMessage);
             return false;
         }
 
@@ -78,8 +102,9 @@ public static class MarkIndexEntryDialogPlanner
             mainEntry,
             state.Subentry.Trim(),
             crossReference,
-            BoldPageNumber: !state.UseCrossReference && state.BoldPageNumber,
-            ItalicPageNumber: !state.UseCrossReference && state.ItalicPageNumber);
+            BoldPageNumber: state.ReferenceKind != IndexEntryReferenceKind.CrossReference && state.BoldPageNumber,
+            ItalicPageNumber: state.ReferenceKind != IndexEntryReferenceKind.CrossReference && state.ItalicPageNumber,
+            BookmarkName: bookmarkName);
         validation = null;
         return true;
     }
