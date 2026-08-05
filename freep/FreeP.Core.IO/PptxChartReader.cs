@@ -274,6 +274,7 @@ internal static class PptxChartReader
                 _ => null,
             };
             shape.LegendOverlay = ParseNullableBoolAttr(legend.Attribute("overlay")?.Value);
+            shape.LegendTextStyle = ReadChartTextStyle(legend.Element(Cx + "txPr"), scheme);
         }
         shape.Categories.AddRange(categories);
 

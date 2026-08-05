@@ -168,17 +168,20 @@ internal static class PptxChartWriter
                     new XElement(cx + "plotArea",
                         new XElement(cx + "plotAreaRegion", series)))));
         if (chart.Legend is { } position)
-            document.Root?.Element(cx + "chart")?.Add(BuildChartExLegend(position, chart.LegendOverlay, cx));
+            document.Root?.Element(cx + "chart")?.Add(BuildChartExLegend(
+                position, chart.LegendOverlay, chart.LegendTextStyle, cx));
         return document;
     }
 
     private static XElement BuildChartExLegend(
         LegendPosition position,
         bool? overlay,
+        ChartTextStyle? textStyle,
         XNamespace cx) =>
         new(cx + "legend",
             new XAttribute("pos", ChartExLegendPosition(position)),
-            overlay is { } value ? new XAttribute("overlay", value ? "1" : "0") : null);
+            overlay is { } value ? new XAttribute("overlay", value ? "1" : "0") : null,
+            BuildChartTextPropertiesEl(textStyle, cx));
 
     private static string ChartExLegendPosition(LegendPosition position) =>
         position switch
@@ -202,13 +205,29 @@ internal static class PptxChartWriter
         var legend = chartElement.Element(cx + "legend");
         if (legend is null)
         {
-            chartElement.Add(BuildChartExLegend(position, chart.LegendOverlay, cx));
+            chartElement.Add(BuildChartExLegend(
+                position, chart.LegendOverlay, chart.LegendTextStyle, cx));
             return;
         }
 
         legend.SetAttributeValue("pos", ChartExLegendPosition(position));
         if (chart.LegendOverlay is { } overlay)
             legend.SetAttributeValue("overlay", overlay ? "1" : "0");
+
+        if (chart.LegendTextStyle is not null)
+        {
+            legend.Element(cx + "txPr")?.Remove();
+            var textProperties = BuildChartTextPropertiesEl(chart.LegendTextStyle, cx);
+            if (textProperties is not null)
+            {
+                var anchor = legend.Elements().FirstOrDefault(element =>
+                    element.Name == cx + "offset" || element.Name == cx + "extLst");
+                if (anchor is null)
+                    legend.Add(textProperties);
+                else
+                    anchor.AddBeforeSelf(textProperties);
+            }
+        }
     }
 
     private static void UpdateChartExTitle(XDocument document, ChartShape chart)
@@ -1739,7 +1758,9 @@ internal static class PptxChartWriter
         return new XElement(A + "gradFill", gsLst, kindEl);
     }
 
-    private static XElement? BuildChartTextPropertiesEl(ChartTextStyle? style)
+    private static XElement? BuildChartTextPropertiesEl(
+        ChartTextStyle? style,
+        XNamespace? chartNamespace = null)
     {
         if (style?.IsImplicitDefault == true)
             return null;
@@ -1748,7 +1769,8 @@ internal static class PptxChartWriter
         if (defRPr is null)
             return null;
 
-        return new XElement(C + "txPr",
+        var chartNs = chartNamespace ?? C;
+        return new XElement(chartNs + "txPr",
             new XElement(A + "bodyPr"),
             new XElement(A + "lstStyle"),
             new XElement(A + "p",
