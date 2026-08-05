@@ -12,6 +12,7 @@ public sealed class MarkIndexEntryDialogTests
         var dialog = MarkIndexEntryDialog.CreateForTest("  Animals  ");
 
         dialog.CrossReferenceEnabledForTest.Should().BeFalse();
+        dialog.BookmarkSelectorEnabledForTest.Should().BeFalse();
         dialog.PageNumberFormattingEnabledForTest.Should().BeTrue();
         dialog.AcceptForTest().Should().BeTrue();
         dialog.ResultForTest!.Mark.Should().Be(new IndexMark("Animals"));
@@ -24,6 +25,7 @@ public sealed class MarkIndexEntryDialogTests
         dialog.SetForTest(" Animals ", " Cats ", true, " See Pet care ");
 
         dialog.CrossReferenceEnabledForTest.Should().BeTrue();
+        dialog.BookmarkSelectorEnabledForTest.Should().BeFalse();
         dialog.PageNumberFormattingEnabledForTest.Should().BeFalse();
         dialog.AcceptForTest().Should().BeTrue();
         dialog.ResultForTest!.Mark.Should().Be(new IndexMark("Animals", "Cats", "See Pet care"));
@@ -62,5 +64,77 @@ public sealed class MarkIndexEntryDialogTests
         dialog.AcceptAllForTest().Should().BeTrue();
         dialog.ResultForTest!.MarkAll.Should().BeTrue();
         dialog.ResultForTest.Mark.Should().Be(new IndexMark("Alpha"));
+    }
+
+    [StaFact]
+    public void Dialog_PageRangeReturnsSelectedBookmarkAndKeepsPageNumberFormatting()
+    {
+        var dialog = MarkIndexEntryDialog.CreateForTest("Animals", ["ChapterOne", "ChapterTwo"]);
+        dialog.SetReferenceForTest(
+            "Animals",
+            "Cats",
+            IndexEntryReferenceKind.PageRange,
+            "ChapterTwo",
+            null,
+            boldPageNumber: true,
+            italicPageNumber: true);
+
+        dialog.BookmarkNamesForTest.Should().Equal("ChapterOne", "ChapterTwo");
+        dialog.BookmarkSelectorEnabledForTest.Should().BeTrue();
+        dialog.CrossReferenceEnabledForTest.Should().BeFalse();
+        dialog.PageNumberFormattingEnabledForTest.Should().BeTrue();
+        dialog.AcceptForTest().Should().BeTrue();
+        dialog.ResultForTest!.Mark.Should().Be(new IndexMark(
+            "Animals",
+            "Cats",
+            BoldPageNumber: true,
+            ItalicPageNumber: true,
+            BookmarkName: "ChapterTwo"));
+    }
+
+    [StaFact]
+    public void Dialog_PageRangeRequiresBookmarkSelection()
+    {
+        var dialog = MarkIndexEntryDialog.CreateForTest("Animals", ["ChapterOne"]);
+        dialog.SetReferenceForTest(
+            "Animals",
+            null,
+            IndexEntryReferenceKind.PageRange,
+            null,
+            null);
+
+        dialog.AcceptForTest().Should().BeFalse();
+        dialog.ResultForTest.Should().BeNull();
+    }
+
+    [StaFact]
+    public void Dialog_MarkAllIsSuppressedForPageRangeAndRestoredForOtherOptions()
+    {
+        var dialog = MarkIndexEntryDialog.CreateForTest("Animals", ["ChapterOne"]);
+
+        dialog.SetReferenceForTest(
+            "Animals",
+            null,
+            IndexEntryReferenceKind.PageRange,
+            "ChapterOne",
+            null);
+        dialog.MarkAllEnabledForTest.Should().BeFalse();
+        dialog.AcceptAllForTest().Should().BeFalse();
+
+        dialog.SetReferenceForTest(
+            "Animals",
+            null,
+            IndexEntryReferenceKind.CrossReference,
+            null,
+            "See Creatures");
+        dialog.MarkAllEnabledForTest.Should().BeTrue();
+
+        dialog.SetReferenceForTest(
+            "Animals",
+            null,
+            IndexEntryReferenceKind.CurrentPage,
+            null,
+            null);
+        dialog.MarkAllEnabledForTest.Should().BeTrue();
     }
 }
