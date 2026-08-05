@@ -6,7 +6,6 @@ using Avalonia.Media;
 using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
-using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
@@ -14,8 +13,7 @@ internal sealed class FindReplaceDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
-    private readonly EditingSession _editor;
-    private readonly Action? _onNavigationOrMutation;
+    private readonly FindReplaceDialogSession _session;
     private readonly TextBox _findBox;
     private readonly TextBlock _replaceLabel;
     private readonly TextBox _replaceBox;
@@ -28,12 +26,8 @@ internal sealed class FindReplaceDialog : Window
     private readonly TextBlock _statusText;
     private readonly Grid _replaceInputRow;
     private readonly StackPanel _replaceButtonRow;
-    private readonly List<TextSearchMatch> _matches = new();
-    private int _currentMatchIndex = -1;
-    private bool _showReplace;
-
-    internal FindReplaceWorkflowPlan LastWorkflowPlan { get; private set; } = null!;
-    internal bool ShowReplace => _showReplace;
+    internal FindReplaceWorkflowPlan LastWorkflowPlan => _session.LastWorkflowPlan;
+    internal bool ShowReplace => _session.ShowReplace;
     internal string StatusText => _statusText.Text ?? string.Empty;
 
     public FindReplaceDialog(
@@ -41,8 +35,7 @@ internal sealed class FindReplaceDialog : Window
         bool showReplace = false,
         Action? onNavigationOrMutation = null)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        _onNavigationOrMutation = onNavigationOrMutation;
+        _session = new FindReplaceDialogSession(editor, showReplace, onNavigationOrMutation);
 
         Width = 425.3333333333333;
         CanResize = false;
@@ -55,10 +48,19 @@ internal sealed class FindReplaceDialog : Window
         _replaceBox = new TextBox { MinWidth = 260, Margin = new Thickness(6, 4, 0, 4) };
         _matchCaseCheck = new CheckBox { Content = "Match case", Margin = new Thickness(0, 0, 12, 0) };
         _wholeWordCheck = new CheckBox { Content = "Whole word" };
-        _findNextButton = BuildButton("Find Next", () => Navigate(+1), isDefault: true);
-        _findPreviousButton = BuildButton("Find Previous", () => Navigate(-1));
-        _replaceButton = BuildButton("Replace", () => ReplaceCurrent());
-        _replaceAllButton = BuildButton("Replace All", () => ReplaceAll());
+        _findNextButton = BuildButton(
+            "Find Next",
+            () => ApplyWorkflowPlan(_session.Navigate(+1)),
+            isDefault: true);
+        _findPreviousButton = BuildButton(
+            "Find Previous",
+            () => ApplyWorkflowPlan(_session.Navigate(-1)));
+        _replaceButton = BuildButton(
+            "Replace",
+            () => ApplyWorkflowPlan(_session.ReplaceCurrent()));
+        _replaceAllButton = BuildButton(
+            "Replace All",
+            () => ApplyWorkflowPlan(_session.ReplaceAll()));
         var closeButton = BuildButton("Close", Close, isCancel: true);
         _statusText = new TextBlock
         {
@@ -72,16 +74,18 @@ internal sealed class FindReplaceDialog : Window
         AvaloniaCompactDialogChrome.ApplyCheckBox(_matchCaseCheck, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyCheckBox(_wholeWordCheck, DialogChromeStyle);
 
-        _findBox.TextChanged += (_, _) => InvalidateSearch();
-        _replaceBox.TextChanged += (_, _) => RefreshWorkflowPlan();
-        _matchCaseCheck.IsCheckedChanged += (_, _) => InvalidateSearch();
-        _wholeWordCheck.IsCheckedChanged += (_, _) => InvalidateSearch();
+        _findBox.TextChanged += (_, _) => ApplyWorkflowPlan(_session.SetQuery(_findBox.Text));
+        _replaceBox.TextChanged += (_, _) => ApplyWorkflowPlan(_session.SetReplacement(_replaceBox.Text));
+        _matchCaseCheck.IsCheckedChanged += (_, _) =>
+            ApplyWorkflowPlan(_session.SetMatchCase(_matchCaseCheck.IsChecked == true));
+        _wholeWordCheck.IsCheckedChanged += (_, _) =>
+            ApplyWorkflowPlan(_session.SetWholeWord(_wholeWordCheck.IsChecked == true));
         _findBox.KeyDown += (_, e) =>
         {
             if (e.Key != Key.Enter)
                 return;
 
-            Navigate(+1);
+            ApplyWorkflowPlan(_session.Navigate(+1));
             e.Handled = true;
         };
 
@@ -130,12 +134,10 @@ internal sealed class FindReplaceDialog : Window
 
     internal void ShowReplaceMode(bool show)
     {
-        _showReplace = show;
         Height = show ? 198.66666666666666 : 134;
-        Title = FindReplaceDialogPlanner.TitleForMode(show);
         _replaceInputRow.IsVisible = show;
         _replaceButtonRow.IsVisible = show;
-        RefreshWorkflowPlan();
+        ApplyWorkflowPlan(_session.SetShowReplace(show));
     }
 
     internal FindReplaceWorkflowPlan SetInputForTests(
@@ -148,103 +150,20 @@ internal sealed class FindReplaceDialog : Window
         _replaceBox.Text = replacement ?? string.Empty;
         _matchCaseCheck.IsChecked = matchCase;
         _wholeWordCheck.IsChecked = wholeWord;
-        InvalidateSearch();
-        return LastWorkflowPlan;
+        return ApplyWorkflowPlan(_session.SetInput(query, replacement, matchCase, wholeWord));
     }
 
-    internal FindReplaceWorkflowPlan NavigateForTests(int direction) => Navigate(direction);
-    internal FindReplaceWorkflowPlan ReplaceAllForTests() => ReplaceAll();
+    internal FindReplaceWorkflowPlan NavigateForTests(int direction) =>
+        ApplyWorkflowPlan(_session.Navigate(direction));
 
-    private void InvalidateSearch()
+    internal FindReplaceWorkflowPlan ReplaceAllForTests() =>
+        ApplyWorkflowPlan(_session.ReplaceAll());
+
+    private FindReplaceWorkflowPlan ApplyWorkflowPlan(FindReplaceWorkflowPlan plan)
     {
-        _matches.Clear();
-        _currentMatchIndex = -1;
-        RefreshWorkflowPlan();
-    }
-
-    private void EnsureMatches()
-    {
-        if (_matches.Count > 0)
-            return;
-
-        _matches.AddRange(_editor.FindAll(_findBox.Text, BuildOptions()));
-    }
-
-    private FindReplaceWorkflowPlan Navigate(int direction)
-    {
-        EnsureMatches();
-        var navigation = FindReplaceDialogPlanner.Navigate(
-            _currentMatchIndex,
-            _matches.Count,
-            direction);
-        if (navigation.HasMatch)
-        {
-            _currentMatchIndex = navigation.MatchIndex;
-            _editor.NavigateTo(_matches[_currentMatchIndex]);
-            _onNavigationOrMutation?.Invoke();
-        }
-
-        return RefreshWorkflowPlan(navigation.StatusText, navigation.StatusKind);
-    }
-
-    private FindReplaceWorkflowPlan ReplaceCurrent()
-    {
-        EnsureMatches();
-        var index = FindReplaceDialogPlanner.ReplacementTargetIndex(
-            _currentMatchIndex,
-            _matches.Count);
-        if (index < 0)
-        {
-            return RefreshWorkflowPlan(
-                FindReplaceDialogPolicy.NoMatchesStatus,
-                FindReplacePolicyStatusKind.NoMatches);
-        }
-
-        _editor.ReplaceOne(_matches[index], _replaceBox.Text ?? string.Empty);
-        _onNavigationOrMutation?.Invoke();
-        _matches.Clear();
-        _currentMatchIndex = -1;
-        return Navigate(+1);
-    }
-
-    private FindReplaceWorkflowPlan ReplaceAll()
-    {
-        var query = _findBox.Text;
-        if (!FindReplaceDialogPlanner.CanReplaceAll(query))
-        {
-            return RefreshWorkflowPlan(
-                FindReplaceDialogPolicy.SearchTermRequiredMessage,
-                FindReplacePolicyStatusKind.None);
-        }
-
-        var count = _editor.ReplaceAll(
-            query,
-            _replaceBox.Text ?? string.Empty,
-            BuildOptions());
-        _onNavigationOrMutation?.Invoke();
-        _matches.Clear();
-        _currentMatchIndex = -1;
-        var status = FindReplaceDialogPlanner.ReplacementStatus(count);
-        return RefreshWorkflowPlan(status.StatusText, status.StatusKind);
-    }
-
-    private FindReplaceWorkflowPlan RefreshWorkflowPlan(
-        string? statusText = null,
-        FindReplacePolicyStatusKind statusKind = FindReplacePolicyStatusKind.None)
-    {
-        LastWorkflowPlan = FindReplaceDialogPlanner.BuildWorkflowPlan(
-            _showReplace,
-            _findBox.Text,
-            _replaceBox.Text,
-            _matchCaseCheck.IsChecked == true,
-            _wholeWordCheck.IsChecked == true,
-            _matches,
-            _currentMatchIndex,
-            statusText,
-            statusKind);
-
-        _statusText.Text = LastWorkflowPlan.StatusText;
-        _statusText.Foreground = LastWorkflowPlan.StatusKind switch
+        Title = plan.Title;
+        _statusText.Text = plan.StatusText;
+        _statusText.Foreground = plan.StatusKind switch
         {
             FindReplacePolicyStatusKind.NoMatches or FindReplacePolicyStatusKind.NoReplacements =>
                 new SolidColorBrush(Color.FromRgb(0xC6, 0x28, 0x28)),
@@ -252,16 +171,12 @@ internal sealed class FindReplaceDialog : Window
                 new SolidColorBrush(Color.FromRgb(0x1B, 0x7E, 0x30)),
             _ => new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
         };
-        _findNextButton.IsEnabled = LastWorkflowPlan.CanSearch;
-        _findPreviousButton.IsEnabled = LastWorkflowPlan.CanSearch;
-        _replaceButton.IsEnabled = LastWorkflowPlan.CanReplace;
-        _replaceAllButton.IsEnabled = LastWorkflowPlan.CanReplaceAll;
-        return LastWorkflowPlan;
+        _findNextButton.IsEnabled = plan.CanSearch;
+        _findPreviousButton.IsEnabled = plan.CanSearch;
+        _replaceButton.IsEnabled = plan.CanReplace;
+        _replaceAllButton.IsEnabled = plan.CanReplaceAll;
+        return plan;
     }
-
-    private TextSearchOptions BuildOptions() => FindReplaceDialogPlanner.BuildOptions(
-        _matchCaseCheck.IsChecked == true,
-        _wholeWordCheck.IsChecked == true);
 
     private static Grid BuildInputRow(TextBlock label, Control field)
     {
