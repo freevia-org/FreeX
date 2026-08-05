@@ -101,7 +101,7 @@ public class ComplexFieldRoundTripTests
         var mark = reopened.Blocks.OfType<Paragraph>().Single().Runs.Single(run => run.ComplexField is not null);
         DocumentIndex.MarkedTerm(mark).Should().Be("Alpha topic");
         DocumentIndex.Build(reopened).Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Index", "Alpha topic, 1");
+            .Should().Equal("A", "Alpha topic, 1");
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public class ComplexFieldRoundTripTests
         var run = reopened.Blocks.OfType<Paragraph>().Single().Runs.Single(candidate => candidate.ComplexField is not null);
         DocumentIndex.MarkedEntry(run).Should().Be(new IndexMark("Transportation", "Rail", "See Trains"));
         DocumentIndex.Build(reopened).Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Index", "Transportation", "Rail. See Trains");
+            .Should().Equal("T", "Transportation", "Rail. See Trains");
     }
 
     [Fact]
@@ -209,8 +209,8 @@ public class ComplexFieldRoundTripTests
         var run = reopened.Blocks.OfType<Paragraph>().Single().Runs.Single(candidate => candidate.ComplexField is not null);
         DocumentIndex.MarkedEntry(run).Should().Be(new IndexMark("Alpha", Identifier: "People"));
         DocumentIndex.Build(reopened, identifier: "People").Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Index", "Alpha, 1");
-        DocumentIndex.Build(reopened).Should().ContainSingle();
+            .Should().Equal("A", "Alpha, 1");
+        DocumentIndex.Build(reopened).Should().BeEmpty();
     }
 
     [Fact]
@@ -230,7 +230,7 @@ public class ComplexFieldRoundTripTests
 
         region.Should().HaveCount(2);
         region.Cast<Paragraph>().Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Index", "Ada, 1");
+            .Should().Equal("A", "Ada, 1");
         region.Should().OnlyContain(block => !DocumentIndex.IsIndexParagraph(block, identifier: null));
         reopened.Styles.Should().ContainKey(DocumentIndex.HeadingStyleIdFor("People"));
         reopened.Styles.Should().ContainKey(DocumentIndex.EntryStyleIdFor("People"));

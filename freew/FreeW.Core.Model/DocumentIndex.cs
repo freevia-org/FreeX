@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+
 namespace FreeW.Core.Model;
 
 /// <summary>
@@ -25,14 +28,24 @@ public sealed record IndexMark(
 /// <summary>One body-paragraph insertion point selected by Word-style Mark All.</summary>
 public sealed record IndexMarkTarget(int BlockIndex, int TextOffset);
 
+/// <summary>Layout and collation choices for a generated Word INDEX field result.</summary>
+public sealed record IndexBuildOptions(
+    bool IncludeAlphabeticHeadings = true,
+    bool IncludeTitle = false,
+    string CultureName = "en-US")
+{
+    public static IndexBuildOptions WordDefault { get; } = new();
+    public static IndexBuildOptions LegacyTitleOnly { get; } = new(false, true);
+}
+
 /// <summary>
 /// Pure, WPF-free generation of a document index from hidden body <c>XE</c> marks plus legacy
 /// <see cref="TextDocument.IndexEntries"/>. Lives in the model project so it is unit-testable without
 /// any UI, mirroring <see cref="TableOfContents"/>.
 /// <para>
-/// <see cref="Build"/> produces ordinary styled <see cref="Paragraph"/>s — an "Index" heading
-/// followed by one paragraph per distinct marked term and its page list, sorted alphabetically
-/// (case-insensitive) with duplicate pages collapsed. The paragraphs carry dedicated index style ids (<see cref="HeadingStyleId"/>
+/// <see cref="Build"/> produces ordinary styled <see cref="Paragraph"/>s: Word-style alphabetic group
+/// headings followed by one paragraph per distinct marked term and its page list, sorted with English
+/// index collation and duplicate pages collapsed. The paragraphs carry dedicated index style ids (<see cref="HeadingStyleId"/>
 /// and <see cref="EntryStyleId"/>) so they:
 /// </para>
 /// <list type="bullet">
@@ -47,25 +60,27 @@ public static class DocumentIndex
     /// <summary>Style id of the index's "Index" heading paragraph.</summary>
     public const string HeadingStyleId = "IndexHeading";
 
-    /// <summary>Display text of the index's heading paragraph.</summary>
+    /// <summary>Display text used only by the explicit legacy-title build option.</summary>
     public const string HeadingText = "Index";
 
     /// <summary>Style id carried by each generated index entry paragraph.</summary>
     public const string EntryStyleId = "IndexEntry";
 
     /// <summary>
-    /// Builds the index paragraphs for <paramref name="document"/>: an "Index" heading
-    /// (<see cref="HeadingStyleId"/>) followed by one paragraph per distinct hidden or legacy marked term,
-    /// sorted alphabetically with its distinct page labels. A document with no marked entries yields just
-    /// the heading paragraph. Deterministic and
+    /// Builds the index paragraphs for <paramref name="document"/> using Word's default INDEX result:
+    /// alphabetic group headings followed by one paragraph per distinct hidden or legacy marked term,
+    /// sorted with English index collation and distinct page labels. A document with no marked entries
+    /// yields no paragraphs. Deterministic and
     /// side-effect free — it never mutates <paramref name="document"/>.
     /// </summary>
     public static IReadOnlyList<Paragraph> Build(
         TextDocument document,
         Func<int, string?>? pageTextOf = null,
-        string? identifier = null)
+        string? identifier = null,
+        IndexBuildOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(document);
+        options ??= IndexBuildOptions.WordDefault;
 
         var occurrences = new List<IndexOccurrence>();
         var bodyTerms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -94,10 +109,9 @@ public static class DocumentIndex
             }
         }
 
-        var paragraphs = new List<Paragraph>
-        {
-            new(HeadingText) { StyleId = HeadingStyleIdFor(identifier) }
-        };
+        var paragraphs = new List<Paragraph>();
+        if (options.IncludeTitle)
+            paragraphs.Add(new Paragraph(HeadingText) { StyleId = HeadingStyleIdFor(identifier) });
         var roots = new Dictionary<string, IndexNode>(StringComparer.OrdinalIgnoreCase);
         foreach (var occurrence in occurrences)
         {
@@ -119,8 +133,25 @@ public static class DocumentIndex
             node!.Occurrences.Add(occurrence);
         }
 
-        foreach (var root in Ordered(roots.Values))
-            AppendNode(paragraphs, root, depth: 0, document, pageTextOf, EntryStyleIdFor(identifier));
+        string? currentHeading = null;
+        foreach (var root in Ordered(roots.Values, options.CultureName))
+        {
+            var heading = AlphabeticHeading(root.Label, options.CultureName);
+            if (options.IncludeAlphabeticHeadings
+                && !string.Equals(currentHeading, heading, StringComparison.Ordinal))
+            {
+                paragraphs.Add(new Paragraph(heading) { StyleId = HeadingStyleIdFor(identifier) });
+                currentHeading = heading;
+            }
+            AppendNode(
+                paragraphs,
+                root,
+                depth: 0,
+                document,
+                pageTextOf,
+                EntryStyleIdFor(identifier),
+                options.CultureName);
+        }
 
         return paragraphs;
     }
@@ -254,7 +285,8 @@ public static class DocumentIndex
         int depth,
         TextDocument document,
         Func<int, string?>? pageTextOf,
-        string entryStyleId)
+        string entryStyleId,
+        string cultureName)
     {
         var pages = node.Occurrences
             .Where(occurrence => occurrence.Mark.CrossReference.Length == 0)
@@ -300,13 +332,36 @@ public static class DocumentIndex
             paragraph.Runs.Add(new Run(". " + string.Join("; ", crossReferences)));
         paragraphs.Add(paragraph);
 
-        foreach (var child in Ordered(node.Children.Values))
-            AppendNode(paragraphs, child, depth + 1, document, pageTextOf, entryStyleId);
+        foreach (var child in Ordered(node.Children.Values, cultureName))
+            AppendNode(paragraphs, child, depth + 1, document, pageTextOf, entryStyleId, cultureName);
     }
 
-    private static IEnumerable<IndexNode> Ordered(IEnumerable<IndexNode> nodes) =>
-        nodes.OrderBy(node => node.Label, StringComparer.OrdinalIgnoreCase)
+    private static IEnumerable<IndexNode> Ordered(IEnumerable<IndexNode> nodes, string cultureName) =>
+        nodes.OrderBy(node => node.Label, IndexLabelComparer(cultureName))
             .ThenBy(node => node.Label, StringComparer.Ordinal);
+
+    private static IComparer<string> IndexLabelComparer(string cultureName)
+    {
+        var compareInfo = CultureInfo.GetCultureInfo(cultureName).CompareInfo;
+        return Comparer<string>.Create((left, right) => compareInfo.Compare(
+            left,
+            right,
+            CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace));
+    }
+
+    private static string AlphabeticHeading(string label, string cultureName)
+    {
+        var element = StringInfo.GetNextTextElement(label.Trim());
+        var decomposed = element.Normalize(NormalizationForm.FormD);
+        var baseElement = string.Concat(decomposed.Where(character =>
+            CharUnicodeInfo.GetUnicodeCategory(character) is not UnicodeCategory.NonSpacingMark
+                and not UnicodeCategory.SpacingCombiningMark
+                and not UnicodeCategory.EnclosingMark));
+        if (baseElement.Length == 0)
+            baseElement = element;
+        return baseElement.Normalize(NormalizationForm.FormC)
+            .ToUpper(CultureInfo.GetCultureInfo(cultureName));
+    }
 
     private static IReadOnlyList<string> SplitLevels(string entryText) =>
         entryText.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
