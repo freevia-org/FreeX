@@ -219,7 +219,7 @@ public sealed class SlideShowPresenterSessionDedupTests
     }
 
     [Fact]
-    public void NativeHosts_KeepOnlyRendererSpecificPresenterResponsibilities()
+    public void NativeHosts_KeepOnlyRendererProjectionInputAndWindowingResponsibilities()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var presenterFiles = new[]
@@ -236,25 +236,41 @@ public sealed class SlideShowPresenterSessionDedupTests
         foreach (var source in presenterFiles)
         {
             source.Should().Contain("SlideShowPresenterViewSession");
+            source.Should().Contain("SlideShowPresenterViewOperations operations");
             source.Should().Contain("_session.BuildViewPlan()");
+            source.Should().Contain("_session.GoBack(_notesDirty, _notesText.Text)");
+            source.Should().Contain("_session.GoNext(_notesDirty, _notesText.Text)");
             source.Should().Contain("DispatcherTimer");
             source.Should().Contain("SlideCanvas");
             source.Should().NotContain("SlideShowSlideNumberPlanner");
             source.Should().NotContain("BuildRecordingSummary");
+            source.Should().NotContain("TotalArtifactCount");
             source.Should().NotContain("private readonly Func<SlideShowPresenterState> _stateProvider");
         }
 
         foreach (var source in slideShowFiles)
         {
-            source.Should().Contain("_session.PlanKeyboardInput(");
-            source.Should().Contain("_session.PlanPointerInput(");
-            source.Should().Contain("_session.PlanHyperlinkActivation(");
-            source.Should().Contain("_session.ExecuteInputPlan(");
-            source.Should().Contain("_session.ExecuteHostCommand(");
-            source.Should().Contain("_session.BuildDisplayPlan(");
-            source.Should().Contain("_session.DisplaySlide");
+            source.Should().Contain("private readonly SlideShowRuntimeApplication _runtime;");
+            source.Should().Contain("_runtime.BindRenderer(new SlideShowRuntimeRendererCallbacks(");
+            source.Should().Contain("_runtime.HandleKeyboardInput(");
+            source.Should().Contain("_runtime.HandlePointerInput(");
+            source.Should().Contain("_runtime.ActivateHyperlink(");
+            source.Should().Contain("_runtime.BuildDisplayPlan(");
+            source.Should().Contain("_runtime.DisplaySlide");
+            source.Should().Contain("_runtime.CreatePresenterViewOperations(_setSlideNotesText)");
+            source.Should().Contain("var windowPlan = _runtime.WindowPlan;");
             source.Should().Contain("DispatcherTimer");
             source.Should().Contain("_screenModeOverlay");
+            source.Should().Contain("SlideShowPlaybackPlanner.PlanAnimationStep(");
+            source.Should().NotContain("SlideShowSessionController");
+            source.Should().NotContain("SlideShowSessionInputExecutionCallbacks");
+            source.Should().NotContain("SlideShowHostExecutionCallbacks");
+            source.Should().NotContain("PresentationMediaTranscriptPlanner");
+            source.Should().NotContain("SlideShowKioskRestartPlanner");
+            source.Should().NotContain("_presentation.ShowType");
+            source.Should().NotContain("_presentation.ShowBrowseScrollbar");
+            source.Should().NotContain("_presentation.ShowMediaControls");
+            source.Should().NotContain("_presentation.ShowWithNarration");
             source.Should().NotContain("private readonly SlideShowController _controller");
             source.Should().NotContain("private string _slideNumberBuffer");
             source.Should().NotContain("private SlideShowScreenMode _screenMode");

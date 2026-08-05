@@ -38,6 +38,26 @@ public sealed class PresenterViewWindow : Window
 
     public PresenterViewWindow(
         Presentation presentation,
+        SlideShowPresenterViewOperations operations)
+        : this(
+            presentation,
+            operations.StateProvider,
+            operations.GoBack,
+            operations.GoNext,
+            operations.SetScreenMode,
+            operations.SelectPointerMode,
+            operations.ClearInk,
+            operations.SetTimingIntent,
+            operations.SetMediaIntent,
+            operations.RecordingReviewProvider,
+            operations.ApplyRecordingReview,
+            operations.GoToSlide,
+            operations.SetNotesText)
+    {
+    }
+
+    public PresenterViewWindow(
+        Presentation presentation,
         Func<SlideShowPresenterState> stateProvider,
         Action? goBack = null,
         Action? goNext = null,
@@ -93,18 +113,8 @@ public sealed class PresenterViewWindow : Window
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(18, 0, 18, 0),
         };
-        _backButton = MakeActionButton("Previous", () =>
-        {
-            CommitNotes();
-            _session.GoBack(notesDirty: false, notesText: null);
-            RefreshFromState();
-        });
-        _advanceButton = MakeActionButton("Next", () =>
-        {
-            CommitNotes();
-            _session.GoNext(notesDirty: false, notesText: null);
-            RefreshFromState();
-        });
+        _backButton = MakeActionButton("Previous", GoBack);
+        _advanceButton = MakeActionButton("Next", GoNext);
         _slideNumberBox = new TextBox
         {
             Width = 48,
@@ -148,11 +158,8 @@ public sealed class PresenterViewWindow : Window
         _recordingStatusText.Margin = new Thickness(0, 6, 0, 0);
         _applyRecordingButton = MakeActionButton("Apply recording", () =>
         {
-            if (_session.ApplyRecordingReview() is { } result)
-            {
-                _recordingStatusText.Text = $"Applied {result.TotalArtifactCount} recording artifact(s).";
-                RefreshFromState();
-            }
+            _session.ApplyRecordingReview();
+            RefreshFromState();
         });
         controls.Children.Add(_backButton);
         controls.Children.Add(_advanceButton);
@@ -313,6 +320,18 @@ public sealed class PresenterViewWindow : Window
         VerticalAlignment = VerticalAlignment.Stretch,
         Margin = new Thickness(0, 6, 0, 0),
     };
+
+    private void GoBack()
+    {
+        _notesDirty &= !_session.GoBack(_notesDirty, _notesText.Text);
+        RefreshFromState();
+    }
+
+    private void GoNext()
+    {
+        _notesDirty &= !_session.GoNext(_notesDirty, _notesText.Text);
+        RefreshFromState();
+    }
 
     private void SubmitSlideNumber()
     {

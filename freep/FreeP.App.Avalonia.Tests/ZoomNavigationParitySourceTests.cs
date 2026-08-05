@@ -15,6 +15,10 @@ public sealed class ZoomNavigationParitySourceTests
             "freep",
             "FreeP.App.Presentation",
             "SlideShowSessionController.cs"));
+        var runtimeSource = File.ReadAllText(RepoFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowRuntimeApplication.cs"));
         var zoomCase = sessionSource.IndexOf(
             "SlideShowPointerClickIntentKind.Zoom",
             StringComparison.Ordinal);
@@ -23,7 +27,8 @@ public sealed class ZoomNavigationParitySourceTests
         var route = sessionSource[zoomCase..];
         route.Should().Contain("intent.TransitionDurationMs");
         route.Should().Contain("intent.ShowBackground");
-        hostSource.Should().Contain("_session.PlanPointerInput(");
+        hostSource.Should().Contain("_runtime.HandlePointerInput(");
+        runtimeSource.Should().Contain("_session.PlanPointerInput(pointer)");
         hostSource.Should().NotContain("case SlideShowPointerClickIntentKind.Zoom");
     }
 

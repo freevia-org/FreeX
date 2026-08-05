@@ -39,12 +39,16 @@ public sealed class CanvasGestureOwnershipTests
     }
 
     [Fact]
-    public void SlideShowAdapters_DelegateInputRoutingAndCanvasMappingToSharedSession()
+    public void SlideShowAdapters_DelegateInputRoutingAndCanvasMappingToSharedRuntime()
     {
         var session = ReadRepoFile(
             "freep",
             "FreeP.App.Presentation",
             "SlideShowSessionController.cs");
+        var runtime = ReadRepoFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowRuntimeApplication.cs");
         var wpf = ReadRepoFile("freep", "FreeP.App.Host", "SlideShowWindow.cs");
         var avalonia = ReadRepoFile("freep", "FreeP.App.Avalonia", "SlideShowWindow.cs");
 
@@ -52,13 +56,17 @@ public sealed class CanvasGestureOwnershipTests
         session.Should().Contain("SlideShowPointerInteractionPlanner.HitTestHyperlink");
         session.Should().Contain("SlideShowPointerInteractionPlanner.MapInkPoint");
         session.Should().Contain("SlideShowPointerClickIntentKind.Zoom");
+        runtime.Should().Contain("_session.PlanPointerInput(pointer)");
+        runtime.Should().Contain("_session.HitTestHyperlink(slide, pointer)");
+        runtime.Should().Contain("_session.BeginPointerInk(pointer)");
         foreach (var adapter in new[] { wpf, avalonia })
         {
-            adapter.Should().Contain("_session.PlanPointerInput");
-            adapter.Should().Contain("_session.HitTestHyperlink");
-            adapter.Should().Contain("_session.BeginPointerInk");
-            adapter.Should().Contain("_session.AppendPointerInk");
-            adapter.Should().Contain("_session.EndPointerInk");
+            adapter.Should().Contain("_runtime.HandlePointerInput");
+            adapter.Should().Contain("_runtime.HitTestHyperlink");
+            adapter.Should().Contain("_runtime.BeginPointerInk");
+            adapter.Should().Contain("_runtime.AppendPointerInk");
+            adapter.Should().Contain("_runtime.EndPointerInk");
+            adapter.Should().NotContain("_session.PlanPointerInput");
             adapter.Should().NotContain("SlideShowHostPlanner.MapCanvasPointToSlide");
             adapter.Should().NotContain("case SlideShowPointerClickIntentKind.");
             adapter.Should().NotContain("private uint? HitTestTriggerShape");

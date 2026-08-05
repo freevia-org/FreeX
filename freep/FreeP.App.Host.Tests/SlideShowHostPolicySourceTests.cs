@@ -13,11 +13,13 @@ public sealed class SlideShowHostPolicySourceTests
             "FreeP.App.Host",
             "SlideShowWindow.cs"));
 
-        source.Should().Contain("HorizontalScrollBarVisibility = _presentation.ShowBrowseScrollbar");
-        source.Should().Contain("VerticalScrollBarVisibility = _presentation.ShowBrowseScrollbar");
-        source.Should().Contain("SlideShowKioskRestartPlanner.TryGetInterval(");
+        source.Should().Contain("HorizontalScrollBarVisibility = windowPlan.ShowBrowseScrollbars");
+        source.Should().Contain("VerticalScrollBarVisibility = windowPlan.ShowBrowseScrollbars");
+        source.Should().Contain("_runtime.KioskRestartInterval");
         source.Should().Contain("StartKioskRestartTimer");
-        source.Should().Contain("RestartKioskShow");
+        source.Should().Contain("_runtime.RestartKioskShow()");
+        source.Should().NotContain("_presentation.ShowBrowseScrollbar");
+        source.Should().NotContain("SlideShowKioskRestartPlanner");
     }
 
     [Fact]
@@ -29,29 +31,26 @@ public sealed class SlideShowHostPolicySourceTests
             "FreeP.App.Host",
             "SlideShowWindow.cs"));
 
-        source.Should().Contain("_session.PlanKeyboardInput(");
-        source.Should().Contain("_session.PlanSlideNumberJump(");
+        source.Should().Contain("_runtime.HandleKeyboardInput(");
+        source.Should().Contain("_runtime.ExecuteSlideNumberJump(");
         source.Should().Contain("ExecuteSlideNumberJump");
-        source.Should().Contain("_session.SetScreenMode(mode);");
-        source.Should().Contain("CreateInputExecutionCallbacks");
-        source.Should().Contain("_session.ExecuteInputPlan(");
-        source.Should().Contain("_session.PlanAdvance(");
-        source.Should().Contain("_session.PlanBack(");
-        source.Should().Contain("_session.PlanPointerInput(");
-        source.Should().Contain("_session.PlanHyperlinkActivation(");
-        source.Should().Contain("_session.BuildDisplayPlan(");
-        source.Should().Contain("_session.CreatePresenterState(");
-        source.Should().Contain("_session.PresenterSummary");
+        source.Should().Contain("_runtime.SetScreenMode(mode);");
+        source.Should().Contain("_runtime.ExecuteAdvance(");
+        source.Should().Contain("_runtime.ExecuteBack(");
+        source.Should().Contain("_runtime.HandlePointerInput(");
+        source.Should().Contain("_runtime.ActivateHyperlink(");
+        source.Should().Contain("_runtime.BuildDisplayPlan(");
+        source.Should().Contain("_runtime.CreatePresenterState(");
+        source.Should().Contain("_runtime.PresenterSummary");
         source.Should().Contain("SlideShowInkExecutionPlanner.BuildOverlayRenderPlan(");
-        source.Should().Contain("SlideShowSessionController");
-        source.Should().Contain("_session.ApplyPresenterToolIntent(");
-        source.Should().Contain("_session.ExecuteHostCommand(");
-        source.Should().Contain("_session.Close(");
-        source.Should().Contain("_session.BeginPointerInk(");
-        source.Should().Contain("_session.AppendPointerInk(");
-        source.Should().Contain("_session.EndPointerInk(");
-        source.Should().Contain("_session.ClearInkStrokes(");
-        source.Should().Contain("_session.UndoLastInkStroke(");
+        source.Should().Contain("SlideShowRuntimeApplication");
+        source.Should().Contain("_runtime.ApplyPresenterToolIntent(");
+        source.Should().Contain("_runtime.Close(");
+        source.Should().Contain("_runtime.BeginPointerInk(");
+        source.Should().Contain("_runtime.AppendPointerInk(");
+        source.Should().Contain("_runtime.EndPointerInk(");
+        source.Should().Contain("_runtime.ClearInkStrokes(");
+        source.Should().Contain("_runtime.UndoLastInkStroke(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildBlindsBand(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildRandomBars(");
         source.Should().Contain("SlideShowPlaybackPlanner.RandomBarsBandCount");
@@ -65,7 +64,11 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildWedge(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildWheel(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.IsSecondCheckerboardPhase(");
-        source.Should().Contain("_session.HitTestHyperlink(");
+        source.Should().Contain("_runtime.HitTestHyperlink(");
+        source.Should().NotContain("SlideShowSessionController");
+        source.Should().NotContain("SlideShowSessionInputExecutionCallbacks");
+        source.Should().NotContain("SlideShowHostExecutionCallbacks");
+        source.Should().NotContain("PresentationMediaTranscriptPlanner");
         source.Should().NotContain("SlideShowHostPlanner.MapCanvasPointToSlide(");
         source.Should().NotContain("case SlideShowPointerClickIntentKind.");
         source.Should().NotContain("if (e.Key == Key.P");
@@ -219,7 +222,7 @@ public sealed class SlideShowHostPolicySourceTests
             "FreeP.App.Host",
             "SlideShowWindow.cs"));
 
-        source.Should().Contain("new SlideShowHostExecutionCallbacks(");
+        source.Should().Contain("new SlideShowRuntimeRendererCallbacks(");
         source.Should().Contain("PlayAnimationStep,");
         source.Should().Contain("private void PlayAnimationStep(AnimationStep step)");
         source.Should().Contain("_lastAnimationStepFrameEvidence = SlideShowPlaybackFramePlanner.PlanAnimationStepCheckpoints(step, _slideDipW, _slideDipH);");

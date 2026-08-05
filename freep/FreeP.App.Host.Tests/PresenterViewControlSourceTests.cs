@@ -13,17 +13,15 @@ public sealed class PresenterViewControlSourceTests
         var mainWindow = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs"));
         var presenter = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "PresenterViewWindow.cs"));
 
-        slideshow.Should().Contain("() => ExecuteBack()");
-        slideshow.Should().Contain("() => ExecuteAdvance()");
-        slideshow.Should().Contain("slideNumber => ExecuteSlideNumberJump(slideNumber)");
-        slideshow.Should().Contain("(slideIndex, text) => _setSlideNotesText?.Invoke(slideIndex, text)");
+        slideshow.Should().Contain("_runtime.CreatePresenterViewOperations(_setSlideNotesText)");
+        slideshow.Should().Contain("private readonly SlideShowRuntimeApplication _runtime;");
         mainWindow.Should().Contain("Editor.SetSlideNotesText");
-        slideshow.Should().Contain("SetScreenMode,");
-        slideshow.Should().Contain("SetPresenterPointerMode(mode)");
-        slideshow.Should().Contain("() => ClearPresenterInkStrokes(),");
-        slideshow.Should().Contain("SetPresenterTimingIntent(timing)");
+        slideshow.Should().Contain("_runtime.SetScreenMode(mode)");
+        slideshow.Should().Contain("_runtime.SetPointerMode(pointerMode, nowUtc)");
+        slideshow.Should().Contain("_runtime.ClearInkStrokes()");
+        slideshow.Should().Contain("_runtime.SetTimingIntent(timingIntent, nowUtc)");
         slideshow.Should().Contain("public SlideShowPresenterToolPlan SetPresenterTimingIntent");
-        slideshow.Should().Contain("SetPresenterMediaIntent(media)");
+        slideshow.Should().Contain("_runtime.SetMediaIntent(mediaIntent, nowUtc)");
         slideshow.Should().Contain("public SlideShowPresenterToolPlan SetPresenterMediaIntent");
         presenter.Should().Contain("SlideShowPresenterViewSession");
         presenter.Should().Contain("_session.GoBack(");
@@ -47,5 +45,6 @@ public sealed class PresenterViewControlSourceTests
         presenter.Should().Contain("plan.CanAdvance");
         presenter.Should().NotContain("SlideShowSlideNumberPlanner");
         presenter.Should().NotContain("BuildRecordingSummary");
+        slideshow.Should().NotContain("new SlideShowPresenterViewSession(");
     }
 }

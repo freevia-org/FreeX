@@ -66,7 +66,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     // ── State ─────────────────────────────────────────────────────────────────────
 
     private readonly Presentation    _presentation;
-    private readonly SlideShowSessionController _session;
+    private readonly SlideShowRuntimeApplication _runtime;
     private readonly Action<int, string?>? _setSlideNotesText;
     private readonly AvaloniaSlideShowMediaController _mediaController;
     private readonly DispatcherTimer  _autoAdvanceTimer;
@@ -113,9 +113,6 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     // Current slide dimensions in DIP.
     private double _slideDipW;
     private double _slideDipH;
-    private readonly int? _preferredCaptionSlideIndex;
-    private readonly uint? _preferredCaptionShapeId;
-    private readonly int? _preferredCaptionTrackIndex;
 
     // ── Construction ─────────────────────────────────────────────────────────────
 
@@ -177,27 +174,27 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         ArgumentNullException.ThrowIfNull(playbackRoute);
         _setSlideNotesText = setSlideNotesText;
-        _preferredCaptionSlideIndex = preferredCaptionSlideIndex;
-        _preferredCaptionShapeId = preferredCaptionShapeId;
-        _preferredCaptionTrackIndex = preferredCaptionTrackIndex;
-        _session = new SlideShowSessionController(
+        _runtime = new SlideShowRuntimeApplication(
             _presentation,
             playbackRoute,
             DateTimeOffset.UtcNow,
-            captureBackend ?? CreateDefaultRecordingCaptureBackend());
+            captureBackend ?? CreateDefaultRecordingCaptureBackend(),
+            new SlideShowRuntimeCaptionPreference(
+                preferredCaptionSlideIndex,
+                preferredCaptionShapeId,
+                preferredCaptionTrackIndex));
 
         // Pre-compute slide DIP dimensions.
-        var metrics = SlideShowHostPlanner.BuildSlideMetrics(
-            presentation.SlideSizeCxEmu,
-            presentation.SlideSizeCyEmu);
+        var metrics = _runtime.InitialSlideMetrics;
         _slideDipW = metrics.WidthDip;
         _slideDipH = metrics.HeightDip;
 
         // Speaker and kiosk modes are fullscreen; individual browsing is a normal window.
-        var isBrowseWindow = _presentation.ShowType == PresentationShowType.BrowsedByIndividual;
+        var windowPlan = _runtime.WindowPlan;
+        var isBrowseWindow = windowPlan.IsBrowseWindow;
         WindowState        = isBrowseWindow ? WindowState.Normal : WindowState.FullScreen;
-        ExtendClientAreaToDecorationsHint = !isBrowseWindow;
-        Topmost            = !isBrowseWindow;
+        ExtendClientAreaToDecorationsHint = windowPlan.IsBorderless;
+        Topmost            = windowPlan.IsTopmost;
         if (isBrowseWindow)
         {
             Width = 1024;
@@ -207,7 +204,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         }
         Background         = Brushes.Black;
         Focusable          = true;
-        CanResize          = isBrowseWindow;
+        CanResize          = windowPlan.AllowsResize;
 
         // ── Visual tree ────────────────────────────────────────────────────────
 
@@ -296,10 +293,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             var browser = new ScrollViewer
             {
                 Background = Brushes.Black,
-                HorizontalScrollBarVisibility = _presentation.ShowBrowseScrollbar
+                HorizontalScrollBarVisibility = windowPlan.ShowBrowseScrollbars
                     ? global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
                     : global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = _presentation.ShowBrowseScrollbar
+                VerticalScrollBarVisibility = windowPlan.ShowBrowseScrollbars
                     ? global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
                     : global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
                 HorizontalContentAlignment = HorizontalAlignment.Center,
@@ -320,13 +317,28 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             IsEnabled = false,
         };
-        _autoAdvanceTimer.Tick += (_, _) => DoAdvance();
+        _autoAdvanceTimer.Tick += (_, _) => _runtime.ExecuteAdvance(stopAutoAdvance: true);
 
         _kioskRestartTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             IsEnabled = false,
         };
-        _kioskRestartTimer.Tick += (_, _) => RestartKioskShow();
+        _kioskRestartTimer.Tick += (_, _) => _runtime.RestartKioskShow();
+
+        _runtime.BindRenderer(new SlideShowRuntimeRendererCallbacks(
+            _autoAdvanceTimer.Stop,
+            CloseSlideShow,
+            PlayAnimationStep,
+            navigation => DisplayCurrentSlide(
+                navigation.AnimateSlide,
+                navigation.TransitionDurationMs,
+                navigation.UseDestinationBackground),
+            TogglePresenterView,
+            () => DisplayCurrentSlide(animated: false),
+            RenderScreenMode,
+            hyperlink => OpenExternalUrl(hyperlink.Url!),
+            RefreshInkOverlay,
+            RecordInternalHyperlinkNavigation));
 
         // ── Event wiring ───────────────────────────────────────────────────────
         KeyDown             += OnKeyDown;
@@ -347,82 +359,65 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     /// <summary>
     /// Execute a single logical advance step and return what happened.
     /// </summary>
-    public AdvanceResult ExecuteAdvance(DateTimeOffset? nowUtc = null)
-    {
-        var command = _session.PlanAdvance();
-        ApplyHostCommand(command, nowUtc);
-        return command.AdvanceResult!;
-    }
+    public AdvanceResult ExecuteAdvance(DateTimeOffset? nowUtc = null) =>
+        _runtime.ExecuteAdvance(nowUtc);
 
     /// <summary>Execute a logical back step and return what happened.</summary>
-    public BackResult ExecuteBack(DateTimeOffset? nowUtc = null)
-    {
-        var command = _session.PlanBack();
-        ApplyHostCommand(command, nowUtc);
-        return command.BackResult!;
-    }
+    public BackResult ExecuteBack(DateTimeOffset? nowUtc = null) =>
+        _runtime.ExecuteBack(nowUtc);
 
     /// <summary>Jump to a one-based slide number without playing its entrance transition.</summary>
-    public void ExecuteSlideNumberJump(int oneBasedSlideNumber)
-    {
-        ApplyHostCommand(_session.PlanSlideNumberJump(oneBasedSlideNumber));
-    }
+    public void ExecuteSlideNumberJump(int oneBasedSlideNumber) =>
+        _runtime.ExecuteSlideNumberJump(oneBasedSlideNumber);
 
-    public Slide? ExecuteHiddenSlideReveal()
-    {
-        var slide = _session.RevealNextHiddenSlide();
-        if (slide is null)
-            return null;
-
-        DisplayCurrentSlide(animated: false);
-        return slide;
-    }
+    public Slide? ExecuteHiddenSlideReveal() => _runtime.ExecuteHiddenSlideReveal();
 
     /// <summary>The underlying state machine (for test assertions).</summary>
-    public SlideShowController Controller => _session.Controller;
+    public SlideShowController Controller => _runtime.Controller;
 
     /// <summary>The presenter blank-screen mode currently covering the slide.</summary>
-    public SlideShowScreenMode ScreenMode => _session.ScreenMode;
+    public SlideShowScreenMode ScreenMode => _runtime.ScreenMode;
 
     /// <summary>Show the slide, a black screen, or a white screen during presentation.</summary>
-    public void SetScreenMode(SlideShowScreenMode mode)
+    public void SetScreenMode(SlideShowScreenMode mode) => _runtime.SetScreenMode(mode);
+
+    private void RenderScreenMode(SlideShowRuntimeScreenModePlan plan)
     {
-        _session.SetScreenMode(mode);
-        _screenModeOverlay.Fill = mode == SlideShowScreenMode.White ? Brushes.White : Brushes.Black;
-        _screenModeOverlay.IsVisible = _session.IsScreenBlank;
+        _screenModeOverlay.Fill = plan.UseWhiteSurface ? Brushes.White : Brushes.Black;
+        _screenModeOverlay.IsVisible = plan.IsBlank;
     }
 
-    public DateTimeOffset PresenterStartedAtUtc => _session.StartedAtUtc;
+    public DateTimeOffset PresenterStartedAtUtc => _runtime.StartedAtUtc;
 
-    public SlideShowPresenterToolPlan PresenterToolPlan => _session.ToolPlan;
+    public SlideShowPresenterToolPlan PresenterToolPlan => _runtime.ToolPlan;
 
     public IReadOnlyList<SlideShowPresenterWorkflowAction> PresenterWorkflowActions =>
-        _session.ToolPlan.WorkflowActions;
+        _runtime.ToolPlan.WorkflowActions;
 
     public IReadOnlyList<SlideShowPresenterCommandState> PresenterCommandStates =>
-        _session.ToolPlan.CommandStates;
+        _runtime.ToolPlan.CommandStates;
 
-    public SlideShowTimingRecorderState TimingRecorderState => _session.TimingRecorderState;
+    public SlideShowTimingRecorderState TimingRecorderState => _runtime.TimingRecorderState;
 
-    public SlideShowRecordingExecutionState RecordingExecutionState => _session.RecordingExecutionState;
+    public SlideShowRecordingExecutionState RecordingExecutionState => _runtime.RecordingExecutionState;
 
     public SlideShowRecordingCaptureAdapterReadiness RecordingCaptureAdapterReadiness =>
-        _session.RecordingExecutionState.HostCapabilities.EffectiveCaptureAdapterReadiness;
+        _runtime.RecordingExecutionState.HostCapabilities.EffectiveCaptureAdapterReadiness;
 
     public IReadOnlyList<SlideShowRecordingExecutionAction> RecordingExecutionActions =>
-        _session.RecordingExecutionState.LastActions;
+        _runtime.RecordingExecutionState.LastActions;
 
-    public bool IsPresenterSessionClosed => _session.IsClosed;
+    public bool IsPresenterSessionClosed => _runtime.IsClosed;
 
-    public SlideShowInkExecutionState InkExecutionState => _session.InkExecutionState;
+    public SlideShowInkExecutionState InkExecutionState => _runtime.InkExecutionState;
     public SlideShowPresenterSessionSummary PresenterSessionSummary =>
-        _session.PresenterSummary;
+        _runtime.PresenterSummary;
 
     public SlideShowRecordingReviewPlan RecordingReviewPlan =>
-        _session.RecordingReviewPlan;
+        _runtime.RecordingReviewPlan;
 
     public SlideShowRecordingReviewApplyResult ApplyRecordingReview() =>
-        _session.ApplyRecordingReview();
+        _runtime.ApplyRecordingReview();
 
     internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
     internal IReadOnlyList<SlideShowMediaShapePlan> ActiveMediaPlansForTest => _mediaController.Active;
@@ -434,13 +429,13 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     internal SlideShowShapeAnimationVisualFramePlan? LastAnimationFramePlanForTest => _lastAnimationFramePlan;
     internal IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> LastAnimationStepFrameEvidenceForTest => _lastAnimationStepFrameEvidence;
     internal SlideShowAnimationStepPlaybackReadinessPlan? LastAnimationStepPlaybackReadinessPlanForTest => _lastAnimationStepPlaybackReadinessPlan;
-    internal SlideShowPlaybackRoute PlaybackRoute => _session.PlaybackRoute;
-    internal int CurrentPresentationSlideIndex => _session.CurrentPresentationSlideIndex;
+    internal SlideShowPlaybackRoute PlaybackRoute => _runtime.PlaybackRoute;
+    internal int CurrentPresentationSlideIndex => _runtime.CurrentPresentationSlideIndex;
 
     public SlideShowPresenterState CreatePresenterState(
         DateTimeOffset nowUtc,
         SlideShowPresenterDisplayIntent? displayIntent = null) =>
-        _session.CreatePresenterState(nowUtc, displayIntent);
+        _runtime.CreatePresenterState(nowUtc, displayIntent);
 
     /// <summary>Whether the synchronized presenter dashboard is currently open.</summary>
     public bool IsPresenterViewOpen => _presenterViewWindow?.IsVisible == true;
@@ -456,18 +451,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         var window = new PresenterViewWindow(
             _presentation,
-            () => CreatePresenterState(DateTimeOffset.UtcNow),
-            () => ExecuteBack(),
-            () => ExecuteAdvance(),
-            SetScreenMode,
-            mode => SetPresenterPointerMode(mode),
-            () => ClearPresenterInkStrokes(),
-            timing => SetPresenterTimingIntent(timing),
-            media => SetPresenterMediaIntent(media),
-            () => RecordingReviewPlan,
-            () => ApplyRecordingReview(),
-            slideNumber => ExecuteSlideNumberJump(slideNumber),
-            (slideIndex, text) => _setSlideNotesText?.Invoke(slideIndex, text));
+            _runtime.CreatePresenterViewOperations(_setSlideNotesText));
         _presenterViewWindow = window;
         window.Closed += (_, _) =>
         {
@@ -485,62 +469,44 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         double inkThicknessDip = 0,
         SlideShowInkRetentionDecision inkRetentionDecision = SlideShowInkRetentionDecision.KeepInk,
         DateTimeOffset? nowUtc = null)
-    {
-        var now = nowUtc ?? DateTimeOffset.UtcNow;
-        var plan = _session.ApplyPresenterToolIntent(
+        => _runtime.ApplyPresenterToolIntent(
             timingIntent,
             mediaIntent,
             pointerMode,
             inkColorHex,
             inkThicknessDip,
             inkRetentionDecision,
-            now);
-
-        RefreshInkOverlay();
-        return plan;
-    }
+            nowUtc);
 
     public SlideShowPresenterToolPlan SetPresenterPointerMode(
         SlideShowPresenterPointerMode pointerMode,
         DateTimeOffset? nowUtc = null)
-    {
-        var plan = _session.SetPointerMode(pointerMode, nowUtc ?? DateTimeOffset.UtcNow);
-        RefreshInkOverlay();
-        return plan;
-    }
+        => _runtime.SetPointerMode(pointerMode, nowUtc);
 
     public SlideShowPresenterToolPlan SetPresenterTimingIntent(
         SlideShowTimingIntent timingIntent,
         DateTimeOffset? nowUtc = null)
-    {
-        var plan = _session.SetTimingIntent(timingIntent, nowUtc ?? DateTimeOffset.UtcNow);
-        RefreshInkOverlay();
-        return plan;
-    }
+        => _runtime.SetTimingIntent(timingIntent, nowUtc);
 
     public SlideShowPresenterToolPlan SetPresenterMediaIntent(
         SlideShowRecordingMediaIntent mediaIntent,
         DateTimeOffset? nowUtc = null)
-    {
-        var plan = _session.SetMediaIntent(mediaIntent, nowUtc ?? DateTimeOffset.UtcNow);
-        RefreshInkOverlay();
-        return plan;
-    }
+        => _runtime.SetMediaIntent(mediaIntent, nowUtc);
 
     public SlideShowInkExecutionResult BeginPresenterInkStroke(double canvasX, double canvasY) =>
-        ApplyInkExecution(_session.BeginPointerInk(CreateCanvasPointer(canvasX, canvasY)));
+        _runtime.BeginPointerInk(CreateCanvasPointer(canvasX, canvasY));
 
     public SlideShowInkExecutionResult AppendPresenterInkStroke(double canvasX, double canvasY) =>
-        ApplyInkExecution(_session.AppendPointerInk(CreateCanvasPointer(canvasX, canvasY)));
+        _runtime.AppendPointerInk(CreateCanvasPointer(canvasX, canvasY));
 
     public SlideShowInkExecutionResult EndPresenterInkStroke(double canvasX, double canvasY) =>
-        ApplyInkExecution(_session.EndPointerInk(CreateCanvasPointer(canvasX, canvasY)));
+        _runtime.EndPointerInk(CreateCanvasPointer(canvasX, canvasY));
 
     public SlideShowInkExecutionResult ClearPresenterInkStrokes() =>
-        ApplyInkExecution(_session.ClearInkStrokes());
+        _runtime.ClearInkStrokes();
 
     public SlideShowInkExecutionResult UndoLastPresenterInkStroke() =>
-        ApplyInkExecution(_session.UndoLastInkStroke());
+        _runtime.UndoLastInkStroke();
 
     private static ISlideShowRecordingCaptureBackend CreateDefaultRecordingCaptureBackend()
     {
@@ -576,11 +542,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        var plan = _session.PlanKeyboardInput(
+        e.Handled = _runtime.HandleKeyboardInput(
             e.Key.ToString(),
             controlPressed: e.KeyModifiers.HasFlag(KeyModifiers.Control));
-        _session.ExecuteInputPlan(plan, CreateInputExecutionCallbacks());
-        e.Handled = plan.IsHandled;
     }
 
     // ── Pointer navigation ────────────────────────────────────────────────────────
@@ -590,7 +554,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             return;
 
-        var slide = _session.DisplaySlide;
+        var slide = _runtime.DisplaySlide;
         var pt = e.GetPosition(_slideCanvas);
         var inkResult = BeginPresenterInkStroke(pt.X, pt.Y);
         if (inkResult.IsHandled)
@@ -612,14 +576,12 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             return;
         }
 
-        var plan = _session.PlanPointerInput(CreateCanvasPointer(pt.X, pt.Y));
-        _session.ExecuteInputPlan(plan, CreateInputExecutionCallbacks());
-        e.Handled = plan.IsHandled;
+        e.Handled = _runtime.HandlePointerInput(CreateCanvasPointer(pt.X, pt.Y));
     }
 
     private void OnPointerMoved(object? sender, PointerEventArgs e)
     {
-        var slide = _session.DisplaySlide;
+        var slide = _runtime.DisplaySlide;
         if (slide is null) { Cursor = Cursor.Default; return; }
         var pt    = e.GetPosition(_slideCanvas);
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
@@ -651,17 +613,14 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     /// Returns the first matching hyperlink, or null.
     /// </summary>
     internal Hyperlink? HitTestHyperlink(Slide slide, double canvasX, double canvasY)
-        => _session.HitTestHyperlink(slide, CreateCanvasPointer(canvasX, canvasY));
+        => _runtime.HitTestHyperlink(slide, CreateCanvasPointer(canvasX, canvasY));
 
     /// <summary>
     /// Activates a hyperlink: external → open URL or local file;
     /// internal → navigate to the target slide.
     /// </summary>
     internal void ActivateHyperlink(Hyperlink hlink)
-    {
-        var plan = _session.PlanHyperlinkActivation(hlink);
-        _session.ExecuteInputPlan(plan, CreateInputExecutionCallbacks());
-    }
+        => _runtime.ActivateHyperlink(hlink);
 
     /// <summary>
     /// Opens an external URL in the default browser through the shared URI allowlist.
@@ -676,15 +635,6 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     // ── Trigger shape hit-testing ─────────────────────────────────────────────────
 
-    private SlideShowSessionInputExecutionCallbacks CreateInputExecutionCallbacks() =>
-        new(
-            TogglePresenterView,
-            () => ExecuteHiddenSlideReveal(),
-            SetScreenMode,
-            command => ApplyHostCommand(command),
-            hyperlink => OpenExternalUrl(hyperlink.Url!),
-            RecordInternalHyperlinkNavigation);
-
     private void RecordInternalHyperlinkNavigation(Hyperlink hyperlink)
     {
         var postconditionPath = Environment.GetEnvironmentVariable("FREEP_PHYSICAL_HYPERLINK_POSTCONDITION");
@@ -696,7 +646,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(postconditionPath)!);
         File.WriteAllText(
             postconditionPath,
-            $"activation=internal-slide-hyperlink\ntargetSlideId={hyperlink.TargetSlideId}\ncurrentSlideIndex={_session.Controller.CurrentSlideIndex}\n");
+            $"activation=internal-slide-hyperlink\ntargetSlideId={hyperlink.TargetSlideId}\ncurrentSlideIndex={_runtime.Controller.CurrentSlideIndex}\n");
     }
 
     private SlideShowCanvasPointer CreateCanvasPointer(double canvasX, double canvasY) =>
@@ -707,12 +657,6 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             _slideCanvas.Bounds.Height,
             CurrentSlideMetrics());
 
-    private SlideShowInkExecutionResult ApplyInkExecution(SlideShowInkExecutionResult result)
-    {
-        RefreshInkOverlay();
-        return result;
-    }
-
     private void RefreshInkOverlay()
     {
         _inkOverlay.Children.Clear();
@@ -720,7 +664,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         var canvasWidth = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW;
         var canvasHeight = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH;
         var plan = SlideShowInkExecutionPlanner.BuildOverlayRenderPlan(
-            _session.InkExecutionState,
+            _runtime.InkExecutionState,
             canvasWidth,
             canvasHeight,
             CurrentSlideMetrics());
@@ -816,7 +760,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     }
 
     private Cursor CursorForPresenterInk() =>
-        _session.InkExecutionState.ActivePointerMode switch
+        _runtime.InkExecutionState.ActivePointerMode switch
         {
             SlideShowPresenterPointerMode.Pen or SlideShowPresenterPointerMode.Highlighter =>
                 new Cursor(StandardCursorType.Cross),
@@ -826,50 +770,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     // ── Navigation helpers ────────────────────────────────────────────────────────
 
-    private void DoAdvance()
-    {
-        ApplyHostCommand(_session.PlanAdvance(stopAutoAdvance: true));
-    }
-
-    private void DoBack()
-    {
-        ApplyHostCommand(_session.PlanBack(stopAutoAdvance: true));
-    }
-
     private void CloseSlideShow(DateTimeOffset nowUtc)
     {
         Teardown(nowUtc);
         Close();
-    }
-
-    private void NavigateToSlide(
-        Slide slide,
-        int index,
-        bool animated,
-        int? zoomTransitionDurationMs = null,
-        bool zoomShowBackground = true)
-    {
-        _ = slide;
-        _ = index;
-        DisplayCurrentSlide(animated, zoomTransitionDurationMs, zoomShowBackground);
-    }
-
-    private void ApplyHostCommand(SlideShowHostCommand command, DateTimeOffset? nowUtc = null)
-    {
-        var now = nowUtc ?? DateTimeOffset.UtcNow;
-        _session.ExecuteHostCommand(
-            command,
-            now,
-            new SlideShowHostExecutionCallbacks(
-                _autoAdvanceTimer.Stop,
-                CloseSlideShow,
-                PlayAnimationStep,
-                navigation => NavigateToSlide(
-                    navigation.Slide,
-                    navigation.SlideIndex,
-                    navigation.AnimateSlide,
-                    navigation.TransitionDurationMs,
-                    navigation.UseDestinationBackground)));
     }
 
     // ── Slide display + transitions ───────────────────────────────────────────────
@@ -879,7 +783,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         int? zoomTransitionDurationMs = null,
         bool zoomShowBackground = true)
     {
-        var plan = _session.BuildDisplayPlan(
+        var plan = _runtime.BuildDisplayPlan(
             animated,
             zoomTransitionDurationMs,
             zoomShowBackground);
@@ -892,19 +796,11 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         var slide = plan.Slide;
         if (slide is null) return;
 
-        var captionSlideIndex = _session.DisplaySourceSlideIndex;
-
         // DA2: cancel any in-flight transition/animation timers from the PREVIOUS slide so
         // their stale onComplete callbacks don't clobber the new slide's visual state.
         CancelActiveTimers();
 
         PrepareAnimationOverlay(slide);
-
-        var captionTracks = PresentationMediaTranscriptPlanner
-            .BuildTranscriptPlan(_presentation)
-            .Tracks
-            .Where(track => track.SlideIndex == captionSlideIndex)
-            .ToArray();
 
         _mediaController.EnterSlide(
             slide,
@@ -912,13 +808,13 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             _slideDipH,
             _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW,
             _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH,
-            captionTracks,
-            preferredCaptionShapeId: _preferredCaptionSlideIndex == captionSlideIndex ? _preferredCaptionShapeId : null,
-            preferredCaptionTrackIndex: _preferredCaptionTrackIndex,
-            captionSlideIndex: captionSlideIndex,
-            preferredCaptionSlideIndex: _preferredCaptionSlideIndex,
-            showMediaControls: _presentation.ShowMediaControls,
-            showNarration: _presentation.ShowWithNarration);
+            plan.CaptionTracks,
+            preferredCaptionShapeId: plan.PreferredCaptionShapeId,
+            preferredCaptionTrackIndex: plan.PreferredCaptionTrackIndex,
+            captionSlideIndex: plan.CaptionSlideIndex,
+            preferredCaptionSlideIndex: plan.PreferredCaptionSlideIndex,
+            showMediaControls: plan.ShowMediaControls,
+            showNarration: plan.ShowNarration);
 
         if (plan.Transition is { } t)
             PlayTransition(slide, t);
@@ -939,28 +835,18 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private void StartKioskRestartTimer()
     {
         _kioskRestartTimer.Stop();
-        if (!SlideShowKioskRestartPlanner.TryGetInterval(
-                _presentation,
-                out var interval))
+        if (_runtime.KioskRestartInterval is not { } interval)
             return;
 
         _kioskRestartTimer.Interval = interval;
         _kioskRestartTimer.Start();
     }
 
-    private void RestartKioskShow()
-    {
-        if (_session.IsClosed)
-            return;
-
-        ApplyHostCommand(_session.PlanFirstSlide());
-    }
-
     private void SyncMediaOverlayBounds()
     {
         var width = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW;
         var height = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH;
-        var slide = _session.DisplaySlide;
+        var slide = _runtime.DisplaySlide;
         if (slide is null)
         {
             _mediaController.SetCanvasBounds(width, height);
@@ -3528,7 +3414,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 slideWidthDip: _slideDipW,
                 slideHeightDip: _slideDipH);
 
-        var effectiveColorMap = _session.DisplaySlide?.ColorMapOverride;
+        var effectiveColorMap = _runtime.DisplaySlide?.ColorMapOverride;
         foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step, _presentation, effectiveColorMap))
         {
             var anim = plan.Animation;
@@ -3630,7 +3516,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             _ => AnimationKind.Emphasis,
         };
 
-        var effectiveColorMap = _session.DisplaySlide?.ColorMapOverride;
+        var effectiveColorMap = _runtime.DisplaySlide?.ColorMapOverride;
         var reversePlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
             reversedAnimation,
             0,
@@ -5942,13 +5828,12 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _presenterViewWindow?.Close();
         _presenterViewWindow = null;
         _mediaController.Teardown();
-        if (_session.IsClosed)
+        if (_runtime.IsClosed)
         {
             return;
         }
 
-        var now = nowUtc ?? DateTimeOffset.UtcNow;
-        _session.Close(now);
+        _runtime.Close(nowUtc);
         _autoAdvanceTimer.Stop();
         _kioskRestartTimer.Stop();
         // DA3: stop ALL per-frame animation/transition timers so they don't keep
