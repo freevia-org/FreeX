@@ -55,27 +55,27 @@ internal sealed class AutosaveCoordinator
     {
         try
         {
-            var candidates = _store.EnumerateCandidates();
-            if (candidates.Count == 0)
+            var recovery = AutosaveRecoveryPlanner.PlanLatest(_store);
+            if (recovery is null)
                 return;
 
-            var candidate = AutosaveRecoveryPlanner.SelectLatest(candidates)!;
-            var name = AutosaveRecoveryPlanner.DisplayName(candidate);
             var recover = DialogMessageHelper.AskYesNo(owner,
-                $"FreeW found unsaved changes to {name} from a previous session. Recover them?",
+                $"FreeW found unsaved changes to {recovery.DisplayName} from a previous session. Recover them?",
                 "FreeW - Recover");
 
-            if (recover)
+            if (!recover)
             {
-                // Open the snapshot; delete it on success. On failure the snapshot is structurally
-                // unreadable (e.g. a truncated ZIP from a crashed write) — quarantine it so it is not
-                // re-offered on every launch, which otherwise loops the "Could not recover" error.
-                var loaded = _file.OpenSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
-                ApplyRecoveryDisposition(candidate,
-                    AutosaveRecoveryPlanner.ResolveDisposition(accepted: true, recovered: loaded));
+                // Leave the candidate intact for a later manual recovery or startup prompt.
+                AutosaveRecoveryPlanner.Complete(recovery, accepted: false, recovered: false);
+                return;
             }
-            // On decline ("No"): leave the candidate intact so it remains available for
-            // "Recover Unsaved Documents" or the next startup prompt.
+
+            // Open the snapshot; delete it on success. On failure the snapshot is structurally
+            // unreadable (e.g. a truncated ZIP from a crashed write) — quarantine it so it is not
+            // re-offered on every launch, which otherwise loops the "Could not recover" error.
+            var candidate = recovery.Candidate;
+            var loaded = _file.OpenSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
+            AutosaveRecoveryPlanner.Complete(recovery, accepted: true, recovered: loaded);
         }
         catch
         {
@@ -87,9 +87,8 @@ internal sealed class AutosaveCoordinator
     {
         try
         {
-            var candidates = _store.EnumerateCandidates();
-            var candidate = AutosaveRecoveryPlanner.SelectLatest(candidates);
-            if (candidate is null)
+            var recovery = AutosaveRecoveryPlanner.PlanLatest(_store);
+            if (recovery is null)
             {
                 DialogMessageHelper.ShowInfo(owner,
                     "No unsaved documents were found.",
@@ -97,18 +96,20 @@ internal sealed class AutosaveCoordinator
                 return false;
             }
 
-            var name = AutosaveRecoveryPlanner.DisplayName(candidate);
             var answer = DialogMessageHelper.ShowMessage(owner,
-                $"Recover unsaved changes to {name}?",
+                $"Recover unsaved changes to {recovery.DisplayName}?",
                 "FreeW - Recover",
                 UserMessageButtons.OkCancel,
                 UserMessageIcon.Question);
             if (answer != UserMessageResult.Ok)
+            {
+                AutosaveRecoveryPlanner.Complete(recovery, accepted: false, recovered: false);
                 return false;
+            }
 
+            var candidate = recovery.Candidate;
             var recovered = _file.RecoverSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
-            ApplyRecoveryDisposition(candidate,
-                AutosaveRecoveryPlanner.ResolveDisposition(accepted: true, recovered: recovered));
+            AutosaveRecoveryPlanner.Complete(recovery, accepted: true, recovered: recovered);
 
             return recovered;
         }
@@ -118,21 +119,6 @@ internal sealed class AutosaveCoordinator
                 $"Could not recover the document.\n\n{ex.Message}",
                 "FreeW - Recover");
             return false;
-        }
-    }
-
-    private static void ApplyRecoveryDisposition(
-        AutosaveRecoveryCandidate candidate,
-        AutosaveRecoveryDisposition disposition)
-    {
-        switch (disposition)
-        {
-            case AutosaveRecoveryDisposition.Delete:
-                AutosaveSnapshotStore.DeleteCandidate(candidate);
-                break;
-            case AutosaveRecoveryDisposition.Quarantine:
-                AutosaveSnapshotStore.QuarantineCandidate(candidate);
-                break;
         }
     }
 

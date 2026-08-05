@@ -58,17 +58,33 @@ public sealed class FreeWBehaviorSourceGuardTests
     }
 
     [Fact]
-    public void AutosaveHosts_UseSharedDispositionPolicy()
+    public void AutosaveHosts_DelegateNeutralRecoveryWorkflowToPresentation()
     {
+        var planner = ReadSource("freew", "FreeW.App.Presentation", "Shell", "AutosaveRecoveryPlanner.cs");
         var wpf = ReadSource("freew", "FreeW.App.Host", "AutosaveCoordinator.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "AutosaveAdapter.cs");
 
-        wpf.Should().Contain("AutosaveRecoveryPlanner.SelectLatest(");
-        wpf.Should().Contain("AutosaveRecoveryPlanner.ResolveDisposition(");
-        avalonia.Should().Contain("AutosaveRecoveryPlanner.SelectLatest(");
-        avalonia.Should().Contain("AutosaveRecoveryPlanner.ResolveDisposition(");
-        avalonia.Should().NotContain("private static AutosaveRecoveryCandidate? SelectLatest");
-        avalonia.Should().NotContain("CandidateDisplayName");
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("AutosaveRecoveryPlanner.PlanLatest(_store)");
+            source.Should().Contain("AutosaveRecoveryPlanner.Complete(");
+            source.Should().NotContain("_store.EnumerateCandidates()");
+            source.Should().NotContain("AutosaveRecoveryPlanner.SelectLatest(");
+            source.Should().NotContain("AutosaveRecoveryPlanner.DisplayName(");
+            source.Should().NotContain("AutosaveRecoveryPlanner.ResolveDisposition(");
+            source.Should().NotContain("ApplyRecoveryDisposition");
+            source.Should().NotContain("AutosaveSnapshotStore.DeleteCandidate(");
+            source.Should().NotContain("AutosaveSnapshotStore.QuarantineCandidate(");
+        }
+
+        planner.Should().Contain("store.EnumerateCandidates()");
+        planner.Should().Contain("AutosaveSnapshotStore.DeleteCandidate(candidate)");
+        planner.Should().Contain("AutosaveSnapshotStore.QuarantineCandidate(candidate)");
+
+        wpf.Should().Contain("DialogMessageHelper.AskYesNo(");
+        wpf.Should().Contain("_file.OpenSnapshot(");
+        avalonia.Should().Contain("RecoveryPromptDialog.ShowAsync(");
+        avalonia.Should().Contain("Dispatcher.UIThread.InvokeAsync(");
     }
 
     [Fact]

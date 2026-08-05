@@ -81,33 +81,30 @@ internal sealed class AutosaveAdapter : IDisposable
 
         try
         {
-            var candidates = _store.EnumerateCandidates();
-            if (candidates.Count == 0)
+            var recovery = AutosaveRecoveryPlanner.PlanLatest(_store);
+            if (recovery is null)
                 return;
 
-            var candidate = AutosaveRecoveryPlanner.SelectLatest(candidates);
-            if (candidate is null)
-                return;
-
-            var name = AutosaveRecoveryPlanner.DisplayName(candidate);
             var recover = await RecoveryPromptDialog.ShowAsync(
                 owner,
-                $"FreeW found unsaved changes to \"{name}\" from a previous session. Recover them?");
+                $"FreeW found unsaved changes to \"{recovery.DisplayName}\" from a previous session. Recover them?");
 
             if (!recover)
+            {
+                AutosaveRecoveryPlanner.Complete(recovery, accepted: false, recovered: false);
                 return; // leave snapshot on disk for later recovery
+            }
 
+            var candidate = recovery.Candidate;
             try
             {
                 var doc = DocxReader.Read(candidate.SnapshotPath);
                 _source.LoadRecoveredSnapshot(doc, candidate.Sidecar.OriginalFilePath);
-                ApplyRecoveryDisposition(candidate,
-                    AutosaveRecoveryPlanner.ResolveDisposition(accepted: true, recovered: true));
+                AutosaveRecoveryPlanner.Complete(recovery, accepted: true, recovered: true);
             }
             catch
             {
-                ApplyRecoveryDisposition(candidate,
-                    AutosaveRecoveryPlanner.ResolveDisposition(accepted: true, recovered: false));
+                AutosaveRecoveryPlanner.Complete(recovery, accepted: true, recovered: false);
             }
         }
         catch
@@ -138,21 +135,6 @@ internal sealed class AutosaveAdapter : IDisposable
 
             // Coordinator is best-effort and never throws. Skips when not dirty.
             _coordinator.Snapshot(_source);
-        }
-    }
-
-    private static void ApplyRecoveryDisposition(
-        AutosaveRecoveryCandidate candidate,
-        AutosaveRecoveryDisposition disposition)
-    {
-        switch (disposition)
-        {
-            case AutosaveRecoveryDisposition.Delete:
-                AutosaveSnapshotStore.DeleteCandidate(candidate);
-                break;
-            case AutosaveRecoveryDisposition.Quarantine:
-                AutosaveSnapshotStore.QuarantineCandidate(candidate);
-                break;
         }
     }
 

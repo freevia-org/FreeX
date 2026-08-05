@@ -9,8 +9,28 @@ public enum AutosaveRecoveryDisposition
     Quarantine
 }
 
+public sealed record AutosaveRecoveryPlan(
+    AutosaveRecoveryCandidate Candidate,
+    string DisplayName);
+
 public static class AutosaveRecoveryPlanner
 {
+    public static AutosaveRecoveryPlan? PlanLatest(AutosaveSnapshotStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+
+        return PlanLatest(store.EnumerateCandidates());
+    }
+
+    public static AutosaveRecoveryPlan? PlanLatest(
+        IEnumerable<AutosaveRecoveryCandidate> candidates)
+    {
+        var candidate = SelectLatest(candidates);
+        return candidate is null
+            ? null
+            : new AutosaveRecoveryPlan(candidate, DisplayName(candidate));
+    }
+
     public static AutosaveRecoveryCandidate? SelectLatest(
         IEnumerable<AutosaveRecoveryCandidate> candidates)
     {
@@ -36,6 +56,33 @@ public static class AutosaveRecoveryPlanner
             : recovered
                 ? AutosaveRecoveryDisposition.Delete
                 : AutosaveRecoveryDisposition.Quarantine;
+
+    public static AutosaveRecoveryDisposition Complete(
+        AutosaveRecoveryPlan plan,
+        bool accepted,
+        bool recovered)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var disposition = ResolveDisposition(accepted, recovered);
+        ApplyDisposition(plan.Candidate, disposition);
+        return disposition;
+    }
+
+    private static void ApplyDisposition(
+        AutosaveRecoveryCandidate candidate,
+        AutosaveRecoveryDisposition disposition)
+    {
+        switch (disposition)
+        {
+            case AutosaveRecoveryDisposition.Delete:
+                AutosaveSnapshotStore.DeleteCandidate(candidate);
+                break;
+            case AutosaveRecoveryDisposition.Quarantine:
+                AutosaveSnapshotStore.QuarantineCandidate(candidate);
+                break;
+        }
+    }
 
     private static DateTimeOffset ParseTimestamp(string? timestampUtc) =>
         DateTimeOffset.TryParse(timestampUtc, out var timestamp)
