@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Editing;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -30,25 +31,13 @@ public partial class MainWindow
         string? Token = null);
     private InternalClipboard? _internalClipboard;
 
-    // R91-io-clipboard-image-formats-5-1: a selected chart/shape (SheetGrid.SelectedObjectKind/
-    // SelectedObjectId, set by SelectInsertedChart/SelectInsertedDrawingObject in
-    // MainWindow.ChartCommands.cs/MainWindow.Drawing.cs) leaves SheetGrid.SelectedRange as whatever
-    // single-cell range sits under/near the object's anchor -- ExecuteCopy used to only ever look at
-    // SelectedRange, so Ctrl+C on a selected chart/shape silently copied that underlying CELL and
-    // Ctrl+V never duplicated the object at all. This tracks a pending object copy or cut separately from
-    // the cell-range clipboard above.
-    private sealed record InternalObjectClipboard(
-        SheetId SourceSheetId,
-        SelectionPaneObjectKind Kind,
-        Guid ObjectId,
-        bool IsCut = false);
-    private InternalObjectClipboard? _internalObjectClipboard;
+    private readonly DrawingObjectClipboardSession _drawingObjectClipboard = new();
 
     private void CancelCopyAndTransientModes()
     {
         ClearClipboardVisualState();
         _internalClipboard = null;
-        _internalObjectClipboard = null;
+        _drawingObjectClipboard.Clear();
         CancelFormatPainter();
         _borderDrawMode = BorderDrawMode.None;
         SetSelectionMode(ExcelSelectionMode.Normal);
@@ -95,7 +84,7 @@ public partial class MainWindow
     {
         // Route a selected drawing object through its own clipboard instead of falling into the
         // cell-range path. Object Cut stays pending until Paste executes the shared move command.
-        _internalObjectClipboard = null;
+        _drawingObjectClipboard.Clear();
         if (TryCopySelectedDrawingObject(isCut))
             return;
 
@@ -250,7 +239,7 @@ public partial class MainWindow
     /// <summary>
     /// R91-io-clipboard-image-formats-5-1 (Chart/Shape), completed for Picture/TextBox by
     /// R92-consumer-wiring-sweep-2: captures a selected chart/shape/picture/text box into
-    /// <see cref="_internalObjectClipboard"/> instead of the cell-range clipboard, when
+    /// <see cref="_drawingObjectClipboard"/> instead of the cell-range clipboard, when
     /// SheetGrid currently has an object (not a plain cell) selected. Returns false (leaving both
     /// clipboards untouched) for any other selection kind, which keeps falling through to the
     /// pre-existing cell-range copy behavior unchanged.
@@ -265,16 +254,15 @@ public partial class MainWindow
             FreeX.App.UI.ObjectKind.TextBox => SelectionPaneObjectKind.TextBox,
             _ => null
         };
-        if (kind is null || SheetGrid.SelectedObjectId == Guid.Empty)
+        if (!_drawingObjectClipboard.TryCapture(
+                _currentSheetId,
+                kind,
+                SheetGrid.SelectedObjectId,
+                isCut))
             return false;
 
         _internalClipboard = null;
         ClearClipboardVisualState();
-        _internalObjectClipboard = new InternalObjectClipboard(
-            _currentSheetId,
-            kind.Value,
-            SheetGrid.SelectedObjectId,
-            isCut);
         return true;
     }
 
@@ -285,18 +273,13 @@ public partial class MainWindow
     /// via <see cref="DuplicateDrawingObjectCommand"/>, then selects the new object exactly like
     /// freshly inserting one does (SelectInsertedChart/SelectInsertedDrawingObject).
     /// </summary>
-    private void PasteClipboardObject(InternalObjectClipboard objectClip)
+    private void PasteClipboardObject(DrawingObjectClipboardSnapshot objectClip)
     {
         var destinationSheetId = _currentSheetId;
         DuplicateDrawingObjectCommand? command = null;
         IWorkbookCommand CreateCommand()
         {
-            command = new DuplicateDrawingObjectCommand(
-                objectClip.SourceSheetId,
-                destinationSheetId,
-                objectClip.Kind,
-                objectClip.ObjectId,
-                removeSource: objectClip.IsCut);
+            command = DrawingObjectClipboardSession.CreatePasteCommand(objectClip, destinationSheetId);
             return command;
         }
 
@@ -308,7 +291,7 @@ public partial class MainWindow
         }
 
         if (objectClip.IsCut)
-            _internalObjectClipboard = null;
+            _drawingObjectClipboard.CompletePaste(objectClip);
 
         if (command?.NewObjectId is { } newObjectId)
         {
@@ -318,23 +301,29 @@ public partial class MainWindow
             }
             else if (objectClip.Kind == SelectionPaneObjectKind.Shape)
             {
-                var newAnchor = _workbook.GetSheet(destinationSheetId)?.DrawingShapes
-                    .Find(shape => shape.Id == newObjectId)?.Anchor
-                    ?? new CellAddress(destinationSheetId, 1, 1);
+                var newAnchor = DrawingObjectClipboardSession.ResolveAnchor(
+                    _workbook.GetSheet(destinationSheetId),
+                    destinationSheetId,
+                    objectClip.Kind,
+                    newObjectId);
                 SelectInsertedDrawingObject(newObjectId, FreeX.App.UI.ObjectKind.Shape, newAnchor);
             }
             else if (objectClip.Kind == SelectionPaneObjectKind.Picture)
             {
-                var newAnchor = _workbook.GetSheet(destinationSheetId)?.Pictures
-                    .Find(picture => picture.Id == newObjectId)?.Anchor
-                    ?? new CellAddress(destinationSheetId, 1, 1);
+                var newAnchor = DrawingObjectClipboardSession.ResolveAnchor(
+                    _workbook.GetSheet(destinationSheetId),
+                    destinationSheetId,
+                    objectClip.Kind,
+                    newObjectId);
                 SelectInsertedDrawingObject(newObjectId, FreeX.App.UI.ObjectKind.Picture, newAnchor);
             }
             else if (objectClip.Kind == SelectionPaneObjectKind.TextBox)
             {
-                var newAnchor = _workbook.GetSheet(destinationSheetId)?.TextBoxes
-                    .Find(textBox => textBox.Id == newObjectId)?.Anchor
-                    ?? new CellAddress(destinationSheetId, 1, 1);
+                var newAnchor = DrawingObjectClipboardSession.ResolveAnchor(
+                    _workbook.GetSheet(destinationSheetId),
+                    destinationSheetId,
+                    objectClip.Kind,
+                    newObjectId);
                 SelectInsertedDrawingObject(newObjectId, FreeX.App.UI.ObjectKind.TextBox, newAnchor);
             }
         }
@@ -595,7 +584,7 @@ public partial class MainWindow
         // R91-io-clipboard-image-formats-5-1: the Ctrl+V side of a chart/shape Ctrl+C (see
         // TryCopySelectedDrawingObject) -- duplicate the copied object instead of falling through to
         // the cell-range paste logic below, which has no concept of an object clipboard at all.
-        if (_internalObjectClipboard is { } objectClip)
+        if (_drawingObjectClipboard.Content is { } objectClip)
         {
             PasteClipboardObject(objectClip);
             return;

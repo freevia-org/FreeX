@@ -24842,7 +24842,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         // Keep object Cut separate from the cell clipboard. The source is removed only by the
         // shared move command after Paste has validated and added the destination object.
-        _internalObjectClipboard = null;
+        _drawingObjectClipboard.Clear();
 
         if (TryCopySelectedDrawingObject(isCut: true))
             return;
@@ -24875,7 +24875,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_isOpening || _isSaving)
             return;
 
-        _internalObjectClipboard = null;
+        _drawingObjectClipboard.Clear();
         if (TryCopySelectedDrawingObject())
             return;
 
@@ -25031,7 +25031,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_isOpening || _isSaving)
             return;
 
-        if (_internalObjectClipboard is { } objectClip)
+        if (_drawingObjectClipboard.Content is { } objectClip)
         {
             PasteClipboardObject(objectClip);
             return;
@@ -27852,11 +27852,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // marquee, mirroring the WPF host's ClearClipboardVisualState call on Escape
             // (MainWindow.Editing.cs).
             if (e.Key == Key.Escape &&
-                (_clipboardMarqueeRange is not null || _internalObjectClipboard is not null))
+                (_clipboardMarqueeRange is not null || _drawingObjectClipboard.HasContent))
             {
                 e.Handled = true;
                 SetClipboardMarquee(null, isCut: false);
-                _internalObjectClipboard = null;
+                _drawingObjectClipboard.Clear();
                 RefreshShell("Ready");
                 return;
             }
