@@ -725,11 +725,33 @@ public sealed class ReferencesTabTests
             .Where(TableOfFigures.IsTableOfFiguresParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Equal("Table of Figures", "Figure 1: First", "Figure 2: Second");
+            .Equal("Table of Figures", "Figure 1: First\t1", "Figure 2: Second\t1");
         view.Document.Blocks.OfType<Paragraph>()
             .Count(paragraph => paragraph.StyleId == TableOfFigures.HeadingStyleId)
             .Should()
             .Be(1);
+    }
+
+    [Fact]
+    public void Table_of_figures_refresh_uses_caption_logical_page_label()
+    {
+        var view = ViewWith(
+            new Paragraph(TableOfFigures.HeadingText(CaptionLabel.Figure))
+            {
+                StyleId = TableOfFigures.HeadingStyleId
+            },
+            new Paragraph("Old Figure\t9") { StyleId = TableOfFigures.EntryStyleId },
+            DocumentOps.CreatePageBreak(),
+            Captions.BuildCaption(CaptionLabel.Figure, 1, "Architecture"));
+        view.Document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        view.Document.Page.PageNumberStartAt = 4;
+
+        view.RefreshTableOfFigures();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Figure 1: Architecture\tV");
     }
 
     [Fact]
@@ -745,7 +767,7 @@ public sealed class ReferencesTabTests
             .Where(TableOfFigures.IsTableOfFiguresParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Equal("Table of Equations", "Equation 1: Energy");
+            .Equal("Table of Equations", "Equation 1: Energy\t1");
 
         view.RefreshTableOfFigures("Scheme");
 
@@ -753,7 +775,7 @@ public sealed class ReferencesTabTests
             .Where(TableOfFigures.IsTableOfFiguresParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Equal("Table of Schemes", "Scheme 1: Flow");
+            .Equal("Table of Schemes", "Scheme 1: Flow\t1");
     }
 
     [Fact]
@@ -771,7 +793,7 @@ public sealed class ReferencesTabTests
             .Where(TableOfFigures.IsTableOfFiguresParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Equal("Table of Equations", "Equation 1: First", "Equation 2: Second");
+            .Equal("Table of Equations", "Equation 1: First\t1", "Equation 2: Second\t1");
     }
 
     [Fact]
