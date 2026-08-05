@@ -327,6 +327,14 @@ public class CrossReferencesTests
                 sourceBlockIndex: 1,
                 pageOf: block => block == 0 ? 4 : null)
             .Should().Be("4");
+        CrossReferences.ResolveField(
+                doc,
+                new CrossReferenceField(CrossRefFieldKind.PageRef, "target", CrossRefInsertAs.PageNumber, Hyperlink: false),
+                "1",
+                sourceBlockIndex: 1,
+                pageOf: block => block == 0 ? 4 : null,
+                pageTextOf: block => block == 0 ? "iv" : null)
+            .Should().Be("iv");
     }
 
     [Fact]

@@ -86,6 +86,14 @@ public class ComplexFieldEngineTests
 
         var result = ComplexFieldEngine.Recompute(doc, 1, 0, pageOf: block => block == 0 ? 7 : null);
         result.Should().Be("7");
+
+        ComplexFieldEngine.Recompute(
+                doc,
+                1,
+                0,
+                pageOf: block => block == 0 ? 7 : null,
+                pageTextOf: block => block == 0 ? "vii" : null)
+            .Should().Be("vii");
     }
 
     [Fact]

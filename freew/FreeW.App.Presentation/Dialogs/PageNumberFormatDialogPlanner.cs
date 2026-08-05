@@ -300,6 +300,48 @@ public static class PageNumberFormatDialogPlanner
         return result;
     }
 
+    /// <summary>
+    /// Builds a stable block-to-page-label resolver from a host's physical page ownership. The returned
+    /// labels use the same section restarts, continuation, number formats, and chapter prefixes as PAGE
+    /// fields in headers and footers. Unplaced blocks remain unresolved.
+    /// </summary>
+    public static Func<int, string?> BuildBlockPageReferenceResolver(
+        TextDocument document,
+        Func<int, int?> physicalPageOf)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(physicalPageOf);
+
+        var assignments = Enumerable
+            .Repeat(HeaderFooterPagePlanner.UnassignedBlockPageIndex, document.Blocks.Count)
+            .ToArray();
+        var pageCount = 1;
+        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        {
+            var physicalPage = physicalPageOf(blockIndex)
+                ?? CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex);
+            if (physicalPage is not > 0)
+                continue;
+
+            assignments[blockIndex] = physicalPage.Value - 1;
+            pageCount = Math.Max(pageCount, physicalPage.Value);
+        }
+
+        var pageSections = HeaderFooterPagePlanner.MapPagesToSections(document, assignments, pageCount);
+        var displayPlans = BuildDisplayPlans(pageSections, document, assignments);
+        var textByBlock = new string?[document.Blocks.Count];
+        for (var blockIndex = 0; blockIndex < assignments.Length; blockIndex++)
+        {
+            var pageIndex = assignments[blockIndex];
+            if (pageIndex >= 0 && pageIndex < displayPlans.Count)
+                textByBlock[blockIndex] = displayPlans[pageIndex].Text;
+        }
+
+        return blockIndex => blockIndex >= 0 && blockIndex < textByBlock.Length
+            ? textByBlock[blockIndex]
+            : null;
+    }
+
     public static IReadOnlyList<PageNumberCitationReferencePlan> BuildCitationPageReferencePlans(TextDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);

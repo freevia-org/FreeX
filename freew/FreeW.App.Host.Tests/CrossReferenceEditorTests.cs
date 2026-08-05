@@ -157,7 +157,9 @@ public sealed class CrossReferenceEditorTests
                 new Run("See page "),
                 Run.CrossReferenceFieldRun(
                     new CrossReferenceField(CrossRefFieldKind.PageRef, "_Ref2", CrossRefInsertAs.PageNumber, Hyperlink: false),
-                    "9")
+                    "9"),
+                new Run(" and imported "),
+                Run.ComplexFieldRun(" PAGEREF _Ref2 ", "9")
                 }
         });
         doc.Blocks.Add(DocumentOps.CreatePageBreak());
@@ -165,6 +167,8 @@ public sealed class CrossReferenceEditorTests
         {
             BookmarkName = "_Ref2",
         });
+        doc.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        doc.Page.PageNumberStartAt = 4;
 
         var view = new DocumentView();
         view.LoadModel(doc);
@@ -172,6 +176,10 @@ public sealed class CrossReferenceEditorTests
         view.UpdateFields();
         view.CommitToModel();
 
-        InsertedField(view).Text.Should().Be("2");
+        InsertedField(view).Text.Should().Be("V");
+        view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.ComplexField?.Keyword == "PAGEREF")
+            .Text.Should().Be("V");
     }
 }
