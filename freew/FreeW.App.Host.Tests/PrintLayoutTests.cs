@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
@@ -93,5 +94,74 @@ public sealed class PrintLayoutTests
         Assert.Equal(1056, paginator.GetPage(1).Size.Width, precision: 3);
         Assert.Equal(816, paginator.GetPage(1).Size.Height, precision: 3);
         Assert.Equal(1056, paginator.GetPage(0).Size.Height, precision: 3);
+    }
+
+    [StaFact]
+    public void BuildPaginator_HomogeneousNextPageSection_PreservesPageBoundary()
+    {
+        var document = BuildHomogeneousTwoSectionDocument(SectionBreakKind.NextPage);
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var flow = PrintLayout.BuildPaginatedDocument(view);
+        var paragraphs = flow.Blocks.OfType<System.Windows.Documents.Paragraph>().ToList();
+        var paginator = PrintLayout.BuildPaginator(view);
+        paginator.ComputePageCount();
+
+        Assert.True(paragraphs[1].BreakPageBefore);
+        Assert.Equal(2, paginator.PageCount);
+    }
+
+    [StaFact]
+    public void BuildPaginator_HomogeneousContinuousSection_DoesNotAddPageBoundary()
+    {
+        var document = BuildHomogeneousTwoSectionDocument(SectionBreakKind.Continuous);
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var flow = PrintLayout.BuildPaginatedDocument(view);
+        var paragraphs = flow.Blocks.OfType<System.Windows.Documents.Paragraph>().ToList();
+        var paginator = PrintLayout.BuildPaginator(view);
+        paginator.ComputePageCount();
+
+        Assert.False(paragraphs[1].BreakPageBefore);
+        Assert.Equal(1, paginator.PageCount);
+    }
+
+    [StaFact]
+    public void BuildPaginator_ListCompactionBeforeHomogeneousSection_PreservesPageBoundary()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var listFormatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet };
+        document.Blocks.Add(new Paragraph("First list item") { Formatting = listFormatting });
+        document.Blocks.Add(new Paragraph("Second list item") { Formatting = listFormatting });
+        document.Blocks.Add(new Paragraph("Section end")
+        {
+            SectionBreak = new Section(document.Page.Clone(), SectionBreakKind.NextPage)
+        });
+        document.Blocks.Add(new Paragraph("Second section"));
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var flow = PrintLayout.BuildPaginatedDocument(view);
+        var target = flow.Blocks.OfType<System.Windows.Documents.Paragraph>().Last();
+        var paginator = PrintLayout.BuildPaginator(view);
+        paginator.ComputePageCount();
+
+        Assert.True(target.BreakPageBefore);
+        Assert.Equal(2, paginator.PageCount);
+    }
+
+    private static TextDocument BuildHomogeneousTwoSectionDocument(SectionBreakKind breakKind)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("First section")
+        {
+            SectionBreak = new Section(document.Page.Clone(), breakKind)
+        });
+        document.Blocks.Add(new Paragraph("Second section"));
+        return document;
     }
 }

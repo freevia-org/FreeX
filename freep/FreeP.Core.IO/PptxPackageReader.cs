@@ -4572,6 +4572,7 @@ public static class PptxPackageReader
                                ?? mediaEl.Attribute(R + "embed")?.Value;
 
                 var mediaInfo = new MediaInfo { IsVideo = isVideo };
+                ReadMediaTiming(nvPr, mediaInfo);
 
                 if (!string.IsNullOrWhiteSpace(mediaRelId))
                 {
@@ -4647,6 +4648,30 @@ public static class PptxPackageReader
 
         return shape;
     }
+
+    private static void ReadMediaTiming(XElement nvPr, MediaInfo media)
+    {
+        var mediaEl = nvPr.Element(P + "extLst")?
+            .Elements(P + "ext")
+            .SelectMany(ext => ext.Elements(P14 + "media"))
+            .FirstOrDefault();
+        if (mediaEl is null)
+            return;
+
+        var trim = mediaEl.Element(P14 + "trim");
+        media.TrimStartMilliseconds = ReadMediaMilliseconds(trim?.Attribute("st")?.Value);
+        media.TrimEndMilliseconds = ReadMediaMilliseconds(trim?.Attribute("end")?.Value);
+
+        var fade = mediaEl.Element(P14 + "fade");
+        media.FadeInMilliseconds = ReadMediaMilliseconds(fade?.Attribute("in")?.Value);
+        media.FadeOutMilliseconds = ReadMediaMilliseconds(fade?.Attribute("out")?.Value);
+    }
+
+    private static double ReadMediaMilliseconds(string? value) =>
+        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            && double.IsFinite(parsed)
+            ? Math.Max(0, parsed)
+            : 0;
 
     // ── p:cxnSp ──────────────────────────────────────────────────────────────────
 

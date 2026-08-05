@@ -87,6 +87,12 @@ internal static class PrintLayout
         foreach (var block in CloneBlocks(editor.Document))
             flow.Blocks.Add(block);
 
+        // XAML cloning strips the private paragraph tags that carry model section breaks. Restore
+        // page-type break ownership here so every consumer of this print/preview document sees the
+        // same section boundaries, including homogeneous sections that do not need the section-aware
+        // geometry/header-footer paginator.
+        PaginationEngine.ApplySectionBreakFlags(editor, flow);
+
         // Word paginates long notes as page-local fragments in the same physical body flow. Keep
         // ordinary notes on the established reserve path and use fragment owners only for the
         // narrow plain-flow overflow signature proven by the fidelity compositor.

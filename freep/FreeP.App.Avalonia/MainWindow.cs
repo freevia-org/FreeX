@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -33,7 +34,6 @@ using FreeP.App.Recording.Windows;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
-using System.Globalization;
 using System.Linq;
 
 namespace FreeP.App.Avalonia;
@@ -288,6 +288,15 @@ public sealed partial class MainWindow : Window
     private ComboBox _mediaStartModeBox = null!;
     private CheckBox _mediaLoopCheckBox = null!;
     private Button _mediaPlaybackApplyButton = null!;
+    private TextBlock _mediaTrimStartText = null!;
+    private TextBox _mediaTrimStartBox = null!;
+    private TextBlock _mediaTrimEndText = null!;
+    private TextBox _mediaTrimEndBox = null!;
+    private TextBlock _mediaFadeInText = null!;
+    private TextBox _mediaFadeInBox = null!;
+    private TextBlock _mediaFadeOutText = null!;
+    private TextBox _mediaFadeOutBox = null!;
+    private Button _mediaTimingApplyButton = null!;
     private Button _mediaCaptionCreateButton = null!;
     private Button _mediaCaptionReplaceButton = null!;
     private Button _mediaCaptionDeleteButton = null!;
@@ -1694,6 +1703,21 @@ public sealed partial class MainWindow : Window
         _mediaPlaybackApplyButton = BuildMediaCaptionPaneButton();
         _mediaPlaybackApplyButton.Content = "Apply playback";
         _mediaPlaybackApplyButton.Click += (_, _) => ApplyMediaPlaybackPane();
+        _mediaTrimStartText = BuildMediaCaptionPaneLabel();
+        _mediaTrimStartText.Text = "Trim start (ms)";
+        _mediaTrimStartBox = BuildMediaCaptionPaneTextBox(singleLine: true);
+        _mediaTrimEndText = BuildMediaCaptionPaneLabel();
+        _mediaTrimEndText.Text = "Trim end (ms)";
+        _mediaTrimEndBox = BuildMediaCaptionPaneTextBox(singleLine: true);
+        _mediaFadeInText = BuildMediaCaptionPaneLabel();
+        _mediaFadeInText.Text = "Fade in (ms)";
+        _mediaFadeInBox = BuildMediaCaptionPaneTextBox(singleLine: true);
+        _mediaFadeOutText = BuildMediaCaptionPaneLabel();
+        _mediaFadeOutText.Text = "Fade out (ms)";
+        _mediaFadeOutBox = BuildMediaCaptionPaneTextBox(singleLine: true);
+        _mediaTimingApplyButton = BuildMediaCaptionPaneButton();
+        _mediaTimingApplyButton.Content = "Apply timing";
+        _mediaTimingApplyButton.Click += (_, _) => ApplyMediaTimingPane();
         _mediaCaptionCreateButton = BuildMediaCaptionPaneButton();
         _mediaCaptionReplaceButton = BuildMediaCaptionPaneButton();
         _mediaCaptionDeleteButton = BuildMediaCaptionPaneButton();
@@ -1736,6 +1760,14 @@ public sealed partial class MainWindow : Window
                     _mediaLoopCheckBox,
                     _mediaVolumeText,
                     _mediaVolumeSlider,
+                    _mediaTrimStartText,
+                    _mediaTrimStartBox,
+                    _mediaTrimEndText,
+                    _mediaTrimEndBox,
+                    _mediaFadeInText,
+                    _mediaFadeInBox,
+                    _mediaFadeOutText,
+                    _mediaFadeOutBox,
                     new WrapPanel
                     {
                         HorizontalAlignment = HorizontalAlignment.Right,
@@ -1747,6 +1779,7 @@ public sealed partial class MainWindow : Window
                             _mediaCaptionDeleteButton,
                             _mediaVolumeApplyButton,
                             _mediaPlaybackApplyButton,
+                            _mediaTimingApplyButton,
                             _mediaCaptionCloseButton,
                         },
                     },
@@ -2822,6 +2855,8 @@ public sealed partial class MainWindow : Window
                 !TextVerticalTypeOptionParser.TryParse(selection, out var verticalType))
                 return;
 
+            if (_textEditor?.TryApplyActiveTableCellTextVerticalType(verticalType) == true)
+                return;
             if (Editor.TryApplyActiveTableCellTextVerticalType(verticalType))
                 return;
             Editor.SetTextVerticalTypeOnSelection(verticalType);
@@ -2849,6 +2884,8 @@ public sealed partial class MainWindow : Window
             if (!TryGetRibbonFontColor(ctx, out var color))
                 return;
 
+            if (_textEditor?.TryApplyActiveTableCellFill(color) == true)
+                return;
             Editor.TryApplyActiveTableCellFill(color);
         }));
         r.Register("freep.table-cell-anchor", new ContextRibbonCommand(ctx =>
@@ -2856,6 +2893,8 @@ public sealed partial class MainWindow : Window
             if (!TryGetRibbonTableCellAnchor(ctx, out var anchor))
                 return;
 
+            if (_textEditor?.TryApplyActiveTableCellAnchor(anchor) == true)
+                return;
             Editor.TryApplyActiveTableCellAnchor(anchor);
         }));
         r.Register("freep.table-cell-border", new ContextRibbonCommand(ctx =>
@@ -2865,6 +2904,8 @@ public sealed partial class MainWindow : Window
                 !TableCellBorderOptionParser.TryParse(selection, out var side, out var outline))
                 return;
 
+            if (_textEditor?.TryApplyActiveTableCellBorder(side, outline) == true)
+                return;
             Editor.TryApplyActiveTableCellBorder(side, outline);
         }));
         r.Register("freep.table-cell-inset", new ContextRibbonCommand(ctx =>
@@ -2874,6 +2915,8 @@ public sealed partial class MainWindow : Window
                 !TableCellInsetOptionParser.TryParse(selection, out var side, out var insetPt))
                 return;
 
+            if (_textEditor?.TryApplyActiveTableCellInset(side, insetPt) == true)
+                return;
             Editor.TryApplyActiveTableCellInset(side, insetPt);
         }));
         r.Register("freep.table-row-height", new ContextRibbonCommand(ctx =>
@@ -2883,6 +2926,8 @@ public sealed partial class MainWindow : Window
                 !TableRowHeightOptionParser.TryParse(selection, out var heightEmu))
                 return;
 
+            if (_textEditor?.TryApplyActiveTableRowHeight(heightEmu) == true)
+                return;
             Editor.TryApplyActiveTableRowHeight(heightEmu);
         }));
         r.Register(TableCellEditPlanner.MergeCellsCommandId,
@@ -8413,6 +8458,46 @@ public sealed partial class MainWindow : Window
         return changed;
     }
 
+    internal double MediaTrimStartMilliseconds => ParseMediaTiming(_mediaTrimStartBox?.Text);
+    internal double MediaTrimEndMilliseconds => ParseMediaTiming(_mediaTrimEndBox?.Text);
+    internal double MediaFadeInMilliseconds => ParseMediaTiming(_mediaFadeInBox?.Text);
+    internal double MediaFadeOutMilliseconds => ParseMediaTiming(_mediaFadeOutBox?.Text);
+
+    internal void SetMediaTimingPaneInput(double trimStart, double trimEnd, double fadeIn, double fadeOut)
+    {
+        if (!IsMediaCaptionPaneVisible)
+            ShowMediaCaptionPane();
+        _mediaCaptionPaneRefreshing = true;
+        try
+        {
+            _mediaTrimStartBox.Text = FormatMediaTiming(trimStart);
+            _mediaTrimEndBox.Text = FormatMediaTiming(trimEnd);
+            _mediaFadeInBox.Text = FormatMediaTiming(fadeIn);
+            _mediaFadeOutBox.Text = FormatMediaTiming(fadeOut);
+        }
+        finally
+        {
+            _mediaCaptionPaneRefreshing = false;
+        }
+    }
+
+    internal bool ApplyMediaTimingPane()
+    {
+        var changed = Editor.SetSelectedMediaTiming(
+            MediaTrimStartMilliseconds,
+            MediaTrimEndMilliseconds,
+            MediaFadeInMilliseconds,
+            MediaFadeOutMilliseconds);
+        if (changed)
+        {
+            _fileWorkflow.MarkDirty();
+            RefreshReviewWorkflowPlans();
+            UpdateStatus();
+            RefreshVisibleMediaCaptionPaneFromFields();
+        }
+        return changed;
+    }
+
     private void RefreshMediaCaptionAuthoringPlans(
         string? proposedLabel,
         string? proposedLanguage,
@@ -8473,6 +8558,11 @@ public sealed partial class MainWindow : Window
             _mediaVolumeSlider.Value = selectedMedia?.VolumePercent ?? 80;
             _mediaVolumeSlider.IsEnabled = selectedMedia is not null;
             _mediaVolumeApplyButton.IsEnabled = selectedMedia is not null;
+            _mediaTimingApplyButton.IsEnabled = selectedMedia is not null;
+            _mediaTrimStartBox.Text = FormatMediaTiming(selectedMedia?.TrimStartMilliseconds ?? 0);
+            _mediaTrimEndBox.Text = FormatMediaTiming(selectedMedia?.TrimEndMilliseconds ?? 0);
+            _mediaFadeInBox.Text = FormatMediaTiming(selectedMedia?.FadeInMilliseconds ?? 0);
+            _mediaFadeOutBox.Text = FormatMediaTiming(selectedMedia?.FadeOutMilliseconds ?? 0);
             ApplyMediaCaptionButtonPlan(
                 _mediaCaptionCreateButton,
                 GetMediaCaptionPaneAction(plan, PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCreateCommandId));
@@ -8491,6 +8581,13 @@ public sealed partial class MainWindow : Window
             _mediaCaptionPaneRefreshing = false;
         }
     }
+
+    private static double ParseMediaTiming(string? text) =>
+        double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value)
+            && double.IsFinite(value) ? Math.Max(0, value) : 0;
+
+    private static string FormatMediaTiming(double value) =>
+        Math.Max(0, value).ToString("0.####", CultureInfo.CurrentCulture);
 
     private void RenderMediaCaptionTrackOptions(PresentationMediaCaptionAuthoringPanePlan plan)
     {

@@ -2148,6 +2148,58 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_table_cell_fill_commits_active_inline_editor_before_cell_command()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            try
+            {
+                window.Show();
+                var shape = window.Editor.InsertTable(1, 1);
+                shape.Table!.Rows[0].Cells[0].TextBody = new TextBody
+                {
+                    Paragraphs =
+                    {
+                        new Paragraph { Runs = { new Run { Text = "Before" } } },
+                    },
+                };
+                window.Editor.Select(shape.Id);
+                window.Editor.SetActiveTableCell(0, 0);
+                window.ActivateTableCellEditForTests(shape.Id, 0, 0).Should().BeTrue();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+                window.GetVisualDescendants()
+                    .OfType<TextBox>()
+                    .Single(control => control.Classes.Contains("freep-table-cell-rich-editor"))
+                    .Text = "Committed before fill";
+
+                var registry = window.BuildCommandRegistry();
+                registry.TryGet("freep.table-cell-fill", out var fill).Should().BeTrue();
+                fill!.Execute(RibbonCommandContext.ForSelectedValue("#123456"));
+
+                window.IsTableCellEditActiveForTests.Should().BeFalse();
+                InCanvasTextEditPlanner.ExtractPlainText(shape.Table.Rows[0].Cells[0].TextBody)
+                    .Should().Be("Committed before fill");
+                shape.Table.Rows[0].Cells[0].Fill.Should().BeOfType<ShapeFill.Solid>()
+                    .Subject.Color.Resolved.Should().Be(SrgbColor.FromRgb(0x123456));
+
+                // The child text command is below the cell-style command in the undo stack.
+                window.Editor.Undo();
+                shape.Table.Rows[0].Cells[0].Fill.Should().BeNull();
+                InCanvasTextEditPlanner.ExtractPlainText(shape.Table.Rows[0].Cells[0].TextBody)
+                    .Should().Be("Committed before fill");
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        if (!ran) return;
+    }
+
+    [Fact]
     public async Task Ribbon_table_row_height_command_routes_selected_value_to_editor()
     {
         var found = false;
@@ -5606,6 +5658,47 @@ public sealed class MainWindowHeadlessTests
         applied.Should().BeTrue();
         startMode.Should().Be(MediaPlaybackStartMode.Automatically);
         loop.Should().BeTrue();
+        dirty.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Media_timing_pane_applies_trim_and_fade()
+    {
+        var trimStart = 0d;
+        var trimEnd = 0d;
+        var fadeIn = 0d;
+        var fadeOut = 0d;
+        var applied = false;
+        var dirty = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var mediaShape = new SlideShape
+            {
+                Id = 728,
+                Name = "Demo video",
+                Kind = SlideShapeKind.Media,
+                Media = new MediaInfo { IsVideo = true }
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
+            window.Editor.Select(mediaShape.Id);
+
+            window.SetMediaTimingPaneInput(125, 250, 500, 750);
+            applied = window.ApplyMediaTimingPane();
+            trimStart = mediaShape.Media!.TrimStartMilliseconds;
+            trimEnd = mediaShape.Media.TrimEndMilliseconds;
+            fadeIn = mediaShape.Media.FadeInMilliseconds;
+            fadeOut = mediaShape.Media.FadeOutMilliseconds;
+            dirty = window.IsDirty;
+        });
+
+        if (!ran) return;
+        applied.Should().BeTrue();
+        trimStart.Should().Be(125);
+        trimEnd.Should().Be(250);
+        fadeIn.Should().Be(500);
+        fadeOut.Should().Be(750);
         dirty.Should().BeTrue();
     }
 

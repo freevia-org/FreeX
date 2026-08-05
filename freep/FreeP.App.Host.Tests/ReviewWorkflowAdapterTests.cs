@@ -1054,6 +1054,38 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_MediaTimingPane_AppliesTrimAndFade()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var mediaShape = new SlideShape
+            {
+                Id = 727,
+                Name = "Demo video",
+                Kind = SlideShapeKind.Media,
+                Media = new MediaInfo { IsVideo = true }
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
+            window.Editor.Select(mediaShape.Id);
+
+            window.SetMediaTimingPaneInput(125, 250, 500, 750);
+            window.MediaTrimStartMilliseconds.Should().Be(125);
+            window.ApplyMediaTimingPane().Should().BeTrue();
+
+            mediaShape.Media!.TrimStartMilliseconds.Should().Be(125);
+            mediaShape.Media.TrimEndMilliseconds.Should().Be(250);
+            mediaShape.Media.FadeInMilliseconds.Should().Be(500);
+            mediaShape.Media.FadeOutMilliseconds.Should().Be(750);
+            window.IsDirty.Should().BeTrue();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_ApplyProofingCorrection_UsesSharedMutationAndRefreshesPlans()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
