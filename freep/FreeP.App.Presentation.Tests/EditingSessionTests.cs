@@ -200,7 +200,7 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
-    public void RegenerateSmartArtDrawingCache_PreservesAuthoredEffectsByModelId()
+    public void RegenerateSmartArtDrawingCache_PreservesAuthoredEffectsAndTextFormattingByModelId()
     {
         var (_, smartArt) = MakeSmartArtSession();
         var container = new SlideShape
@@ -227,6 +227,12 @@ public sealed class EditingSessionTests
         var sourceShape = drawing.Descendants(dsp + "sp").First();
         var modelId = sourceShape.Attribute("modelId")!.Value;
         smartArt.FallbackShapes.Select(shape => shape.Id.ToString()).Should().Contain(modelId);
+        var sourceParagraph = sourceShape.Element(dsp + "txBody")!.Element(a + "p")!;
+        sourceParagraph.AddFirst(new System.Xml.Linq.XElement(
+            a + "pPr",
+            new System.Xml.Linq.XAttribute("algn", "ctr")));
+        sourceParagraph.Element(a + "r")!.Element(a + "rPr")!
+            .SetAttributeValue("b", "1");
         sourceShape.Element(dsp + "spPr")!.Add(
             new System.Xml.Linq.XElement(
                 a + "effectLst",
@@ -256,6 +262,9 @@ public sealed class EditingSessionTests
         var updatedEffects = updatedProperties?.Element(a + "effectLst");
         updatedEffects.Should().NotBeNull();
         updatedEffects!.Element(a + "outerShdw")!.Attribute("blurRad")!.Value.Should().Be("50800");
+        var updatedParagraph = updatedShape.Element(dsp + "txBody")!.Element(a + "p")!;
+        updatedParagraph.Element(a + "pPr")!.Attribute("algn")!.Value.Should().Be("ctr");
+        updatedParagraph.Element(a + "r")!.Element(a + "rPr")!.Attribute("b")!.Value.Should().Be("1");
         updatedShape.Descendants(a + "t").Should().Contain(element => element.Value == "Updated");
     }
 
