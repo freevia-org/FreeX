@@ -208,6 +208,18 @@ public sealed class MediaInfo
     /// <summary>Whether playback restarts when the media reaches its end.</summary>
     public bool Loop { get; set; }
 
+    /// <summary>Milliseconds trimmed from the beginning of playback.</summary>
+    public double TrimStartMilliseconds { get; set; }
+
+    /// <summary>Milliseconds trimmed from the end of playback.</summary>
+    public double TrimEndMilliseconds { get; set; }
+
+    /// <summary>Milliseconds used to fade the media in at playback start.</summary>
+    public double FadeInMilliseconds { get; set; }
+
+    /// <summary>Milliseconds used to fade the media out at playback end.</summary>
+    public double FadeOutMilliseconds { get; set; }
+
     /// <summary>Raw media bytes. Empty when the media is link-only (no embed).</summary>
     public byte[] Bytes { get; set; } = Array.Empty<byte>();
 

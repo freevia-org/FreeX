@@ -2307,6 +2307,10 @@ public sealed class EditingSession
             VolumePercent = media.VolumePercent,
             PlaybackStartMode = media.PlaybackStartMode,
             Loop = media.Loop,
+            TrimStartMilliseconds = media.TrimStartMilliseconds,
+            TrimEndMilliseconds = media.TrimEndMilliseconds,
+            FadeInMilliseconds = media.FadeInMilliseconds,
+            FadeOutMilliseconds = media.FadeOutMilliseconds,
             Bytes = media.Bytes.ToArray(),
             ContentType = media.ContentType,
             SourcePackagePath = media.SourcePackagePath,
@@ -2370,6 +2374,34 @@ public sealed class EditingSession
             media.Loop,
             startMode,
             loop));
+        return true;
+    }
+
+    /// <summary>Sets selected media trim and fade timing through the shared undo bus.</summary>
+    public bool SetSelectedMediaTiming(
+        double trimStartMilliseconds,
+        double trimEndMilliseconds,
+        double fadeInMilliseconds,
+        double fadeOutMilliseconds)
+    {
+        var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
+            CurrentSlide,
+            SelectedShapeIds);
+        var media = mediaShape?.Media;
+        if (mediaShape is null || media is null)
+            return false;
+
+        Bus.Execute(new SetMediaTimingCommand(
+            CurrentSlideIndex,
+            mediaShape.Id,
+            media.TrimStartMilliseconds,
+            media.TrimEndMilliseconds,
+            media.FadeInMilliseconds,
+            media.FadeOutMilliseconds,
+            trimStartMilliseconds,
+            trimEndMilliseconds,
+            fadeInMilliseconds,
+            fadeOutMilliseconds));
         return true;
     }
 

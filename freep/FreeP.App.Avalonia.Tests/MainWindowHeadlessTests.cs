@@ -5603,6 +5603,47 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Media_timing_pane_applies_trim_and_fade()
+    {
+        var trimStart = 0d;
+        var trimEnd = 0d;
+        var fadeIn = 0d;
+        var fadeOut = 0d;
+        var applied = false;
+        var dirty = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var mediaShape = new SlideShape
+            {
+                Id = 728,
+                Name = "Demo video",
+                Kind = SlideShapeKind.Media,
+                Media = new MediaInfo { IsVideo = true }
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
+            window.Editor.Select(mediaShape.Id);
+
+            window.SetMediaTimingPaneInput(125, 250, 500, 750);
+            applied = window.ApplyMediaTimingPane();
+            trimStart = mediaShape.Media!.TrimStartMilliseconds;
+            trimEnd = mediaShape.Media.TrimEndMilliseconds;
+            fadeIn = mediaShape.Media.FadeInMilliseconds;
+            fadeOut = mediaShape.Media.FadeOutMilliseconds;
+            dirty = window.IsDirty;
+        });
+
+        if (!ran) return;
+        applied.Should().BeTrue();
+        trimStart.Should().Be(125);
+        trimEnd.Should().Be(250);
+        fadeIn.Should().Be(500);
+        fadeOut.Should().Be(750);
+        dirty.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Review_comment_add_edit_routes_through_shared_mutation_plan()
     {
         SlideComment? addedComment = null;

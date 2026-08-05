@@ -245,4 +245,52 @@ public sealed class MediaCaptionCommandTests
         mediaShape.Media.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
         mediaShape.Media.Loop.Should().BeTrue();
     }
+
+    [Fact]
+    public void SetMediaTimingCommand_UndoAndRedoRestoresAllValues()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var mediaShape = new SlideShape
+        {
+            Id = 54,
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo { IsVideo = true, TrimStartMilliseconds = 10 },
+        };
+        presentation.Slides[0].Shapes.Add(mediaShape);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetMediaTimingCommand(0, mediaShape.Id, 10, 0, 0, 0, 100, 200, 300, 400));
+
+        mediaShape.Media.TrimStartMilliseconds.Should().Be(100);
+        mediaShape.Media.TrimEndMilliseconds.Should().Be(200);
+        mediaShape.Media.FadeInMilliseconds.Should().Be(300);
+        mediaShape.Media.FadeOutMilliseconds.Should().Be(400);
+        bus.Undo();
+        mediaShape.Media.TrimStartMilliseconds.Should().Be(10);
+        mediaShape.Media.TrimEndMilliseconds.Should().Be(0);
+        bus.Redo();
+        mediaShape.Media.FadeOutMilliseconds.Should().Be(400);
+    }
+
+    [Fact]
+    public void EditingSessionSelectedMediaTiming_UsesUndoBus()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var mediaShape = new SlideShape
+        {
+            Id = 55,
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo { IsVideo = false },
+        };
+        presentation.Slides[0].Shapes.Add(mediaShape);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        editor.Select(mediaShape.Id);
+
+        editor.SetSelectedMediaTiming(125, 250, 500, 750).Should().BeTrue();
+        mediaShape.Media.TrimStartMilliseconds.Should().Be(125);
+        editor.Undo();
+        mediaShape.Media.TrimStartMilliseconds.Should().Be(0);
+        editor.Redo();
+        mediaShape.Media.FadeOutMilliseconds.Should().Be(750);
+    }
 }

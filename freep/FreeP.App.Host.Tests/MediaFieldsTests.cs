@@ -183,6 +183,58 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Media_TrimAndFade_RoundTripThroughP14Extension()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 10,
+            Name = "Trimmed video",
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                TrimStartMilliseconds = 18374.0515,
+                TrimEndMilliseconds = 29596.7072,
+                FadeInMilliseconds = 1000,
+                FadeOutMilliseconds = 250.5,
+                Bytes = [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70],
+                ContentType = "video/mp4",
+            },
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
+            var p = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+            var p14 = XNamespace.Get("http://schemas.microsoft.com/office/powerpoint/2010/main");
+            var media = slideXml.Descendants(p14 + "media").Single();
+            media.Parent!.Attribute("uri")!.Value
+                .Should().Be("{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}");
+            media.Element(p14 + "trim")!.Attribute("st")!.Value.Should().Be("18374.0515");
+            media.Element(p14 + "trim")!.Attribute("end")!.Value.Should().Be("29596.7072");
+            media.Element(p14 + "fade")!.Attribute("in")!.Value.Should().Be("1000");
+            media.Element(p14 + "fade")!.Attribute("out")!.Value.Should().Be("250.5");
+            slideXml.Descendants(p + "pic").Should().ContainSingle();
+        }
+
+        ms.Position = 0;
+        var reopened = PptxPackageReader.Read(ms);
+        var timing = reopened.Slides[0].Shapes[0].Media!;
+        timing.TrimStartMilliseconds.Should().BeApproximately(18374.0515, 0.0001);
+        timing.TrimEndMilliseconds.Should().BeApproximately(29596.7072, 0.0001);
+        timing.FadeInMilliseconds.Should().Be(1000);
+        timing.FadeOutMilliseconds.Should().Be(250.5);
+    }
+
+    [Fact]
     public void GroupedMedia_LoopPlayback_RoundTripsThroughPresentationTiming()
     {
         var pres = new Presentation();

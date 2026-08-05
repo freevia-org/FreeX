@@ -67,6 +67,7 @@ public static class PptxPackageWriter
     private const string VideoRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video";
     private const string AudioRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio";
     private const string CaptionRelType     = "http://schemas.microsoft.com/office/2011/relationships/mediaCaption";
+    private const string MediaTimingExtUri  = "{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}";
 
     // OLE relationship types (Theme 21)
     private const string OleObjectRelType =
@@ -3130,6 +3131,8 @@ public static class PptxPackageWriter
         {
             nvPrChildren.Add(BuildMediaCaptionExtList(captionTracks));
         }
+        if (shape.Media is { } media && HasMediaTiming(media))
+            nvPrChildren.Add(BuildMediaTimingExtList(mediaFileRelId, media));
 
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",
@@ -3164,6 +3167,50 @@ public static class PptxPackageWriter
                 new XAttribute("uri", "{DAA4B4D4-6D71-4841-9C94-3DE7FCFBFE68}"),
                 captionElements));
     }
+
+    private static bool HasMediaTiming(MediaInfo media) =>
+        IsPositiveMediaMilliseconds(media.TrimStartMilliseconds)
+        || IsPositiveMediaMilliseconds(media.TrimEndMilliseconds)
+        || IsPositiveMediaMilliseconds(media.FadeInMilliseconds)
+        || IsPositiveMediaMilliseconds(media.FadeOutMilliseconds);
+
+    private static XElement BuildMediaTimingExtList(
+        string mediaFileRelId,
+        MediaInfo media)
+    {
+        var relationAttribute = media.Bytes.Length > 0 ? R + "embed" : R + "link";
+        var trimAttributes = new List<object>();
+        if (IsPositiveMediaMilliseconds(media.TrimStartMilliseconds))
+            trimAttributes.Add(new XAttribute("st", FormatMediaMilliseconds(media.TrimStartMilliseconds)));
+        if (IsPositiveMediaMilliseconds(media.TrimEndMilliseconds))
+            trimAttributes.Add(new XAttribute("end", FormatMediaMilliseconds(media.TrimEndMilliseconds)));
+
+        var fadeAttributes = new List<object>();
+        if (IsPositiveMediaMilliseconds(media.FadeInMilliseconds))
+            fadeAttributes.Add(new XAttribute("in", FormatMediaMilliseconds(media.FadeInMilliseconds)));
+        if (IsPositiveMediaMilliseconds(media.FadeOutMilliseconds))
+            fadeAttributes.Add(new XAttribute("out", FormatMediaMilliseconds(media.FadeOutMilliseconds)));
+
+        var mediaChildren = new List<object>();
+        if (trimAttributes.Count > 0)
+            mediaChildren.Add(new XElement(P14 + "trim", trimAttributes));
+        if (fadeAttributes.Count > 0)
+            mediaChildren.Add(new XElement(P14 + "fade", fadeAttributes));
+
+        return new XElement(P + "extLst",
+            new XElement(P + "ext",
+                new XAttribute("uri", MediaTimingExtUri),
+                new XElement(P14 + "media",
+                    new XAttribute(XNamespace.Xmlns + "p14", P14.NamespaceName),
+                    new XAttribute(relationAttribute, mediaFileRelId),
+                    mediaChildren)));
+    }
+
+    private static string FormatMediaMilliseconds(double value) =>
+        (double.IsFinite(value) ? Math.Max(0, value) : 0).ToString("0.####", CultureInfo.InvariantCulture);
+
+    private static bool IsPositiveMediaMilliseconds(double value) =>
+        double.IsFinite(value) && value > 0;
 
     private static XElement BuildGrpSpEl(
         SlideShape shape, PresentationColorScheme scheme, Dictionary<uint, string> mediaById,
