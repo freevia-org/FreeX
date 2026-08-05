@@ -30,20 +30,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
     [IO.Path]::GetFullPath($OutputDir)
 } else {
     [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
-
-function Invoke-External {
-    param([Parameter(Mandatory = $true)][string[]]$Arguments)
-    Push-Location $repoRoot
-    try {
-        & powershell.exe @Arguments | Out-Host
-        if ($LASTEXITCODE -ne 0) { throw "powershell.exe exited with code $LASTEXITCODE." }
-    } finally { Pop-Location }
 }
 
 function Read-JsonFile {
@@ -74,7 +66,7 @@ try {
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
     if ($Replace) { $startArguments += "-Replace" }
 
-    Invoke-External -Arguments $startArguments
+    Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot -OutputToHost
     $started = $true
 
     # Copy the branch-local probe into the running container so a cached app image
@@ -207,10 +199,10 @@ try {
 finally {
     if ($started) {
         try {
-            Invoke-External -Arguments @(
+            Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                 "-Action", "Stop", "-App", "FreeP", "-Port", "$Port",
-                "-OutputDir", $resolvedOutputRoot)
+                "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot -OutputToHost
         } catch { Write-Warning "Could not stop harness-owned FreeP container: $($_.Exception.Message)" }
     }
 }

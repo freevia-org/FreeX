@@ -23,6 +23,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
     [IO.Path]::GetFullPath($OutputDir)
 } else {
@@ -42,19 +43,6 @@ $requiredIds = @(
     "smartart-outline-save",
     "smartart-outline-reopen"
 )
-
-function Invoke-External {
-    param(
-        [Parameter(Mandatory = $true)][string]$FilePath,
-        [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [string]$WorkingDirectory = $repoRoot
-    )
-    Push-Location $WorkingDirectory
-    try {
-        & $FilePath @Arguments
-        if ($LASTEXITCODE -ne 0) { throw "$FilePath exited with code $LASTEXITCODE." }
-    } finally { Pop-Location }
-}
 
 function Get-Session {
     $path = Join-Path $resolvedOutputRoot "freep/current-session.json"
@@ -77,7 +65,7 @@ function Start-Session {
     if ($SkipPublish -or $ReusePublishedImage) { $args += "-SkipPublish" }
     if ($SkipImageBuild -or $ReusePublishedImage) { $args += "-SkipImageBuild" }
     if ($Replace) { $args += "-Replace" }
-    Invoke-External -FilePath "powershell.exe" -Arguments $args
+    Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $args -WorkingDirectory $repoRoot
     Get-Session
 }
 
@@ -119,9 +107,9 @@ function Invoke-Probe {
 
 function Stop-Session {
     try {
-        Invoke-External -FilePath "powershell.exe" -Arguments @(
+        Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @(
             "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-            "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot)
+            "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot
     } catch { Write-Warning "Could not stop harness-owned FreeP container: $($_.Exception.Message)" }
 }
 

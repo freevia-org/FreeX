@@ -30,20 +30,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
     [IO.Path]::GetFullPath($OutputDir)
 } else {
     [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
-
-function Invoke-External {
-    param([Parameter(Mandatory = $true)][string[]]$Arguments)
-    Push-Location $repoRoot
-    try {
-        & powershell.exe @Arguments | Out-Host
-        if ($LASTEXITCODE -ne 0) { throw "powershell.exe exited with code $LASTEXITCODE." }
-    } finally { Pop-Location }
 }
 
 function Read-RunManifest {
@@ -110,7 +102,7 @@ function Start-ValidationRun {
 
     $started = $false
     try {
-        Invoke-External -Arguments $arguments
+        Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $arguments -WorkingDirectory $repoRoot -OutputToHost
         $started = $true
         $run = Read-RunManifest -RunRoot $runRoot
         Assert-Manifest -Run $run -ExpectedCupsMode $Mode
@@ -118,10 +110,10 @@ function Start-ValidationRun {
     } finally {
         if ($started) {
             try {
-                Invoke-External -Arguments @(
+                Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @(
                     "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                     "-Action", "Stop", "-App", "FreeP", "-Port", "$Port",
-                    "-OutputDir", $runRoot)
+                    "-OutputDir", $runRoot) -WorkingDirectory $repoRoot -OutputToHost
             } catch { Write-Warning "Could not stop harness-owned FreeP container: $($_.Exception.Message)" }
         }
     }

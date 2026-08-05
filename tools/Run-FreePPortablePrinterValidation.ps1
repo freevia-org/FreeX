@@ -29,6 +29,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freep-portable-printer-probe.sh"
 $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freep-portable-printer-wave105-validation.schema.json"
@@ -38,15 +39,6 @@ $resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
     [IO.Path]::GetFullPath($OutputDir)
 } else {
     [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
-
-function Invoke-External {
-    param([Parameter(Mandatory = $true)][string]$FilePath, [Parameter(Mandatory = $true)][string[]]$Arguments)
-    Push-Location $repoRoot
-    try {
-        & $FilePath @Arguments | Out-Host
-        if ($LASTEXITCODE -ne 0) { throw "$FilePath exited with code $LASTEXITCODE." }
-    } finally { Pop-Location }
 }
 
 function Invoke-Docker {
@@ -151,7 +143,7 @@ try {
     if ($SkipPublish) { $startArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
     if ($Replace) { $startArguments += "-Replace" }
-    Invoke-External -FilePath "powershell.exe" -Arguments $startArguments
+    Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot -OutputToHost
     $started = $true
 
     $sessionPath = Join-Path $resolvedOutputRoot "freep/current-session.json"
@@ -190,9 +182,9 @@ try {
 } finally {
     if ($started) {
         try {
-            Invoke-External -FilePath "powershell.exe" -Arguments @(
+            Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-                "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot)
+                "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot -OutputToHost
         } catch { Write-Warning "Could not stop harness-owned FreeP container '$($session.containerName)': $($_.Exception.Message)" }
     }
 }

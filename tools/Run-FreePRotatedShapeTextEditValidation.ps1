@@ -19,6 +19,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) { [IO.Path]::GetFullPath($OutputDir) } else { [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir)) }
 $fixturePath = Join-Path $resolvedOutputRoot "rotated-shape-text-fixture.pptx"
 $baseFixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/02-autoshapes.pptx"
@@ -26,13 +27,6 @@ $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freep-rotated-shape-text-edit.sh"
 $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freep-rotated-shape-text-edit-validation.schema.json"
 $requiredIds = @("visible-window-discovery", "rotated-editor-entry-and-caret", "rotated-editor-typing-selection-commit", "saved-rotated-shape-package", "escape-cancels-and-preserves-package")
-
-function Invoke-External {
-    param([Parameter(Mandatory = $true)][string]$FilePath, [Parameter(Mandatory = $true)][string[]]$Arguments)
-    Push-Location $repoRoot
-    try { & $FilePath @Arguments; if ($LASTEXITCODE -ne 0) { throw "$FilePath exited with code $LASTEXITCODE." } }
-    finally { Pop-Location }
-}
 
 function New-RotatedFixture {
     param([Parameter(Mandatory = $true)][string]$Source, [Parameter(Mandatory = $true)][string]$Destination)
@@ -93,7 +87,7 @@ try {
     $startArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Start", "-App", "FreeP", "-Port", "$Port", "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi", "-MemoryLimit", $MemoryLimit, "-OutputDir", $resolvedOutputRoot, "-DocumentPath", $fixturePath)
     if (-not [string]::IsNullOrWhiteSpace($PublishDir)) { $startArguments += @("-PublishDir", $PublishDir) }
     if ($SkipPublish) { $startArguments += "-SkipPublish" }; if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }; if ($Replace) { $startArguments += "-Replace" }
-    Invoke-External -FilePath "powershell.exe" -Arguments $startArguments; $started = $true
+    Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot; $started = $true
     $session = Get-Content -LiteralPath (Join-Path $resolvedOutputRoot "freep/current-session.json") -Raw | ConvertFrom-Json
     $sessionDirectory = [IO.Path]::GetFullPath([string]$session.sessionDirectory)
     $probeInWork = Join-Path $sessionDirectory "freep-rotated-shape-text-edit-probe.sh"
@@ -104,9 +98,9 @@ try {
     $dockerArguments = @("exec", "--env", "FREEP_DOCUMENT_PATH=/documents/rotated-shape-text-fixture.pptx", "--env", "FREEP_EXPECTED_DOCUMENT_NAME=rotated-shape-text-fixture.pptx", "--env", "FREEP_EXPECTED_WINDOW_PATTERN=FreeP", "--env", "FREEP_SCREEN_WIDTH=$Width", "--env", "FREEP_SCREEN_HEIGHT=$Height", "--env", "FREEP_SCREEN_DPI=$Dpi", [string]$session.containerName, "bash", "/work/freep-rotated-shape-text-edit-probe.sh", "/work/freep-rotated-shape-text-edit-validation")
     Push-Location $repoRoot; try { $probeOutput = @(& docker @dockerArguments 2>&1); $probeExitCode = $LASTEXITCODE } finally { Pop-Location }
     $probeOutput | Set-Content -LiteralPath (Join-Path $evidenceDirectory "probe.log") -Encoding utf8
-    Invoke-External -FilePath "docker" -Arguments @("cp", "$($session.containerName):/work/freep-rotated-shape-text-edit-validation/.", $evidenceDirectory)
+    Invoke-ToolProcess -FilePath "docker" -Arguments @("cp", "$($session.containerName):/work/freep-rotated-shape-text-edit-validation/.", $evidenceDirectory) -WorkingDirectory $repoRoot
     if ($started -and -not $KeepContainer) {
-        Invoke-External -FilePath "powershell.exe" -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot)
+        Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot
         $started = $false
     }
     Start-Sleep -Seconds 2
@@ -137,5 +131,5 @@ try {
     Write-Host "Manifest contract validation: passed"; Write-Host "Results: $($manifest.summary.passed) passed, $($manifest.summary.failed) failed, $($manifest.summary.total) total"; Write-Host "Manifest: $manifestPath"; Write-Host "Evidence: $evidenceDirectory"
     if ($probeExitCode -ne 0 -or $manifest.summary.failed -ne 0) { throw "FreeP rotated-shape physical validation failed with probe exit code $probeExitCode." }
 } finally {
-    if ($started -and -not $KeepContainer) { try { Invoke-External -FilePath "powershell.exe" -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) } catch { Write-Warning "Could not stop harness-owned FreeP container on port ${Port}: $($_.Exception.Message)" } }
+    if ($started -and -not $KeepContainer) { try { Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot } catch { Write-Warning "Could not stop harness-owned FreeP container on port ${Port}: $($_.Exception.Message)" } }
 }

@@ -18,6 +18,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) { [IO.Path]::GetFullPath($OutputDir) } else { [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir)) }
 $fixtureName = "freep-multiselect-x11-wave89-fixture.pptx"
 $fixturePath = Join-Path $resolvedOutputRoot $fixtureName
@@ -27,7 +28,11 @@ $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freep-multiselect-
 $baseFixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/02-autoshapes.pptx"
 $requiredIds = @("visible-window-discovery", "two-shape-pointer-selection", "group-resize-handle-drag", "saved-resize-geometry", "group-rotate-handle-drag", "saved-rotate-geometry", "ctrl-z-restores-resize", "escape-cancel-preserves-package", "capture-loss-cancel-preserves-package")
 
-function Invoke-External { param([Parameter(Mandatory=$true)][string]$FilePath, [Parameter(Mandatory=$true)][string[]]$Arguments); Push-Location $repoRoot; try { & $FilePath @Arguments; if ($LASTEXITCODE -ne 0) { throw "$FilePath exited with code $LASTEXITCODE." } } finally { Pop-Location } }
+function Invoke-External {
+    param([Parameter(Mandatory = $true)][string]$FilePath, [Parameter(Mandatory = $true)][string[]]$Arguments)
+    Invoke-ToolProcess -FilePath $FilePath -Arguments $Arguments -WorkingDirectory $repoRoot
+}
+
 function Wait-EvidenceFile {
     param([Parameter(Mandatory=$true)][string]$Directory, [Parameter(Mandatory=$true)][string]$Name)
     if ([IO.Path]::GetFileName($Name) -ne $Name) { throw "Evidence name must be a file name: $Name" }
@@ -105,7 +110,7 @@ $started = $false; $sessionDirectory = $null; $manifestPath = $null; $probeExitC
 try {
     $startArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Start", "-App", "FreeP", "-Port", "$Port", "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi", "-MemoryLimit", $MemoryLimit, "-OutputDir", $resolvedOutputRoot, "-DocumentPath", $fixturePath)
     if ($PublishDir) { $startArgs += @("-PublishDir", $PublishDir) }; if ($SkipPublish) { $startArgs += "-SkipPublish" }; if ($SkipImageBuild) { $startArgs += "-SkipImageBuild" }; if ($Replace) { $startArgs += "-Replace" }
-    Invoke-External powershell.exe $startArgs ; $started = $true
+    Invoke-External powershell.exe $startArgs; $started = $true
     $session = Get-Content -LiteralPath (Join-Path $resolvedOutputRoot "freep/current-session.json") -Raw | ConvertFrom-Json; $sessionDirectory = [IO.Path]::GetFullPath([string]$session.sessionDirectory); $probeInWork = Join-Path $sessionDirectory "freep-multiselect-x11-wave89-probe.sh"; Copy-Item -LiteralPath $probeSource -Destination $probeInWork -Force
     $manifestPath = Join-Path $sessionDirectory "freep-multiselect-x11-wave89-validation/results.json"; $evidenceDirectory = Split-Path -Parent $manifestPath; New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
     Push-Location $repoRoot; try { $dockerArgs = @("exec", "--env", "FREEP_DOCUMENT_PATH=/documents/$fixtureName", "--env", "FREEP_EXPECTED_DOCUMENT_NAME=$fixtureName", "--env", "FREEP_EXPECTED_WINDOW_PATTERN=FreeP", $session.containerName, "bash", "/work/freep-multiselect-x11-wave89-probe.sh", "/work/freep-multiselect-x11-wave89-validation"); $probeOutput = @(& docker @dockerArgs 2>&1); $probeExitCode = $LASTEXITCODE } finally { Pop-Location }
@@ -113,7 +118,7 @@ try {
     # already present on the host. Copying it back over the same OneDrive path causes a
     # transient directory replacement and makes otherwise-complete evidence appear missing.
     $probeOutput | Set-Content -LiteralPath (Join-Path $evidenceDirectory "probe.log") -Encoding utf8
-    if ($started -and -not $KeepContainer) { Invoke-External powershell.exe @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot); $started = $false }
+    if ($started -and -not $KeepContainer) { Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot; $started = $false }
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw "Probe did not write manifest: $manifestPath" }; $manifest = Assert-Manifest -ManifestPath $manifestPath -EvidenceDirectory $evidenceDirectory; $report = [ordered]@{ suite = $manifest.suite; probeExitCode = $probeExitCode; manifest = $manifestPath; evidenceDirectory = $evidenceDirectory; fixture = $fixturePath; results = $manifest.summary }; $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $resolvedOutputRoot "wave89-report.json") -Encoding utf8
     Write-Host "Manifest contract validation: passed"; Write-Host "Results: $($manifest.summary.passed) passed, $($manifest.summary.failed) failed, $($manifest.summary.total) total"; Write-Host "Manifest: $manifestPath"; Write-Host "Evidence: $evidenceDirectory"; if ($probeExitCode -ne 0) { throw "Wave 89 probe exited with code $probeExitCode." }
-} finally { if ($started -and -not $KeepContainer) { try { Invoke-External powershell.exe @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) } catch { Write-Warning "Could not stop harness-owned FreeP container: $($_.Exception.Message)" } } }
+} finally { if ($started -and -not $KeepContainer) { try { Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot } catch { Write-Warning "Could not stop harness-owned FreeP container: $($_.Exception.Message)" } } }

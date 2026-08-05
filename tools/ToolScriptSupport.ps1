@@ -52,9 +52,15 @@ function Invoke-ToolProcess {
     param(
         [Parameter(Mandatory = $true)][string]$FilePath,
         [string[]]$Arguments = @(),
-        [Parameter(Mandatory = $true)][string]$FailureMessage,
-        [string]$WorkingDirectory
+        [string]$FailureMessage,
+        [string]$WorkingDirectory,
+        [switch]$OutputToHost,
+        [string]$OutputPath
     )
+
+    if ($OutputToHost -and -not [string]::IsNullOrWhiteSpace($OutputPath)) {
+        throw "OutputToHost and OutputPath cannot be used together."
+    }
 
     $previousLocation = $null
     try {
@@ -63,7 +69,15 @@ function Invoke-ToolProcess {
             Set-Location -LiteralPath (Resolve-ToolFullPath -Path $WorkingDirectory)
         }
 
-        & $FilePath @Arguments
+        if ($OutputToHost) {
+            & $FilePath @Arguments | Out-Host
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
+            & $FilePath @Arguments 2>&1 | Tee-Object -FilePath $OutputPath
+        }
+        else {
+            & $FilePath @Arguments
+        }
         $exitCode = $LASTEXITCODE
     }
     finally {
@@ -73,6 +87,10 @@ function Invoke-ToolProcess {
     }
 
     if ($exitCode -ne 0) {
+        if ([string]::IsNullOrWhiteSpace($FailureMessage)) {
+            throw "$FilePath exited with code $exitCode."
+        }
+
         throw "$FailureMessage with exit code $exitCode"
     }
 }

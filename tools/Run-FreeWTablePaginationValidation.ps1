@@ -20,6 +20,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $outputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) { [IO.Path]::GetFullPath($OutputDir) } else { [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir)) }
 $fixtureDir = Join-Path $outputRoot "fixture"
 $fixturePath = Join-Path $fixtureDir "table-page-composition-stress.docx"
@@ -32,7 +33,7 @@ $probe = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freew-table-paginat
 $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freew-table-pagination-validation.schema.json"
 $requiredIds = @("visible-window-discovery", "generated-fixture-hash-integrity", "physical-third-page-navigation", "nonblank-final-page-render", "shared-plan-proof")
 
-function Invoke-External {
+function Invoke-CapturedExternal {
     param([Parameter(Mandatory)][string]$FilePath, [Parameter(Mandatory)][string[]]$Arguments, [string]$WorkingDirectory = $repoRoot, [string]$OutputPath = "")
     Push-Location $WorkingDirectory
     try {
@@ -99,20 +100,20 @@ function Assert-ManifestContract {
 New-Item -ItemType Directory -Path $fixtureDir -Force | Out-Null
 $sharedPlanPath = Join-Path $outputRoot "shared-plan-test.txt"
 $fidelityOutput = if ($ShortOutput) { Join-Path $outputRoot "fidelity-render.txt" } else { "" }
-Invoke-External dotnet @("run", "--project", $fidelityProject, "--configuration", "Release", "--", "--generate-f2-corpus", $fixtureDir) -OutputPath $fidelityOutput
+Invoke-CapturedExternal dotnet @("run", "--project", $fidelityProject, "--configuration", "Release", "--", "--generate-f2-corpus", $fixtureDir) -OutputPath $fidelityOutput
 if (-not (Test-Path -LiteralPath $fixturePath -PathType Leaf)) { throw "Generated fixture is missing: $fixturePath" }
 $fixtureHash = (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant()
-Invoke-External dotnet @("test", $plannerProject, "--configuration", "Release", "--filter", "FullyQualifiedName~DocumentViewLayoutPlannerTests.BuildTableLayoutPlans_AccountsForLeadingDocumentContentWhenEstimatingFirstTablePage", "--logger", "console;verbosity=minimal") -OutputPath $sharedPlanPath
+Invoke-CapturedExternal dotnet @("test", $plannerProject, "--configuration", "Release", "--filter", "FullyQualifiedName~DocumentViewLayoutPlannerTests.BuildTableLayoutPlans_AccountsForLeadingDocumentContentWhenEstimatingFirstTablePage", "--logger", "console;verbosity=minimal") -OutputPath $sharedPlanPath
 Assert-FocusedTestProof $sharedPlanPath "DocumentViewLayoutPlannerTests.BuildTableLayoutPlans_AccountsForLeadingDocumentContentWhenEstimatingFirstTablePage"
 $avaloniaTablePath = Join-Path $outputRoot "avalonia-table-structure-test.txt"
-Invoke-External dotnet @("test", $avaloniaTableProject, "--configuration", "Release", "--filter", "FullyQualifiedName~DocumentViewTableStructureTests.TablePageCompositionStress_UsesSharedPlanForThreeRenderedPages", "--logger", "console;verbosity=minimal") -OutputPath $avaloniaTablePath
+Invoke-CapturedExternal dotnet @("test", $avaloniaTableProject, "--configuration", "Release", "--filter", "FullyQualifiedName~DocumentViewTableStructureTests.TablePageCompositionStress_UsesSharedPlanForThreeRenderedPages", "--logger", "console;verbosity=minimal") -OutputPath $avaloniaTablePath
 Assert-FocusedTestProof $avaloniaTablePath "DocumentViewTableStructureTests.TablePageCompositionStress_UsesSharedPlanForThreeRenderedPages"
 
 $started = $false
 try {
     $startArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $runner, "-Action", "Start", "-App", "FreeW", "-Port", "$Port", "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi", "-MemoryLimit", $MemoryLimit, "-OutputDir", $outputRoot, "-DocumentPath", $fixturePath)
     if ($PublishDir) { $startArgs += @("-PublishDir", $PublishDir) }; if ($SkipPublish) { $startArgs += "-SkipPublish" }; if ($SkipImageBuild) { $startArgs += "-SkipImageBuild" }; if ($Replace) { $startArgs += "-Replace" }
-    Invoke-External powershell.exe $startArgs; $started = $true
+    Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $startArgs -WorkingDirectory $repoRoot; $started = $true
     $session = Get-Content -LiteralPath (Join-Path $outputRoot "freew/current-session.json") -Raw | ConvertFrom-Json
     $sessionDir = [IO.Path]::GetFullPath([string]$session.sessionDirectory)
     Copy-Item -LiteralPath $probe -Destination (Join-Path $sessionDir "run-freew-table-pagination-probe.sh") -Force
@@ -158,5 +159,5 @@ try {
     if ($probeExitCode -ne 0 -or $validated.summary.failed -gt 0) { throw "FreeW table-pagination validation failed with probe exit code $probeExitCode." }
 }
 finally {
-    if ($started -and -not $KeepContainer) { try { Invoke-External powershell.exe @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $runner, "-Action", "Stop", "-App", "FreeW", "-Port", "$Port", "-OutputDir", $outputRoot) } catch { Write-Warning "Could not stop the harness-owned FreeW container." } }
+    if ($started -and -not $KeepContainer) { try { Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $runner, "-Action", "Stop", "-App", "FreeW", "-Port", "$Port", "-OutputDir", $outputRoot) -WorkingDirectory $repoRoot } catch { Write-Warning "Could not stop the harness-owned FreeW container." } }
 }

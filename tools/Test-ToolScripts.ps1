@@ -99,6 +99,57 @@ function Assert-ToolSourceCentralization {
         }
     }
 
+    $sharedProcessScripts = @(
+        "Run-FamilyLinuxInteractionValidation.ps1",
+        "Run-FreePAccessibilityValidation.ps1",
+        "Run-FreePClipboardShortcutValidation.ps1",
+        "Run-FreePFileSlideshowShortcutValidation.ps1",
+        "Run-FreePMultiSelectionX11Validation.ps1",
+        "Run-FreePNativePickerX11Validation.ps1",
+        "Run-FreePPhysicalLinuxValidation.ps1",
+        "Run-FreePPortablePrinterValidation.ps1",
+        "Run-FreePRichTextShortcutValidation.ps1",
+        "Run-FreePRotatedShapeTextEditValidation.ps1",
+        "Run-FreePSmartArtAuthoringValidation.ps1",
+        "Run-FreePTransformedTableCellEditValidation.ps1",
+        "Run-FreeWFieldShortcutValidation.ps1",
+        "Run-FreeWForegroundPrintValidation.ps1",
+        "Run-FreeWTablePaginationValidation.ps1"
+    )
+    foreach ($scriptName in $sharedProcessScripts) {
+        $script = Get-Content -LiteralPath (Join-Path $ToolRoot $scriptName) -Raw
+        if (-not $script.Contains("ToolScriptSupport.ps1") -or -not $script.Contains("Invoke-ToolProcess")) {
+            throw "$scriptName must use Invoke-ToolProcess from ToolScriptSupport.ps1."
+        }
+    }
+
+    $compatibilityAdapterFound = $false
+    foreach ($scriptFile in Get-ChildItem -LiteralPath $ToolRoot -Filter "*.ps1" -File -Recurse) {
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($scriptFile.FullName, [ref]$tokens, [ref]$parseErrors)
+        $externalDeclarations = $ast.FindAll({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq "Invoke-External"
+            }, $true)
+        if ($externalDeclarations.Count -eq 0) {
+            continue
+        }
+
+        if ($scriptFile.Name -eq "Run-FreePMultiSelectionX11Validation.ps1" -and
+            $externalDeclarations.Count -eq 1 -and
+            $externalDeclarations[0].Extent.Text.Contains("Invoke-ToolProcess")) {
+            $compatibilityAdapterFound = $true
+            continue
+        }
+
+        throw "$($scriptFile.Name) redeclares process invocation owned by ToolScriptSupport.ps1."
+    }
+    if (-not $compatibilityAdapterFound) {
+        throw "Run-FreePMultiSelectionX11Validation.ps1 must retain its source-contract adapter to Invoke-ToolProcess."
+    }
+
     $repoRoot = Split-Path -Parent $ToolRoot
     $orderedToolScripts = [ordered]@{
         "freew-fidelity-corpus\tools\Run-FreeWVisualEvidence.ps1" = [ordered]@{
@@ -819,6 +870,41 @@ Write-Output "synthetic stdout"
             throw "Invoke-ToolProcess did not restore the parent working directory."
         }
 
+        $teeProbeOutputPath = Join-Path $tempRoot "tee-probe-output.json"
+        $teeStreamPath = Join-Path $tempRoot "tee-stream.txt"
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            $teeOutput = @(Invoke-ToolProcess `
+                -FilePath $powerShell `
+                -Arguments @(
+                    "-NoProfile",
+                    "-ExecutionPolicy", "Bypass",
+                    "-File", $probePath,
+                    "-OutputPath", $teeProbeOutputPath,
+                    "first tee value",
+                    "second tee value"
+                ) `
+                -WorkingDirectory $workingRoot `
+                -OutputPath $teeStreamPath)
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+        $teeStream = Get-Content -LiteralPath $teeStreamPath -Raw
+        if ($teeOutput.Count -lt 2 -or $teeStream -notmatch 'synthetic stdout' -or $teeStream -notmatch 'synthetic stderr') {
+            throw "Invoke-ToolProcess did not preserve tee-to-file stdout/stderr behavior."
+        }
+
+        $hostOnlyOutput = @(Invoke-ToolProcess `
+            -FilePath $powerShell `
+            -Arguments @("-NoProfile", "-Command", "Write-Output 'synthetic host-only stdout'") `
+            -WorkingDirectory $workingRoot `
+            -OutputToHost)
+        if ($hostOnlyOutput.Count -ne 0) {
+            throw "Invoke-ToolProcess did not preserve host-only output behavior."
+        }
+
         $capturePath = Join-Path $shimRoot "capture-process.ps1"
         $wrapperOutputPath = Join-Path $tempRoot "wrapper-output.json"
         @'
@@ -918,6 +1004,20 @@ exit /b %ERRORLEVEL%
 
         if ($nonzeroMessage -ne "synthetic nonzero process with exit code 17" -or $LASTEXITCODE -ne 17) {
             throw "Invoke-ToolProcess did not preserve nonzero exit propagation: message='$nonzeroMessage', exit=$LASTEXITCODE."
+        }
+
+        $defaultNonzeroMessage = $null
+        try {
+            Invoke-ToolProcess `
+                -FilePath $powerShell `
+                -Arguments @("-NoProfile", "-Command", "exit 19")
+        }
+        catch {
+            $defaultNonzeroMessage = $_.Exception.Message
+        }
+
+        if ($defaultNonzeroMessage -ne "$powerShell exited with code 19." -or $LASTEXITCODE -ne 19) {
+            throw "Invoke-ToolProcess did not preserve default nonzero exit propagation: message='$defaultNonzeroMessage', exit=$LASTEXITCODE."
         }
     }
     finally {

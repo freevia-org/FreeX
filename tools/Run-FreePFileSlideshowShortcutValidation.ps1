@@ -25,6 +25,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
     [IO.Path]::GetFullPath($OutputDir)
 } else {
@@ -50,24 +51,6 @@ $requiredIds = @(
     "find-shortcut-lifecycle",
     "replace-shortcut-lifecycle"
 )
-
-function Invoke-External {
-    param(
-        [Parameter(Mandatory = $true)][string]$FilePath,
-        [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [string]$WorkingDirectory = $repoRoot
-    )
-
-    Push-Location $WorkingDirectory
-    try {
-        & $FilePath @Arguments
-        if ($LASTEXITCODE -ne 0) {
-            throw "$FilePath exited with code $LASTEXITCODE."
-        }
-    } finally {
-        Pop-Location
-    }
-}
 
 function Add-ResultEvidence {
     param(
@@ -214,7 +197,7 @@ try {
     if ($SkipPublish) { $startArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
     if ($Replace) { $startArguments += "-Replace" }
-    Invoke-External -FilePath "powershell.exe" -Arguments $startArguments
+    Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot
     $started = $true
 
     $sessionMetadataPath = Join-Path $resolvedOutputRoot "freep/current-session.json"
@@ -421,10 +404,10 @@ try {
 } finally {
     if ($started -and -not $KeepContainer) {
         try {
-            Invoke-External -FilePath "powershell.exe" -Arguments @(
+            Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                 "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot
-            )
+            ) -WorkingDirectory $repoRoot
         } catch {
             Write-Warning "Could not stop harness-owned FreeP container on port ${Port}: $($_.Exception.Message)"
         }

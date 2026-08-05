@@ -42,6 +42,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $manifestEvidenceHelper = Join-Path $PSScriptRoot "LinuxInteractiveDocker/ManifestEvidence.ps1"
 $null = . $manifestEvidenceHelper
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
@@ -68,24 +69,6 @@ $probeParameters = @{
         FileSurface = "in-window-backstage-overlay"
     }
 }[$App]
-
-function Invoke-External {
-    param(
-        [Parameter(Mandatory = $true)][string]$FilePath,
-        [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [string]$WorkingDirectory = $repoRoot
-    )
-
-    Push-Location $WorkingDirectory
-    try {
-        & $FilePath @Arguments
-        if ($LASTEXITCODE -ne 0) {
-            throw "$FilePath exited with code $LASTEXITCODE."
-        }
-    } finally {
-        Pop-Location
-    }
-}
 
 function Assert-ManifestContract {
     param(
@@ -273,7 +256,7 @@ try {
     if ($Replace) { $startArguments += "-Replace" }
     if ($App -eq "FreeW") { $startArguments += "-CupsDryRun" }
 
-    Invoke-External -FilePath "powershell.exe" -Arguments $startArguments
+    Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot
     $started = $true
 
     $currentSessionPath = Join-Path $resolvedOutputRoot "$appKey/current-session.json"
@@ -467,11 +450,11 @@ try {
 } finally {
     if ($started -and -not $KeepContainer) {
         try {
-            Invoke-External -FilePath "powershell.exe" -Arguments @(
+            Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                 "-Action", "Stop", "-App", $App, "-Port", "$Port",
                 "-OutputDir", $resolvedOutputRoot
-            )
+            ) -WorkingDirectory $repoRoot
         } catch {
             Write-Warning "Could not stop harness-owned $App container on port ${Port}: $($_.Exception.Message)"
         }

@@ -25,6 +25,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
     [IO.Path]::GetFullPath($OutputDir)
 } else {
@@ -39,28 +40,6 @@ $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freew-field-s
 $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/field-shortcut-validation.schema.json"
 $manifestEvidenceHelper = Join-Path $PSScriptRoot "LinuxInteractiveDocker/ManifestEvidence.ps1"
 $null = . $manifestEvidenceHelper
-
-function Invoke-External {
-    param(
-        [Parameter(Mandatory = $true)][string]$FilePath,
-        [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [string]$WorkingDirectory = $repoRoot,
-        [string]$OutputPath = ""
-    )
-    Push-Location $WorkingDirectory
-    try {
-        if ([string]::IsNullOrWhiteSpace($OutputPath)) {
-            & $FilePath @Arguments
-        } else {
-            & $FilePath @Arguments 2>&1 | Tee-Object -FilePath $OutputPath
-        }
-        if ($LASTEXITCODE -ne 0) {
-            throw "$FilePath exited with code $LASTEXITCODE."
-        }
-    } finally {
-        Pop-Location
-    }
-}
 
 function Assert-ManifestContract {
     param(
@@ -143,10 +122,10 @@ function Assert-ManifestContract {
 }
 
 New-Item -ItemType Directory -Path (Split-Path -Parent $fixturePath) -Force | Out-Null
-Invoke-External -FilePath "dotnet" -Arguments @(
+Invoke-ToolProcess -FilePath "dotnet" -Arguments @(
     "run", "--project", $fixtureProject, "--configuration", "Release", "--",
     "generate", $fixturePath
-)
+) -WorkingDirectory $repoRoot
 
 $started = $false
 $sessionDirectory = $null
@@ -164,7 +143,7 @@ try {
     if ($SkipPublish) { $startArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
     if ($Replace) { $startArguments += "-Replace" }
-    Invoke-External -FilePath "powershell.exe" -Arguments $startArguments
+    Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot
     $started = $true
 
     $sessionMetadataPath = Join-Path $resolvedOutputRoot "freew/current-session.json"
@@ -200,7 +179,7 @@ try {
     )
     $inspectionExitCode = 0
     try {
-        Invoke-External -FilePath "dotnet" -Arguments $inspectionArguments -OutputPath $inspectionPath
+        Invoke-ToolProcess -FilePath "dotnet" -Arguments $inspectionArguments -WorkingDirectory $repoRoot -OutputPath $inspectionPath
     } catch {
         $inspectionExitCode = 1
         $_ | Out-String | Add-Content -LiteralPath $inspectionPath
@@ -234,10 +213,10 @@ try {
 } finally {
     if ($started -and -not $KeepContainer) {
         try {
-            Invoke-External -FilePath "powershell.exe" -Arguments @(
+            Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                 "-Action", "Stop", "-App", "FreeW", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot
-            )
+            ) -WorkingDirectory $repoRoot
         } catch { Write-Warning "Could not stop harness-owned FreeW container: $($_.Exception.Message)" }
     } elseif ($started) {
         Write-Host "Container retained by request on port $Port."
