@@ -77,12 +77,15 @@ public sealed class DialogRangeSelectionTests
     public void NeutralInventoryFormatting_UsesTheWpfBehavioralFormatters()
     {
         var registrations = ReadSource("MainWindow.DialogRangeSelection.cs");
+        var formatter = ReadPresentationSource("Dialogs", "DialogRangeSelectionFormatter.cs");
         var textToColumns = ReadSource("MainWindow.TextToColumns.cs");
 
-        registrations.Should().Contain("DataValidationService.FormatListSourceRange(");
-        registrations.Should().Contain("PageSetupRangeSelectionTarget.PrintArea");
-        registrations.Should().Contain("PageSetupRangeSelectionTarget.RepeatRows");
-        registrations.Should().Contain("PageSetupRangeSelectionTarget.RepeatColumns");
+        registrations.Should().Contain("DialogRangeSelectionFormatter.Format(");
+        registrations.Should().NotContain("format switch");
+        formatter.Should().Contain("DataValidationService.FormatListSourceRange(");
+        formatter.Should().Contain("PageSetupRangeSelectionTarget.PrintArea");
+        formatter.Should().Contain("PageSetupRangeSelectionTarget.RepeatRows");
+        formatter.Should().Contain("PageSetupRangeSelectionTarget.RepeatColumns");
         textToColumns.Should().Contain("TextToColumnsDialogPlanner.TryParseDestination(");
         textToColumns.Should().Contain("TextToColumnsApplyPlanner.MapResultToEdits(");
         textToColumns.Should().Contain("destination,");
@@ -128,19 +131,23 @@ public sealed class DialogRangeSelectionTests
 
         source.Should().Contain("Window.OwnerProperty.Changed.AddClassHandler<Window>(DialogRangePickerOwnerChanged);");
         source.Should().Contain("DialogRangePickerPointerReleased");
-        source.Should().Contain("e.Key == Key.Escape");
-        source.Should().Contain("e.Key == Key.Enter");
-        source.Should().Contain("session.Target.Text = session.OriginalText;");
+        source.Should().Contain("_dialogRangeSelectionController.DecideKey(");
+        source.Should().Contain("DialogRangeSelectionKey.Escape");
+        source.Should().Contain("DialogRangeSelectionKey.Enter");
+        source.Should().Contain("session.Context.Target.Text = session.OriginalText;");
         source.Should().Contain("RestoreDialogAfterRangeSelection(session);");
-        source.Should().Contain("session.Dialog.Activate();");
+        source.Should().Contain("context.Dialog.Activate();");
         source.Should().Contain("dialog.Closed += DialogRangePickerDialogClosed;");
         source.Should().Contain("CancelDialogRangeSelection(restoreDialog: false, restoreOriginalText: false);");
-        source.Should().Contain("SpreadsheetDisplayFormatter.FormatRangeReference");
+        source.Should().Contain("DialogRangeSelectionFormatter.Format(");
         source.Should().Contain("SetPlatformWindowEnabledMethod?.Invoke(platformImpl, [isEnabled]);");
     }
 
     private static string ReadSource(string fileName) =>
         File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", fileName));
+
+    private static string ReadPresentationSource(params string[] parts) =>
+        File.ReadAllText(RepoFile(["src", "FreeX.App.Presentation", .. parts]));
 
     private static string RepoFile(params string[] parts) =>
         TestWorkspaceFileLocator.FindFileFromBaseDirectory(parts);

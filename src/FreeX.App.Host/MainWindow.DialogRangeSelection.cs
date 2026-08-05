@@ -3,13 +3,14 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private DialogRangePickerSession? _dialogRangePickerSession;
+    private readonly DialogRangeSelectionController<DialogRangePickerContext> _dialogRangeSelectionController = new();
 
     private void BeginDialogRangeSelection(
         Window? dialog,
@@ -19,17 +20,19 @@ public partial class MainWindow
         if (dialog is null)
             return;
 
-        CancelDialogRangeSelection(restoreDialog: true);
-        var session = new DialogRangePickerSession(
-            dialog,
+        var session = _dialogRangeSelectionController.Begin(
+            new DialogRangePickerContext(
+                dialog,
+                applySelection,
+                dialog.Left,
+                dialog.Top,
+                dialog.Opacity,
+                dialog.IsHitTestVisible),
+            originalText: string.Empty,
+            DialogRangeSelectionFormat.Range,
             collapseDialog,
-            applySelection,
             IsEnabled,
-            dialog.Left,
-            dialog.Top,
-            dialog.Opacity,
-            dialog.IsHitTestVisible);
-        _dialogRangePickerSession = session;
+            FinishDialogRangeSelectionTransition);
         SheetGrid.AddHandler(
             UIElement.PreviewMouseLeftButtonUpEvent,
             new MouseButtonEventHandler(DialogRangePicker_MouseLeftButtonUp),
@@ -47,7 +50,7 @@ public partial class MainWindow
 
     private void DialogRangePicker_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (_dialogRangePickerSession is null)
+        if (!_dialogRangeSelectionController.IsActive)
             return;
 
         Dispatcher.BeginInvoke(
@@ -57,19 +60,17 @@ public partial class MainWindow
 
     private void DialogRangePicker_KeyDown(object sender, KeyEventArgs e)
     {
-        if (_dialogRangePickerSession is null)
+        var decision = _dialogRangeSelectionController.DecideKey(e.Key switch
+        {
+            Key.Escape => DialogRangeSelectionKey.Escape,
+            Key.Enter => DialogRangeSelectionKey.Enter,
+            _ => DialogRangeSelectionKey.Other,
+        });
+        if (!decision.Handled)
             return;
 
-        if (e.Key == Key.Escape)
-        {
-            CompleteDialogRangeSelection(applySelection: false);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Enter)
-        {
-            CompleteDialogRangeSelection(applySelection: true);
-            e.Handled = true;
-        }
+        CompleteDialogRangeSelection(decision.ApplySelection);
+        e.Handled = true;
     }
 
     private void DialogRangePickerDialog_Closed(object? sender, EventArgs e) =>
@@ -77,46 +78,57 @@ public partial class MainWindow
 
     private void CompleteDialogRangeSelection(bool applySelection)
     {
-        var session = _dialogRangePickerSession;
-        if (session is null)
-            return;
-
-        CancelDialogRangeSelection(restoreDialog: false);
-        if (applySelection && SheetGrid.SelectedRange is { } selectedRange)
-            session.ApplySelection(selectedRange);
-
-        RestoreDialogAfterRangeSelection(session);
+        if (_dialogRangeSelectionController.Complete(SheetGrid.SelectedRange, applySelection) is { } transition)
+            FinishDialogRangeSelectionTransition(transition);
     }
 
     private void CancelDialogRangeSelection(bool restoreDialog)
     {
-        var session = _dialogRangePickerSession;
-        if (session is null)
-            return;
+        if (_dialogRangeSelectionController.Cancel(restoreDialog, restoreOriginalText: false) is { } transition)
+            FinishDialogRangeSelectionTransition(transition);
+    }
 
-        _dialogRangePickerSession = null;
+    private void FinishDialogRangeSelectionTransition(
+        DialogRangeSelectionTransition<DialogRangePickerContext> transition)
+    {
+        var session = transition.State;
+        DetachDialogRangeSelection(session.Context);
+        try
+        {
+            if (transition.ApplySelection && transition.SelectedRange is { } selectedRange)
+                session.Context.ApplySelection(selectedRange);
+        }
+        finally
+        {
+            if (transition.RestoreDialog)
+                RestoreDialogAfterRangeSelection(session);
+        }
+    }
+
+    private void DetachDialogRangeSelection(DialogRangePickerContext context)
+    {
         SheetGrid.RemoveHandler(
             UIElement.PreviewMouseLeftButtonUpEvent,
             new MouseButtonEventHandler(DialogRangePicker_MouseLeftButtonUp));
         PreviewKeyDown -= DialogRangePicker_KeyDown;
-        session.Dialog.Closed -= DialogRangePickerDialog_Closed;
-        if (restoreDialog)
-            RestoreDialogAfterRangeSelection(session);
+        context.Dialog.Closed -= DialogRangePickerDialog_Closed;
     }
 
-    private void RestoreDialogAfterRangeSelection(DialogRangePickerSession session)
+    private void RestoreDialogAfterRangeSelection(
+        DialogRangeSelectionState<DialogRangePickerContext> session)
     {
+        var context = session.Context;
         SetDialogRangePickerOwnerInputEnabled(session.OwnerWasEnabled);
         if (session.CollapseDialog)
         {
-            session.Dialog.Left = session.DialogLeft;
-            session.Dialog.Top = session.DialogTop;
-            session.Dialog.Opacity = session.DialogOpacity;
-            session.Dialog.IsHitTestVisible = session.DialogIsHitTestVisible;
+            context.Dialog.Left = context.DialogLeft;
+            context.Dialog.Top = context.DialogTop;
+            context.Dialog.Opacity = context.DialogOpacity;
+            context.Dialog.IsHitTestVisible = context.DialogIsHitTestVisible;
         }
 
-        if (session.Dialog.IsVisible)
-            session.Dialog.Activate();
+        if (context.Dialog.IsVisible)
+            context.Dialog.Activate();
     }
 
     private void SetDialogRangePickerOwnerInputEnabled(bool isEnabled)
@@ -127,14 +139,16 @@ public partial class MainWindow
             NativeEnableWindow(handle, isEnabled);
     }
 
-    private static void CollapseDialogForRangeSelection(DialogRangePickerSession session)
+    private static void CollapseDialogForRangeSelection(
+        DialogRangeSelectionState<DialogRangePickerContext> session)
     {
-        var dialogWidth = EffectiveDialogRangeSelectionDimension(session.Dialog.ActualWidth, session.Dialog.Width, 420);
-        var dialogHeight = EffectiveDialogRangeSelectionDimension(session.Dialog.ActualHeight, session.Dialog.Height, 560);
-        session.Dialog.Opacity = 0;
-        session.Dialog.IsHitTestVisible = false;
-        session.Dialog.Left = SystemParameters.VirtualScreenLeft - dialogWidth - 32;
-        session.Dialog.Top = SystemParameters.VirtualScreenTop - dialogHeight - 32;
+        var context = session.Context;
+        var dialogWidth = EffectiveDialogRangeSelectionDimension(context.Dialog.ActualWidth, context.Dialog.Width, 420);
+        var dialogHeight = EffectiveDialogRangeSelectionDimension(context.Dialog.ActualHeight, context.Dialog.Height, 560);
+        context.Dialog.Opacity = 0;
+        context.Dialog.IsHitTestVisible = false;
+        context.Dialog.Left = SystemParameters.VirtualScreenLeft - dialogWidth - 32;
+        context.Dialog.Top = SystemParameters.VirtualScreenTop - dialogHeight - 32;
     }
 
     private static double EffectiveDialogRangeSelectionDimension(double actual, double configured, double fallback)
@@ -149,11 +163,9 @@ public partial class MainWindow
     [DllImport("user32.dll", EntryPoint = "EnableWindow")]
     private static extern bool NativeEnableWindow(IntPtr hWnd, bool bEnable);
 
-    private sealed record DialogRangePickerSession(
+    private sealed record DialogRangePickerContext(
         Window Dialog,
-        bool CollapseDialog,
         Action<GridRange> ApplySelection,
-        bool OwnerWasEnabled,
         double DialogLeft,
         double DialogTop,
         double DialogOpacity,
