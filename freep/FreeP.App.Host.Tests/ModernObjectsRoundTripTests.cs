@@ -562,6 +562,37 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void ZoomFrameBorderSoftEdge_IsUndoableAndRoundTripsNativeEffect()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var zoom = session.InsertSlideZoom("slide-2");
+        var softEdge = new ZoomFrameBorderSoftEdge(158750);
+        session.SetZoomObjectProperties(
+                zoom.Id,
+                new ZoomObjectProperties(FrameBorderSoftEdge: softEdge))
+            .Should().BeTrue();
+
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var raw = XElement.Parse(zoom.PreservedObject!.RawXml);
+        var nativeSoftEdge = raw.Descendants(drawing + "softEdge").Single();
+        nativeSoftEdge.Attribute("rad")!.Value.Should().Be("158750");
+        zoom.PreservedObject.ZoomProperties!.FrameBorderSoftEdge.Should().Be(softEdge);
+
+        session.Undo();
+        XElement.Parse(zoom.PreservedObject.RawXml).Descendants(drawing + "softEdge")
+            .Should().BeEmpty();
+        session.Redo();
+
+        var reopened = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
+            .PreservedObject!.ZoomProperties!.FrameBorderSoftEdge.Should().Be(softEdge);
+    }
+
+    [Fact]
     public void ZoomFrameBorder_GradientIsUndoableAndRoundTripsNativeStops()
     {
         var presentation = new Presentation();

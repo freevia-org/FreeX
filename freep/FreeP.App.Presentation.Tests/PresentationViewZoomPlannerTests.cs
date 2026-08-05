@@ -253,6 +253,31 @@ public sealed class PresentationViewZoomPlannerTests
             .Should().BeFalse();
     }
 
+    [Fact]
+    public void Zoom_border_soft_edge_normalizes_editable_values()
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderSoftEdge(
+                "12.5", enabled: true, out var normalized)
+            .Should().BeTrue();
+
+        normalized.Should().Be(new ZoomFrameBorderSoftEdge(158750));
+        var properties = new ZoomObjectProperties(FrameBorderSoftEdge: normalized);
+        ZoomObjectPropertiesPlanner.FormatFrameBorderSoftEdgeRadius(properties)
+            .Should().Be("12.5");
+        ZoomObjectPropertiesPlanner.IsFrameBorderSoftEdgeEnabled(properties)
+            .Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("-1")]
+    [InlineData("not-a-number")]
+    public void Zoom_border_soft_edge_rejects_invalid_values(string radius)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderSoftEdge(
+                radius, enabled: true, out _)
+            .Should().BeFalse();
+    }
+
     [Theory]
     [InlineData("not-a-pattern", "4472C4", "FFFFFF")]
     [InlineData("pct50", "GGGGGG", "FFFFFF")]

@@ -17,6 +17,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private readonly CheckBox _frameBorderThemeEnabled;
     private readonly CheckBox _frameBorderShadowEnabled;
     private readonly CheckBox _frameBorderGlowEnabled;
+    private readonly CheckBox _frameBorderSoftEdgeEnabled;
     private readonly ComboBox _imageType;
     private readonly TextBox _transitionDuration;
     private readonly TextBox _frameBorderColor;
@@ -29,6 +30,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private readonly TextBox _frameBorderGlowColor;
     private readonly TextBox _frameBorderGlowAlpha;
     private readonly TextBox _frameBorderGlowRadius;
+    private readonly TextBox _frameBorderSoftEdgeRadius;
     private readonly TextBox _frameBorderWidth;
     private readonly ComboBox _frameBorderDash;
     private readonly TextBox _frameBorderGradientStart;
@@ -269,6 +271,17 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         };
         _frameBorderGlowEnabled.Checked += (_, _) => SyncFrameBorderState();
         _frameBorderGlowEnabled.Unchecked += (_, _) => SyncFrameBorderState();
+        _frameBorderSoftEdgeEnabled = new CheckBox
+        {
+            Content = "Use border soft edge",
+            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderSoftEdgeEnabled(current),
+        };
+        _frameBorderSoftEdgeRadius = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderSoftEdgeRadius(current), MinWidth = 180,
+        };
+        _frameBorderSoftEdgeEnabled.Checked += (_, _) => SyncFrameBorderState();
+        _frameBorderSoftEdgeEnabled.Unchecked += (_, _) => SyncFrameBorderState();
         _frameBorderGradientEnabled.Checked += (_, _) => _frameBorderThemeEnabled.IsChecked = false;
         _frameBorderPatternEnabled.Checked += (_, _) => _frameBorderThemeEnabled.IsChecked = false;
         _frameBorderNoFillEnabled.Checked += (_, _) => _frameBorderThemeEnabled.IsChecked = false;
@@ -310,7 +323,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         }
 
         var grid = new Grid { Margin = new Thickness(14) };
-        for (var i = 0; i < 33 + (_summaryTargets.Count > 0 ? 4 : 0); i++)
+        for (var i = 0; i < 35 + (_summaryTargets.Count > 0 ? 4 : 0); i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -343,6 +356,10 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         AddRow(grid, row++, "Glow color:", _frameBorderGlowColor);
         AddRow(grid, row++, "Glow alpha (%):", _frameBorderGlowAlpha);
         AddRow(grid, row++, "Glow radius (pt):", _frameBorderGlowRadius);
+        Grid.SetRow(_frameBorderSoftEdgeEnabled, row++);
+        Grid.SetColumnSpan(_frameBorderSoftEdgeEnabled, 2);
+        grid.Children.Add(_frameBorderSoftEdgeEnabled);
+        AddRow(grid, row++, "Soft-edge radius (pt):", _frameBorderSoftEdgeRadius);
         AddRow(grid, row++, "Border width (pt):", _frameBorderWidth);
         AddRow(grid, row++, "Border dash:", _frameBorderDash);
         Grid.SetRow(_frameBorderGradientEnabled, row++);
@@ -555,6 +572,18 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                 MessageBoxImage.Warning);
             return;
         }
+        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderSoftEdge(
+                _frameBorderSoftEdgeRadius.Text,
+                _frameBorderSoftEdgeEnabled.IsChecked == true,
+                out var frameBorderSoftEdge))
+        {
+            MessageBox.Show(this,
+                ZoomObjectPropertiesPlanner.InvalidFrameBorderSoftEdgeMessage,
+                ZoomObjectPropertiesPlanner.DialogTitle,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
         if (!ZoomObjectPropertiesPlanner.TryParseFrameGeometry(
                 _frameGeometry.SelectedItem?.ToString(), out var frameGeometry))
         {
@@ -615,7 +644,9 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             frameBorderShadow,
             _frameBorderShadowEnabled.IsChecked == true ? true : false,
             frameBorderGlow,
-            _frameBorderGlowEnabled.IsChecked == true ? true : false);
+            _frameBorderGlowEnabled.IsChecked == true ? true : false,
+            frameBorderSoftEdge,
+            _frameBorderSoftEdgeEnabled.IsChecked == true ? true : false);
         if (_summaryTile is not null && _summaryTile.SelectedIndex >= 0
             && _summaryTile.SelectedIndex < _summaryTargets.Count)
         {
@@ -669,6 +700,8 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _frameBorderGlowColor.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowColor(properties);
         _frameBorderGlowAlpha.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowAlpha(properties);
         _frameBorderGlowRadius.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowRadius(properties);
+        _frameBorderSoftEdgeEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderSoftEdgeEnabled(properties);
+        _frameBorderSoftEdgeRadius.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderSoftEdgeRadius(properties);
         SyncFrameBorderState();
         _frameGeometry.SelectedItem = ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
             geometry => string.Equals(geometry, properties.FrameGeometry, StringComparison.OrdinalIgnoreCase))
@@ -716,5 +749,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _frameBorderGlowColor.IsEnabled = enabled && _frameBorderGlowEnabled.IsChecked == true;
         _frameBorderGlowAlpha.IsEnabled = _frameBorderGlowColor.IsEnabled;
         _frameBorderGlowRadius.IsEnabled = _frameBorderGlowColor.IsEnabled;
+        _frameBorderSoftEdgeEnabled.IsEnabled = enabled;
+        _frameBorderSoftEdgeRadius.IsEnabled = enabled && _frameBorderSoftEdgeEnabled.IsChecked == true;
     }
 }

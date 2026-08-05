@@ -1808,7 +1808,9 @@ public static class PptxPackageReader
             ReadZoomFrameBorderShadow(properties),
             ReadZoomFrameBorderShadowEnabled(properties),
             ReadZoomFrameBorderGlow(properties),
-            ReadZoomFrameBorderGlowEnabled(properties));
+            ReadZoomFrameBorderGlowEnabled(properties),
+            ReadZoomFrameBorderSoftEdge(properties),
+            ReadZoomFrameBorderSoftEdgeEnabled(properties));
         return value.IsEmpty ? null : value;
     }
 
@@ -1883,6 +1885,30 @@ public static class PptxPackageReader
                 string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
         return effectList?.Elements().Any(element =>
             string.Equals(element.Name.LocalName, "glow", StringComparison.OrdinalIgnoreCase)) == true
+            ? true
+            : null;
+    }
+
+    private static ZoomFrameBorderSoftEdge? ReadZoomFrameBorderSoftEdge(XElement properties)
+    {
+        var softEdge = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "softEdge", StringComparison.OrdinalIgnoreCase));
+        var radius = ParseNullableLong(softEdge?.Attribute("rad")?.Value);
+        return radius is >= 0 ? new ZoomFrameBorderSoftEdge(radius.Value) : null;
+    }
+
+    private static bool? ReadZoomFrameBorderSoftEdgeEnabled(XElement properties)
+    {
+        var effectList = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
+        return effectList?.Elements().Any(element =>
+            string.Equals(element.Name.LocalName, "softEdge", StringComparison.OrdinalIgnoreCase)) == true
             ? true
             : null;
     }

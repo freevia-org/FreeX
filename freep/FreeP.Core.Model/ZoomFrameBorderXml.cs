@@ -20,7 +20,9 @@ internal static class ZoomFrameBorderXml
         ZoomFrameBorderShadow? shadow = null,
         bool? shadowEnabled = null,
         ZoomFrameBorderGlow? glow = null,
-        bool? glowEnabled = null)
+        bool? glowEnabled = null,
+        ZoomFrameBorderSoftEdge? softEdge = null,
+        bool? softEdgeEnabled = null)
     {
         if (noFill == false)
             noFill = null;
@@ -28,7 +30,8 @@ internal static class ZoomFrameBorderXml
         // Null means the model did not understand the native line; preserve it verbatim.
         if (color is null && widthEmu is null && dash is null && gradient is null && pattern is null && noFill is null && themeColor is null
             && shadow is null && shadowEnabled is null
-            && glow is null && glowEnabled is null)
+            && glow is null && glowEnabled is null
+            && softEdge is null && softEdgeEnabled is null)
             return;
 
         var shapeProperties = zoomProperties.Elements().FirstOrDefault(element =>
@@ -55,6 +58,7 @@ internal static class ZoomFrameBorderXml
 
         SetOuterShadow(shapeProperties, shadow, shadowEnabled);
         SetGlow(shapeProperties, glow, glowEnabled);
+        SetSoftEdge(shapeProperties, softEdge, softEdgeEnabled);
 
         var solidFill = line?.Elements(Drawing + "solidFill").FirstOrDefault();
         if (gradient is not null && pattern is not null)
@@ -261,6 +265,42 @@ internal static class ZoomFrameBorderXml
                     new XAttribute("val", glow.Alpha))));
         if (nativeGlow.Parent is null)
             effectList.Add(nativeGlow);
+        if (effectList.Parent is null)
+        {
+            var line = shapeProperties.Elements(Drawing + "ln").FirstOrDefault();
+            if (line is null)
+                shapeProperties.Add(effectList);
+            else
+                line.AddAfterSelf(effectList);
+        }
+    }
+
+    private static void SetSoftEdge(
+        XElement shapeProperties,
+        ZoomFrameBorderSoftEdge? softEdge,
+        bool? softEdgeEnabled)
+    {
+        if (softEdge is null && softEdgeEnabled is null)
+            return;
+
+        var effectList = shapeProperties.Elements(Drawing + "effectLst").FirstOrDefault();
+        var nativeSoftEdge = effectList?.Elements(Drawing + "softEdge").FirstOrDefault();
+        if (softEdgeEnabled == false)
+        {
+            nativeSoftEdge?.Remove();
+            if (effectList is not null && !effectList.Elements().Any())
+                effectList.Remove();
+            return;
+        }
+
+        if (softEdge is null)
+            return;
+
+        effectList ??= new XElement(Drawing + "effectLst");
+        nativeSoftEdge ??= new XElement(Drawing + "softEdge");
+        nativeSoftEdge.SetAttributeValue("rad", softEdge.RadiusEmu);
+        if (nativeSoftEdge.Parent is null)
+            effectList.Add(nativeSoftEdge);
         if (effectList.Parent is null)
         {
             var line = shapeProperties.Elements(Drawing + "ln").FirstOrDefault();

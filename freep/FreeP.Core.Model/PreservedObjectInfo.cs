@@ -57,7 +57,9 @@ public sealed record ZoomObjectProperties(
     ZoomFrameBorderShadow? FrameBorderShadow = null,
     bool? FrameBorderShadowEnabled = null,
     ZoomFrameBorderGlow? FrameBorderGlow = null,
-    bool? FrameBorderGlowEnabled = null)
+    bool? FrameBorderGlowEnabled = null,
+    ZoomFrameBorderSoftEdge? FrameBorderSoftEdge = null,
+    bool? FrameBorderSoftEdgeEnabled = null)
 {
     public bool IsEmpty => ReturnToParent is null
         && ImageType is null
@@ -78,7 +80,9 @@ public sealed record ZoomObjectProperties(
         && FrameBorderShadow is null
         && FrameBorderShadowEnabled is null
         && FrameBorderGlow is null
-        && FrameBorderGlowEnabled is null;
+        && FrameBorderGlowEnabled is null
+        && FrameBorderSoftEdge is null
+        && FrameBorderSoftEdgeEnabled is null;
 }
 
 /// <summary>
@@ -101,6 +105,12 @@ public sealed record ZoomFrameBorderGlow(
     string Color,
     int Alpha = 50000,
     long RadiusEmu = 203200);
+
+/// <summary>
+/// A supported native DrawingML soft edge on a Zoom frame outline.
+/// Radius is stored in the OOXML EMU unit used by <c>a:softEdge/@rad</c>.
+/// </summary>
+public sealed record ZoomFrameBorderSoftEdge(long RadiusEmu = 127000);
 
 /// <summary>
 /// Payload for a preserved modern object (SlideShapeKind.Zoom / Ink / Model3d / PreservedObject).
