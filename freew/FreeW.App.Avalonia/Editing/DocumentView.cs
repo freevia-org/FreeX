@@ -8146,44 +8146,7 @@ public sealed class DocumentView : Control
     /// clamping, instead of the previous 1-line-per-note estimate.
     /// </summary>
     private double MeasureNoteContentHeight(string number, IReadOnlyList<Paragraph> content, double x, double availWidth)
-    {
-        var noteFmt = RunFormatting.Default with { FontSizePt = NoteFontSizePt };
-        var numFmt  = noteFmt with { VerticalAlign = VerticalAlign.Superscript };
-        var lineH   = Math.Max(1, Build("Ag", noteFmt).Height);
-
-        var numText  = number + " ";
-        var numWidth = BuildForLayout(numText, numFmt).WidthIncludingTrailingWhitespace;
-        var textLeft = x + numWidth;
-        var penX     = textLeft;
-        var lineY    = 0.0; // relative to the note's start Y
-
-        var first = true;
-        foreach (var para in content)
-        {
-            if (!first)
-            {
-                lineY += lineH;
-                penX = textLeft;
-            }
-            first = false;
-
-            var visibleText = DocumentNoteRegionPlanner.ResolveVisiblePlainText(_doc, [para]);
-            var words = visibleText.Split(' ');
-            for (var wi = 0; wi < words.Length; wi++)
-            {
-                var word = wi == words.Length - 1 ? words[wi] : words[wi] + " ";
-                if (word.Length == 0) continue;
-                var w = Build(word, noteFmt).WidthIncludingTrailingWhitespace;
-                if (penX + w > x + availWidth && penX > textLeft)
-                {
-                    lineY += lineH;
-                    penX = textLeft;
-                }
-                penX += w;
-            }
-        }
-        return lineY + lineH; // total height from the note's top to the last line's bottom
-    }
+        => LayoutNoteContentCore(number, content, x, y: 0, availWidth: availWidth, emitItems: false);
 
     /// <summary>
     /// DB3: Computes the display number string for a note (footnote or endnote) given its
@@ -8292,22 +8255,37 @@ public sealed class DocumentView : Control
     /// Returns the page-space Y just past the laid-out content (the next free line).
     /// </summary>
     private double LayoutNoteContent(string number, IReadOnlyList<Paragraph> content, double x, double y, double availWidth)
+        => LayoutNoteContentCore(number, content, x, y, availWidth, emitItems: true);
+
+    private double LayoutNoteContentCore(
+        string number,
+        IReadOnlyList<Paragraph> content,
+        double x,
+        double y,
+        double availWidth,
+        bool emitItems)
     {
         var noteFmt = RunFormatting.Default with { FontSizePt = NoteFontSizePt };
         var numFmt  = noteFmt with { VerticalAlign = VerticalAlign.Superscript };
-
         var lineH = Math.Max(1, Build("Ag", noteFmt).Height);
+        var right = x + availWidth;
+
+        void AddItem(string text, RunFormatting formatting, double itemX, double itemY)
+        {
+            if (emitItems && !string.IsNullOrEmpty(text))
+                _noteItems.Add(new NoteRenderItem { Text = text, Fmt = formatting, X = itemX, Y = itemY });
+        }
 
         // Emit the number marker first (superscript), then the text flows after it on the same line.
         var numText = string.IsNullOrEmpty(number) ? string.Empty : number + " ";
         var numWidth = BuildForLayout(numText, numFmt).WidthIncludingTrailingWhitespace;
-        if (!string.IsNullOrEmpty(numText))
-            _noteItems.Add(new NoteRenderItem { Text = numText, Fmt = numFmt, X = x, Y = y });
+        AddItem(numText, numFmt, x, y);
 
         var textLeft = x + numWidth;
-        var lineLeft = textLeft;
         var penX = textLeft;
+        var lineVisibleRight = textLeft;
         var lineY = y;
+        var lineHasContent = false;
 
         // Flatten the note's paragraphs into a single wrapped flow (note content is usually one paragraph).
         var first = true;
@@ -8318,9 +8296,11 @@ public sealed class DocumentView : Control
                 // New paragraph in the note: break to a fresh line at the text-left indent.
                 lineY += lineH;
                 penX = textLeft;
-                lineLeft = textLeft;
+                lineVisibleRight = textLeft;
+                lineHasContent = false;
             }
             first = false;
+            var consecutiveAutomaticHyphenLines = 0;
 
             var visibleText = DocumentNoteRegionPlanner.ResolveVisiblePlainText(_doc, [para]);
             var words = visibleText.Split(' ');
@@ -8328,16 +8308,103 @@ public sealed class DocumentView : Control
             {
                 var word = wi == words.Length - 1 ? words[wi] : words[wi] + " ";
                 if (word.Length == 0) continue;
-                var w = Build(word, noteFmt).WidthIncludingTrailingWhitespace;
-                // Wrap when the word would overflow the available width (but always place at least one word).
-                if (penX + w > x + availWidth && penX > lineLeft)
+
+                var coreLength = word.TrimEnd(' ').Length;
+                var core = word[..coreLength];
+                var trailing = word[coreLength..];
+                var automaticOffsets = AutomaticHyphenationDisplayPlanner.BuildBreakOffsets(
+                        core,
+                        _doc.Page,
+                        ResolveParagraphFmt(para))
+                    .Where(offset => offset > 0 && offset < core.Length)
+                    .Distinct()
+                    .OrderBy(offset => offset)
+                    .ToArray();
+                var segmentStart = 0;
+
+                while (segmentStart < core.Length || (core.Length == 0 && trailing.Length > 0))
                 {
-                    lineY += lineH;
-                    penX = textLeft;
-                    lineLeft = textLeft;
+                    var remaining = core[segmentStart..] + trailing;
+                    var remainingWidth = Build(remaining, noteFmt).WidthIncludingTrailingWhitespace;
+                    if (penX + remainingWidth > right)
+                    {
+                        var available = Math.Max(0, right - penX);
+                        var automaticBreakAt = -1;
+                        foreach (var offset in automaticOffsets)
+                        {
+                            if (offset <= segmentStart)
+                                continue;
+                            var candidate = core[segmentStart..offset] + "-";
+                            if (Build(candidate, noteFmt).WidthIncludingTrailingWhitespace <= available)
+                                automaticBreakAt = offset;
+                        }
+
+                        var trailingWhitespacePt = lineHasContent
+                            ? Math.Max(0, right - lineVisibleRight) / PxPerPoint
+                            : 0;
+                        var useAutomaticHyphen = automaticBreakAt > segmentStart
+                            && AutomaticHyphenationDisplayPlanner.AllowsAutomaticLineBreak(
+                                _doc.Page,
+                                consecutiveAutomaticHyphenLines,
+                                lineHasContent,
+                                trailingWhitespacePt);
+                        if (useAutomaticHyphen)
+                        {
+                            var fragment = core[segmentStart..automaticBreakAt] + "-";
+                            AddItem(fragment, noteFmt, penX, lineY);
+                            lineY += lineH;
+                            penX = textLeft;
+                            lineVisibleRight = textLeft;
+                            lineHasContent = false;
+                            segmentStart = automaticBreakAt;
+                            consecutiveAutomaticHyphenLines++;
+                            continue;
+                        }
+
+                        if (lineHasContent)
+                        {
+                            lineY += lineH;
+                            penX = textLeft;
+                            lineVisibleRight = textLeft;
+                            lineHasContent = false;
+                            consecutiveAutomaticHyphenLines = 0;
+                            continue;
+                        }
+
+                        // An overlong first word still needs a non-hyphenated line when the consecutive
+                        // limit rejects the next candidate. This mirrors the body wrapper's hard fallback.
+                        var hardBreakAt = segmentStart;
+                        if (automaticOffsets.Any(offset => offset > segmentStart))
+                        {
+                            for (var offset = segmentStart + 1; offset <= core.Length; offset++)
+                            {
+                                if (Build(core[segmentStart..offset], noteFmt).WidthIncludingTrailingWhitespace <= available)
+                                    hardBreakAt = offset;
+                            }
+                        }
+                        if (hardBreakAt > segmentStart && hardBreakAt < core.Length)
+                        {
+                            AddItem(core[segmentStart..hardBreakAt], noteFmt, penX, lineY);
+                            lineY += lineH;
+                            penX = textLeft;
+                            lineVisibleRight = textLeft;
+                            lineHasContent = false;
+                            segmentStart = hardBreakAt;
+                            consecutiveAutomaticHyphenLines = 0;
+                            continue;
+                        }
+                    }
+
+                    AddItem(remaining, noteFmt, penX, lineY);
+                    if (core.Length > segmentStart)
+                    {
+                        lineVisibleRight = penX
+                            + Build(core[segmentStart..], noteFmt).WidthIncludingTrailingWhitespace;
+                        lineHasContent = true;
+                    }
+                    penX += remainingWidth;
+                    break;
                 }
-                _noteItems.Add(new NoteRenderItem { Text = word, Fmt = noteFmt, X = penX, Y = lineY });
-                penX += w;
             }
         }
 
