@@ -112,6 +112,7 @@ internal static class PptxChartWriter
                 var preserved = XDocument.Parse(chart.PreservedChartExXml, LoadOptions.PreserveWhitespace);
                 UpdateChartExTitle(preserved, chart);
                 UpdateChartExSeriesLayouts(preserved, chart);
+                UpdateChartExSeriesDataPoints(preserved, chart);
                 UpdateChartExSeriesDataLabels(preserved, chart);
                 if (chart.RegenerateWorkbookOnSave)
                     UpdateChartExData(preserved, chart);
@@ -369,6 +370,68 @@ internal static class PptxChartWriter
             }
         }
     }
+
+    /// <summary>
+    /// Updates only modeled native ChartEx point shape properties. A point with
+    /// no fill/stroke edit remains verbatim, including its extension payload.
+    /// </summary>
+    private static void UpdateChartExSeriesDataPoints(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var series = document.Descendants(cx + "plotAreaRegion")
+            .Elements(cx + "series")
+            .ToList();
+
+        if (series.Count == 0 || series.Count != chart.Series.Count)
+            return;
+
+        for (var index = 0; index < series.Count; index++)
+        {
+            var source = chart.Series[index];
+            var pointStyles = source.PointStyles
+                .Where(pair => HasChartExPointShapeFormatting(pair.Value))
+                .ToDictionary(pair => pair.Key, pair => pair.Value);
+            if (pointStyles.Count == 0)
+                continue;
+
+            foreach (var pair in pointStyles.OrderBy(pair => pair.Key))
+            {
+                var point = series[index].Elements(cx + "dataPt")
+                    .FirstOrDefault(element =>
+                        TryParseChartExId(element.Attribute("idx")?.Value) == pair.Key);
+                if (point is null)
+                {
+                    point = new XElement(cx + "dataPt",
+                        new XAttribute("idx", pair.Key));
+                    var anchor = series[index].Elements()
+                        .FirstOrDefault(element =>
+                            element.Name == cx + "dataLabels"
+                            || element.Name == cx + "dataId");
+                    if (anchor is not null)
+                        anchor.AddBeforeSelf(point);
+                    else
+                        series[index].Add(point);
+                }
+
+                var shapeProperties = BuildPointShapePropertiesEl(null, pair.Value);
+                if (shapeProperties is null)
+                    continue;
+
+                var chartExShapeProperties = new XElement(cx + "spPr", shapeProperties.Elements());
+                var existing = point.Element(cx + "spPr");
+                if (existing is not null)
+                    existing.ReplaceWith(chartExShapeProperties);
+                else
+                    point.AddFirst(chartExShapeProperties);
+            }
+        }
+    }
+
+    private static bool HasChartExPointShapeFormatting(ChartPointStyle style) =>
+        style.Fill is not null
+        || style.FillColor is not null
+        || style.StrokeColor is not null
+        || style.StrokeWidthPt is not null;
 
     private static void AddChartExDataLabelContent(
         XElement element,
@@ -1962,6 +2025,7 @@ internal static class PptxChartWriter
     private static XElement? BuildChartFillEl(ShapeFill? fill, ThemeAwareColor? solidFallback) =>
         fill switch
         {
+            ShapeFill.None => new XElement(A + "noFill"),
             ShapeFill.Gradient gradient => BuildGradFillEl(gradient),
             ShapeFill.Pattern pattern => BuildPattFillEl(pattern),
             ShapeFill.Solid solid => new XElement(A + "solidFill", BuildColorEl(solid.Color)),

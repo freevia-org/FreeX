@@ -2013,6 +2013,74 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void Edit_NativeChartExDataPointFormatting_RoundTripsWithoutFlatteningExtensions()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        const string drawingMlUri = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace cxNs = chartExUri;
+        XNamespace aNs = drawingMlUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XAttribute(XNamespace.Xmlns + "a", drawingMlUri),
+                new XElement(cxNs + "chartData",
+                    new XElement(cxNs + "data", new XAttribute("id", 0))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData",
+                                        new XElement(cxNs + "v", "Revenue"))),
+                                new XElement(cxNs + "dataPt",
+                                    new XAttribute("idx", 1),
+                                    new XElement(cxNs + "spPr",
+                                        new XElement(aNs + "solidFill",
+                                            new XElement(aNs + "srgbClr", new XAttribute("val", "FF0000"))),
+                                        new XElement(aNs + "ln",
+                                            new XAttribute("w", 12700),
+                                            new XElement(aNs + "solidFill",
+                                                new XElement(aNs + "srgbClr", new XAttribute("val", "0000FF"))))),
+                                    new XElement(cxNs + "extLst",
+                                        new XElement(cxNs + "ext", new XAttribute("uri", "urn:freep:test")))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0))))))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+        chart.Categories.AddRange(["Q1", "Q2"]);
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+
+        var importedPath = WriteToPptx(BuildPresWithChart(chart));
+        var imported = PptxPackageReader.Read(importedPath).Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        var importedPoint = imported.Series[0].PointStyles[1];
+        importedPoint.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xFF0000));
+        importedPoint.StrokeColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x0000FF));
+        importedPoint.StrokeWidthPt.Should().BeApproximately(1, 0.001);
+
+        importedPoint.FillColor = new ThemeAwareColor(SrgbColor.FromRgb(0x00AA00));
+        var editedPath = WriteToPptx(BuildPresWithChart(imported));
+        using var archive = ZipFile.OpenRead(editedPath);
+        var edited = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var dataPoint = edited.Descendants(cxNs + "dataPt").Single();
+        dataPoint.Element(cxNs + "extLst").Should().NotBeNull();
+        dataPoint.Element(cxNs + "spPr")!
+            .Element(aNs + "solidFill")!
+            .Element(aNs + "srgbClr")!
+            .Attribute("val")!.Value.Should().Be("00AA00");
+        dataPoint.Element(cxNs + "spPr")!
+            .Element(aNs + "ln")!
+            .Attribute("w")!.Value.Should().Be("12700");
+    }
+
+    [Fact]
     public void Edit_NativeSingleSeriesChartEx_UpdatesDataWithoutChangingFamilyPayload()
     {
         const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
