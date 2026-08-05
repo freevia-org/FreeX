@@ -8,7 +8,7 @@ namespace FreeW.Ribbon.Definitions;
 /// Canonical FreeW tab topology shared by both renderers. Capability checks select only the
 /// presentation shape that each host already supports; command ownership and ordering live here.
 /// </summary>
-internal static class FreeWCanonicalRibbonTabs
+internal static partial class FreeWCanonicalRibbonTabs
 {
     internal static RibbonDefinitionBuilder AddLayoutTab(
         this RibbonDefinitionBuilder builder,

@@ -35,6 +35,10 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
         "view",
         "CB9249AAD3A6B6A5BB00C86AE16F2FF13697EAE694B5F54E0F33911D9D5A63BF",
         "4B41DCA044EF9FF14EB2A0B3239D4722C5EC13D41B1C127D1AEF1602C9D648D1")]
+    [InlineData("home", "03022E585BA534F49C0A1E21D0CE739BE3B4E07B8EBCA5166A4502C3E5ED7292", "BF7FB5D3B559CB4730B3738AC6E241329BB542546BAFF11E0136D27E6FCCBE39")]
+    [InlineData("insert", "CDE6CB1B0682F56F84BCBB2F3775F71CE67D5BAB9E2B9245A7B0AA0DE93AD149", "4C2CA0C7C39E93EF1DB3BAD06B7EA3388F6BB88952B3C015079849A765734169")]
+    [InlineData("references", "E45FFB1DFBE9D61F7D883E43AFB232E82F8F8465C6F8E54B15AA5E902BEB504A", "CFE21A6FCDC9FAB33072CB6D7158FA02F36050AA404C55699F95F54E21CE20FB")]
+    [InlineData("review", "0C8DB7D034E83F9B916B024D09E3FCFBF335788384DDC513EE1CFDE3736F1229", "99C0BDD4F259BB161D2A4C472E599E9F95BD2FB60709C2628462EB9DDC4C098A")]
     public void Canonical_tab_profiles_preserve_existing_structure(
         string tabId,
         string expectedWpfHash,
@@ -51,15 +55,21 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
     public void Canonical_tabs_have_one_topology_source()
     {
         var canonical = ReadRepositoryFile(
-            "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.cs");
+                "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.cs")
+            + ReadRepositoryFile(
+                "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs");
         var wpf = ReadRepositoryFile(
             "freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
         var avalonia = ReadRepositoryFile(
             "freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
 
-        foreach (var tabId in new[] { "layout", "design", "view", "mailings", "help", "developer" })
+        foreach (var tabId in new[]
+                 {
+                     "home", "insert", "references", "review",
+                     "layout", "design", "view", "mailings", "help", "developer",
+                 })
         {
-            canonical.Should().Contain($"builder.Tab(\"{tabId}\"");
+            canonical.Should().Contain($".Tab(\"{tabId}\"");
             wpf.Should().NotContain($".Tab(\"{tabId}\"");
             avalonia.Should().NotContain($".Tab(\"{tabId}\"");
         }
@@ -70,6 +80,10 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
 
         foreach (var method in new[]
                  {
+                     "AddHomeTab(capabilities)",
+                     "AddInsertTab(capabilities)",
+                     "AddReferencesTab(capabilities)",
+                     "AddReviewTab(capabilities)",
                      "AddLayoutTab(capabilities)",
                      "AddDesignTab(capabilities)",
                      "AddViewTab(capabilities)",

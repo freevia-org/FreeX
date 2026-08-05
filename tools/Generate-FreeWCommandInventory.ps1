@@ -48,6 +48,7 @@ internal static class FreeWCommandInventory
     private static readonly SourceLiteralFile[] SourceFiles =
     [
         new("canonicalDefinitionSource", "Canonical shared definition source", "freew/FreeW.Ribbon.Definitions/FreeWCanonicalRibbonTabs.cs"),
+        new("canonicalOrdinaryDefinitionSource", "Canonical ordinary-tab definition source", "freew/FreeW.Ribbon.Definitions/FreeWCanonicalRibbonTabs.Ordinary.cs"),
         new("wpfDefinitionSource", "WPF definition source", "freew/FreeW.Ribbon.Definitions/FreeWRibbon.cs"),
         new("avaloniaDefinitionSource", "Avalonia definition source", "freew/FreeW.Ribbon.Definitions/FreeWAvaloniaRibbonDefinition.cs"),
         new("wpfRegistrySource", "WPF registry source", "freew/FreeW.App.Host/Ribbon/FreeWRibbonCommands.cs"),
@@ -396,7 +397,8 @@ internal static class FreeWCommandInventory
             file => file.Id,
             file => ReadRepositoryFile(repoRoot, file.RelativePath),
             StringComparer.Ordinal);
-        var canonicalDefinitionSource = sourceTexts["canonicalDefinitionSource"];
+        var canonicalDefinitionSource = sourceTexts["canonicalDefinitionSource"]
+            + sourceTexts["canonicalOrdinaryDefinitionSource"];
 
         var commands = commandIds.Select(commandId =>
         {

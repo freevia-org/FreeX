@@ -926,6 +926,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
     {
         var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
         var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+        var canonicalSource = ReadRepositoryFile(
+            "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs");
 
         wpfSource.Should().NotContain(".Tab(\"home\", \"Home\"");
         wpfSource.Should().NotContain("tab.Group(\"clipboard\", \"Clipboard\"");
@@ -936,15 +938,15 @@ public sealed class FreeWRibbonDefinitionProfileTests
         wpfSource.Should().NotContain("g.Icon(\"freew.paste-plain\", \"Paste Text Only\"");
         wpfSource.Should().NotContain("g.Icon(\"freew.paste-merge\", \"Merge Formatting\"");
         wpfSource.Should().NotContain("g.Icon(\"freew.paste-special\", \"Paste Special");
-        wpfSource.Should().Contain("FreeWRibbonText.HomeTab");
-        wpfSource.Should().Contain("FreeWRibbonText.ClipboardGroup");
-        wpfSource.Should().Contain("FreeWRibbonText.PasteCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.CutCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.CopyCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.FormatPainterCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.PasteTextOnlyCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.PasteMergeFormattingCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.PasteSpecialCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.HomeTab");
+        canonicalSource.Should().Contain("FreeWRibbonText.ClipboardGroup");
+        canonicalSource.Should().Contain("FreeWRibbonText.PasteCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.CutCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.CopyCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.FormatPainterCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.PasteTextOnlyCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.PasteMergeFormattingCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.PasteSpecialCommand");
 
         avaloniaSource.Should().NotContain(".Tab(\"home\", \"Home\"");
         avaloniaSource.Should().NotContain("tab.Group(\"clipboard\", \"Clipboard\"");
@@ -955,15 +957,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         avaloniaSource.Should().NotContain("g.Icon(\"freew.paste-plain\", \"Paste Text Only\"");
         avaloniaSource.Should().NotContain("g.Icon(\"freew.paste-merge\", \"Merge Formatting\"");
         avaloniaSource.Should().NotContain("g.Icon(\"freew.paste-special\", \"Paste Special");
-        avaloniaSource.Should().Contain("FreeWRibbonText.HomeTab");
-        avaloniaSource.Should().Contain("FreeWRibbonText.ClipboardGroup");
-        avaloniaSource.Should().Contain("FreeWRibbonText.PasteCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.CutCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.CopyCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.FormatPainterCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.PasteTextOnlyCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.PasteMergeFormattingCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.PasteSpecialCommand");
+        avaloniaSource.Should().Contain("AddHomeTab(capabilities)");
     }
 
     [Fact]
@@ -1006,6 +1000,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
     {
         var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
         var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+        var canonicalSource = ReadRepositoryFile(
+            "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs");
 
         wpfSource.Should().NotContain("tab.Group(\"font\", \"Font\"");
         wpfSource.Should().NotContain("g.ComboBox(\"freew.font-family\", \"Font\"");
@@ -1015,14 +1011,14 @@ public sealed class FreeWRibbonDefinitionProfileTests
         wpfSource.Should().NotContain("g.IconToggle(\"freew.underline\", \"Underline\"");
         wpfSource.Should().NotContain("g.Icon(\"freew.strikethrough\", \"Strikethrough\"");
         wpfSource.Should().NotContain("g.Icon(\"freew.font-dialog\", \"Font");
-        wpfSource.Should().Contain("FreeWRibbonText.FontGroup");
-        wpfSource.Should().Contain("FreeWRibbonText.FontFamilyCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.FontSizeCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.BoldCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.ItalicCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.UnderlineCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.StrikethroughCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.FontDialogCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.FontGroup");
+        canonicalSource.Should().Contain("FreeWRibbonText.FontFamilyCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.FontSizeCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.BoldCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.ItalicCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.UnderlineCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.StrikethroughCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.FontDialogCommand");
 
         avaloniaSource.Should().NotContain("tab.Group(\"font\", \"Font\"");
         avaloniaSource.Should().NotContain("g.ComboBox(\"freew.font-family\", \"Font\"");
@@ -1032,14 +1028,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         avaloniaSource.Should().NotContain("g.Toggle(\"freew.underline\",       \"Underline\"");
         avaloniaSource.Should().NotContain("g.Toggle(\"freew.strikethrough\",   \"Strikethrough\"");
         avaloniaSource.Should().NotContain("g.Button(\"freew.font-dialog\",     \"Font");
-        avaloniaSource.Should().Contain("FreeWRibbonText.FontGroup");
-        avaloniaSource.Should().Contain("FreeWRibbonText.FontFamilyCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.FontSizeCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.BoldCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.ItalicCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.UnderlineCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.StrikethroughCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.FontDialogCommand");
+        avaloniaSource.Should().Contain("AddHomeTab(capabilities)");
     }
 
     [Fact]
@@ -1071,6 +1060,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
     {
         var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
         var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+        var canonicalSource = ReadRepositoryFile(
+            "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs");
 
         wpfSource.Should().NotContain("g.Icon(\"freew.grow-font\", \"Grow Font\"");
         wpfSource.Should().NotContain("g.Icon(\"freew.shrink-font\", \"Shrink Font\"");
@@ -1084,18 +1075,18 @@ public sealed class FreeWRibbonDefinitionProfileTests
         wpfSource.Should().NotContain("g.Icon(\"freew.char-border\", \"Character Border\"");
         wpfSource.Should().NotContain("g.Icon(\"freew.char-shading\", \"Character Shading\"");
         wpfSource.Should().NotContain("g.Icon(\"freew.clear-formatting\", \"Clear All Formatting\"");
-        wpfSource.Should().Contain("FreeWRibbonText.GrowFontCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.ShrinkFontCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.SubscriptCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.SuperscriptCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.ChangeCaseCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.SmallCapsCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.AllCapsCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.TextHighlightColorCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.FontColorCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.CharacterBorderCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.CharacterShadingCommand");
-        wpfSource.Should().Contain("FreeWRibbonText.ClearAllFormattingCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.GrowFontCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.ShrinkFontCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.SubscriptCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.SuperscriptCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.ChangeCaseCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.SmallCapsCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.AllCapsCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.TextHighlightColorCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.FontColorCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.CharacterBorderCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.CharacterShadingCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.ClearAllFormattingCommand");
 
         avaloniaSource.Should().NotContain("g.Toggle(\"freew.superscript\",     \"X");
         avaloniaSource.Should().NotContain("g.Toggle(\"freew.subscript\",       \"X");
@@ -1109,18 +1100,14 @@ public sealed class FreeWRibbonDefinitionProfileTests
         avaloniaSource.Should().NotContain("g.Button(\"freew.clear-formatting\", \"Clear\"");
         avaloniaSource.Should().NotContain("g.Dropdown(\"freew.font-color\", \"Font Color\"");
         avaloniaSource.Should().NotContain("g.Button(\"freew.change-case\",     \"Aa\"");
-        avaloniaSource.Should().Contain("FreeWRibbonText.SuperscriptCompactCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.SubscriptCompactCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.SmallCapsCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.AllCapsCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.HighlightCompactCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.CharacterBorderCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.CharacterShadingCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.GrowFontCompactCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.ShrinkFontCompactCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.ClearFormattingCompactCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.FontColorDropdownCommand");
-        avaloniaSource.Should().Contain("FreeWRibbonText.ChangeCaseCompactCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.SuperscriptCompactCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.SubscriptCompactCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.HighlightCompactCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.GrowFontCompactCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.ShrinkFontCompactCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.ClearFormattingCompactCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.FontColorDropdownCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.ChangeCaseCompactCommand");
     }
 
     [Fact]
@@ -1168,6 +1155,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
     {
         var dataSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbonDefinitionData.cs");
         var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+        var canonicalSource = ReadRepositoryFile(
+            "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs");
 
         dataSource.Should().NotContain("(\"freew.font-color.automatic\", \"Automatic\")");
         dataSource.Should().NotContain("(\"freew.font-color.dark-red\", \"Dark Red\")");
@@ -1176,7 +1165,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_FontColor_DarkRed_Label\")");
         dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_FontColor_DarkBlue_Label\")");
         avaloniaSource.Should().NotContain("private static readonly (string CommandId, string Label)[] FontColors");
-        avaloniaSource.Should().Contain("FreeWRibbonDefinitionData.FontColors");
+        canonicalSource.Should().Contain("FreeWRibbonDefinitionData.FontColors");
     }
 
     [Fact]
@@ -1240,7 +1229,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
     {
         var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
         var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
-        var canonicalSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.cs");
+        var canonicalSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.cs")
+            + ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs");
         var dataSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbonDefinitionData.cs");
         var hostCommands = ReadRepositoryFile("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
 
@@ -1251,8 +1241,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
         wpfSource.Should().NotContain("g.Medium(\"freew.symbol\", \"Symbol\"");
         wpfSource.Should().NotContain("tab.Group(\"page-background\", \"Page Background\"");
         wpfSource.Should().NotContain("g.Medium(\"freew.page-color\", \"Page Color\"");
-        wpfSource.Should().Contain("FreeWRibbonText.ParagraphGroup");
-        wpfSource.Should().Contain("FreeWRibbonText.SymbolsGroup");
+        canonicalSource.Should().Contain("FreeWRibbonText.ParagraphGroup");
+        canonicalSource.Should().Contain("FreeWRibbonText.SymbolsGroup");
         wpfSource.Should().NotContain("FreeWRibbonText.PageBackgroundGroup");
 
         avaloniaSource.Should().NotContain("tab.Group(\"paragraph\", \"Paragraph\"");
@@ -1260,8 +1250,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         avaloniaSource.Should().NotContain("g.Dropdown(\"freew.symbol\", \"Symbol\"");
         avaloniaSource.Should().NotContain("g.Dropdown(\"freew.page-color\", \"Page Color\"");
         avaloniaSource.Should().NotContain("private static readonly (string CommandId, string Label)[] PageColors");
-        avaloniaSource.Should().Contain("FreeWRibbonText.ParagraphGroup");
-        avaloniaSource.Should().Contain("FreeWRibbonText.SymbolCommand");
+        canonicalSource.Should().Contain("FreeWRibbonText.SymbolCommand");
         avaloniaSource.Should().NotContain("FreeWRibbonDefinitionData.PageColors");
         avaloniaSource.Should().NotContain("FreeWRibbonDefinitionData.Symbols");
 
