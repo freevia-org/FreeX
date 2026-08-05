@@ -769,6 +769,10 @@ public sealed class EditingSession
             FrameBorderGlowEnabled = properties.FrameBorderGlow is not null
                 ? true
                 : properties.FrameBorderGlowEnabled == false ? false : null,
+            FrameBorderSoftEdge = properties.FrameBorderSoftEdge,
+            FrameBorderSoftEdgeEnabled = properties.FrameBorderSoftEdge is not null
+                ? true
+                : properties.FrameBorderSoftEdgeEnabled == false ? false : null,
         };
         return Equals(shape.PreservedObject.ZoomProperties, normalized);
     }

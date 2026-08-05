@@ -750,7 +750,13 @@ public static class SlideCompositor
         var fallbackGlow = fallback?.FrameBorderGlowEnabled == false
             ? null
             : fallback?.FrameBorderGlow;
-        if (shadow is null && fallbackShadow is null && glow is null && fallbackGlow is null)
+        var softEdge = effectList?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "softEdge", StringComparison.OrdinalIgnoreCase));
+        var fallbackSoftEdge = fallback?.FrameBorderSoftEdgeEnabled == false
+            ? null
+            : fallback?.FrameBorderSoftEdge;
+        if (shadow is null && fallbackShadow is null && glow is null && fallbackGlow is null
+            && softEdge is null && fallbackSoftEdge is null)
             return null;
 
         var colorText = shadow?.Elements().FirstOrDefault(element =>
@@ -797,6 +803,10 @@ public static class SlideCompositor
                 NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawGlowRadius)
             ? rawGlowRadius / EmuPerDip
             : (fallbackGlow?.RadiusEmu ?? 0) / EmuPerDip;
+        var softEdgeRadius = long.TryParse(softEdge?.Attribute("rad")?.Value,
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawSoftEdgeRadius)
+            ? rawSoftEdgeRadius / EmuPerDip
+            : (fallbackSoftEdge?.RadiusEmu ?? 0) / EmuPerDip;
         return new ResolvedShapeEffects
         {
             HasOuterShadow = shadow is not null || fallbackShadow is not null,
@@ -809,6 +819,8 @@ public static class SlideCompositor
             GlowColor = glowColor,
             GlowAlpha = (byte)Math.Clamp((int)Math.Round(glowAlpha * 255d / 100000d), 0, 255),
             GlowRadiusDip = Math.Max(0, glowRadius),
+            HasSoftEdge = softEdge is not null || fallbackSoftEdge is not null,
+            SoftEdgeRadiusDip = Math.Max(0, softEdgeRadius),
         };
     }
 
