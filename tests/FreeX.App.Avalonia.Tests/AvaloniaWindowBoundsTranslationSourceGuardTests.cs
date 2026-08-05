@@ -47,18 +47,6 @@ public sealed class AvaloniaWindowBoundsTranslationSourceGuardTests
     private static string ReadAppSource(string fileName) =>
         File.ReadAllText(RepositoryFile("src", "FreeX.App.Avalonia", fileName));
 
-    private static string RepositoryFile(params string[] relativeSegments)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(directory.FullName, Path.Combine(relativeSegments));
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not locate repository file: {Path.Combine(relativeSegments)}");
-    }
+    private static string RepositoryFile(params string[] relativeSegments) =>
+        TestWorkspaceFileLocator.FindFromWorkspaceRoot(relativeSegments);
 }
