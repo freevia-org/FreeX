@@ -63,6 +63,31 @@ public class DocumentCombineTests
     }
 
     [Fact]
+    public void BothReviewersUnchanged_PreserveSpanningFieldOwnership()
+    {
+        var original = DocWith("A", "Alpha, 1");
+        var revisedA = DocWith("A", "Alpha, 1");
+        var revisedB = DocWith("A", "Alpha, 1");
+        foreach (var document in new[] { original, revisedA, revisedB })
+        {
+            var paragraphs = document.Paragraphs.ToArray();
+            var field = new ComplexField(" INDEX \\h \"A\" ");
+            paragraphs[0].SpanningFieldStart = field;
+            paragraphs[0].SpanningFieldOwner = field;
+            paragraphs[1].SpanningFieldOwner = field;
+            paragraphs[1].EndsSpanningField = true;
+        }
+
+        var result = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml)
+            .Paragraphs.ToArray();
+
+        result[0].SpanningFieldStart.Should().Be(revisedB.Paragraphs.First().SpanningFieldStart);
+        result.Should().OnlyContain(paragraph =>
+            paragraph.SpanningFieldOwner != null && paragraph.SpanningFieldOwner.Keyword == "INDEX");
+        result[1].EndsSpanningField.Should().BeTrue();
+    }
+
+    [Fact]
     public void ReviewerInsertedFloatingTable_PreservesCompleteTableShell()
     {
         var original = new TextDocument();

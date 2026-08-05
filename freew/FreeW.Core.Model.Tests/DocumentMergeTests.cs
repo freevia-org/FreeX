@@ -5,6 +5,31 @@ namespace FreeW.Core.Model.Tests;
 public class DocumentMergeTests
 {
     [Fact]
+    public void Merge_PreservesSpanningFieldOwnershipAcrossParagraphs()
+    {
+        var source = new TextDocument();
+        var field = new ComplexField(" INDEX \\h \"A\" ");
+        source.Blocks.Add(new Paragraph("A")
+        {
+            SpanningFieldStart = field,
+            SpanningFieldOwner = field
+        });
+        source.Blocks.Add(new Paragraph("Alpha, 1")
+        {
+            SpanningFieldOwner = field,
+            EndsSpanningField = true
+        });
+
+        var inserted = DocumentMerge.Merge(new TextDocument(), 0, source).Cast<Paragraph>().ToArray();
+
+        inserted[0].SpanningFieldStart.Should().Be(new ComplexField(" INDEX \\h \"A\" "));
+        inserted.Should().OnlyContain(paragraph => paragraph.SpanningFieldOwner == field);
+        inserted[0].EndsSpanningField.Should().BeFalse();
+        inserted[1].SpanningFieldStart.Should().BeNull();
+        inserted[1].EndsSpanningField.Should().BeTrue();
+    }
+
+    [Fact]
     public void Merge_TransfersPreservedNumberingWithCollisionSafeIds()
     {
         var wordprocessing = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");

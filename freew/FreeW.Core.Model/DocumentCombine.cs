@@ -118,6 +118,9 @@ public static class DocumentCombine
             BlockCustomXml = bParagraph.BlockCustomXml ?? aParagraph?.BlockCustomXml,
             Formatting = bParagraph.Formatting,
             StyleId = bParagraph.StyleId,
+            SpanningFieldStart = bParagraph.SpanningFieldStart ?? aParagraph?.SpanningFieldStart,
+            SpanningFieldOwner = bParagraph.SpanningFieldOwner ?? aParagraph?.SpanningFieldOwner,
+            EndsSpanningField = bParagraph.EndsSpanningField || aParagraph?.EndsSpanningField == true,
             DropCap = bParagraph.DropCap,
         };
         merged.BookmarkNames.AddRange(bParagraph.BookmarkNames);
@@ -256,6 +259,9 @@ public static class DocumentCombine
             BlockCustomXml = source.BlockCustomXml,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
+            SpanningFieldStart = source.SpanningFieldStart,
+            SpanningFieldOwner = source.SpanningFieldOwner,
+            EndsSpanningField = source.EndsSpanningField,
             DropCap = source.DropCap,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);

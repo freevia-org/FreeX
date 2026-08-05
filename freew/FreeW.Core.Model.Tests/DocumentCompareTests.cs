@@ -48,6 +48,25 @@ public class DocumentCompareTests
     }
 
     [Fact]
+    public void IdenticalDocuments_PreserveSpanningFieldOwnership()
+    {
+        var original = DocWith("A", "Alpha, 1");
+        var revised = DocWith("A", "Alpha, 1");
+        var revisedParagraphs = revised.Paragraphs.ToArray();
+        var field = new ComplexField(" INDEX \\h \"A\" ");
+        revisedParagraphs[0].SpanningFieldStart = field;
+        revisedParagraphs[0].SpanningFieldOwner = field;
+        revisedParagraphs[1].SpanningFieldOwner = field;
+        revisedParagraphs[1].EndsSpanningField = true;
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml).Paragraphs.ToArray();
+
+        result[0].SpanningFieldStart.Should().Be(revisedParagraphs[0].SpanningFieldStart);
+        result.Should().OnlyContain(paragraph => paragraph.SpanningFieldOwner == field);
+        result[1].EndsSpanningField.Should().BeTrue();
+    }
+
+    [Fact]
     public void InsertedFloatingTable_PreservesCompleteTableShell()
     {
         var original = new TextDocument();

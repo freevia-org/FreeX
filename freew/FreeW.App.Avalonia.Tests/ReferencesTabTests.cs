@@ -904,6 +904,43 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void RefreshIndex_replaces_Word_updated_native_region_by_field_ownership()
+    {
+        var field = new ComplexField(" INDEX \\h \"A\" \\z \"1033\" ");
+        var heading = new Paragraph("A")
+        {
+            StyleId = "IndexHeading",
+            SpanningFieldStart = field,
+            SpanningFieldOwner = field
+        };
+        var entry = new Paragraph("Alpha, 1")
+        {
+            StyleId = "Index1",
+            SpanningFieldOwner = field
+        };
+        var trailing = new Paragraph
+        {
+            StyleId = "IndexEntry",
+            SpanningFieldOwner = field,
+            EndsSpanningField = true
+        };
+        var view = ViewWith(
+            new Paragraph { Runs = { DocumentIndex.MarkRun("Beta") } },
+            heading,
+            entry,
+            trailing);
+
+        view.RefreshIndex();
+
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, identifier: null))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("B", "Beta, 1");
+        view.Document.Blocks.Should().NotContain(heading).And.NotContain(entry).And.NotContain(trailing);
+    }
+
+    [Fact]
     public void RefreshIndex_selective_region_updates_people_and_leaves_default_region_untouched()
     {
         var defaultHeading = new Paragraph(DocumentIndex.HeadingText)

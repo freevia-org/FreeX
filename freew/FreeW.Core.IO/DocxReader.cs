@@ -84,8 +84,9 @@ public static class DocxReader
             // Word down the page.
             Paragraph? prevPara = null;
             var prevAfterAuto = false;
+            var spanningField = new SpanningFieldReadState();
             foreach (var element in body.Elements())
-                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, altChunkRelationships, subDocumentRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto);
+                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, altChunkRelationships, subDocumentRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto, spanningField);
         }
 
         if (document.Blocks.Count == 0)
@@ -1772,14 +1773,21 @@ public static class DocxReader
         IReadOnlyDictionary<(int NumId, int Level), int> startOverrides,
         ref Paragraph? prevPara,
         ref bool prevAfterAuto,
+        SpanningFieldReadState spanningField,
         ContentControl? inheritedControl = null,
         BlockContentControl? inheritedBlockContentControl = null,
         BlockCustomXml? inheritedBlockCustomXml = null)
     {
         if (element.Name == W + "p")
         {
-            var para = ReadParagraph(
+            var paragraphElement = PrepareSpanningFieldParagraph(
                 element,
+                spanningField,
+                out var spanningFieldStart,
+                out var spanningFieldOwner,
+                out var endsSpanningField);
+            var para = ReadParagraph(
+                paragraphElement,
                 archive,
                 imageRelationships,
                 hyperlinkRelationships,
@@ -1789,6 +1797,9 @@ public static class DocxReader
                 inheritedControl: inheritedControl,
                 startOverrides: startOverrides,
                 subDocumentRelationships: subDocumentRelationships);
+            para.SpanningFieldStart = spanningFieldStart;
+            para.SpanningFieldOwner = spanningFieldOwner;
+            para.EndsSpanningField = endsSpanningField;
             para.BlockContentControl = inheritedBlockContentControl;
             para.BlockCustomXml = inheritedBlockCustomXml;
             document.Blocks.Add(para);
@@ -1866,6 +1877,7 @@ public static class DocxReader
                     startOverrides,
                     ref prevPara,
                     ref prevAfterAuto,
+                    spanningField,
                     inheritedControl,
                     blockControl,
                     inheritedBlockCustomXml);
@@ -1891,11 +1903,115 @@ public static class DocxReader
                     startOverrides,
                     ref prevPara,
                     ref prevAfterAuto,
+                    spanningField,
                     inheritedControl,
                     inheritedBlockContentControl,
                     blockCustomXml);
             }
         }
+    }
+
+    private sealed class SpanningFieldReadState
+    {
+        public int Depth { get; set; }
+        public bool PastSeparate { get; set; }
+        public System.Text.StringBuilder Instruction { get; } = new();
+        public bool IsActive => Depth > 0;
+
+        public void Reset()
+        {
+            Depth = 0;
+            PastSeparate = false;
+            Instruction.Clear();
+        }
+    }
+
+    private static XElement PrepareSpanningFieldParagraph(
+        XElement source,
+        SpanningFieldReadState state,
+        out ComplexField? fieldStart,
+        out ComplexField? fieldOwner,
+        out bool fieldEnd)
+    {
+        fieldStart = null;
+        fieldOwner = null;
+        fieldEnd = false;
+        var paragraph = new XElement(source);
+        var runs = paragraph.Descendants(W + "r")
+            .Where(run => ReferenceEquals(run.Ancestors(W + "p").FirstOrDefault(), paragraph))
+            .ToList();
+        var startIndex = 0;
+        var startedHere = false;
+
+        if (!state.IsActive)
+        {
+            var depth = 0;
+            var unmatchedStart = -1;
+            for (var index = 0; index < runs.Count; index++)
+            {
+                var fieldCharacter = runs[index].Element(W + "fldChar");
+                var kind = fieldCharacter?.Attribute(W + "fldCharType")?.Value;
+                if (kind == "begin" && fieldCharacter!.Element(W + "ffData") is null)
+                {
+                    if (depth == 0)
+                        unmatchedStart = index;
+                    depth++;
+                }
+                else if (kind == "end" && depth > 0 && --depth == 0)
+                {
+                    unmatchedStart = -1;
+                }
+            }
+
+            if (unmatchedStart < 0)
+                return paragraph;
+
+            startIndex = unmatchedStart;
+            state.Reset();
+            startedHere = true;
+        }
+
+        for (var index = startIndex; index < runs.Count && (state.IsActive || index == startIndex); index++)
+        {
+            var run = runs[index];
+            var fieldCharacter = run.Element(W + "fldChar");
+            var kind = fieldCharacter?.Attribute(W + "fldCharType")?.Value;
+            if (kind == "begin" && fieldCharacter!.Element(W + "ffData") is null)
+            {
+                state.Depth++;
+                run.Remove();
+            }
+            else if (kind == "separate")
+            {
+                state.PastSeparate = true;
+                run.Remove();
+            }
+            else if (kind == "end")
+            {
+                state.Depth--;
+                run.Remove();
+                if (!state.IsActive)
+                {
+                    fieldEnd = true;
+                    break;
+                }
+            }
+            else if (!state.PastSeparate)
+            {
+                state.Instruction.Append(string.Concat(run.Elements(W + "instrText").Select(text => text.Value)));
+                state.Instruction.Append(string.Concat(run.Elements(W + "t").Select(text => text.Value)));
+                run.Remove();
+            }
+        }
+
+        if (state.Instruction.Length > 0)
+            fieldOwner = new ComplexField(state.Instruction.ToString());
+        if (startedHere)
+            fieldStart = fieldOwner;
+
+        if (fieldEnd)
+            state.Reset();
+        return paragraph;
     }
 
     /// <summary>
