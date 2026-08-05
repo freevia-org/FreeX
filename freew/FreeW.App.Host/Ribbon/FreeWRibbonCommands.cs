@@ -1761,124 +1761,48 @@ internal static class FreeWRibbonCommands
         // already round-trips as w:background in docx); the editor recolours the page sheet immediately.
         registry.Register("freew.page-color", new PageColorCommand(editor));
 
-        // Layout tab — open the modeless print-preview window (paginated, page-settings-aware).
-        if (onPrintPreview is not null)
-            registry.Register("freew.print-preview", new ActionRibbonCommand(onPrintPreview));
-
-        // View tab — toggle the navigation pane (heading outline). Stateful so the ribbon's toggle
-        // button reflects whether the pane is currently shown.
-        if (onToggleNavPane is not null && isNavPaneVisible is not null)
-            registry.Register("freew.nav-pane", new ToggleActionCommand(onToggleNavPane, isNavPaneVisible));
-
-        // View tab — toggle the passive Word-style ruler chrome above/left of the page. The editor owns
-        // the geometry; the host owns visibility so the ribbon checkmark mirrors the live chrome state.
-        if (onToggleRuler is not null && isRulerVisible is not null)
-            registry.Register("freew.ruler", new ToggleActionCommand(onToggleRuler, isRulerVisible));
-
-        // View > Zoom — Multiple Pages: swap the workspace child from the live editor to a read-only
-        // DocumentViewer fed by PrintLayout.BuildPaginatedSource (multi-page layout). Stateful toggle so
-        // the ribbon reflects whether the paginated overlay is currently active.
-        if (onToggleMultiplePages is not null && isMultiplePagesActive is not null)
-            registry.Register("freew.zoom-multiple-pages", new ToggleActionCommand(onToggleMultiplePages, isMultiplePagesActive));
-
-        // View > Zoom — Side to Side: same paginated overlay as Multiple Pages but forced to 2 pages across.
-        if (onToggleSideToSide is not null && isSideToSideActive is not null)
-            registry.Register("freew.zoom-side-to-side", new ToggleActionCommand(onToggleSideToSide, isSideToSideActive));
-
-        // View > Window — Split: split the workspace with a GridSplitter, live editor on top and a
-        // read-only FlowDocumentScrollViewer snapshot on the bottom, refreshed on TextChanged (~300 ms debounce).
-        if (onToggleSplitWindow is not null && isSplitWindowActive is not null)
-            registry.Register("freew.split-window", new ToggleActionCommand(onToggleSplitWindow, isSplitWindowActive));
-
-        // View tab — toggle read mode (distraction-free view). Stateful so the ribbon's toggle button
-        // reflects whether the chrome-light reading column is currently active.
-        if (onToggleReadMode is not null && isReadModeActive is not null)
-            registry.Register("freew.read-mode", new ToggleActionCommand(onToggleReadMode, isReadModeActive));
-
-        // View > Views > Read Mode dropdown options — column width and page color (Feature 4).
-        // The callback receives the choice token; behaviour applies immediately if in read mode.
-        if (onReadModeColumnWidth is not null)
-        {
-            registry.Register("freew.read-mode-column-narrow",  new ActionRibbonCommand(() => onReadModeColumnWidth("narrow")));
-            registry.Register("freew.read-mode-column-default", new ActionRibbonCommand(() => onReadModeColumnWidth("default")));
-            registry.Register("freew.read-mode-column-wide",    new ActionRibbonCommand(() => onReadModeColumnWidth("wide")));
-        }
-        else
-        {
-            registry.Register("freew.read-mode-column-narrow",  EmptyRibbonCommand.Instance);
-            registry.Register("freew.read-mode-column-default", EmptyRibbonCommand.Instance);
-            registry.Register("freew.read-mode-column-wide",    EmptyRibbonCommand.Instance);
-        }
-        if (onReadModePageColor is not null)
-        {
-            registry.Register("freew.read-mode-color-none",    new ActionRibbonCommand(() => onReadModePageColor("none")));
-            registry.Register("freew.read-mode-color-sepia",   new ActionRibbonCommand(() => onReadModePageColor("sepia")));
-            registry.Register("freew.read-mode-color-inverse", new ActionRibbonCommand(() => onReadModePageColor("inverse")));
-        }
-        else
-        {
-            registry.Register("freew.read-mode-color-none",    EmptyRibbonCommand.Instance);
-            registry.Register("freew.read-mode-color-sepia",   EmptyRibbonCommand.Instance);
-            registry.Register("freew.read-mode-color-inverse", EmptyRibbonCommand.Instance);
-        }
-
-        // View > Window — New Window: open a second MainWindow (Feature 5).
-        if (onNewWindow is not null)
-            registry.Register("freew.new-window", new ActionRibbonCommand(onNewWindow));
-        else
-            registry.Register("freew.new-window", EmptyRibbonCommand.Instance);
-
-        // View > Window — Arrange All: tile all open FreeW windows (Feature 5).
-        if (onArrangeAll is not null)
-            registry.Register("freew.arrange-all", new ActionRibbonCommand(onArrangeAll));
-        else
-            registry.Register("freew.arrange-all", EmptyRibbonCommand.Instance);
-
-        // View tab — toggle Print Layout (Word-style page view) vs the plain/continuous view. Stateful so
-        // the ribbon's toggle button reflects whether the page presentation is currently active. Default
-        // on (the Word default); the host seeds the checked state to match.
-        if (onTogglePrintLayout is not null && isPrintLayoutActive is not null)
-            registry.Register("freew.print-layout", new ToggleActionCommand(onTogglePrintLayout, isPrintLayoutActive));
-
-        // View tab — toggle Outline view (the heading-structured outline surface with the Outlining
-        // mini-toolbar) vs the normal editing surface. Stateful so the ribbon's toggle button reflects
-        // whether the outline view is currently active.
-        if (onToggleOutlineView is not null && isOutlineViewActive is not null)
-            registry.Register("freew.outline-view", new ToggleActionCommand(onToggleOutlineView, isOutlineViewActive));
-
-        // View tab — switch to Web Layout (a continuous, full-width view with no page chrome, text wrapping
-        // to the window like a web page) and Draft (a simplified continuous view for fast editing). Both are
-        // mutually exclusive with Print Layout / Outline; the host owns the exclusivity and the stateful
-        // checked-state, so these are ToggleActionCommands reflecting which view mode is active.
-        if (onWebLayout is not null && isWebLayoutActive is not null)
-            registry.Register("freew.web-layout", new ToggleActionCommand(onWebLayout, isWebLayoutActive));
-        if (onDraftView is not null && isDraftViewActive is not null)
-            registry.Register("freew.draft-view", new ToggleActionCommand(onDraftView, isDraftViewActive));
-
-        // View tab — toggle Page Edit mode (opt-in editable-pagination surface). Stateful so the
-        // ribbon's toggle button reflects whether the paged surface is currently active. Mutually
-        // exclusive with Print Layout / Web Layout / Draft; the host owns the exclusivity via
-        // TogglePagedEditView / EnterPagedEdit / ExitPagedEdit.
-        if (onTogglePagedEditView is not null && isPagedEditViewActive is not null)
-            registry.Register("freew.paged-edit-view", new ToggleActionCommand(onTogglePagedEditView, isPagedEditViewActive));
-
-        // Home tab — toggle the Reveal Formatting pane (Word's Shift+F1 pane), a read-only side pane
-        // showing the effective FONT / PARAGRAPH / SECTION formatting of the selection. Stateful so the
-        // ribbon's toggle button reflects whether the pane is currently shown.
-        if (onToggleRevealFormatting is not null && isRevealFormattingVisible is not null)
-            registry.Register("freew.reveal-formatting",
-                new ToggleActionCommand(onToggleRevealFormatting, isRevealFormattingVisible));
-
-        // View tab — open Word's Zoom dialog (presets / page fits / custom %). The host computes the
-        // page-relative fit factors from the live viewport and applies the chosen factor to the editor.
-        if (onZoomDialog is not null)
-            registry.Register("freew.zoom-dialog", new ActionRibbonCommand(onZoomDialog));
-        if (onZoom100 is not null)
-            registry.Register("freew.zoom-100", new ActionRibbonCommand(onZoom100));
-        if (onZoomOnePage is not null)
-            registry.Register("freew.zoom-one-page", new ActionRibbonCommand(onZoomOnePage));
-        if (onZoomPageWidth is not null)
-            registry.Register("freew.zoom-page-width", new ActionRibbonCommand(onZoomPageWidth));
+        var viewRibbon = ViewRibbonWorkflow.Register(
+            registry,
+            new ViewRibbonCommandBindings(
+                PrintPreview: new ViewRibbonActionBinding(onPrintPreview),
+                ReadMode: new ViewRibbonReadModeBindings(
+                    Toggle: new ViewRibbonToggleBinding(onToggleReadMode, isReadModeActive),
+                    ColumnWidth: new ViewRibbonChoiceBinding(
+                        onReadModeColumnWidth,
+                        EmptyRibbonCommand.Instance),
+                    PageColor: new ViewRibbonChoiceBinding(
+                        onReadModePageColor,
+                        EmptyRibbonCommand.Instance)),
+                Modes: new ViewRibbonModeBindings(
+                    PrintLayout: new ViewRibbonToggleBinding(onTogglePrintLayout, isPrintLayoutActive),
+                    WebLayout: new ViewRibbonToggleBinding(onWebLayout, isWebLayoutActive),
+                    Draft: new ViewRibbonToggleBinding(onDraftView, isDraftViewActive),
+                    Outline: new ViewRibbonToggleBinding(onToggleOutlineView, isOutlineViewActive),
+                    PagedEdit: new ViewRibbonToggleBinding(onTogglePagedEditView, isPagedEditViewActive)),
+                Show: new ViewRibbonShowBindings(
+                    NavigationPane: new ViewRibbonToggleBinding(onToggleNavPane, isNavPaneVisible),
+                    RevealFormatting: new ViewRibbonToggleBinding(
+                        onToggleRevealFormatting,
+                        isRevealFormattingVisible),
+                    Gridlines: new ViewRibbonToggleBinding(
+                        () => editor.TogglePageGridlines(),
+                        () => editor.ShowPageGridlines),
+                    Ruler: new ViewRibbonToggleBinding(onToggleRuler, isRulerVisible)),
+                Zoom: new ViewRibbonZoomBindings(
+                    Dialog: new ViewRibbonActionBinding(onZoomDialog),
+                    Reset100: new ViewRibbonActionBinding(onZoom100),
+                    OnePage: new ViewRibbonActionBinding(onZoomOnePage),
+                    PageWidth: new ViewRibbonActionBinding(onZoomPageWidth),
+                    MultiplePages: new ViewRibbonToggleBinding(
+                        onToggleMultiplePages,
+                        isMultiplePagesActive),
+                    SideToSide: new ViewRibbonToggleBinding(
+                        onToggleSideToSide,
+                        isSideToSideActive)),
+                Window: new ViewRibbonWindowBindings(
+                    NewWindow: new ViewRibbonActionBinding(onNewWindow, EmptyRibbonCommand.Instance),
+                    ArrangeAll: new ViewRibbonActionBinding(onArrangeAll, EmptyRibbonCommand.Instance),
+                    Split: new ViewRibbonToggleBinding(onToggleSplitWindow, isSplitWindowActive))));
 
         // Home > Paragraph — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
         // space-dot / tab-arrow overlay. The marks are drawn as a non-editable adorner computed from the
@@ -1888,11 +1812,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.formatting-marks", formattingMarks);
         stateful.Add(("freew.formatting-marks", formattingMarks));
 
-        // View > Show > Gridlines: a stateful toggle that adds/removes the page-gridlines adorner.
-        // Render-only; no model change. Distinct from freew.table-view-gridlines (table borders).
-        var gridlines = new ToggleActionCommand(() => editor.TogglePageGridlines(), () => editor.ShowPageGridlines);
-        registry.Register("freew.gridlines", gridlines);
-        stateful.Add(("freew.gridlines", gridlines));
+        if (viewRibbon.Gridlines is { } viewGridlines)
+            stateful.Add(("freew.gridlines", viewGridlines));
 
         if (onHelpOnline is not null)
             registry.Register("freew.help-online", new ActionRibbonCommand(onHelpOnline));

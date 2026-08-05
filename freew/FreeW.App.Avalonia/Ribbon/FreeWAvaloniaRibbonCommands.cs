@@ -4,7 +4,6 @@ using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Ribbon;
-using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 using FreeW.Ribbon.Definitions;
 using Free.Shared.Ribbon;
@@ -95,16 +94,6 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.open",      new ActionRibbonCommand(callbacks.Open));
         r.Register("freew.import-pdf-text", new ActionRibbonCommand(callbacks.ImportPdfText ?? (() => { })));
         r.Register("freew.save",      new ActionRibbonCommand(callbacks.Save));
-
-        r.Register("freew.read-mode", callbacks.ToggleReadMode is { } toggle && callbacks.IsReadModeActive is { } isActive
-            ? new ToggleActionCommand(toggle, isActive)
-            : HostCommand(null));
-        RegisterReadModeChoice(r, "freew.read-mode-column-narrow", FreeWReadModePlanner.NarrowColumn, callbacks.ApplyReadModeColumnWidth);
-        RegisterReadModeChoice(r, "freew.read-mode-column-default", FreeWReadModePlanner.DefaultColumn, callbacks.ApplyReadModeColumnWidth);
-        RegisterReadModeChoice(r, "freew.read-mode-column-wide", FreeWReadModePlanner.WideColumn, callbacks.ApplyReadModeColumnWidth);
-        RegisterReadModeChoice(r, "freew.read-mode-color-none", FreeWReadModePlanner.NoColor, callbacks.ApplyReadModePageColor);
-        RegisterReadModeChoice(r, "freew.read-mode-color-sepia", FreeWReadModePlanner.SepiaColor, callbacks.ApplyReadModePageColor);
-        RegisterReadModeChoice(r, "freew.read-mode-color-inverse", FreeWReadModePlanner.InverseColor, callbacks.ApplyReadModePageColor);
 
         // ── Clipboard ────────────────────────────────────────────────────────
         r.Register("freew.cut",   new ActionRibbonCommand(callbacks.Cut));
@@ -471,73 +460,72 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.text-to-table", new ActionRibbonCommand(
             callbacks.OpenTextToTableDialog ?? editor.ConvertCurrentParagraphToTable));
 
-        // ── View ─────────────────────────────────────────────────────────────
-        var printPreviewCommand = new ActionRibbonCommand(callbacks.OpenPrintPreview ?? (() => { }));
-        r.Register("freew.print-preview", printPreviewCommand);
-
-        var printLayoutCommand = new ToggleActionCommand(
-            callbacks.SetPrintLayout,
-            callbacks.IsPrintLayoutActive ?? (() => editor.ViewMode == DocumentViewMode.PrintLayout));
-        var webLayoutCommand = new ToggleActionCommand(
-            callbacks.SetWebLayout,
-            callbacks.IsWebLayoutActive ?? (() => editor.ViewMode == DocumentViewMode.WebLayout));
-        var draftViewCommand = new ToggleActionCommand(
-            callbacks.SetDraftView,
-            callbacks.IsDraftViewActive ?? (() => editor.ViewMode == DocumentViewMode.Draft));
-        // Outline is a distinct host surface. A host that does not provide it must not silently
-        // route the command to Draft; production MainWindow supplies the real toggle and state query.
-        var outlineViewCommand = new ToggleActionCommand(
-            callbacks.SetOutlineView ?? (() => { }),
-            callbacks.IsOutlineViewActive ?? (() => false));
-        var pagedEditViewCommand = new ToggleActionCommand(
-            callbacks.TogglePagedEditView ?? callbacks.SetPrintLayout,
-            callbacks.IsPagedEditViewActive ?? (() => false));
-        r.Register("freew.print-layout", printLayoutCommand);
-        r.Register("freew.web-layout", webLayoutCommand);
-        r.Register("freew.draft-view", draftViewCommand);
-        r.Register("freew.outline-view", outlineViewCommand);
-        r.Register("freew.paged-edit-view", pagedEditViewCommand);
-        // Compatibility aliases for older Avalonia definitions/tests that used compact ids.
-        r.Register("freew.printlayout", printLayoutCommand);
-        r.Register("freew.weblayout", webLayoutCommand);
-        r.Register("freew.draftview", draftViewCommand);
-        var navigationPaneCommand = new ToggleActionCommand(
-            callbacks.ToggleNavigationPane,
-            callbacks.IsNavigationPaneVisible ?? (() => false));
-        r.Register("freew.nav-pane",          navigationPaneCommand);
-        r.Register("freew.navigationpane",    navigationPaneCommand);
-        r.Register("freew.reveal-formatting", new ToggleActionCommand(
-            callbacks.ToggleRevealFormatting,
-            callbacks.IsRevealFormattingVisible ?? (() => false)));
-        r.Register("freew.zoom-in",           new ActionRibbonCommand(() => callbacks.ApplyZoom(null, +0.1)));
-        r.Register("freew.zoom-out",          new ActionRibbonCommand(() => callbacks.ApplyZoom(null, -0.1)));
-        r.Register("freew.zoom-100",          new ActionRibbonCommand(() => callbacks.ApplyZoom(1.0, 0)));
-        r.Register("freew.zoom-one-page",     new ActionRibbonCommand(callbacks.ZoomOnePage ?? (() => { })));
-        r.Register("freew.zoom-page-width",   new ActionRibbonCommand(callbacks.ZoomPageWidth ?? (() => { })));
-        r.Register("freew.zoom-multiple-pages",
-            new ToggleActionCommand(callbacks.ToggleMultiplePages ?? (() => { }), callbacks.IsMultiplePagesActive ?? (() => false)));
-        r.Register("freew.zoom-side-to-side",
-            new ToggleActionCommand(callbacks.ToggleSideToSide ?? (() => { }), callbacks.IsSideToSideActive ?? (() => false)));
-        // AV-VIEW: Zoom dialog (presets + custom %) and layout gridlines / ruler toggles.
-        // The three Window/Zoom-dialog callbacks are optional on RibbonHostCallbacks (default null so
-        // test call sites stay terse); fall back to a safe no-op when the shell didn't supply one.
-        r.Register("freew.zoom-dialog",       new ActionRibbonCommand(callbacks.OpenZoomDialog ?? (() => { })));
-        var gridlinesCommand = new ToggleActionCommand(
-            () => editor.ShowGridlines = !editor.ShowGridlines,
-            () => editor.ShowGridlines);
-        var rulerCommand = new ToggleActionCommand(
-            () => editor.ShowRuler = !editor.ShowRuler,
-            () => editor.ShowRuler);
-        r.Register("freew.gridlines",         gridlinesCommand);
-        r.Register("freew.view-gridlines",    gridlinesCommand);
-        r.Register("freew.ruler",             rulerCommand);
-        r.Register("freew.view-ruler",        rulerCommand);
-        // AV-VIEW: Window group — new window, Arrange All, and split.
-        r.Register("freew.new-window",        new ActionRibbonCommand(callbacks.NewWindow ?? (() => { })));
-        r.Register("freew.arrange-all",       new ActionRibbonCommand(callbacks.ArrangeAll ?? (() => { })));
-        var splitCommand = new ToggleActionCommand(callbacks.ToggleSplit ?? (() => { }), callbacks.IsSplitActive ?? (() => false));
-        r.Register("freew.split",             splitCommand);
-        r.Register("freew.split-window",      splitCommand);
+        ViewRibbonWorkflow.Register(
+            r,
+            new ViewRibbonCommandBindings(
+                PrintPreview: new ViewRibbonActionBinding(callbacks.OpenPrintPreview ?? (static () => { })),
+                ReadMode: new ViewRibbonReadModeBindings(
+                    Toggle: callbacks.ToggleReadMode is { } toggle && callbacks.IsReadModeActive is { } isActive
+                        ? new ViewRibbonToggleBinding(toggle, isActive)
+                        : new ViewRibbonToggleBinding(FallbackCommand: UnavailableRibbonCommand.Instance),
+                    ColumnWidth: new ViewRibbonChoiceBinding(
+                        callbacks.ApplyReadModeColumnWidth,
+                        UnavailableRibbonCommand.Instance),
+                    PageColor: new ViewRibbonChoiceBinding(
+                        callbacks.ApplyReadModePageColor,
+                        UnavailableRibbonCommand.Instance)),
+                Modes: new ViewRibbonModeBindings(
+                    PrintLayout: new ViewRibbonToggleBinding(
+                        callbacks.SetPrintLayout,
+                        callbacks.IsPrintLayoutActive ??
+                            (() => editor.ViewMode == DocumentViewMode.PrintLayout)),
+                    WebLayout: new ViewRibbonToggleBinding(
+                        callbacks.SetWebLayout,
+                        callbacks.IsWebLayoutActive ??
+                            (() => editor.ViewMode == DocumentViewMode.WebLayout)),
+                    Draft: new ViewRibbonToggleBinding(
+                        callbacks.SetDraftView,
+                        callbacks.IsDraftViewActive ??
+                            (() => editor.ViewMode == DocumentViewMode.Draft)),
+                    Outline: new ViewRibbonToggleBinding(
+                        callbacks.SetOutlineView ?? (static () => { }),
+                        callbacks.IsOutlineViewActive ?? (static () => false)),
+                    PagedEdit: new ViewRibbonToggleBinding(
+                        callbacks.TogglePagedEditView ?? callbacks.SetPrintLayout,
+                        callbacks.IsPagedEditViewActive ?? (static () => false))),
+                Show: new ViewRibbonShowBindings(
+                    NavigationPane: new ViewRibbonToggleBinding(
+                        callbacks.ToggleNavigationPane,
+                        callbacks.IsNavigationPaneVisible ?? (static () => false)),
+                    RevealFormatting: new ViewRibbonToggleBinding(
+                        callbacks.ToggleRevealFormatting,
+                        callbacks.IsRevealFormattingVisible ?? (static () => false)),
+                    Gridlines: new ViewRibbonToggleBinding(
+                        () => editor.ShowGridlines = !editor.ShowGridlines,
+                        () => editor.ShowGridlines),
+                    Ruler: new ViewRibbonToggleBinding(
+                        () => editor.ShowRuler = !editor.ShowRuler,
+                        () => editor.ShowRuler)),
+                Zoom: new ViewRibbonZoomBindings(
+                    Dialog: new ViewRibbonActionBinding(callbacks.OpenZoomDialog ?? (static () => { })),
+                    ZoomIn: new ViewRibbonActionBinding(() => callbacks.ApplyZoom(null, +0.1)),
+                    ZoomOut: new ViewRibbonActionBinding(() => callbacks.ApplyZoom(null, -0.1)),
+                    Reset100: new ViewRibbonActionBinding(() => callbacks.ApplyZoom(1.0, 0)),
+                    OnePage: new ViewRibbonActionBinding(callbacks.ZoomOnePage ?? (static () => { })),
+                    PageWidth: new ViewRibbonActionBinding(callbacks.ZoomPageWidth ?? (static () => { })),
+                    MultiplePages: new ViewRibbonToggleBinding(
+                        callbacks.ToggleMultiplePages ?? (static () => { }),
+                        callbacks.IsMultiplePagesActive ?? (static () => false)),
+                    SideToSide: new ViewRibbonToggleBinding(
+                        callbacks.ToggleSideToSide ?? (static () => { }),
+                        callbacks.IsSideToSideActive ?? (static () => false))),
+                Window: new ViewRibbonWindowBindings(
+                    NewWindow: new ViewRibbonActionBinding(callbacks.NewWindow ?? (static () => { })),
+                    ArrangeAll: new ViewRibbonActionBinding(callbacks.ArrangeAll ?? (static () => { })),
+                    Split: new ViewRibbonToggleBinding(
+                        callbacks.ToggleSplit ?? (static () => { }),
+                        callbacks.IsSplitActive ?? (static () => false))),
+                RegisterCompatibilityAliases: true));
 
         // ── Review ───────────────────────────────────────────────────────────
         var reviewingPaneCommand = new ToggleActionCommand(
@@ -640,17 +628,6 @@ internal static class FreeWAvaloniaRibbonCommands
     }
 
     private const double ParagraphSpacingTogglePoints = 12.0;
-
-    private static void RegisterReadModeChoice(
-        RibbonCommandRegistry registry,
-        string commandId,
-        string token,
-        Action<string>? apply)
-    {
-        registry.Register(commandId, apply is null
-            ? HostCommand(null)
-            : new ActionRibbonCommand(() => apply(token)));
-    }
 
     private static void ApplyMultiLevelList(DocumentView editor)
     {
