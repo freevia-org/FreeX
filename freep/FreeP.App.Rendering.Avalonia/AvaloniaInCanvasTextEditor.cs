@@ -330,6 +330,37 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
     }
 
     /// <summary>
+    /// Commits the child rich-text edit before applying a cell-owned formatting command.
+    /// Cell fill, geometry, and direction belong to the table transaction rather than the
+    /// inline text editor, so they must not race a pending child-text commit.
+    /// </summary>
+    public bool TryApplyActiveTableCellTextVerticalType(TextVerticalType verticalType) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableCellTextVerticalType(verticalType));
+
+    public bool TryApplyActiveTableCellFill(ThemeAwareColor? color) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableCellFill(color));
+
+    public bool TryApplyActiveTableCellAnchor(TableCellAnchor? anchor) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableCellAnchor(anchor));
+
+    public bool TryApplyActiveTableCellBorder(
+        TableCellBorderSide side,
+        ShapeOutline? outline) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableCellBorder(side, outline));
+
+    public bool TryApplyActiveTableCellInset(TableCellInsetSide side, double? insetPt) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableCellInset(side, insetPt));
+
+    public bool TryApplyActiveTableRowHeight(long heightEmu) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableRowHeight(heightEmu));
+
+    /// <summary>
     /// Inserts a row above the active inline table cell after committing the child rich-text
     /// transaction through the shared command bus.
     /// </summary>
@@ -420,6 +451,19 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
 
         var state = AvaloniaTableCellEditAdapter.PlanSelectedCell(_editor);
         if (!state.HasActiveCell || state.ShapeId != _editingTableShapeId || !canApply(state))
+            return false;
+
+        CommitCellEdit();
+        return apply(_editor);
+    }
+
+    private bool TryApplyActiveTableCellCommand(Func<EditingSession, bool> apply)
+    {
+        if (!_cellEditActive || _cellTextBox is null)
+            return false;
+
+        var state = AvaloniaTableCellEditAdapter.PlanSelectedCell(_editor);
+        if (!state.HasActiveCell || state.ShapeId != _editingTableShapeId)
             return false;
 
         CommitCellEdit();

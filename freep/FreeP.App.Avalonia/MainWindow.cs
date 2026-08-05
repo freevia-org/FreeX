@@ -2822,6 +2822,8 @@ public sealed partial class MainWindow : Window
                 !TextVerticalTypeOptionParser.TryParse(selection, out var verticalType))
                 return;
 
+            if (_textEditor?.TryApplyActiveTableCellTextVerticalType(verticalType) == true)
+                return;
             if (Editor.TryApplyActiveTableCellTextVerticalType(verticalType))
                 return;
             Editor.SetTextVerticalTypeOnSelection(verticalType);
@@ -2849,6 +2851,8 @@ public sealed partial class MainWindow : Window
             if (!TryGetRibbonFontColor(ctx, out var color))
                 return;
 
+            if (_textEditor?.TryApplyActiveTableCellFill(color) == true)
+                return;
             Editor.TryApplyActiveTableCellFill(color);
         }));
         r.Register("freep.table-cell-anchor", new ContextRibbonCommand(ctx =>
@@ -2856,6 +2860,8 @@ public sealed partial class MainWindow : Window
             if (!TryGetRibbonTableCellAnchor(ctx, out var anchor))
                 return;
 
+            if (_textEditor?.TryApplyActiveTableCellAnchor(anchor) == true)
+                return;
             Editor.TryApplyActiveTableCellAnchor(anchor);
         }));
         r.Register("freep.table-cell-border", new ContextRibbonCommand(ctx =>
@@ -2865,6 +2871,8 @@ public sealed partial class MainWindow : Window
                 !TableCellBorderOptionParser.TryParse(selection, out var side, out var outline))
                 return;
 
+            if (_textEditor?.TryApplyActiveTableCellBorder(side, outline) == true)
+                return;
             Editor.TryApplyActiveTableCellBorder(side, outline);
         }));
         r.Register("freep.table-cell-inset", new ContextRibbonCommand(ctx =>
@@ -2874,6 +2882,8 @@ public sealed partial class MainWindow : Window
                 !TableCellInsetOptionParser.TryParse(selection, out var side, out var insetPt))
                 return;
 
+            if (_textEditor?.TryApplyActiveTableCellInset(side, insetPt) == true)
+                return;
             Editor.TryApplyActiveTableCellInset(side, insetPt);
         }));
         r.Register("freep.table-row-height", new ContextRibbonCommand(ctx =>
@@ -2883,6 +2893,8 @@ public sealed partial class MainWindow : Window
                 !TableRowHeightOptionParser.TryParse(selection, out var heightEmu))
                 return;
 
+            if (_textEditor?.TryApplyActiveTableRowHeight(heightEmu) == true)
+                return;
             Editor.TryApplyActiveTableRowHeight(heightEmu);
         }));
         r.Register(TableCellEditPlanner.MergeCellsCommandId,
