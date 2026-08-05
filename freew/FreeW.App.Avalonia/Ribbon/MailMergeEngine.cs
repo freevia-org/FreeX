@@ -77,12 +77,7 @@ internal sealed class MailMergeEngine
     public MergeData LoadRecipientsCsv(string csv)
     {
         ArgumentNullException.ThrowIfNull(csv);
-        var data = MergeData.FromCsv(csv);
-        Session.Data = data;
-        Session.Mapping = MailMerge.AutoMatchFields(data.Header);
-        Session.Template = null;   // leaving any active preview
-        Session.CurrentIndex = 0;
-        return data;
+        return Session.Load(MergeData.FromCsv(csv));
     }
 
     /// <summary>The field names available from the loaded recipient list (empty when none loaded).</summary>
@@ -103,9 +98,7 @@ internal sealed class MailMergeEngine
 
     private void SetMergeMode(MailMergeOutputMode mode, string message)
     {
-        Session.Mode = mode;
-        Session.Template = null;
-        Session.CurrentIndex = 0;
+        Session.SetMode(mode);
         ShowInfo(message);
     }
 
@@ -532,7 +525,7 @@ internal sealed class MailMergeEngine
         // Augment every row with the composed «AddressBlock» / «GreetingLine» values so those composite
         // placeholders resolve across every record, then run the rules-aware merge (records flagged by a
         // «Skip Record If» rule are excluded).
-        var augmentedData = BuildAugmentedData(data, finishPlan.RowIndexes);
+        var augmentedData = Session.BuildAugmentedData(finishPlan.RowIndexes);
         var state = new MergeState();
         var merged = MailMerge.MergeAllWithRules(template, augmentedData, state);
         var combined = MailMerge.CombineMergedRecords(merged, Session.Mode);
@@ -621,7 +614,8 @@ internal sealed class MailMergeEngine
     {
         var rows = Math.Max(1, result.Rows);
         var columns = Math.Max(1, result.Columns);
-        var cellContents = BuildLabelCellContents(rows * columns);
+        var template = Session.IsPreviewing ? Session.Template! : _editor.Document;
+        var cellContents = Session.BuildLabelCellContents(template, rows * columns);
         var existingTables = _editor.Document.Blocks.OfType<Table>().ToList();
 
         _editor.ApplyPageSettings(page =>
@@ -659,56 +653,6 @@ internal sealed class MailMergeEngine
         }
 
         ShowInfo($"Inserted a {rows} x {columns} label grid.");
-    }
-
-    private IReadOnlyList<IReadOnlyList<Paragraph>> BuildLabelCellContents(int capacity)
-    {
-        if (Session.Data is not { Count: > 0 } data)
-            return [];
-
-        var template = Session.IsPreviewing ? Session.Template! : _editor.Document;
-        var state = new MergeState();
-        var contents = new List<IReadOnlyList<Paragraph>>(Math.Min(capacity, data.Count));
-        var recordIndex = 0;
-
-        while (contents.Count < capacity && recordIndex < data.Count)
-        {
-            state.SequenceNumber++;
-            var row = Session.AugmentRow(data.Rows[recordIndex]);
-            var merged = MailMerge.MergeRecordWithRules(template, row, state, recordIndex + 1);
-            if (state.SkipRecordRequested)
-            {
-                state.SequenceNumber--;
-                recordIndex++;
-                continue;
-            }
-
-            contents.Add(merged.Blocks.OfType<Paragraph>().ToList());
-            recordIndex += state.AdvanceRecordRequested ? 2 : 1;
-        }
-
-        return contents;
-    }
-
-    /// <summary>
-    /// Build a <see cref="MergeData"/> whose every row carries the composed «AddressBlock» and
-    /// «GreetingLine» columns (in addition to the original columns), so the substitution path resolves the
-    /// composite placeholders per record.
-    /// </summary>
-    private MergeData BuildAugmentedData(MergeData data, IReadOnlyList<int> rowIndexes)
-    {
-        var header = data.Header.ToList();
-        if (!header.Contains("AddressBlock", StringComparer.OrdinalIgnoreCase)) header.Add("AddressBlock");
-        if (!header.Contains("GreetingLine", StringComparer.OrdinalIgnoreCase)) header.Add("GreetingLine");
-
-        var rows = new List<IReadOnlyList<string>>(rowIndexes.Count);
-        foreach (var rowIndex in rowIndexes)
-        {
-            var row = data.Rows[rowIndex];
-            var augmented = Session.AugmentRow(row);
-            rows.Add(header.Select(h => augmented.TryGetValue(h, out var v) ? v : string.Empty).ToList());
-        }
-        return new MergeData(header, rows);
     }
 
     private bool RequireRecipients(string message)

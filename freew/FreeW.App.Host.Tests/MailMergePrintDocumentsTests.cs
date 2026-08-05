@@ -14,7 +14,7 @@ public sealed class MailMergePrintDocumentsTests
         var preview = DocumentWith("Dear Grace");
         var editor = new DocumentView();
         editor.LoadModel(preview);
-        var session = new FreeWRibbonCommands.MailMergeSession
+        var session = new MailMergeSession
         {
             Data = MergeData.FromCsv("FirstName\nAda\nGrace\nLinus"),
             Template = template,
@@ -52,7 +52,7 @@ public sealed class MailMergePrintDocumentsTests
         var preview = DocumentWith("Dear Ada");
         var editor = new DocumentView();
         editor.LoadModel(preview);
-        var session = new FreeWRibbonCommands.MailMergeSession
+        var session = new MailMergeSession
         {
             Data = MergeData.FromCsv("FirstName\nAda"),
             Template = template,

@@ -6052,60 +6052,9 @@ internal static class FreeWRibbonCommands
 
     }
 
-    // Mailings: the shared mail-merge state across the four Mailings commands. Holds the data source
-    // and, while previewing, the original template document plus the current record index so previewing
-    // can step through records and restore the template when the preview ends.
-    internal sealed class MailMergeSession
-    {
-        public MergeData? Data { get; set; }
-        public MailMergeOutputMode Mode { get; set; } = MailMergeOutputMode.Letters;
-
-        // Non-null only while a preview is active: the document that was in the editor before the first
-        // Preview, so leaving the preview restores it (the user's editable template).
-        public TextDocument? Template { get; set; }
-
-        public int CurrentIndex { get; set; }
-
-        // Role→column mapping for Address Block / Greeting Line composition. Null until the user loads
-        // data (SetMergeDataCommand seeds it via AutoMatchFields) or opens Match Fields.
-        public FieldMapping? Mapping { get; set; }
-
-        public bool IsPreviewing => Template is not null;
-
-        public void Clear()
-        {
-            Data = null;
-            Template = null;
-            CurrentIndex = 0;
-            Mode = MailMergeOutputMode.Letters;
-            Mapping = null;
-        }
-
-        /// <summary>
-        /// Build an augmented row dictionary that adds synthetic «AddressBlock» and «GreetingLine»
-        /// keys so the standard Substitute path resolves both composite placeholders per-record.
-        /// When no mapping is set the synthetic keys map to empty strings.
-        /// </summary>
-        public IReadOnlyDictionary<string, string> AugmentRow(
-            IReadOnlyDictionary<string, string> row,
-            string greetingFormat = "Dear")
-        {
-            var augmented = new Dictionary<string, string>(row, StringComparer.OrdinalIgnoreCase);
-            var mapping = Mapping ?? new FieldMapping();
-            augmented["AddressBlock"] = MailMerge.ComposeAddressBlock(row, mapping);
-            augmented["GreetingLine"] = MailMerge.ComposeGreetingLine(row, mapping, greetingFormat);
-            return augmented;
-        }
-    }
-
     private sealed class SetMergeModeCommand(MailMergeSession session, MailMergeOutputMode mode) : IRibbonCommand
     {
-        public void Execute(RibbonCommandContext context)
-        {
-            session.Mode = mode;
-            session.Template = null;
-            session.CurrentIndex = 0;
-        }
+        public void Execute(RibbonCommandContext context) => session.SetMode(mode);
     }
 
     private sealed class ClearMergeSessionCommand(MailMergeSession session) : IRibbonCommand
@@ -6586,13 +6535,7 @@ internal static class FreeWRibbonCommands
             if (csv is null)
                 return; // cancelled
 
-            var parsed = MergeData.FromCsv(csv);
-            session.Data = parsed;
-            session.Template = null; // any in-progress preview is invalidated by new data
-            session.CurrentIndex = 0;
-            // Auto-seed the field mapping from the new header so Address Block / Greeting Line
-            // immediately compose correctly without requiring the user to open Match Fields.
-            session.Mapping = MailMerge.AutoMatchFields(parsed.Header);
+            var parsed = session.Load(MergeData.FromCsv(csv));
 
             DialogMessageHelper.ShowInfo(
                 Window.GetWindow(editor),
@@ -6910,13 +6853,7 @@ internal static class FreeWRibbonCommands
             var mergeState = new MergeState();
             CollectFillInAndAskAnswers(template, mergeState, owner);
 
-            // Augment every row with the composed «AddressBlock» and «GreetingLine» values so composite
-            // placeholders in the template resolve correctly across every record.
-            var augmentedRows = finishPlan.RowIndexes.Select(index => session.AugmentRow(data.Rows[index])).ToList();
-            var augmentedData = new MergeData(data.Header,
-                augmentedRows.Select(r =>
-                    (IReadOnlyList<string>)data.Header.Select(h => r.TryGetValue(h, out var v) ? v : string.Empty).ToList())
-                .ToList());
+            var augmentedData = session.BuildAugmentedData(finishPlan.RowIndexes);
 
             // Use the rules-aware merge path. Records flagged by «Skip Record If» are excluded.
             var merged = MailMerge.MergeAllWithRules(template, augmentedData, mergeState);
@@ -7393,39 +7330,6 @@ internal static class FreeWRibbonCommands
             ApplyLabelSheet(editor, session, label);
         }
 
-        internal static IReadOnlyList<IReadOnlyList<FreeW.Core.Model.Paragraph>> BuildLabelCellContents(
-            DocumentView editor,
-            MailMergeSession session,
-            int capacity)
-        {
-            if (session.Data is not { Count: > 0 } data)
-                return [];
-
-            var template = session.IsPreviewing ? session.Template! : editor.Model;
-            var state = new MergeState();
-            var contents = new List<IReadOnlyList<FreeW.Core.Model.Paragraph>>(
-                Math.Min(capacity, data.Count));
-            var recordIndex = 0;
-
-            while (contents.Count < capacity && recordIndex < data.Count)
-            {
-                state.SequenceNumber++;
-                var row = session.AugmentRow(data.Rows[recordIndex]);
-                var merged = MailMerge.MergeRecordWithRules(template, row, state, recordIndex + 1);
-                if (state.SkipRecordRequested)
-                {
-                    state.SequenceNumber--;
-                    recordIndex++;
-                    continue;
-                }
-
-                contents.Add(merged.Blocks.OfType<FreeW.Core.Model.Paragraph>().ToList());
-                recordIndex += state.AdvanceRecordRequested ? 2 : 1;
-            }
-
-            return contents;
-        }
-
     }
 
     internal static void ApplyLabelSheet(
@@ -7436,7 +7340,8 @@ internal static class FreeWRibbonCommands
         editor.CommitToModel();
         var rows = Math.Max(1, label.Rows);
         var columns = Math.Max(1, label.Columns);
-        var cellContents = LabelsCommand.BuildLabelCellContents(editor, session, rows * columns);
+        var template = session.IsPreviewing ? session.Template! : editor.Model;
+        var cellContents = session.BuildLabelCellContents(template, rows * columns);
 
         editor.ApplyPageSettings(page =>
         {

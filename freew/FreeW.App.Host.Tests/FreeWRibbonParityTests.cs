@@ -1246,7 +1246,7 @@ public sealed class FreeWRibbonParityTests
     public void MailingsFindRecipientAndCheckErrors_UseSharedPlannersThroughWpfCommands()
     {
         var editor = new DocumentView();
-        var session = new FreeWRibbonCommands.MailMergeSession
+        var session = new MailMergeSession
         {
             Data = MergeData.FromCsv("Name,City\nAda,London\nGrace,New York"),
             CurrentIndex = 1,
@@ -1279,7 +1279,7 @@ public sealed class FreeWRibbonParityTests
     public void MailingsFindRecipientAndCheckErrors_PreserveStateOnCancelAndRejectMissingRecipients()
     {
         var editor = new DocumentView();
-        var session = new FreeWRibbonCommands.MailMergeSession { CurrentIndex = 3 };
+        var session = new MailMergeSession { CurrentIndex = 3 };
         var prompts = 0;
         var messages = new List<string>();
 
@@ -1326,7 +1326,7 @@ public sealed class FreeWRibbonParityTests
         {
             Blocks = { new Paragraph($"Dear {MailMerge.FieldOpen}Missing{MailMerge.FieldClose}") }
         });
-        var session = new FreeWRibbonCommands.MailMergeSession
+        var session = new MailMergeSession
         {
             Data = MergeData.FromCsv("Name\nAda")
         };
@@ -1363,7 +1363,7 @@ public sealed class FreeWRibbonParityTests
                     + $"{MailMerge.FieldOpen}MissingTwo{MailMerge.FieldClose}")
             }
         });
-        var session = new FreeWRibbonCommands.MailMergeSession
+        var session = new MailMergeSession
         {
             Data = MergeData.FromCsv("Name\nAda")
         };
@@ -1391,7 +1391,7 @@ public sealed class FreeWRibbonParityTests
         {
             Blocks = { new Paragraph($"{MailMerge.FieldOpen}Missing{MailMerge.FieldClose}") }
         });
-        var session = new FreeWRibbonCommands.MailMergeSession
+        var session = new MailMergeSession
         {
             Data = MergeData.FromCsv("Name\nAda")
         };
