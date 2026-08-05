@@ -74,9 +74,8 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("BackstagePaneSurfacePlanner.BuildPrintPane(");
             source.Should().Contain("SurfaceActionRow(action)");
             source.Should().Contain("BuildPrintEvidenceSection(surface.Evidence)");
+            source.Should().Contain("BackstagePrintEvidenceTextFormatter.Format(row)");
             source.Should().Contain("BackstageViewTextResources.EvidenceSection");
-            source.Should().Contain("BackstageViewTextResources.EvidenceRequirementsLabel");
-            source.Should().Contain("FormatPrintEvidenceRequirement");
             source.Should().Contain("PrintEvidence_");
             source.Should().Contain("PrintPreview");
             source.Should().Contain("BuildAccountPane = BuildAccountPane");
@@ -93,6 +92,9 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("BackstagePaneRenderer.BuildActionPane(Kit, surface)");
             source.Should().Contain("_backstage.ShowPane(\"Open\")");
             source.Should().Contain("RecoverUnsaved");
+            source.Should().NotContain("PrintEvidenceKindLabel(");
+            source.Should().NotContain("PrintEvidenceStatusLabel(");
+            source.Should().NotContain("FormatPrintEvidenceRequirement(");
         }
         else
         {
@@ -143,6 +145,23 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().NotContain("TextTrimming = TextTrimming.CharacterEllipsis");
         source.Should().NotContain("Path.GetFileName(path)");
         source.Should().NotContain("var gallery = new WrapPanel");
+    }
+
+    [Fact]
+    public void SharedPrintEvidenceFormatter_OwnsRendererNeutralEvidenceText()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+            "freew",
+            "FreeW.App.Presentation",
+            "Backstage",
+            "BackstagePrintEvidenceTextFormatter.cs"));
+
+        source.Should().Contain("BackstageViewTextResources.EvidenceScenariosLabel");
+        source.Should().Contain("BackstageViewTextResources.EvidenceRequirementsLabel");
+        source.Should().Contain("BackstagePrintEvidenceKind.PrintPreviewFidelity");
+        source.Should().Contain("BackstagePrintEvidenceStatus.HostBacked");
+        source.Should().Contain("FormatRequirement");
     }
 
     [Fact]

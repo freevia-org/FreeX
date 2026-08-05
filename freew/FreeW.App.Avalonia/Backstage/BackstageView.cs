@@ -418,14 +418,8 @@ internal sealed class BackstageView : Window
 
         foreach (var row in evidence)
         {
-            var scenarios = row.FixtureScenarioIds.Count == 0
-                ? BackstageViewTextResources.NoEvidenceFixtureScenario
-                : string.Join(", ", row.FixtureScenarioIds);
-            var requirements = row.Requirements.Count == 0
-                ? BackstageViewTextResources.NoEvidenceRequirement
-                : string.Join(", ", row.Requirements.Select(FormatPrintEvidenceRequirement));
             var note = AvaloniaBackstageChrome.CreateNote(
-                $"{PrintEvidenceKindLabel(row.Kind)} - {PrintEvidenceStatusLabel(row.Status)}\n{row.Description}\n{BackstageViewTextResources.EvidenceScenariosLabel}: {scenarios}\n{BackstageViewTextResources.EvidenceRequirementsLabel}: {requirements}",
+                BackstagePrintEvidenceTextFormatter.Format(row),
                 BackstageChromeStyle,
                 margin: new Thickness(0, 0, 0, 8));
             AutomationProperties.SetAutomationId(note, $"PrintEvidence_{row.Kind}");
@@ -434,9 +428,6 @@ internal sealed class BackstageView : Window
 
         return panel;
     }
-
-    private static string FormatPrintEvidenceRequirement(BackstagePrintEvidenceRequirement requirement) =>
-        $"{requirement.HostId}/{requirement.ScenarioId} >= {requirement.MinimumExpectedOutputs}";
 
     private Control BuildSharePane()
     {
@@ -1409,22 +1400,6 @@ internal sealed class BackstageView : Window
             baseName = "Document";
         return baseName + normalized;
     }
-
-    private static string PrintEvidenceKindLabel(BackstagePrintEvidenceKind kind) => kind switch
-    {
-        BackstagePrintEvidenceKind.PrintPreviewFidelity => BackstageViewTextResources.PrintPreviewEvidenceLabel,
-        BackstagePrintEvidenceKind.PdfExportFidelity => BackstageViewTextResources.PdfExportEvidenceLabel,
-        BackstagePrintEvidenceKind.NativePrint => BackstageViewTextResources.NativePrintEvidenceLabel,
-        _ => kind.ToString()
-    };
-
-    private static string PrintEvidenceStatusLabel(BackstagePrintEvidenceStatus status) => status switch
-    {
-        BackstagePrintEvidenceStatus.FixtureReady => BackstageViewTextResources.FixtureReadyEvidenceStatus,
-        BackstagePrintEvidenceStatus.HostBacked => BackstageViewTextResources.HostBackedEvidenceStatus,
-        BackstagePrintEvidenceStatus.Deferred => BackstageViewTextResources.DeferredEvidenceStatus,
-        _ => status.ToString()
-    };
 
     private static string SafeEnvironment(Func<string> read)
     {

@@ -195,15 +195,9 @@ internal sealed class BackstageView : UserControl
 
         foreach (var row in evidence)
         {
-            var scenarios = row.FixtureScenarioIds.Count == 0
-                ? BackstageViewTextResources.NoEvidenceFixtureScenario
-                : string.Join(", ", row.FixtureScenarioIds);
-            var requirements = row.Requirements.Count == 0
-                ? BackstageViewTextResources.NoEvidenceRequirement
-                : string.Join(", ", row.Requirements.Select(FormatPrintEvidenceRequirement));
             var text = new TextBlock
             {
-                Text = $"{PrintEvidenceKindLabel(row.Kind)} - {PrintEvidenceStatusLabel(row.Status)}\n{row.Description}\n{BackstageViewTextResources.EvidenceScenariosLabel}: {scenarios}\n{BackstageViewTextResources.EvidenceRequirementsLabel}: {requirements}",
+                Text = BackstagePrintEvidenceTextFormatter.Format(row),
                 Foreground = Kit.Muted,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 8)
@@ -214,9 +208,6 @@ internal sealed class BackstageView : UserControl
 
         return panel;
     }
-
-    private static string FormatPrintEvidenceRequirement(BackstagePrintEvidenceRequirement requirement) =>
-        $"{requirement.HostId}/{requirement.ScenarioId} >= {requirement.MinimumExpectedOutputs}";
 
     private UIElement BuildOpenPane()
     {
@@ -445,22 +436,6 @@ internal sealed class BackstageView : UserControl
 
         return BackstagePaneRenderer.BuildAccountPane(Kit, surface);
     }
-
-    private static string PrintEvidenceKindLabel(BackstagePrintEvidenceKind kind) => kind switch
-    {
-        BackstagePrintEvidenceKind.PrintPreviewFidelity => BackstageViewTextResources.PrintPreviewEvidenceLabel,
-        BackstagePrintEvidenceKind.PdfExportFidelity => BackstageViewTextResources.PdfExportEvidenceLabel,
-        BackstagePrintEvidenceKind.NativePrint => BackstageViewTextResources.NativePrintEvidenceLabel,
-        _ => kind.ToString()
-    };
-
-    private static string PrintEvidenceStatusLabel(BackstagePrintEvidenceStatus status) => status switch
-    {
-        BackstagePrintEvidenceStatus.FixtureReady => BackstageViewTextResources.FixtureReadyEvidenceStatus,
-        BackstagePrintEvidenceStatus.HostBacked => BackstageViewTextResources.HostBackedEvidenceStatus,
-        BackstagePrintEvidenceStatus.Deferred => BackstageViewTextResources.DeferredEvidenceStatus,
-        _ => status.ToString()
-    };
 
     private BackstageOpenPaneSurfaceSpec BuildOpenSurface(string? filter) =>
         BackstagePaneSurfacePlanner.BuildOpenPane(

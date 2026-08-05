@@ -535,10 +535,12 @@ public class BackstageViewTests
         source.Should().Contain("BuildActionGroupContent(surface)");
         source.Should().Contain("BuildSurfaceActionRow(action)");
         source.Should().Contain("BuildPrintEvidenceSection(surface.Evidence)");
+        source.Should().Contain("BackstagePrintEvidenceTextFormatter.Format(row)");
         source.Should().Contain("PrintEvidence_");
         source.Should().Contain("BackstageViewTextResources.EvidenceSection");
-        source.Should().Contain("BackstageViewTextResources.EvidenceRequirementsLabel");
-        source.Should().Contain("FormatPrintEvidenceRequirement");
+        source.Should().NotContain("PrintEvidenceKindLabel(");
+        source.Should().NotContain("PrintEvidenceStatusLabel(");
+        source.Should().NotContain("FormatPrintEvidenceRequirement(");
         source.Should().Contain("var printCapability = _callbacks.DirectPrintCapability");
         source.Should().Contain("print: printCapability.IsAvailable && _callbacks.Print");
         source.Should().Contain("directPrintCapability: printCapability");
