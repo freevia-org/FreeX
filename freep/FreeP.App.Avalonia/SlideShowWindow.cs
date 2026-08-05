@@ -565,7 +565,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             new WindowsNativeRecordingDeviceCatalog(),
             new WindowsNativeRecordingCaptureEngine(windowsMetadata.AdapterName));
 #else
-        return new WindowsRecordingCaptureBackend(windowsMetadata);
+        return WindowsRecordingCaptureBackend.CreateUnavailable(windowsMetadata);
 #endif
     }
 

@@ -10,7 +10,7 @@ public sealed class WpfCameraCaptureParityTests
         var source = File.ReadAllText(RepoFile("freep/FreeP.App.Host/SlideShowWindow.cs"));
 
         source.Should().Contain("new WindowsRecordingCaptureBackend(");
-        source.Should().Contain("new WindowsHostRecordingCaptureEngine");
+        source.Should().Contain("new WindowsNativeRecordingCaptureEngine");
         source.Should().Contain("ppt/media/freep-recordings/wpf");
         source.Should().NotContain("LinuxRecordingCaptureBackend");
     }

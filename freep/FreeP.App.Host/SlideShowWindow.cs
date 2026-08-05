@@ -11,7 +11,6 @@ using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.App.Recording;
 using FreeP.App.Recording.Windows;
-using FreeP.App.Host.Recording;
 using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
 
@@ -535,7 +534,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 "WPF Windows recording capture adapter",
                 "ppt/media/freep-recordings/wpf"),
             new WindowsNativeRecordingDeviceCatalog(),
-            new WindowsHostRecordingCaptureEngine("WPF Windows recording capture adapter"));
+            new WindowsNativeRecordingCaptureEngine("WPF Windows recording capture adapter"));
 
     // ── Keyboard navigation ───────────────────────────────────────────────────────
 
