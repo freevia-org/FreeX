@@ -708,6 +708,7 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
     private readonly bool _oldShowBrowseScrollbar;
     private readonly uint? _oldKioskRestartAfterMilliseconds;
     private readonly bool _oldShowMediaControls;
+    private readonly bool _oldShowMasterShapes;
     private readonly bool _newUseSlideTimings;
     private readonly bool _newShowWithAnimation;
     private readonly bool _newShowWithNarration;
@@ -716,6 +717,7 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
     private readonly bool _newShowBrowseScrollbar;
     private readonly uint? _newKioskRestartAfterMilliseconds;
     private readonly bool _newShowMediaControls;
+    private readonly bool _newShowMasterShapes;
 
     public SetSlideShowSettingsCommand(
         bool oldUseSlideTimings,
@@ -733,7 +735,9 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
         uint? newKioskRestartAfterMilliseconds,
         bool newShowWithNarration,
         bool oldShowMediaControls = true,
-        bool newShowMediaControls = true)
+        bool newShowMediaControls = true,
+        bool oldShowMasterShapes = true,
+        bool newShowMasterShapes = true)
     {
         _oldUseSlideTimings = oldUseSlideTimings;
         _oldShowWithAnimation = oldShowWithAnimation;
@@ -743,6 +747,7 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
         _oldKioskRestartAfterMilliseconds = oldKioskRestartAfterMilliseconds;
         _oldShowWithNarration = oldShowWithNarration;
         _oldShowMediaControls = oldShowMediaControls;
+        _oldShowMasterShapes = oldShowMasterShapes;
         _newUseSlideTimings = newUseSlideTimings;
         _newShowWithAnimation = newShowWithAnimation;
         _newLoopUntilStopped = newLoopUntilStopped;
@@ -751,6 +756,7 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
         _newKioskRestartAfterMilliseconds = newKioskRestartAfterMilliseconds;
         _newShowWithNarration = newShowWithNarration;
         _newShowMediaControls = newShowMediaControls;
+        _newShowMasterShapes = newShowMasterShapes;
     }
 
     public SetSlideShowSettingsCommand(
@@ -812,6 +818,7 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
         p.ShowWithAnimation != _newShowWithAnimation ||
         p.ShowWithNarration != _newShowWithNarration ||
         p.ShowMediaControls != _newShowMediaControls ||
+        p.ShowMasterShapes != _newShowMasterShapes ||
         p.LoopUntilStopped != _newLoopUntilStopped ||
         p.ShowType != _newShowType ||
         p.ShowBrowseScrollbar != _newShowBrowseScrollbar ||
@@ -823,6 +830,7 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
         p.ShowWithAnimation = _newShowWithAnimation;
         p.ShowWithNarration = _newShowWithNarration;
         p.ShowMediaControls = _newShowMediaControls;
+        p.ShowMasterShapes = _newShowMasterShapes;
         p.LoopUntilStopped = _newLoopUntilStopped;
         p.ShowType = _newShowType;
         p.ShowBrowseScrollbar = _newShowBrowseScrollbar;
@@ -835,6 +843,7 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
         p.ShowWithAnimation = _oldShowWithAnimation;
         p.ShowWithNarration = _oldShowWithNarration;
         p.ShowMediaControls = _oldShowMediaControls;
+        p.ShowMasterShapes = _oldShowMasterShapes;
         p.LoopUntilStopped = _oldLoopUntilStopped;
         p.ShowType = _oldShowType;
         p.ShowBrowseScrollbar = _oldShowBrowseScrollbar;
