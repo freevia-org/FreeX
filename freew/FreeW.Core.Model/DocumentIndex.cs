@@ -129,12 +129,12 @@ public static class DocumentIndex
         var instruction = $" XE \"{Escape(normalized.EntryText)}\"";
         if (normalized.CrossReference.Length > 0)
             instruction += $" \\t \"{Escape(normalized.CrossReference)}\"";
+        if (normalized.BookmarkName.Length > 0)
+            instruction += $" \\r \"{Escape(normalized.BookmarkName)}\"";
         if (normalized.BoldPageNumber)
             instruction += " \\b";
         if (normalized.ItalicPageNumber)
             instruction += " \\i";
-        if (normalized.BookmarkName.Length > 0)
-            instruction += $" \\r \"{Escape(normalized.BookmarkName)}\"";
         return Run.ComplexFieldRun(instruction + " ");
     }
 

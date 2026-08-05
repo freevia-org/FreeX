@@ -190,7 +190,7 @@ public class DocumentIndexTests
             BoldPageNumber: true,
             BookmarkName: "TopicRange"));
 
-        run.ComplexField!.Instruction.Should().Be(" XE \"Alpha\" \\b \\r \"TopicRange\" ");
+        run.ComplexField!.Instruction.Should().Be(" XE \"Alpha\" \\r \"TopicRange\" \\b ");
         DocumentIndex.MarkedEntry(run).Should().Be(new IndexMark(
             "Alpha",
             BoldPageNumber: true,

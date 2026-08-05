@@ -489,6 +489,9 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
 
     private bool Accept(bool markAll, bool closeOnSuccess = true)
     {
+        if (markAll && !MarkIndexEntryDialogPlanner.CanMarkAll(_selectedText, ReferenceKind))
+            return false;
+
         if (!MarkIndexEntryDialogPlanner.TryBuildMark(CurrentState(), out var mark, out var validation))
         {
             _status.Text = validation?.Message ?? MarkIndexEntryDialogPlanner.MissingMainEntryMessage;

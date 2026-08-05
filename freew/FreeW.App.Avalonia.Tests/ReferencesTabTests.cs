@@ -828,6 +828,7 @@ public sealed class ReferencesTabTests
         dialog.BookmarkSelectorEnabledForTests.Should().BeTrue();
         dialog.PageNumberFormattingEnabledForTests.Should().BeTrue();
         dialog.MarkAllEnabledForTests.Should().BeFalse();
+        dialog.AcceptAllForTests().Should().BeFalse();
 
         dialog.SetForTests("Alpha", null, IndexEntryReferenceKind.CrossReference, null, "See Beta");
         dialog.BookmarkSelectorEnabledForTests.Should().BeFalse();
