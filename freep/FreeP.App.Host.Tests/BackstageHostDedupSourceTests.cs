@@ -44,6 +44,17 @@ public sealed class BackstageHostDedupSourceTests
             "FreeP.App.Avalonia",
             "Backstage",
             "BackstageView.cs"));
+        var avaloniaMainWindowSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Avalonia",
+            "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "Backstage",
+            "PresentationBackstagePrintSession.cs"));
 
         wpfSource.Should().Contain("SisterBackstageHostController");
         wpfSource.Should().Contain("new SisterBackstageHostSpec(");
@@ -52,7 +63,10 @@ public sealed class BackstageHostDedupSourceTests
         wpfSource.Should().Contain("public void Hide() => _backstage.Hide();");
         wpfSource.Should().Contain("backstage.FrameCommand(_actions.New)");
         wpfSource.Should().Contain("PresentationBackstagePanePlanner");
-        wpfSource.Should().Contain("PresentationBackstagePrintSurfacePlanner.Build(plan)");
+        wpfSource.Should().Contain("PresentationBackstagePrintSession");
+        wpfSource.Should().Contain("_printSession.Refresh().Surface");
+        wpfSource.Should().Contain("_printSession.ApplyCustomRange(");
+        wpfSource.Should().Contain("_printSession.TryExecutePrint(");
         wpfSource.Should().Contain("PanePlans.BuildInfoPane(");
         wpfSource.Should().Contain("PanePlans.BuildExportPane(");
         wpfSource.Should().Contain("PanePlans.BuildRecentPane(");
@@ -62,7 +76,10 @@ public sealed class BackstageHostDedupSourceTests
         wpfSource.Should().Contain("PresentationBackstageExportActions(");
 
         avaloniaSource.Should().Contain("PresentationBackstagePanePlanner");
-        avaloniaSource.Should().Contain("PresentationBackstagePrintSurfacePlanner.Build(plan)");
+        avaloniaSource.Should().Contain("PresentationBackstagePrintSession");
+        avaloniaSource.Should().Contain("_printSession.Refresh().Surface");
+        avaloniaSource.Should().Contain("_printSession.ApplyCustomRange(");
+        avaloniaSource.Should().Contain("_printSession.TryExecutePrint(");
         avaloniaSource.Should().Contain("AvaloniaBackstagePaneComposer");
         avaloniaSource.Should().Contain("Panes.BuildInfoPane(");
         avaloniaSource.Should().Contain("Panes.BuildRecentPane(");
@@ -82,6 +99,9 @@ public sealed class BackstageHostDedupSourceTests
             source.Should().NotContain("plan.LayoutChoices");
             source.Should().NotContain("plan.RangeChoices");
             source.Should().NotContain("plan.NativePrintHandoff.Can");
+            source.Should().NotContain("PresentationBackstagePrintSurfacePlanner.Build(");
+            source.Should().NotContain("BuildCustomRangeRequest(");
+            source.Should().NotContain("NormalizeCustomRangeText(");
             source.Should().NotContain("new SisterBackstageAccountPaneContext(");
             source.Should().NotContain("SafeEnvironment(");
         }
@@ -90,6 +110,25 @@ public sealed class BackstageHostDedupSourceTests
         wpfSource.Should().NotContain("SisterBackstageEntryBuilder.Build(");
         wpfSource.Should().NotContain("Hide(); _actions");
         wpfSource.Should().NotContain("_shell.Show");
+
+        avaloniaMainWindowSource.Should().Contain(
+            "PresentationBackstagePrintRequestPlanner.BuildRequest(plan)");
+        avaloniaMainWindowSource.Should().Contain(
+            "PresentationBackstagePrintSurfacePlanner.Build(plan)");
+        avaloniaMainWindowSource.Should().Contain(
+            "PresentationBackstagePrintRequestPlanner.WithCustomRange(");
+        avaloniaMainWindowSource.Should().NotContain("foreach (var choice in plan.OutputOptionChoices)");
+        avaloniaMainWindowSource.Should().NotContain("foreach (var page in plan.PreviewPlan.Pages)");
+        avaloniaMainWindowSource.Should().NotContain("foreach (var choice in plan.LayoutChoices)");
+        avaloniaMainWindowSource.Should().NotContain("foreach (var choice in plan.RangeChoices)");
+
+        sessionSource.Should().NotContain("System.Windows");
+        sessionSource.Should().NotContain("Avalonia");
+        sessionSource.Should().NotContain("WpfPresentationPrintService");
+        sessionSource.Should().NotContain("CupsPrintDialog");
+        sessionSource.Should().NotContain("WindowsNativePrintOutput");
+        sessionSource.Should().NotContain("PrintQueue");
+        sessionSource.Should().NotContain("Bitmap");
     }
 
 }

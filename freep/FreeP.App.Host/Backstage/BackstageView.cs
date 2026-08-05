@@ -36,9 +36,9 @@ internal sealed class BackstageView : UserControl
     private readonly Func<Presentation> _getModel;
     private readonly FileCommands _file;
     private readonly BackstageActions _actions;
+    private readonly PresentationBackstagePrintSession _printSession;
     private readonly SisterBackstageHostController _backstage;
     private string? _evidencePaneLabel;
-    private PresentationPrintRequest? _printRequest;
     private TextBox? _customRangeInput;
     private Button? _customRangeApplyButton;
 
@@ -47,6 +47,9 @@ internal sealed class BackstageView : UserControl
         _getModel = getModel;
         _file = file;
         _actions = actions;
+        _printSession = new PresentationBackstagePrintSession(
+            _file.BuildPrintBackstagePlan,
+            _actions.Print);
 
         _backstage = new SisterBackstageHostController(
             this,
@@ -97,7 +100,7 @@ internal sealed class BackstageView : UserControl
             BuildNewPane,
             BuildOptionsPane)
         {
-            Print = backstage.FrameCommand(_actions.PlanPrint),
+            Print = backstage.FrameCommand(() => _printSession.Refresh()),
             BuildPrintPane = BuildPrintPane,
             BuildExportPane = BuildExportPane,
             BuildAccountPane = BuildAccountPane,
@@ -106,8 +109,7 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildPrintPane()
     {
-        var plan = _file.BuildPrintBackstagePlan(_printRequest);
-        var surface = PresentationBackstagePrintSurfacePlanner.Build(plan);
+        var surface = _printSession.Refresh().Surface;
         var panel = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(Kit.HeadingText(surface.Heading));
         panel.Children.Add(new TextBlock
@@ -155,8 +157,7 @@ internal sealed class BackstageView : UserControl
         AutomationProperties.SetAutomationId(_customRangeApplyButton, surface.CustomRangeApplyAutomationId);
         _customRangeApplyButton.Click += (_, _) =>
         {
-            _printRequest = PresentationBackstagePrintSurfacePlanner.BuildCustomRangeRequest(
-                _customRangeInput.Text);
+            _printSession.ApplyCustomRange(_customRangeInput.Text);
             _backstage.Show("Print");
         };
         panel.Children.Add(_customRangeInput);
@@ -186,8 +187,11 @@ internal sealed class BackstageView : UserControl
             AutomationProperties.SetAutomationId(printButton, action.AutomationId);
             printButton.Click += (_, _) =>
             {
+                if (!_printSession.CanExecutePrint(action.AutomationId))
+                    return;
+
                 _backstage.Hide();
-                _actions.Print(action.Request);
+                _printSession.TryExecutePrint(action.AutomationId);
             };
             panel.Children.Add(printButton);
         }
@@ -271,7 +275,6 @@ internal sealed record BackstageActions(
     Action ExportNotesPagePdf,
     Action ExportImages,
     Action<PresentationPrintRequest> Print,
-    Action PlanPrint,
     Action ExportVideo,
     Func<bool> CanExportVideo,
     Func<FreePOptions> CurrentOptions,

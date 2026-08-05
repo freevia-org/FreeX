@@ -33,8 +33,8 @@ internal sealed class BackstageView : UserControl
     private static readonly AvaloniaBackstagePaneComposer Panes = new(PaneStyle);
 
     private readonly BackstageCallbacks _callbacks;
+    private readonly PresentationBackstagePrintSession _printSession;
     private readonly AvaloniaBackstageFrame _frame;
-    private string? _customRangeText;
     private TextBox? _customRangeInput;
     private Button? _customRangeApplyButton;
     private readonly List<(string AutomationId, Button Button)> _printActionButtons = new();
@@ -42,6 +42,9 @@ internal sealed class BackstageView : UserControl
     public BackstageView(BackstageCallbacks callbacks)
     {
         _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
+        _printSession = new PresentationBackstagePrintSession(
+            callbacks.GetPrintPlan,
+            callbacks.Print);
 
         var entries = SisterBackstageEntryPlanner.Build(new SisterBackstageEntryPlanSpec<Control>(
             BuildInfoPane,
@@ -142,10 +145,7 @@ internal sealed class BackstageView : UserControl
     private Control BuildPrintPane()
     {
         _printActionButtons.Clear();
-        var plan = _customRangeText is null
-            ? _callbacks.GetPrintPlan()
-            : _callbacks.GetPrintPlanForCustomRange(_customRangeText);
-        var surface = PresentationBackstagePrintSurfacePlanner.Build(plan);
+        var surface = _printSession.Refresh().Surface;
 
         var panel = CreatePane(maxWidth: 760);
         panel.Children.Add(AvaloniaBackstageChrome.CreateHeading(surface.Heading, PaneStyle));
@@ -177,8 +177,7 @@ internal sealed class BackstageView : UserControl
                 surface.CustomRangeApplyAutomationId,
                 () =>
                 {
-                    _customRangeText = PresentationBackstagePrintSurfacePlanner.NormalizeCustomRangeText(
-                        _customRangeInput.Text);
+                    _printSession.ApplyCustomRange(_customRangeInput.Text);
                     _frame.Show("Print");
                 })
             {
@@ -202,8 +201,11 @@ internal sealed class BackstageView : UserControl
                     action.AutomationId,
                     () =>
                     {
+                        if (!_printSession.CanExecutePrint(action.AutomationId))
+                            return;
+
                         Hide();
-                        _callbacks.Print(action.Request);
+                        _printSession.TryExecutePrint(action.AutomationId);
                     })
                 {
                     HorizontalAlignment = HorizontalAlignment.Left,

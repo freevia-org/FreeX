@@ -1,3 +1,4 @@
+using System.Globalization;
 using Free.Shared.Shell;
 
 namespace FreeP.App.Compositor;
@@ -41,7 +42,9 @@ public sealed record PresentationBackstagePrintSurface(
 /// </summary>
 public static class PresentationBackstagePrintSurfacePlanner
 {
-    public static PresentationBackstagePrintSurface Build(PresentationPrintBackstagePlan plan)
+    public static PresentationBackstagePrintSurface Build(
+        PresentationPrintBackstagePlan plan,
+        int? selectedPreviewPageNumber = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
 
@@ -49,7 +52,7 @@ public static class PresentationBackstagePrintSurfacePlanner
             plan.Heading,
             plan.Description,
             BuildSettings(plan),
-            BuildChoiceGroups(plan),
+            BuildChoiceGroups(plan, selectedPreviewPageNumber),
             CustomRangeHeading: "Custom Range",
             CustomRangeDescription: "Enter slide numbers and ranges, for example 2,4-6.",
             CustomRangePlaceholder: "e.g. 2,4-6",
@@ -63,10 +66,7 @@ public static class PresentationBackstagePrintSurfacePlanner
     }
 
     public static string? NormalizeCustomRangeText(string? rangeText)
-    {
-        var normalized = rangeText?.Trim();
-        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
-    }
+        => PresentationBackstagePrintRequestPlanner.NormalizeCustomRangeText(rangeText);
 
     public static PresentationPrintRequest? BuildCustomRangeRequest(string? rangeText)
     {
@@ -84,7 +84,7 @@ public static class PresentationBackstagePrintSurfacePlanner
     [
         new("Layout", plan.SelectedLayout.Layout.DisplayName),
         new("Slides", plan.SlideRangeSummary),
-        new("Pages", plan.PageCount.ToString()),
+        new("Pages", plan.PageCount.ToString(CultureInfo.InvariantCulture)),
         new("Preview", plan.PreviewPlan.PageCountText),
         new("Hidden slides", plan.PrintHiddenSlides ? "Included" : "Not included"),
         new("Options", plan.Options.DisplaySummary),
@@ -92,7 +92,8 @@ public static class PresentationBackstagePrintSurfacePlanner
     ];
 
     private static IReadOnlyList<PresentationBackstagePrintChoiceGroup> BuildChoiceGroups(
-        PresentationPrintBackstagePlan plan) =>
+        PresentationPrintBackstagePlan plan,
+        int? selectedPreviewPageNumber) =>
     [
         new("Output Options", plan.OutputOptionChoices.Select(choice => new PresentationBackstagePrintChoiceRow(
             $"{choice.Group}: {choice.DisplayName}",
@@ -102,7 +103,7 @@ public static class PresentationBackstagePrintSurfacePlanner
         new("Preview", plan.PreviewPlan.Pages.Select(page => new PresentationBackstagePrintChoiceRow(
             page.ThumbnailLabel,
             page.Detail,
-            page.PageNumber == 1,
+            page.PageNumber == (selectedPreviewPageNumber ?? 1),
             IsAvailable: true)).ToArray()),
         new("Layouts", plan.LayoutChoices.Select(choice => new PresentationBackstagePrintChoiceRow(
             choice.Layout.DisplayName,
@@ -120,10 +121,7 @@ public static class PresentationBackstagePrintSurfacePlanner
         PresentationPrintBackstageLayoutChoice choice,
         PresentationPrintBackstagePlan plan)
     {
-        var request = new PresentationPrintRequest(
-            choice.Layout.Layout,
-            plan.SelectedRange.Request,
-            HandoutSlidesPerPage: choice.Layout.SlidesPerPage);
+        var request = PresentationBackstagePrintRequestPlanner.BuildRequest(plan, choice);
         var canPrint = choice.PackagePlan.CanBuildPackage &&
             (plan.NativePrintHandoff.CanOpenNativePrintDialog ||
              plan.NativePrintHandoff.CanSubmitToNativePrinter);

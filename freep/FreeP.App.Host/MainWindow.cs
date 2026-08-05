@@ -623,7 +623,6 @@ public sealed partial class MainWindow : Window
             ExportNotesPagePdf: () => _file.ExportNotesPagePdf(),
             ExportImages: () => _file.ExportImages(),
             Print: request => _file.Print(request),
-            PlanPrint: () => RefreshPrintBackstagePlan(),
             ExportVideo: () => _ = _file.ExportVideoAsync(),
             CanExportVideo: () => _file.CanExportVideo,
             CurrentOptions: () => _options,

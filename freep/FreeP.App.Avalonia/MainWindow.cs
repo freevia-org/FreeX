@@ -1190,7 +1190,7 @@ public sealed partial class MainWindow : Window
                     _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(_nativeOutputCapabilities.Print);
                     _videoExportHostCapabilities = BuildVideoExportHostCapabilities(_nativeOutputCapabilities.Video);
                     if (_printOptionsPaneHost?.IsVisible == true)
-                        RenderPrintOptionsPane(RefreshPrintBackstagePlan());
+                        RenderPrintOptionsPane(RefreshPrintBackstagePlan(_printOptionsPaneRequest));
                 });
             },
             CancellationToken.None,
@@ -5045,13 +5045,7 @@ public sealed partial class MainWindow : Window
         ExportPdf: () => _ = FileExportPdfAsync(),
         ExportNotesPagePdf: () => _ = FileExportNotesPagePdfAsync(),
         ExportImages: () => _ = FileExportImagesAsync(),
-        GetPrintPlan: () => RefreshPrintBackstagePlan(),
-        GetPrintPlanForCustomRange: rangeText => RefreshPrintBackstagePlan(
-            new PresentationPrintRequest(
-                PresentationPrintLayoutKind.FullPageSlides,
-                new PresentationSlideRangeRequest(
-                    PresentationSlideRangeKind.CustomRange,
-                    CustomRangeText: rangeText))),
+        GetPrintPlan: RefreshPrintBackstagePlan,
         Print: request => _backstagePrintOperation = ExecutePrintWorkflowAsync(request),
         ExportVideo: () => _ = FileExportVideoAsync(),
         CanExportVideo: () => _nativeOutputCapabilities.Video.CanEncodeMp4);
@@ -5453,16 +5447,7 @@ public sealed partial class MainWindow : Window
     internal PresentationPrintBackstagePlan ShowPrintOptionsPane(PresentationPrintRequest? request = null)
     {
         var plan = RefreshPrintBackstagePlan(request);
-        _printOptionsPaneRequest = request ?? new PresentationPrintRequest(
-            plan.SelectedLayout.Layout.Layout,
-            plan.SelectedRange.Request,
-            plan.SelectedLayout.Layout.IsHandout ? plan.SelectedLayout.Layout.SlidesPerPage : null,
-            plan.PrintHiddenSlides,
-            plan.Options.Copies,
-            plan.Options.Collate,
-            plan.Options.ColorMode,
-            plan.Options.FrameSlides,
-            plan.Options.IncludeCommentsAndInkMarkup);
+        _printOptionsPaneRequest = PresentationBackstagePrintRequestPlanner.BuildRequest(plan);
         RenderPrintOptionsPane(plan);
         _printOptionsPaneHost.IsVisible = true;
         return plan;
@@ -5625,8 +5610,9 @@ public sealed partial class MainWindow : Window
 
     private void RenderPrintOptionsPane(PresentationPrintBackstagePlan plan)
     {
-        _printOptionsPaneHeading.Text = plan.Heading;
-        _printOptionsPaneMessage.Text = plan.Description;
+        var surface = PresentationBackstagePrintSurfacePlanner.Build(plan);
+        _printOptionsPaneHeading.Text = surface.Heading;
+        _printOptionsPaneMessage.Text = surface.Description;
         _printOptionsPaneRenderedOptionLines.Clear();
         _printOptionsPaneRenderedPreviewRows.Clear();
         _printOptionsPaneRenderedLayoutRows.Clear();
@@ -5634,114 +5620,104 @@ public sealed partial class MainWindow : Window
         _printOptionsPaneRowsPanel.Children.Clear();
 
         AddPrintOptionsPaneSection("Settings");
-        AddPrintOptionsPaneField("Layout", plan.SelectedLayout.Layout.DisplayName);
-        AddPrintOptionsPaneField("Slides", plan.SlideRangeSummary);
-        AddPrintOptionsPaneField("Pages", plan.PageCount.ToString(CultureInfo.InvariantCulture));
-        AddPrintOptionsPaneField("Preview", plan.PreviewPlan.PageCountText);
-        AddPrintOptionsPaneField("Hidden slides", plan.PrintHiddenSlides ? "Included" : "Not included");
-        AddPrintOptionsPaneField("Options", plan.Options.DisplaySummary);
-        AddPrintOptionsPaneField("Native printer handoff", plan.NativePrintHandoff.StatusText);
+        foreach (var field in surface.Settings)
+            AddPrintOptionsPaneField(field.Label, field.Value);
 #if FREEP_WINDOWS_CAPTURE
         AddWindowsPrinterSelector();
 #endif
 
-        AddPrintOptionsPaneSection("Output options");
-
-        foreach (var choice in plan.OutputOptionChoices)
+        foreach (var group in surface.ChoiceGroups)
         {
-            var row = BuildPrintOptionsPaneChoiceSummary(
-                $"{choice.Group}: {choice.DisplayName}",
-                choice.Description,
-                choice.IsSelected,
-                choice.IsAvailable);
-            _printOptionsPaneRenderedOptionLines.Add(row);
-            AddPrintOptionsPaneChoice(row, choice.IsAvailable);
+            AddPrintOptionsPaneSection(PrintOptionsPaneSectionHeading(group.Heading));
+            foreach (var choice in group.Choices)
+            {
+                var row = BuildPrintOptionsPaneChoiceSummary(
+                    choice.Label,
+                    choice.Description,
+                    choice.IsSelected,
+                    choice.IsAvailable);
+                AddPrintOptionsPaneRenderedChoice(group.Heading, row);
+                AddPrintOptionsPaneChoice(row, choice.IsAvailable);
+            }
         }
 
-        AddPrintOptionsPaneSection("Preview");
-        foreach (var page in plan.PreviewPlan.Pages)
-        {
-            var row = BuildPrintOptionsPaneChoiceSummary(
-                page.ThumbnailLabel,
-                page.Detail,
-                page.PageNumber == 1);
-            _printOptionsPaneRenderedPreviewRows.Add(row);
-            AddPrintOptionsPaneChoice(row, isAvailable: true);
-        }
-
-        AddPrintOptionsPaneSection("Layouts");
-        foreach (var choice in plan.LayoutChoices)
-        {
-            var row = BuildPrintOptionsPaneChoiceSummary(
-                choice.Layout.DisplayName,
-                choice.PackagePlan.LayoutSummary,
-                choice.IsSelected);
-            _printOptionsPaneRenderedLayoutRows.Add(row);
-            AddPrintOptionsPaneChoice(row, isAvailable: true);
-        }
-
-        AddPrintOptionsPaneSection("Slide range");
-        foreach (var choice in plan.RangeChoices)
-        {
-            var row = BuildPrintOptionsPaneChoiceSummary(
-                choice.DisplayName,
-                choice.Description,
-                choice.Kind == plan.SelectedRange.Kind,
-                choice.IsAvailable);
-            _printOptionsPaneRenderedRangeRows.Add(row);
-            AddPrintOptionsPaneChoice(row, choice.IsAvailable);
-        }
-
-        AddPrintOptionsPaneSection("Custom range");
+        AddPrintOptionsPaneSection(PrintOptionsPaneSectionHeading(surface.CustomRangeHeading));
         _printOptionsPaneRowsPanel.Children.Add(new TextBlock
         {
-            Text = "Enter slide numbers and ranges, for example 2,4-6.",
+            Text = surface.CustomRangeDescription,
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
             Margin = new Thickness(0, 0, 0, 4),
         });
         _printCustomRangeInput = new TextBox
         {
-            Text = plan.SelectedRange.Request?.CustomRangeText ?? string.Empty,
-            PlaceholderText = "e.g. 2,4-6",
+            Text = surface.CustomRangeText,
+            PlaceholderText = surface.CustomRangePlaceholder,
             MinWidth = 240,
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 6),
         };
-        AutomationProperties.SetAutomationId(_printCustomRangeInput, "FreePPrintCustomRangeInput");
+        AutomationProperties.SetAutomationId(
+            _printCustomRangeInput,
+            surface.CustomRangeInputAutomationId);
         _printCustomRangeApplyButton = new Button
         {
-            Content = "Apply range",
+            Content = surface.CustomRangeApplyLabel,
             HorizontalAlignment = HorizontalAlignment.Left,
             Padding = new Thickness(12, 6),
         };
-        AutomationProperties.SetAutomationId(_printCustomRangeApplyButton, "FreePPrintCustomRangeApply");
+        AutomationProperties.SetAutomationId(
+            _printCustomRangeApplyButton,
+            surface.CustomRangeApplyAutomationId);
         _printCustomRangeApplyButton.Click += (_, _) =>
         {
-            var text = _printCustomRangeInput.Text?.Trim() ?? string.Empty;
-            ShowPrintOptionsPane(string.IsNullOrWhiteSpace(text)
-                ? new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides)
-                : new PresentationPrintRequest(
-                    PresentationPrintLayoutKind.FullPageSlides,
-                    new PresentationSlideRangeRequest(
-                        PresentationSlideRangeKind.CustomRange,
-                        CustomRangeText: text)));
+            var currentRequest = _printOptionsPaneRequest ??
+                PresentationBackstagePrintRequestPlanner.BuildRequest(plan);
+            ShowPrintOptionsPane(PresentationBackstagePrintRequestPlanner.WithCustomRange(
+                currentRequest,
+                _printCustomRangeInput.Text));
         };
         _printOptionsPaneRowsPanel.Children.Add(_printCustomRangeInput);
         _printOptionsPaneRowsPanel.Children.Add(_printCustomRangeApplyButton);
 
         _printOptionsPaneRowsPanel.Children.Add(new TextBlock
         {
-            Text = plan.DisabledReason ?? plan.NativePrintHandoff.Reason,
+            Text = surface.StatusText,
             TextWrapping = TextWrapping.Wrap,
             FontStyle = FontStyle.Italic,
             Foreground = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
             Margin = new Thickness(0, 8, 0, 0),
         });
         _printOptionsPaneExecuteButton.IsEnabled =
-            plan.NativePrintHandoff.CanOpenNativePrintDialog ||
-            plan.NativePrintHandoff.CanSubmitToNativePrinter;
+            PresentationBackstagePrintRequestPlanner.Validate(plan).CanPrint;
     }
+
+    private void AddPrintOptionsPaneRenderedChoice(string heading, string row)
+    {
+        switch (heading)
+        {
+            case "Output Options":
+                _printOptionsPaneRenderedOptionLines.Add(row);
+                break;
+            case "Preview":
+                _printOptionsPaneRenderedPreviewRows.Add(row);
+                break;
+            case "Layouts":
+                _printOptionsPaneRenderedLayoutRows.Add(row);
+                break;
+            case "Slide Range":
+                _printOptionsPaneRenderedRangeRows.Add(row);
+                break;
+        }
+    }
+
+    private static string PrintOptionsPaneSectionHeading(string heading) => heading switch
+    {
+        "Output Options" => "Output options",
+        "Slide Range" => "Slide range",
+        "Custom Range" => "Custom range",
+        _ => heading,
+    };
 
     private void AddPrintOptionsPaneSection(string text)
     {

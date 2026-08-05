@@ -12,7 +12,12 @@ public sealed class PresentationBackstagePrintSurfacePlannerTests
                     PresentationSlideRangeKind.CustomRange,
                     CustomRangeText: "2,4-5"),
                 HandoutSlidesPerPage: 3,
-                PrintHiddenSlides: true),
+                PrintHiddenSlides: true,
+                Copies: 4,
+                Collate: false,
+                ColorMode: PresentationPrintColorMode.Grayscale,
+                FrameSlides: true,
+                IncludeCommentsAndInkMarkup: true),
             slideCount: 6,
             hostCapabilities: PresentationNativePrintHandoffHostCapabilities.Available("test host"));
 
@@ -32,8 +37,16 @@ public sealed class PresentationBackstagePrintSurfacePlannerTests
         surface.PrintActions.Should().OnlyContain(action => action.IsEnabled);
         surface.PrintActions.Select(action => action.AutomationId)
             .Should().OnlyContain(id => id.StartsWith("BackstagePrint_"));
-        surface.PrintActions.Single(action => action.Request.Layout == PresentationPrintLayoutKind.Handouts &&
-            action.Request.HandoutSlidesPerPage == 3).Request.SlideRange.Should().Be(plan.SelectedRange.Request);
+        var handoutRequest = surface.PrintActions.Single(action =>
+            action.Request.Layout == PresentationPrintLayoutKind.Handouts &&
+            action.Request.HandoutSlidesPerPage == 3).Request;
+        handoutRequest.SlideRange.Should().Be(plan.SelectedRange.Request);
+        handoutRequest.PrintHiddenSlides.Should().BeTrue();
+        handoutRequest.Copies.Should().Be(4);
+        handoutRequest.Collate.Should().BeFalse();
+        handoutRequest.ColorMode.Should().Be(PresentationPrintColorMode.Grayscale);
+        handoutRequest.FrameSlides.Should().BeTrue();
+        handoutRequest.IncludeCommentsAndInkMarkup.Should().BeTrue();
     }
 
     [Theory]
