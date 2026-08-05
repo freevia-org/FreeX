@@ -534,6 +534,37 @@ public sealed class SlideCompositorTests
         picture.Effects.OuterShadowDirDeg.Should().BeApproximately(45, 0.00001);
     }
 
+    [Fact]
+    public void Compose_ZoomFrameBorder_ResolvesNativeGlow()
+    {
+        var presentation = PresentationModel.CreateEmpty();
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+        var zoom = SlideZoomInsertionPlanner.CreateShape(presentation, 0, "slide-2");
+        presentation.Slides[0].Shapes.Add(zoom);
+        SummaryZoomPreviewPlanner.AttachPreviewImage(
+            presentation, zoom, targetSlideIndex: 1, _ => new byte[] { 1, 2, 3 })
+            .Should().BeTrue();
+
+        var raw = XElement.Parse(zoom.PreservedObject!.RawXml);
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var shapeProperties = raw.Descendants().Single(element => element.Name.LocalName == "spPr");
+        shapeProperties.Add(new XElement(drawing + "effectLst",
+            new XElement(drawing + "glow",
+                new XAttribute("rad", 152400),
+                new XElement(drawing + "srgbClr",
+                    new XAttribute("val", "00AAFF"),
+                    new XElement(drawing + "alpha", new XAttribute("val", 42000))))));
+        zoom.PreservedObject.RawXml = raw.ToString(SaveOptions.DisableFormatting);
+
+        var picture = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Picture>().Single();
+        picture.Effects.Should().NotBeNull();
+        picture.Effects!.HasGlow.Should().BeTrue();
+        picture.Effects.GlowColor.Should().Be(new SrgbColor(0x00, 0xAA, 0xFF));
+        picture.Effects.GlowAlpha.Should().Be(107);
+        picture.Effects.GlowRadiusDip.Should().BeApproximately(152400 / 9525d, 0.00001);
+    }
+
     private static TextBody BodyWithText(string text)
     {
         var body = new TextBody();

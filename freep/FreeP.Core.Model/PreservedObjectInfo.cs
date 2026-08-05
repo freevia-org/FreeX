@@ -55,7 +55,9 @@ public sealed record ZoomObjectProperties(
     bool? FrameBorderNoFill = null,
     ThemeColorSlot? FrameBorderThemeColor = null,
     ZoomFrameBorderShadow? FrameBorderShadow = null,
-    bool? FrameBorderShadowEnabled = null)
+    bool? FrameBorderShadowEnabled = null,
+    ZoomFrameBorderGlow? FrameBorderGlow = null,
+    bool? FrameBorderGlowEnabled = null)
 {
     public bool IsEmpty => ReturnToParent is null
         && ImageType is null
@@ -74,7 +76,9 @@ public sealed record ZoomObjectProperties(
         && FrameBorderNoFill is null
         && FrameBorderThemeColor is null
         && FrameBorderShadow is null
-        && FrameBorderShadowEnabled is null;
+        && FrameBorderShadowEnabled is null
+        && FrameBorderGlow is null
+        && FrameBorderGlowEnabled is null;
 }
 
 /// <summary>
@@ -88,6 +92,15 @@ public sealed record ZoomFrameBorderShadow(
     long BlurRadiusEmu = 50800,
     long DistanceEmu = 38100,
     int Direction = 2700000);
+
+/// <summary>
+/// A supported native DrawingML glow on a Zoom frame outline.
+/// Alpha uses OOXML 0..100000 units and radius uses EMU.
+/// </summary>
+public sealed record ZoomFrameBorderGlow(
+    string Color,
+    int Alpha = 50000,
+    long RadiusEmu = 203200);
 
 /// <summary>
 /// Payload for a preserved modern object (SlideShapeKind.Zoom / Ink / Model3d / PreservedObject).

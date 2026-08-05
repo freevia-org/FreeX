@@ -1003,6 +1003,9 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
         if (properties.FrameBorderShadowEnabled == false && properties.FrameBorderShadow is not null)
             throw new ArgumentException(
                 "A disabled Zoom frame shadow cannot carry shadow values.", nameof(properties));
+        if (properties.FrameBorderGlowEnabled == false && properties.FrameBorderGlow is not null)
+            throw new ArgumentException(
+                "A disabled Zoom frame glow cannot carry glow values.", nameof(properties));
         if (properties.ImageType is not null
             && !string.Equals(properties.ImageType, "preview", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(properties.ImageType, "cover", StringComparison.OrdinalIgnoreCase))
@@ -1028,6 +1031,10 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             FrameBorderShadowEnabled = properties.FrameBorderShadowEnabled == false
                 ? false
                 : properties.FrameBorderShadow is not null ? true : null,
+            FrameBorderGlow = ValidateFrameBorderGlow(properties.FrameBorderGlow),
+            FrameBorderGlowEnabled = properties.FrameBorderGlowEnabled == false
+                ? false
+                : properties.FrameBorderGlow is not null ? true : null,
         };
     }
 
@@ -1049,6 +1056,25 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
         if (value.Direction is < 0 or > 21600000)
             throw new ArgumentOutOfRangeException(nameof(value), value.Direction,
                 "Zoom frame shadow direction must be between 0 and 21600000.");
+
+        return value with { Color = color.ToUpperInvariant() };
+    }
+
+    private static ZoomFrameBorderGlow? ValidateFrameBorderGlow(ZoomFrameBorderGlow? value)
+    {
+        if (value is null)
+            return null;
+
+        var color = value.Color.Trim().TrimStart('#');
+        if (color.Length != 6 || !color.All(Uri.IsHexDigit))
+            throw new ArgumentException(
+                "Zoom frame glow color must be a six-digit RGB value.", nameof(value));
+        if (value.Alpha is < 0 or > 100000)
+            throw new ArgumentOutOfRangeException(nameof(value), value.Alpha,
+                "Zoom frame glow alpha must be between 0 and 100000.");
+        if (value.RadiusEmu < 0)
+            throw new ArgumentOutOfRangeException(nameof(value), value.RadiusEmu,
+                "Zoom frame glow radius cannot be negative.");
 
         return value with { Color = color.ToUpperInvariant() };
     }
@@ -1203,7 +1229,9 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             properties.FrameBorderNoFill,
             properties.FrameBorderThemeColor,
             properties.FrameBorderShadow,
-            properties.FrameBorderShadowEnabled);
+            properties.FrameBorderShadowEnabled,
+            properties.FrameBorderGlow,
+            properties.FrameBorderGlowEnabled);
             ZoomFrameGeometryXml.Set(zoomProperty, properties.FrameGeometry);
         }
         patchedXml = root.ToString(SaveOptions.DisableFormatting);
@@ -1758,7 +1786,11 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
             _newValue.FrameBorderGradient,
             _newValue.FrameBorderPattern,
             _newValue.FrameBorderNoFill,
-            _newValue.FrameBorderThemeColor);
+            _newValue.FrameBorderThemeColor,
+            _newValue.FrameBorderShadow,
+            _newValue.FrameBorderShadowEnabled,
+            _newValue.FrameBorderGlow,
+            _newValue.FrameBorderGlowEnabled);
         ZoomFrameGeometryXml.Set(properties, _newValue.FrameGeometry);
         patchedXml = document.Root!.ToString(SaveOptions.DisableFormatting);
         return true;

@@ -742,10 +742,15 @@ public static class SlideCompositor
             string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
         var shadow = effectList?.Elements().FirstOrDefault(element =>
             string.Equals(element.Name.LocalName, "outerShdw", StringComparison.OrdinalIgnoreCase));
+        var glow = effectList?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "glow", StringComparison.OrdinalIgnoreCase));
         var fallbackShadow = fallback?.FrameBorderShadowEnabled == false
             ? null
             : fallback?.FrameBorderShadow;
-        if (shadow is null && fallbackShadow is null)
+        var fallbackGlow = fallback?.FrameBorderGlowEnabled == false
+            ? null
+            : fallback?.FrameBorderGlow;
+        if (shadow is null && fallbackShadow is null && glow is null && fallbackGlow is null)
             return null;
 
         var colorText = shadow?.Elements().FirstOrDefault(element =>
@@ -774,14 +779,36 @@ public static class SlideCompositor
                 NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawDirection)
             ? rawDirection / 60000d
             : (fallbackShadow?.Direction ?? 0) / 60000d;
+        var glowColorText = glow?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value;
+        var glowColor = TryParseZoomRgb(glowColorText, out var nativeGlowColor)
+            ? nativeGlowColor
+            : TryParseZoomRgb(fallbackGlow?.Color, out var fallbackGlowColor)
+                ? fallbackGlowColor
+                : new SrgbColor(0x40, 0x40, 0x40);
+        var glowAlpha100k = glow?.Descendants().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "alpha", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value;
+        var glowAlpha = int.TryParse(glowAlpha100k, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawGlowAlpha)
+            ? rawGlowAlpha
+            : fallbackGlow?.Alpha ?? 50000;
+        var glowRadius = long.TryParse(glow?.Attribute("rad")?.Value,
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawGlowRadius)
+            ? rawGlowRadius / EmuPerDip
+            : (fallbackGlow?.RadiusEmu ?? 0) / EmuPerDip;
         return new ResolvedShapeEffects
         {
-            HasOuterShadow = true,
+            HasOuterShadow = shadow is not null || fallbackShadow is not null,
             OuterShadowColor = color,
             OuterShadowAlpha = (byte)Math.Clamp((int)Math.Round(alpha * 255d / 100000d), 0, 255),
             OuterShadowBlurDip = Math.Max(0, blur),
             OuterShadowDistDip = Math.Max(0, distance),
             OuterShadowDirDeg = direction,
+            HasGlow = glow is not null || fallbackGlow is not null,
+            GlowColor = glowColor,
+            GlowAlpha = (byte)Math.Clamp((int)Math.Round(glowAlpha * 255d / 100000d), 0, 255),
+            GlowRadiusDip = Math.Max(0, glowRadius),
         };
     }
 
