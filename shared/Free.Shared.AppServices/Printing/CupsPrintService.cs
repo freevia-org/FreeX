@@ -1,17 +1,58 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
-using Free.Shared.AppServices.Printing;
 
-namespace FreeW.App.Avalonia.Printing;
+namespace Free.Shared.AppServices.Printing;
 
 /// <summary>
-/// Linux/macOS printer adapter using the CUPS-compatible <c>lpstat</c> and <c>lp</c> commands.
-/// Process execution is injected so discovery/submission tests never depend on a host printer.
+/// Builds CUPS process invocations without launching processes.
+/// </summary>
+public static class CupsPrintCommandPlanner
+{
+    public static ProcessInvocation ListPrinters() =>
+        new("lpstat", ["-p"]);
+
+    public static ProcessInvocation ReadDefaultPrinter() =>
+        new("lpstat", ["-d"]);
+
+    public static ProcessInvocation Submit(
+        string pdfPath,
+        PrintSelection selection,
+        string printerName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(pdfPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(printerName);
+        ArgumentNullException.ThrowIfNull(selection);
+        selection.Validate();
+
+        var arguments = new List<string>
+        {
+            "-d", printerName,
+            "-n", selection.Copies.ToString(CultureInfo.InvariantCulture),
+            "-o", $"collate={(selection.Collate ? "true" : "false")}",
+        };
+        if (selection.EffectivePageRange.ToCupsPageList() is { } pageList)
+            arguments.AddRange(["-P", pageList]);
+        if (selection.Orientation is PrintOrientation.Portrait or PrintOrientation.Landscape)
+        {
+            var requested = selection.Orientation == PrintOrientation.Portrait ? "3" : "4";
+            arguments.AddRange(["-o", $"orientation-requested={requested}"]);
+        }
+
+        arguments.Add(pdfPath);
+        return new ProcessInvocation("lp", arguments);
+    }
+}
+
+/// <summary>
+/// Portable Linux/macOS printer adapter backed by the CUPS-compatible <c>lpstat</c> and <c>lp</c>
+/// commands. Process execution is injected so discovery and submission stay deterministic in tests.
 /// </summary>
 public sealed class CupsPrintService : IPlatformPrintService
 {
     private static readonly Regex PrinterLine = new(
         "^printer\\s+(?<name>\\S+)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
     private readonly IProcessRunner _processRunner;
     private readonly bool? _isSupportedOverride;
 
@@ -21,22 +62,17 @@ public sealed class CupsPrintService : IPlatformPrintService
         _isSupportedOverride = isSupportedOverride;
     }
 
-    public bool IsSupported => _isSupportedOverride ?? (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
+    public bool IsSupported =>
+        _isSupportedOverride ?? (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
 
-    public async Task<PrinterDiscoveryResult> DiscoverAsync(CancellationToken cancellationToken = default)
+    public async Task<PrinterDiscoveryResult> DiscoverAsync(
+        CancellationToken cancellationToken = default)
     {
         if (cancellationToken.IsCancellationRequested)
-        {
-            return new PrinterDiscoveryResult(
-                PrinterDiscoveryStatus.Cancelled,
-                [],
-                null,
-                "Printer discovery was cancelled.");
-        }
-
+            return new(PrinterDiscoveryStatus.Cancelled, [], null, "Printer discovery was cancelled.");
         if (!IsSupported)
         {
-            return new PrinterDiscoveryResult(
+            return new(
                 PrinterDiscoveryStatus.Unavailable,
                 [],
                 null,
@@ -49,7 +85,7 @@ public sealed class CupsPrintService : IPlatformPrintService
                 CupsPrintCommandPlanner.ListPrinters(), cancellationToken).ConfigureAwait(false);
             if (!printersResult.Succeeded)
             {
-                return new PrinterDiscoveryResult(
+                return new(
                     PrinterDiscoveryStatus.Unavailable,
                     [],
                     null,
@@ -65,7 +101,7 @@ public sealed class CupsPrintService : IPlatformPrintService
                 .ToArray();
             if (names.Length == 0)
             {
-                return new PrinterDiscoveryResult(
+                return new(
                     PrinterDiscoveryStatus.NoPrinters,
                     [],
                     null,
@@ -78,9 +114,11 @@ public sealed class CupsPrintService : IPlatformPrintService
                 ? ParseDefaultPrinter(defaultResult.StandardOutput)
                 : null;
             var printers = names
-                .Select(name => new PrinterInfo(name, string.Equals(name, defaultName, StringComparison.OrdinalIgnoreCase)))
+                .Select(name => new PrinterInfo(
+                    name,
+                    string.Equals(name, defaultName, StringComparison.OrdinalIgnoreCase)))
                 .ToArray();
-            return new PrinterDiscoveryResult(
+            return new(
                 PrinterDiscoveryStatus.Available,
                 printers,
                 defaultName,
@@ -88,19 +126,11 @@ public sealed class CupsPrintService : IPlatformPrintService
         }
         catch (OperationCanceledException)
         {
-            return new PrinterDiscoveryResult(
-                PrinterDiscoveryStatus.Cancelled,
-                [],
-                null,
-                "Printer discovery was cancelled.");
+            return new(PrinterDiscoveryStatus.Cancelled, [], null, "Printer discovery was cancelled.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            return new PrinterDiscoveryResult(
-                PrinterDiscoveryStatus.Failed,
-                [],
-                null,
-                $"Printer discovery failed: {ex.Message}");
+            return new(PrinterDiscoveryStatus.Failed, [], null, $"Printer discovery failed: {ex.Message}");
         }
     }
 
@@ -115,23 +145,21 @@ public sealed class CupsPrintService : IPlatformPrintService
 
         if (cancellationToken.IsCancellationRequested)
         {
-            return new PrintSubmissionResult(
+            return new(
                 PrintSubmissionStatus.Cancelled,
                 selection.PrinterName,
                 Message: "Print submission was cancelled.");
         }
-
         if (!IsSupported)
         {
-            return new PrintSubmissionResult(
+            return new(
                 PrintSubmissionStatus.Unavailable,
                 selection.PrinterName,
                 Message: "CUPS printing is available only on Linux and macOS hosts.");
         }
-
         if (!File.Exists(pdfPath))
         {
-            return new PrintSubmissionResult(
+            return new(
                 PrintSubmissionStatus.Failed,
                 selection.PrinterName,
                 Message: $"The generated PDF does not exist: {pdfPath}");
@@ -139,21 +167,21 @@ public sealed class CupsPrintService : IPlatformPrintService
 
         var discovery = await DiscoverAsync(cancellationToken).ConfigureAwait(false);
         if (discovery.Status == PrinterDiscoveryStatus.Cancelled)
-            return new PrintSubmissionResult(PrintSubmissionStatus.Cancelled, null, Message: discovery.Message);
+            return new(PrintSubmissionStatus.Cancelled, null, Message: discovery.Message);
         if (discovery.Status == PrinterDiscoveryStatus.NoPrinters)
-            return new PrintSubmissionResult(PrintSubmissionStatus.NoPrinters, null, Message: discovery.Message);
+            return new(PrintSubmissionStatus.NoPrinters, null, Message: discovery.Message);
         if (!discovery.IsAvailable)
         {
             var status = discovery.Status == PrinterDiscoveryStatus.Unavailable
                 ? PrintSubmissionStatus.Unavailable
                 : PrintSubmissionStatus.Failed;
-            return new PrintSubmissionResult(status, null, Message: discovery.Message);
+            return new(status, null, Message: discovery.Message);
         }
 
         var printer = ResolvePrinter(selection.PrinterName, discovery);
         if (printer is null)
         {
-            return new PrintSubmissionResult(
+            return new(
                 PrintSubmissionStatus.Failed,
                 selection.PrinterName,
                 Message: $"The selected printer is not available: {selection.PrinterName}");
@@ -162,10 +190,16 @@ public sealed class CupsPrintService : IPlatformPrintService
         try
         {
             var result = await _processRunner.RunAsync(
-                CupsPrintCommandPlanner.Submit(pdfPath, selection with { PrinterName = printer }, printer),
+                CupsPrintCommandPlanner.Submit(
+                    pdfPath,
+                    selection with { PrinterName = printer },
+                    printer),
                 cancellationToken).ConfigureAwait(false);
             return result.Succeeded
-                ? new PrintSubmissionResult(PrintSubmissionStatus.Submitted, printer, result.StandardOutput.Trim())
+                ? new PrintSubmissionResult(
+                    PrintSubmissionStatus.Submitted,
+                    printer,
+                    result.StandardOutput.Trim())
                 : new PrintSubmissionResult(
                     PrintSubmissionStatus.Failed,
                     printer,
@@ -173,14 +207,14 @@ public sealed class CupsPrintService : IPlatformPrintService
         }
         catch (OperationCanceledException)
         {
-            return new PrintSubmissionResult(
+            return new(
                 PrintSubmissionStatus.Cancelled,
                 printer,
                 Message: "Print submission was cancelled.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            return new PrintSubmissionResult(
+            return new(
                 PrintSubmissionStatus.Failed,
                 printer,
                 Message: $"Print submission failed: {ex.Message}");
@@ -190,8 +224,11 @@ public sealed class CupsPrintService : IPlatformPrintService
     private static string? ResolvePrinter(string? requested, PrinterDiscoveryResult discovery)
     {
         if (requested is { Length: > 0 })
+        {
             return discovery.Printers.FirstOrDefault(printer =>
                 string.Equals(printer.Name, requested, StringComparison.OrdinalIgnoreCase))?.Name;
+        }
+
         return discovery.DefaultPrinter ?? discovery.Printers[0].Name;
     }
 
@@ -201,6 +238,7 @@ public sealed class CupsPrintService : IPlatformPrintService
             .FirstOrDefault();
         if (line is null || line.Contains("no system default", StringComparison.OrdinalIgnoreCase))
             return null;
+
         var colon = line.IndexOf(':');
         return colon >= 0 && colon + 1 < line.Length ? line[(colon + 1)..].Trim() : null;
     }

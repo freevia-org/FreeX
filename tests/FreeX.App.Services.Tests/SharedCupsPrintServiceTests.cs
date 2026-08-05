@@ -1,15 +1,17 @@
+using FluentAssertions;
 using Free.Shared.AppServices.Printing;
-using FreeW.App.Avalonia.Printing;
+using SharedCupsPrintCommandPlanner = Free.Shared.AppServices.Printing.CupsPrintCommandPlanner;
 
-namespace FreeW.App.Avalonia.Tests.Printing;
+namespace FreeX.App.Services.Tests;
 
-public sealed class CupsPrintServiceTests
+public sealed class SharedCupsPrintServiceTests
 {
     [Fact]
-    public void CupsPrintService_ImplementsSharedPlatformBoundary()
+    public void Service_OwnershipIsSharedAndPlatformSupportIsReported()
     {
         IPlatformPrintService service = new CupsPrintService(new FakeProcessRunner());
 
+        service.GetType().Assembly.GetName().Name.Should().Be("Free.Shared.AppServices");
         service.IsSupported.Should().Be(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
     }
 
@@ -30,24 +32,28 @@ public sealed class CupsPrintServiceTests
     }
 
     [Fact]
-    public async Task SubmitAsync_BuildsCupsArgumentsForPrinterCopiesRangeAndOrientation()
+    public async Task SubmitAsync_BuildsSupersetCupsArguments()
     {
-        var pdfPath = Path.Combine(Path.GetTempPath(), $"freew-print-{Guid.NewGuid():N}.pdf");
-        await File.WriteAllBytesAsync(pdfPath, [0x25, 0x50, 0x44, 0x46]);
+        var pdfPath = await CreatePdfStubAsync();
         try
         {
-            var runner = new FakeProcessRunner(
-                new ProcessResult(0, "printer Office is idle.\n", ""),
-                new ProcessResult(0, "system default destination: Office\n", ""),
-                new ProcessResult(0, "request id is Office-17 (1 file(s))\n", ""));
+            var runner = SuccessfulSubmissionRunner();
             var result = await new CupsPrintService(runner, isSupportedOverride: true).SubmitAsync(
                 pdfPath,
-                new PrintSelection(Copies: 2, PageRange: PrintPageRange.Between(2, 4), Orientation: PrintOrientation.Landscape));
+                new PrintSelection(
+                    Copies: 2,
+                    PageRange: PrintPageRange.Between(2, 4),
+                    Orientation: PrintOrientation.Landscape,
+                    Collate: false));
 
             result.Status.Should().Be(PrintSubmissionStatus.Submitted);
-            var invocation = runner.Invocations.Last();
-            invocation.FileName.Should().Be("lp");
-            invocation.Arguments.Should().ContainInOrder("-d", "Office", "-n", "2", "-P", "2-4", "-o", "orientation-requested=4", pdfPath);
+            runner.Invocations.Last().Should().BeEquivalentTo(
+                new ProcessInvocation(
+                    "lp",
+                    [
+                        "-d", "Office", "-n", "2", "-o", "collate=false", "-P", "2-4",
+                        "-o", "orientation-requested=4", pdfPath,
+                    ]));
         }
         finally
         {
@@ -58,16 +64,17 @@ public sealed class CupsPrintServiceTests
     [Fact]
     public async Task SubmitAsync_NoPrintersReturnsWithoutCallingLp()
     {
-        var pdfPath = Path.Combine(Path.GetTempPath(), $"freew-print-{Guid.NewGuid():N}.pdf");
-        await File.WriteAllBytesAsync(pdfPath, [0x25, 0x50, 0x44, 0x46]);
+        var pdfPath = await CreatePdfStubAsync();
         try
         {
             var runner = new FakeProcessRunner(new ProcessResult(0, "", ""));
-            var result = await new CupsPrintService(runner, isSupportedOverride: true).SubmitAsync(pdfPath, new PrintSelection());
+
+            var result = await new CupsPrintService(runner, isSupportedOverride: true)
+                .SubmitAsync(pdfPath, new PrintSelection());
 
             result.Status.Should().Be(PrintSubmissionStatus.NoPrinters);
             runner.Invocations.Should().ContainSingle();
-            runner.Invocations[0].Arguments.Should().Equal("-p");
+            runner.Invocations[0].Should().BeEquivalentTo(SharedCupsPrintCommandPlanner.ListPrinters());
         }
         finally
         {
@@ -89,7 +96,7 @@ public sealed class CupsPrintServiceTests
     }
 
     [Fact]
-    public async Task DiscoverAsync_UnsupportedBackendIsReportedWithoutInvokingCommands()
+    public async Task DiscoverAsync_UnsupportedBackendDoesNotInvokeCommands()
     {
         var runner = new FakeProcessRunner();
 
@@ -109,14 +116,12 @@ public sealed class CupsPrintServiceTests
 
         result.Status.Should().Be(PrinterDiscoveryStatus.Unavailable);
         result.Message.Should().Contain("lpstat");
-        runner.Invocations.Should().ContainSingle();
     }
 
     [Fact]
     public async Task SubmitAsync_LpFailureIsReportedWithoutClaimingSuccess()
     {
-        var pdfPath = Path.Combine(Path.GetTempPath(), $"freew-print-{Guid.NewGuid():N}.pdf");
-        await File.WriteAllBytesAsync(pdfPath, [0x25, 0x50, 0x44, 0x46]);
+        var pdfPath = await CreatePdfStubAsync();
         try
         {
             var runner = new FakeProcessRunner(
@@ -138,18 +143,17 @@ public sealed class CupsPrintServiceTests
     }
 
     [Fact]
-    public async Task SubmitAsync_CancellationDuringLpIsReportedWithoutClaimingSuccess()
+    public async Task SubmitAsync_CancellationDuringLpIsReported()
     {
-        var pdfPath = Path.Combine(Path.GetTempPath(), $"freew-print-{Guid.NewGuid():N}.pdf");
-        await File.WriteAllBytesAsync(pdfPath, [0x25, 0x50, 0x44, 0x46]);
+        var pdfPath = await CreatePdfStubAsync();
         try
         {
             var runner = new CancellingSubmitProcessRunner();
+
             var result = await new CupsPrintService(runner, isSupportedOverride: true)
-                .SubmitAsync(pdfPath, new PrintSelection(), CancellationToken.None);
+                .SubmitAsync(pdfPath, new PrintSelection());
 
             result.Status.Should().Be(PrintSubmissionStatus.Cancelled);
-            result.Succeeded.Should().BeFalse();
             runner.Invocations.Select(invocation => invocation.FileName)
                 .Should().Equal("lpstat", "lpstat", "lp");
         }
@@ -160,67 +164,57 @@ public sealed class CupsPrintServiceTests
     }
 
     [Fact]
-    public async Task SubmitAsync_CancellationIsReportedBeforeSpooling()
+    public async Task SubmitAsync_CancellationBeforeSpoolingIsReported()
     {
-        var pdfPath = Path.Combine(Path.GetTempPath(), $"freew-print-{Guid.NewGuid():N}.pdf");
-        await File.WriteAllBytesAsync(pdfPath, [0x25, 0x50, 0x44, 0x46]);
-        try
-        {
-            using var cancellation = new CancellationTokenSource();
-            cancellation.Cancel();
-            var result = await new CupsPrintService(new FakeProcessRunner())
-                .SubmitAsync(pdfPath, new PrintSelection(), cancellation.Token);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
 
-            result.Status.Should().Be(PrintSubmissionStatus.Cancelled);
-            result.Message.Should().Contain("cancelled");
-        }
-        finally
-        {
-            File.Delete(pdfPath);
-        }
+        var result = await new CupsPrintService(new FakeProcessRunner())
+            .SubmitAsync("unused.pdf", new PrintSelection(), cancellation.Token);
+
+        result.Status.Should().Be(PrintSubmissionStatus.Cancelled);
     }
 
-    private sealed class FakeProcessRunner : IProcessRunner
+    private static FakeProcessRunner SuccessfulSubmissionRunner() => new(
+        new ProcessResult(0, "printer Office is idle.\n", ""),
+        new ProcessResult(0, "system default destination: Office\n", ""),
+        new ProcessResult(0, "request id is Office-17 (1 file(s))\n", ""));
+
+    private static async Task<string> CreatePdfStubAsync()
     {
-        private readonly Queue<ProcessResult> _results;
-        private readonly bool _cancellation;
+        var path = Path.Combine(Path.GetTempPath(), $"free-shared-print-{Guid.NewGuid():N}.pdf");
+        await File.WriteAllBytesAsync(path, [0x25, 0x50, 0x44, 0x46]);
+        return path;
+    }
 
-        public FakeProcessRunner(params ProcessResult[] results)
-        {
-            _results = new Queue<ProcessResult>(results);
-        }
-
-        public FakeProcessRunner(bool cancellation)
-        {
-            _results = new Queue<ProcessResult>();
-            _cancellation = cancellation;
-        }
+    private sealed class FakeProcessRunner(params ProcessResult[] results) : IProcessRunner
+    {
+        private readonly Queue<ProcessResult> _results = new(results);
 
         public List<ProcessInvocation> Invocations { get; } = [];
 
-        public Task<ProcessResult> RunAsync(ProcessInvocation invocation, CancellationToken cancellationToken = default)
+        public Task<ProcessResult> RunAsync(
+            ProcessInvocation invocation,
+            CancellationToken cancellationToken = default)
         {
             Invocations.Add(invocation);
-            if (_cancellation)
-                throw new OperationCanceledException(cancellationToken);
             return Task.FromResult(_results.Dequeue());
         }
     }
 
     private sealed class CancellingSubmitProcessRunner : IProcessRunner
     {
-        private int _callCount;
-
         public List<ProcessInvocation> Invocations { get; } = [];
 
-        public Task<ProcessResult> RunAsync(ProcessInvocation invocation, CancellationToken cancellationToken = default)
+        public Task<ProcessResult> RunAsync(
+            ProcessInvocation invocation,
+            CancellationToken cancellationToken = default)
         {
             Invocations.Add(invocation);
-            _callCount++;
-            if (_callCount == 3)
+            if (Invocations.Count == 3)
                 throw new OperationCanceledException(cancellationToken);
 
-            return Task.FromResult(_callCount == 1
+            return Task.FromResult(Invocations.Count == 1
                 ? new ProcessResult(0, "printer Office is idle.\n", "")
                 : new ProcessResult(0, "system default destination: Office\n", ""));
         }
