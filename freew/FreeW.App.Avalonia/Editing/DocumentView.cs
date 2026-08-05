@@ -5265,7 +5265,8 @@ public sealed class DocumentView : Control
 
         var yPt = pageHeightPt - ((sourceRect.Bottom - pageTopDip) / PxPerPoint);
         var xPt = (sourceRect.Left - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
-        var needsTransformGroup = image.FlipH || image.FlipV || image.HasBorder;
+        var reflection = PictureEffectVisualPlanner.BuildReflectionPlan(image);
+        var needsTransformGroup = image.FlipH || image.FlipV || image.HasBorder || reflection is not null;
         var pdfImage = new PdfImage(
             xPt,
             yPt,
@@ -5284,7 +5285,27 @@ public sealed class DocumentView : Control
         if (!needsTransformGroup)
             return pdfImage;
 
-        var imageOps = new List<PdfDrawOp> { pdfImage };
+        var imageOps = new List<PdfDrawOp>();
+        if (reflection is not null)
+        {
+            imageOps.Add(new PdfEffectGroup(
+                PdfEffectKind.Reflection,
+                pdfImage.X,
+                pdfImage.Y,
+                pdfImage.Width,
+                pdfImage.Height,
+                new PdfEffectParameters(
+                    Color: null,
+                    Opacity: reflection.Opacity,
+                    Radius: 0,
+                    ReflectionGap: reflection.DistanceDip / PxPerPoint,
+                    ReflectionEndOpacity: reflection.EndOpacity,
+                    ReflectionStartPosition: reflection.StartPosition,
+                    ReflectionEndPosition: reflection.EndPosition),
+                [pdfImage]));
+        }
+
+        imageOps.Add(pdfImage);
         if (image.HasBorder)
         {
             imageOps.Add(new PdfStrokeRect(

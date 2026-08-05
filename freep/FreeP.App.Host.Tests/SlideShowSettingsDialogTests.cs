@@ -18,6 +18,7 @@ public sealed class SlideShowSettingsDialogTests
         GetField<CheckBox>(dialog, "_showAnimationCheck").IsChecked.Should().BeFalse();
         GetField<CheckBox>(dialog, "_loopCheck").IsChecked.Should().BeFalse();
         GetField<CheckBox>(dialog, "_showNarrationCheck").IsChecked.Should().BeTrue();
+        GetField<CheckBox>(dialog, "_showMediaControlsCheck").IsChecked.Should().BeTrue();
 
         dialog.ApplyForTests(
             useSlideTimings: false,
@@ -26,7 +27,8 @@ public sealed class SlideShowSettingsDialogTests
             showType: PresentationShowType.BrowsedByIndividual,
             showBrowseScrollbar: false,
             kioskRestartAfterMilliseconds: 12_000,
-            showWithNarration: false).Should().BeTrue();
+            showWithNarration: false,
+            showMediaControls: false).Should().BeTrue();
         editor.Presentation.UseSlideTimings.Should().BeFalse();
         editor.Presentation.ShowWithAnimation.Should().BeFalse();
         editor.Presentation.LoopUntilStopped.Should().BeTrue();
@@ -34,6 +36,7 @@ public sealed class SlideShowSettingsDialogTests
         editor.Presentation.ShowBrowseScrollbar.Should().BeFalse();
         editor.Presentation.KioskRestartAfterMilliseconds.Should().Be(12_000);
         editor.Presentation.ShowWithNarration.Should().BeFalse();
+        editor.Presentation.ShowMediaControls.Should().BeFalse();
 
         editor.Undo();
         editor.Presentation.UseSlideTimings.Should().BeTrue();
@@ -43,6 +46,7 @@ public sealed class SlideShowSettingsDialogTests
         editor.Presentation.ShowBrowseScrollbar.Should().BeTrue();
         editor.Presentation.KioskRestartAfterMilliseconds.Should().BeNull();
         editor.Presentation.ShowWithNarration.Should().BeTrue();
+        editor.Presentation.ShowMediaControls.Should().BeTrue();
     }
 
     [StaFact]

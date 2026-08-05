@@ -106,6 +106,12 @@ public sealed class Presentation
     /// </summary>
     public bool ShowMediaControls { get; set; } = true;
 
+    /// <summary>
+    /// Whether slideshow playback includes non-placeholder shapes authored on the slide master.
+    /// PresentationML defaults this policy to enabled when the showPr attribute is omitted.
+    /// </summary>
+    public bool ShowMasterShapes { get; set; } = true;
+
     /// <summary>Whether slideshow playback honors authored per-slide transition timings.</summary>
     public bool UseSlideTimings { get; set; } = true;
 
