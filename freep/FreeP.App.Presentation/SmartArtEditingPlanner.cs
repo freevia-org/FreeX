@@ -592,10 +592,10 @@ public static class SmartArtEditingPlanner
     }
 
     /// <summary>
-    /// Updates one uniquely matched text-bearing shape in an imported native drawing cache.
-    /// This is intentionally limited to a single text-only data change with unchanged node
-    /// topology. Unsupported layout mutations must continue to fail rather than replacing an
-    /// authored cache with a guessed live layout.
+    /// Updates uniquely matched text-bearing shapes in an imported native drawing cache.
+    /// This is intentionally limited to text-only data changes with unchanged node topology.
+    /// Unsupported layout mutations must continue to fail rather than replacing an authored
+    /// cache with a guessed live layout.
     /// </summary>
     public static SmartArtDrawingCacheRegenerationResult SynchronizePreservedDrawingText(
         SmartArtShape? smartArt,
@@ -606,21 +606,38 @@ public static class SmartArtEditingPlanner
 
         var previousNodes = EnumerateNodes(previousData.Nodes).ToArray();
         var currentNodes = EnumerateNodes(currentData.Nodes).ToArray();
-        var changedNodes = previousNodes.Zip(currentNodes)
-            .Where(pair => !string.Equals(
-                NormalizeText(pair.First.Text),
-                NormalizeText(pair.Second.Text),
-                StringComparison.Ordinal))
-            .ToArray();
-        if (previousNodes.Length != currentNodes.Length || changedNodes.Length != 1)
+        if (previousNodes.Length != currentNodes.Length ||
+            previousNodes.Zip(currentNodes).Any(pair =>
+                !StringComparer.Ordinal.Equals(pair.First.ModelId, pair.Second.ModelId) ||
+                pair.First.Level != pair.Second.Level ||
+                pair.First.IsAssistant != pair.Second.IsAssistant))
         {
             return NotAppliedDrawingCacheResult(
                 smartArt,
-                "Preserved SmartArt cache synchronization requires exactly one text-only node change.");
+                "Preserved SmartArt cache synchronization requires unchanged node topology.");
         }
 
-        var oldText = NormalizeText(changedNodes[0].First.Text);
-        var newText = NormalizeText(changedNodes[0].Second.Text);
+        var changedNodes = previousNodes.Zip(currentNodes)
+            .Where(pair => !StringComparer.Ordinal.Equals(
+                NormalizeText(pair.First.Text),
+                NormalizeText(pair.Second.Text)))
+            .Select(pair => (OldText: NormalizeText(pair.First.Text), NewText: NormalizeText(pair.Second.Text)))
+            .ToArray();
+        if (changedNodes.Length == 0)
+        {
+            return NotAppliedDrawingCacheResult(
+                smartArt,
+                "Preserved SmartArt cache synchronization requires at least one text change.");
+        }
+
+        if (changedNodes.GroupBy(change => change.OldText, StringComparer.Ordinal)
+            .Any(group => group.Count() > 1))
+        {
+            return NotAppliedDrawingCacheResult(
+                smartArt,
+                "Preserved SmartArt cache synchronization cannot disambiguate duplicate source text.");
+        }
+
         var drawingPart = FindDrawingPart(smartArt);
         if (drawingPart is null || drawingPart.Bytes.Length == 0)
             return NotAppliedDrawingCacheResult(smartArt, "No preserved SmartArt drawing cache is available.");
@@ -635,31 +652,69 @@ public static class SmartArtEditingPlanner
             return NotAppliedDrawingCacheResult(smartArt, "The preserved SmartArt drawing cache is malformed.");
         }
 
-        var matchingBodies = document.Descendants(Dsp + "txBody")
-            .Where(body => string.Equals(ReadDrawingText(body), oldText, StringComparison.Ordinal))
-            .ToArray();
-        if (matchingBodies.Length != 1 || !ReplaceDrawingText(matchingBodies[0], newText))
+        var bodyUpdates = new List<(XElement Body, string Text)>();
+        var usedBodies = new HashSet<XElement>();
+        foreach (var change in changedNodes)
         {
-            return NotAppliedDrawingCacheResult(
-                smartArt,
-                "The changed SmartArt node does not map to one cached text shape.");
+            var matchingBody = document.Descendants(Dsp + "txBody")
+                .Where(body => !usedBodies.Contains(body) &&
+                               StringComparer.Ordinal.Equals(ReadDrawingText(body), change.OldText))
+                .ToArray();
+            if (matchingBody.Length != 1)
+            {
+                return NotAppliedDrawingCacheResult(
+                    smartArt,
+                    "A changed SmartArt node does not map to one cached text shape.");
+            }
+
+            if (!CanReplaceDrawingText(matchingBody[0], change.NewText))
+            {
+                return NotAppliedDrawingCacheResult(
+                    smartArt,
+                    "A changed SmartArt node has text that does not fit its cached paragraph structure.");
+            }
+
+            usedBodies.Add(matchingBody[0]);
+            bodyUpdates.Add((matchingBody[0], change.NewText));
         }
 
-        var matchingFallbacks = smartArt.FallbackShapes
-            .Where(shape => shape.TextBody is not null &&
-                            string.Equals(NormalizeText(shape.PlainText), oldText, StringComparison.Ordinal))
-            .ToArray();
-        if (matchingFallbacks.Length != 1 || !ReplaceShapeText(matchingFallbacks[0], newText))
+        var fallbackUpdates = new List<(SlideShape Shape, string Text)>();
+        var usedFallbacks = new HashSet<SlideShape>();
+        foreach (var change in changedNodes)
         {
-            return NotAppliedDrawingCacheResult(
-                smartArt,
-                "The changed SmartArt node does not map to one cached model shape.");
+            var matchingFallback = smartArt.FallbackShapes
+                .Where(shape => !usedFallbacks.Contains(shape) && shape.TextBody is not null &&
+                                StringComparer.Ordinal.Equals(NormalizeText(shape.PlainText), change.OldText))
+                .ToArray();
+            if (matchingFallback.Length != 1)
+            {
+                return NotAppliedDrawingCacheResult(
+                    smartArt,
+                    "A changed SmartArt node does not map to one cached model shape.");
+            }
+
+            if (!CanReplaceShapeText(matchingFallback[0], change.NewText))
+            {
+                return NotAppliedDrawingCacheResult(
+                    smartArt,
+                    "A changed SmartArt node has text that does not fit its cached paragraph structure.");
+            }
+
+            usedFallbacks.Add(matchingFallback[0]);
+            fallbackUpdates.Add((matchingFallback[0], change.NewText));
         }
+
+        foreach (var update in bodyUpdates)
+            ReplaceDrawingText(update.Body, update.Text);
+        foreach (var update in fallbackUpdates)
+            ReplaceShapeText(update.Shape, update.Text);
 
         drawingPart.Bytes = SerializeXml(document);
         return new SmartArtDrawingCacheRegenerationResult(
             true,
-            "One text edit was applied to the preserved native SmartArt drawing cache.",
+            changedNodes.Length == 1
+                ? "One text edit was applied to the preserved native SmartArt drawing cache."
+                : $"{changedNodes.Length} text edits were applied to the preserved native SmartArt drawing cache.",
             drawingPart.PartPath,
             CountNodes(currentData),
             smartArt.FallbackShapes.Count);
@@ -1134,6 +1189,14 @@ public static class SmartArtEditingPlanner
         return true;
     }
 
+    private static bool CanReplaceDrawingText(XElement body, string text)
+    {
+        var paragraphs = body.Elements(A + "p").ToArray();
+        var lines = text.Split('\n');
+        return paragraphs.Length == lines.Length &&
+               paragraphs.All(paragraph => paragraph.Descendants(A + "t").Any());
+    }
+
     private static bool ReplaceShapeText(SlideShape shape, string text)
     {
         if (shape.TextBody is not { } body)
@@ -1157,6 +1220,9 @@ public static class SmartArtEditingPlanner
 
         return true;
     }
+
+    private static bool CanReplaceShapeText(SlideShape shape, string text) =>
+        shape.TextBody is { } body && body.Paragraphs.Count == text.Split('\n').Length;
 
     private static SmartArtDrawingCacheRegenerationResult NotAppliedDrawingCacheResult(
         SmartArtShape? smartArt,
