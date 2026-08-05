@@ -115,6 +115,11 @@ public sealed class ZoomDialogSessionTests
             FrameBorderGlowRadius = "8",
             FrameBorderSoftEdgeEnabled = true,
             FrameBorderSoftEdgeRadius = "5",
+            FrameBorderReflectionEnabled = true,
+            FrameBorderReflectionAlpha = "42",
+            FrameBorderReflectionDistance = "3.5",
+            FrameBorderReflectionDirection = "90",
+            FrameBorderReflectionScale = "-75",
             CropEdges = "0, 5, 0, 5",
             SummaryOffset = "-2.5, 5",
             SummaryScale = "125, 80",
@@ -137,6 +142,9 @@ public sealed class ZoomDialogSessionTests
         session.Result.Properties.FrameBorderSoftEdge.Should().Be(
             new ZoomFrameBorderSoftEdge(63500));
         session.Result.Properties.FrameBorderSoftEdgeEnabled.Should().BeTrue();
+        session.Result.Properties.FrameBorderReflection.Should().Be(
+            new ZoomFrameBorderReflection(42000, 0, 44450, 5400000, -75000, 100000));
+        session.Result.Properties.FrameBorderReflectionEnabled.Should().BeTrue();
         session.Result.Properties.CropTop.Should().Be(5000);
         session.Result.Properties.CropBottom.Should().Be(5000);
         session.Result.SummaryTileLayout.Should().Be(
@@ -209,7 +217,8 @@ public sealed class ZoomDialogSessionTests
             themeEnabled: false,
             shadowEnabled: true,
             glowEnabled: true,
-            softEdgeEnabled: true);
+            softEdgeEnabled: true,
+            reflectionEnabled: true);
 
         enablement.TransitionDuration.Should().BeTrue();
         enablement.FrameBorderColor.Should().BeFalse();
@@ -222,6 +231,8 @@ public sealed class ZoomDialogSessionTests
         enablement.FrameBorderGlowFields.Should().BeTrue();
         enablement.FrameBorderSoftEdgeToggle.Should().BeTrue();
         enablement.FrameBorderSoftEdgeFields.Should().BeTrue();
+        enablement.FrameBorderReflectionToggle.Should().BeTrue();
+        enablement.FrameBorderReflectionFields.Should().BeTrue();
     }
 
     [Fact]
@@ -245,6 +256,8 @@ public sealed class ZoomDialogSessionTests
             surface.Text.GlowRadiusLabel.Should().Be("Glow radius (pt):");
             surface.Text.UseBorderSoftEdgeLabel.Should().Be("Use border soft edge");
             surface.Text.SoftEdgeRadiusLabel.Should().Be("Soft-edge radius (pt):");
+            surface.Text.UseBorderReflectionLabel.Should().Be("Use border reflection");
+            surface.Text.ReflectionAlphaLabel.Should().Be("Reflection alpha (%):");
             surface.Text.FrameShapeLabel.Should().Be("Frame shape:");
             surface.Text.ApplyToAllSummaryTilesLabel
                 .Should().Be("Apply format to all Summary Zoom tiles");
@@ -305,6 +318,11 @@ public sealed class ZoomDialogSessionTests
             FrameBorderGlowRadius: string.Empty,
             FrameBorderSoftEdgeEnabled: false,
             FrameBorderSoftEdgeRadius: string.Empty,
+            FrameBorderReflectionEnabled: false,
+            FrameBorderReflectionAlpha: string.Empty,
+            FrameBorderReflectionDistance: string.Empty,
+            FrameBorderReflectionDirection: string.Empty,
+            FrameBorderReflectionScale: string.Empty,
             FrameGeometry: "rect",
             CropEdges: string.Empty,
             SummaryTileIndex: 0,

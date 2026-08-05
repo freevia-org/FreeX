@@ -299,6 +299,12 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
         Content = MarkIndexEntryDialogPlanner.CurrentPageLabel,
         GroupName = "IndexEntryOption"
     };
+    private readonly RadioButton _pageRange = new()
+    {
+        Content = MarkIndexEntryDialogPlanner.PageRangeLabel,
+        GroupName = "IndexEntryOption"
+    };
+    private readonly ComboBox _bookmark = new() { MinWidth = 300 };
     private readonly RadioButton _crossReferenceOption = new()
     {
         Content = MarkIndexEntryDialogPlanner.CrossReferenceLabel,
@@ -307,6 +313,8 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
     private readonly TextBox _crossReference = new() { MinWidth = 300 };
     private readonly CheckBox _boldPageNumber = new() { Content = MarkIndexEntryDialogPlanner.BoldLabel };
     private readonly CheckBox _italicPageNumber = new() { Content = MarkIndexEntryDialogPlanner.ItalicLabel };
+    private readonly Button _markAll;
+    private readonly string _selectedText;
     private readonly TextBlock _status = new()
     {
         Foreground = Brushes.DarkRed,
@@ -315,8 +323,9 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
     };
 
     public IndexMark? Mark { get; private set; }
+    public bool MarkAll { get; private set; }
 
-    public MarkIndexEntryDialog(string? selectedText = null)
+    public MarkIndexEntryDialog(string? selectedText = null, IReadOnlyList<string>? bookmarkNames = null)
     {
         Title = MarkIndexEntryDialogPlanner.Title;
         Width = MarkIndexEntryDialogPlanner.DialogWidth;
@@ -325,21 +334,32 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
         CanResize = false;
         ShowInTaskbar = false;
 
+        _selectedText = selectedText ?? string.Empty;
         var state = MarkIndexEntryDialogPlanner.BuildInitialState(selectedText);
         _mainEntry.Text = state.MainEntry;
         _subentry.Text = state.Subentry;
-        _currentPage.IsChecked = !state.UseCrossReference;
-        _crossReferenceOption.IsChecked = state.UseCrossReference;
+        _currentPage.IsChecked = state.ReferenceKind == IndexEntryReferenceKind.CurrentPage;
+        _pageRange.IsChecked = state.ReferenceKind == IndexEntryReferenceKind.PageRange;
+        _crossReferenceOption.IsChecked = state.ReferenceKind == IndexEntryReferenceKind.CrossReference;
+        var bookmarks = bookmarkNames ?? [];
+        _bookmark.ItemsSource = bookmarks;
+        _bookmark.SelectedItem = bookmarks.FirstOrDefault(name =>
+            string.Equals(name, state.BookmarkName, StringComparison.Ordinal));
+        if (_bookmark.SelectedItem is null && bookmarks.Count > 0)
+            _bookmark.SelectedIndex = 0;
         _crossReference.Text = state.CrossReference;
         _boldPageNumber.IsChecked = state.BoldPageNumber;
         _italicPageNumber.IsChecked = state.ItalicPageNumber;
         foreach (var textBox in new[] { _mainEntry, _subentry, _crossReference })
             AvaloniaCompactDialogChrome.ApplyTextBox(textBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_bookmark, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyRadioButton(_currentPage, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyRadioButton(_pageRange, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyRadioButton(_crossReferenceOption, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyCheckBox(_boldPageNumber, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyCheckBox(_italicPageNumber, DialogChromeStyle);
         _currentPage.IsCheckedChanged += (_, _) => UpdateCrossReferenceState();
+        _pageRange.IsCheckedChanged += (_, _) => UpdateCrossReferenceState();
         _crossReferenceOption.IsCheckedChanged += (_, _) => UpdateCrossReferenceState();
 
         var fields = new StackPanel
@@ -358,8 +378,12 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
             Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.LabelBottomMargin)
         });
         _currentPage.Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.OptionBottomMargin);
+        _pageRange.Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.OptionBottomMargin);
         _crossReferenceOption.Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.OptionBottomMargin);
         fields.Children.Add(_currentPage);
+        fields.Children.Add(_pageRange);
+        _bookmark.Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.FieldBottomMargin);
+        fields.Children.Add(_bookmark);
         fields.Children.Add(_crossReferenceOption);
         _crossReference.Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.FieldBottomMargin);
         fields.Children.Add(_crossReference);
@@ -376,10 +400,11 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
             Children = { _boldPageNumber, _italicPageNumber }
         });
 
-        var markButton = Button(MarkIndexEntryDialogPlanner.MarkButtonLabel, () => Accept(), isDefault: true);
+        var markButton = Button(MarkIndexEntryDialogPlanner.MarkButtonLabel, () => Accept(markAll: false), isDefault: true);
+        _markAll = Button(MarkIndexEntryDialogPlanner.MarkAllButtonLabel, () => Accept(markAll: true));
         var cancelButton = Button(MarkIndexEntryDialogPlanner.CancelButtonLabel, () => Close(), isCancel: true);
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
-            [markButton, cancelButton],
+            [markButton, _markAll, cancelButton],
             new Thickness(
                 MarkIndexEntryDialogPlanner.ContentHorizontalMargin,
                 MarkIndexEntryDialogPlanner.ActionRowTopMargin,
@@ -410,6 +435,7 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
         _mainEntry.Text = mainEntry;
         _subentry.Text = subentry;
         _currentPage.IsChecked = !useCrossReference;
+        _pageRange.IsChecked = false;
         _crossReferenceOption.IsChecked = useCrossReference;
         _crossReference.Text = crossReference;
         _boldPageNumber.IsChecked = boldPageNumber;
@@ -417,20 +443,55 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
         UpdateCrossReferenceState();
     }
 
-    internal bool AcceptForTests() => Accept(closeOnSuccess: false);
+    internal void SetForTests(
+        string? mainEntry,
+        string? subentry,
+        IndexEntryReferenceKind referenceKind,
+        string? bookmarkName,
+        string? crossReference,
+        bool boldPageNumber = false,
+        bool italicPageNumber = false)
+    {
+        _mainEntry.Text = mainEntry;
+        _subentry.Text = subentry;
+        _currentPage.IsChecked = referenceKind == IndexEntryReferenceKind.CurrentPage;
+        _pageRange.IsChecked = referenceKind == IndexEntryReferenceKind.PageRange;
+        _crossReferenceOption.IsChecked = referenceKind == IndexEntryReferenceKind.CrossReference;
+        _bookmark.SelectedItem = bookmarkName;
+        _crossReference.Text = crossReference;
+        _boldPageNumber.IsChecked = boldPageNumber;
+        _italicPageNumber.IsChecked = italicPageNumber;
+        UpdateCrossReferenceState();
+    }
+
+    internal bool AcceptForTests() => Accept(markAll: false, closeOnSuccess: false);
+    internal bool AcceptAllForTests() => Accept(markAll: true, closeOnSuccess: false);
     internal bool CrossReferenceEnabledForTests => _crossReference.IsEnabled;
+    internal bool BookmarkSelectorEnabledForTests => _bookmark.IsEnabled;
     internal bool PageNumberFormattingEnabledForTests => _boldPageNumber.IsEnabled && _italicPageNumber.IsEnabled;
+    internal bool MarkAllEnabledForTests => _markAll.IsEnabled;
+
+    private IndexEntryReferenceKind ReferenceKind =>
+        _pageRange.IsChecked == true
+            ? IndexEntryReferenceKind.PageRange
+            : _crossReferenceOption.IsChecked == true
+                ? IndexEntryReferenceKind.CrossReference
+                : IndexEntryReferenceKind.CurrentPage;
 
     private MarkIndexEntryDialogState CurrentState() => new(
         _mainEntry.Text ?? string.Empty,
         _subentry.Text ?? string.Empty,
-        _crossReferenceOption.IsChecked == true,
+        ReferenceKind,
+        _bookmark.SelectedItem as string ?? string.Empty,
         _crossReference.Text ?? string.Empty,
         _boldPageNumber.IsChecked == true,
         _italicPageNumber.IsChecked == true);
 
-    private bool Accept(bool closeOnSuccess = true)
+    private bool Accept(bool markAll, bool closeOnSuccess = true)
     {
+        if (markAll && !MarkIndexEntryDialogPlanner.CanMarkAll(_selectedText, ReferenceKind))
+            return false;
+
         if (!MarkIndexEntryDialogPlanner.TryBuildMark(CurrentState(), out var mark, out var validation))
         {
             _status.Text = validation?.Message ?? MarkIndexEntryDialogPlanner.MissingMainEntryMessage;
@@ -440,6 +501,7 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
 
         _status.IsVisible = false;
         Mark = mark;
+        MarkAll = markAll;
         if (closeOnSuccess)
             Close();
         return true;
@@ -447,10 +509,13 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
 
     private void UpdateCrossReferenceState()
     {
-        var useCrossReference = _crossReferenceOption.IsChecked == true;
+        var referenceKind = ReferenceKind;
+        var useCrossReference = referenceKind == IndexEntryReferenceKind.CrossReference;
+        _bookmark.IsEnabled = referenceKind == IndexEntryReferenceKind.PageRange;
         _crossReference.IsEnabled = useCrossReference;
         _boldPageNumber.IsEnabled = !useCrossReference;
         _italicPageNumber.IsEnabled = !useCrossReference;
+        _markAll.IsEnabled = MarkIndexEntryDialogPlanner.CanMarkAll(_selectedText, referenceKind);
     }
 
     private static void AddLabeledField(StackPanel panel, string label, Control field)

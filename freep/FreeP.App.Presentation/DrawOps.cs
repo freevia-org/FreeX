@@ -463,6 +463,15 @@ public sealed class ResolvedShapeEffects
     public bool HasSoftEdge { get; init; }
     public double SoftEdgeRadiusDip { get; init; }
 
+    // Reflection
+    public bool HasReflection { get; init; }
+    public byte ReflectionAlpha { get; init; }
+    public double ReflectionBlurDip { get; init; }
+    public double ReflectionDistDip { get; init; }
+    public double ReflectionDirDeg { get; init; }
+    public double ReflectionScaleY { get; init; } = -1;
+    public double ReflectionEndPos { get; init; } = 1;
+
     // Bevel / 3-D
     /// <summary>Top-face bevel, or null if none.</summary>
     public ResolvedBevel? BevelTop { get; init; }

@@ -29,7 +29,14 @@ public sealed record PictureRenderPlan(
 
     public bool HasOuterEffects =>
         OuterEffects.ShadowPasses.Count > 0 ||
-        OuterEffects.GlowPasses.Count > 0;
+        OuterEffects.GlowPasses.Count > 0 ||
+        HasReflection;
+
+    public bool HasReflection { get; init; }
+    public byte ReflectionAlpha { get; init; }
+    public double ReflectionDistDip { get; init; }
+    public double ReflectionScaleY { get; init; } = -1;
+    public double ReflectionEndPos { get; init; } = 1;
 
     public bool AlphaAppliesToImageBody { get; init; } = true;
 }
@@ -61,7 +68,12 @@ public static class PictureRenderPlanner
             HasCrop = sourceRect.X != 0 ||
                 sourceRect.Y != 0 ||
                 sourceRect.Width != sourceWidth ||
-                sourceRect.Height != sourceHeight
+                sourceRect.Height != sourceHeight,
+            HasReflection = picture.Effects?.HasReflection == true,
+            ReflectionAlpha = picture.Effects?.ReflectionAlpha ?? 0,
+            ReflectionDistDip = picture.Effects?.ReflectionDistDip ?? 0,
+            ReflectionScaleY = picture.Effects?.ReflectionScaleY ?? -1,
+            ReflectionEndPos = picture.Effects?.ReflectionEndPos ?? 1
         };
     }
 

@@ -136,6 +136,7 @@ public enum ZoomObjectPropertiesDialogField
     FrameBorderShadow,
     FrameBorderGlow,
     FrameBorderSoftEdge,
+    FrameBorderReflection,
     FrameGeometry,
     CropEdges,
     SummaryTileLayout,
@@ -176,7 +177,9 @@ public sealed record ZoomObjectPropertiesDialogEnablement(
     bool FrameBorderGlowToggle,
     bool FrameBorderGlowFields,
     bool FrameBorderSoftEdgeToggle,
-    bool FrameBorderSoftEdgeFields);
+    bool FrameBorderSoftEdgeFields,
+    bool FrameBorderReflectionToggle,
+    bool FrameBorderReflectionFields);
 
 public sealed record ZoomObjectPropertiesDialogFields(
     bool ReturnToParent,
@@ -211,6 +214,11 @@ public sealed record ZoomObjectPropertiesDialogFields(
     string FrameBorderGlowRadius,
     bool FrameBorderSoftEdgeEnabled,
     string FrameBorderSoftEdgeRadius,
+    bool FrameBorderReflectionEnabled,
+    string FrameBorderReflectionAlpha,
+    string FrameBorderReflectionDistance,
+    string FrameBorderReflectionDirection,
+    string FrameBorderReflectionScale,
     string FrameGeometry,
     string CropEdges,
     string SummaryOffset,
@@ -249,6 +257,11 @@ public sealed record ZoomObjectPropertiesDialogInput(
     string? FrameBorderGlowRadius,
     bool FrameBorderSoftEdgeEnabled,
     string? FrameBorderSoftEdgeRadius,
+    bool FrameBorderReflectionEnabled,
+    string? FrameBorderReflectionAlpha,
+    string? FrameBorderReflectionDistance,
+    string? FrameBorderReflectionDirection,
+    string? FrameBorderReflectionScale,
     string? FrameGeometry,
     string? CropEdges,
     int SummaryTileIndex,
@@ -444,6 +457,18 @@ public sealed class ZoomObjectPropertiesDialogSession
                 ZoomObjectPropertiesPlanner.InvalidFrameBorderSoftEdgeMessage,
                 out validation);
 
+        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderReflection(
+                input.FrameBorderReflectionAlpha,
+                input.FrameBorderReflectionDistance,
+                input.FrameBorderReflectionDirection,
+                input.FrameBorderReflectionScale,
+                input.FrameBorderReflectionEnabled,
+                out var frameBorderReflection))
+            return Invalid(
+                ZoomObjectPropertiesDialogField.FrameBorderReflection,
+                ZoomObjectPropertiesPlanner.InvalidFrameBorderReflectionMessage,
+                out validation);
+
         if (!ZoomObjectPropertiesPlanner.TryParseFrameGeometry(
                 input.FrameGeometry,
                 out var frameGeometry))
@@ -512,7 +537,9 @@ public sealed class ZoomObjectPropertiesDialogSession
             frameBorderGlow,
             input.FrameBorderGlowEnabled ? true : false,
             frameBorderSoftEdge,
-            input.FrameBorderSoftEdgeEnabled ? true : false);
+            input.FrameBorderSoftEdgeEnabled ? true : false,
+            frameBorderReflection,
+            input.FrameBorderReflectionEnabled ? true : false);
 
         ZoomObjectPropertiesPlanner.SummaryZoomTilePropertiesEdit? summaryTileProperties = null;
         var applyToAll = _summaryTargets.Count > 0 && input.ApplySummaryPropertiesToAllTiles;
@@ -548,7 +575,8 @@ public sealed class ZoomObjectPropertiesDialogSession
         bool themeEnabled,
         bool shadowEnabled,
         bool glowEnabled,
-        bool softEdgeEnabled)
+        bool softEdgeEnabled,
+        bool reflectionEnabled)
     {
         var noFill = frameBorderEnabled && noFillEnabled;
         var gradient = frameBorderEnabled && gradientEnabled && !noFill;
@@ -571,7 +599,9 @@ public sealed class ZoomObjectPropertiesDialogSession
             FrameBorderGlowToggle: frameBorderEnabled,
             FrameBorderGlowFields: frameBorderEnabled && glowEnabled,
             FrameBorderSoftEdgeToggle: frameBorderEnabled,
-            FrameBorderSoftEdgeFields: frameBorderEnabled && softEdgeEnabled);
+            FrameBorderSoftEdgeFields: frameBorderEnabled && softEdgeEnabled,
+            FrameBorderReflectionToggle: frameBorderEnabled,
+            FrameBorderReflectionFields: frameBorderEnabled && reflectionEnabled);
     }
 
     private ZoomObjectPropertiesDialogFields BuildFields(int summaryTileIndex)
@@ -613,6 +643,11 @@ public sealed class ZoomObjectPropertiesDialogSession
             FrameBorderGlowRadius: ZoomObjectPropertiesPlanner.FormatFrameBorderGlowRadius(properties),
             FrameBorderSoftEdgeEnabled: ZoomObjectPropertiesPlanner.IsFrameBorderSoftEdgeEnabled(properties),
             FrameBorderSoftEdgeRadius: ZoomObjectPropertiesPlanner.FormatFrameBorderSoftEdgeRadius(properties),
+            FrameBorderReflectionEnabled: ZoomObjectPropertiesPlanner.IsFrameBorderReflectionEnabled(properties),
+            FrameBorderReflectionAlpha: ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionAlpha(properties),
+            FrameBorderReflectionDistance: ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(properties),
+            FrameBorderReflectionDirection: ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(properties),
+            FrameBorderReflectionScale: ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(properties),
             FrameGeometry: ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
                 geometry => string.Equals(geometry, properties.FrameGeometry, StringComparison.OrdinalIgnoreCase))
                 ?? "rect",

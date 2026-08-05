@@ -260,7 +260,7 @@ internal static class PptxChartReader
                 .Distinct()
                 .OrderBy(index => index)
                 .ToList(),
-            Title = chart.Element(Cx + "title") is null ? null : string.Empty,
+            Title = ReadChartExTitle(chart.Element(Cx + "title")),
         };
         shape.Categories.AddRange(categories);
 
@@ -278,10 +278,115 @@ internal static class PptxChartReader
                 series.Values.AddRange(ReadChartExValues(valueLevel));
             }
 
+            ReadChartExDataLabels(seriesElement.Element(Cx + "dataLabels"), scheme, series);
+
             shape.Series.Add(series);
         }
 
         return shape;
+    }
+
+    private static void ReadChartExDataLabels(
+        XElement? dataLabels,
+        PresentationColorScheme scheme,
+        ChartSeries series)
+    {
+        if (dataLabels is null)
+            return;
+
+        var labels = ReadChartExDataLabelValues(dataLabels, scheme);
+        if (labels is not null)
+            series.DataLabels = labels;
+
+        foreach (var pointLabel in dataLabels.Elements(Cx + "dataLabel"))
+        {
+            if (!int.TryParse(
+                    pointLabel.Attribute("idx")?.Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var index)
+                || index < 0)
+                continue;
+
+            var pointLabels = ReadChartExDataLabelValues(pointLabel, scheme);
+            if (pointLabels is null)
+                continue;
+
+            if (!series.PointStyles.TryGetValue(index, out var style))
+                style = new ChartPointStyle();
+            style.DataLabels = pointLabels;
+            series.PointStyles[index] = style;
+        }
+
+        foreach (var hiddenLabel in dataLabels.Elements(Cx + "dataLabelHidden"))
+        {
+            if (!int.TryParse(
+                    hiddenLabel.Attribute("idx")?.Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var index)
+                || index < 0)
+                continue;
+
+            if (!series.PointStyles.TryGetValue(index, out var style))
+                style = new ChartPointStyle();
+            style.DataLabels = new ChartDataLabels { Delete = true };
+            series.PointStyles[index] = style;
+        }
+    }
+
+    private static ChartDataLabels? ReadChartExDataLabelValues(
+        XElement element,
+        PresentationColorScheme scheme)
+    {
+        var visibility = element.Element(Cx + "visibility");
+        var hasContent = visibility is not null
+            || element.Attribute("pos") is not null
+            || element.Element(Cx + "numFmt") is not null
+            || element.Element(Cx + "txPr") is not null
+            || element.Element(Cx + "separator") is not null;
+        if (!hasContent)
+            return null;
+
+        var position = element.Attribute("pos")?.Value switch
+        {
+            "ctr" => DataLabelPosition.Center,
+            "inEnd" => DataLabelPosition.InsideEnd,
+            "outEnd" => DataLabelPosition.OutsideEnd,
+            "inBase" => DataLabelPosition.InsideBase,
+            "bestFit" => DataLabelPosition.BestFit,
+            "t" => DataLabelPosition.Above,
+            "b" => DataLabelPosition.Below,
+            "l" => DataLabelPosition.Left,
+            "r" => DataLabelPosition.Right,
+            _ => (DataLabelPosition?)null
+        };
+
+        return new ChartDataLabels
+        {
+            ShowSeriesName = ParseNullableBoolAttr(visibility?.Attribute("seriesName")?.Value) ?? false,
+            ShowCategoryName = ParseNullableBoolAttr(visibility?.Attribute("categoryName")?.Value) ?? false,
+            ShowValue = ParseNullableBoolAttr(visibility?.Attribute("value")?.Value) ?? false,
+            Position = position,
+            NumberFormat = element.Element(Cx + "numFmt")?.Attribute("formatCode")?.Value,
+            Separator = element.Element(Cx + "separator")?.Value,
+            TextStyle = ReadChartTextStyle(element.Element(Cx + "txPr"), scheme)
+        };
+    }
+
+    private static string? ReadChartExTitle(XElement? title)
+    {
+        if (title is null)
+            return null;
+
+        var value = title.Descendants(Cx + "v")
+            .Select(element => element.Value)
+            .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
+        if (value is not null)
+            return value;
+
+        var richText = string.Concat(title.Descendants(A + "t").Select(element => element.Value));
+        return string.IsNullOrWhiteSpace(richText) ? string.Empty : richText;
     }
 
     private static XElement? FindChartExCategoryData(IReadOnlyList<XElement> dataElements)

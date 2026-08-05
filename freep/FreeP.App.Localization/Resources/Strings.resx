@@ -2878,6 +2878,9 @@
   <data name="Dialog_ZoomFormat_UseBorderSoftEdge" xml:space="preserve">
     <value>Use border soft edge</value>
   </data>
+  <data name="Dialog_ZoomFormat_UseBorderReflection" xml:space="preserve">
+    <value>Use border reflection</value>
+  </data>
   <data name="Dialog_ZoomFormat_ApplyToAllSummaryTiles" xml:space="preserve">
     <value>Apply format to all Summary Zoom tiles</value>
   </data>
@@ -2919,6 +2922,18 @@
   </data>
   <data name="Dialog_ZoomFormat_SoftEdgeRadius" xml:space="preserve">
     <value>Soft-edge radius (pt):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ReflectionAlpha" xml:space="preserve">
+    <value>Reflection alpha (%):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ReflectionDistance" xml:space="preserve">
+    <value>Reflection distance (pt):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ReflectionDirection" xml:space="preserve">
+    <value>Reflection direction (deg):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ReflectionScale" xml:space="preserve">
+    <value>Reflection scale (%):</value>
   </data>
   <data name="Dialog_ZoomFormat_BorderWidth" xml:space="preserve">
     <value>Border width (pt):</value>

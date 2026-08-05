@@ -167,6 +167,28 @@ public class ComplexFieldRoundTripTests
     }
 
     [Fact]
+    public void IndexBookmarkPageRange_RoundTripsExactXeSwitch()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Alpha"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha", BookmarkName: "TopicRange"))
+            }
+        });
+
+        DocumentXml(doc).Descendants(W + "instrText").Single().Value
+            .Should().Be(" XE \"Alpha\" \\r \"TopicRange\" ");
+
+        var reopened = RoundTrip(doc);
+        var run = reopened.Blocks.OfType<Paragraph>().Single().Runs.Single(candidate => candidate.ComplexField is not null);
+        DocumentIndex.MarkedEntry(run).Should().Be(new IndexMark("Alpha", BookmarkName: "TopicRange"));
+    }
+
+    [Fact]
     public void NativeMailMergeControlFields_EmitInstructionsAndRoundTripCachedLabels()
     {
         var doc = TextDocument.CreateEmpty();

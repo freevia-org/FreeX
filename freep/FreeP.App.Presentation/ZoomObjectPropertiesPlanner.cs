@@ -27,6 +27,8 @@ public static class ZoomObjectPropertiesPlanner
         "Border glow requires a six-digit RGB color, alpha from 0 to 100 percent, and a non-negative radius in points.";
     public const string InvalidFrameBorderSoftEdgeMessage =
         "Border soft edge requires a non-negative radius in points.";
+    public const string InvalidFrameBorderReflectionMessage =
+        "Border reflection requires alpha from 0 to 100 percent, non-negative distance, direction from 0 to 360 degrees, and a non-zero scale from -100 to 100 percent.";
     public const string InvalidFrameGeometryMessage =
         "Frame shape must be Rectangle, Rounded rectangle, or Ellipse.";
     public const string InvalidCropEdgesMessage =
@@ -102,7 +104,9 @@ public static class ZoomObjectPropertiesPlanner
             ReadFrameBorderGlow(properties),
             ReadFrameBorderGlowEnabled(properties),
             ReadFrameBorderSoftEdge(properties),
-            ReadFrameBorderSoftEdgeEnabled(properties));
+            ReadFrameBorderSoftEdgeEnabled(properties),
+            ReadFrameBorderReflection(properties),
+            ReadFrameBorderReflectionEnabled(properties));
         return value.IsEmpty ? fallback : value;
     }
 
@@ -204,6 +208,34 @@ public static class ZoomObjectPropertiesPlanner
             ? true
             : null;
     }
+
+    private static ZoomFrameBorderReflection? ReadFrameBorderReflection(XElement properties)
+    {
+        var reflection = properties.Descendants().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "reflection", StringComparison.OrdinalIgnoreCase));
+        if (reflection is null)
+            return null;
+
+        var alpha = ReadNullableInt(reflection.Attribute("stA")?.Value) ?? 50000;
+        var blur = ReadNullableLong(reflection.Attribute("blurRad")?.Value) ?? 0;
+        var distance = ReadNullableLong(reflection.Attribute("dist")?.Value) ?? 0;
+        var direction = ReadNullableInt(reflection.Attribute("dir")?.Value) ?? 5400000;
+        var scaleY = ReadNullableInt(reflection.Attribute("sy")?.Value) ?? -100000;
+        var endPosition = ReadNullableInt(reflection.Attribute("endPos")?.Value) ?? 100000;
+        return alpha is >= 0 and <= 100000
+            && blur >= 0 && distance >= 0
+            && direction is >= 0 and <= 21600000
+            && scaleY is >= -100000 and <= 100000
+            && endPosition is >= 0 and <= 100000
+            ? new ZoomFrameBorderReflection(alpha, blur, distance, direction, scaleY, endPosition)
+            : null;
+    }
+
+    private static bool? ReadFrameBorderReflectionEnabled(XElement properties) =>
+        properties.Descendants().Any(element =>
+            string.Equals(element.Name.LocalName, "reflection", StringComparison.OrdinalIgnoreCase))
+            ? true
+            : null;
 
     private static string? ReadFrameBorderColor(XElement properties)
     {
@@ -418,7 +450,8 @@ public static class ZoomObjectPropertiesPlanner
         || properties.FrameBorderThemeColor is not null
         || IsFrameBorderShadowEnabled(properties)
         || IsFrameBorderGlowEnabled(properties)
-        || IsFrameBorderSoftEdgeEnabled(properties);
+        || IsFrameBorderSoftEdgeEnabled(properties)
+        || IsFrameBorderReflectionEnabled(properties);
 
     public static string FormatFrameBorderWidth(ZoomObjectProperties properties) =>
         properties.FrameBorderWidthEmu is int width
@@ -465,6 +498,66 @@ public static class ZoomObjectPropertiesPlanner
 
     public static bool IsFrameBorderSoftEdgeEnabled(ZoomObjectProperties properties) =>
         properties.FrameBorderSoftEdgeEnabled == true || properties.FrameBorderSoftEdge is not null;
+
+    public static bool IsFrameBorderReflectionEnabled(ZoomObjectProperties properties) =>
+        properties.FrameBorderReflectionEnabled == true || properties.FrameBorderReflection is not null;
+
+    public static string FormatFrameBorderReflectionAlpha(ZoomObjectProperties properties) =>
+        properties.FrameBorderReflection is { } reflection
+            ? (reflection.Alpha / 1000d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+            : "50";
+
+    public static string FormatFrameBorderReflectionDistance(ZoomObjectProperties properties) =>
+        properties.FrameBorderReflection is { } reflection
+            ? (reflection.DistanceEmu / 12700d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+            : "0";
+
+    public static string FormatFrameBorderReflectionDirection(ZoomObjectProperties properties) =>
+        properties.FrameBorderReflection is { } reflection
+            ? (reflection.Direction / 60000d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+            : "90";
+
+    public static string FormatFrameBorderReflectionScale(ZoomObjectProperties properties) =>
+        properties.FrameBorderReflection is { } reflection
+            ? (reflection.ScaleY / 1000d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+            : "-100";
+
+    public static bool TryParseFrameBorderReflection(
+        string? alphaText,
+        string? distanceText,
+        string? directionText,
+        string? scaleText,
+        bool enabled,
+        out ZoomFrameBorderReflection? normalized)
+    {
+        normalized = null;
+        if (!enabled)
+            return true;
+
+        if (!double.TryParse(alphaText?.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var alphaPercent)
+            || !double.TryParse(distanceText?.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var distancePoints)
+            || !double.TryParse(directionText?.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var directionDegrees)
+            || !double.TryParse(scaleText?.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var scalePercent)
+            || !double.IsFinite(alphaPercent) || !double.IsFinite(distancePoints)
+            || !double.IsFinite(directionDegrees) || !double.IsFinite(scalePercent)
+            || alphaPercent is < 0 or > 100 || distancePoints < 0
+            || directionDegrees is < 0 or > 360
+            || scalePercent is < -100 or > 100 || Math.Abs(scalePercent) < 0.01)
+            return false;
+
+        normalized = new ZoomFrameBorderReflection(
+            checked((int)Math.Round(alphaPercent * 1000d, MidpointRounding.AwayFromZero)),
+            0,
+            checked((long)Math.Round(distancePoints * 12700d, MidpointRounding.AwayFromZero)),
+            checked((int)Math.Round(directionDegrees * 60000d, MidpointRounding.AwayFromZero)),
+            checked((int)Math.Round(scalePercent * 1000d, MidpointRounding.AwayFromZero)),
+            100000);
+        return true;
+    }
 
     public static string FormatFrameBorderShadowColor(ZoomObjectProperties properties) =>
         properties.FrameBorderShadow?.Color ?? string.Empty;

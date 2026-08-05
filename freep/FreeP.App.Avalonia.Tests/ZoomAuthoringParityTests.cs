@@ -30,10 +30,12 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("text.UseOuterBorderShadowLabel");
         source.Should().Contain("text.UseBorderGlowLabel");
         source.Should().Contain("text.UseBorderSoftEdgeLabel");
+        source.Should().Contain("text.UseBorderReflectionLabel");
         source.Should().Contain("FrameBorderThemeColor");
         source.Should().Contain("FrameBorderShadowEnabled:");
         source.Should().Contain("FrameBorderGlowEnabled:");
         source.Should().Contain("FrameBorderSoftEdgeEnabled:");
+        source.Should().Contain("FrameBorderReflectionEnabled:");
         source.Should().Contain("text.FrameShapeLabel");
         source.Should().Contain("_frameBorderColor.IsEnabled");
         source.Should().Contain("text.ApplyToAllSummaryTilesLabel");
@@ -43,6 +45,7 @@ public sealed class ZoomAuthoringParityTests
         source.Should().NotContain("\"Apply format to all Summary Zoom tiles\"");
         source.Should().NotContain("\"Use border glow\"");
         source.Should().NotContain("\"Use border soft edge\"");
+        source.Should().NotContain("\"Use border reflection\"");
         source.Should().NotContain("Width = 440");
         source.Should().NotContain("MinWidth = 180");
     }
@@ -90,6 +93,7 @@ public sealed class ZoomAuthoringParityTests
         source.Should().NotContain("InvalidFrameBorderShadowMessage");
         source.Should().NotContain("InvalidFrameBorderGlowMessage");
         source.Should().NotContain("InvalidFrameBorderSoftEdgeMessage");
+        source.Should().NotContain("InvalidFrameBorderReflectionMessage");
         source.Should().NotContain("TryParseTransitionDuration");
         source.Should().NotContain("_validation");
     }

@@ -773,6 +773,10 @@ public sealed class EditingSession
             FrameBorderSoftEdgeEnabled = properties.FrameBorderSoftEdge is not null
                 ? true
                 : properties.FrameBorderSoftEdgeEnabled == false ? false : null,
+            FrameBorderReflection = properties.FrameBorderReflection,
+            FrameBorderReflectionEnabled = properties.FrameBorderReflection is not null
+                ? true
+                : properties.FrameBorderReflectionEnabled == false ? false : null,
         };
         return Equals(shape.PreservedObject.ZoomProperties, normalized);
     }

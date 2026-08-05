@@ -68,6 +68,27 @@ public sealed class IndexEntryUndoParityTests
         MarksWithOptions(editor).Should().Equal(mark);
     }
 
+    [StaFact]
+    public void MarkAllIndexEntries_MarksMatchingParagraphsAsOneUndoableOperation()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Alpha first Alpha"));
+        document.Blocks.Add(new Paragraph("alphabet control"));
+        document.Blocks.Add(new Paragraph("Second ALPHA"));
+        var editor = new DocumentView();
+        editor.LoadModel(document);
+        var mark = new IndexMark("Alpha", "Topic", BoldPageNumber: true);
+
+        editor.MarkAllIndexEntries("Alpha", mark).Should().Be(3);
+        MarksWithOptions(editor).Should().Equal(mark, mark, mark);
+
+        editor.Undo();
+        MarksWithOptions(editor).Should().BeEmpty();
+        editor.Redo();
+        MarksWithOptions(editor).Should().Equal(mark, mark, mark);
+    }
+
     private static IEnumerable<string> Marks(DocumentView editor) =>
         editor.Model.Blocks.OfType<Paragraph>()
             .SelectMany(paragraph => paragraph.Runs)

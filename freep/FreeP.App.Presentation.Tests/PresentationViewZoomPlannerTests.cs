@@ -278,6 +278,35 @@ public sealed class PresentationViewZoomPlannerTests
             .Should().BeFalse();
     }
 
+    [Fact]
+    public void Zoom_border_reflection_normalizes_editable_values()
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderReflection(
+                "42", "3.5", "90", "-75", enabled: true, out var normalized)
+            .Should().BeTrue();
+
+        normalized.Should().Be(new ZoomFrameBorderReflection(
+            42000, 0, 44450, 5400000, -75000, 100000));
+        var properties = new ZoomObjectProperties(FrameBorderReflection: normalized);
+        ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionAlpha(properties).Should().Be("42");
+        ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(properties).Should().Be("3.5");
+        ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(properties).Should().Be("90");
+        ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(properties).Should().Be("-75");
+        ZoomObjectPropertiesPlanner.IsFrameBorderReflectionEnabled(properties).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("101", "0", "90", "-100")]
+    [InlineData("50", "0", "90", "0")]
+    [InlineData("50", "0", "90", "-101")]
+    public void Zoom_border_reflection_rejects_invalid_values(
+        string alpha, string distance, string direction, string scale)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderReflection(
+                alpha, distance, direction, scale, enabled: true, out _)
+            .Should().BeFalse();
+    }
+
     [Theory]
     [InlineData("not-a-pattern", "4472C4", "FFFFFF")]
     [InlineData("pct50", "GGGGGG", "FFFFFF")]

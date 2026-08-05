@@ -5174,10 +5174,14 @@ internal static class FreeWRibbonCommands
             var seed = editor.Selection.Text?.Trim() ?? string.Empty;
             var result = MarkIndexEntryDialog.Prompt(
                 Window.GetWindow(editor),
-                MarkIndexEntryDialogPlanner.BuildInitialState(seed));
+                MarkIndexEntryDialogPlanner.BuildInitialState(seed),
+                editor.BookmarkNames());
             if (result is null)
                 return; // cancelled or empty — nothing to mark
-            editor.MarkIndexEntry(result.Mark);
+            if (result.MarkAll)
+                editor.MarkAllIndexEntries(seed, result.Mark);
+            else
+                editor.MarkIndexEntry(result.Mark);
         }
     }
 
