@@ -150,6 +150,7 @@ public sealed class SlideShowMediaController
         string? TempPath,
         bool ShowWhenStopped,
         MediaInfo? Media = null,
+        int BaseVolumePercent = 100,
         PresentationMediaTranscriptTrackDescriptor? CaptionTrack = null,
         Border? CaptionHost = null,
         TextBlock? CaptionText = null);
@@ -267,7 +268,7 @@ public sealed class SlideShowMediaController
         }
 
         _captionTimer.IsEnabled = _slots.Any(slot =>
-            slot.CaptionTrack is not null || HasTrimWindow(slot.Media));
+            slot.CaptionTrack is not null || HasPlaybackEnvelope(slot.Media));
         UpdateCaptions();
     }
 
@@ -510,10 +511,11 @@ public sealed class SlideShowMediaController
         // NOTE: tempPath is set even when source is null (e.g. invalid URI from a fake writer),
         // so we always have it for cleanup.
         Uri? source = ResolveSource(media, out string? tempPath);
+        var baseVolumePercent = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(media.VolumePercent);
         if (source is null)
         {
             // Still record the tempPath for cleanup (written but URI was unparseable).
-            return new MediaSlot(shapeId, null, tempPath, media.ShowWhenStopped, media);
+            return new MediaSlot(shapeId, null, tempPath, media.ShowWhenStopped, media, baseVolumePercent);
         }
 
         MediaElement? element = null;
@@ -524,7 +526,7 @@ public sealed class SlideShowMediaController
                 LoadedBehavior   = MediaState.Manual,
                 UnloadedBehavior = MediaState.Stop,
                 Source           = source,
-                Volume           = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(media.VolumePercent) / 100d,
+                Volume           = baseVolumePercent / 100d,
                 // For audio: collapse the visual (no video frame to show).
                 Visibility       = isVideo && media.ShowWhenStopped
                     ? Visibility.Visible
@@ -543,6 +545,7 @@ public sealed class SlideShowMediaController
             element.MediaOpened += (_, _) =>
             {
                 SeekToTrimStart(element, media);
+                ApplyFade(element, media, baseVolumePercent);
             };
 
             element.MediaEnded += (_, _) =>
@@ -557,6 +560,7 @@ public sealed class SlideShowMediaController
                 try
                 {
                     SeekToTrimStart(element, media);
+                    ApplyFade(element, media, baseVolumePercent);
                     element.Play();
                     element.Tag = true;
                 }
@@ -570,6 +574,7 @@ public sealed class SlideShowMediaController
             if (media.PlaybackStartMode == MediaPlaybackStartMode.Automatically)
             {
                 SeekToTrimStart(element, media);
+                ApplyFade(element, media, baseVolumePercent);
                 element.Play();
                 element.Tag = true;
                 if (isVideo)
@@ -582,7 +587,7 @@ public sealed class SlideShowMediaController
             element = null;
         }
 
-        return new MediaSlot(shapeId, element, tempPath, media.ShowWhenStopped, media);
+        return new MediaSlot(shapeId, element, tempPath, media.ShowWhenStopped, media, baseVolumePercent);
     }
 
     private Uri? ResolveSource(MediaInfo media, out string? tempPath)
@@ -643,6 +648,7 @@ public sealed class SlideShowMediaController
                     ? window.End
                     : SlideShowMediaInteractionPlanner.ClampToTrimStart(media, position);
             }
+            ApplyFade(element, media, slot.BaseVolumePercent);
             return true;
         }
         catch (InvalidOperationException)
@@ -654,13 +660,15 @@ public sealed class SlideShowMediaController
     /// <summary>Sets the active media volume using the shared 0-100 volume convention.</summary>
     public bool TrySetVolume(uint shapeId, int volume)
     {
-        var element = _slots.FirstOrDefault(slot => slot.ShapeId == shapeId)?.Element;
-        if (element is null)
+        var slotIndex = _slots.FindIndex(slot => slot.ShapeId == shapeId);
+        if (slotIndex < 0 || _slots[slotIndex].Element is not { } element)
             return false;
 
         try
         {
-            element.Volume = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(volume) / 100d;
+            var baseVolumePercent = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(volume);
+            _slots[slotIndex] = _slots[slotIndex] with { BaseVolumePercent = baseVolumePercent };
+            ApplyFade(element, _slots[slotIndex].Media, baseVolumePercent);
             return true;
         }
         catch (InvalidOperationException)
@@ -698,6 +706,7 @@ public sealed class SlideShowMediaController
             else
             {
                 SeekToTrimStart(el, slot.Media);
+                ApplyFade(el, slot.Media, slot.BaseVolumePercent);
                 el.Play();
                 el.Tag = true;
                 el.Visibility = Visibility.Visible;
@@ -716,6 +725,8 @@ public sealed class SlideShowMediaController
             if (element.Tag is not true)
                 continue;
 
+            ApplyFade(element, media, slot.BaseVolumePercent);
+
             var duration = element.NaturalDuration.HasTimeSpan
                 ? element.NaturalDuration.TimeSpan
                 : TimeSpan.Zero;
@@ -726,6 +737,7 @@ public sealed class SlideShowMediaController
             if (media.Loop)
             {
                 SeekToTrimStart(element, media);
+                ApplyFade(element, media, slot.BaseVolumePercent);
                 element.Play();
             }
             else
@@ -738,9 +750,29 @@ public sealed class SlideShowMediaController
         }
     }
 
-    private static bool HasTrimWindow(MediaInfo? media) =>
+    private static bool HasPlaybackEnvelope(MediaInfo? media) =>
         media is not null &&
-        (media.TrimStartMilliseconds > 0 || media.TrimEndMilliseconds > 0);
+        (HasPositiveTiming(media.TrimStartMilliseconds) ||
+         HasPositiveTiming(media.TrimEndMilliseconds) ||
+         HasPositiveTiming(media.FadeInMilliseconds) ||
+         HasPositiveTiming(media.FadeOutMilliseconds));
+
+    private static bool HasPositiveTiming(double value) => value > 0 && double.IsFinite(value);
+
+    private static void ApplyFade(MediaElement element, MediaInfo? media, int baseVolumePercent)
+    {
+        if (media is null)
+            return;
+
+        var duration = element.NaturalDuration.HasTimeSpan
+            ? element.NaturalDuration.TimeSpan
+            : TimeSpan.Zero;
+        element.Volume = SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent(
+            media,
+            baseVolumePercent,
+            element.Position,
+            duration) / 100d;
+    }
 
     private static void SeekToTrimStart(MediaElement element, MediaInfo? media)
     {

@@ -245,6 +245,29 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void SlideShowMediaInteractionPlanner_ComputesFadeEnvelopeAgainstTrimWindow()
+    {
+        var media = new MediaInfo
+        {
+            TrimStartMilliseconds = 1000,
+            TrimEndMilliseconds = 2000,
+            FadeInMilliseconds = 4000,
+            FadeOutMilliseconds = 3000,
+        };
+
+        SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent(
+            media, 80, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(20)).Should().Be(0);
+        SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent(
+            media, 80, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(20)).Should().Be(40);
+        SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent(
+            media, 80, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(20)).Should().Be(80);
+        SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent(
+            media, 80, TimeSpan.FromSeconds(16.5), TimeSpan.FromSeconds(20)).Should().Be(40);
+        SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent(
+            media, 80, TimeSpan.FromSeconds(18), TimeSpan.FromSeconds(20)).Should().Be(0);
+    }
+
+    [Fact]
     public void SlideShowMediaInteractionPlanner_SuppressesNarrationAudioButKeepsVideo()
     {
         var slide = new Slide();
