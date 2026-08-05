@@ -43,7 +43,7 @@ public sealed class WpfAuthoritySurfaceParityTests
             text.AcceptsReturn.Should().BeTrue();
             text.Focusable.Should().BeTrue();
             text.HorizontalContentAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Left);
-            text.VerticalContentAlignment.Should().Be(global::Avalonia.Layout.VerticalAlignment.Top);
+            text.VerticalContentAlignment.Should().Be(global::Avalonia.Layout.VerticalAlignment.Center);
             root.Margin.Should().Be(new Thickness(
                 AboutDialogMetrics.RootMargin,
                 AboutDialogMetrics.RootMargin,
@@ -55,6 +55,11 @@ public sealed class WpfAuthoritySurfaceParityTests
             text.Text.Should().Contain("Help > Legal Notices");
             text.Text.Should().NotContain("Microsoft 365");
             AssertDefaultCancelButtons(dialog);
+            var viewportAlignment = text.Styles
+                .OfType<global::Avalonia.Styling.Style>()
+                .SelectMany(style => style.Setters.OfType<global::Avalonia.Styling.Setter>())
+                .Single(setter => setter.Property == ScrollViewer.VerticalContentAlignmentProperty);
+            viewportAlignment.Value.Should().Be(global::Avalonia.Layout.VerticalAlignment.Center);
         }, CancellationToken.None);
     }
 

@@ -1169,6 +1169,64 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void SerializeXamlPackage_RoundTripsInlineImagePartsInDocumentOrder()
+    {
+        var imageBytes = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+        var body = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run { Text = "Before " },
+                        new Run
+                        {
+                            Text = "\uFFFC",
+                            InlineImage = new ImagePart
+                            {
+                                Bytes = imageBytes,
+                                ContentType = "image/png",
+                            },
+                            InlineImageWidthEmu = 228_600,
+                            InlineImageHeightEmu = 114_300,
+                        },
+                        new Run { Text = " after" },
+                    },
+                },
+            },
+        };
+        var payload = new InCanvasRichClipboardPayload(
+            body,
+            InCanvasTextEditPlanner.ExtractPlainText(body));
+
+        var packageBytes = ExternalXamlClipboardPlanner.SerializeXamlPackage(payload);
+        using (var package = new ZipArchive(
+                   new MemoryStream(packageBytes, writable: false),
+                   ZipArchiveMode.Read))
+        {
+            package.Entries.Select(entry => entry.FullName)
+                .Should().Contain("Xaml/Image1.png");
+            using var imageStream = package.GetEntry("Xaml/Image1.png")!.Open();
+            using var restoredImage = new MemoryStream();
+            imageStream.CopyTo(restoredImage);
+            restoredImage.ToArray().Should().Equal(imageBytes);
+        }
+
+        var restored = ExternalXamlClipboardPlanner.TryParseXamlPackage(packageBytes);
+        restored.Should().NotBeNull();
+        restored!.PlainText.Should().Be("Before \uFFFC after");
+        restored.Body.Paragraphs.Single().Runs.Select(run => run.Text)
+            .Should().Equal("Before ", "\uFFFC", " after");
+        restored.Body.Paragraphs.Single().Runs[1].InlineImage!.Bytes
+            .Should().Equal(imageBytes);
+        restored.Body.Paragraphs.Single().Runs[1].InlineImageWidthEmu.Should().Be(228_600);
+        restored.Body.Paragraphs.Single().Runs[1].InlineImageHeightEmu.Should().Be(114_300);
+    }
+
+    [Fact]
     public void RtfCharacterDirection_RtlchAndLtrch_PreserveMixedRunOverrides()
     {
         const string rtf =

@@ -657,6 +657,25 @@ public sealed class SlideShowMediaController
         }
     }
 
+    /// <summary>Seeks an active media element to a named authored bookmark.</summary>
+    public bool TrySeekToBookmark(uint shapeId, string bookmarkName)
+    {
+        var slot = _slots.FirstOrDefault(candidate => candidate.ShapeId == shapeId);
+        if (slot?.Element is not { } element || slot.Media is not { } media)
+            return false;
+
+        var duration = element.NaturalDuration.HasTimeSpan
+            ? element.NaturalDuration.TimeSpan
+            : TimeSpan.Zero;
+        if (!SlideShowMediaInteractionPlanner.TryResolveMediaBookmarkPosition(
+                media, bookmarkName, duration, out var position))
+            return false;
+
+        // Reuse the established WPF seek path so unopened MediaElement instances
+        // receive the same dispatcher/trim handling as ordinary scrubbing.
+        return TrySeek(shapeId, position);
+    }
+
     /// <summary>Sets the active media volume using the shared 0-100 volume convention.</summary>
     public bool TrySetVolume(uint shapeId, int volume)
     {

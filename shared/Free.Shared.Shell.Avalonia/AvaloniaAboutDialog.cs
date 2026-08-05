@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Free.Shared.Shell;
 
 namespace Free.Shared.Shell.Avalonia;
@@ -11,6 +12,7 @@ namespace Free.Shared.Shell.Avalonia;
 /// <summary>Shared Avalonia realization of the WPF product About dialog.</summary>
 public class AvaloniaAboutDialog : AvaloniaDialogWindow
 {
+    private const string AboutViewportClass = "free-about-document-viewport";
     private Button _okButton = null!;
     private readonly TextBox _aboutTextBox;
 
@@ -135,8 +137,25 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
             AboutDialogMetrics.AvaloniaTextPaddingTop,
             AboutDialogMetrics.AvaloniaTextPaddingRight,
             AboutDialogMetrics.TextPadding);
+        _aboutTextBox.VerticalContentAlignment = global::Avalonia.Layout.VerticalAlignment.Center;
         _aboutTextBox.FontSize = AboutDialogMetrics.AvaloniaTextFontSize;
         _aboutTextBox.LineHeight = AboutDialogMetrics.AvaloniaTextLineHeight;
+        // The WPF authority centers the short About document inside its read-only viewport.
+        // Avalonia's outer TextBox alignment does not reach the template-owned ScrollViewer,
+        // so style that realized document host through the control's local template scope.
+        if (!_aboutTextBox.Classes.Contains(AboutViewportClass))
+        {
+            _aboutTextBox.Classes.Add(AboutViewportClass);
+            _aboutTextBox.Styles.Add(new Style(selector => selector.OfType<ScrollViewer>())
+            {
+                Setters =
+                {
+                    new Setter(
+                        ScrollViewer.VerticalContentAlignmentProperty,
+                        global::Avalonia.Layout.VerticalAlignment.Center),
+                },
+            });
+        }
         // WPF's About action button has a white resting surface; preserve the shared button
         // metrics and border while correcting this authority-specific fill.
         _okButton.Background = Brushes.White;

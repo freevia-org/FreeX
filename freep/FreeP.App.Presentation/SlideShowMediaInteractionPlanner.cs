@@ -153,6 +153,38 @@ public static class SlideShowMediaInteractionPlanner
     }
 
     /// <summary>
+    /// Resolves a named media bookmark to a seek position while respecting the
+    /// active trim window. Bookmark names are user-facing labels, so lookup is
+    /// trimmed and case-insensitive; duplicate names resolve to the first entry.
+    /// </summary>
+    public static bool TryResolveMediaBookmarkPosition(
+        MediaInfo media,
+        string bookmarkName,
+        TimeSpan duration,
+        out TimeSpan position)
+    {
+        ArgumentNullException.ThrowIfNull(media);
+        position = TimeSpan.Zero;
+        var normalizedName = bookmarkName?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedName))
+            return false;
+
+        var bookmark = media.Bookmarks.FirstOrDefault(candidate =>
+            string.Equals(candidate.Name?.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase));
+        if (bookmark is null || !double.IsFinite(bookmark.TimeMilliseconds) || bookmark.TimeMilliseconds < 0)
+            return false;
+
+        position = TimeSpan.FromMilliseconds(
+            Math.Min(bookmark.TimeMilliseconds, TimeSpan.MaxValue.TotalMilliseconds));
+        var window = ResolveTrimWindow(media, duration);
+        if (position < window.Start)
+            position = window.Start;
+        else if (window.End != TimeSpan.MaxValue && position > window.End)
+            position = window.End;
+        return true;
+    }
+
+    /// <summary>
     /// Computes the current playback volume after applying authored fade-in and
     /// fade-out durations. The returned value remains in the shared 0-100 range.
     /// </summary>
