@@ -13,6 +13,7 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private readonly TextBox _mainEntry;
     private readonly TextBox _subentry;
+    private readonly TextBox _identifier;
     private readonly RadioButton _currentPage;
     private readonly RadioButton _pageRange;
     private readonly ComboBox _bookmarkName;
@@ -41,6 +42,7 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         _mainEntry = CreateTextBox(initialState.MainEntry);
         _subentry = CreateTextBox(initialState.Subentry);
+        _identifier = CreateTextBox(initialState.Identifier);
         _currentPage = new RadioButton
         {
             Content = MarkIndexEntryDialogPlanner.CurrentPageLabel,
@@ -126,6 +128,8 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         panel.Children.Add(_mainEntry);
         panel.Children.Add(CreateLabel(MarkIndexEntryDialogPlanner.SubentryLabel));
         panel.Children.Add(_subentry);
+        panel.Children.Add(CreateLabel(MarkIndexEntryDialogPlanner.IdentifierLabel));
+        panel.Children.Add(_identifier);
         panel.Children.Add(CreateLabel(MarkIndexEntryDialogPlanner.OptionsLabel));
         panel.Children.Add(_currentPage);
         var pageRange = new StackPanel { Orientation = Orientation.Horizontal };
@@ -184,6 +188,7 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private MarkIndexEntryDialogState CurrentState() => new(
         _mainEntry.Text ?? string.Empty,
         _subentry.Text ?? string.Empty,
+        _identifier.Text ?? string.Empty,
         ReferenceKind,
         _bookmarkName.SelectedItem as string ?? string.Empty,
         _crossReference.Text ?? string.Empty,
@@ -220,7 +225,8 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         bool useCrossReference,
         string? crossReference,
         bool boldPageNumber = false,
-        bool italicPageNumber = false)
+        bool italicPageNumber = false,
+        string? identifier = null)
     {
         SetReferenceForTest(
             mainEntry,
@@ -229,7 +235,8 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             bookmarkName: null,
             crossReference,
             boldPageNumber,
-            italicPageNumber);
+            italicPageNumber,
+            identifier);
     }
 
     internal void SetReferenceForTest(
@@ -239,10 +246,12 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         string? bookmarkName,
         string? crossReference,
         bool boldPageNumber = false,
-        bool italicPageNumber = false)
+        bool italicPageNumber = false,
+        string? identifier = null)
     {
         _mainEntry.Text = mainEntry;
         _subentry.Text = subentry;
+        _identifier.Text = identifier;
         _currentPage.IsChecked = referenceKind == IndexEntryReferenceKind.CurrentPage;
         _pageRange.IsChecked = referenceKind == IndexEntryReferenceKind.PageRange;
         _crossReferenceOption.IsChecked = referenceKind == IndexEntryReferenceKind.CrossReference;

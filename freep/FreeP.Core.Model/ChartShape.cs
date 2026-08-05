@@ -73,6 +73,12 @@ public enum ChartMarkerSymbol
 /// <summary>Position of the chart legend relative to the plot area.</summary>
 public enum LegendPosition { Right, Left, Top, Bottom }
 
+/// <summary>Native ChartEx title side position from <c>cx:title/@pos</c>.</summary>
+public enum ChartExTitlePosition { Top, Bottom, Left, Right }
+
+/// <summary>Native ChartEx title alignment along its side from <c>cx:title/@align</c>.</summary>
+public enum ChartExTitleAlignment { Near, Center, Far }
+
 /// <summary>Which chart surface receives an authored fill and outline.</summary>
 public enum ChartAreaFormattingTarget { ChartArea, PlotArea }
 
@@ -420,6 +426,37 @@ public sealed class ChartPointStyle
     public ChartMarkerStyle? Marker { get; set; }
 }
 
+/// <summary>
+/// One native ChartEx value-color stop position. A stop may be tied to an
+/// explicit numeric value, a percentage of the series range, or an extreme
+/// endpoint. The distinction is retained because PowerPoint uses it when the
+/// underlying data range changes.
+/// </summary>
+public sealed class ChartValueColorPosition
+{
+    public double? Number { get; set; }
+    public double? Percent { get; set; }
+    public bool IsExtreme { get; set; }
+}
+
+/// <summary>
+/// Native ChartEx value-driven gradient colors and optional stop positions.
+/// This is separate from per-point <see cref="ChartPointStyle"/> overrides.
+/// </summary>
+public sealed class ChartValueColorScale
+{
+    public ThemeAwareColor? MinColor { get; set; }
+    public ThemeAwareColor? MidColor { get; set; }
+    public ThemeAwareColor? MaxColor { get; set; }
+
+    public ChartValueColorPosition? MinPosition { get; set; }
+    public ChartValueColorPosition? MidPosition { get; set; }
+    public ChartValueColorPosition? MaxPosition { get; set; }
+
+    /// <summary>Native cx:valueColorPositions/@count when authored.</summary>
+    public int? PositionCount { get; set; }
+}
+
 /// <summary>Authored workbook formula references for a chart series.</summary>
 public sealed class ChartSeriesFormulaReferences
 {
@@ -493,6 +530,12 @@ public sealed class ChartSeries
 
     /// <summary>Per-point style overrides (keyed by zero-based point index).</summary>
     public Dictionary<int, ChartPointStyle> PointStyles { get; } = new();
+
+    /// <summary>
+    /// Native ChartEx min/mid/max value-color gradient and its optional numeric
+    /// or percentage stop positions.
+    /// </summary>
+    public ChartValueColorScale? ValueColorScale { get; set; }
 
     // ── Scatter / Bubble extension fields ────────────────────────────────────────
 
@@ -723,11 +766,24 @@ public sealed class ChartShape
     public string? Title { get; set; }
 
     /// <summary>
-    /// Explicit PowerPoint chart-title overlay state from <c>c:title/c:overlay</c>.
+    /// Explicit PowerPoint chart-title overlay state from <c>c:title/c:overlay</c>
+    /// or native ChartEx <c>cx:title/@overlay</c>.
     /// Null means the source did not author the token; false is the normal above-plot
     /// placement and true places the title over the plot area.
     /// </summary>
     public bool? TitleOverlay { get; set; }
+
+    /// <summary>
+    /// Optional native ChartEx title side position. Null preserves an absent source
+    /// token and lets ChartEx apply its default of top.
+    /// </summary>
+    public ChartExTitlePosition? ChartExTitlePosition { get; set; }
+
+    /// <summary>
+    /// Optional native ChartEx title alignment along its side. Null preserves an
+    /// absent source token and lets ChartEx apply its default of center.
+    /// </summary>
+    public ChartExTitleAlignment? ChartExTitleAlignment { get; set; }
 
     /// <summary>Optional independent formatting for the chart title text.</summary>
     public ChartTextStyle? TitleStyle { get; set; }

@@ -3,15 +3,13 @@ namespace FreeW.Core.Model.Tests;
 public class DocumentIndexTests
 {
     [Fact]
-    public void Build_EmptyDocument_YieldsOnlyTheHeadingParagraph()
+    public void Build_EmptyDocument_YieldsNoIndexResultParagraphs()
     {
         var doc = new TextDocument();
 
         var index = DocumentIndex.Build(doc);
 
-        index.Should().ContainSingle();
-        index[0].PlainText.Should().Be(DocumentIndex.HeadingText);
-        index[0].StyleId.Should().Be(DocumentIndex.HeadingStyleId);
+        index.Should().BeEmpty();
     }
 
     [Fact]
@@ -53,8 +51,9 @@ public class DocumentIndexTests
         var index = DocumentIndex.Build(doc);
 
         index.Select(p => p.PlainText).Should().Equal(
-            DocumentIndex.HeadingText,
+            "A",
             "alpha, 1",
+            "Z",
             "Zebra, 1");
     }
 
@@ -82,8 +81,9 @@ public class DocumentIndexTests
         var index = DocumentIndex.Build(doc, blockIndex => blockIndex == 0 ? "iv" : "1");
 
         index.Select(paragraph => paragraph.PlainText).Should().Equal(
-            DocumentIndex.HeadingText,
+            "A",
             "Alpha, iv, 1",
+            "B",
             "Beta, 1");
     }
 
@@ -116,16 +116,17 @@ public class DocumentIndexTests
         var index = DocumentIndex.Build(doc, _ => "1");
 
         index.Select(paragraph => paragraph.PlainText).Should().Equal(
-            DocumentIndex.HeadingText,
+            "A",
             "Animals",
             "Cats, 1",
             "Dogs, 1",
+            "T",
             "Transportation. See Vehicles");
         index[1].Formatting.Should().Match<ParagraphFormatting>(format =>
             format.IndentLeftPt == 12 && format.FirstLineIndentPt == -12);
         index[2].Formatting.Should().Match<ParagraphFormatting>(format =>
             format.IndentLeftPt == 24 && format.FirstLineIndentPt == -12);
-        index[4].PlainText.Should().NotContain(", 1");
+        index[5].PlainText.Should().NotContain(", 1");
     }
 
     [Fact]
@@ -195,6 +196,93 @@ public class DocumentIndexTests
             "Alpha",
             BoldPageNumber: true,
             BookmarkName: "TopicRange"));
+    }
+
+    [Fact]
+    public void MarkRun_SerializesAndParsesAlternateIndexIdentifier()
+    {
+        var run = DocumentIndex.MarkRun(new IndexMark(
+            "Alpha",
+            BoldPageNumber: true,
+            Identifier: "People"));
+
+        run.ComplexField!.Instruction.Should().Be(" XE \"Alpha\" \\f \"People\" \\b ");
+        DocumentIndex.MarkedEntry(run).Should().Be(new IndexMark(
+            "Alpha",
+            BoldPageNumber: true,
+            Identifier: "People"));
+    }
+
+    [Fact]
+    public void Build_FiltersAlternateIdentifiersAndTreatsIAsDefault()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha")) } });
+        doc.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun(new IndexMark("Beta", Identifier: "I")) } });
+        doc.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun(new IndexMark("Carol", Identifier: "People")) } });
+        doc.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun(new IndexMark("Dave", Identifier: "people")) } });
+        doc.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun(new IndexMark("Rome", Identifier: "Places")) } });
+        doc.IndexEntries.Add(new IndexEntry("Zebra"));
+
+        DocumentIndex.Build(doc).Select(paragraph => paragraph.PlainText).Should().Equal(
+            "A", "Alpha, 1", "B", "Beta, 1", "Z", "Zebra, 1");
+        DocumentIndex.Build(doc, identifier: "People").Select(paragraph => paragraph.PlainText).Should().Equal(
+            "C", "Carol, 1", "D", "Dave, 1");
+        DocumentIndex.Build(doc, identifier: "Places").Select(paragraph => paragraph.PlainText).Should().Equal(
+            "R", "Rome, 1");
+    }
+
+    [Fact]
+    public void AlternateIndexStylesIdentifyOnlyTheirOwnGeneratedRegion()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People")) }
+        });
+        DocumentIndex.EnsureStyles(doc, "People");
+        var paragraphs = DocumentIndex.Build(doc, identifier: "People");
+
+        var headingStyle = DocumentIndex.HeadingStyleIdFor("People");
+        var entryStyle = DocumentIndex.EntryStyleIdFor("People");
+        doc.Styles.Should().ContainKey(headingStyle);
+        doc.Styles.Should().ContainKey(entryStyle);
+        paragraphs[0].StyleId.Should().Be(headingStyle);
+        DocumentIndex.IsIndexParagraph(paragraphs[0]).Should().BeTrue();
+        DocumentIndex.IsIndexParagraph(paragraphs[0], "People").Should().BeTrue();
+        DocumentIndex.IsIndexParagraph(paragraphs[0], "Places").Should().BeFalse();
+        DocumentIndex.IsIndexParagraph(paragraphs[0], null).Should().BeFalse();
+        DocumentIndex.HeadingStyleIdFor("people").Should().Be(headingStyle);
+    }
+
+    [Fact]
+    public void Build_WordDefaultGroupsSymbolsDigitsAndEnglishDiacriticsLikeWord()
+    {
+        var doc = new TextDocument();
+        foreach (var term in new[] { "1alpha", "!bang", "Éclair", "Zulu" })
+        {
+            doc.Blocks.Add(new Paragraph
+            {
+                Runs = { DocumentIndex.MarkRun(term) }
+            });
+        }
+
+        DocumentIndex.Build(doc).Select(paragraph => paragraph.PlainText).Should().Equal(
+            "!", "!bang, 1",
+            "1", "1alpha, 1",
+            "E", "Éclair, 1",
+            "Z", "Zulu, 1");
+    }
+
+    [Fact]
+    public void Build_LegacyOptionsRetainSyntheticTitleWithoutAlphabeticHeadings()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun("Alpha") } });
+
+        DocumentIndex.Build(doc, options: IndexBuildOptions.LegacyTitleOnly)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Alpha, 1");
     }
 
     [Fact]

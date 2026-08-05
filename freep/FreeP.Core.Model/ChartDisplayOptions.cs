@@ -34,4 +34,6 @@ public sealed record ChartDisplayOptions(
     bool? ShowWaterfallConnectorLines = null,
     bool? ShowDropLines = null,
     bool? ShowUpDownBars = null,
-    bool? ShowSeriesLines = null);
+    bool? ShowSeriesLines = null,
+    ChartExTitlePosition? ChartExTitlePosition = null,
+    ChartExTitleAlignment? ChartExTitleAlignment = null);

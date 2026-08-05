@@ -232,6 +232,7 @@ internal static class PptxChartReader
 
         var chartSpace = doc.Root;
         var chart = chartSpace?.Element(Cx + "chart");
+        var chartExTitle = chart?.Element(Cx + "title");
         var region = chart?.Element(Cx + "plotArea")?.Element(Cx + "plotAreaRegion");
         var seriesEl = region?.Element(Cx + "series");
         if (chartSpace is null || chart is null || region is null || seriesEl is null)
@@ -260,8 +261,39 @@ internal static class PptxChartReader
                 .Distinct()
                 .OrderBy(index => index)
                 .ToList(),
-            Title = ReadChartExTitle(chart.Element(Cx + "title")),
+            Title = ReadChartExTitle(chartExTitle),
+            TitleOverlay = ParseNullableBoolAttr(chartExTitle?.Attribute("overlay")?.Value),
+            ChartExTitlePosition = chartExTitle?.Attribute("pos")?.Value switch
+            {
+                "t" => ChartExTitlePosition.Top,
+                "b" => ChartExTitlePosition.Bottom,
+                "l" => ChartExTitlePosition.Left,
+                "r" => ChartExTitlePosition.Right,
+                _ => null,
+            },
+            ChartExTitleAlignment = chartExTitle?.Attribute("align")?.Value switch
+            {
+                "near" => ChartExTitleAlignment.Near,
+                "ctr" => ChartExTitleAlignment.Center,
+                "far" => ChartExTitleAlignment.Far,
+                _ => null,
+            },
+            TitleStyle = ReadChartTextStyle(chartExTitle?.Element(Cx + "txPr"), scheme),
         };
+        var legend = chart.Element(Cx + "legend");
+        if (legend is not null)
+        {
+            shape.Legend = legend.Attribute("pos")?.Value switch
+            {
+                "l" => LegendPosition.Left,
+                "t" => LegendPosition.Top,
+                "b" => LegendPosition.Bottom,
+                "r" => LegendPosition.Right,
+                _ => null,
+            };
+            shape.LegendOverlay = ParseNullableBoolAttr(legend.Attribute("overlay")?.Value);
+            shape.LegendTextStyle = ReadChartTextStyle(legend.Element(Cx + "txPr"), scheme);
+        }
         shape.Categories.AddRange(categories);
 
         foreach (var seriesElement in region.Elements(Cx + "series"))
@@ -278,10 +310,220 @@ internal static class PptxChartReader
                 series.Values.AddRange(ReadChartExValues(valueLevel));
             }
 
+            var seriesShapeProperties = seriesElement.Element(Cx + "spPr");
+            if (seriesShapeProperties is not null)
+                ReadSeriesShapeProperties(seriesShapeProperties, scheme, series);
+
+            series.ValueColorScale = ReadChartExValueColorScale(seriesElement, scheme);
+            ReadChartExDataPoints(seriesElement, scheme, series);
+            ReadChartExDataLabels(seriesElement.Element(Cx + "dataLabels"), scheme, series);
+
             shape.Series.Add(series);
         }
 
         return shape;
+    }
+
+    private static ChartValueColorScale? ReadChartExValueColorScale(
+        XElement seriesElement,
+        PresentationColorScheme scheme)
+    {
+        var colors = seriesElement.Element(Cx + "valueColors");
+        var positions = seriesElement.Element(Cx + "valueColorPositions");
+        if (colors is null && positions is null)
+            return null;
+
+        var scale = new ChartValueColorScale
+        {
+            MinColor = ReadChartExValueColor(colors?.Element(Cx + "minColor"), scheme),
+            MidColor = ReadChartExValueColor(colors?.Element(Cx + "midColor"), scheme),
+            MaxColor = ReadChartExValueColor(colors?.Element(Cx + "maxColor"), scheme),
+            PositionCount = ParseNullableInt(positions?.Attribute("count")?.Value),
+            MinPosition = ReadChartExValueColorPosition(positions?.Element(Cx + "min")),
+            MidPosition = ReadChartExValueColorPosition(positions?.Element(Cx + "mid")),
+            MaxPosition = ReadChartExValueColorPosition(positions?.Element(Cx + "max")),
+        };
+        return scale;
+    }
+
+    private static ThemeAwareColor? ReadChartExValueColor(
+        XElement? element,
+        PresentationColorScheme scheme) =>
+        element is null
+            ? null
+            : PptxColorReader.TryReadColor(element.Element(A + "solidFill"), scheme);
+
+    private static ChartValueColorPosition? ReadChartExValueColorPosition(XElement? element)
+    {
+        if (element is null)
+            return null;
+
+        if (element.Element(Cx + "extremeValue") is not null)
+            return new ChartValueColorPosition { IsExtreme = true };
+
+        var number = element.Element(Cx + "number")?.Attribute("val")?.Value;
+        if (double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out var numberValue))
+            return new ChartValueColorPosition { Number = numberValue };
+
+        var percent = element.Element(Cx + "percent")?.Attribute("val")?.Value;
+        if (double.TryParse(percent, NumberStyles.Float, CultureInfo.InvariantCulture, out var percentValue))
+            return new ChartValueColorPosition { Percent = percentValue };
+
+        return null;
+    }
+
+    private static void ReadChartExDataPoints(
+        XElement seriesElement,
+        PresentationColorScheme scheme,
+        ChartSeries series)
+    {
+        foreach (var dataPoint in seriesElement.Elements(Cx + "dataPt"))
+        {
+            if (!int.TryParse(
+                    dataPoint.Attribute("idx")?.Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var index)
+                || index < 0)
+                continue;
+
+            var shapeProperties = dataPoint.Element(Cx + "spPr");
+            if (shapeProperties is null)
+                continue;
+
+            var style = new ChartPointStyle();
+            var fill = PptxColorReader.TryReadFill(shapeProperties, scheme);
+            switch (fill)
+            {
+                case ShapeFill.None:
+                    style.Fill = fill;
+                    break;
+                case ShapeFill.Solid solid:
+                    style.FillColor = solid.Color;
+                    break;
+                case ShapeFill.Gradient gradient:
+                    style.Fill = gradient;
+                    break;
+                case ShapeFill.Pattern pattern:
+                    style.Fill = pattern;
+                    break;
+            }
+
+            var outline = PptxColorReader.TryReadOutline(
+                shapeProperties.Element(A + "ln"), scheme);
+            if (outline is ShapeOutline.Visible visible)
+            {
+                style.StrokeColor = visible.Color;
+                style.StrokeWidthPt = visible.WidthPt;
+            }
+            else if (outline is ShapeOutline.GradientVisible gradientOutline)
+            {
+                style.StrokeWidthPt = gradientOutline.WidthPt;
+            }
+
+            if (style.Fill is not null
+                || style.FillColor is not null
+                || style.StrokeColor is not null
+                || style.StrokeWidthPt is not null)
+            {
+                if (series.PointStyles.TryGetValue(index, out var existing))
+                {
+                    style.DataLabels = existing.DataLabels;
+                    style.Marker = existing.Marker;
+                    style.ExplosionPercent = existing.ExplosionPercent;
+                }
+
+                series.PointStyles[index] = style;
+            }
+        }
+    }
+
+    private static void ReadChartExDataLabels(
+        XElement? dataLabels,
+        PresentationColorScheme scheme,
+        ChartSeries series)
+    {
+        if (dataLabels is null)
+            return;
+
+        var labels = ReadChartExDataLabelValues(dataLabels, scheme);
+        if (labels is not null)
+            series.DataLabels = labels;
+
+        foreach (var pointLabel in dataLabels.Elements(Cx + "dataLabel"))
+        {
+            if (!int.TryParse(
+                    pointLabel.Attribute("idx")?.Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var index)
+                || index < 0)
+                continue;
+
+            var pointLabels = ReadChartExDataLabelValues(pointLabel, scheme);
+            if (pointLabels is null)
+                continue;
+
+            if (!series.PointStyles.TryGetValue(index, out var style))
+                style = new ChartPointStyle();
+            style.DataLabels = pointLabels;
+            series.PointStyles[index] = style;
+        }
+
+        foreach (var hiddenLabel in dataLabels.Elements(Cx + "dataLabelHidden"))
+        {
+            if (!int.TryParse(
+                    hiddenLabel.Attribute("idx")?.Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var index)
+                || index < 0)
+                continue;
+
+            if (!series.PointStyles.TryGetValue(index, out var style))
+                style = new ChartPointStyle();
+            style.DataLabels = new ChartDataLabels { Delete = true };
+            series.PointStyles[index] = style;
+        }
+    }
+
+    private static ChartDataLabels? ReadChartExDataLabelValues(
+        XElement element,
+        PresentationColorScheme scheme)
+    {
+        var visibility = element.Element(Cx + "visibility");
+        var hasContent = visibility is not null
+            || element.Attribute("pos") is not null
+            || element.Element(Cx + "numFmt") is not null
+            || element.Element(Cx + "txPr") is not null
+            || element.Element(Cx + "separator") is not null;
+        if (!hasContent)
+            return null;
+
+        var position = element.Attribute("pos")?.Value switch
+        {
+            "ctr" => DataLabelPosition.Center,
+            "inEnd" => DataLabelPosition.InsideEnd,
+            "outEnd" => DataLabelPosition.OutsideEnd,
+            "inBase" => DataLabelPosition.InsideBase,
+            "bestFit" => DataLabelPosition.BestFit,
+            "t" => DataLabelPosition.Above,
+            "b" => DataLabelPosition.Below,
+            "l" => DataLabelPosition.Left,
+            "r" => DataLabelPosition.Right,
+            _ => (DataLabelPosition?)null
+        };
+
+        return new ChartDataLabels
+        {
+            ShowSeriesName = ParseNullableBoolAttr(visibility?.Attribute("seriesName")?.Value) ?? false,
+            ShowCategoryName = ParseNullableBoolAttr(visibility?.Attribute("categoryName")?.Value) ?? false,
+            ShowValue = ParseNullableBoolAttr(visibility?.Attribute("value")?.Value) ?? false,
+            Position = position,
+            NumberFormat = element.Element(Cx + "numFmt")?.Attribute("formatCode")?.Value,
+            Separator = element.Element(Cx + "separator")?.Value,
+            TextStyle = ReadChartTextStyle(element.Element(Cx + "txPr"), scheme)
+        };
     }
 
     private static string? ReadChartExTitle(XElement? title)

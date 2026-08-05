@@ -69,6 +69,8 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
     private bool? _oldUpDownBars;
     private bool? _oldSeriesLines;
     private int? _oldStyleId;
+    private ChartExTitlePosition? _oldChartExTitlePosition;
+    private ChartExTitleAlignment? _oldChartExTitleAlignment;
 
     public SetChartDisplayOptionsCommand(
         int slideIndex,
@@ -111,6 +113,8 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         _oldUpDownBars = SupportsLineDecorations(chart.ChartType) ? chart.ShowUpDownBars : null;
         _oldSeriesLines = SupportsSeriesLines(chart.ChartType) ? chart.SeriesLinesSpecified : null;
         _oldStyleId = chart.StyleId;
+        _oldChartExTitlePosition = chart.ChartExTitlePosition;
+        _oldChartExTitleAlignment = chart.ChartExTitleAlignment;
 
         chart.Title = string.IsNullOrWhiteSpace(_newOptions.Title) ? null : _newOptions.Title;
         chart.HasAutomaticTitle = false;
@@ -130,6 +134,13 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         chart.VaryColors = _newOptions.VaryColors ?? chart.VaryColors;
         chart.LegendOverlay = _newOptions.LegendOverlay;
         chart.StyleId = _newOptions.StyleId;
+        if (chart.IsChartEx)
+        {
+            if (_newOptions.ChartExTitlePosition.HasValue)
+                chart.ChartExTitlePosition = _newOptions.ChartExTitlePosition;
+            if (_newOptions.ChartExTitleAlignment.HasValue)
+                chart.ChartExTitleAlignment = _newOptions.ChartExTitleAlignment;
+        }
         if (chart.ChartType == ChartType.Stock && _newOptions.HighLowLines.HasValue)
             chart.HasHighLowLines = _newOptions.HighLowLines.Value;
         if (chart.ChartType == ChartType.Waterfall && _newOptions.ShowWaterfallConnectorLines.HasValue)
@@ -207,6 +218,8 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         chart.VaryColors = _oldVaryColors;
         chart.LegendOverlay = _oldLegendOverlay;
         chart.StyleId = _oldStyleId;
+        chart.ChartExTitlePosition = _oldChartExTitlePosition;
+        chart.ChartExTitleAlignment = _oldChartExTitleAlignment;
         if (chart.ChartType == ChartType.Stock && _oldHighLowLines.HasValue)
             chart.HasHighLowLines = _oldHighLowLines.Value;
         if (chart.ChartType == ChartType.Waterfall && _oldWaterfallConnectorLines.HasValue)

@@ -463,6 +463,22 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void ChartDisplayOptionsPlanner_ChartExTitleLayoutUsesSharedCommitPlan()
+    {
+        var chart = MakeChart();
+        chart.IsChartEx = true;
+
+        var planner = ChartDisplayOptionsPlanner.FromChart(chart);
+        planner.SetTitlePosition(ChartExTitlePosition.Right);
+        planner.SetTitleAlignment(ChartExTitleAlignment.Far);
+
+        var commit = planner.BuildCommitPlan();
+
+        commit.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Right);
+        commit.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Far);
+    }
+
+    [Fact]
     public void ChartDisplayOptionsPlanner_WaterfallConnectorLinesAreScopedToWaterfallCharts()
     {
         var waterfall = MakeChart();

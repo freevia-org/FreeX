@@ -1903,6 +1903,8 @@ public sealed class ChartTests : IDisposable
                     new XElement(cxNs + "data", new XAttribute("id", 0))),
                 new XElement(cxNs + "chart",
                     new XElement(cxNs + "title",
+                        new XAttribute("pos", "r"),
+                        new XAttribute("align", "far"),
                         new XElement(cxNs + "tx",
                             new XElement(cxNs + "txData",
                                 new XElement(cxNs + "v", "Native title")))),
@@ -1932,19 +1934,586 @@ public sealed class ChartTests : IDisposable
         var reloaded = PptxPackageReader.Read(path).Slides[0].Shapes
             .First(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
         reloaded.Title.Should().Be("Native title");
+        reloaded.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Right);
+        reloaded.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Far);
 
         reloaded.Title = "Edited title";
+        reloaded.ChartExTitlePosition = ChartExTitlePosition.Bottom;
+        reloaded.ChartExTitleAlignment = ChartExTitleAlignment.Near;
         var editedPath = WriteToPptx(BuildPresWithChart(reloaded));
         using (var archive = ZipFile.OpenRead(editedPath))
         {
             var chartEx = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
-            chartEx.Descendants(cxNs + "title").Single()
-                .Descendants(cxNs + "v").Single().Value.Should().Be("Edited title");
+            var title = chartEx.Descendants(cxNs + "title").Single();
+            title.Attribute("pos")!.Value.Should().Be("b");
+            title.Attribute("align")!.Value.Should().Be("near");
+            title.Descendants(cxNs + "v").Single().Value.Should().Be("Edited title");
         }
 
         var edited = PptxPackageReader.Read(editedPath).Slides[0].Shapes
             .First(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
         edited.Title.Should().Be("Edited title");
+        edited.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Bottom);
+        edited.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Near);
+    }
+
+    [Fact]
+    public void Edit_NativeChartExSeriesDataLabels_RoundTripsWithoutFlatteningFamilyPayload()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XElement(cxNs + "chartData",
+                    new XElement(cxNs + "data", new XAttribute("id", 0))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData",
+                                        new XElement(cxNs + "v", "Revenue"))),
+                                new XElement(cxNs + "dataLabels",
+                                    new XAttribute("pos", "outEnd"),
+                                    new XElement(cxNs + "numFmt",
+                                        new XAttribute("formatCode", "0.0")),
+                                    new XElement(cxNs + "visibility",
+                                        new XAttribute("value", "true"),
+                                        new XAttribute("categoryName", "false")),
+                                    new XElement(cxNs + "separator", " | "),
+                                    new XElement(cxNs + "dataLabelHidden",
+                                        new XAttribute("idx", 1))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0))))))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+        chart.Categories.AddRange(["Q1", "Q2"]);
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+
+        var importedPath = WriteToPptx(BuildPresWithChart(chart));
+        var imported = PptxPackageReader.Read(importedPath).Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        imported.Series[0].DataLabels.Should().NotBeNull();
+        imported.Series[0].DataLabels!.ShowValue.Should().BeTrue();
+        imported.Series[0].DataLabels!.Position.Should().Be(DataLabelPosition.OutsideEnd);
+        imported.Series[0].DataLabels!.NumberFormat.Should().Be("0.0");
+        imported.Series[0].DataLabels!.Separator.Should().Be(" | ");
+        imported.Series[0].PointStyles[1].DataLabels!.Delete.Should().BeTrue();
+
+        imported.Series[0].DataLabels!.ShowCategoryName = true;
+        imported.Series[0].DataLabels!.ShowValue = false;
+        var editedPath = WriteToPptx(BuildPresWithChart(imported));
+        using var archive = ZipFile.OpenRead(editedPath);
+        var edited = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var labels = edited.Descendants(cxNs + "series").Single()
+            .Element(cxNs + "dataLabels")!;
+        labels.Attribute("pos")!.Value.Should().Be("outEnd");
+        labels.Element(cxNs + "visibility")!.Attribute("categoryName")!.Value.Should().Be("true");
+        labels.Element(cxNs + "visibility")!.Attribute("value").Should().BeNull();
+        labels.Element(cxNs + "dataLabelHidden")!.Attribute("idx")!.Value.Should().Be("1");
+        edited.Descendants(cxNs + "series").Single().Attribute("layoutId")!.Value.Should().Be("histogram");
+    }
+
+    [Fact]
+    public void Edit_NativeChartExLegendTextStyle_RoundTripsWithoutDroppingLegendAttributes()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        const string drawingMlUri = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace cxNs = chartExUri;
+        XNamespace aNs = drawingMlUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XAttribute(XNamespace.Xmlns + "a", drawingMlUri),
+                new XElement(cxNs + "chartData",
+                    new XElement(cxNs + "data", new XAttribute("id", 0))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData",
+                                        new XElement(cxNs + "v", "Revenue"))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0))))),
+                    new XElement(cxNs + "legend",
+                        new XAttribute("pos", "r"),
+                        new XAttribute("overlay", "0"),
+                        new XAttribute("align", "ctr"),
+                        new XElement(cxNs + "txPr",
+                            new XElement(aNs + "bodyPr"),
+                            new XElement(aNs + "lstStyle"),
+                            new XElement(aNs + "p",
+                                new XElement(aNs + "pPr",
+                                    new XElement(aNs + "defRPr",
+                                        new XAttribute("sz", "1200"),
+                                        new XAttribute("b", "1"),
+                                        new XElement(aNs + "solidFill",
+                                            new XElement(aNs + "srgbClr",
+                                                new XAttribute("val", "1F4E79"))))),
+                                new XElement(aNs + "endParaRPr")))))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+        chart.Categories.AddRange(["Q1", "Q2"]);
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+
+        var importedPath = WriteToPptx(BuildPresWithChart(chart));
+        var imported = PptxPackageReader.Read(importedPath).Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        imported.LegendTextStyle.Should().NotBeNull();
+        imported.LegendTextStyle!.FontSizePt.Should().Be(12);
+        imported.LegendTextStyle.Bold.Should().BeTrue();
+        imported.LegendTextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+
+        imported.LegendTextStyle = new ChartTextStyle
+        {
+            FontSizePt = 14,
+            Italic = true,
+            FontFamily = "Aptos"
+        };
+        var editedPath = WriteToPptx(BuildPresWithChart(imported));
+        using var archive = ZipFile.OpenRead(editedPath);
+        var edited = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var legend = edited.Descendants(cxNs + "legend").Single();
+        legend.Attribute("pos")!.Value.Should().Be("r");
+        legend.Attribute("overlay")!.Value.Should().Be("0");
+        legend.Attribute("align")!.Value.Should().Be("ctr");
+        var defRPr = legend.Element(cxNs + "txPr")!
+            .Element(aNs + "p")!
+            .Element(aNs + "pPr")!
+            .Element(aNs + "defRPr")!;
+        defRPr.Attribute("sz")!.Value.Should().Be("1400");
+        defRPr.Attribute("i")!.Value.Should().Be("1");
+        defRPr.Element(aNs + "latin")!.Attribute("typeface")!.Value.Should().Be("Aptos");
+
+        var fresh = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            Legend = LegendPosition.Top,
+            LegendTextStyle = new ChartTextStyle { FontSizePt = 11, Bold = true }
+        };
+        fresh.Categories.Add("Q1");
+        var freshSeries = new ChartSeries { Name = "Revenue" };
+        freshSeries.Values.Add(10);
+        fresh.Series.Add(freshSeries);
+        var freshPath = WriteToPptx(BuildPresWithChart(fresh));
+        using var freshArchive = ZipFile.OpenRead(freshPath);
+        var freshChart = XDocument.Load(freshArchive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        freshChart.Descendants(cxNs + "legend").Single()
+            .Element(cxNs + "txPr")!.Element(aNs + "p")!
+            .Element(aNs + "pPr")!.Element(aNs + "defRPr")!
+            .Attribute("b")!.Value.Should().Be("1");
+    }
+
+    [Fact]
+    public void Edit_NativeChartExTitleTextStyle_RoundTripsWithoutDroppingTitleAttributes()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        const string drawingMlUri = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace cxNs = chartExUri;
+        XNamespace aNs = drawingMlUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XAttribute(XNamespace.Xmlns + "a", drawingMlUri),
+                new XElement(cxNs + "chartData",
+                    new XElement(cxNs + "data", new XAttribute("id", 0)) ),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "title",
+                        new XAttribute("pos", "t"),
+                        new XAttribute("align", "ctr"),
+                        new XAttribute("overlay", "0"),
+                        new XElement(cxNs + "tx",
+                            new XElement(cxNs + "txData",
+                                new XElement(cxNs + "v", "Native title"))),
+                        new XElement(cxNs + "txPr",
+                            new XElement(aNs + "bodyPr"),
+                            new XElement(aNs + "lstStyle"),
+                            new XElement(aNs + "p",
+                                new XElement(aNs + "pPr",
+                                    new XElement(aNs + "defRPr",
+                                        new XAttribute("sz", "1200"),
+                                        new XAttribute("b", "1"),
+                                        new XElement(aNs + "solidFill",
+                                            new XElement(aNs + "srgbClr",
+                                                new XAttribute("val", "1F4E79"))))),
+                                new XElement(aNs + "endParaRPr")))),
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData",
+                                        new XElement(cxNs + "v", "Value"))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0))))))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+
+        var path = WriteToPptx(BuildPresWithChart(chart));
+        var imported = PptxPackageReader.Read(path).Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        imported.Title.Should().Be("Native title");
+        imported.TitleOverlay.Should().BeFalse();
+        imported.TitleStyle.Should().NotBeNull();
+        imported.TitleStyle!.FontSizePt.Should().Be(12);
+        imported.TitleStyle.Bold.Should().BeTrue();
+        imported.TitleStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+
+        imported.Title = "Edited title";
+        imported.TitleOverlay = true;
+        imported.TitleStyle = new ChartTextStyle
+        {
+            FontSizePt = 16,
+            Italic = true,
+            FontFamily = "Aptos"
+        };
+        var editedPath = WriteToPptx(BuildPresWithChart(imported));
+        using var archive = ZipFile.OpenRead(editedPath);
+        var edited = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var title = edited.Descendants(cxNs + "title").Single();
+        title.Attribute("pos")!.Value.Should().Be("t");
+        title.Attribute("align")!.Value.Should().Be("ctr");
+        title.Attribute("overlay")!.Value.Should().Be("1");
+        title.Descendants(cxNs + "v").Single().Value.Should().Be("Edited title");
+        var defRPr = title.Element(cxNs + "txPr")!
+            .Element(aNs + "p")!
+            .Element(aNs + "pPr")!
+            .Element(aNs + "defRPr")!;
+        defRPr.Attribute("sz")!.Value.Should().Be("1600");
+        defRPr.Attribute("i")!.Value.Should().Be("1");
+        defRPr.Element(aNs + "latin")!.Attribute("typeface")!.Value.Should().Be("Aptos");
+
+        var fresh = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            Title = "Fresh title",
+            TitleOverlay = false,
+            TitleStyle = new ChartTextStyle { FontSizePt = 11, Bold = true }
+        };
+        fresh.Categories.Add("Q1");
+        var freshSeries = new ChartSeries { Name = "Revenue" };
+        freshSeries.Values.Add(10);
+        fresh.Series.Add(freshSeries);
+        var freshPath = WriteToPptx(BuildPresWithChart(fresh));
+        using var freshArchive = ZipFile.OpenRead(freshPath);
+        var freshChart = XDocument.Load(freshArchive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var freshTitle = freshChart.Descendants(cxNs + "title").Single();
+        freshTitle.Attribute("overlay")!.Value.Should().Be("0");
+        freshTitle
+            .Element(cxNs + "txPr")!.Element(aNs + "p")!
+            .Element(aNs + "pPr")!.Element(aNs + "defRPr")!
+            .Attribute("b")!.Value.Should().Be("1");
+    }
+
+    [Fact]
+    public void Edit_NativeChartExDataPointFormatting_RoundTripsWithoutFlatteningExtensions()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        const string drawingMlUri = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace cxNs = chartExUri;
+        XNamespace aNs = drawingMlUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XAttribute(XNamespace.Xmlns + "a", drawingMlUri),
+                new XElement(cxNs + "chartData",
+                    new XElement(cxNs + "data", new XAttribute("id", 0))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData",
+                                        new XElement(cxNs + "v", "Revenue"))),
+                                new XElement(cxNs + "dataPt",
+                                    new XAttribute("idx", 1),
+                                    new XElement(cxNs + "spPr",
+                                        new XElement(aNs + "solidFill",
+                                            new XElement(aNs + "srgbClr", new XAttribute("val", "FF0000"))),
+                                        new XElement(aNs + "ln",
+                                            new XAttribute("w", 12700),
+                                            new XElement(aNs + "solidFill",
+                                                new XElement(aNs + "srgbClr", new XAttribute("val", "0000FF"))))),
+                                    new XElement(cxNs + "extLst",
+                                        new XElement(cxNs + "ext", new XAttribute("uri", "urn:freep:test")))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0))))))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+        chart.Categories.AddRange(["Q1", "Q2"]);
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+
+        var importedPath = WriteToPptx(BuildPresWithChart(chart));
+        var imported = PptxPackageReader.Read(importedPath).Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        var importedPoint = imported.Series[0].PointStyles[1];
+        importedPoint.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xFF0000));
+        importedPoint.StrokeColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x0000FF));
+        importedPoint.StrokeWidthPt.Should().BeApproximately(1, 0.001);
+
+        importedPoint.FillColor = new ThemeAwareColor(SrgbColor.FromRgb(0x00AA00));
+        var editedPath = WriteToPptx(BuildPresWithChart(imported));
+        using var archive = ZipFile.OpenRead(editedPath);
+        var edited = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var dataPoint = edited.Descendants(cxNs + "dataPt").Single();
+        dataPoint.Element(cxNs + "extLst").Should().NotBeNull();
+        dataPoint.Element(cxNs + "spPr")!
+            .Element(aNs + "solidFill")!
+            .Element(aNs + "srgbClr")!
+            .Attribute("val")!.Value.Should().Be("00AA00");
+        dataPoint.Element(cxNs + "spPr")!
+            .Element(aNs + "ln")!
+            .Attribute("w")!.Value.Should().Be("12700");
+    }
+
+    [Fact]
+    public void Edit_NativeChartExValueColors_RoundTripsGradientStopsAndPositions()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        const string drawingMlUri = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace cxNs = chartExUri;
+        XNamespace aNs = drawingMlUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XAttribute(XNamespace.Xmlns + "a", drawingMlUri),
+                new XElement(cxNs + "chartData", new XElement(cxNs + "data", new XAttribute("id", 0))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData", new XElement(cxNs + "v", "Revenue"))),
+                                new XElement(cxNs + "valueColors",
+                                    new XElement(cxNs + "minColor",
+                                        new XElement(aNs + "solidFill",
+                                            new XElement(aNs + "srgbClr", new XAttribute("val", "FF0000")))),
+                                    new XElement(cxNs + "midColor",
+                                        new XElement(aNs + "solidFill",
+                                            new XElement(aNs + "srgbClr", new XAttribute("val", "FFFF00")))),
+                                    new XElement(cxNs + "maxColor",
+                                        new XElement(aNs + "solidFill",
+                                            new XElement(aNs + "srgbClr", new XAttribute("val", "00FF00"))))),
+                                new XElement(cxNs + "valueColorPositions",
+                                    new XAttribute("count", "3"),
+                                    new XElement(cxNs + "min",
+                                        new XElement(cxNs + "number", new XAttribute("val", "0"))),
+                                    new XElement(cxNs + "mid",
+                                        new XElement(cxNs + "percent", new XAttribute("val", "50"))),
+                                    new XElement(cxNs + "max",
+                                        new XElement(cxNs + "extremeValue"))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0))))))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+        chart.Categories.AddRange(["Q1", "Q2"]);
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+
+        var importedPath = WriteToPptx(BuildPresWithChart(chart));
+        var imported = PptxPackageReader.Read(importedPath).Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        var importedScale = imported.Series[0].ValueColorScale!;
+        importedScale.MinColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xFF0000));
+        importedScale.MidColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xFFFF00));
+        importedScale.MaxColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x00FF00));
+        importedScale.PositionCount.Should().Be(3);
+        importedScale.MinPosition!.Number.Should().Be(0);
+        importedScale.MidPosition!.Percent.Should().Be(50);
+        importedScale.MaxPosition!.IsExtreme.Should().BeTrue();
+
+        importedScale.MidColor = new ThemeAwareColor(SrgbColor.FromRgb(0x0000FF));
+        importedScale.MidPosition = new ChartValueColorPosition { Number = 25 };
+        var editedPath = WriteToPptx(BuildPresWithChart(imported));
+        using var archive = ZipFile.OpenRead(editedPath);
+        var edited = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var editedSeries = edited.Descendants(cxNs + "series").Single();
+        editedSeries.Element(cxNs + "valueColors")!
+            .Element(cxNs + "midColor")!
+            .Element(aNs + "solidFill")!
+            .Element(aNs + "srgbClr")!
+            .Attribute("val")!.Value.Should().Be("0000FF");
+        editedSeries.Element(cxNs + "valueColorPositions")!
+            .Element(cxNs + "mid")!
+            .Element(cxNs + "number")!
+            .Attribute("val")!.Value.Should().Be("25");
+        editedSeries.Elements().Select(element => element.Name.LocalName)
+            .Should().ContainInOrder("tx", "valueColors", "valueColorPositions", "dataId");
+    }
+
+    [Fact]
+    public void Edit_NativeChartExSeriesFormatting_RoundTripsWithoutFlatteningShapeExtensions()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        const string drawingMlUri = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace cxNs = chartExUri;
+        XNamespace aNs = drawingMlUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XAttribute(XNamespace.Xmlns + "a", drawingMlUri),
+                new XElement(cxNs + "chartData", new XElement(cxNs + "data", new XAttribute("id", 0))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData", new XElement(cxNs + "v", "Revenue"))),
+                                new XElement(cxNs + "spPr",
+                                    new XElement(aNs + "solidFill",
+                                        new XElement(aNs + "srgbClr", new XAttribute("val", "FF0000"))),
+                                    new XElement(aNs + "ln",
+                                        new XAttribute("w", 12700),
+                                        new XElement(aNs + "solidFill",
+                                            new XElement(aNs + "srgbClr", new XAttribute("val", "0000FF"))),
+                                        new XElement(aNs + "prstDash", new XAttribute("val", "dash"))),
+                                    new XElement(aNs + "effectLst",
+                                        new XElement(aNs + "outerShdw", new XAttribute("blurRad", 12700)))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0))))))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+        chart.Categories.AddRange(["Q1", "Q2"]);
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+
+        var importedPath = WriteToPptx(BuildPresWithChart(chart));
+        var imported = PptxPackageReader.Read(importedPath).Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        imported.Series[0].FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xFF0000));
+        var importedLine = imported.Series[0].LineStyle!;
+        importedLine.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x0000FF));
+        importedLine.WidthPt.Should().BeApproximately(1, 3);
+        importedLine.Dash.Should().Be(OutlineDash.Dash);
+
+        imported.Series[0].FillColor = new ThemeAwareColor(SrgbColor.FromRgb(0x00AA00));
+        importedLine.Color = new ThemeAwareColor(SrgbColor.FromRgb(0xAA00AA));
+        importedLine.WidthPt = 2.25;
+        var editedPath = WriteToPptx(BuildPresWithChart(imported));
+        using var archive = ZipFile.OpenRead(editedPath);
+        var edited = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var editedSeries = edited.Descendants(cxNs + "series").Single();
+        var shapeProperties = editedSeries.Element(cxNs + "spPr")!;
+        shapeProperties.Element(aNs + "solidFill")!
+            .Element(aNs + "srgbClr")!
+            .Attribute("val")!.Value.Should().Be("00AA00");
+        shapeProperties.Element(aNs + "ln")!
+            .Element(aNs + "solidFill")!
+            .Element(aNs + "srgbClr")!
+            .Attribute("val")!.Value.Should().Be("AA00AA");
+        shapeProperties.Element(aNs + "ln")!.Attribute("w")!.Value.Should().Be("28575");
+        shapeProperties.Element(aNs + "effectLst").Should().NotBeNull();
+        editedSeries.Elements().Select(element => element.Name.LocalName)
+            .Should().ContainInOrder("tx", "spPr", "dataId");
+    }
+
+    [Fact]
+    public void Edit_NativeChartExLegend_RoundTripsPositionAndOverlayAttributes()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XElement(cxNs + "chartData", new XElement(cxNs + "data", new XAttribute("id", 0))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData", new XElement(cxNs + "v", "Revenue"))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0))))),
+                    new XElement(cxNs + "legend",
+                        new XAttribute("pos", "r"),
+                        new XAttribute("align", "ctr"),
+                        new XAttribute("overlay", "0")))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+        chart.Categories.AddRange(["Q1", "Q2"]);
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+
+        var importedPath = WriteToPptx(BuildPresWithChart(chart));
+        var imported = PptxPackageReader.Read(importedPath).Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        imported.Legend.Should().Be(LegendPosition.Right);
+        imported.LegendOverlay.Should().BeFalse();
+
+        imported.Legend = LegendPosition.Bottom;
+        imported.LegendOverlay = true;
+        var editedPath = WriteToPptx(BuildPresWithChart(imported));
+        using var archive = ZipFile.OpenRead(editedPath);
+        var edited = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var editedLegend = edited.Descendants(cxNs + "legend").Single();
+        editedLegend.Attribute("pos")!.Value.Should().Be("b");
+        editedLegend.Attribute("overlay")!.Value.Should().Be("1");
+        editedLegend.Attribute("align")!.Value.Should().Be("ctr");
+
+        var fresh = new ChartShape
+        {
+            ChartType = ChartType.Waterfall,
+            IsChartEx = true,
+            Legend = LegendPosition.Top,
+            LegendOverlay = false,
+        };
+        fresh.Categories.Add("Q1");
+        var freshSeries = new ChartSeries { Name = "Fresh" };
+        freshSeries.Values.Add(1);
+        fresh.Series.Add(freshSeries);
+        var freshPath = WriteToPptx(BuildPresWithChart(fresh));
+        using var freshArchive = ZipFile.OpenRead(freshPath);
+        var freshXml = XDocument.Load(freshArchive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        freshXml.Descendants(cxNs + "legend").Single().Attribute("pos")!.Value.Should().Be("t");
     }
 
     [Fact]

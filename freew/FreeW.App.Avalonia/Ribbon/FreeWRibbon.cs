@@ -282,6 +282,10 @@ internal sealed record RibbonHostCallbacks(
     Action? OpenManageSourcesDialog = null,
     /// <summary>References &gt; Mark Entry. Optional; registry falls back to marking the selection when null.</summary>
     Action? OpenMarkIndexEntryDialog = null,
+    /// <summary>References &gt; Insert Index. Optional; registry inserts the default index when null.</summary>
+    Action? OpenInsertIndexDialog = null,
+    /// <summary>References &gt; Update Index. Optional; registry refreshes the default index when null.</summary>
+    Action? OpenUpdateIndexDialog = null,
     /// <summary>References &gt; Mark Citation. Optional; registry no-ops when null.</summary>
     Action? OpenMarkCitationDialog = null,
     /// <summary>References &gt; Table of Authorities. Optional; registry inserts with default options when null.</summary>

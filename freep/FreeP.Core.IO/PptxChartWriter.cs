@@ -111,7 +111,12 @@ internal static class PptxChartWriter
             {
                 var preserved = XDocument.Parse(chart.PreservedChartExXml, LoadOptions.PreserveWhitespace);
                 UpdateChartExTitle(preserved, chart);
+                UpdateChartExLegend(preserved, chart);
                 UpdateChartExSeriesLayouts(preserved, chart);
+                UpdateChartExSeriesShapeProperties(preserved, chart);
+                UpdateChartExValueColorScales(preserved, chart);
+                UpdateChartExSeriesDataPoints(preserved, chart);
+                UpdateChartExSeriesDataLabels(preserved, chart);
                 if (chart.RegenerateWorkbookOnSave)
                     UpdateChartExData(preserved, chart);
                 if (IsWaterfallChartEx(preserved, chart))
@@ -152,7 +157,7 @@ internal static class PptxChartWriter
             new XElement(cx + "dataId", new XAttribute("val", 0)),
             BuildChartExLayoutPr(chart, cx));
 
-        return new XDocument(
+        var document = new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(cx + "chartSpace",
                 new XAttribute(XNamespace.Xmlns + "cx", cx.NamespaceName),
@@ -162,6 +167,102 @@ internal static class PptxChartWriter
                 new XElement(cx + "chart",
                     new XElement(cx + "plotArea",
                         new XElement(cx + "plotAreaRegion", series)))));
+        if (!string.IsNullOrWhiteSpace(chart.Title))
+        {
+            document.Root?.Element(cx + "chart")?.AddFirst(
+                new XElement(cx + "title",
+                    chart.ChartExTitlePosition is { } titlePosition
+                        ? new XAttribute("pos", ChartExTitlePositionToken(titlePosition))
+                        : null,
+                    chart.ChartExTitleAlignment is { } titleAlignment
+                        ? new XAttribute("align", ChartExTitleAlignmentToken(titleAlignment))
+                        : null,
+                    chart.TitleOverlay is { } overlay
+                        ? new XAttribute("overlay", overlay ? "1" : "0")
+                        : null,
+                    new XElement(cx + "tx",
+                        new XElement(cx + "txData",
+                            new XElement(cx + "v", chart.Title))),
+                    BuildChartTextPropertiesEl(chart.TitleStyle, cx)));
+        }
+        if (chart.Legend is { } position)
+            document.Root?.Element(cx + "chart")?.Add(BuildChartExLegend(
+                position, chart.LegendOverlay, chart.LegendTextStyle, cx));
+        return document;
+    }
+
+    private static XElement BuildChartExLegend(
+        LegendPosition position,
+        bool? overlay,
+        ChartTextStyle? textStyle,
+        XNamespace cx) =>
+        new(cx + "legend",
+            new XAttribute("pos", ChartExLegendPosition(position)),
+            overlay is { } value ? new XAttribute("overlay", value ? "1" : "0") : null,
+            BuildChartTextPropertiesEl(textStyle, cx));
+
+    private static string ChartExLegendPosition(LegendPosition position) =>
+        position switch
+        {
+            LegendPosition.Left => "l",
+            LegendPosition.Top => "t",
+            LegendPosition.Bottom => "b",
+            _ => "r",
+        };
+
+    private static string ChartExTitlePositionToken(ChartExTitlePosition position) =>
+        position switch
+        {
+            ChartExTitlePosition.Bottom => "b",
+            ChartExTitlePosition.Left => "l",
+            ChartExTitlePosition.Right => "r",
+            _ => "t",
+        };
+
+    private static string ChartExTitleAlignmentToken(ChartExTitleAlignment alignment) =>
+        alignment switch
+        {
+            ChartExTitleAlignment.Near => "near",
+            ChartExTitleAlignment.Far => "far",
+            _ => "ctr",
+        };
+
+    private static void UpdateChartExLegend(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        if (chart.Legend is not { } position)
+            return;
+
+        var chartElement = document.Root?.Element(cx + "chart");
+        if (chartElement is null)
+            return;
+
+        var legend = chartElement.Element(cx + "legend");
+        if (legend is null)
+        {
+            chartElement.Add(BuildChartExLegend(
+                position, chart.LegendOverlay, chart.LegendTextStyle, cx));
+            return;
+        }
+
+        legend.SetAttributeValue("pos", ChartExLegendPosition(position));
+        if (chart.LegendOverlay is { } overlay)
+            legend.SetAttributeValue("overlay", overlay ? "1" : "0");
+
+        if (chart.LegendTextStyle is not null)
+        {
+            legend.Element(cx + "txPr")?.Remove();
+            var textProperties = BuildChartTextPropertiesEl(chart.LegendTextStyle, cx);
+            if (textProperties is not null)
+            {
+                var anchor = legend.Elements().FirstOrDefault(element =>
+                    element.Name == cx + "offset" || element.Name == cx + "extLst");
+                if (anchor is null)
+                    legend.Add(textProperties);
+                else
+                    anchor.AddBeforeSelf(textProperties);
+            }
+        }
     }
 
     private static void UpdateChartExTitle(XDocument document, ChartShape chart)
@@ -173,14 +274,29 @@ internal static class PptxChartWriter
 
         var title = chartElement.Element(cx + "title");
         if (chart.Title is null)
+        {
+            // An empty title is an explicit authoring edit. Do not leave the
+            // preserved native title visible just because the model has no text.
+            title?.Remove();
             return;
+        }
 
         if (title is null)
         {
             chartElement.AddFirst(new XElement(cx + "title",
+                chart.ChartExTitlePosition is { } titlePosition
+                    ? new XAttribute("pos", ChartExTitlePositionToken(titlePosition))
+                    : null,
+                chart.ChartExTitleAlignment is { } titleAlignment
+                    ? new XAttribute("align", ChartExTitleAlignmentToken(titleAlignment))
+                    : null,
+                chart.TitleOverlay is { } overlay
+                    ? new XAttribute("overlay", overlay ? "1" : "0")
+                    : null,
                 new XElement(cx + "tx",
                     new XElement(cx + "txData",
-                        new XElement(cx + "v", chart.Title)))));
+                        new XElement(cx + "v", chart.Title))),
+                BuildChartTextPropertiesEl(chart.TitleStyle, cx)));
             return;
         }
 
@@ -188,21 +304,46 @@ internal static class PptxChartWriter
         if (value is not null)
         {
             value.Value = chart.Title;
-            return;
         }
-
-        var richRuns = title.Descendants(A + "t").ToList();
-        if (richRuns.Count > 0)
+        else
         {
-            richRuns[0].Value = chart.Title;
-            foreach (var run in richRuns.Skip(1))
-                run.Value = string.Empty;
-            return;
+            var richRuns = title.Descendants(A + "t").ToList();
+            if (richRuns.Count > 0)
+            {
+                richRuns[0].Value = chart.Title;
+                foreach (var run in richRuns.Skip(1))
+                    run.Value = string.Empty;
+            }
+            else
+            {
+                var txData = title.Descendants(cx + "txData").FirstOrDefault();
+                if (txData is not null)
+                    txData.Add(new XElement(cx + "v", chart.Title));
+            }
         }
 
-        var txData = title.Descendants(cx + "txData").FirstOrDefault();
-        if (txData is not null)
-            txData.Add(new XElement(cx + "v", chart.Title));
+        if (chart.TitleOverlay is { } overlayValue)
+            title.SetAttributeValue("overlay", overlayValue ? "1" : "0");
+
+        if (chart.ChartExTitlePosition is { } positionValue)
+            title.SetAttributeValue("pos", ChartExTitlePositionToken(positionValue));
+        if (chart.ChartExTitleAlignment is { } alignmentValue)
+            title.SetAttributeValue("align", ChartExTitleAlignmentToken(alignmentValue));
+
+        if (chart.TitleStyle is not null)
+        {
+            title.Element(cx + "txPr")?.Remove();
+            var textProperties = BuildChartTextPropertiesEl(chart.TitleStyle, cx);
+            if (textProperties is not null)
+            {
+                var anchor = title.Elements().FirstOrDefault(element =>
+                    element.Name == cx + "offset" || element.Name == cx + "extLst");
+                if (anchor is null)
+                    title.Add(textProperties);
+                else
+                    anchor.AddBeforeSelf(textProperties);
+            }
+        }
     }
 
     private static bool IsWaterfallChartEx(XDocument document, ChartShape chart)
@@ -303,6 +444,347 @@ internal static class PptxChartWriter
             var layoutId = chart.Series[index].ChartExLayoutId;
             if (!string.IsNullOrWhiteSpace(layoutId))
                 series[index].SetAttributeValue("layoutId", layoutId);
+        }
+    }
+
+    private static void UpdateChartExValueColorScales(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var series = document.Descendants(cx + "plotAreaRegion")
+            .Elements(cx + "series")
+            .ToList();
+
+        if (series.Count == 0 || series.Count != chart.Series.Count)
+            return;
+
+        for (var index = 0; index < series.Count; index++)
+        {
+            var scale = chart.Series[index].ValueColorScale;
+            if (scale is null)
+                continue;
+
+            series[index].Element(cx + "valueColors")?.Remove();
+            series[index].Element(cx + "valueColorPositions")?.Remove();
+
+            var anchor = series[index].Elements().FirstOrDefault(element =>
+                element.Name == cx + "dataPt"
+                || element.Name == cx + "dataLabels"
+                || element.Name == cx + "dataId"
+                || element.Name == cx + "layoutPr");
+
+            var valueColors = new XElement(cx + "valueColors");
+            AddChartExValueColor(valueColors, "minColor", scale.MinColor, cx);
+            AddChartExValueColor(valueColors, "midColor", scale.MidColor, cx);
+            AddChartExValueColor(valueColors, "maxColor", scale.MaxColor, cx);
+            if (!valueColors.IsEmpty)
+                InsertBeforeOrAdd(series[index], anchor, valueColors);
+
+            var positions = new XElement(cx + "valueColorPositions",
+                new XAttribute("count", (scale.PositionCount is 2 or 3)
+                    ? scale.PositionCount.Value.ToString(CultureInfo.InvariantCulture)
+                    : scale.MidPosition is null ? "2" : "3"));
+            AddChartExValueColorPosition(positions, "min", scale.MinPosition, cx);
+            AddChartExValueColorPosition(positions, "mid", scale.MidPosition, cx);
+            AddChartExValueColorPosition(positions, "max", scale.MaxPosition, cx);
+            if (positions.Elements().Any())
+                InsertBeforeOrAdd(series[index], anchor, positions);
+        }
+    }
+
+    private static void UpdateChartExSeriesShapeProperties(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var series = document.Descendants(cx + "plotAreaRegion")
+            .Elements(cx + "series")
+            .ToList();
+
+        if (series.Count == 0 || series.Count != chart.Series.Count)
+            return;
+
+        for (var index = 0; index < series.Count; index++)
+        {
+            var source = chart.Series[index];
+            if (source.Fill is null && source.FillColor is null && source.LineStyle is null)
+                continue;
+
+            var shapeProperties = series[index].Element(cx + "spPr");
+            if (shapeProperties is null)
+            {
+                shapeProperties = new XElement(cx + "spPr");
+                var anchor = series[index].Elements().FirstOrDefault(element =>
+                    element.Name == cx + "valueColors"
+                    || element.Name == cx + "valueColorPositions"
+                    || element.Name == cx + "dataPt"
+                    || element.Name == cx + "dataLabels"
+                    || element.Name == cx + "dataId"
+                    || element.Name == cx + "layoutPr");
+                InsertBeforeOrAdd(series[index], anchor, shapeProperties);
+            }
+
+            if (source.Fill is not null || source.FillColor is not null)
+            {
+                foreach (var child in shapeProperties.Elements()
+                             .Where(element => element.Name == A + "noFill"
+                                || element.Name == A + "solidFill"
+                                || element.Name == A + "gradFill"
+                                || element.Name == A + "pattFill")
+                             .ToList())
+                    child.Remove();
+
+                var fill = BuildChartFillEl(source.Fill, source.FillColor);
+                if (fill is not null)
+                    shapeProperties.AddFirst(fill);
+            }
+
+            if (source.LineStyle is not null)
+                MergeChartExSeriesLine(shapeProperties, source.LineStyle);
+        }
+    }
+
+    private static void MergeChartExSeriesLine(XElement shapeProperties, ChartLineStyle style)
+    {
+        var modeled = BuildLineStyleEl(style);
+        if (modeled is null)
+            return;
+
+        var line = shapeProperties.Element(A + "ln");
+        if (line is null)
+        {
+            shapeProperties.Add(modeled);
+            return;
+        }
+
+        line.Attribute("w")?.Remove();
+        if (modeled.Attribute("w") is { } width)
+            line.Add(new XAttribute("w", width.Value));
+
+        foreach (var child in line.Elements()
+                     .Where(element => element.Name == A + "noFill"
+                        || element.Name == A + "solidFill"
+                        || element.Name == A + "gradFill"
+                        || element.Name == A + "pattFill"
+                        || element.Name == A + "prstDash")
+                     .ToList())
+            child.Remove();
+
+        foreach (var child in modeled.Elements())
+            line.Add(new XElement(child));
+    }
+
+    private static void AddChartExValueColor(
+        XElement parent,
+        string name,
+        ThemeAwareColor? color,
+        XNamespace cx)
+    {
+        if (color is null)
+            return;
+
+        parent.Add(new XElement(cx + name,
+            new XElement(A + "solidFill", BuildColorEl(color))));
+    }
+
+    private static void AddChartExValueColorPosition(
+        XElement parent,
+        string name,
+        ChartValueColorPosition? position,
+        XNamespace cx)
+    {
+        if (position is null)
+            return;
+
+        XElement value;
+        if (position.IsExtreme)
+            value = new XElement(cx + "extremeValue");
+        else if (position.Number is double number)
+            value = new XElement(cx + "number", new XAttribute("val", number.ToString("G", CultureInfo.InvariantCulture)));
+        else if (position.Percent is double percent)
+            value = new XElement(cx + "percent", new XAttribute("val", percent.ToString("G", CultureInfo.InvariantCulture)));
+        else
+            return;
+
+        parent.Add(new XElement(cx + name, value));
+    }
+
+    private static void InsertBeforeOrAdd(XElement parent, XElement? anchor, XElement child)
+    {
+        if (anchor is not null)
+            anchor.AddBeforeSelf(child);
+        else
+            parent.Add(child);
+    }
+
+    /// <summary>
+    /// Updates only the modeled ChartEx series data-label payload. A null model
+    /// value leaves the native element untouched so unsupported family metadata
+    /// remains verbatim.
+    /// </summary>
+    private static void UpdateChartExSeriesDataLabels(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var series = document.Descendants(cx + "plotAreaRegion")
+            .Elements(cx + "series")
+            .ToList();
+
+        if (series.Count == 0 || series.Count != chart.Series.Count)
+            return;
+
+        for (var index = 0; index < series.Count; index++)
+        {
+            var source = chart.Series[index];
+            var pointLabels = source.PointStyles
+                .Where(pair => pair.Value.DataLabels is not null)
+                .ToDictionary(pair => pair.Key, pair => pair.Value.DataLabels!);
+            if (source.DataLabels is null && pointLabels.Count == 0)
+                continue;
+
+            var element = series[index].Element(cx + "dataLabels");
+            if (element is null)
+            {
+                element = new XElement(cx + "dataLabels");
+                var dataId = series[index].Element(cx + "dataId");
+                if (dataId is not null)
+                    dataId.AddBeforeSelf(element);
+                else
+                    series[index].Add(element);
+            }
+
+            foreach (var childName in new[]
+                     { "numFmt", "txPr", "visibility", "separator", "dataLabel", "dataLabelHidden" })
+            {
+                element.Elements(cx + childName).Remove();
+            }
+            element.Attribute("pos")?.Remove();
+            var labels = source.DataLabels;
+            if (labels is not null)
+                AddChartExDataLabelContent(element, labels, cx);
+
+            foreach (var pair in pointLabels.OrderBy(pair => pair.Key))
+            {
+                var point = pair.Value;
+                if (point.Delete == true)
+                {
+                    element.Add(new XElement(cx + "dataLabelHidden",
+                        new XAttribute("idx", pair.Key)));
+                    continue;
+                }
+
+                element.Add(new XElement(cx + "dataLabel",
+                    new XAttribute("idx", pair.Key)));
+                AddChartExDataLabelContent(
+                    element.Elements(cx + "dataLabel").Last(), point, cx);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Updates only modeled native ChartEx point shape properties. A point with
+    /// no fill/stroke edit remains verbatim, including its extension payload.
+    /// </summary>
+    private static void UpdateChartExSeriesDataPoints(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var series = document.Descendants(cx + "plotAreaRegion")
+            .Elements(cx + "series")
+            .ToList();
+
+        if (series.Count == 0 || series.Count != chart.Series.Count)
+            return;
+
+        for (var index = 0; index < series.Count; index++)
+        {
+            var source = chart.Series[index];
+            var pointStyles = source.PointStyles
+                .Where(pair => HasChartExPointShapeFormatting(pair.Value))
+                .ToDictionary(pair => pair.Key, pair => pair.Value);
+            if (pointStyles.Count == 0)
+                continue;
+
+            foreach (var pair in pointStyles.OrderBy(pair => pair.Key))
+            {
+                var point = series[index].Elements(cx + "dataPt")
+                    .FirstOrDefault(element =>
+                        TryParseChartExId(element.Attribute("idx")?.Value) == pair.Key);
+                if (point is null)
+                {
+                    point = new XElement(cx + "dataPt",
+                        new XAttribute("idx", pair.Key));
+                    var anchor = series[index].Elements()
+                        .FirstOrDefault(element =>
+                            element.Name == cx + "dataLabels"
+                            || element.Name == cx + "dataId");
+                    if (anchor is not null)
+                        anchor.AddBeforeSelf(point);
+                    else
+                        series[index].Add(point);
+                }
+
+                var shapeProperties = BuildPointShapePropertiesEl(null, pair.Value);
+                if (shapeProperties is null)
+                    continue;
+
+                var chartExShapeProperties = new XElement(cx + "spPr", shapeProperties.Elements());
+                var existing = point.Element(cx + "spPr");
+                if (existing is not null)
+                    existing.ReplaceWith(chartExShapeProperties);
+                else
+                    point.AddFirst(chartExShapeProperties);
+            }
+        }
+    }
+
+    private static bool HasChartExPointShapeFormatting(ChartPointStyle style) =>
+        style.Fill is not null
+        || style.FillColor is not null
+        || style.StrokeColor is not null
+        || style.StrokeWidthPt is not null;
+
+    private static void AddChartExDataLabelContent(
+        XElement element,
+        ChartDataLabels labels,
+        XNamespace cx)
+    {
+        if (labels.NumberFormat is not null)
+            element.Add(new XElement(cx + "numFmt",
+                new XAttribute("formatCode", labels.NumberFormat),
+                new XAttribute("sourceLinked", "0")));
+
+        var textProperties = BuildChartTextPropertiesEl(labels.TextStyle);
+        if (textProperties is not null)
+            element.Add(new XElement(cx + "txPr", textProperties.Nodes()));
+
+        if (labels.ShowSeriesName || labels.ShowCategoryName || labels.ShowValue)
+        {
+            var visibility = new XElement(cx + "visibility");
+            if (labels.ShowSeriesName)
+                visibility.SetAttributeValue("seriesName", "true");
+            if (labels.ShowCategoryName)
+                visibility.SetAttributeValue("categoryName", "true");
+            if (labels.ShowValue)
+                visibility.SetAttributeValue("value", "true");
+            element.Add(visibility);
+        }
+
+        if (labels.Separator is not null)
+            element.Add(new XElement(cx + "separator", labels.Separator));
+
+        if (labels.Position is { } position)
+        {
+            var token = position switch
+            {
+                DataLabelPosition.Center => "ctr",
+                DataLabelPosition.InsideEnd => "inEnd",
+                DataLabelPosition.OutsideEnd => "outEnd",
+                DataLabelPosition.InsideBase => "inBase",
+                DataLabelPosition.BestFit => "bestFit",
+                DataLabelPosition.Above => "t",
+                DataLabelPosition.Below => "b",
+                DataLabelPosition.Left => "l",
+                DataLabelPosition.Right => "r",
+                _ => null
+            };
+            if (token is not null)
+                element.SetAttributeValue("pos", token);
         }
     }
 
@@ -1351,7 +1833,9 @@ internal static class PptxChartWriter
         return new XElement(A + "gradFill", gsLst, kindEl);
     }
 
-    private static XElement? BuildChartTextPropertiesEl(ChartTextStyle? style)
+    private static XElement? BuildChartTextPropertiesEl(
+        ChartTextStyle? style,
+        XNamespace? chartNamespace = null)
     {
         if (style?.IsImplicitDefault == true)
             return null;
@@ -1360,7 +1844,8 @@ internal static class PptxChartWriter
         if (defRPr is null)
             return null;
 
-        return new XElement(C + "txPr",
+        var chartNs = chartNamespace ?? C;
+        return new XElement(chartNs + "txPr",
             new XElement(A + "bodyPr"),
             new XElement(A + "lstStyle"),
             new XElement(A + "p",
@@ -1849,6 +2334,7 @@ internal static class PptxChartWriter
     private static XElement? BuildChartFillEl(ShapeFill? fill, ThemeAwareColor? solidFallback) =>
         fill switch
         {
+            ShapeFill.None => new XElement(A + "noFill"),
             ShapeFill.Gradient gradient => BuildGradFillEl(gradient),
             ShapeFill.Pattern pattern => BuildPattFillEl(pattern),
             ShapeFill.Solid solid => new XElement(A + "solidFill", BuildColorEl(solid.Color)),

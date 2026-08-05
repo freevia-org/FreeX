@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -1336,6 +1337,71 @@ public sealed class ChartDataCommandTests
         chart.VaryColors.Should().BeFalse();
         chart.LegendOverlay.Should().BeNull();
         chart.HasHighLowLines.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SetChartDisplayOptions_ChartExTitleLayout_ChangesAndUndoRestoresIt()
+    {
+        var (presentation, bus, id) = MakeChartPresentation();
+        var chart = presentation.Slides[0].Shapes[0].Chart!;
+        chart.IsChartEx = true;
+        chart.ChartExTitlePosition = ChartExTitlePosition.Left;
+        chart.ChartExTitleAlignment = ChartExTitleAlignment.Near;
+
+        bus.Execute(new SetChartDisplayOptionsCommand(
+            0,
+            id,
+            new ChartDisplayOptions(
+                null,
+                null,
+                false,
+                DataLabelPosition.Center,
+                false,
+                false,
+                ChartExTitlePosition: ChartExTitlePosition.Right,
+                ChartExTitleAlignment: ChartExTitleAlignment.Far)));
+
+        chart.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Right);
+        chart.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Far);
+
+        bus.Undo();
+
+        chart.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Left);
+        chart.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Near);
+    }
+
+    [Fact]
+    public void ChartExTitleRemoval_RemovesPreservedNativeTitleOnWrite()
+    {
+        var chart = new ChartShape
+        {
+            IsChartEx = true,
+            Title = null,
+            PreservedChartExXml = """
+                <cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex">
+                  <cx:chart>
+                    <cx:title overlay="1">
+                      <cx:tx><cx:txData><cx:v>Stale title</cx:v></cx:txData></cx:tx>
+                    </cx:title>
+                    <cx:plotArea><cx:plotAreaRegion><cx:series layoutId="column" /></cx:plotAreaRegion></cx:plotArea>
+                  </cx:chart>
+                  <cx:preservedExtension value="must-survive" />
+                </cx:chartSpace>
+                """
+        };
+
+        using var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+            PptxChartWriter.WriteChartExPart(archive, chart, 1);
+
+        package.Position = 0;
+        using var readArchive = new ZipArchive(package, ZipArchiveMode.Read);
+        using var reader = new StreamReader(readArchive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var xml = reader.ReadToEnd();
+
+        xml.Should().NotContain("<cx:title");
+        xml.Should().Contain("preservedExtension");
+        xml.Should().Contain("must-survive");
     }
 
     [Fact]

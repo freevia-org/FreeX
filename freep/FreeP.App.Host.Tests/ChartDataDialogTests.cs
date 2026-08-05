@@ -125,11 +125,14 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var (sess, _) = MakeSession();
         sess.SelectedChart!.Title = "Existing";
+        sess.SelectedChart.IsChartEx = true;
         sess.SelectedChart.Legend = LegendPosition.Right;
         sess.SelectedChart.ChartType = ChartType.Stock;
 
         var dialog = new ChartDisplayOptionsDialog(sess);
         dialog.SetTitleOverlayForTests(true);
+        dialog.SetTitlePositionForTests(ChartExTitlePosition.Right);
+        dialog.SetTitleAlignmentForTests(ChartExTitleAlignment.Far);
         dialog.SetPlotVisibleOnlyForTests(false);
         dialog.SetRoundedCornersForTests(true);
         dialog.SetVaryColorsForTests(true);
@@ -143,6 +146,8 @@ public sealed class ChartDataDialogTests : IDisposable
         dialog.Should().NotBeNull();
         options.Title.Should().Be("Existing");
         options.TitleOverlay.Should().BeTrue();
+        options.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Right);
+        options.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Far);
         options.PlotVisibleOnly.Should().BeFalse();
         options.RoundedCorners.Should().BeTrue();
         options.Legend.Should().Be(LegendPosition.Right);

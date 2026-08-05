@@ -21762,16 +21762,26 @@ public sealed class DocumentView : Control
         return targets.Count;
     }
 
-    public void InsertIndex()
+    public void InsertIndex() => InsertIndex(identifier: null);
+
+    public void InsertIndex(string? identifier)
     {
-        DocumentIndex.EnsureStyles(_doc);
-        InsertGeneratedReferenceBlocks(DocumentIndex.Build(_doc, BuildGeneratedPageTextResolver()), "Insert Index", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+        DocumentIndex.EnsureStyles(_doc, identifier);
+        InsertGeneratedReferenceBlocks(
+            DocumentIndex.Build(_doc, BuildGeneratedPageTextResolver(), identifier),
+            "Insert Index",
+            Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
     }
 
-    public void RefreshIndex()
+    public void RefreshIndex() => RefreshIndex(identifier: null);
+
+    public void RefreshIndex(string? identifier)
     {
-        DocumentIndex.EnsureStyles(_doc);
-        RefreshGeneratedReferenceBlocks(DocumentIndex.IsIndexParagraph, () => DocumentIndex.Build(_doc, BuildGeneratedPageTextResolver()), "Update Index");
+        DocumentIndex.EnsureStyles(_doc, identifier);
+        RefreshGeneratedReferenceBlocks(
+            block => DocumentIndex.IsIndexParagraph(block, identifier),
+            () => DocumentIndex.Build(_doc, BuildGeneratedPageTextResolver(), identifier),
+            "Update Index");
     }
 
     public void InsertTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
