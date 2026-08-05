@@ -113,6 +113,35 @@ public sealed class NumericCitationEditorTests
     }
 
     [StaFact]
+    public void RefreshTableOfContents_ReplacesNativeOwnedResultWithoutDeletingSourceHeading()
+    {
+        var field = new ComplexField(" TOC \\o \"1-3\" ");
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Blocks.Add(new Paragraph("Old Heading\t9")
+        {
+            StyleId = "Normal",
+            SpanningFieldStart = field,
+            SpanningFieldOwner = field,
+            EndsSpanningField = true
+        });
+        model.Blocks.Add(Heading("Source Heading"));
+
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        view.RefreshTableOfContents();
+        view.CommitToModel();
+
+        view.Model.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Source Heading");
+        view.Model.Blocks.Where(TableOfContents.IsTocParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Source Heading\t1").And.NotContain("Old Heading\t9");
+    }
+
+    [StaFact]
     public void UpdateFields_CitationFieldAndBibliographyRefresh_DoNotOverwriteCitationFromStaleView()
     {
         var first = new Source { Tag = "Ada1843", Author = "Ada Lovelace", Title = "Notes", Year = "1843" };

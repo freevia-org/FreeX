@@ -508,6 +508,77 @@ public class ComplexFieldRoundTripTests
     }
 
     [Fact]
+    public void NativeMultiParagraphToc_PreservesNestedPageReferencesAndKeepsSourceHeadingsOutsideField()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph());
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+
+        using var authoredStream = new MemoryStream();
+        using (var source = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read))
+        using (var authored = new ZipArchive(authoredStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in source.Entries)
+            {
+                var copy = authored.CreateEntry(entry.FullName);
+                using var sourceEntry = entry.Open();
+                using var authoredEntry = copy.Open();
+                if (entry.FullName == "word/document.xml")
+                {
+                    var document = new XElement(W + "document", new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+                        new XElement(W + "body",
+                            TocResultParagraph("TOC1", "Chapter One", "_Toc1", startsOuterField: true),
+                            TocResultParagraph("TOC2", "Section A", "_Toc2", startsOuterField: false),
+                            new XElement(W + "p",
+                                ParagraphStyle("Heading1"),
+                                FldChar(W, "end"),
+                                TextRun(W, "Chapter One")),
+                            new XElement(W + "p", ParagraphStyle("Heading2"), TextRun(W, "Section A"))));
+                    new XDocument(document).Save(authoredEntry);
+                }
+                else
+                {
+                    sourceEntry.CopyTo(authoredEntry);
+                }
+            }
+        }
+
+        authoredStream.Position = 0;
+        var loaded = DocxReader.Read(authoredStream);
+        var paragraphs = loaded.Blocks.OfType<Paragraph>().ToArray();
+
+        paragraphs.Should().HaveCount(4);
+        paragraphs[0].SpanningFieldStart!.Instruction.Should().Be(" TOC \\o \"1-3\" ");
+        paragraphs.Take(2).All(paragraph => paragraph.SpanningFieldOwner?.Keyword == "TOC")
+            .Should().BeTrue();
+        paragraphs[0].EndsSpanningField.Should().BeFalse();
+        paragraphs[1].EndsSpanningField.Should().BeTrue();
+        paragraphs[2].SpanningFieldOwner.Should().BeNull();
+        paragraphs[2].EndsSpanningField.Should().BeFalse();
+        paragraphs[2].PlainText.Should().Be("Chapter One");
+        paragraphs[3].PlainText.Should().Be("Section A");
+        paragraphs.Take(2).SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.ComplexField is { Keyword: "PAGEREF" })
+            .Should().HaveCount(2);
+        paragraphs.Take(2).All(paragraph => TableOfContents.IsTocParagraph(paragraph))
+            .Should().BeTrue();
+        paragraphs.Skip(2).All(paragraph => !TableOfContents.IsTocParagraph(paragraph))
+            .Should().BeTrue();
+
+        var saved = DocumentXml(loaded);
+        var savedParagraphs = saved.Descendants(W + "p").ToArray();
+        savedParagraphs[0].Descendants(W + "instrText").Select(element => element.Value)
+            .Should().Contain(" TOC \\o \"1-3\" ");
+        savedParagraphs[0].Descendants(W + "fldChar").Select(FieldCharacterType)
+            .Should().Equal("begin", "separate", "begin", "separate", "end");
+        savedParagraphs[1].Descendants(W + "fldChar").Select(FieldCharacterType)
+            .Should().Equal("begin", "separate", "end", "end");
+        savedParagraphs[2].Descendants(W + "fldChar").Should().BeEmpty();
+    }
+
+    [Fact]
     public void ComplexField_InsideContentControl_PreservesFieldAndControl()
     {
         // Word can wrap arbitrary inline content in a structured document tag. The paragraph reader's
@@ -570,4 +641,35 @@ public class ComplexFieldRoundTripTests
 
     private static XElement TextRun(XNamespace w, string text) =>
         new(w + "r", new XElement(w + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), text));
+
+    private static XElement TocResultParagraph(
+        string styleId,
+        string text,
+        string bookmark,
+        bool startsOuterField)
+    {
+        var paragraph = new XElement(W + "p", ParagraphStyle(styleId));
+        if (startsOuterField)
+        {
+            paragraph.Add(
+                FldChar(W, "begin"),
+                InstrText(W, " TOC \\o \"1-3\" "),
+                FldChar(W, "separate"));
+        }
+
+        paragraph.Add(
+            TextRun(W, text),
+            FldChar(W, "begin"),
+            InstrText(W, $" PAGEREF {bookmark} \\h "),
+            FldChar(W, "separate"),
+            TextRun(W, "1"),
+            FldChar(W, "end"));
+        return paragraph;
+    }
+
+    private static XElement ParagraphStyle(string styleId) =>
+        new(W + "pPr", new XElement(W + "pStyle", new XAttribute(W + "val", styleId)));
+
+    private static string? FieldCharacterType(XElement element) =>
+        element.Attribute(W + "fldCharType")?.Value;
 }

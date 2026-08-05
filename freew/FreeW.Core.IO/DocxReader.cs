@@ -1785,7 +1785,8 @@ public static class DocxReader
                 spanningField,
                 out var spanningFieldStart,
                 out var spanningFieldOwner,
-                out var endsSpanningField);
+                out var endsSpanningField,
+                out var fieldEndBeforeFollowingContent);
             var para = ReadParagraph(
                 paragraphElement,
                 archive,
@@ -1798,6 +1799,18 @@ public static class DocxReader
                 startOverrides: startOverrides,
                 subDocumentRelationships: subDocumentRelationships);
             para.SpanningFieldStart = spanningFieldStart;
+            if (fieldEndBeforeFollowingContent
+                && prevPara?.SpanningFieldOwner is { } previousOwner
+                && spanningFieldOwner is { } endingOwner
+                && string.Equals(previousOwner.Instruction, endingOwner.Instruction, StringComparison.Ordinal))
+            {
+                // Word places a multi-paragraph TOC's outer end marker at the start of the first
+                // source heading. Keep that heading outside the generated region and close the
+                // semantic field on its preceding cached-result paragraph instead.
+                prevPara.EndsSpanningField = true;
+                spanningFieldOwner = null;
+                endsSpanningField = false;
+            }
             para.SpanningFieldOwner = spanningFieldOwner;
             para.EndsSpanningField = endsSpanningField;
             para.BlockContentControl = inheritedBlockContentControl;
@@ -1931,11 +1944,13 @@ public static class DocxReader
         SpanningFieldReadState state,
         out ComplexField? fieldStart,
         out ComplexField? fieldOwner,
-        out bool fieldEnd)
+        out bool fieldEnd,
+        out bool fieldEndBeforeFollowingContent)
     {
         fieldStart = null;
         fieldOwner = null;
         fieldEnd = false;
+        fieldEndBeforeFollowingContent = false;
         var paragraph = new XElement(source);
         var runs = paragraph.Descendants(W + "r")
             .Where(run => ReferenceEquals(run.Ancestors(W + "p").FirstOrDefault(), paragraph))
@@ -1978,6 +1993,28 @@ public static class DocxReader
             var kind = fieldCharacter?.Attribute(W + "fldCharType")?.Value;
             if (kind == "begin" && fieldCharacter!.Element(W + "ffData") is null)
             {
+                if (state.PastSeparate && state.Depth == 1)
+                {
+                    var nestedDepth = 1;
+                    for (var nestedIndex = index + 1; nestedIndex < runs.Count; nestedIndex++)
+                    {
+                        var nestedCharacter = runs[nestedIndex].Element(W + "fldChar");
+                        var nestedKind = nestedCharacter?.Attribute(W + "fldCharType")?.Value;
+                        if (nestedKind == "begin" && nestedCharacter!.Element(W + "ffData") is null)
+                            nestedDepth++;
+                        else if (nestedKind == "end" && --nestedDepth == 0)
+                        {
+                            // Nested PAGEREF fields are part of a TOC's cached result. Leave the
+                            // complete sequence for ReadParagraph to retain as a ComplexField run.
+                            index = nestedIndex;
+                            break;
+                        }
+                    }
+
+                    if (nestedDepth == 0)
+                        continue;
+                }
+
                 state.Depth++;
                 run.Remove();
             }
@@ -1993,6 +2030,12 @@ public static class DocxReader
                 if (!state.IsActive)
                 {
                     fieldEnd = true;
+                    fieldEndBeforeFollowingContent = runs
+                        .Skip(index + 1)
+                        .Any(candidate => candidate.Elements().Any(child =>
+                            child.Name != W + "rPr"
+                            && child.Name != W + "fldChar"
+                            && child.Name != W + "instrText"));
                     break;
                 }
             }
