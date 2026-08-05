@@ -153,6 +153,39 @@ public sealed class PrintLayoutTests
         Assert.Equal(2, paginator.PageCount);
     }
 
+    [StaTheory]
+    [InlineData(SectionBreakKind.NextPage, true, 2)]
+    [InlineData(SectionBreakKind.Continuous, false, 1)]
+    public void BuildPaginator_HomogeneousSectionBeginningWithTable_PreservesBoundary(
+        SectionBreakKind breakKind,
+        bool expectedBreakBefore,
+        int expectedPageCount)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var listFormatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet };
+        document.Blocks.Add(new Paragraph("First list item") { Formatting = listFormatting });
+        document.Blocks.Add(new Paragraph("Second list item") { Formatting = listFormatting });
+        document.Blocks.Add(new Paragraph("Section end")
+        {
+            SectionBreak = new Section(document.Page.Clone(), breakKind)
+        });
+        document.Blocks.Add(Table.Create(1, 1));
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var flow = PrintLayout.BuildPaginatedDocument(view);
+        var target = flow.Blocks.Single(block =>
+            block is System.Windows.Documents.Table
+            || block is System.Windows.Documents.Section section
+               && section.Blocks.OfType<System.Windows.Documents.Table>().Any());
+        var paginator = PrintLayout.BuildPaginator(view);
+        paginator.ComputePageCount();
+
+        Assert.Equal(expectedBreakBefore, target.BreakPageBefore);
+        Assert.Equal(expectedPageCount, paginator.PageCount);
+    }
+
     private static TextDocument BuildHomogeneousTwoSectionDocument(SectionBreakKind breakKind)
     {
         var document = TextDocument.CreateEmpty();
