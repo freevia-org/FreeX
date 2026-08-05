@@ -28,6 +28,22 @@ public sealed class AdvancedFilterPlannerTests
     }
 
     [Fact]
+    public void CreateDefaultListRange_FallsBackToUsedRangeWhenCurrentRegionIsSingleCell()
+    {
+        var sheet = new Sheet(SheetId, "Data");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(SheetId, 4, 4), new NumberValue(42));
+
+        var selectedCell = new CellAddress(SheetId, 1, 1);
+
+        AdvancedFilterPlanner.CreateDefaultListRange(sheet, new GridRange(selectedCell, selectedCell))
+            .Should()
+            .Be(new GridRange(
+                new CellAddress(SheetId, 1, 1),
+                new CellAddress(SheetId, 4, 4)));
+    }
+
+    [Fact]
     public void CreatePlan_BuildsDialogResultAndCommandForCopyToHeaderRange()
     {
         var criteriaSheetId = SheetId.New();
@@ -51,6 +67,7 @@ public sealed class AdvancedFilterPlannerTests
         plan.CriteriaRange.Should().Be(new GridRange(new CellAddress(criteriaSheetId, 1, 6), new CellAddress(criteriaSheetId, 2, 7)));
         plan.OutputMode.Should().Be(AdvancedFilterOutputMode.CopyToAnotherLocation);
         plan.UniqueRecordsOnly.Should().BeTrue();
+        plan.HasCopyDestination.Should().BeTrue();
         plan.CopyToCell.Should().Be(new CellAddress(SheetId, 1, 10));
         plan.CopyToRange.Should().Be(new GridRange(new CellAddress(SheetId, 1, 10), new CellAddress(SheetId, 1, 12)));
         plan.CreateCommand().Should().BeOfType<AdvancedFilterCommand>().Which.Label.Should().Be("Advanced Filter");
@@ -66,9 +83,13 @@ public sealed class AdvancedFilterPlannerTests
 
     [Theory]
     [InlineData("", "F1:G2", AdvancedFilterPlanError.InvalidListRange, "", AdvancedFilterErrorFocusTarget.ListRange)]
+    [InlineData("   ", "F1:G2", AdvancedFilterPlanError.InvalidListRange, "", AdvancedFilterErrorFocusTarget.ListRange)]
+    [InlineData("bad", "F1:G2", AdvancedFilterPlanError.InvalidListRange, "bad", AdvancedFilterErrorFocusTarget.ListRange)]
     [InlineData("A1", "F1:G2", AdvancedFilterPlanError.ListRangeRequiresDataRows, "A1", AdvancedFilterErrorFocusTarget.ListRange)]
     [InlineData("A1:XFD1048576", "F1:G2", AdvancedFilterPlanError.ListRangeTooLarge, "A1:XFD1048576", AdvancedFilterErrorFocusTarget.ListRange)]
     [InlineData("A1:C5", "", AdvancedFilterPlanError.InvalidCriteriaRange, "", AdvancedFilterErrorFocusTarget.CriteriaRange)]
+    [InlineData("A1:C5", "   ", AdvancedFilterPlanError.InvalidCriteriaRange, "", AdvancedFilterErrorFocusTarget.CriteriaRange)]
+    [InlineData("A1:C5", "bad", AdvancedFilterPlanError.InvalidCriteriaRange, "bad", AdvancedFilterErrorFocusTarget.CriteriaRange)]
     [InlineData("A1:C5", "F1:G1", AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows, "F1:G1", AdvancedFilterErrorFocusTarget.CriteriaRange)]
     [InlineData("A1:C5", "F1:XFD1048576", AdvancedFilterPlanError.CriteriaRangeTooLarge, "F1:XFD1048576", AdvancedFilterErrorFocusTarget.CriteriaRange)]
     public void CreatePlan_ReportsStructuredRequiredRangeErrors(
@@ -95,6 +116,7 @@ public sealed class AdvancedFilterPlannerTests
 
     [Theory]
     [InlineData("", AdvancedFilterPlanError.CopyDestinationRequired, "")]
+    [InlineData("   ", AdvancedFilterPlanError.CopyDestinationRequired, "")]
     [InlineData("A8:C9", AdvancedFilterPlanError.InvalidCopyDestinationRange, "A8:C9")]
     [InlineData("A8:XFD8", AdvancedFilterPlanError.CopyDestinationRangeTooLarge, "A8:XFD8")]
     [InlineData("Other!A1", AdvancedFilterPlanError.InvalidCopyDestinationRange, "Other!A1")]
@@ -118,6 +140,23 @@ public sealed class AdvancedFilterPlannerTests
     }
 
     [Fact]
+    public void CreatePlan_FilterInPlaceIgnoresCopyToText()
+    {
+        var result = AdvancedFilterPlanner.CreatePlan(
+            SheetId,
+            listRangeText: "A1:D20",
+            criteriaRangeText: "F1:G2",
+            copyToRangeText: "NotACell",
+            outputMode: AdvancedFilterOutputMode.FilterInPlace,
+            uniqueRecordsOnly: false);
+
+        result.Success.Should().BeTrue();
+        result.Plan!.OutputMode.Should().Be(AdvancedFilterOutputMode.FilterInPlace);
+        result.Plan.CopyToCell.Should().BeNull();
+        result.Plan.CopyToRange.Should().BeNull();
+    }
+
+    [Fact]
     public void CreatePlan_RejectsCopyDestinationOnDifferentSheetThanListRange()
     {
         var currentSheetId = SheetId.New();
@@ -136,6 +175,26 @@ public sealed class AdvancedFilterPlannerTests
         result.Error.Should().Be(AdvancedFilterPlanError.CopyDestinationMustBeOnListSheet);
         result.InvalidText.Should().Be("J1");
         AdvancedFilterPlanner.FocusTargetForPlanError(result.Error).Should().Be(AdvancedFilterErrorFocusTarget.CopyTo);
+    }
+
+    [Fact]
+    public void TryCreatePlan_ReturnsPlanAndParseResult()
+    {
+        AdvancedFilterPlanner.TryCreatePlan(
+                SheetId,
+                listRangeText: "A1:D20",
+                criteriaRangeText: "F1:G2",
+                copyToRangeText: "J1",
+                outputMode: AdvancedFilterOutputMode.CopyToAnotherLocation,
+                uniqueRecordsOnly: true,
+                out var plan,
+                out var result)
+            .Should()
+            .BeTrue();
+
+        result.Success.Should().BeTrue();
+        plan.Should().Be(result.Plan);
+        plan.CopyToCell.Should().Be(new CellAddress(SheetId, 1, 10));
     }
 
     [Theory]
@@ -163,6 +222,20 @@ public sealed class AdvancedFilterPlannerTests
             range.Start.ToA1().Should().Be(expectedStart);
             range.End.ToA1().Should().Be(expectedEnd);
         }
+    }
+
+    [Fact]
+    public void TryParseRange_ParsesSheetQualifiedRange()
+    {
+        AdvancedFilterPlanner.TryParseRange(
+            SheetId.New(),
+            "Sheet1!A1:B2",
+            sheetName => string.Equals(sheetName, "Sheet1", StringComparison.OrdinalIgnoreCase) ? SheetId : null,
+            out var range).Should().BeTrue();
+
+        range.Start.Sheet.Should().Be(SheetId);
+        range.Start.ToA1().Should().Be("A1");
+        range.End.ToA1().Should().Be("B2");
     }
 
     [Theory]

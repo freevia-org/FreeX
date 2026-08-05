@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;

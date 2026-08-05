@@ -1,4 +1,5 @@
 using FreeX.App.Presentation.Editing;
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;

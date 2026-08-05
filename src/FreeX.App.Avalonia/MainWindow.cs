@@ -30,6 +30,7 @@ using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.FormulaBar;
+using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;

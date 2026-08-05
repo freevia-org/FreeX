@@ -17,7 +17,8 @@ public sealed class AdvancedFilterDialogPlannerDedupSourceTests
             "AdvancedFilterDialog.cs",
             "AdvancedFilterDialog.Planning.cs");
         var presentationSource = DialogSourceTestSupport.ReadPresentationSources("Filtering", "AdvancedFilterPlanner.cs");
-        var servicesSource = DialogSourceTestSupport.ReadAppServicesSource("AdvancedFilterPlanner.cs");
+        var servicesPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Services", "AdvancedFilterPlanner.cs");
+        var workbookSessionSource = DialogSourceTestSupport.ReadAppServicesSource("WorkbookSession.cs");
 
         File.Exists(hostPlannerPath)
             .Should().BeFalse("the WPF dialog should call the portable AdvancedFilterPlanner directly");
@@ -58,12 +59,9 @@ public sealed class AdvancedFilterDialogPlannerDedupSourceTests
         presentationSource.Should().NotContain("UiText.Get(");
         presentationSource.Should().NotContain("WorkbookReferenceNavigator");
 
-        servicesSource.Should().Contain("using SharedAdvancedFilterPlanner = FreeX.App.Presentation.Filtering.AdvancedFilterPlanner;");
-        servicesSource.Should().Contain("AdvancedFilterPlanError");
-        servicesSource.Should().Contain("SharedAdvancedFilterPlanner.CreatePlan(");
-        servicesSource.Should().Contain("SharedAdvancedFilterPlanner.TryParseRange(");
-        servicesSource.Should().Contain("CreateRangeSelectionRequest(");
-        servicesSource.Should().NotContain("WorkbookReferenceNavigator");
-        servicesSource.Should().NotContain("UiText.Get(");
+        File.Exists(servicesPlannerPath)
+            .Should().BeFalse("Advanced Filter should have one canonical planner and type family");
+        workbookSessionSource.Should().Contain("using FreeX.App.Presentation.Filtering;");
+        workbookSessionSource.Should().Contain("ExecuteAdvancedFilterPlan(AdvancedFilterPlan plan)");
     }
 }
