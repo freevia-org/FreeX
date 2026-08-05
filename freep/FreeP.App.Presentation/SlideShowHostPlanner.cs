@@ -314,7 +314,7 @@ public static class SlideShowHostPlanner
             AdvanceResult.NavigateToSlide nav => SlideShowHostCommand.Navigate(
                 nav.Slide,
                 nav.SlideIndex,
-                animateSlide: true,
+                animateSlide: controller.ShowWithAnimation,
                 stopAutoAdvance,
                 result),
             AdvanceResult.AtEnd => SlideShowHostCommand.Close(stopAutoAdvance, result),
@@ -334,7 +334,7 @@ public static class SlideShowHostPlanner
             BackResult.NavigateToSlide nav => SlideShowHostCommand.Navigate(
                 nav.Slide,
                 nav.SlideIndex,
-                animateSlide: true,
+                animateSlide: controller.ShowWithAnimation,
                 stopAutoAdvance,
                 backResult: result),
             BackResult.AtStart => SlideShowHostCommand.HandledNoOp(stopAutoAdvance, backResult: result),
@@ -421,7 +421,7 @@ public static class SlideShowHostPlanner
             : SlideShowHostCommand.Navigate(
                 slide,
                 controller.CurrentSlideIndex,
-                animateSlide: transitionDurationMs is > 0,
+                animateSlide: controller.ShowWithAnimation && transitionDurationMs is > 0,
                 stopAutoAdvance: true,
                 transitionDurationMs: transitionDurationMs is > 0
                     ? transitionDurationMs
