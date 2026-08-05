@@ -208,6 +208,9 @@ public sealed class MediaInfo
     /// <summary>Whether playback restarts when the media reaches its end.</summary>
     public bool Loop { get; set; }
 
+    /// <summary>Whether the media poster remains visible while playback is stopped or paused.</summary>
+    public bool ShowWhenStopped { get; set; } = true;
+
     /// <summary>Milliseconds trimmed from the beginning of playback.</summary>
     public double TrimStartMilliseconds { get; set; }
 
