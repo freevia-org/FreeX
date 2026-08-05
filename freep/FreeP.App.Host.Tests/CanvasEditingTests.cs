@@ -1061,15 +1061,16 @@ public sealed class CanvasEditingTests
     {
         var gestures = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "CanvasGestureHandler.cs");
         var avaloniaGestures = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "AvaloniaCanvasGestureHandler.cs");
+        var sharedSession = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "CanvasGestureSession.cs");
         var adorner = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SelectionAdorner.cs");
 
-        gestures.Should().Contain("ShapeGeometryAdjustmentPlanner.BuildMutationPlan");
-        gestures.Should().Contain("_editor.SetShapeGeometryAdjustment");
-        gestures.Should().Contain("PictureCropAuthoringPlanner.BuildMutationPlan");
-        gestures.Should().Contain("_editor.SetPictureCrop");
+        sharedSession.Should().Contain("ShapeGeometryAdjustmentPlanner.BuildMutationPlan");
+        sharedSession.Should().Contain("editor.SetShapeGeometryAdjustment");
+        sharedSession.Should().Contain("PictureCropAuthoringPlanner.BuildMutationPlan");
+        sharedSession.Should().Contain("editor.SetPictureCrop");
+        gestures.Should().Contain("_gestureSession.CommitGeometryAdjustment");
         gestures.Should().Contain("GestureKind.GeometryAdjustment");
-        avaloniaGestures.Should().Contain("PictureCropAuthoringPlanner.BuildMutationPlan");
-        avaloniaGestures.Should().Contain("_editor.SetPictureCrop");
+        avaloniaGestures.Should().Contain("_gestureSession.CommitGeometryAdjustment");
         adorner.Should().Contain("UpdateGeometryHandles");
         adorner.Should().Contain("HitTestGeometryHandle");
     }

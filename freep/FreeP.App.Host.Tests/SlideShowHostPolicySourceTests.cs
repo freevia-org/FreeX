@@ -64,10 +64,10 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildWedge(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildWheel(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.IsSecondCheckerboardPhase(");
-        source.Should().Contain("SlideShowHostPlanner.MapCanvasPointToSlide(");
-        source.Should().Contain("SlideShowHostPlanner.HitTestHyperlink(");
-        source.Should().Contain("SlideShowHostPlanner.HitTestTriggerShape(");
         source.Should().Contain("_session.PlanPointerClick(");
+        source.Should().Contain("SlideShowPointerInteractionPlanner.HitTestHyperlink(");
+        source.Should().Contain("SlideShowPointerInteractionPlanner.MapInkPoint(");
+        source.Should().NotContain("SlideShowHostPlanner.MapCanvasPointToSlide(");
         source.Should().Contain("SlideShowPlaybackPlanner.PlanTransition(_presentation, slide, t);");
         source.Should().Contain("t = plan.EffectiveTransition;");
         source.Should().Contain("PlaySplitTransition(");

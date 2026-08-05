@@ -308,18 +308,24 @@ public sealed class CanvasGesturePlannerTests
     [Fact]
     public void WpfAndAvaloniaHandlers_DelegateGesturePolicyToSharedPlanner()
     {
+        var session = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "CanvasGestureSession.cs");
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "CanvasGestureHandler.cs");
         var avalonia = ReadWorkspaceFile(
             "freep",
             "FreeP.App.Rendering.Avalonia",
             "AvaloniaCanvasGestureHandler.cs");
 
-        wpf.Should().Contain("CanvasGesturePlanner.ComputeResizeBounds");
-        wpf.Should().Contain("CanvasGesturePlanner.ComputeRotationAngle");
-        wpf.Should().Contain("CanvasGesturePlanner.PlanMultiResize");
-        wpf.Should().Contain("CanvasGesturePlanner.PlanMultiRotate");
+        session.Should().Contain("CanvasGesturePlanner.ComputeResizeBounds");
+        session.Should().Contain("CanvasGesturePlanner.ComputeRotationAngle");
+        session.Should().Contain("CanvasGesturePlanner.PlanMultiResize");
+        session.Should().Contain("CanvasGesturePlanner.PlanMultiRotate");
+        session.Should().Contain("CanvasGesturePlanner.ReduceDrag");
+
+        wpf.Should().Contain("CanvasGestureSession _gestureSession");
         wpf.Should().Contain("ApplySelectedTransforms");
-        wpf.Should().Contain("CanvasGesturePlanner.ReduceDrag");
         wpf.Should().Contain("BeginFormatPainter");
         wpf.Should().Contain("CancelFormatPainter");
         wpf.Should().Contain("TryApplyFormatPainterToShape");
@@ -330,12 +336,8 @@ public sealed class CanvasGesturePlannerTests
         wpf.Should().NotContain("Math.Abs(ddxPx)");
         wpf.Should().NotContain("Math.Abs(ddyPx)");
 
-        avalonia.Should().Contain("CanvasGesturePlanner.ComputeResizeBounds");
-        avalonia.Should().Contain("CanvasGesturePlanner.ComputeRotationAngle");
-        avalonia.Should().Contain("CanvasGesturePlanner.PlanMultiResize");
-        avalonia.Should().Contain("CanvasGesturePlanner.PlanMultiRotate");
+        avalonia.Should().Contain("CanvasGestureSession _gestureSession");
         avalonia.Should().Contain("ApplySelectedTransforms");
-        avalonia.Should().Contain("CanvasGesturePlanner.ReduceDrag");
         avalonia.Should().Contain("BeginFormatPainter");
         avalonia.Should().Contain("CancelFormatPainter");
         avalonia.Should().Contain("TryApplyFormatPainterToShape");

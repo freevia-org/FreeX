@@ -166,8 +166,53 @@ public readonly record struct CanvasMovePlan(
 public static class CanvasGesturePlanner
 {
     public const long MinimumShapeSizeEmu = DrawingMlCoordinateUnits.EmuPerInch / 10;
+    public const long SmallNudgeEmu = DrawingMlCoordinateUnits.EmuPerInch / 10;
+    public const long LargeNudgeEmu = DrawingMlCoordinateUnits.EmuPerInch;
     public const double DefaultDragStartThresholdPx = 3;
     public const double MeaningfulDragCommitThresholdPx = 1;
+
+    public static long ResolveNudgeStep(bool useLargeStep) =>
+        useLargeStep ? LargeNudgeEmu : SmallNudgeEmu;
+
+    public static bool ShouldContinueDoubleClickSelection(SlideShape? shape) =>
+        shape?.TextBody is null;
+
+    public static bool HitSelectedShapeBody(
+        Slide slide,
+        Presentation presentation,
+        IEnumerable<uint> selectedShapeIds,
+        CanvasGesturePoint slidePoint,
+        bool includeNestedShapes = true)
+    {
+        ArgumentNullException.ThrowIfNull(slide);
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(selectedShapeIds);
+
+        foreach (var shapeId in selectedShapeIds)
+        {
+            LayoutRect? bounds;
+            if (includeNestedShapes)
+            {
+                bounds = ShapeHitTester.GetShapeBoundsDip(slide, presentation, shapeId)
+                    ?.ToLayoutRect();
+            }
+            else
+            {
+                var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+                bounds = shape is null
+                    ? null
+                    : ShapeHitTester.GetShapeBoundsDip(shape, presentation).ToLayoutRect();
+            }
+            if (bounds is { } hit &&
+                slidePoint.X >= hit.Left && slidePoint.X <= hit.Right &&
+                slidePoint.Y >= hit.Top && slidePoint.Y <= hit.Bottom)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Keeps Escape precedence identical in the WPF and Avalonia hosts. Format Painter is a

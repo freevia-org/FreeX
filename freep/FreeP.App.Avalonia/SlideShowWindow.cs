@@ -636,7 +636,7 @@ public sealed class SlideShowWindow : Window
         }
 
         var pointerIntent = _session.PlanPointerClick(
-            SlideShowHostPlanner.MapCanvasPointToSlide(
+            new SlideShowCanvasPointer(
                 pt.X,
                 pt.Y,
                 _slideCanvas.Bounds.Width,
@@ -699,15 +699,14 @@ public sealed class SlideShowWindow : Window
     /// Returns the first matching hyperlink, or null.
     /// </summary>
     internal Hyperlink? HitTestHyperlink(Slide slide, double canvasX, double canvasY)
-    {
-        var slidePoint = SlideShowHostPlanner.MapCanvasPointToSlide(
-            canvasX,
-            canvasY,
-            _slideCanvas.Bounds.Width,
-            _slideCanvas.Bounds.Height,
-            CurrentSlideMetrics());
-        return SlideShowHostPlanner.HitTestHyperlink(slide, slidePoint);
-    }
+        => SlideShowPointerInteractionPlanner.HitTestHyperlink(
+            slide,
+            new SlideShowCanvasPointer(
+                canvasX,
+                canvasY,
+                _slideCanvas.Bounds.Width,
+                _slideCanvas.Bounds.Height,
+                CurrentSlideMetrics()));
 
     /// <summary>
     /// Activates a hyperlink: external → open URL or local file;
@@ -746,27 +745,13 @@ public sealed class SlideShowWindow : Window
 
     // ── Trigger shape hit-testing ─────────────────────────────────────────────────
 
-    private uint? HitTestTriggerShape(Slide slide, double canvasX, double canvasY)
-    {
-        var slidePoint = SlideShowHostPlanner.MapCanvasPointToSlide(
-            canvasX,
-            canvasY,
-            _slideCanvas.Bounds.Width,
-            _slideCanvas.Bounds.Height,
-            CurrentSlideMetrics());
-        return SlideShowHostPlanner.HitTestTriggerShape(slide, slidePoint);
-    }
-
     private SlideShowInkPoint MapPresenterInkPoint(double canvasX, double canvasY)
-    {
-        var point = SlideShowHostPlanner.MapCanvasPointToSlide(
+        => SlideShowPointerInteractionPlanner.MapInkPoint(new SlideShowCanvasPointer(
             canvasX,
             canvasY,
             _slideCanvas.Bounds.Width,
             _slideCanvas.Bounds.Height,
-            CurrentSlideMetrics());
-        return new SlideShowInkPoint(point.X, point.Y);
-    }
+            CurrentSlideMetrics()));
 
     private SlideShowInkExecutionResult ApplyInkExecution(SlideShowInkExecutionResult result)
     {

@@ -261,8 +261,8 @@ public sealed class SlideShowSessionController
         return _revealedHiddenSlide;
     }
 
-    public SlideShowPointerClickIntent PlanPointerClick(SlideShowPoint slidePoint) =>
-        SlideShowHostPlanner.PlanPointerClick(DisplaySlide, slidePoint, _presentation);
+    public SlideShowPointerClickIntent PlanPointerClick(SlideShowCanvasPointer pointer) =>
+        SlideShowPointerInteractionPlanner.PlanClick(DisplaySlide, _presentation, pointer);
 
     public void ExecuteHostCommand(
         SlideShowHostCommand command,

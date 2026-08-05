@@ -599,7 +599,7 @@ public sealed class SlideShowWindow : Window
         }
 
         var pointerIntent = _session.PlanPointerClick(
-            SlideShowHostPlanner.MapCanvasPointToSlide(
+            new SlideShowCanvasPointer(
                 clickPt.X,
                 clickPt.Y,
                 _slideCanvas.ActualWidth,
@@ -664,15 +664,14 @@ public sealed class SlideShowWindow : Window
     /// Recurses into group children (BB2 fix) so hyperlinks on grouped shapes are reachable.
     /// </summary>
     internal Hyperlink? HitTestHyperlink(Slide slide, double canvasX, double canvasY)
-    {
-        var slidePoint = SlideShowHostPlanner.MapCanvasPointToSlide(
-            canvasX,
-            canvasY,
-            _slideCanvas.ActualWidth,
-            _slideCanvas.ActualHeight,
-            CurrentSlideMetrics());
-        return SlideShowHostPlanner.HitTestHyperlink(slide, slidePoint);
-    }
+        => SlideShowPointerInteractionPlanner.HitTestHyperlink(
+            slide,
+            new SlideShowCanvasPointer(
+                canvasX,
+                canvasY,
+                _slideCanvas.ActualWidth,
+                _slideCanvas.ActualHeight,
+                CurrentSlideMetrics()));
 
     /// <summary>
     /// Activates a hyperlink: external → open URL or local file;
@@ -708,27 +707,13 @@ public sealed class SlideShowWindow : Window
     /// Hit-tests the click point (in slide-canvas DIP coords) against trigger shapes on the slide.
     /// Returns the TriggerShapeId if a trigger shape was hit, null otherwise.
     /// </summary>
-    private uint? HitTestTriggerShape(Slide slide, double canvasX, double canvasY)
-    {
-        var slidePoint = SlideShowHostPlanner.MapCanvasPointToSlide(
-            canvasX,
-            canvasY,
-            _slideCanvas.ActualWidth,
-            _slideCanvas.ActualHeight,
-            CurrentSlideMetrics());
-        return SlideShowHostPlanner.HitTestTriggerShape(slide, slidePoint);
-    }
-
     private SlideShowInkPoint MapPresenterInkPoint(double canvasX, double canvasY)
-    {
-        var point = SlideShowHostPlanner.MapCanvasPointToSlide(
+        => SlideShowPointerInteractionPlanner.MapInkPoint(new SlideShowCanvasPointer(
             canvasX,
             canvasY,
             _slideCanvas.ActualWidth,
             _slideCanvas.ActualHeight,
-            CurrentSlideMetrics());
-        return new SlideShowInkPoint(point.X, point.Y);
-    }
+            CurrentSlideMetrics()));
 
     private SlideShowInkExecutionResult ApplyInkExecution(SlideShowInkExecutionResult result)
     {
