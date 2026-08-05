@@ -5,20 +5,24 @@ namespace FreeP.App.Host.Tests;
 public sealed class SmartArtTransactionSourceTests
 {
     [Fact]
-    public void MainWindow_SmartArtAuthoringDoesNotCommitWhenNativeRefreshFails()
+    public void PresentationSession_SmartArtAuthoringDoesNotCommitWhenNativeRefreshFails()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
-        var source = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs"));
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationSmartArtTextPaneSession.cs"));
 
         source.Should().Contain(
-            "private bool CommitSmartArtTextPaneMutation(");
+            "private bool CommitMutation(");
         source.Should().Contain(
-            "return LastSmartArtDrawingCacheRegenerationResult is { Applied: true };");
+            "return LastDrawingCacheRegenerationResult is { Applied: true };");
         source.Should().Contain(
             "allowCachedPackageEdit: true");
         source.Should().Contain(
-            "Message = \"SmartArt native data or drawing cache refresh failed.\"");
+            "Message = NativeRefreshFailureMessage");
         source.Should().Contain(
-            "LastSmartArtTextPaneApplyResult = LastSmartArtTextPaneApplyResult with");
+            "LastTextPaneApplyResult = LastTextPaneApplyResult with");
     }
 }

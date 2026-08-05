@@ -24,13 +24,19 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
     [Fact]
     public void AvaloniaSmartArtTextPane_RefreshesAfterEditorUndoRedo()
     {
-        var sourcePath = Path.GetFullPath(Path.Combine(
+        var mainWindowPath = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory,
             "../../../../FreeP.App.Avalonia/MainWindow.cs"));
-        var source = File.ReadAllText(sourcePath);
+        var frameSessionPath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../FreeP.App.Presentation/PresentationApplicationFrameSession.cs"));
+        var mainWindow = File.ReadAllText(mainWindowPath);
+        var frameSession = File.ReadAllText(frameSessionPath);
 
-        source.Should().MatchRegex(
-            @"if\s*\(IsSmartArtTextPaneVisible\)\s*ShowSmartArtTextPane\(\);");
+        mainWindow.Should().Contain("IsSmartArtPaneVisible = () => IsSmartArtTextPaneVisible");
+        mainWindow.Should().Contain("RefreshSmartArtPane = () => ShowSmartArtTextPane()");
+        frameSession.Should().Contain("if (_frame.IsSmartArtPaneVisible())");
+        frameSession.Should().Contain("_frame.RefreshSmartArtPane();");
     }
 
     [Fact]
@@ -46,20 +52,20 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
     }
 
     [Fact]
-    public void AvaloniaSmartArtAuthoring_RejectsFailedNativeRefreshBeforeUndoCommit()
+    public void SharedSmartArtSession_RejectsFailedNativeRefreshBeforeUndoCommit()
     {
         var sourcePath = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory,
-            "../../../../FreeP.App.Avalonia/MainWindow.cs"));
+            "../../../../FreeP.App.Presentation/PresentationSmartArtTextPaneSession.cs"));
         var source = File.ReadAllText(sourcePath);
 
         source.Should().Contain(
-            "private bool CommitSmartArtTextPaneMutation(");
+            "private bool CommitMutation(");
         source.Should().Contain(
-            "if (LastSmartArtDataPartRewriteResult is not { Applied: true })");
+            "if (LastDataPartRewriteResult is not { Applied: true })");
         source.Should().Contain(
-            "return LastSmartArtDrawingCacheRegenerationResult is { Applied: true };");
+            "return LastDrawingCacheRegenerationResult is { Applied: true };");
         source.Should().Contain(
-            "Message = \"SmartArt native data or drawing cache refresh failed.\"");
+            "Message = NativeRefreshFailureMessage");
     }
 }
