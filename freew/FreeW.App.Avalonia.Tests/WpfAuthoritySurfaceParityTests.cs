@@ -43,7 +43,7 @@ public sealed class WpfAuthoritySurfaceParityTests
             text.AcceptsReturn.Should().BeTrue();
             text.Focusable.Should().BeTrue();
             text.HorizontalContentAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Left);
-            text.VerticalContentAlignment.Should().Be(global::Avalonia.Layout.VerticalAlignment.Top);
+            text.VerticalContentAlignment.Should().Be(global::Avalonia.Layout.VerticalAlignment.Center);
             root.Margin.Should().Be(new Thickness(
                 AboutDialogMetrics.RootMargin,
                 AboutDialogMetrics.RootMargin,
@@ -54,6 +54,15 @@ public sealed class WpfAuthoritySurfaceParityTests
             text.Text.Should().Contain("Built with .NET 10 and Avalonia.");
             text.Text.Should().Contain("Help > Legal Notices");
             text.Text.Should().NotContain("Microsoft 365");
+            var workspaceRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+            var aboutSource = File.ReadAllText(Path.Combine(
+                workspaceRoot,
+                "shared",
+                "Free.Shared.Shell.Avalonia",
+                "AvaloniaAboutDialog.cs"));
+            aboutSource.Should().Contain("selector => selector.OfType<ScrollViewer>()");
+            aboutSource.Should().Contain("ScrollViewer.VerticalContentAlignmentProperty");
+            aboutSource.Should().Contain("VerticalAlignment.Center");
             AssertDefaultCancelButtons(dialog);
         }, CancellationToken.None);
     }
