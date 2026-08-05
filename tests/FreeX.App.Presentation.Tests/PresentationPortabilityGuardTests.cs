@@ -141,6 +141,7 @@ public sealed class PresentationPortabilityGuardTests
             "ShellFocusCyclePlanner.cs",
             "WorkbookTitleFormatter.cs",
             "WorkbookWindowOrdering.cs",
+            "WorkbookWindowRegistryCore.cs",
             "WorkbookWindowSelectionPlanner.cs"
         };
 

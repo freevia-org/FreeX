@@ -64,8 +64,8 @@ public sealed class WorkbookWindowRegistryDocumentScopeTests
         registry.Register(viewA2);
         registry.Register(loneB);
 
-        viewA1.Suffix.Should().Be(" - 1");
-        viewA2.Suffix.Should().Be(" - 2");
+        viewA1.Suffix.Should().Be(":1");
+        viewA2.Suffix.Should().Be(":2");
         loneB.Suffix.Should().BeEmpty("a document's lone window carries no number, like Excel");
     }
 
@@ -87,8 +87,8 @@ public sealed class WorkbookWindowRegistryDocumentScopeTests
         registry.Unregister(viewA2);
 
         viewA1.Suffix.Should().BeEmpty("its document is down to a single view");
-        viewB1.Suffix.Should().Be(" - 1", "the other document still has two views");
-        viewB2.Suffix.Should().Be(" - 2");
+        viewB1.Suffix.Should().Be(":1", "the other document still has two views");
+        viewB2.Suffix.Should().Be(":2");
     }
 
     [Fact]
@@ -102,8 +102,8 @@ public sealed class WorkbookWindowRegistryDocumentScopeTests
         var view2 = new TestWorkbookWindow { DocumentId = documentA };
         registry.Register(view1);
         registry.Register(view2);
-        view1.Suffix.Should().Be(" - 1");
-        view2.Suffix.Should().Be(" - 2");
+        view1.Suffix.Should().Be(":1");
+        view2.Suffix.Should().Be(":2");
 
         view2.DocumentId = NewDocumentId();
         registry.RefreshWindowNumbering();

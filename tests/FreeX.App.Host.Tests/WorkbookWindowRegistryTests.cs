@@ -30,8 +30,8 @@ public sealed class WorkbookWindowRegistryTests
         registry.Register(w2);
 
         registry.Count.Should().Be(2);
-        w1.Suffix.Should().Be(" - 1");
-        w2.Suffix.Should().Be(" - 2");
+        w1.Suffix.Should().Be(":1");
+        w2.Suffix.Should().Be(":2");
     }
 
     [Fact]
@@ -61,8 +61,8 @@ public sealed class WorkbookWindowRegistryTests
 
         registry.Count.Should().Be(2);
         registry.Windows.Should().Equal(w1, w3);
-        w1.Suffix.Should().Be(" - 1");
-        w3.Suffix.Should().Be(" - 2", "the third window becomes window 2 after the middle one closes");
+        w1.Suffix.Should().Be(":1");
+        w3.Suffix.Should().Be(":2", "the third window becomes window 2 after the middle one closes");
 
         registry.Unregister(w3);
 
