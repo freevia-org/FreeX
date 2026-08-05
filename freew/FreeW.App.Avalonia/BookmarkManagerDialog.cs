@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using Free.Shared.Shell.Avalonia;
 
@@ -19,6 +20,8 @@ internal sealed class BookmarkManagerDialog : FreeWDialogWindow
     private readonly TextBlock _status;
     private readonly Button _goTo;
     private readonly Button _delete;
+    private readonly BookmarkManagerDialogSession _session = new();
+    private bool _applyingState;
 
     internal BookmarkManagerDialog(DocumentView editor)
     {
@@ -33,7 +36,7 @@ internal sealed class BookmarkManagerDialog : FreeWDialogWindow
         _list = new ListBox { MinWidth = 300, MinHeight = 180, Focusable = true, IsTabStop = true };
         AutomationProperties.SetAutomationId(_list, "BookmarkManagerList");
         _list.FocusAdorner = null;
-        _list.SelectionChanged += (_, _) => UpdateButtons();
+        _list.SelectionChanged += (_, _) => UpdateSelection();
         _list.DoubleTapped += (_, _) => GoTo();
         _status = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), Margin = new Thickness(0, 8, 0, 0) };
         AutomationProperties.SetAutomationId(_status, "BookmarkManagerStatus");
@@ -110,47 +113,62 @@ internal sealed class BookmarkManagerDialog : FreeWDialogWindow
         return heading;
     }
 
-    private void RefreshList(string? preserveName = null)
+    private void RefreshList(BookmarkManagerDeleteRefreshPlan? deletePlan = null)
     {
-        preserveName ??= (_list.SelectedItem as Item)?.Name;
-        var items = Bookmarks.List(_editor.Document).Select(location => new Item(location.Name, location.BlockIndex)).ToArray();
-        _list.ItemsSource = items;
-        if (items.Length == 0)
-        {
-            _status.Text = "This document has no bookmarks.";
-            _list.SelectedIndex = -1;
-        }
-        else
-        {
-            var index = preserveName is null ? 0 : Array.FindIndex(items, item => item.Name == preserveName);
-            _list.SelectedIndex = index >= 0 ? index : 0;
-            _status.Text = string.Empty;
-        }
-        UpdateButtons();
+        var locations = Bookmarks.List(_editor.Document);
+        var state = deletePlan is null
+            ? _session.Refresh(locations)
+            : _session.CompleteDelete(deletePlan, locations);
+        ApplyState(state);
     }
 
-    private void UpdateButtons()
+    private void ApplyState(BookmarkManagerDialogState state)
     {
-        var enabled = _list.SelectedItem is Item;
-        _goTo.IsEnabled = enabled;
-        _delete.IsEnabled = enabled;
+        _applyingState = true;
+        try
+        {
+            _list.ItemsSource = state.Items;
+            _list.SelectedIndex = state.SelectedIndex;
+        }
+        finally
+        {
+            _applyingState = false;
+        }
+
+        _status.Text = state.StatusText;
+        ApplyActionState(state);
+    }
+
+    private void UpdateSelection()
+    {
+        if (_applyingState)
+            return;
+
+        ApplyActionState(_session.SelectIndex(_list.SelectedIndex));
+    }
+
+    private void ApplyActionState(BookmarkManagerDialogState state)
+    {
+        _goTo.IsEnabled = state.CanGoTo;
+        _delete.IsEnabled = state.CanDelete;
     }
 
     private void GoTo()
     {
-        if (_list.SelectedItem is not Item item)
+        var intent = _session.PlanGoTo();
+        if (intent is null)
             return;
-        _editor.GoToBookmark(item.Name);
+        _editor.GoToBookmark(intent.Name);
         Close();
     }
 
     private void Delete()
     {
-        if (_list.SelectedItem is not Item item)
+        var plan = _session.PlanDelete();
+        if (plan is null)
             return;
-        _editor.DeleteBookmark(item.Name);
-        RefreshList();
-        _status.Text = $"Removed bookmark \"{item.Name}\".";
+        _editor.DeleteBookmark(plan.Name);
+        RefreshList(plan);
     }
 
     private static Button Button(string text, Action click)
@@ -164,10 +182,5 @@ internal sealed class BookmarkManagerDialog : FreeWDialogWindow
         };
         button.Click += (_, _) => click();
         return button;
-    }
-
-    private sealed record Item(string Name, int BlockIndex)
-    {
-        public override string ToString() => Name;
     }
 }

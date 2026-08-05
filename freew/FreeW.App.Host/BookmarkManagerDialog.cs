@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -24,6 +25,8 @@ internal sealed class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.DialogWindo
     private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 8, 0, 0) };
     private readonly Button _goToButton;
     private readonly Button _deleteButton;
+    private readonly BookmarkManagerDialogSession _session = new();
+    private bool _applyingState;
 
     private BookmarkManagerDialog(Window? owner, DocumentView editor)
     {
@@ -43,7 +46,7 @@ internal sealed class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         System.Windows.Automation.AutomationProperties.SetAutomationId(_list, "BookmarkManagerList");
         System.Windows.Automation.AutomationProperties.SetAutomationId(_status, "BookmarkManagerStatus");
 
-        _list.SelectionChanged += (_, _) => UpdateButtons();
+        _list.SelectionChanged += (_, _) => UpdateSelection();
         _list.MouseDoubleClick += (_, _) => GoTo();
         panel.Children.Add(_list);
 
@@ -82,72 +85,73 @@ internal sealed class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.DialogWindo
     public static void Show(Window? owner, DocumentView editor) =>
         new BookmarkManagerDialog(owner, editor).ShowDialog();
 
-    // A list entry: the bookmark name + its model block index, shown by name in the list box.
-    private readonly record struct Item(string Name, int BlockIndex)
-    {
-        public override string ToString() => Name;
-    }
-
-    private void RefreshList()
+    private void RefreshList(BookmarkManagerDeleteRefreshPlan? deletePlan = null)
     {
         // Commit pending edits so the model reflects the current text before enumerating bookmarks.
-        _editor.CommitToModel();
-
-        var selectedName = (_list.SelectedItem as Item?)?.Name;
-
-        _list.Items.Clear();
-        foreach (var location in Bookmarks.List(_editor.Model))
-            _list.Items.Add(new Item(location.Name, location.BlockIndex));
-
-        if (_list.Items.Count == 0)
-        {
-            _status.Text = "This document has no bookmarks.";
-        }
-        else
-        {
-            // Re-select the previously selected name if it survived, else select the first entry.
-            var restored = -1;
-            if (selectedName is not null)
-            {
-                for (var i = 0; i < _list.Items.Count; i++)
-                {
-                    if (_list.Items[i] is Item item && string.Equals(item.Name, selectedName, StringComparison.Ordinal))
-                    {
-                        restored = i;
-                        break;
-                    }
-                }
-            }
-            _list.SelectedIndex = restored >= 0 ? restored : 0;
-        }
-
-        UpdateButtons();
+        var locations = EnumerateBookmarks();
+        var state = deletePlan is null
+            ? _session.Refresh(locations)
+            : _session.CompleteDelete(deletePlan, locations);
+        ApplyState(state);
     }
 
-    private void UpdateButtons()
+    private IReadOnlyList<BookmarkLocation> EnumerateBookmarks()
     {
-        var hasSelection = _list.SelectedItem is Item;
-        _goToButton.IsEnabled = hasSelection;
-        _deleteButton.IsEnabled = hasSelection;
+        _editor.CommitToModel();
+        return Bookmarks.List(_editor.Model);
+    }
+
+    private void ApplyState(BookmarkManagerDialogState state)
+    {
+        _applyingState = true;
+        try
+        {
+            _list.Items.Clear();
+            foreach (var item in state.Items)
+                _list.Items.Add(item);
+            _list.SelectedIndex = state.SelectedIndex;
+        }
+        finally
+        {
+            _applyingState = false;
+        }
+
+        _status.Text = state.StatusText;
+        ApplyActionState(state);
+    }
+
+    private void UpdateSelection()
+    {
+        if (_applyingState)
+            return;
+
+        ApplyActionState(_session.SelectIndex(_list.SelectedIndex));
+    }
+
+    private void ApplyActionState(BookmarkManagerDialogState state)
+    {
+        _goToButton.IsEnabled = state.CanGoTo;
+        _deleteButton.IsEnabled = state.CanDelete;
     }
 
     private void GoTo()
     {
-        if (_list.SelectedItem is not Item item)
+        var intent = _session.PlanGoTo();
+        if (intent is null)
             return;
-        _editor.BringBlockIntoView(item.BlockIndex);
+        _editor.BringBlockIntoView(intent.BlockIndex);
         Close();
     }
 
     private void Delete()
     {
-        if (_list.SelectedItem is not Item item)
+        var plan = _session.PlanDelete();
+        if (plan is null)
             return;
 
         // Removes the marker from the model and re-renders, then refresh the list.
-        _editor.RemoveBookmark(item.Name);
-        RefreshList();
-        _status.Text = $"Removed bookmark \"{item.Name}\".";
+        _editor.RemoveBookmark(plan.Name);
+        RefreshList(plan);
     }
 
     private static Button MakeButton(string content, RoutedEventHandler onClick)
