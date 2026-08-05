@@ -431,6 +431,34 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void UpdateFields_page_reference_uses_target_physical_page()
+    {
+        var view = ViewWith(
+            new Paragraph
+            {
+                Runs =
+                {
+                    new Run("See page "),
+                    Run.CrossReferenceFieldRun(
+                        new CrossReferenceField(CrossRefFieldKind.PageRef, "_Ref2", CrossRefInsertAs.PageNumber, Hyperlink: false),
+                        "9")
+                }
+            },
+            DocumentOps.CreatePageBreak(),
+            new Paragraph("Target")
+            {
+                BookmarkName = "_Ref2",
+            });
+
+        view.UpdateFields();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.CrossReference is not null)
+            .Text.Should().Be("2");
+    }
+
+    [Fact]
     public void UpdateFields_refreshes_stale_styleref_cached_text()
     {
         var view = ViewWith(

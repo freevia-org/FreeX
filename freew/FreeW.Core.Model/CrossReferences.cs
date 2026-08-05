@@ -279,6 +279,56 @@ public static class CrossReferences
         };
     }
 
+    /// <summary>
+    /// Resolves the 1-based physical page containing the start of a body block from authored page and
+    /// section boundaries alone. Returns null when the document has no explicit page boundary, so live
+    /// hosts can distinguish exact package evidence from an unpaginated one-page guess.
+    /// </summary>
+    public static int? ExplicitPageNumberAtBlock(TextDocument doc, int blockIndex)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        if (blockIndex < 0 || blockIndex >= doc.Blocks.Count || !HasExplicitPageBoundary(doc))
+            return null;
+
+        var pageNumber = 1;
+        for (var index = 0; index <= blockIndex; index++)
+        {
+            if (doc.Blocks[index] is not Paragraph paragraph)
+                continue;
+
+            if (paragraph.Formatting.PageBreakBefore)
+                pageNumber++;
+
+            if (index == blockIndex)
+                return pageNumber;
+
+            foreach (var run in paragraph.Runs)
+            {
+                if (run.IsPageBreak)
+                    pageNumber++;
+            }
+
+            if (paragraph.SectionBreak is { } sectionBreak)
+                pageNumber = AdvanceForSectionBreak(pageNumber, sectionBreak.BreakKind);
+        }
+
+        return pageNumber;
+    }
+
+    private static bool HasExplicitPageBoundary(TextDocument doc) =>
+        doc.Blocks.OfType<Paragraph>().Any(paragraph =>
+            paragraph.Formatting.PageBreakBefore
+            || paragraph.Runs.Any(run => run.IsPageBreak)
+            || paragraph.SectionBreak is { BreakKind: SectionBreakKind.NextPage or SectionBreakKind.EvenPage or SectionBreakKind.OddPage });
+
+    private static int AdvanceForSectionBreak(int pageNumber, SectionBreakKind breakKind) => breakKind switch
+    {
+        SectionBreakKind.NextPage => pageNumber + 1,
+        SectionBreakKind.EvenPage => pageNumber % 2 == 0 ? pageNumber + 2 : pageNumber + 1,
+        SectionBreakKind.OddPage => pageNumber % 2 == 0 ? pageNumber + 1 : pageNumber + 2,
+        _ => pageNumber
+    };
+
     private static List<CrossRefTarget> HeadingTargets(TextDocument doc)
     {
         var targets = new List<CrossRefTarget>();

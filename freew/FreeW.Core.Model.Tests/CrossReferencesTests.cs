@@ -2,6 +2,41 @@ namespace FreeW.Core.Model.Tests;
 
 public class CrossReferencesTests
 {
+    [Fact]
+    public void ExplicitPageNumberAtBlock_UsesAuthoredBreaksAndAvoidsUnpaginatedGuesses()
+    {
+        var unpaginated = TextDocument.CreateEmpty();
+        CrossReferences.ExplicitPageNumberAtBlock(unpaginated, 0).Should().BeNull();
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("First"));
+        document.Blocks.Add(DocumentOps.CreatePageBreak());
+        document.Blocks.Add(new Paragraph("Second"));
+        document.Blocks.Add(new Paragraph("Third")
+        {
+            Formatting = ParagraphFormatting.Default with { PageBreakBefore = true },
+        });
+
+        CrossReferences.ExplicitPageNumberAtBlock(document, 0).Should().Be(1);
+        CrossReferences.ExplicitPageNumberAtBlock(document, 1).Should().Be(2);
+        CrossReferences.ExplicitPageNumberAtBlock(document, 2).Should().Be(2);
+        CrossReferences.ExplicitPageNumberAtBlock(document, 3).Should().Be(3);
+        CrossReferences.ExplicitPageNumberAtBlock(document, 4).Should().BeNull();
+
+        var evenSection = TextDocument.CreateEmpty();
+        evenSection.Blocks.Clear();
+        evenSection.Blocks.Add(DocumentOps.CreateSectionBreak(SectionBreakKind.EvenPage));
+        evenSection.Blocks.Add(new Paragraph("Even section"));
+        CrossReferences.ExplicitPageNumberAtBlock(evenSection, 1).Should().Be(2);
+
+        var oddSection = TextDocument.CreateEmpty();
+        oddSection.Blocks.Clear();
+        oddSection.Blocks.Add(DocumentOps.CreateSectionBreak(SectionBreakKind.OddPage));
+        oddSection.Blocks.Add(new Paragraph("Odd section"));
+        CrossReferences.ExplicitPageNumberAtBlock(oddSection, 1).Should().Be(3);
+    }
+
     [Theory]
     [InlineData(CrossRefType.Heading)]
     [InlineData(CrossRefType.Bookmark)]
