@@ -11,7 +11,6 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class ChartDataTableOptionsDialog : Window
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private readonly EditingSession _editor;
     private readonly ChartDataTableOptionsPlanner _planner;
     private readonly CheckBox _showTableCheck;
@@ -58,18 +57,11 @@ internal sealed class ChartDataTableOptionsDialog : Window
         _boldCheck = new CheckBox { Content = surface.BoldLabel, IsThreeState = true, IsChecked = _planner.Bold };
         _italicCheck = new CheckBox { Content = surface.ItalicLabel, IsThreeState = true, IsChecked = _planner.Italic };
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children =
-            {
-                MakeButton(surface.OkLabel, true, OnOk),
-                MakeButton(surface.CancelLabel, false, () => Close(false)),
-            },
-        };
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(
+            surface.OkLabel,
+            OnOk,
+            surface.CancelLabel,
+            () => Close(false));
 
         Content = new StackPanel
         {
@@ -82,12 +74,12 @@ internal sealed class ChartDataTableOptionsDialog : Window
                 _verticalBorderCheck,
                 _outlineBorderCheck,
                 _legendKeysCheck,
-                MakeRow(surface.BackgroundColorLabel, _backgroundColorBox),
-                MakeRow(surface.BorderColorLabel, _borderColorBox),
-                MakeRow(surface.BorderWidthLabel, _borderWidthBox),
-                MakeRow(surface.TextColorLabel, _textColorBox),
-                MakeRow(surface.FontSizeLabel, _fontSizeBox),
-                MakeRow(surface.FontFamilyLabel, _fontFamilyBox),
+                ChartOptionsDialogChrome.CreateRow(surface.BackgroundColorLabel, _backgroundColorBox, 180),
+                ChartOptionsDialogChrome.CreateRow(surface.BorderColorLabel, _borderColorBox, 180),
+                ChartOptionsDialogChrome.CreateRow(surface.BorderWidthLabel, _borderWidthBox, 180),
+                ChartOptionsDialogChrome.CreateRow(surface.TextColorLabel, _textColorBox, 180),
+                ChartOptionsDialogChrome.CreateRow(surface.FontSizeLabel, _fontSizeBox, 180),
+                ChartOptionsDialogChrome.CreateRow(surface.FontFamilyLabel, _fontFamilyBox, 180),
                 _boldCheck,
                 _italicCheck,
                 buttons,
@@ -169,35 +161,13 @@ internal sealed class ChartDataTableOptionsDialog : Window
 
     private static double? ParseOptional(string? text, string label)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) &&
-            double.IsFinite(value) && value > 0)
-            return value;
-        throw new FormatException($"{label} must be a positive finite number or blank.");
+        return ChartDialogOptionProjection.ParseOptionalDouble(
+            text,
+            CultureInfo.CurrentCulture,
+            value => double.IsFinite(value) && value > 0,
+            $"{label} must be a positive finite number or blank.");
     }
 
-    private static string Format(double? value) => value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
-
-    private static Control MakeRow(string label, Control control)
-    {
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("180, *") };
-        row.Children.Add(new TextBlock
-        {
-            Text = label,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 0),
-        });
-        Grid.SetColumn(control, 1);
-        row.Children.Add(control);
-        return row;
-    }
-
-    private static Button MakeButton(string label, bool isDefault, Action action)
-    {
-        var button = new Button { Content = label, IsDefault = isDefault, MinWidth = 80 };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
-        button.Click += (_, _) => action();
-        return button;
-    }
+    private static string Format(double? value) =>
+        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 }

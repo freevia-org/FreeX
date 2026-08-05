@@ -11,7 +11,6 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class ChartAxisOptionsDialog : Window
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private readonly EditingSession _editor;
     private readonly ChartAxisOptionsPlanner _planner;
     private readonly ComboBox _axisCombo;
@@ -108,18 +107,7 @@ internal sealed class ChartAxisOptionsDialog : Window
         _reverseOrderCheck = new CheckBox { Content = surface.ReverseOrderLabel };
         LoadControls();
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children =
-            {
-                MakeButton(surface.OkLabel, true, OnOk),
-                MakeButton(surface.CancelLabel, false, () => Close(false)),
-            },
-        };
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(surface.OkLabel, OnOk, surface.CancelLabel, () => Close(false));
 
         Content = new StackPanel
         {
@@ -127,34 +115,34 @@ internal sealed class ChartAxisOptionsDialog : Window
             Spacing = 8,
             Children =
             {
-                MakeRow(surface.AxisLabel, _axisCombo),
-                MakeRow(surface.AxisTitleLabel, _titleBox),
-                MakeRow(surface.AxisTitleFontFamilyLabel, _titleFontFamilyBox),
-                MakeRow(surface.AxisTitleFontSizeLabel, _titleFontSizeBox),
-                MakeRow(surface.AxisTitleColorLabel, _titleColorBox),
+                ChartOptionsDialogChrome.CreateRow(surface.AxisLabel, _axisCombo),
+                ChartOptionsDialogChrome.CreateRow(surface.AxisTitleLabel, _titleBox),
+                ChartOptionsDialogChrome.CreateRow(surface.AxisTitleFontFamilyLabel, _titleFontFamilyBox),
+                ChartOptionsDialogChrome.CreateRow(surface.AxisTitleFontSizeLabel, _titleFontSizeBox),
+                ChartOptionsDialogChrome.CreateRow(surface.AxisTitleColorLabel, _titleColorBox),
                 _titleBoldCheck,
                 _titleItalicCheck,
                 _showAxisCheck,
-                MakeRow(surface.MinimumLabel, _minimumBox),
-                MakeRow(surface.MaximumLabel, _maximumBox),
-                MakeRow(surface.MajorUnitLabel, _majorUnitBox),
-                MakeRow(surface.MinorUnitLabel, _minorUnitBox),
-                MakeRow(surface.NumberFormatLabel, _numberFormatBox),
-                MakeRow(surface.DisplayUnitLabel, _displayUnitCombo),
-                MakeRow("Custom divisor", _customDisplayUnitBox),
+                ChartOptionsDialogChrome.CreateRow(surface.MinimumLabel, _minimumBox),
+                ChartOptionsDialogChrome.CreateRow(surface.MaximumLabel, _maximumBox),
+                ChartOptionsDialogChrome.CreateRow(surface.MajorUnitLabel, _majorUnitBox),
+                ChartOptionsDialogChrome.CreateRow(surface.MinorUnitLabel, _minorUnitBox),
+                ChartOptionsDialogChrome.CreateRow(surface.NumberFormatLabel, _numberFormatBox),
+                ChartOptionsDialogChrome.CreateRow(surface.DisplayUnitLabel, _displayUnitCombo),
+                ChartOptionsDialogChrome.CreateRow("Custom divisor", _customDisplayUnitBox),
                 new TextBlock { Text = surface.AutoHint, Opacity = 0.7 },
                 _majorGridlinesCheck,
                 _minorGridlinesCheck,
-                MakeRow(surface.MajorTickMarkLabel, _majorTickMarkCombo),
-                MakeRow(surface.MinorTickMarkLabel, _minorTickMarkCombo),
-                MakeRow(surface.TickLabelPositionLabel, _tickLabelPositionCombo),
-                MakeRow(surface.CrossingLabel, _crossesCombo),
-                MakeRow(surface.CrossesAtLabel, _crossesAtBox),
-                MakeRow(surface.CrossBetweenLabel, _crossBetweenCombo),
-                MakeRow(surface.LabelAlignmentLabel, _labelAlignmentCombo),
-                MakeRow(surface.LabelOffsetLabel, _labelOffsetBox),
-                MakeRow(surface.MultiLevelLabelsLabel, _multiLevelLabelsCombo),
-                MakeRow(surface.AutoCrossingLabel, _autoCrossingCombo),
+                ChartOptionsDialogChrome.CreateRow(surface.MajorTickMarkLabel, _majorTickMarkCombo),
+                ChartOptionsDialogChrome.CreateRow(surface.MinorTickMarkLabel, _minorTickMarkCombo),
+                ChartOptionsDialogChrome.CreateRow(surface.TickLabelPositionLabel, _tickLabelPositionCombo),
+                ChartOptionsDialogChrome.CreateRow(surface.CrossingLabel, _crossesCombo),
+                ChartOptionsDialogChrome.CreateRow(surface.CrossesAtLabel, _crossesAtBox),
+                ChartOptionsDialogChrome.CreateRow(surface.CrossBetweenLabel, _crossBetweenCombo),
+                ChartOptionsDialogChrome.CreateRow(surface.LabelAlignmentLabel, _labelAlignmentCombo),
+                ChartOptionsDialogChrome.CreateRow(surface.LabelOffsetLabel, _labelOffsetBox),
+                ChartOptionsDialogChrome.CreateRow(surface.MultiLevelLabelsLabel, _multiLevelLabelsCombo),
+                ChartOptionsDialogChrome.CreateRow(surface.AutoCrossingLabel, _autoCrossingCombo),
                 _reverseOrderCheck,
                 buttons,
             },
@@ -200,16 +188,16 @@ internal sealed class ChartAxisOptionsDialog : Window
         _numberFormatBox.Text = numberFormatCode;
         _majorGridlinesCheck.IsChecked = majorGridlines;
         _minorGridlinesCheck.IsChecked = minorGridlines;
-        _majorTickMarkCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, majorTickMark);
-        _minorTickMarkCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, minorTickMark);
-        _tickLabelPositionCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickLabelPositionOptions, tickLabelPosition);
-        _crossesCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.CrossingOptions, crosses);
+        _majorTickMarkCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, majorTickMark, option => option.Value);
+        _minorTickMarkCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, minorTickMark, option => option.Value);
+        _tickLabelPositionCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.TickLabelPositionOptions, tickLabelPosition, option => option.Value);
+        _crossesCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.CrossingOptions, crosses, option => option.Value);
         _crossesAtBox.Text = Format(crossesAt);
-        _crossBetweenCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.CrossBetweenOptions, crossBetween);
-        _labelAlignmentCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.LabelAlignmentOptions, labelAlignment);
+        _crossBetweenCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.CrossBetweenOptions, crossBetween, option => option.Value);
+        _labelAlignmentCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.LabelAlignmentOptions, labelAlignment, option => option.Value);
         _labelOffsetBox.Text = Format(labelOffsetPercent);
-        _multiLevelLabelsCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.MultiLevelLabelsOptions, noMultiLevelLabels);
-        _autoCrossingCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.AutoCrossingOptions, autoCrossing);
+        _multiLevelLabelsCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.MultiLevelLabelsOptions, noMultiLevelLabels, option => option.Value);
+        _autoCrossingCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.AutoCrossingOptions, autoCrossing, option => option.Value);
         _reverseOrderCheck.IsChecked = reverseOrder;
     }
 
@@ -240,20 +228,20 @@ internal sealed class ChartAxisOptionsDialog : Window
         _majorUnitBox.Text = Format(_planner.MajorUnit);
         _minorUnitBox.Text = Format(_planner.MinorUnit);
         _numberFormatBox.Text = _planner.NumberFormatCode;
-        _displayUnitCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.DisplayUnitOptions, _planner.DisplayUnit);
+        _displayUnitCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.DisplayUnitOptions, _planner.DisplayUnit, option => option.Value);
         _customDisplayUnitBox.Text = Format(_planner.CustomDisplayUnit);
         _majorGridlinesCheck.IsChecked = _planner.MajorGridlines;
         _minorGridlinesCheck.IsChecked = _planner.MinorGridlines;
-        _majorTickMarkCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, _planner.MajorTickMark);
-        _minorTickMarkCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, _planner.MinorTickMark);
-        _tickLabelPositionCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickLabelPositionOptions, _planner.TickLabelPosition);
-        _crossesCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.CrossingOptions, _planner.Crosses);
+        _majorTickMarkCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, _planner.MajorTickMark, option => option.Value);
+        _minorTickMarkCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, _planner.MinorTickMark, option => option.Value);
+        _tickLabelPositionCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.TickLabelPositionOptions, _planner.TickLabelPosition, option => option.Value);
+        _crossesCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.CrossingOptions, _planner.Crosses, option => option.Value);
         _crossesAtBox.Text = Format(_planner.CrossesAt);
-        _crossBetweenCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.CrossBetweenOptions, _planner.CrossBetween);
-        _labelAlignmentCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.LabelAlignmentOptions, _planner.LabelAlignment);
+        _crossBetweenCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.CrossBetweenOptions, _planner.CrossBetween, option => option.Value);
+        _labelAlignmentCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.LabelAlignmentOptions, _planner.LabelAlignment, option => option.Value);
         _labelOffsetBox.Text = Format(_planner.LabelOffsetPercent);
-        _multiLevelLabelsCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.MultiLevelLabelsOptions, _planner.NoMultiLevelLabels);
-        _autoCrossingCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.AutoCrossingOptions, _planner.AutoCrossing);
+        _multiLevelLabelsCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.MultiLevelLabelsOptions, _planner.NoMultiLevelLabels, option => option.Value);
+        _autoCrossingCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(ChartAxisOptionsPlanner.AutoCrossingOptions, _planner.AutoCrossing, option => option.Value);
         _reverseOrderCheck.IsChecked = _planner.ReverseOrder;
     }
 
@@ -271,61 +259,37 @@ internal sealed class ChartAxisOptionsDialog : Window
         _planner.SetMajorUnit(ParseOptional(_majorUnitBox.Text, "Major unit"));
         _planner.SetMinorUnit(ParseOptional(_minorUnitBox.Text, "Minor unit"));
         _planner.SetNumberFormatCode(_numberFormatBox.Text);
-        _planner.SetDisplayUnit(ChartAxisOptionsPlanner.DisplayUnitOptions[_displayUnitCombo.SelectedIndex].Value);
+        _planner.SetDisplayUnit(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.DisplayUnitOptions, _displayUnitCombo.SelectedIndex, option => option.Value));
         _planner.SetCustomDisplayUnit(ParseOptional(_customDisplayUnitBox.Text, "Custom display-unit divisor"));
         _planner.SetMajorGridlines(_majorGridlinesCheck.IsChecked == true);
         _planner.SetMinorGridlines(_minorGridlinesCheck.IsChecked == true);
-        _planner.SetMajorTickMark(ChartAxisOptionsPlanner.TickMarkOptions[_majorTickMarkCombo.SelectedIndex].Value);
-        _planner.SetMinorTickMark(ChartAxisOptionsPlanner.TickMarkOptions[_minorTickMarkCombo.SelectedIndex].Value);
-        _planner.SetTickLabelPosition(ChartAxisOptionsPlanner.TickLabelPositionOptions[_tickLabelPositionCombo.SelectedIndex].Value);
-        _planner.SetCrosses(ChartAxisOptionsPlanner.CrossingOptions[_crossesCombo.SelectedIndex].Value);
+        _planner.SetMajorTickMark(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.TickMarkOptions, _majorTickMarkCombo.SelectedIndex, option => option.Value));
+        _planner.SetMinorTickMark(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.TickMarkOptions, _minorTickMarkCombo.SelectedIndex, option => option.Value));
+        _planner.SetTickLabelPosition(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.TickLabelPositionOptions, _tickLabelPositionCombo.SelectedIndex, option => option.Value));
+        _planner.SetCrosses(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.CrossingOptions, _crossesCombo.SelectedIndex, option => option.Value));
         _planner.SetCrossesAt(ParseOptional(_crossesAtBox.Text, "Crosses at"));
-        _planner.SetCrossBetween(ChartAxisOptionsPlanner.CrossBetweenOptions[_crossBetweenCombo.SelectedIndex].Value);
-        _planner.SetLabelAlignment(ChartAxisOptionsPlanner.LabelAlignmentOptions[_labelAlignmentCombo.SelectedIndex].Value);
+        _planner.SetCrossBetween(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.CrossBetweenOptions, _crossBetweenCombo.SelectedIndex, option => option.Value));
+        _planner.SetLabelAlignment(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.LabelAlignmentOptions, _labelAlignmentCombo.SelectedIndex, option => option.Value));
         _planner.SetLabelOffsetPercent(ParseOptionalInt(_labelOffsetBox.Text, "Label offset"));
-        _planner.SetNoMultiLevelLabels(ChartAxisOptionsPlanner.MultiLevelLabelsOptions[_multiLevelLabelsCombo.SelectedIndex].Value);
-        _planner.SetAutoCrossing(ChartAxisOptionsPlanner.AutoCrossingOptions[_autoCrossingCombo.SelectedIndex].Value);
+        _planner.SetNoMultiLevelLabels(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.MultiLevelLabelsOptions, _multiLevelLabelsCombo.SelectedIndex, option => option.Value));
+        _planner.SetAutoCrossing(ChartDialogOptionProjection.ValueAtOrDefault(ChartAxisOptionsPlanner.AutoCrossingOptions, _autoCrossingCombo.SelectedIndex, option => option.Value));
         _planner.SetReverseOrder(_reverseOrderCheck.IsChecked == true);
     }
 
     private static double? ParseOptional(string? text, string label)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) &&
-            double.IsFinite(value))
-            return value;
-        throw new FormatException($"{label} must be a finite number or blank.");
+        return ChartDialogOptionProjection.ParseOptionalDouble(text, CultureInfo.CurrentCulture, double.IsFinite, $"{label} must be a finite number or blank.");
     }
 
     private static string Format(double? value) =>
-        value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
+        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 
     private static string Format(int? value) =>
-        value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 
     private static int? ParseOptionalInt(string? text, string label)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) &&
-            value is >= 0 and <= 100)
-            return value;
-        throw new FormatException($"{label} must be an integer from 0 to 100 or blank.");
-    }
-
-    private static Control MakeRow(string label, Control control)
-    {
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("150, *") };
-        row.Children.Add(new TextBlock
-        {
-            Text = label,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 0),
-        });
-        Grid.SetColumn(control, 1);
-        row.Children.Add(control);
-        return row;
+        return ChartDialogOptionProjection.ParseOptionalInt(text, CultureInfo.CurrentCulture, value => value is >= 0 and <= 100, $"{label} must be an integer from 0 to 100 or blank.");
     }
 
     private static ComboBox MakeChoiceCombo(IEnumerable<string> labels) => new()
@@ -335,25 +299,4 @@ internal sealed class ChartAxisOptionsDialog : Window
         MinWidth = 150,
     };
 
-    private static int FindIndex<T>(IReadOnlyList<T> options, object? value) where T : class =>
-        options.Select((option, index) => (option, index))
-            .FirstOrDefault(pair => pair.option switch
-            {
-                ChartTickMarkOption tick => Equals(tick.Value, value),
-                ChartTickLabelPositionOption position => Equals(position.Value, value),
-                ChartAxisCrossingOption crossing => Equals(crossing.Value, value),
-                ChartCrossBetweenOption crossBetween => Equals(crossBetween.Value, value),
-                ChartLabelAlignmentOption alignment => Equals(alignment.Value, value),
-                ChartAxisBooleanOption toggle => Equals(toggle.Value, value),
-                ChartAxisDisplayUnitOption displayUnit => Equals(displayUnit.Value, value),
-                _ => false,
-            }).index;
-
-    private static Button MakeButton(string label, bool isDefault, Action action)
-    {
-        var button = new Button { Content = label, IsDefault = isDefault, MinWidth = 80 };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
-        button.Click += (_, _) => action();
-        return button;
-    }
 }

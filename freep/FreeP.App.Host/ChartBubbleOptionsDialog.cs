@@ -46,22 +46,16 @@ public sealed class ChartBubbleOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
             IsChecked = _planner.ShowNegativeBubbles,
         };
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(8, 14, 8, 8),
-        };
-        var ok = new Button { Content = surface.OkLabel, IsDefault = true, MinWidth = 80, Margin = new Thickness(4) };
-        var cancel = new Button { Content = surface.CancelLabel, IsCancel = true, MinWidth = 80, Margin = new Thickness(4) };
-        ok.Click += (_, _) => OnOk();
-        cancel.Click += (_, _) => Close();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(
+            surface.OkLabel,
+            OnOk,
+            surface.CancelLabel,
+            Close,
+            new Thickness(8, 14, 8, 8));
 
         var content = new StackPanel { Margin = new Thickness(14) };
-        content.Children.Add(MakeRow(surface.BubbleScaleLabel, _scaleBox));
-        content.Children.Add(MakeRow(surface.SizeRepresentsLabel, _sizeRepresentsCombo));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.BubbleScaleLabel, _scaleBox, 190));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.SizeRepresentsLabel, _sizeRepresentsCombo, 190));
         content.Children.Add(_negativeBubblesCheck);
         content.Children.Add(new TextBlock { Text = surface.Hint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
@@ -97,28 +91,26 @@ public sealed class ChartBubbleOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private void UpdatePlannerFromControls()
     {
         _planner.SetBubbleScalePercent(ParseScale(_scaleBox.Text));
-        if (_sizeRepresentsCombo.SelectedItem is ChartBubbleSizeRepresentationOption size)
-            _planner.SetSizeRepresents(size.Value);
+        _planner.SetSizeRepresents(ChartDialogOptionProjection.ValueAtOrDefault(
+            ChartBubbleOptionsPlanner.SizeRepresentsOptions,
+            _sizeRepresentsCombo.SelectedIndex,
+            option => option.Value,
+            BubbleSizeRepresentation.Area));
         _planner.SetShowNegativeBubbles(_negativeBubblesCheck.IsChecked == true);
     }
 
     private static int ParseScale(string? text)
     {
-        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value is >= 0 and <= 300)
-            return value;
-        throw new FormatException("Bubble scale must be a whole number from 0 to 300.");
+        return ChartDialogOptionProjection.ParseRequiredInt(
+            text,
+            CultureInfo.CurrentCulture,
+            value => value is >= 0 and <= 300,
+            "Bubble scale must be a whole number from 0 to 300.");
     }
 
     private static int FindSizeRepresentsIndex(BubbleSizeRepresentation value) =>
-        Math.Max(0, ChartBubbleOptionsPlanner.SizeRepresentsOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == value).index);
-
-    private static StackPanel MakeRow(string label, Control control)
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        row.Children.Add(new Label { Content = label, Width = 190, VerticalContentAlignment = VerticalAlignment.Center });
-        row.Children.Add(control);
-        return row;
-    }
+        ChartDialogOptionProjection.FindIndex(
+            ChartBubbleOptionsPlanner.SizeRepresentsOptions,
+            value,
+            option => option.Value);
 }

@@ -60,31 +60,25 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             _ofPieSeriesLinesCheck = new CheckBox { IsChecked = _planner.OfPieSeriesLines, MinWidth = 150 };
         }
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(8, 14, 8, 8),
-        };
-        var ok = new Button { Content = surface.OkLabel, IsDefault = true, MinWidth = 80, Margin = new Thickness(4) };
-        var cancel = new Button { Content = surface.CancelLabel, IsCancel = true, MinWidth = 80, Margin = new Thickness(4) };
-        ok.Click += (_, _) => OnOk();
-        cancel.Click += (_, _) => Close();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(
+            surface.OkLabel,
+            OnOk,
+            surface.CancelLabel,
+            Close,
+            new Thickness(8, 14, 8, 8));
 
         var content = new StackPanel { Margin = new Thickness(14) };
-        content.Children.Add(MakeRow(surface.FirstSliceAngleLabel, _angleBox));
-        content.Children.Add(MakeRow(surface.DoughnutHoleLabel, _holeBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.FirstSliceAngleLabel, _angleBox, 220));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.DoughnutHoleLabel, _holeBox, 220));
         if (chart.ChartType == ChartType.OfPie)
         {
-            content.Children.Add(MakeRow(surface.OfPieTypeLabel, _ofPieTypeCombo!));
-            content.Children.Add(MakeRow(surface.OfPieSplitTypeLabel, _ofPieSplitTypeCombo!));
-            content.Children.Add(MakeRow(surface.OfPieSplitPositionLabel, _ofPieSplitPositionBox!));
-            content.Children.Add(MakeRow(surface.OfPieSecondPieSizeLabel, _ofPieSizeBox!));
-            content.Children.Add(MakeRow(surface.OfPieCustomPointIndicesLabel, _ofPieCustomPointsBox!));
-            content.Children.Add(MakeRow(surface.OfPieGapWidthLabel, _ofPieGapWidthBox!));
-            content.Children.Add(MakeRow(surface.OfPieSeriesLinesLabel, _ofPieSeriesLinesCheck!));
+            content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.OfPieTypeLabel, _ofPieTypeCombo!, 220));
+            content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.OfPieSplitTypeLabel, _ofPieSplitTypeCombo!, 220));
+            content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.OfPieSplitPositionLabel, _ofPieSplitPositionBox!, 220));
+            content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.OfPieSecondPieSizeLabel, _ofPieSizeBox!, 220));
+            content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.OfPieCustomPointIndicesLabel, _ofPieCustomPointsBox!, 220));
+            content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.OfPieGapWidthLabel, _ofPieGapWidthBox!, 220));
+            content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.OfPieSeriesLinesLabel, _ofPieSeriesLinesCheck!, 220));
         }
         content.Children.Add(new TextBlock { Text = surface.Hint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
@@ -147,62 +141,54 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private static int ParseAngle(string? text)
     {
-        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value is >= 0 and <= 359)
-            return value;
-        throw new FormatException("First slice angle must be a whole number from 0 to 359.");
+        return ChartDialogOptionProjection.ParseRequiredInt(
+            text,
+            CultureInfo.CurrentCulture,
+            value => value is >= 0 and <= 359,
+            "First slice angle must be a whole number from 0 to 359.");
     }
 
     private static int ParseHole(string? text)
     {
-        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value is >= 10 and <= 90)
-            return value;
-        throw new FormatException("Doughnut hole must be a whole number from 10 to 90.");
+        return ChartDialogOptionProjection.ParseRequiredInt(
+            text,
+            CultureInfo.CurrentCulture,
+            value => value is >= 10 and <= 90,
+            "Doughnut hole must be a whole number from 10 to 90.");
     }
 
     private static double? ParseOptionalDouble(string? text)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) && value >= 0)
-            return value;
-        throw new FormatException("OfPie split position must be a non-negative number or blank.");
+        return ChartDialogOptionProjection.ParseOptionalDouble(
+            text,
+            CultureInfo.CurrentCulture,
+            value => value >= 0,
+            "OfPie split position must be a non-negative number or blank.");
     }
 
     private static int ParseOfPieSize(string? text)
     {
-        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value is >= 5 and <= 200)
-            return value;
-        throw new FormatException("Secondary plot size must be a whole number from 5 to 200.");
+        return ChartDialogOptionProjection.ParseRequiredInt(
+            text,
+            CultureInfo.CurrentCulture,
+            value => value is >= 5 and <= 200,
+            "Secondary plot size must be a whole number from 5 to 200.");
     }
 
     private static int? ParseOptionalInt(string? text, int min, int max, string label)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value >= min && value <= max)
-            return value;
-        throw new FormatException($"{label} must be a whole number from {min} to {max}, or blank.");
+        return ChartDialogOptionProjection.ParseOptionalInt(
+            text,
+            CultureInfo.CurrentCulture,
+            value => value >= min && value <= max,
+            $"{label} must be a whole number from {min} to {max}, or blank.");
     }
 
     private static IReadOnlyList<int> ParsePointIndices(string? text)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return Array.Empty<int>();
-        var values = new List<int>();
-        foreach (var token in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (!int.TryParse(token, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) || value < 0)
-                throw new FormatException("Custom secondary points must be non-negative whole numbers separated by commas.");
-            values.Add(value);
-        }
-        return values;
-    }
-
-    private static StackPanel MakeRow(string label, Control control)
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        row.Children.Add(new Label { Content = label, Width = 220, VerticalContentAlignment = VerticalAlignment.Center });
-        row.Children.Add(control);
-        return row;
+        return ChartDialogOptionProjection.ParseNonNegativeIntList(
+            text,
+            CultureInfo.CurrentCulture,
+            "Custom secondary points must be non-negative whole numbers separated by commas.");
     }
 }

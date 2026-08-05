@@ -11,7 +11,6 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class ChartTextOptionsDialog : Window
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private readonly EditingSession _editor;
     private readonly ChartTextOptionsPlanner _planner;
     private readonly TextBox _fontFamilyBox;
@@ -42,18 +41,11 @@ internal sealed class ChartTextOptionsDialog : Window
         _italicCombo = BuildBooleanCombo(_planner.Italic);
         _colorBox = new TextBox { Text = _planner.ColorText, MinWidth = 180 };
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children =
-            {
-                MakeButton(surface.OkLabel, true, OnOk),
-                MakeButton(surface.CancelLabel, false, () => Close(false)),
-            },
-        };
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(
+            surface.OkLabel,
+            OnOk,
+            surface.CancelLabel,
+            () => Close(false));
 
         Content = new StackPanel
         {
@@ -61,11 +53,11 @@ internal sealed class ChartTextOptionsDialog : Window
             Spacing = 8,
             Children =
             {
-                MakeRow(surface.FontFamilyLabel, _fontFamilyBox),
-                MakeRow(surface.FontSizeLabel, _fontSizeBox),
-                MakeRow(surface.BoldLabel, _boldCombo),
-                MakeRow(surface.ItalicLabel, _italicCombo),
-                MakeRow(surface.ColorLabel, _colorBox),
+                ChartOptionsDialogChrome.CreateRow(surface.FontFamilyLabel, _fontFamilyBox, 180),
+                ChartOptionsDialogChrome.CreateRow(surface.FontSizeLabel, _fontSizeBox, 180),
+                ChartOptionsDialogChrome.CreateRow(surface.BoldLabel, _boldCombo, 180),
+                ChartOptionsDialogChrome.CreateRow(surface.ItalicLabel, _italicCombo, 180),
+                ChartOptionsDialogChrome.CreateRow(surface.ColorLabel, _colorBox, 180),
                 new TextBlock { Text = surface.AutoHint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7 },
                 buttons,
             },
@@ -118,33 +110,19 @@ internal sealed class ChartTextOptionsDialog : Window
 
     private static bool? ReadBoolean(ComboBox combo)
     {
-        var index = combo.SelectedIndex;
-        return index >= 0 && index < ChartTextOptionsPlanner.BooleanOptions.Count
-            ? ChartTextOptionsPlanner.BooleanOptions[index].Value
-            : null;
+        return ChartDialogOptionProjection.ValueAtOrDefault(
+            ChartTextOptionsPlanner.BooleanOptions,
+            combo.SelectedIndex,
+            option => option.Value,
+            default(bool?));
     }
 
     private static int FindBooleanIndex(bool? value) =>
-        ChartTextOptionsPlanner.BooleanOptions
-            .Select((option, index) => (option, index))
-            .First(item => item.option.Value == value).index;
+        ChartDialogOptionProjection.FindIndex(
+            ChartTextOptionsPlanner.BooleanOptions,
+            value,
+            option => option.Value);
 
-    private static string Format(double? value) => value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
-
-    private static Control MakeRow(string label, Control control)
-    {
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("180, *") };
-        row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
-        Grid.SetColumn(control, 1);
-        row.Children.Add(control);
-        return row;
-    }
-
-    private static Button MakeButton(string label, bool isDefault, Action action)
-    {
-        var button = new Button { Content = label, IsDefault = isDefault, MinWidth = 80 };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
-        button.Click += (_, _) => action();
-        return button;
-    }
+    private static string Format(double? value) =>
+        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 }

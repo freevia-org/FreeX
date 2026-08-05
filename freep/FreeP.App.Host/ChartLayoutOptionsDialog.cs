@@ -61,26 +61,20 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _heightBox = new TextBox { MinWidth = 120 };
         LoadControls();
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(8, 14, 8, 8),
-        };
-        var ok = new Button { Content = surface.OkLabel, IsDefault = true, MinWidth = 80, Margin = new Thickness(4) };
-        var cancel = new Button { Content = surface.CancelLabel, IsCancel = true, MinWidth = 80, Margin = new Thickness(4) };
-        ok.Click += (_, _) => OnOk();
-        cancel.Click += (_, _) => Close();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(
+            surface.OkLabel,
+            OnOk,
+            surface.CancelLabel,
+            Close,
+            new Thickness(8, 14, 8, 8));
 
         var content = new StackPanel { Margin = new Thickness(14) };
-        content.Children.Add(MakeRow(surface.TargetLabel, _targetCombo));
-        content.Children.Add(MakeRow(surface.LayoutTargetLabel, _layoutTargetCombo));
-        content.Children.Add(MakeRow(surface.XLabel, _xBox, surface.XModeLabel, _xModeCombo));
-        content.Children.Add(MakeRow(surface.YLabel, _yBox, surface.YModeLabel, _yModeCombo));
-        content.Children.Add(MakeRow(surface.WidthLabel, _widthBox, surface.WidthModeLabel, _widthModeCombo));
-        content.Children.Add(MakeRow(surface.HeightLabel, _heightBox, surface.HeightModeLabel, _heightModeCombo));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.TargetLabel, _targetCombo, 130));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.LayoutTargetLabel, _layoutTargetCombo, 130));
+        content.Children.Add(ChartOptionsDialogChrome.CreateValueModeRow(surface.XLabel, _xBox, 130, surface.XModeLabel, _xModeCombo, 90));
+        content.Children.Add(ChartOptionsDialogChrome.CreateValueModeRow(surface.YLabel, _yBox, 130, surface.YModeLabel, _yModeCombo, 90));
+        content.Children.Add(ChartOptionsDialogChrome.CreateValueModeRow(surface.WidthLabel, _widthBox, 130, surface.WidthModeLabel, _widthModeCombo, 90));
+        content.Children.Add(ChartOptionsDialogChrome.CreateValueModeRow(surface.HeightLabel, _heightBox, 130, surface.HeightModeLabel, _heightModeCombo, 90));
         content.Children.Add(new TextBlock { Text = surface.Hint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
         Content = content;
@@ -168,50 +162,55 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         MinWidth = 180,
     };
 
-    private string? SelectedLayoutTarget() =>
-        _layoutTargetCombo.SelectedItem is ChartLayoutTargetSemanticOption option ? option.Value : null;
+    private string? SelectedLayoutTarget()
+    {
+        var options = ChartLayoutOptionsPlanner.LayoutTargetOptionsFor(_planner.LayoutTarget);
+        return ChartDialogOptionProjection.ValueAtOrDefault(
+            options,
+            _layoutTargetCombo.SelectedIndex,
+            option => option.Value,
+            default(string?));
+    }
 
     private void SelectLayoutTarget(string? value)
     {
         var options = ChartLayoutOptionsPlanner.LayoutTargetOptionsFor(value);
         _layoutTargetCombo.ItemsSource = options;
-        _layoutTargetCombo.SelectedIndex = Math.Max(0,
-            options.Select((item, index) => (item, index))
-                .FirstOrDefault(x => string.Equals(x.item.Value, value, StringComparison.OrdinalIgnoreCase)).index);
+        _layoutTargetCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(
+            options,
+            value,
+            option => option.Value,
+            comparer: StringComparer.OrdinalIgnoreCase);
     }
 
     private static ChartManualLayoutMode SelectedMode(ComboBox combo) =>
-        combo.SelectedItem is ChartLayoutModeOption option ? option.Value : ChartManualLayoutMode.Factor;
+        ChartDialogOptionProjection.ValueAtOrDefault(
+            ChartLayoutOptionsPlanner.ModeOptions,
+            combo.SelectedIndex,
+            option => option.Value,
+            ChartManualLayoutMode.Factor);
 
     private static double? ParseOptional(string? text, string surface)
     {
-        if (string.IsNullOrWhiteSpace(text)) return null;
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) && double.IsFinite(value))
-            return value;
-        throw new FormatException($"{surface} must be a finite number or blank.");
+        return ChartDialogOptionProjection.ParseOptionalDouble(
+            text,
+            CultureInfo.CurrentCulture,
+            double.IsFinite,
+            $"{surface} must be a finite number or blank.");
     }
 
-    private static string Format(double? value) => value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
+    private static string Format(double? value) =>
+        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 
     private static int FindTargetIndex(ChartLayoutTarget value) =>
-        Math.Max(0, ChartLayoutOptionsPlanner.TargetOptions.Select((item, index) => (item, index)).FirstOrDefault(x => x.item.Value == value).index);
+        ChartDialogOptionProjection.FindIndex(
+            ChartLayoutOptionsPlanner.TargetOptions,
+            value,
+            option => option.Value);
 
     private static int FindModeIndex(ChartManualLayoutMode value) =>
-        Math.Max(0, ChartLayoutOptionsPlanner.ModeOptions.Select((item, index) => (item, index)).FirstOrDefault(x => x.item.Value == value).index);
-
-    private static StackPanel MakeRow(string label, Control control)
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        row.Children.Add(new Label { Content = label, Width = 130, VerticalContentAlignment = VerticalAlignment.Center });
-        row.Children.Add(control);
-        return row;
-    }
-
-    private static StackPanel MakeRow(string valueLabel, Control value, string modeLabel, Control mode)
-    {
-        var row = MakeRow(valueLabel, value);
-        row.Children.Add(new Label { Content = modeLabel, Width = 90, Margin = new Thickness(14, 0, 0, 0), VerticalContentAlignment = VerticalAlignment.Center });
-        row.Children.Add(mode);
-        return row;
-    }
+        ChartDialogOptionProjection.FindIndex(
+            ChartLayoutOptionsPlanner.ModeOptions,
+            value,
+            option => option.Value);
 }

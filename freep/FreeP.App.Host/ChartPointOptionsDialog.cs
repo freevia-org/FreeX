@@ -123,25 +123,14 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         RefreshPoints();
         LoadControls();
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(8, 14, 8, 8),
-        };
-        var ok = new Button { Content = surface.OkLabel, IsDefault = true, MinWidth = 80, Margin = new Thickness(4) };
-        var cancel = new Button { Content = surface.CancelLabel, IsCancel = true, MinWidth = 80, Margin = new Thickness(4) };
-        ok.Click += (_, _) => OnOk();
-        cancel.Click += (_, _) => Close();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(surface.OkLabel, OnOk, surface.CancelLabel, Close, new Thickness(8, 14, 8, 8));
 
         var content = new StackPanel { Margin = new Thickness(14) };
-        content.Children.Add(MakeRow(surface.SeriesLabel, _seriesCombo));
-        content.Children.Add(MakeRow(surface.PointLabel, _pointCombo));
-        content.Children.Add(MakeRow(surface.FillColorLabel, _fillColorBox));
-        content.Children.Add(MakeRow(surface.StrokeColorLabel, _strokeColorBox));
-        content.Children.Add(MakeRow(surface.StrokeWidthLabel, _strokeWidthBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.SeriesLabel, _seriesCombo, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.PointLabel, _pointCombo, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.FillColorLabel, _fillColorBox, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.StrokeColorLabel, _strokeColorBox, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.StrokeWidthLabel, _strokeWidthBox, 180));
         content.Children.Add(_usePointDataLabelsCheck);
         content.Children.Add(_showValueLabelsCheck);
         content.Children.Add(_showPercentLabelsCheck);
@@ -150,17 +139,17 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         content.Children.Add(_showLegendKeysCheck);
         content.Children.Add(_showBubbleSizeCheck);
         content.Children.Add(_showLeaderLinesCheck);
-        content.Children.Add(MakeRow(surface.LabelPositionLabel, _labelPositionCombo));
-        content.Children.Add(MakeRow(surface.NumberFormatLabel, _labelNumberFormatBox));
-        content.Children.Add(MakeRow(surface.SeparatorLabel, _labelSeparatorBox));
-        content.Children.Add(MakeRow(surface.FontFamilyLabel, _labelFontFamilyBox));
-        content.Children.Add(MakeRow(surface.FontSizeLabel, _labelFontSizeBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.LabelPositionLabel, _labelPositionCombo, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.NumberFormatLabel, _labelNumberFormatBox, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.SeparatorLabel, _labelSeparatorBox, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.FontFamilyLabel, _labelFontFamilyBox, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.FontSizeLabel, _labelFontSizeBox, 180));
         content.Children.Add(_labelBoldCheck);
         content.Children.Add(_labelItalicCheck);
-        content.Children.Add(MakeRow(surface.LabelColorLabel, _labelColorBox));
-        content.Children.Add(MakeRow(surface.MarkerLabel, _markerCombo));
-        content.Children.Add(MakeRow(surface.MarkerSizeLabel, _markerSizeBox));
-        content.Children.Add(MakeRow(surface.ExplosionLabel, _explosionBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.LabelColorLabel, _labelColorBox, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.MarkerLabel, _markerCombo, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.MarkerSizeLabel, _markerSizeBox, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.ExplosionLabel, _explosionBox, 180));
         content.Children.Add(new TextBlock { Text = surface.AutoHint, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
         Content = content;
@@ -283,8 +272,7 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _planner.SetShowLegendKeys(_showLegendKeysCheck.IsChecked == true);
         _planner.SetShowBubbleSize(_showBubbleSizeCheck.IsChecked == true);
         _planner.SetShowLeaderLines(_showLeaderLinesCheck.IsChecked);
-        if (_labelPositionCombo.SelectedItem is ChartDisplayLabelPositionOption position)
-            _planner.SetLabelPosition(position.Value);
+        _planner.SetLabelPosition(ChartDialogOptionProjection.ValueAtOrDefault(ChartDisplayOptionsPlanner.LabelPositionOptions, _labelPositionCombo.SelectedIndex, option => option.Value));
         _planner.SetLabelNumberFormat(_labelNumberFormatBox.Text);
         _planner.SetLabelSeparator(_labelSeparatorBox.Text);
         _planner.SetLabelFontFamily(_labelFontFamilyBox.Text);
@@ -292,58 +280,34 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _planner.SetLabelBold(_labelBoldCheck.IsChecked);
         _planner.SetLabelItalic(_labelItalicCheck.IsChecked);
         _planner.SetLabelColor(_labelColorBox.Text);
-        var marker = _markerCombo.SelectedItem as ChartMarkerSymbolOption;
-        _planner.SetMarkerSymbol(marker is null || marker.Value == ChartMarkerSymbol.Auto ? null : marker.Value);
+        var marker = ChartDialogOptionProjection.ValueAtOrDefault(ChartPointOptionsPlanner.MarkerOptions, _markerCombo.SelectedIndex, option => option.Value, ChartMarkerSymbol.Auto);
+        _planner.SetMarkerSymbol(marker == ChartMarkerSymbol.Auto ? null : marker);
         _planner.SetMarkerSize(ParseOptional(_markerSizeBox.Text, "Marker size"));
         _planner.SetExplosionPercent(ParseOptionalInt(_explosionBox.Text, "Explosion"));
     }
 
     private static double? ParseOptional(string? text, string label)
     {
-        if (string.IsNullOrWhiteSpace(text)) return null;
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) &&
-            double.IsFinite(value) && value >= 0)
-            return value;
-        throw new FormatException($"{label} must be a non-negative finite number or blank.");
+        return ChartDialogOptionProjection.ParseOptionalDouble(text, CultureInfo.CurrentCulture, value => double.IsFinite(value) && value >= 0, $"{label} must be a non-negative finite number or blank.");
     }
 
     private static string Format(double? value) =>
-        value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
+        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 
     private static string Format(int? value) =>
-        value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 
     private static int? ParseOptionalInt(string? text, string label)
     {
-        if (string.IsNullOrWhiteSpace(text)) return null;
-        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) &&
-            value is >= 0 and <= 100)
-            return value;
-        throw new FormatException($"{label} must be an integer from 0 to 100 or blank.");
+        return ChartDialogOptionProjection.ParseOptionalInt(text, CultureInfo.CurrentCulture, value => value is >= 0 and <= 100, $"{label} must be an integer from 0 to 100 or blank.");
     }
 
     private static int FindMarkerIndex(ChartMarkerSymbol? symbol)
     {
         var value = symbol ?? ChartMarkerSymbol.Auto;
-        return Math.Max(0, ChartPointOptionsPlanner.MarkerOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == value).index);
+        return ChartDialogOptionProjection.FindIndex(ChartPointOptionsPlanner.MarkerOptions, value, option => option.Value);
     }
 
     private static int FindLabelPositionIndex(DataLabelPosition position) =>
-        Math.Max(0, ChartDisplayOptionsPlanner.LabelPositionOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == position).index);
-
-    private static StackPanel MakeRow(string label, Control control)
-    {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 0, 0, 8),
-        };
-        row.Children.Add(new Label { Content = label, Width = 180, VerticalContentAlignment = VerticalAlignment.Center });
-        row.Children.Add(control);
-        return row;
-    }
+        ChartDialogOptionProjection.FindIndex(ChartDisplayOptionsPlanner.LabelPositionOptions, position, option => option.Value);
 }

@@ -10,7 +10,6 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class ChartPlotStyleOptionsDialog : Window
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private readonly EditingSession _editor;
     private readonly ChartPlotStyleOptionsPlanner _planner;
     private readonly ComboBox _scatterCombo;
@@ -49,18 +48,11 @@ internal sealed class ChartPlotStyleOptionsDialog : Window
             MinWidth = 190,
         };
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children =
-            {
-                MakeButton(surface.OkLabel, true, OnOk),
-                MakeButton(surface.CancelLabel, false, () => Close(false)),
-            },
-        };
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(
+            surface.OkLabel,
+            OnOk,
+            surface.CancelLabel,
+            () => Close(false));
 
         Content = new StackPanel
         {
@@ -68,8 +60,8 @@ internal sealed class ChartPlotStyleOptionsDialog : Window
             Spacing = 8,
             Children =
             {
-                MakeRow(surface.ScatterStyleLabel, _scatterCombo),
-                MakeRow(surface.RadarStyleLabel, _radarCombo),
+                ChartOptionsDialogChrome.CreateRow(surface.ScatterStyleLabel, _scatterCombo, 190),
+                ChartOptionsDialogChrome.CreateRow(surface.RadarStyleLabel, _radarCombo, 190),
                 new TextBlock { Text = surface.Hint, Opacity = 0.7, TextWrapping = global::Avalonia.Media.TextWrapping.Wrap },
                 buttons,
             },
@@ -96,36 +88,27 @@ internal sealed class ChartPlotStyleOptionsDialog : Window
 
     private void UpdatePlannerFromControls()
     {
-        if (_scatterCombo.SelectedIndex >= 0 && _scatterCombo.SelectedIndex < ChartPlotStyleOptionsPlanner.ScatterStyleOptions.Count)
-            _planner.SetScatterStyle(ChartPlotStyleOptionsPlanner.ScatterStyleOptions[_scatterCombo.SelectedIndex].Value);
-        if (_radarCombo.SelectedIndex >= 0 && _radarCombo.SelectedIndex < ChartPlotStyleOptionsPlanner.RadarStyleOptions.Count)
-            _planner.SetRadarStyle(ChartPlotStyleOptionsPlanner.RadarStyleOptions[_radarCombo.SelectedIndex].Value);
+        _planner.SetScatterStyle(ChartDialogOptionProjection.ValueAtOrDefault(
+            ChartPlotStyleOptionsPlanner.ScatterStyleOptions,
+            _scatterCombo.SelectedIndex,
+            option => option.Value,
+            _planner.ScatterStyle));
+        _planner.SetRadarStyle(ChartDialogOptionProjection.ValueAtOrDefault(
+            ChartPlotStyleOptionsPlanner.RadarStyleOptions,
+            _radarCombo.SelectedIndex,
+            option => option.Value,
+            _planner.RadarStyle));
     }
 
     private static int FindScatterIndex(ScatterStyle value) =>
-        Math.Max(0, ChartPlotStyleOptionsPlanner.ScatterStyleOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == value).index);
+        ChartDialogOptionProjection.FindIndex(
+            ChartPlotStyleOptionsPlanner.ScatterStyleOptions,
+            value,
+            option => option.Value);
 
     private static int FindRadarIndex(RadarStyle value) =>
-        Math.Max(0, ChartPlotStyleOptionsPlanner.RadarStyleOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == value).index);
-
-    private static Control MakeRow(string label, Control control)
-    {
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("190, *") };
-        row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
-        Grid.SetColumn(control, 1);
-        row.Children.Add(control);
-        return row;
-    }
-
-    private static Button MakeButton(string label, bool isDefault, Action action)
-    {
-        var button = new Button { Content = label, IsDefault = isDefault, MinWidth = 80 };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
-        button.Click += (_, _) => action();
-        return button;
-    }
+        ChartDialogOptionProjection.FindIndex(
+            ChartPlotStyleOptionsPlanner.RadarStyleOptions,
+            value,
+            option => option.Value);
 }

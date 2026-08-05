@@ -11,7 +11,6 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class ChartLayoutOptionsDialog : Window
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private readonly EditingSession _editor;
     private readonly ChartLayoutOptionsPlanner _planner;
     private readonly ComboBox _targetCombo;
@@ -53,22 +52,19 @@ internal sealed class ChartLayoutOptionsDialog : Window
         _heightBox = new TextBox { MinWidth = 110 };
         LoadControls();
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children = { MakeButton(surface.OkLabel, true, OnOk), MakeButton(surface.CancelLabel, false, () => Close(false)) },
-        };
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(
+            surface.OkLabel,
+            OnOk,
+            surface.CancelLabel,
+            () => Close(false));
         Content = new StackPanel
         {
             Margin = new Thickness(14), Spacing = 8,
             Children =
             {
-                MakeRow(surface.TargetLabel, _targetCombo), MakeRow(surface.LayoutTargetLabel, _layoutTargetCombo),
-                MakeRow(surface.XLabel, _xBox, _xModeCombo), MakeRow(surface.YLabel, _yBox, _yModeCombo),
-                MakeRow(surface.WidthLabel, _widthBox, _widthModeCombo), MakeRow(surface.HeightLabel, _heightBox, _heightModeCombo),
+                ChartOptionsDialogChrome.CreateRow(surface.TargetLabel, _targetCombo, 140), ChartOptionsDialogChrome.CreateRow(surface.LayoutTargetLabel, _layoutTargetCombo, 140),
+                ChartOptionsDialogChrome.CreateValueModeRow(surface.XLabel, _xBox, _xModeCombo, 140, 110), ChartOptionsDialogChrome.CreateValueModeRow(surface.YLabel, _yBox, _yModeCombo, 140, 110),
+                ChartOptionsDialogChrome.CreateValueModeRow(surface.WidthLabel, _widthBox, _widthModeCombo, 140, 110), ChartOptionsDialogChrome.CreateValueModeRow(surface.HeightLabel, _heightBox, _heightModeCombo, 140, 110),
                 new TextBlock { Text = surface.Hint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7 }, buttons,
             },
         };
@@ -112,36 +108,46 @@ internal sealed class ChartLayoutOptionsDialog : Window
         _planner.SetWidth(ParseOptional(_widthBox.Text, "Width")); _planner.SetHeight(ParseOptional(_heightBox.Text, "Height"));
     }
 
-    private ChartLayoutTarget SelectedTarget() => _targetCombo.SelectedIndex == 1 ? ChartLayoutTarget.Legend : ChartLayoutTarget.PlotArea;
+    private ChartLayoutTarget SelectedTarget() =>
+        ChartDialogOptionProjection.ValueAtOrDefault(
+            ChartLayoutOptionsPlanner.TargetOptions,
+            _targetCombo.SelectedIndex,
+            option => option.Value,
+            ChartLayoutTarget.PlotArea);
     private string? SelectedLayoutTarget()
     {
         var options = ChartLayoutOptionsPlanner.LayoutTargetOptionsFor(_planner.LayoutTarget);
-        return _layoutTargetCombo.SelectedIndex >= 0 && _layoutTargetCombo.SelectedIndex < options.Count
-            ? options[_layoutTargetCombo.SelectedIndex].Value
-            : null;
+        return ChartDialogOptionProjection.ValueAtOrDefault(
+            options,
+            _layoutTargetCombo.SelectedIndex,
+            option => option.Value,
+            default(string?));
     }
 
     private void SelectLayoutTarget(string? value)
     {
         var options = ChartLayoutOptionsPlanner.LayoutTargetOptionsFor(value);
         _layoutTargetCombo.ItemsSource = options.Select(option => option.Label).ToArray();
-        _layoutTargetCombo.SelectedIndex = Math.Max(0,
-            options.Select((item, index) => (item, index))
-                .FirstOrDefault(x => string.Equals(x.item.Value, value, StringComparison.OrdinalIgnoreCase)).index);
+        _layoutTargetCombo.SelectedIndex = ChartDialogOptionProjection.FindIndex(
+            options,
+            value,
+            option => option.Value,
+            comparer: StringComparer.OrdinalIgnoreCase);
     }
 
     private static ComboBox MakeLayoutTargetCombo() => new() { MinWidth = 190 };
     private static ComboBox MakeModeCombo() => new() { ItemsSource = ChartLayoutOptionsPlanner.ModeOptions.Select(x => x.Label).ToArray(), MinWidth = 105 };
     private static ChartManualLayoutMode SelectedMode(ComboBox combo) =>
-        combo.SelectedIndex >= 0 && combo.SelectedIndex < ChartLayoutOptionsPlanner.ModeOptions.Count
-            ? ChartLayoutOptionsPlanner.ModeOptions[combo.SelectedIndex].Value
-            : ChartManualLayoutMode.Factor;
-    private static double? ParseOptional(string? text, string label) { if (string.IsNullOrWhiteSpace(text)) return null; if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) && double.IsFinite(value)) return value; throw new FormatException($"{label} must be a finite number or blank."); }
-    private static string Format(double? value) => value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
-    private static int FindTargetIndex(ChartLayoutTarget value) => value == ChartLayoutTarget.Legend ? 1 : 0;
+        ChartDialogOptionProjection.ValueAtOrDefault(
+            ChartLayoutOptionsPlanner.ModeOptions,
+            combo.SelectedIndex,
+            option => option.Value,
+            ChartManualLayoutMode.Factor);
+    private static double? ParseOptional(string? text, string label) =>
+        ChartDialogOptionProjection.ParseOptionalDouble(text, CultureInfo.CurrentCulture, double.IsFinite, $"{label} must be a finite number or blank.");
+    private static string Format(double? value) => ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
+    private static int FindTargetIndex(ChartLayoutTarget value) =>
+        ChartDialogOptionProjection.FindIndex(ChartLayoutOptionsPlanner.TargetOptions, value, option => option.Value);
     private static int FindModeIndex(ChartManualLayoutMode value) =>
-        Math.Max(0, ChartLayoutOptionsPlanner.ModeOptions.Select((item, index) => (item, index)).FirstOrDefault(x => x.item.Value == value).index);
-    private static Control MakeRow(string label, Control control) { var row = new Grid { ColumnDefinitions = new ColumnDefinitions("140, *") }; row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) }); Grid.SetColumn(control, 1); row.Children.Add(control); return row; }
-    private static Control MakeRow(string label, Control value, Control mode) { var row = new Grid { ColumnDefinitions = new ColumnDefinitions("140, 110, *") }; row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) }); Grid.SetColumn(value, 1); row.Children.Add(value); Grid.SetColumn(mode, 2); row.Children.Add(mode); return row; }
-    private static Button MakeButton(string label, bool isDefault, Action action) { var button = new Button { Content = label, IsDefault = isDefault, MinWidth = 80 }; AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault); button.Click += (_, _) => action(); return button; }
+        ChartDialogOptionProjection.FindIndex(ChartLayoutOptionsPlanner.ModeOptions, value, option => option.Value);
 }

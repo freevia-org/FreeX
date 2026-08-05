@@ -48,28 +48,22 @@ public sealed class Chart3DViewOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _rightAngleCombo = BuildBooleanCombo(_planner.RightAngleAxes);
         _wireframeCombo = BuildBooleanCombo(_planner.Wireframe);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(8, 14, 8, 8),
-        };
-        var ok = new Button { Content = surface.OkLabel, IsDefault = true, MinWidth = 80, Margin = new Thickness(4) };
-        var cancel = new Button { Content = surface.CancelLabel, IsCancel = true, MinWidth = 80, Margin = new Thickness(4) };
-        ok.Click += (_, _) => OnOk();
-        cancel.Click += (_, _) => Close();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(
+            surface.OkLabel,
+            OnOk,
+            surface.CancelLabel,
+            Close,
+            new Thickness(8, 14, 8, 8));
 
         var content = new StackPanel { Margin = new Thickness(14) };
-        content.Children.Add(MakeRow(surface.RotationXLabel, _rotationXBox));
-        content.Children.Add(MakeRow(surface.RotationYLabel, _rotationYBox));
-        content.Children.Add(MakeRow(surface.PerspectiveLabel, _perspectiveBox));
-        content.Children.Add(MakeRow(surface.HeightPercentLabel, _heightBox));
-        content.Children.Add(MakeRow(surface.DepthPercentLabel, _depthBox));
-        content.Children.Add(MakeRow(surface.BarGapDepthPercentLabel, _barGapDepthBox));
-        content.Children.Add(MakeRow(surface.RightAngleAxesLabel, _rightAngleCombo));
-        content.Children.Add(MakeRow(surface.WireframeLabel, _wireframeCombo));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.RotationXLabel, _rotationXBox, 170));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.RotationYLabel, _rotationYBox, 170));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.PerspectiveLabel, _perspectiveBox, 170));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.HeightPercentLabel, _heightBox, 170));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.DepthPercentLabel, _depthBox, 170));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.BarGapDepthPercentLabel, _barGapDepthBox, 170));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.RightAngleAxesLabel, _rightAngleCombo, 170));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.WireframeLabel, _wireframeCombo, 170));
         content.Children.Add(new TextBlock { Text = surface.AutoHint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
         Content = content;
@@ -110,30 +104,29 @@ public sealed class Chart3DViewOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     {
         ItemsSource = Chart3DViewOptionsPlanner.BooleanOptions,
         DisplayMemberPath = nameof(Chart3DViewBooleanOption.Label),
-        SelectedIndex = Chart3DViewOptionsPlanner.BooleanOptions
-            .Select((option, index) => (option, index))
-            .First(item => item.option.Value == value).index,
+        SelectedIndex = ChartDialogOptionProjection.FindIndex(
+            Chart3DViewOptionsPlanner.BooleanOptions,
+            value,
+            option => option.Value),
         MinWidth = 150,
     };
 
     private static bool? ReadBoolean(ComboBox combo) =>
-        combo.SelectedItem is Chart3DViewBooleanOption option ? option.Value : null;
+        ChartDialogOptionProjection.ValueAtOrDefault(
+            Chart3DViewOptionsPlanner.BooleanOptions,
+            combo.SelectedIndex,
+            option => option.Value,
+            default(bool?));
 
     private static int? ParseOptionalInt(string? text, string surface, int minimum, int maximum)
     {
-        if (string.IsNullOrWhiteSpace(text)) return null;
-        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value >= minimum && value <= maximum)
-            return value;
-        throw new FormatException($"{surface} must be a whole number from {minimum} to {maximum}, or blank.");
+        return ChartDialogOptionProjection.ParseOptionalInt(
+            text,
+            CultureInfo.CurrentCulture,
+            value => value >= minimum && value <= maximum,
+            $"{surface} must be a whole number from {minimum} to {maximum}, or blank.");
     }
 
-    private static string Format(int? value) => value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
-
-    private static StackPanel MakeRow(string label, Control control)
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        row.Children.Add(new Label { Content = label, Width = 170, VerticalContentAlignment = VerticalAlignment.Center });
-        row.Children.Add(control);
-        return row;
-    }
+    private static string Format(int? value) =>
+        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 }

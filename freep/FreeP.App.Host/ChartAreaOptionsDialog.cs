@@ -54,22 +54,21 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
         _targetCombo.SelectedIndex = initialTarget == ChartAreaFormattingTarget.PlotArea ? 1 : 0;
         LoadControls();
 
-        var ok = new Button { Content = surface.OkLabel, IsDefault = true, MinWidth = 80, Margin = new Thickness(4) };
-        var cancel = new Button { Content = surface.CancelLabel, IsCancel = true, MinWidth = 80, Margin = new Thickness(4) };
-        ok.Click += (_, _) => OnOk();
-        cancel.Click += (_, _) => Close();
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(
+            surface.OkLabel,
+            OnOk,
+            surface.CancelLabel,
+            Close,
+            new Thickness());
 
         var content = new StackPanel { Margin = new Thickness(14) };
-        content.Children.Add(MakeRow(surface.TargetLabel, _targetCombo));
-        content.Children.Add(MakeRow(surface.FillLabel, _fillBox));
-        content.Children.Add(MakeRow(surface.FillTransparencyLabel, _fillTransparencyBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.TargetLabel, _targetCombo, 170));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.FillLabel, _fillBox, 170));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.FillTransparencyLabel, _fillTransparencyBox, 170));
         content.Children.Add(_noFillCheck);
-        content.Children.Add(MakeRow(surface.OutlineLabel, _outlineBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.OutlineLabel, _outlineBox, 170));
         content.Children.Add(_noOutlineCheck);
-        content.Children.Add(MakeRow(surface.WidthLabel, _widthBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.WidthLabel, _widthBox, 170));
         content.Children.Add(new TextBlock { Text = surface.Hint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7, Margin = new Thickness(0, 0, 0, 8) });
         content.Children.Add(buttons);
         Content = content;
@@ -127,19 +126,13 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
 
     private static double? ParseOptional(string? text)
     {
-        if (string.IsNullOrWhiteSpace(text)) return null;
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) && double.IsFinite(value))
-            return value;
-        throw new FormatException("The value must be a finite number or blank.");
+        return ChartDialogOptionProjection.ParseOptionalDouble(
+            text,
+            CultureInfo.CurrentCulture,
+            double.IsFinite,
+            "The value must be a finite number or blank.");
     }
 
-    private static string Format(double? value) => value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
-
-    private static StackPanel MakeRow(string label, Control control)
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        row.Children.Add(new Label { Content = label, Width = 170, VerticalContentAlignment = VerticalAlignment.Center });
-        row.Children.Add(control);
-        return row;
-    }
+    private static string Format(double? value) =>
+        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 }

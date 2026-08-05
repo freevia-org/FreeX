@@ -53,18 +53,12 @@ public sealed class ChartDataTableOptionsDialog : Free.Shared.Ribbon.Wpf.DialogW
         _boldCheck = new CheckBox { Content = surface.BoldLabel, IsThreeState = true, IsChecked = _planner.Bold };
         _italicCheck = new CheckBox { Content = surface.ItalicLabel, IsThreeState = true, IsChecked = _planner.Italic };
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(8, 14, 8, 8),
-        };
-        var ok = new Button { Content = surface.OkLabel, IsDefault = true, MinWidth = 80, Margin = new Thickness(4) };
-        var cancel = new Button { Content = surface.CancelLabel, IsCancel = true, MinWidth = 80, Margin = new Thickness(4) };
-        ok.Click += (_, _) => OnOk();
-        cancel.Click += (_, _) => Close();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(
+            surface.OkLabel,
+            OnOk,
+            surface.CancelLabel,
+            Close,
+            new Thickness(8, 14, 8, 8));
 
         var content = new StackPanel { Margin = new Thickness(14) };
         content.Children.Add(_showTableCheck);
@@ -72,12 +66,12 @@ public sealed class ChartDataTableOptionsDialog : Free.Shared.Ribbon.Wpf.DialogW
         content.Children.Add(_verticalBorderCheck);
         content.Children.Add(_outlineBorderCheck);
         content.Children.Add(_legendKeysCheck);
-        AddTextRow(content, surface.BackgroundColorLabel, _backgroundColorBox);
-        AddTextRow(content, surface.BorderColorLabel, _borderColorBox);
-        AddTextRow(content, surface.BorderWidthLabel, _borderWidthBox);
-        AddTextRow(content, surface.TextColorLabel, _textColorBox);
-        AddTextRow(content, surface.FontSizeLabel, _fontSizeBox);
-        AddTextRow(content, surface.FontFamilyLabel, _fontFamilyBox);
+        content.Children.Add(ChartOptionsDialogChrome.CreateTrailingFieldRow(surface.BackgroundColorLabel, _backgroundColorBox, 150));
+        content.Children.Add(ChartOptionsDialogChrome.CreateTrailingFieldRow(surface.BorderColorLabel, _borderColorBox, 150));
+        content.Children.Add(ChartOptionsDialogChrome.CreateTrailingFieldRow(surface.BorderWidthLabel, _borderWidthBox, 150));
+        content.Children.Add(ChartOptionsDialogChrome.CreateTrailingFieldRow(surface.TextColorLabel, _textColorBox, 150));
+        content.Children.Add(ChartOptionsDialogChrome.CreateTrailingFieldRow(surface.FontSizeLabel, _fontSizeBox, 150));
+        content.Children.Add(ChartOptionsDialogChrome.CreateTrailingFieldRow(surface.FontFamilyLabel, _fontFamilyBox, 150));
         content.Children.Add(_boldCheck);
         content.Children.Add(_italicCheck);
         content.Children.Add(buttons);
@@ -126,26 +120,15 @@ public sealed class ChartDataTableOptionsDialog : Free.Shared.Ribbon.Wpf.DialogW
 
     private static TextBox CreateTextBox(string value) => new() { Text = value, MinWidth = 150 };
 
-    private static void AddTextRow(Panel panel, string label, TextBox box)
-    {
-        var row = new Grid { Margin = new Thickness(0, 3, 0, 0) };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
-        var labelControl = new Label { Content = label, Padding = new Thickness(0, 2, 8, 2) };
-        Grid.SetColumn(box, 1);
-        row.Children.Add(labelControl);
-        row.Children.Add(box);
-        panel.Children.Add(row);
-    }
-
     private static double? ParseOptional(string? text, string surface)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) && double.IsFinite(value) && value > 0)
-            return value;
-        throw new FormatException($"{surface} must be a positive finite number or blank.");
+        return ChartDialogOptionProjection.ParseOptionalDouble(
+            text,
+            CultureInfo.CurrentCulture,
+            value => double.IsFinite(value) && value > 0,
+            $"{surface} must be a positive finite number or blank.");
     }
 
-    private static string FormatOptional(double? value) => value?.ToString("0.###", CultureInfo.CurrentCulture) ?? string.Empty;
+    private static string FormatOptional(double? value) =>
+        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture, "0.###");
 }

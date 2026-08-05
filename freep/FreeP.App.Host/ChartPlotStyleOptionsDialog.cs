@@ -46,22 +46,16 @@ public sealed class ChartPlotStyleOptionsDialog : Free.Shared.Ribbon.Wpf.DialogW
             MinWidth = 190,
         };
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(8, 14, 8, 8),
-        };
-        var ok = new Button { Content = surface.OkLabel, IsDefault = true, MinWidth = 80, Margin = new Thickness(4) };
-        var cancel = new Button { Content = surface.CancelLabel, IsCancel = true, MinWidth = 80, Margin = new Thickness(4) };
-        ok.Click += (_, _) => OnOk();
-        cancel.Click += (_, _) => Close();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(
+            surface.OkLabel,
+            OnOk,
+            surface.CancelLabel,
+            Close,
+            new Thickness(8, 14, 8, 8));
 
         var content = new StackPanel { Margin = new Thickness(14) };
-        content.Children.Add(MakeRow(surface.ScatterStyleLabel, _scatterCombo));
-        content.Children.Add(MakeRow(surface.RadarStyleLabel, _radarCombo));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.ScatterStyleLabel, _scatterCombo, 190));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.RadarStyleLabel, _radarCombo, 190));
         content.Children.Add(new TextBlock { Text = surface.Hint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
         Content = content;
@@ -87,27 +81,27 @@ public sealed class ChartPlotStyleOptionsDialog : Free.Shared.Ribbon.Wpf.DialogW
 
     private void UpdatePlannerFromControls()
     {
-        if (_scatterCombo.SelectedItem is ChartScatterStyleOption scatter)
-            _planner.SetScatterStyle(scatter.Value);
-        if (_radarCombo.SelectedItem is ChartRadarStyleOption radar)
-            _planner.SetRadarStyle(radar.Value);
+        _planner.SetScatterStyle(ChartDialogOptionProjection.ValueAtOrDefault(
+            ChartPlotStyleOptionsPlanner.ScatterStyleOptions,
+            _scatterCombo.SelectedIndex,
+            option => option.Value,
+            _planner.ScatterStyle));
+        _planner.SetRadarStyle(ChartDialogOptionProjection.ValueAtOrDefault(
+            ChartPlotStyleOptionsPlanner.RadarStyleOptions,
+            _radarCombo.SelectedIndex,
+            option => option.Value,
+            _planner.RadarStyle));
     }
 
     private static int FindScatterIndex(ScatterStyle value) =>
-        Math.Max(0, ChartPlotStyleOptionsPlanner.ScatterStyleOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == value).index);
+        ChartDialogOptionProjection.FindIndex(
+            ChartPlotStyleOptionsPlanner.ScatterStyleOptions,
+            value,
+            option => option.Value);
 
     private static int FindRadarIndex(RadarStyle value) =>
-        Math.Max(0, ChartPlotStyleOptionsPlanner.RadarStyleOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == value).index);
-
-    private static StackPanel MakeRow(string label, Control control)
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        row.Children.Add(new Label { Content = label, Width = 190, VerticalContentAlignment = VerticalAlignment.Center });
-        row.Children.Add(control);
-        return row;
-    }
+        ChartDialogOptionProjection.FindIndex(
+            ChartPlotStyleOptionsPlanner.RadarStyleOptions,
+            value,
+            option => option.Value);
 }

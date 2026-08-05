@@ -12,7 +12,6 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class ChartSeriesOptionsDialog : Window
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private readonly EditingSession _editor;
     private readonly ChartSeriesOptionsPlanner _planner;
     private readonly ComboBox _seriesCombo;
@@ -154,18 +153,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _markerSizeBox = new TextBox { MinWidth = 130 };
         LoadControls();
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children =
-            {
-                MakeButton(surface.OkLabel, true, OnOk),
-                MakeButton(surface.CancelLabel, false, () => Close(false)),
-            },
-        };
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(surface.OkLabel, OnOk, surface.CancelLabel, () => Close(false));
 
         var content = new StackPanel
         {
@@ -383,13 +371,10 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _planner.SetSmoothLine(_smoothLineCheck.IsChecked == true);
         _planner.SetOnSecondaryAxis(_secondaryAxisCheck.IsChecked == true);
         _planner.SetInvertIfNegative(_invertIfNegativeCheck.IsChecked == true);
-        if (_seriesChartTypeCombo.SelectedIndex >= 0 &&
-            _seriesChartTypeCombo.SelectedIndex < ChartSeriesOptionsPlanner.SeriesChartTypeOptions.Count)
-            _planner.SetOverrideChartType(ChartSeriesOptionsPlanner.SeriesChartTypeOptions[_seriesChartTypeCombo.SelectedIndex].Value);
+        _planner.SetOverrideChartType(ChartDialogOptionProjection.ValueAtOrDefault(ChartSeriesOptionsPlanner.SeriesChartTypeOptions, _seriesChartTypeCombo.SelectedIndex, option => option.Value, default(ChartType?)));
         _planner.SetLineWidth(ParseOptional(_lineWidthBox.Text, "Line width"));
         _planner.SetLineColor(_lineColorBox.Text);
-        if (_lineDashCombo.SelectedIndex >= 0 && _lineDashCombo.SelectedIndex < ChartSeriesOptionsPlanner.DashOptions.Count)
-            _planner.SetLineDash(ChartSeriesOptionsPlanner.DashOptions[_lineDashCombo.SelectedIndex].Value);
+        _planner.SetLineDash(ChartDialogOptionProjection.ValueAtOrDefault(ChartSeriesOptionsPlanner.DashOptions, _lineDashCombo.SelectedIndex, option => option.Value, _planner.LineDash));
         _planner.SetNoLine(_noLineCheck.IsChecked == true);
         _planner.SetFillColor(_fillColorBox.Text);
         _planner.SetUseSeriesDataLabels(_useSeriesDataLabelsCheck.IsChecked == true);
@@ -401,26 +386,20 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _planner.SetShowBubbleSize(_showBubbleSizeCheck.IsChecked == true);
         _planner.SetShowLeaderLines(_showLeaderLinesCheck.IsChecked);
         _planner.SetErrorBarsEnabled(_errorBarsCheck.IsChecked == true);
-        if (_errorDirectionCombo.SelectedIndex >= 0 && _errorDirectionCombo.SelectedIndex < ChartSeriesOptionsPlanner.ErrorDirectionOptions.Count)
-            _planner.SetErrorDirection(ChartSeriesOptionsPlanner.ErrorDirectionOptions[_errorDirectionCombo.SelectedIndex].Value);
-        if (_errorBarTypeCombo.SelectedIndex >= 0 && _errorBarTypeCombo.SelectedIndex < ChartSeriesOptionsPlanner.ErrorBarTypeOptions.Count)
-            _planner.SetErrorBarType(ChartSeriesOptionsPlanner.ErrorBarTypeOptions[_errorBarTypeCombo.SelectedIndex].Value);
-        if (_errorValueTypeCombo.SelectedIndex >= 0 && _errorValueTypeCombo.SelectedIndex < ChartSeriesOptionsPlanner.ErrorValueTypeOptions.Count)
-            _planner.SetErrorValueType(ChartSeriesOptionsPlanner.ErrorValueTypeOptions[_errorValueTypeCombo.SelectedIndex].Value);
+        _planner.SetErrorDirection(ChartDialogOptionProjection.ValueAtOrDefault(ChartSeriesOptionsPlanner.ErrorDirectionOptions, _errorDirectionCombo.SelectedIndex, option => option.Value, _planner.ErrorDirection));
+        _planner.SetErrorBarType(ChartDialogOptionProjection.ValueAtOrDefault(ChartSeriesOptionsPlanner.ErrorBarTypeOptions, _errorBarTypeCombo.SelectedIndex, option => option.Value, _planner.ErrorBarType));
+        _planner.SetErrorValueType(ChartDialogOptionProjection.ValueAtOrDefault(ChartSeriesOptionsPlanner.ErrorValueTypeOptions, _errorValueTypeCombo.SelectedIndex, option => option.Value, _planner.ErrorValueType));
         _planner.SetErrorValue(ParseOptional(_errorValueBox.Text, "Error bar value") ?? 0);
         _planner.SetErrorNoEndCap(_errorNoEndCapCheck.IsChecked == true);
         _planner.SetTrendlineEnabled(_trendlineCheck.IsChecked == true);
-        if (_trendlineTypeCombo.SelectedIndex >= 0 && _trendlineTypeCombo.SelectedIndex < ChartSeriesOptionsPlanner.TrendlineTypeOptions.Count)
-            _planner.SetTrendlineType(ChartSeriesOptionsPlanner.TrendlineTypeOptions[_trendlineTypeCombo.SelectedIndex].Value);
+        _planner.SetTrendlineType(ChartDialogOptionProjection.ValueAtOrDefault(ChartSeriesOptionsPlanner.TrendlineTypeOptions, _trendlineTypeCombo.SelectedIndex, option => option.Value, _planner.TrendlineType));
         _planner.SetTrendlineOrder(ParseOptionalInt(_trendlineOrderBox.Text, ChartSeriesOptionsPlanner.TrendlineOrderLabel));
         _planner.SetTrendlinePeriod(ParseOptionalInt(_trendlinePeriodBox.Text, ChartSeriesOptionsPlanner.TrendlinePeriodLabel));
         _planner.SetTrendlineForward(ParseOptional(_trendlineForwardBox.Text, ChartSeriesOptionsPlanner.TrendlineForwardLabel));
         _planner.SetTrendlineBackward(ParseOptional(_trendlineBackwardBox.Text, ChartSeriesOptionsPlanner.TrendlineBackwardLabel));
         _planner.SetTrendlineEquation(_trendlineEquationCheck.IsChecked == true);
         _planner.SetTrendlineRSquared(_trendlineRSquaredCheck.IsChecked == true);
-        if (_labelPositionCombo.SelectedIndex >= 0 &&
-            _labelPositionCombo.SelectedIndex < ChartDisplayOptionsPlanner.LabelPositionOptions.Count)
-            _planner.SetLabelPosition(ChartDisplayOptionsPlanner.LabelPositionOptions[_labelPositionCombo.SelectedIndex].Value);
+        _planner.SetLabelPosition(ChartDialogOptionProjection.ValueAtOrDefault(ChartDisplayOptionsPlanner.LabelPositionOptions, _labelPositionCombo.SelectedIndex, option => option.Value, _planner.LabelPosition));
         _planner.SetLabelNumberFormat(_labelNumberFormatBox.Text);
         _planner.SetLabelSeparator(_labelSeparatorBox.Text);
         _planner.SetLabelFontFamily(_labelFontFamilyBox.Text);
@@ -428,95 +407,50 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _planner.SetLabelBold(_labelBoldCheck.IsChecked);
         _planner.SetLabelItalic(_labelItalicCheck.IsChecked);
         _planner.SetLabelColor(_labelColorBox.Text);
-        if (_markerCombo.SelectedIndex >= 0 && _markerCombo.SelectedIndex < ChartSeriesOptionsPlanner.MarkerOptions.Count)
-            _planner.SetMarkerSymbol(ChartSeriesOptionsPlanner.MarkerOptions[_markerCombo.SelectedIndex].Value);
+        _planner.SetMarkerSymbol(ChartDialogOptionProjection.ValueAtOrDefault(ChartSeriesOptionsPlanner.MarkerOptions, _markerCombo.SelectedIndex, option => option.Value, _planner.MarkerSymbol));
         _planner.SetMarkerSize(ParseOptional(_markerSizeBox.Text, "Marker size"));
     }
 
     private static double? ParseOptional(string? text, string label)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) &&
-            double.IsFinite(value) && value >= 0)
-            return value;
-        throw new FormatException($"{label} must be a non-negative finite number or blank.");
+        return ChartDialogOptionProjection.ParseOptionalDouble(text, CultureInfo.CurrentCulture, value => double.IsFinite(value) && value >= 0, $"{label} must be a non-negative finite number or blank.");
     }
 
     private static string Format(double? value) =>
-        value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
+        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 
     private static string Format(int? value) =>
-        value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 
     private static int? ParseOptionalInt(string? text, string label)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value >= 0)
-            return value;
-        throw new FormatException($"{label} must be a non-negative integer or blank.");
+        return ChartDialogOptionProjection.ParseOptionalInt(text, CultureInfo.CurrentCulture, value => value >= 0, $"{label} must be a non-negative integer or blank.");
     }
 
     private static int FindMarkerIndex(ChartMarkerSymbol symbol) =>
-        Math.Max(0, ChartSeriesOptionsPlanner.MarkerOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == symbol).index);
+        ChartDialogOptionProjection.FindIndex(ChartSeriesOptionsPlanner.MarkerOptions, symbol, option => option.Value);
 
     private static int FindSeriesChartTypeIndex(ChartType? value) =>
-        Math.Max(0, ChartSeriesOptionsPlanner.SeriesChartTypeOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == value).index);
+        ChartDialogOptionProjection.FindIndex(ChartSeriesOptionsPlanner.SeriesChartTypeOptions, value, option => option.Value);
 
     private static int FindDashIndex(OutlineDash dash) =>
-        Math.Max(0, ChartSeriesOptionsPlanner.DashOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == dash).index);
+        ChartDialogOptionProjection.FindIndex(ChartSeriesOptionsPlanner.DashOptions, dash, option => option.Value);
 
     private static int FindErrorDirectionIndex(ChartErrorDirection value) =>
-        Math.Max(0, ChartSeriesOptionsPlanner.ErrorDirectionOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == value).index);
+        ChartDialogOptionProjection.FindIndex(ChartSeriesOptionsPlanner.ErrorDirectionOptions, value, option => option.Value);
 
     private static int FindErrorBarTypeIndex(ChartErrorBarType value) =>
-        Math.Max(0, ChartSeriesOptionsPlanner.ErrorBarTypeOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == value).index);
+        ChartDialogOptionProjection.FindIndex(ChartSeriesOptionsPlanner.ErrorBarTypeOptions, value, option => option.Value);
 
     private static int FindErrorValueTypeIndex(ChartErrorValueType value) =>
-        Math.Max(0, ChartSeriesOptionsPlanner.ErrorValueTypeOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == value).index);
+        ChartDialogOptionProjection.FindIndex(ChartSeriesOptionsPlanner.ErrorValueTypeOptions, value, option => option.Value);
 
     private static int FindTrendlineTypeIndex(ChartTrendlineType value) =>
-        Math.Max(0, ChartSeriesOptionsPlanner.TrendlineTypeOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == value).index);
+        ChartDialogOptionProjection.FindIndex(ChartSeriesOptionsPlanner.TrendlineTypeOptions, value, option => option.Value);
 
     private static int FindLabelPositionIndex(DataLabelPosition position) =>
-        Math.Max(0, ChartDisplayOptionsPlanner.LabelPositionOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == position).index);
+        ChartDialogOptionProjection.FindIndex(ChartDisplayOptionsPlanner.LabelPositionOptions, position, option => option.Value);
 
-    private static Control MakeRow(string label, Control control)
-    {
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("160, *") };
-        row.Children.Add(new TextBlock
-        {
-            Text = label,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 0),
-        });
-        Grid.SetColumn(control, 1);
-        row.Children.Add(control);
-        return row;
-    }
-
-    private static Button MakeButton(string label, bool isDefault, Action action)
-    {
-        var button = new Button { Content = label, IsDefault = isDefault, MinWidth = 80 };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
-        button.Click += (_, _) => action();
-        return button;
-    }
+    private static Control MakeRow(string label, Control control) =>
+        ChartOptionsDialogChrome.CreateRow(label, control, 160);
 }

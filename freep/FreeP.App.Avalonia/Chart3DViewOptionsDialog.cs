@@ -11,7 +11,6 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class Chart3DViewOptionsDialog : Window
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private readonly EditingSession _editor;
     private readonly Chart3DViewOptionsPlanner _planner;
     private readonly TextBox _rotationXBox;
@@ -53,18 +52,11 @@ internal sealed class Chart3DViewOptionsDialog : Window
         _rightAngleCombo = BuildBooleanCombo(_planner.RightAngleAxes);
         _wireframeCombo = BuildBooleanCombo(_planner.Wireframe);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children =
-            {
-                MakeButton(surface.OkLabel, true, OnOk),
-                MakeButton(surface.CancelLabel, false, () => Close(false)),
-            },
-        };
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(
+            surface.OkLabel,
+            OnOk,
+            surface.CancelLabel,
+            () => Close(false));
 
         Content = new StackPanel
         {
@@ -72,14 +64,14 @@ internal sealed class Chart3DViewOptionsDialog : Window
             Spacing = 8,
             Children =
             {
-                MakeRow(surface.RotationXLabel, _rotationXBox),
-                MakeRow(surface.RotationYLabel, _rotationYBox),
-                MakeRow(surface.PerspectiveLabel, _perspectiveBox),
-                MakeRow(surface.HeightPercentLabel, _heightBox),
-                MakeRow(surface.DepthPercentLabel, _depthBox),
-                MakeRow(surface.BarGapDepthPercentLabel, _barGapDepthBox),
-                MakeRow(surface.RightAngleAxesLabel, _rightAngleCombo),
-                MakeRow(surface.WireframeLabel, _wireframeCombo),
+                ChartOptionsDialogChrome.CreateRow(surface.RotationXLabel, _rotationXBox, 170),
+                ChartOptionsDialogChrome.CreateRow(surface.RotationYLabel, _rotationYBox, 170),
+                ChartOptionsDialogChrome.CreateRow(surface.PerspectiveLabel, _perspectiveBox, 170),
+                ChartOptionsDialogChrome.CreateRow(surface.HeightPercentLabel, _heightBox, 170),
+                ChartOptionsDialogChrome.CreateRow(surface.DepthPercentLabel, _depthBox, 170),
+                ChartOptionsDialogChrome.CreateRow(surface.BarGapDepthPercentLabel, _barGapDepthBox, 170),
+                ChartOptionsDialogChrome.CreateRow(surface.RightAngleAxesLabel, _rightAngleCombo, 170),
+                ChartOptionsDialogChrome.CreateRow(surface.WireframeLabel, _wireframeCombo, 170),
                 new TextBlock { Text = surface.AutoHint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7 },
                 buttons,
             },
@@ -146,41 +138,28 @@ internal sealed class Chart3DViewOptionsDialog : Window
 
     private static bool? ReadBoolean(ComboBox combo)
     {
-        var index = combo.SelectedIndex;
-        return index >= 0 && index < Chart3DViewOptionsPlanner.BooleanOptions.Count
-            ? Chart3DViewOptionsPlanner.BooleanOptions[index].Value
-            : null;
+        return ChartDialogOptionProjection.ValueAtOrDefault(
+            Chart3DViewOptionsPlanner.BooleanOptions,
+            combo.SelectedIndex,
+            option => option.Value,
+            default(bool?));
     }
 
-    private static int FindBooleanIndex(bool? value) => Math.Max(0,
-        Chart3DViewOptionsPlanner.BooleanOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == value).index);
+    private static int FindBooleanIndex(bool? value) =>
+        ChartDialogOptionProjection.FindIndex(
+            Chart3DViewOptionsPlanner.BooleanOptions,
+            value,
+            option => option.Value);
 
     private static int? ParseOptionalInt(string? text, string surface, int minimum, int maximum)
     {
-        if (string.IsNullOrWhiteSpace(text)) return null;
-        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value >= minimum && value <= maximum)
-            return value;
-        throw new FormatException($"{surface} must be a whole number from {minimum} to {maximum}, or blank.");
+        return ChartDialogOptionProjection.ParseOptionalInt(
+            text,
+            CultureInfo.CurrentCulture,
+            value => value >= minimum && value <= maximum,
+            $"{surface} must be a whole number from {minimum} to {maximum}, or blank.");
     }
 
-    private static string Format(int? value) => value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
-
-    private static Control MakeRow(string label, Control control)
-    {
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("170, *") };
-        row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
-        Grid.SetColumn(control, 1);
-        row.Children.Add(control);
-        return row;
-    }
-
-    private static Button MakeButton(string label, bool isDefault, Action action)
-    {
-        var button = new Button { Content = label, IsDefault = isDefault, MinWidth = 80 };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
-        button.Click += (_, _) => action();
-        return button;
-    }
+    private static string Format(int? value) =>
+        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 }

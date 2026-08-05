@@ -214,27 +214,16 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             IsEnabled = _planner.SupportsSeriesLines,
         };
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(8, 14, 8, 8),
-        };
-        var ok = new Button { Content = surface.OkLabel, IsDefault = true, MinWidth = 80, Margin = new Thickness(4) };
-        var cancel = new Button { Content = surface.CancelLabel, IsCancel = true, MinWidth = 80, Margin = new Thickness(4) };
-        ok.Click += (_, _) => OnOk();
-        cancel.Click += (_, _) => Close();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(surface.OkLabel, OnOk, surface.CancelLabel, Close, new Thickness(8, 14, 8, 8));
 
         var content = new StackPanel { Margin = new Thickness(14) };
-        content.Children.Add(MakeRow(surface.ChartTitleLabel, _titleBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.ChartTitleLabel, _titleBox));
         content.Children.Add(_titleOverlayCheck);
         content.Children.Add(_plotVisibleOnlyCheck);
         content.Children.Add(_roundedCornersCheck);
-        content.Children.Add(MakeRow(surface.ChartStyleLabel, _styleCombo));
-        content.Children.Add(MakeRow(surface.LegendLabel, _legendCombo));
-        content.Children.Add(MakeRow(surface.LabelPositionLabel, _labelPositionCombo));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.ChartStyleLabel, _styleCombo));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.LegendLabel, _legendCombo));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.LabelPositionLabel, _labelPositionCombo));
         content.Children.Add(_valueLabelsCheck);
         content.Children.Add(_percentLabelsCheck);
         content.Children.Add(_categoryLabelsCheck);
@@ -242,18 +231,18 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         content.Children.Add(_legendKeysCheck);
         content.Children.Add(_bubbleSizeLabelsCheck);
         content.Children.Add(_showLeaderLinesCheck);
-        content.Children.Add(MakeRow(surface.NumberFormatLabel, _numberFormatBox));
-        content.Children.Add(MakeRow(surface.SeparatorLabel, _separatorBox));
-        content.Children.Add(MakeRow(surface.FontFamilyLabel, _labelFontFamilyBox));
-        content.Children.Add(MakeRow(surface.FontSizeLabel, _labelFontSizeBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.NumberFormatLabel, _numberFormatBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.SeparatorLabel, _separatorBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.FontFamilyLabel, _labelFontFamilyBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.FontSizeLabel, _labelFontSizeBox));
         content.Children.Add(_labelBoldCheck);
         content.Children.Add(_labelItalicCheck);
-        content.Children.Add(MakeRow(surface.LabelColorLabel, _labelColorBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.LabelColorLabel, _labelColorBox));
         content.Children.Add(_categoryGridlinesCheck);
         content.Children.Add(_valueGridlinesCheck);
-        content.Children.Add(MakeRow(surface.BarGapWidthLabel, _barGapWidthBox));
-        content.Children.Add(MakeRow(surface.BarOverlapLabel, _barOverlapBox));
-        content.Children.Add(MakeRow(surface.DisplayBlanksAsLabel, _displayBlanksCombo));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.BarGapWidthLabel, _barGapWidthBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.BarOverlapLabel, _barOverlapBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.DisplayBlanksAsLabel, _displayBlanksCombo));
         content.Children.Add(_showDataLabelsOverMaximumCheck);
         content.Children.Add(_varyColorsCheck);
         content.Children.Add(_legendOverlayCheck);
@@ -320,9 +309,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _planner.SetTitleOverlay(_titleOverlayCheck.IsChecked == true);
         _planner.SetPlotVisibleOnly(_plotVisibleOnlyCheck.IsChecked == true);
         _planner.SetRoundedCorners(_roundedCornersCheck.IsChecked == true);
-        if (_styleCombo.SelectedItem is ChartDisplayStyleOption style)
-            _planner.SetStyleId(style.Value);
-        _planner.SetLegend(_legendCombo.SelectedItem is ChartDisplayLegendOption legend ? legend.Value : null);
+        _planner.SetStyleId(ChartDialogOptionProjection.ValueAtOrDefault(_planner.AvailableStyleOptions, _styleCombo.SelectedIndex, option => option.Value));
+        _planner.SetLegend(ChartDialogOptionProjection.ValueAtOrDefault(ChartDisplayOptionsPlanner.LegendOptions, _legendCombo.SelectedIndex, option => option.Value, default(LegendPosition?)));
         _planner.SetShowValueLabels(_valueLabelsCheck.IsChecked == true);
         _planner.SetShowPercentLabels(_percentLabelsCheck.IsChecked == true);
         _planner.SetShowCategoryLabels(_categoryLabelsCheck.IsChecked == true);
@@ -330,8 +318,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _planner.SetShowLegendKeys(_legendKeysCheck.IsChecked == true);
         _planner.SetShowBubbleSize(_bubbleSizeLabelsCheck.IsChecked == true);
         _planner.SetShowLeaderLines(_showLeaderLinesCheck.IsChecked);
-        if (_labelPositionCombo.SelectedItem is ChartDisplayLabelPositionOption position)
-            _planner.SetLabelPosition(position.Value);
+        _planner.SetLabelPosition(ChartDialogOptionProjection.ValueAtOrDefault(ChartDisplayOptionsPlanner.LabelPositionOptions, _labelPositionCombo.SelectedIndex, option => option.Value));
         _planner.SetLabelNumberFormat(_numberFormatBox.Text);
         _planner.SetLabelSeparator(_separatorBox.Text);
         _planner.SetLabelFontFamily(_labelFontFamilyBox.Text);
@@ -343,8 +330,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _planner.SetValueGridlines(_valueGridlinesCheck.IsChecked == true);
         _planner.SetBarGapWidthPercent(ParseOptionalPercent(_barGapWidthBox.Text, "Bar gap width", 0, 500));
         _planner.SetBarOverlapPercent(ParseOptionalPercent(_barOverlapBox.Text, "Bar overlap", -100, 100));
-        if (_displayBlanksCombo.SelectedItem is ChartDisplayBlanksOption blanks)
-            _planner.SetDisplayBlanksAs(blanks.Value);
+        _planner.SetDisplayBlanksAs(ChartDialogOptionProjection.ValueAtOrDefault(ChartDisplayOptionsPlanner.DisplayBlanksOptions, _displayBlanksCombo.SelectedIndex, option => option.Value, default(ChartDisplayBlanksAs?)));
         _planner.SetShowDataLabelsOverMaximum(_showDataLabelsOverMaximumCheck.IsChecked);
         _planner.SetVaryColors(_varyColorsCheck.IsChecked == true);
         _planner.SetLegendOverlay(_legendOverlayCheck.IsChecked);
@@ -355,57 +341,29 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _planner.SetSeriesLines(_seriesLinesCheck.IsChecked);
     }
 
-    private static StackPanel MakeRow(string label, Control control)
-    {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 0, 0, 8),
-        };
-        row.Children.Add(new Label { Content = label, Width = 150, VerticalContentAlignment = VerticalAlignment.Center });
-        row.Children.Add(control);
-        return row;
-    }
-
     private static int FindLegendIndex(LegendPosition? position) =>
-        ChartDisplayOptionsPlanner.LegendOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == position).index;
+        ChartDialogOptionProjection.FindIndex(ChartDisplayOptionsPlanner.LegendOptions, position, option => option.Value);
 
     private static int FindStyleIndex(int? styleId) =>
-        Math.Max(0, ChartDisplayOptionsPlanner.StyleOptionsFor(styleId)
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == styleId).index);
+        ChartDialogOptionProjection.FindIndex(ChartDisplayOptionsPlanner.StyleOptionsFor(styleId), styleId, option => option.Value);
 
     private static int FindLabelPositionIndex(DataLabelPosition position) =>
-        Math.Max(0, ChartDisplayOptionsPlanner.LabelPositionOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == position).index);
+        ChartDialogOptionProjection.FindIndex(ChartDisplayOptionsPlanner.LabelPositionOptions, position, option => option.Value);
 
     private static int FindDisplayBlanksIndex(ChartDisplayBlanksAs? value) =>
-        ChartDisplayOptionsPlanner.DisplayBlanksOptions
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(item => item.option.Value == value).index;
+        ChartDialogOptionProjection.FindIndex(ChartDisplayOptionsPlanner.DisplayBlanksOptions, value, option => option.Value);
 
-    private static string Format(int? value) => value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+    private static string Format(int? value) => ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 
-    private static string Format(double? value) => value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
+    private static string Format(double? value) => ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 
     private static double? ParseOptional(string? text, string label)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) &&
-            double.IsFinite(value) && value >= 0)
-            return value;
-        throw new FormatException($"{label} must be a non-negative finite number or blank.");
+        return ChartDialogOptionProjection.ParseOptionalDouble(text, CultureInfo.CurrentCulture, value => double.IsFinite(value) && value >= 0, $"{label} must be a non-negative finite number or blank.");
     }
 
     private static int? ParseOptionalPercent(string? text, string surface, int minimum, int maximum)
     {
-        if (string.IsNullOrWhiteSpace(text)) return null;
-        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value >= minimum && value <= maximum)
-            return value;
-        throw new FormatException($"{surface} must be a whole number from {minimum} to {maximum}, or blank.");
+        return ChartDialogOptionProjection.ParseOptionalInt(text, CultureInfo.CurrentCulture, value => value >= minimum && value <= maximum, $"{surface} must be a whole number from {minimum} to {maximum}, or blank.");
     }
 }

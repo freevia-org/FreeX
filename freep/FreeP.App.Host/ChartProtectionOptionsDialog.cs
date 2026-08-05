@@ -34,24 +34,18 @@ public sealed class ChartProtectionOptionsDialog : Free.Shared.Ribbon.Wpf.Dialog
         _formattingCombo = BuildBooleanCombo(_planner.Formatting);
         _selectionCombo = BuildBooleanCombo(_planner.Selection);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(8, 14, 8, 8),
-        };
-        var ok = new Button { Content = surface.OkLabel, IsDefault = true, MinWidth = 80, Margin = new Thickness(4) };
-        var cancel = new Button { Content = surface.CancelLabel, IsCancel = true, MinWidth = 80, Margin = new Thickness(4) };
-        ok.Click += (_, _) => OnOk();
-        cancel.Click += (_, _) => Close();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(
+            surface.OkLabel,
+            OnOk,
+            surface.CancelLabel,
+            Close,
+            new Thickness(8, 14, 8, 8));
 
         var content = new StackPanel { Margin = new Thickness(14) };
-        content.Children.Add(MakeRow(surface.ChartObjectLabel, _chartObjectCombo));
-        content.Children.Add(MakeRow(surface.DataLabel, _dataCombo));
-        content.Children.Add(MakeRow(surface.FormattingLabel, _formattingCombo));
-        content.Children.Add(MakeRow(surface.SelectionLabel, _selectionCombo));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.ChartObjectLabel, _chartObjectCombo, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.DataLabel, _dataCombo, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.FormattingLabel, _formattingCombo, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.SelectionLabel, _selectionCombo, 180));
         content.Children.Add(new TextBlock { Text = surface.Hint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
         Content = content;
@@ -89,24 +83,20 @@ public sealed class ChartProtectionOptionsDialog : Free.Shared.Ribbon.Wpf.Dialog
     {
         ItemsSource = ChartProtectionOptionsPlanner.BooleanOptions,
         DisplayMemberPath = nameof(ChartProtectionBooleanOption.Label),
-        SelectedIndex = ChartProtectionOptionsPlanner.BooleanOptions
-            .Select((option, index) => (option, index))
-            .First(item => item.option.Value == value).index,
+        SelectedIndex = FindBooleanIndex(value),
         MinWidth = 180,
     };
 
     private static bool? ReadBoolean(ComboBox combo) =>
-        combo.SelectedItem is ChartProtectionBooleanOption option ? option.Value : null;
+        ChartDialogOptionProjection.ValueAtOrDefault(
+            ChartProtectionOptionsPlanner.BooleanOptions,
+            combo.SelectedIndex,
+            option => option.Value,
+            default(bool?));
 
-    private static int FindBooleanIndex(bool? value) => ChartProtectionOptionsPlanner.BooleanOptions
-        .Select((option, index) => (option, index))
-        .First(item => item.option.Value == value).index;
-
-    private static StackPanel MakeRow(string label, Control control)
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        row.Children.Add(new Label { Content = label, Width = 180, VerticalContentAlignment = VerticalAlignment.Center });
-        row.Children.Add(control);
-        return row;
-    }
+    private static int FindBooleanIndex(bool? value) =>
+        ChartDialogOptionProjection.FindIndex(
+            ChartProtectionOptionsPlanner.BooleanOptions,
+            value,
+            option => option.Value);
 }

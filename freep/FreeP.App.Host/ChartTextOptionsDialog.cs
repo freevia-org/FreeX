@@ -37,25 +37,19 @@ public sealed class ChartTextOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _italicCombo = BuildBooleanCombo(_planner.Italic);
         _colorBox = new TextBox { Text = _planner.ColorText, MinWidth = 180 };
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(8, 14, 8, 8),
-        };
-        var ok = new Button { Content = surface.OkLabel, IsDefault = true, MinWidth = 80, Margin = new Thickness(4) };
-        var cancel = new Button { Content = surface.CancelLabel, IsCancel = true, MinWidth = 80, Margin = new Thickness(4) };
-        ok.Click += (_, _) => OnOk();
-        cancel.Click += (_, _) => Close();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        var buttons = ChartOptionsDialogChrome.CreateActionRow(
+            surface.OkLabel,
+            OnOk,
+            surface.CancelLabel,
+            Close,
+            new Thickness(8, 14, 8, 8));
 
         var content = new StackPanel { Margin = new Thickness(14) };
-        content.Children.Add(MakeRow(surface.FontFamilyLabel, _fontFamilyBox));
-        content.Children.Add(MakeRow(surface.FontSizeLabel, _fontSizeBox));
-        content.Children.Add(MakeRow(surface.BoldLabel, _boldCombo));
-        content.Children.Add(MakeRow(surface.ItalicLabel, _italicCombo));
-        content.Children.Add(MakeRow(surface.ColorLabel, _colorBox));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.FontFamilyLabel, _fontFamilyBox, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.FontSizeLabel, _fontSizeBox, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.BoldLabel, _boldCombo, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.ItalicLabel, _italicCombo, 180));
+        content.Children.Add(ChartOptionsDialogChrome.CreateRow(surface.ColorLabel, _colorBox, 180));
         content.Children.Add(new TextBlock { Text = surface.AutoHint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
         Content = content;
@@ -93,22 +87,20 @@ public sealed class ChartTextOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         ItemsSource = ChartTextOptionsPlanner.BooleanOptions,
         DisplayMemberPath = nameof(ChartTextBooleanOption.Label),
-        SelectedIndex = ChartTextOptionsPlanner.BooleanOptions
-            .Select((option, index) => (option, index))
-            .First(item => item.option.Value == value).index,
+        SelectedIndex = ChartDialogOptionProjection.FindIndex(
+            ChartTextOptionsPlanner.BooleanOptions,
+            value,
+            option => option.Value),
         MinWidth = 180,
     };
 
     private static bool? ReadBoolean(ComboBox combo) =>
-        combo.SelectedItem is ChartTextBooleanOption option ? option.Value : null;
+        ChartDialogOptionProjection.ValueAtOrDefault(
+            ChartTextOptionsPlanner.BooleanOptions,
+            combo.SelectedIndex,
+            option => option.Value,
+            default(bool?));
 
-    private static string Format(double? value) => value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
-
-    private static StackPanel MakeRow(string label, Control control)
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        row.Children.Add(new Label { Content = label, Width = 180, VerticalContentAlignment = VerticalAlignment.Center });
-        row.Children.Add(control);
-        return row;
-    }
+    private static string Format(double? value) =>
+        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 }
