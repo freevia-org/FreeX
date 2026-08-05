@@ -750,7 +750,19 @@ public static class SlideCompositor
         var fallbackGlow = fallback?.FrameBorderGlowEnabled == false
             ? null
             : fallback?.FrameBorderGlow;
-        if (shadow is null && fallbackShadow is null && glow is null && fallbackGlow is null)
+        var softEdge = effectList?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "softEdge", StringComparison.OrdinalIgnoreCase));
+        var fallbackSoftEdge = fallback?.FrameBorderSoftEdgeEnabled == false
+            ? null
+            : fallback?.FrameBorderSoftEdge;
+        var reflection = effectList?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "reflection", StringComparison.OrdinalIgnoreCase));
+        var fallbackReflection = fallback?.FrameBorderReflectionEnabled == false
+            ? null
+            : fallback?.FrameBorderReflection;
+        if (shadow is null && fallbackShadow is null && glow is null && fallbackGlow is null
+            && softEdge is null && fallbackSoftEdge is null
+            && reflection is null && fallbackReflection is null)
             return null;
 
         var colorText = shadow?.Elements().FirstOrDefault(element =>
@@ -797,6 +809,34 @@ public static class SlideCompositor
                 NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawGlowRadius)
             ? rawGlowRadius / EmuPerDip
             : (fallbackGlow?.RadiusEmu ?? 0) / EmuPerDip;
+        var softEdgeRadius = long.TryParse(softEdge?.Attribute("rad")?.Value,
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawSoftEdgeRadius)
+            ? rawSoftEdgeRadius / EmuPerDip
+            : (fallbackSoftEdge?.RadiusEmu ?? 0) / EmuPerDip;
+        var reflectionAlpha = int.TryParse(reflection?.Attribute("stA")?.Value,
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawReflectionAlpha)
+            ? rawReflectionAlpha
+            : fallbackReflection?.Alpha ?? 50000;
+        var reflectionBlur = long.TryParse(reflection?.Attribute("blurRad")?.Value,
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawReflectionBlur)
+            ? rawReflectionBlur / EmuPerDip
+            : (fallbackReflection?.BlurRadiusEmu ?? 0) / EmuPerDip;
+        var reflectionDistance = long.TryParse(reflection?.Attribute("dist")?.Value,
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawReflectionDistance)
+            ? rawReflectionDistance / EmuPerDip
+            : (fallbackReflection?.DistanceEmu ?? 0) / EmuPerDip;
+        var reflectionDirection = int.TryParse(reflection?.Attribute("dir")?.Value,
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawReflectionDirection)
+            ? rawReflectionDirection / 60000d
+            : (fallbackReflection?.Direction ?? 5400000) / 60000d;
+        var reflectionScale = int.TryParse(reflection?.Attribute("sy")?.Value,
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawReflectionScale)
+            ? rawReflectionScale / 100000d
+            : (fallbackReflection?.ScaleY ?? -100000) / 100000d;
+        var reflectionEnd = int.TryParse(reflection?.Attribute("endPos")?.Value,
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out var rawReflectionEnd)
+            ? rawReflectionEnd / 100000d
+            : (fallbackReflection?.EndPosition ?? 100000) / 100000d;
         return new ResolvedShapeEffects
         {
             HasOuterShadow = shadow is not null || fallbackShadow is not null,
@@ -809,6 +849,15 @@ public static class SlideCompositor
             GlowColor = glowColor,
             GlowAlpha = (byte)Math.Clamp((int)Math.Round(glowAlpha * 255d / 100000d), 0, 255),
             GlowRadiusDip = Math.Max(0, glowRadius),
+            HasSoftEdge = softEdge is not null || fallbackSoftEdge is not null,
+            SoftEdgeRadiusDip = Math.Max(0, softEdgeRadius),
+            HasReflection = reflection is not null || fallbackReflection is not null,
+            ReflectionAlpha = (byte)Math.Clamp((int)Math.Round(reflectionAlpha * 255d / 100000d), 0, 255),
+            ReflectionBlurDip = Math.Max(0, reflectionBlur),
+            ReflectionDistDip = Math.Max(0, reflectionDistance),
+            ReflectionDirDeg = reflectionDirection,
+            ReflectionScaleY = Math.Abs(reflectionScale) < 0.001 ? -1 : reflectionScale,
+            ReflectionEndPos = Math.Clamp(reflectionEnd, 0, 1),
         };
     }
 

@@ -565,6 +565,63 @@ public sealed class SlideCompositorTests
         picture.Effects.GlowRadiusDip.Should().BeApproximately(152400 / 9525d, 0.00001);
     }
 
+    [Fact]
+    public void Compose_ZoomFrameBorder_ResolvesNativeSoftEdge()
+    {
+        var presentation = PresentationModel.CreateEmpty();
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+        var zoom = SlideZoomInsertionPlanner.CreateShape(presentation, 0, "slide-2");
+        presentation.Slides[0].Shapes.Add(zoom);
+        SummaryZoomPreviewPlanner.AttachPreviewImage(
+            presentation, zoom, targetSlideIndex: 1, _ => new byte[] { 1, 2, 3 })
+            .Should().BeTrue();
+
+        var raw = XElement.Parse(zoom.PreservedObject!.RawXml);
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var shapeProperties = raw.Descendants().Single(element => element.Name.LocalName == "spPr");
+        shapeProperties.Add(new XElement(drawing + "effectLst",
+            new XElement(drawing + "softEdge", new XAttribute("rad", 158750))));
+        zoom.PreservedObject.RawXml = raw.ToString(SaveOptions.DisableFormatting);
+
+        var picture = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Picture>().Single();
+        picture.Effects.Should().NotBeNull();
+        picture.Effects!.HasSoftEdge.Should().BeTrue();
+        picture.Effects.SoftEdgeRadiusDip.Should().BeApproximately(158750 / 9525d, 0.00001);
+    }
+
+    [Fact]
+    public void Compose_ZoomFrameBorder_ResolvesNativeReflection()
+    {
+        var presentation = PresentationModel.CreateEmpty();
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+        var zoom = SlideZoomInsertionPlanner.CreateShape(presentation, 0, "slide-2");
+        presentation.Slides[0].Shapes.Add(zoom);
+        SummaryZoomPreviewPlanner.AttachPreviewImage(
+            presentation, zoom, targetSlideIndex: 1, _ => new byte[] { 1, 2, 3 })
+            .Should().BeTrue();
+
+        var raw = XElement.Parse(zoom.PreservedObject!.RawXml);
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var shapeProperties = raw.Descendants().Single(element => element.Name.LocalName == "spPr");
+        shapeProperties.Add(new XElement(drawing + "effectLst",
+            new XElement(drawing + "reflection",
+                new XAttribute("stA", 42000),
+                new XAttribute("dist", 44450),
+                new XAttribute("dir", 5400000),
+                new XAttribute("sy", -75000),
+                new XAttribute("endPos", 100000))));
+        zoom.PreservedObject.RawXml = raw.ToString(SaveOptions.DisableFormatting);
+
+        var picture = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Picture>().Single();
+        picture.Effects.Should().NotBeNull();
+        picture.Effects!.HasReflection.Should().BeTrue();
+        picture.Effects.ReflectionAlpha.Should().Be(107);
+        picture.Effects.ReflectionDistDip.Should().BeApproximately(44450 / 9525d, 0.00001);
+        picture.Effects.ReflectionScaleY.Should().BeApproximately(-0.75, 0.00001);
+    }
+
     private static TextBody BodyWithText(string text)
     {
         var body = new TextBody();

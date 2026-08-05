@@ -1006,6 +1006,12 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
         if (properties.FrameBorderGlowEnabled == false && properties.FrameBorderGlow is not null)
             throw new ArgumentException(
                 "A disabled Zoom frame glow cannot carry glow values.", nameof(properties));
+        if (properties.FrameBorderSoftEdgeEnabled == false && properties.FrameBorderSoftEdge is not null)
+            throw new ArgumentException(
+                "A disabled Zoom frame soft edge cannot carry soft-edge values.", nameof(properties));
+        if (properties.FrameBorderReflectionEnabled == false && properties.FrameBorderReflection is not null)
+            throw new ArgumentException(
+                "A disabled Zoom frame reflection cannot carry reflection values.", nameof(properties));
         if (properties.ImageType is not null
             && !string.Equals(properties.ImageType, "preview", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(properties.ImageType, "cover", StringComparison.OrdinalIgnoreCase))
@@ -1035,6 +1041,14 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             FrameBorderGlowEnabled = properties.FrameBorderGlowEnabled == false
                 ? false
                 : properties.FrameBorderGlow is not null ? true : null,
+            FrameBorderSoftEdge = ValidateFrameBorderSoftEdge(properties.FrameBorderSoftEdge),
+            FrameBorderSoftEdgeEnabled = properties.FrameBorderSoftEdgeEnabled == false
+                ? false
+                : properties.FrameBorderSoftEdge is not null ? true : null,
+            FrameBorderReflection = ValidateFrameBorderReflection(properties.FrameBorderReflection),
+            FrameBorderReflectionEnabled = properties.FrameBorderReflectionEnabled == false
+                ? false
+                : properties.FrameBorderReflection is not null ? true : null,
         };
     }
 
@@ -1077,6 +1091,32 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
                 "Zoom frame glow radius cannot be negative.");
 
         return value with { Color = color.ToUpperInvariant() };
+    }
+
+    private static ZoomFrameBorderSoftEdge? ValidateFrameBorderSoftEdge(ZoomFrameBorderSoftEdge? value)
+    {
+        if (value is null)
+            return null;
+        if (value.RadiusEmu < 0)
+            throw new ArgumentOutOfRangeException(nameof(value), value.RadiusEmu,
+                "Zoom frame soft-edge radius cannot be negative.");
+        return value;
+    }
+
+    private static ZoomFrameBorderReflection? ValidateFrameBorderReflection(ZoomFrameBorderReflection? value)
+    {
+        if (value is null)
+            return null;
+        if (value.Alpha is < 0 or > 100000
+            || value.BlurRadiusEmu < 0
+            || value.DistanceEmu < 0
+            || value.Direction is < 0 or > 21600000
+            || value.ScaleY is < -100000 or > 100000
+            || value.ScaleY == 0
+            || value.EndPosition is < 0 or > 100000)
+            throw new ArgumentOutOfRangeException(nameof(value),
+                "Zoom frame reflection values are outside the DrawingML range.");
+        return value;
     }
 
     private static ZoomFrameBorderGradient? ValidateFrameBorderGradient(
@@ -1231,7 +1271,11 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             properties.FrameBorderShadow,
             properties.FrameBorderShadowEnabled,
             properties.FrameBorderGlow,
-            properties.FrameBorderGlowEnabled);
+            properties.FrameBorderGlowEnabled,
+            properties.FrameBorderSoftEdge,
+            properties.FrameBorderSoftEdgeEnabled,
+            properties.FrameBorderReflection,
+            properties.FrameBorderReflectionEnabled);
             ZoomFrameGeometryXml.Set(zoomProperty, properties.FrameGeometry);
         }
         patchedXml = root.ToString(SaveOptions.DisableFormatting);
@@ -1790,7 +1834,11 @@ public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
             _newValue.FrameBorderShadow,
             _newValue.FrameBorderShadowEnabled,
             _newValue.FrameBorderGlow,
-            _newValue.FrameBorderGlowEnabled);
+            _newValue.FrameBorderGlowEnabled,
+            _newValue.FrameBorderSoftEdge,
+            _newValue.FrameBorderSoftEdgeEnabled,
+            _newValue.FrameBorderReflection,
+            _newValue.FrameBorderReflectionEnabled);
         ZoomFrameGeometryXml.Set(properties, _newValue.FrameGeometry);
         patchedXml = document.Root!.ToString(SaveOptions.DisableFormatting);
         return true;
