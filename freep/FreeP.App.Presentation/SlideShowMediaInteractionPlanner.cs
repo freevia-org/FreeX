@@ -152,6 +152,45 @@ public static class SlideShowMediaInteractionPlanner
         return position < start ? start : position;
     }
 
+    /// <summary>
+    /// Computes the current playback volume after applying authored fade-in and
+    /// fade-out durations. The returned value remains in the shared 0-100 range.
+    /// </summary>
+    public static int ComputeEffectiveVolumePercent(
+        MediaInfo media,
+        int baseVolumePercent,
+        TimeSpan position,
+        TimeSpan duration)
+    {
+        ArgumentNullException.ThrowIfNull(media);
+
+        var baseVolume = NormalizeVolumePercent(baseVolumePercent);
+        var fadeIn = PositiveMilliseconds(media.FadeInMilliseconds);
+        var fadeOut = PositiveMilliseconds(media.FadeOutMilliseconds);
+        if (fadeIn == TimeSpan.Zero && fadeOut == TimeSpan.Zero)
+            return baseVolume;
+
+        var window = ResolveTrimWindow(media, duration);
+        var factor = 1d;
+        if (fadeIn > TimeSpan.Zero)
+        {
+            var elapsed = position - window.Start;
+            factor = Math.Min(factor, elapsed <= TimeSpan.Zero
+                ? 0d
+                : Math.Clamp(elapsed.TotalMilliseconds / fadeIn.TotalMilliseconds, 0d, 1d));
+        }
+
+        if (fadeOut > TimeSpan.Zero && window.End != TimeSpan.MaxValue)
+        {
+            var remaining = window.End - position;
+            factor = Math.Min(factor, remaining <= TimeSpan.Zero
+                ? 0d
+                : Math.Clamp(remaining.TotalMilliseconds / fadeOut.TotalMilliseconds, 0d, 1d));
+        }
+
+        return (int)Math.Round(baseVolume * factor, MidpointRounding.AwayFromZero);
+    }
+
     private static TimeSpan PositiveMilliseconds(double value) =>
         value > 0 && double.IsFinite(value)
             ? TimeSpan.FromMilliseconds(Math.Min(value, TimeSpan.MaxValue.TotalMilliseconds))
