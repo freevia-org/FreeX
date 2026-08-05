@@ -5,7 +5,7 @@ namespace FreeW.App.Host.Tests;
 public sealed class SharedPresentationBoundarySourceGuardTests
 {
     [Fact]
-    public void DocumentPropertiesHosts_ReturnSharedPayload_AndApplyThroughEditorHistory()
+    public void DocumentPropertiesHosts_ConsumeSharedCatalogAndCommitPlan_AndApplyThroughEditorHistory()
     {
         var wpfDialog = ReadSource("freew", "FreeW.App.Host", "PropertiesDialog.cs");
         var avaloniaDialog = ReadSource("freew", "FreeW.App.Avalonia", "PropertiesDialog.cs");
@@ -14,7 +14,12 @@ public sealed class SharedPresentationBoundarySourceGuardTests
 
         foreach (var source in new[] { wpfDialog, avaloniaDialog })
         {
-            source.Should().Contain("DocumentPropertiesDialogValues.FromInput(");
+            source.Should().Contain("new DocumentPropertiesDialogSession(");
+            source.Should().Contain("_session.Surface.Fields");
+            source.Should().Contain("_session.PlanCommit(");
+            source.Should().NotContain("DocumentPropertiesDialogValues.FromInput(");
+            source.Should().NotContain("FormatDate(");
+            source.Should().NotContain("\"Last saved by:\"");
             source.Should().NotContain("_properties.Title =");
             source.Should().NotContain("_properties.Author =");
         }

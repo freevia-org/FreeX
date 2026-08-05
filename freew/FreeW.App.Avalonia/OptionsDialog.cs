@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using System.Globalization;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Options;
 using FreeW.Core.Model;
@@ -14,7 +15,7 @@ namespace FreeW.App.Avalonia;
 
 /// <summary>
 /// Compact Avalonia editor for the FreeW options that the cross-platform shell consumes today.
-/// Parsing and normalization stay in <see cref="OptionsDialogPlanner"/>.
+/// Parsing, normalization, and commit planning stay in <see cref="OptionsDialogSession"/>.
 /// </summary>
 internal sealed class OptionsDialog : FreeWDialogWindow
 {
@@ -24,7 +25,7 @@ internal sealed class OptionsDialog : FreeWDialogWindow
             DefaultButtonBorderBrush = AvaloniaCompactDialogChrome.NeutralButtonBorderBrush,
         };
 
-    private readonly FreeWOptions _seed;
+    private readonly OptionsDialogSession _session;
     private readonly OptionsDialogSurfaceSpec _surface;
     private readonly TextBox _recentFilesCap = new() { Width = 72, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly ComboBox _defaultFormat = new() { Width = 180, HorizontalAlignment = HorizontalAlignment.Left };
@@ -64,8 +65,8 @@ internal sealed class OptionsDialog : FreeWDialogWindow
 
     public OptionsDialog(FreeWOptions options)
     {
-        _seed = options ?? new FreeWOptions();
-        _surface = OptionsDialogPlanner.BuildSurface(_seed, SystemLanguageLabel());
+        _session = new OptionsDialogSession(options, CultureInfo.CurrentCulture);
+        _surface = _session.Surface;
 
         Title = _surface.Title;
         Width = OptionsDialogPlanner.DialogWidth;
@@ -74,10 +75,13 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         CanResize = false;
         ShowInTaskbar = false;
 
-        _recentFilesCap.Text = _seed.RecentFilesCap.ToString();
+        _recentFilesCap.Text = _session.InitialState.RecentFilesCapText;
         _defaultFormat.ItemsSource = _surface.General.FormatChoices;
-        _defaultFormat.SelectedIndex = 0;
-        _uiLanguage.Text = _seed.UiLanguage;
+        _defaultFormat.SelectedItem = _surface.General.FormatChoices.FirstOrDefault(choice =>
+            choice.Extension == _session.InitialState.SelectedFormat);
+        if (_defaultFormat.SelectedIndex < 0)
+            _defaultFormat.SelectedIndex = 0;
+        _uiLanguage.Text = _session.InitialState.UiLanguage;
         BuildReplacementTable();
 
         AvaloniaCompactDialogChrome.ApplyTextBox(_recentFilesCap, DialogChromeStyle);
@@ -168,16 +172,17 @@ internal sealed class OptionsDialog : FreeWDialogWindow
             _replacementEditors
                 .Select(row => new OptionsDialogReplacementInput(row.Replace.Text, row.With.Text))
                 .ToArray());
-        if (!OptionsDialogWorkflowPlanner.TryBuildResult(input, out var result, out var validation))
+        var plan = _session.PlanAcceptance(input);
+        if (!plan.ShouldApply)
         {
-            _status.Text = validation!.Message;
+            _status.Text = plan.Validation!.Message;
             _status.IsVisible = true;
-            if (validation.Target == OptionsDialogValidationTarget.RecentFilesCap)
+            if (plan.Validation.Target == OptionsDialogValidationTarget.RecentFilesCap)
                 AvaloniaCompactDialogChrome.FocusAndSelect(_recentFilesCap);
             return;
         }
 
-        Result = result!;
+        Result = plan.Result!;
         Close();
     }
 
@@ -239,7 +244,7 @@ internal sealed class OptionsDialog : FreeWDialogWindow
             Margin = new Thickness(0, OptionsDialogPlanner.ToggleTopMargin + 2, 0, 0),
         });
 
-        void SyncReplacements() => _replacements.IsEnabled = OptionsDialogWorkflowPlanner.PlanEnabledState(
+        void SyncReplacements() => _replacements.IsEnabled = _session.PlanEnabledState(
             _autoCorrectEnabled.IsChecked == true,
             _replaceText.IsChecked == true).ReplacementsEnabled;
         _replaceText.IsCheckedChanged += (_, _) => SyncReplacements();
@@ -255,11 +260,7 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         _replacementGrid.Children.Add(HeaderCell("Replace", 0));
         _replacementGrid.Children.Add(HeaderCell("With", 1));
 
-        OptionsDialogPlanner.TryParseAutoCorrectReplacements(
-            _surface.AutoCorrect.ReplacementsText,
-            out var replacements,
-            out _);
-        foreach (var replacement in replacements)
+        foreach (var replacement in _session.InitialState.Replacements)
             AddReplacementRow(replacement.Replace, replacement.With);
 
         AddReplacementRow();
@@ -379,7 +380,7 @@ internal sealed class OptionsDialog : FreeWDialogWindow
 
         void SyncEnabled()
         {
-            var enabledState = OptionsDialogWorkflowPlanner.PlanEnabledState(
+            var enabledState = _session.PlanEnabledState(
                 _autoCorrectEnabled.IsChecked == true,
                 _replaceText.IsChecked == true);
             foreach (var box in ruleBoxes)
@@ -464,12 +465,6 @@ internal sealed class OptionsDialog : FreeWDialogWindow
 
         grid.Children.Add(text);
         grid.Children.Add(value);
-    }
-
-    private static string SystemLanguageLabel()
-    {
-        var name = System.Globalization.CultureInfo.CurrentCulture.Name;
-        return string.IsNullOrEmpty(name) ? "invariant" : name;
     }
 
     private sealed class ReplacementEditor

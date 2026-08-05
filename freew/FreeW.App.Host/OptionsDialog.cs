@@ -26,7 +26,7 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly FreeWOptions _options;
+    private readonly OptionsDialogSession _session;
     private readonly OptionsDialogSurfaceSpec _surface;
 
     private readonly TextBox _recentFilesCap = new() { MinWidth = 80, HorizontalAlignment = HorizontalAlignment.Left };
@@ -69,9 +69,9 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     public OptionsDialog(Window owner, FreeWOptions options)
     {
-        _options = options ?? new FreeWOptions();
-        _surface = OptionsDialogPlanner.BuildSurface(_options, SystemLanguageLabel());
-        Result = _options;
+        _session = new OptionsDialogSession(options, CultureInfo.CurrentCulture);
+        _surface = _session.Surface;
+        Result = _session.InitialResult;
 
         Owner = owner;
         Title = _surface.Title;
@@ -84,11 +84,17 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         // The single .docx format FreeW ships today, surfaced as a (currently single-entry) picker so the
         // setting reads honestly and is ready to grow. The Tag carries the persisted extension value.
         foreach (var choice in _surface.General.FormatChoices)
-            _defaultFormat.Items.Add(new ComboBoxItem { Content = choice.Label, Tag = choice.Extension });
-        _defaultFormat.SelectedIndex = 0;
+        {
+            var item = new ComboBoxItem { Content = choice.Label, Tag = choice.Extension };
+            _defaultFormat.Items.Add(item);
+            if (choice.Extension == _session.InitialState.SelectedFormat)
+                _defaultFormat.SelectedItem = item;
+        }
+        if (_defaultFormat.SelectedIndex < 0)
+            _defaultFormat.SelectedIndex = 0;
 
-        _recentFilesCap.Text = _options.RecentFilesCap.ToString(CultureInfo.CurrentCulture);
-        _uiLanguage.Text = _options.UiLanguage;
+        _recentFilesCap.Text = _session.InitialState.RecentFilesCapText;
+        _uiLanguage.Text = _session.InitialState.UiLanguage;
 
         var tabs = new TabControl { Margin = new Thickness(OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, 0) };
         tabs.Items.Add(new TabItem { Header = _surface.Tabs[0].Header, Content = BuildGeneralTab() });
@@ -156,7 +162,7 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         // disabling them with the master checkbox.
         void SyncEnabled()
         {
-            var enabledState = OptionsDialogWorkflowPlanner.PlanEnabledState(
+            var enabledState = _session.PlanEnabledState(
                 _autoCorrectEnabled.IsChecked == true,
                 _replaceText.IsChecked == true);
             foreach (var box in ruleBoxes)
@@ -191,12 +197,8 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         foreach (var spec in _surface.AutoCorrect.Toggles)
             ConfigureToggle(ToggleFor(spec.Kind), spec);
 
-        OptionsDialogPlanner.TryParseAutoCorrectReplacements(
-            _surface.AutoCorrect.ReplacementsText,
-            out var replacements,
-            out _);
-        foreach (var r in replacements)
-            _replacementRows.Add(new ReplacementRow { Replace = r.Replace, With = r.With });
+        foreach (var replacement in _session.InitialState.Replacements)
+            _replacementRows.Add(new ReplacementRow { Replace = replacement.Replace, With = replacement.With });
 
         _replacements.Columns.Add(new DataGridTextColumn
         {
@@ -258,7 +260,7 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         });
 
         // The replace table only applies when "Replace text as you type" is on; mirror that in the UI.
-        void SyncTable() => _replacements.IsEnabled = OptionsDialogWorkflowPlanner.PlanEnabledState(
+        void SyncTable() => _replacements.IsEnabled = _session.PlanEnabledState(
             _autoCorrectEnabled.IsChecked == true,
             _replaceText.IsChecked == true).ReplacementsEnabled;
         _replaceText.Checked += (_, _) => SyncTable();
@@ -281,15 +283,16 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             _replacementRows
                 .Select(row => new OptionsDialogReplacementInput(row.Replace, row.With))
                 .ToArray());
-        if (!OptionsDialogWorkflowPlanner.TryBuildResult(input, out var result, out var validation))
+        var plan = _session.PlanAcceptance(input);
+        if (!plan.ShouldApply)
         {
-            DialogMessageHelper.ShowWarning(this, validation!.Message, Title);
-            if (validation.Target == OptionsDialogValidationTarget.RecentFilesCap)
+            DialogMessageHelper.ShowWarning(this, plan.Validation!.Message, Title);
+            if (plan.Validation.Target == OptionsDialogValidationTarget.RecentFilesCap)
                 DialogFocus.FocusAndSelect(_recentFilesCap);
             return;
         }
 
-        Result = result!;
+        Result = plan.Result!;
         DialogResult = true;
     }
 
@@ -331,12 +334,6 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         public string? Replace { get; set; }
         public string? With { get; set; }
-    }
-
-    private static string SystemLanguageLabel()
-    {
-        var name = CultureInfo.CurrentCulture.Name;
-        return string.IsNullOrEmpty(name) ? "invariant" : name;
     }
 
     private static void ConfigureToggle(CheckBox box, OptionsDialogToggleSpec spec)

@@ -214,8 +214,11 @@ public sealed class FreeWOptionsTests : IDisposable
         var dialogSource = File.ReadAllText(Path.Combine(repoRoot, "freew", "FreeW.App.Host", "OptionsDialog.cs"));
 
         dialogSource.Should().Contain("using FreeW.App.Presentation.Options;");
-        dialogSource.Should().Contain("OptionsDialogWorkflowPlanner.TryBuildResult(");
-        dialogSource.Should().Contain("OptionsDialogWorkflowPlanner.PlanEnabledState(");
+        dialogSource.Should().Contain("new OptionsDialogSession(");
+        dialogSource.Should().Contain("_session.PlanAcceptance(");
+        dialogSource.Should().Contain("_session.PlanEnabledState(");
+        dialogSource.Should().NotContain("OptionsDialogWorkflowPlanner.TryBuildResult(");
+        dialogSource.Should().NotContain("OptionsDialogWorkflowPlanner.PlanEnabledState(");
         dialogSource.Should().NotContain("OptionsDialogPlanner.TryParseRecentFilesCap(");
         dialogSource.Should().NotContain("OptionsDialogPlanner.BuildResult(");
         dialogSource.Should().NotContain("new AutoFormatOptions");

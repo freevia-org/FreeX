@@ -27,10 +27,12 @@ public sealed class FreeWBehaviorSourceGuardTests
     {
         var source = ReadSource("freew", "FreeW.App.Host", "OptionsDialog.cs");
 
-        source.Should().Contain("OptionsDialogPlanner.BuildSurface(");
+        source.Should().Contain("new OptionsDialogSession(");
+        source.Should().Contain("_surface = _session.Surface");
         source.Should().Contain("_surface.General");
         source.Should().Contain("_surface.AutoFormat");
         source.Should().Contain("_surface.AutoCorrect");
+        source.Should().NotContain("OptionsDialogPlanner.BuildSurface(");
         source.Should().NotContain("AddRow(grid, 0, \"Recent files\"");
         source.Should().NotContain("AddRow(grid, 2, \"Default save format\"");
     }

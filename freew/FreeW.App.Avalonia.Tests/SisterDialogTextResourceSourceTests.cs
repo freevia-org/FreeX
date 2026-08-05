@@ -104,12 +104,16 @@ public sealed class SisterDialogTextResourceSourceTests
     {
         var source = ReadAvaloniaSource("OptionsDialog.cs");
 
-        source.Should().Contain("OptionsDialogPlanner.BuildSurface(");
+        source.Should().Contain("new OptionsDialogSession(");
+        source.Should().Contain("_surface = _session.Surface");
         source.Should().Contain("_surface.Tabs[0].Header");
         source.Should().Contain("_surface.AutoCorrect.Header");
         source.Should().Contain("_surface.AutoFormat.Header");
-        source.Should().Contain("OptionsDialogWorkflowPlanner.TryBuildResult(");
-        source.Should().Contain("OptionsDialogWorkflowPlanner.PlanEnabledState(");
+        source.Should().Contain("_session.PlanAcceptance(");
+        source.Should().Contain("_session.PlanEnabledState(");
+        source.Should().NotContain("OptionsDialogPlanner.BuildSurface(");
+        source.Should().NotContain("OptionsDialogWorkflowPlanner.TryBuildResult(");
+        source.Should().NotContain("OptionsDialogWorkflowPlanner.PlanEnabledState(");
         source.Should().NotContain("OptionsDialogPlanner.TryParseRecentFilesCap(");
         source.Should().NotContain("OptionsDialogPlanner.BuildResult(");
         source.Should().NotContain("new AutoCorrectOptions");
