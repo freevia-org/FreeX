@@ -53,7 +53,9 @@ public static class TableOfContents
     /// <see cref="MaxStyledLevel"/>). A document with no headings yields just the heading paragraph.
     /// Deterministic and side-effect free — it never mutates <paramref name="document"/>.
     /// </summary>
-    public static IReadOnlyList<Paragraph> Build(TextDocument document)
+    public static IReadOnlyList<Paragraph> Build(
+        TextDocument document,
+        Func<int, string?>? pageTextOf = null)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -67,14 +69,20 @@ public static class TableOfContents
         var entryRightTabStopPt = EntryRightTabStopPt(document.Page);
 
         foreach (var entry in outline)
-            paragraphs.Add(CreateEntryParagraph(entry, pageReferences[entry.BlockIndex], entryRightTabStopPt));
+        {
+            var pageText = pageTextOf?.Invoke(entry.BlockIndex);
+            if (string.IsNullOrEmpty(pageText))
+                pageText = pageReferences[entry.BlockIndex].ToString(CultureInfo.InvariantCulture);
+
+            paragraphs.Add(CreateEntryParagraph(entry, pageText, entryRightTabStopPt));
+        }
 
         return paragraphs;
     }
 
     private static Paragraph CreateEntryParagraph(
         OutlineEntry entry,
-        int pageNumber,
+        string pageText,
         double entryRightTabStopPt)
     {
         var styledLevel = Math.Clamp(entry.Level, 0, MaxStyledLevel);
@@ -95,7 +103,7 @@ public static class TableOfContents
         };
         paragraph.Runs.Add(new Run(entry.Text));
         paragraph.Runs.Add(new Run("\t"));
-        paragraph.Runs.Add(new Run(pageNumber.ToString(CultureInfo.InvariantCulture)));
+        paragraph.Runs.Add(new Run(pageText));
         return paragraph;
     }
 

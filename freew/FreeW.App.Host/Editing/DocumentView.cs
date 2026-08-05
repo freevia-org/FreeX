@@ -1652,7 +1652,11 @@ public sealed class DocumentView : RichTextBox
     // InsertParagraphCommand each (kept in order), then re-render. The bus's Changed event redraws.
     private void InsertTocAt(int at)
     {
-        var toc = TableOfContents.Build(_model);
+        var physicalPageOf = BuildCrossReferencePageResolver();
+        var pageTextOf = physicalPageOf is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_model, physicalPageOf);
+        var toc = TableOfContents.Build(_model, pageTextOf);
         var index = Math.Clamp(at, 0, _model.Blocks.Count);
         foreach (var paragraph in toc)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));

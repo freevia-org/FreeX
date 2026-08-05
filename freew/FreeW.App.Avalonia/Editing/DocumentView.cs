@@ -21116,7 +21116,7 @@ public sealed class DocumentView : Control
         for (var i = tocIndices.Count - 1; i >= 0; i--)
             _bus.Execute(new DeleteParagraphCommand(tocIndices[i]));
         var index = Math.Clamp(insertAt, 0, _doc.Blocks.Count);
-        foreach (var paragraph in TableOfContents.Build(_doc))
+        foreach (var paragraph in BuildTableOfContents())
             _bus.Execute(new InsertParagraphCommand(index++, paragraph));
         _bus.CommitUndoGroup("Update Table of Contents");
     }
@@ -21126,9 +21126,18 @@ public sealed class DocumentView : Control
     {
         _bus.BeginUndoGroup();
         var index = Math.Clamp(at, 0, _doc.Blocks.Count);
-        foreach (var paragraph in TableOfContents.Build(_doc))
+        foreach (var paragraph in BuildTableOfContents())
             _bus.Execute(new InsertParagraphCommand(index++, paragraph));
         _bus.CommitUndoGroup(label);
+    }
+
+    private IReadOnlyList<Paragraph> BuildTableOfContents()
+    {
+        var physicalPageOf = BuildCrossReferencePageResolver();
+        var pageTextOf = physicalPageOf is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_doc, physicalPageOf);
+        return TableOfContents.Build(_doc, pageTextOf);
     }
 
     /// <summary>
