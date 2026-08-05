@@ -222,8 +222,10 @@ public sealed partial class MainWindow : Window
 
     internal PresentationCommentPanePlan? LastCommentPanePlan => _reviewWorkflowSession.LastCommentPanePlan;
     internal PresentationCommentNavigationPlan? LastCommentNavigationPlan => _reviewWorkflowSession.LastCommentNavigationPlan;
-    internal PresentationCommentMentionPickerPlan? LastCommentMentionPickerPlan { get; private set; }
-    internal PresentationCommentMentionInsertionPlan? LastCommentMentionInsertionPlan { get; private set; }
+    internal PresentationCommentMentionPickerPlan? LastCommentMentionPickerPlan =>
+        _reviewWorkflowSession.LastCommentMentionPickerPlan;
+    internal PresentationCommentMentionInsertionPlan? LastCommentMentionInsertionPlan =>
+        _reviewWorkflowSession.LastCommentMentionInsertionPlan;
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan =>
         _reviewWorkflowSession.LastAccessibilitySummaryPlan;
     internal PresentationAccessibilityCheckerPanePlan? LastAccessibilityCheckerPanePlan =>
@@ -472,7 +474,10 @@ public sealed partial class MainWindow : Window
                 OpenMediaCaptionPane: () => ShowMediaCaptionPane(),
                 RenderCommentPane: RenderCommentPane,
                 RenderAltTextPaneIfVisible: RenderAltTextPaneIfVisible,
+                RenderReadingOrderPaneIfVisible: RenderReadingOrderPaneIfVisible,
+                PresentReadingOrderPane: PresentReadingOrderPane,
                 RenderProofingPaneIfVisible: RenderProofingPaneIfVisible,
+                PresentProofingPane: PresentProofingPane,
                 UpdateAfterCommentMutation: UpdateTitle,
                 UpdateAfterCommentNavigation: UpdateSlideCount,
                 UpdateAfterProofingCorrection: UpdateTitle));
@@ -661,7 +666,7 @@ public sealed partial class MainWindow : Window
         Editor.SelectionChanged += (_, _) =>
         {
             RefreshAltTextRequestPlan();
-            RefreshReadingOrderPlan();
+            _reviewWorkflowSession.RefreshReadingOrderPlan();
             if (IsAltTextPaneVisible)
                 ShowAltTextPane();
             if (IsSmartArtTextPaneVisible)
@@ -2170,8 +2175,8 @@ public sealed partial class MainWindow : Window
         var mentionButton = BuildCommentMentionButton(
             "comment-mention:edit",
             () => input.Text,
-            () => ResolveCommentInputCaret(input.Text, input.CaretIndex),
-            updatedText => EditSelectedComment(updatedText));
+            () => input.CaretIndex,
+            PresentationReviewWorkflowIntentKind.EditComment);
         var button = new Button
         {
             Content = "Save",
@@ -2225,8 +2230,8 @@ public sealed partial class MainWindow : Window
         var mentionButton = BuildCommentMentionButton(
             "comment-mention:reply",
             () => input.Text,
-            () => ResolveCommentInputCaret(input.Text, input.CaretIndex),
-            updatedText => ReplyToSelectedComment(updatedText));
+            () => input.CaretIndex,
+            PresentationReviewWorkflowIntentKind.ReplyComment);
         var button = new System.Windows.Controls.Button
         {
             Content = "Reply",
@@ -2258,9 +2263,11 @@ public sealed partial class MainWindow : Window
         string tag,
         Func<string?> getText,
         Func<int> getCaretIndex,
-        Func<string, PresentationCommentMutationPlan> applyUpdatedText)
+        PresentationReviewWorkflowIntentKind intent)
     {
-        var mentionPicker = BuildCommentMentionPickerPlanForCurrentInput(getText, getCaretIndex);
+        var mentionPicker = _reviewWorkflowSession.BuildCommentMentionPickerPlanForInput(
+            getText(),
+            getCaretIndex());
         var candidate = mentionPicker.DefaultCandidate;
         var button = new Button
         {
@@ -2272,14 +2279,16 @@ public sealed partial class MainWindow : Window
         };
         button.Click += (_, _) =>
         {
-            var currentPlan = BuildCommentMentionPickerPlanForCurrentInput(getText, getCaretIndex);
+            var currentPlan = _reviewWorkflowSession.BuildCommentMentionPickerPlanForInput(
+                getText(),
+                getCaretIndex());
             if (currentPlan.Candidates.Count == 1)
             {
-                ApplyCommentMentionCandidate(
-                    getText,
-                    getCaretIndex,
-                    currentPlan.DefaultCandidate,
-                    applyUpdatedText);
+                _reviewWorkflowSession.ApplyCommentMention(
+                    intent,
+                    getText(),
+                    getCaretIndex(),
+                    currentPlan.DefaultCandidate);
                 return;
             }
 
@@ -2289,7 +2298,7 @@ public sealed partial class MainWindow : Window
                     tag,
                     getText,
                     getCaretIndex,
-                    applyUpdatedText,
+                    intent,
                     currentPlan);
                 button.ContextMenu = menu;
                 menu.IsOpen = true;
@@ -2302,7 +2311,7 @@ public sealed partial class MainWindow : Window
         string tag,
         Func<string?> getText,
         Func<int> getCaretIndex,
-        Func<string, PresentationCommentMutationPlan> applyUpdatedText,
+        PresentationReviewWorkflowIntentKind intent,
         PresentationCommentMentionPickerPlan picker)
     {
         var menu = new ContextMenu();
@@ -2313,46 +2322,15 @@ public sealed partial class MainWindow : Window
                 Header = candidate.Label,
                 Tag = $"{tag}:{candidate.InsertToken}",
             };
-            item.Click += (_, _) => ApplyCommentMentionCandidate(
-                getText,
-                getCaretIndex,
-                candidate,
-                applyUpdatedText);
+            item.Click += (_, _) => _reviewWorkflowSession.ApplyCommentMention(
+                intent,
+                getText(),
+                getCaretIndex(),
+                candidate);
             menu.Items.Add(item);
         }
 
         return menu;
-    }
-
-    private void ApplyCommentMentionCandidate(
-        Func<string?> getText,
-        Func<int> getCaretIndex,
-        PresentationCommentMentionCandidate? candidate,
-        Func<string, PresentationCommentMutationPlan> applyUpdatedText)
-    {
-        LastCommentMentionInsertionPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionInsertionPlan(
-            getText(),
-            getCaretIndex(),
-            candidate);
-        if (LastCommentMentionInsertionPlan.ShouldApply)
-            applyUpdatedText(LastCommentMentionInsertionPlan.UpdatedText);
-    }
-
-    private PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlanForCurrentInput(
-        Func<string?> getText,
-        Func<int> getCaretIndex)
-    {
-        LastCommentMentionPickerPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionPickerPlanForInsertionContext(
-            _presentation.Slides,
-            getText(),
-            getCaretIndex());
-        return LastCommentMentionPickerPlan;
-    }
-
-    private static int ResolveCommentInputCaret(string? text, int caretIndex)
-    {
-        var currentText = text ?? string.Empty;
-        return caretIndex == 0 && currentText.Length > 0 ? currentText.Length : caretIndex;
     }
 
     private static IEnumerable<string> EnumerateCommentPaneText(DependencyObject? control)
@@ -2590,36 +2568,24 @@ public sealed partial class MainWindow : Window
         string? query = null,
         string? currentAuthor = null,
         string? currentInitials = null)
-    {
-        var plan = _reviewWorkflowSession.BuildCommentMentionPickerPlanForTests(query, currentAuthor, currentInitials);
-        LastCommentMentionPickerPlan = plan;
-        return plan;
-    }
+        => _reviewWorkflowSession.BuildCommentMentionPickerPlan(query, currentAuthor, currentInitials);
 
     internal PresentationCommentMentionInsertionPlan InsertCommentMentionForTests(
         string? text,
         int caretIndex,
         PresentationCommentMentionCandidate? candidate)
-    {
-        var plan = _reviewWorkflowSession.InsertCommentMentionForTests(text, caretIndex, candidate);
-        LastCommentMentionInsertionPlan = plan;
-        return plan;
-    }
+        => _reviewWorkflowSession.InsertCommentMention(text, caretIndex, candidate);
 
     internal PresentationCommentMutationPlan InsertMentionInSelectedCommentForTests(
         int caretIndex,
         PresentationCommentMentionCandidate? candidate,
         string? author = null,
         string? initials = null)
-    {
-        var plan = _reviewWorkflowSession.InsertMentionInSelectedCommentForTests(
+        => _reviewWorkflowSession.InsertMentionInSelectedComment(
             caretIndex,
             candidate,
             author,
             initials);
-        LastCommentMentionInsertionPlan = _reviewWorkflowSession.LastCommentMentionInsertionPlan;
-        return plan;
-    }
 
     private string? GetSelectedCommentText() => _reviewWorkflowSession.GetSelectedCommentText();
 
@@ -3766,13 +3732,7 @@ public sealed partial class MainWindow : Window
     }
 
     internal PresentationReadingOrderPlan ShowReadingOrderPane()
-    {
-        var plan = RefreshReadingOrderPlan();
-        RenderReadingOrderPane(plan);
-        _readingOrderPaneHost.Visibility = Visibility.Visible;
-        RefreshPaneAccessibilityMetadata();
-        return plan;
-    }
+        => _reviewWorkflowSession.ShowReadingOrderPane();
 
     internal PresentationSelectionPanePlan ShowSelectionPane()
     {
@@ -3789,21 +3749,11 @@ public sealed partial class MainWindow : Window
         => ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderLater);
 
     internal PresentationReadingOrderSelectionPlan ApplyReadingOrderSelectItem(uint shapeId)
-    {
-        var plan = _reviewWorkflowSession.SelectReadingOrderItem(shapeId);
-        if (IsReadingOrderPaneVisible && LastReadingOrderPlan is not null)
-            RenderReadingOrderPane(LastReadingOrderPlan);
-        return plan;
-    }
+        => _reviewWorkflowSession.SelectReadingOrderItem(shapeId);
 
     private PresentationReadingOrderMutationPlan ApplyReadingOrderMove(
         PresentationReviewWorkflowIntentKind intent)
-    {
-        var plan = _reviewWorkflowSession.ApplyReadingOrderMove(intent);
-        if (IsReadingOrderPaneVisible && LastReadingOrderPlan is not null)
-            RenderReadingOrderPane(LastReadingOrderPlan);
-        return plan;
-    }
+        => _reviewWorkflowSession.ApplyReadingOrderMove(intent);
 
     internal void SetAltTextPaneInput(string title, string description, bool isDecorative)
     {
@@ -3939,6 +3889,19 @@ public sealed partial class MainWindow : Window
             _readingOrderPaneItemsPanel.Children.Add(BuildReadingOrderItemCard(item));
     }
 
+    private void RenderReadingOrderPaneIfVisible(PresentationReadingOrderPlan plan)
+    {
+        if (IsReadingOrderPaneVisible)
+            RenderReadingOrderPane(plan);
+    }
+
+    private void PresentReadingOrderPane(PresentationReadingOrderPlan plan)
+    {
+        RenderReadingOrderPane(plan);
+        _readingOrderPaneHost.Visibility = Visibility.Visible;
+        RefreshPaneAccessibilityMetadata();
+    }
+
     private static PresentationReviewWorkflowActionPlan GetReadingOrderAction(
         PresentationReadingOrderPlan plan,
         string commandId)
@@ -4072,9 +4035,6 @@ public sealed partial class MainWindow : Window
             ? Editor.SelectedShapeIds[0]
             : null;
 
-    private PresentationReadingOrderPlan RefreshReadingOrderPlan()
-        => _reviewWorkflowSession.RefreshReadingOrderPlan();
-
     internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(
         string? description,
         string? title = null,
@@ -4092,54 +4052,34 @@ public sealed partial class MainWindow : Window
         => _reviewWorkflowSession.RefreshProofingRequestPlan();
 
     internal PresentationProofingPanePlan ShowProofingPane()
-    {
-        var plan = _reviewWorkflowSession.ShowProofingPane();
-        RenderProofingPane(plan);
-        _proofingPaneHost.Visibility = Visibility.Visible;
-        RefreshPaneAccessibilityMetadata();
-        return plan;
-    }
+        => _reviewWorkflowSession.ShowProofingPane();
 
     internal PresentationProofingPanePlan SelectProofingIssueRow(int rowIndex)
-    {
-        var plan = _reviewWorkflowSession.SelectProofingIssueRow(rowIndex);
-        RenderProofingPane(plan);
-        _proofingPaneHost.Visibility = Visibility.Visible;
-        return plan;
-    }
+        => _reviewWorkflowSession.SelectProofingIssueRow(rowIndex);
 
     internal PresentationProofingCorrectionMutationPlan ApplySelectedProofingCorrection()
-    {
-        if (LastProofingPanePlan is null)
-            ShowProofingPane();
-        return _reviewWorkflowSession.ApplySelectedProofingCorrection();
-    }
+        => _reviewWorkflowSession.ApplySelectedProofingCorrection();
 
     internal PresentationProofingPanePlan IgnoreSelectedProofingIssue()
-    {
-        if (LastProofingPanePlan is null)
-            ShowProofingPane();
-        return _reviewWorkflowSession.IgnoreSelectedProofingIssue();
-    }
+        => _reviewWorkflowSession.IgnoreSelectedProofingIssue();
 
     internal PresentationProofingPanePlan IgnoreAllSelectedProofingIssues()
-    {
-        if (LastProofingPanePlan is null)
-            ShowProofingPane();
-        return _reviewWorkflowSession.IgnoreAllSelectedProofingIssues();
-    }
+        => _reviewWorkflowSession.IgnoreAllSelectedProofingIssues();
 
     internal PresentationProofingPanePlan AddSelectedProofingWordToDictionary()
-    {
-        if (LastProofingPanePlan is null)
-            ShowProofingPane();
-        return _reviewWorkflowSession.AddSelectedProofingWordToDictionary();
-    }
+        => _reviewWorkflowSession.AddSelectedProofingWordToDictionary();
 
     private void RenderProofingPaneIfVisible(PresentationProofingPanePlan plan)
     {
         if (IsProofingPaneVisible)
             RenderProofingPane(plan);
+    }
+
+    private void PresentProofingPane(PresentationProofingPanePlan plan)
+    {
+        RenderProofingPane(plan);
+        _proofingPaneHost.Visibility = Visibility.Visible;
+        RefreshPaneAccessibilityMetadata();
     }
 
     private void RenderProofingPane(PresentationProofingPanePlan plan)

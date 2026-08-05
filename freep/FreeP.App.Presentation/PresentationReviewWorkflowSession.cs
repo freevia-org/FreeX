@@ -13,10 +13,17 @@ public sealed record PresentationReviewWorkflowSessionCallbacks(
     Action OpenMediaCaptionPane,
     Action<PresentationCommentPanePlan> RenderCommentPane,
     Action<PresentationAltTextPanePlan> RenderAltTextPaneIfVisible,
+    Action<PresentationReadingOrderPlan> RenderReadingOrderPaneIfVisible,
+    Action<PresentationReadingOrderPlan> PresentReadingOrderPane,
     Action<PresentationProofingPanePlan> RenderProofingPaneIfVisible,
+    Action<PresentationProofingPanePlan> PresentProofingPane,
     Action UpdateAfterCommentMutation,
     Action UpdateAfterCommentNavigation,
     Action UpdateAfterProofingCorrection);
+
+public sealed record PresentationCommentMentionApplicationResult(
+    PresentationCommentMentionInsertionPlan InsertionPlan,
+    PresentationCommentMutationPlan? MutationPlan);
 
 /// <summary>
 /// Renderer-neutral state and orchestration for the shared FreeP review workflow.
@@ -94,7 +101,7 @@ public sealed class PresentationReviewWorkflowSession
         RefreshAccessibilityCheckerPlans();
         RefreshAltTextPlansCore(null, null, null);
         _callbacks.RenderAltTextPaneIfVisible(LastAltTextPanePlan!);
-        RefreshReadingOrderPlanCore();
+        RefreshReadingOrderPlan();
         RefreshProofingRequestPlan();
     }
 
@@ -209,7 +216,7 @@ public sealed class PresentationReviewWorkflowSession
             author,
             initials);
 
-    public PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlanForTests(
+    public PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlan(
         string? query = null,
         string? currentAuthor = null,
         string? currentInitials = null)
@@ -223,7 +230,24 @@ public sealed class PresentationReviewWorkflowSession
         return LastCommentMentionPickerPlan;
     }
 
-    public PresentationCommentMentionInsertionPlan InsertCommentMentionForTests(
+    public PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlanForInput(
+        string? text,
+        int caretIndex,
+        string? currentAuthor = null,
+        string? currentInitials = null)
+    {
+        var editor = _getEditor();
+        LastCommentMentionPickerPlan =
+            PresentationReviewWorkflowPlanner.BuildCommentMentionPickerPlanForInsertionContext(
+                editor.Presentation.Slides,
+                text,
+                NormalizeCommentInputCaret(text, caretIndex),
+                currentAuthor,
+                currentInitials);
+        return LastCommentMentionPickerPlan;
+    }
+
+    public PresentationCommentMentionInsertionPlan InsertCommentMention(
         string? text,
         int caretIndex,
         PresentationCommentMentionCandidate? candidate)
@@ -235,13 +259,41 @@ public sealed class PresentationReviewWorkflowSession
         return LastCommentMentionInsertionPlan;
     }
 
-    public PresentationCommentMutationPlan InsertMentionInSelectedCommentForTests(
+    public PresentationCommentMentionApplicationResult ApplyCommentMention(
+        PresentationReviewWorkflowIntentKind intent,
+        string? text,
+        int caretIndex,
+        PresentationCommentMentionCandidate? candidate)
+    {
+        if (intent is not PresentationReviewWorkflowIntentKind.EditComment and
+            not PresentationReviewWorkflowIntentKind.ReplyComment)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(intent),
+                intent,
+                "Comment mention insertion supports edit and reply intents only.");
+        }
+
+        var insertion = InsertCommentMention(
+            text,
+            NormalizeCommentInputCaret(text, caretIndex),
+            candidate);
+        if (!insertion.ShouldApply)
+            return new PresentationCommentMentionApplicationResult(insertion, null);
+
+        var mutation = intent == PresentationReviewWorkflowIntentKind.EditComment
+            ? EditSelectedComment(insertion.UpdatedText)
+            : ReplyToSelectedComment(insertion.UpdatedText);
+        return new PresentationCommentMentionApplicationResult(insertion, mutation);
+    }
+
+    public PresentationCommentMutationPlan InsertMentionInSelectedComment(
         int caretIndex,
         PresentationCommentMentionCandidate? candidate,
         string? author = null,
         string? initials = null)
     {
-        LastCommentMentionInsertionPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionInsertionPlan(
+        LastCommentMentionInsertionPlan = InsertCommentMention(
             GetSelectedCommentText(),
             caretIndex,
             candidate);
@@ -258,6 +310,14 @@ public sealed class PresentationReviewWorkflowSession
         }
 
         return EditSelectedComment(LastCommentMentionInsertionPlan.UpdatedText, author, initials);
+    }
+
+    private static int NormalizeCommentInputCaret(string? text, int caretIndex)
+    {
+        var length = (text ?? string.Empty).Length;
+        return caretIndex == 0 && length > 0
+            ? length
+            : Math.Clamp(caretIndex, 0, length);
     }
 
     public string? GetSelectedCommentText()
@@ -442,14 +502,25 @@ public sealed class PresentationReviewWorkflowSession
     }
 
     public PresentationReadingOrderPlan RefreshReadingOrderPlan()
-        => RefreshReadingOrderPlanCore();
+    {
+        var plan = RefreshReadingOrderPlanCore();
+        _callbacks.RenderReadingOrderPaneIfVisible(plan);
+        return plan;
+    }
+
+    public PresentationReadingOrderPlan ShowReadingOrderPane()
+    {
+        var plan = RefreshReadingOrderPlanCore();
+        _callbacks.PresentReadingOrderPane(plan);
+        return plan;
+    }
 
     public PresentationReadingOrderMutationPlan ApplyReadingOrderMove(
         PresentationReviewWorkflowIntentKind intent)
     {
         var editor = _getEditor();
         var plan = PresentationReviewWorkflowPlanner.TryApplyReadingOrderMove(editor, intent);
-        RefreshReadingOrderPlanCore();
+        RefreshReadingOrderPlan();
         return plan;
     }
 
@@ -457,13 +528,14 @@ public sealed class PresentationReviewWorkflowSession
     {
         var editor = _getEditor();
         var plan = PresentationReviewWorkflowPlanner.TryApplyReadingOrderSelection(editor, shapeId);
-        RefreshReadingOrderPlanCore();
+        RefreshReadingOrderPlan();
         return plan;
     }
 
     public PresentationProofingPanePlan ShowProofingPane()
     {
         RefreshProofingRequestPlan();
+        _callbacks.PresentProofingPane(LastProofingPanePlan!);
         return LastProofingPanePlan!;
     }
 
@@ -480,6 +552,7 @@ public sealed class PresentationReviewWorkflowSession
             SelectedProofingIssueRowIndex,
             ProofingIgnoreState,
             ProofingDictionaryState);
+        _callbacks.PresentProofingPane(LastProofingPanePlan);
         return LastProofingPanePlan;
     }
 
@@ -510,6 +583,9 @@ public sealed class PresentationReviewWorkflowSession
 
     public PresentationProofingCorrectionMutationPlan ApplySelectedProofingCorrection()
     {
+        if (LastProofingPanePlan is null)
+            ShowProofingPane();
+
         if (LastProofingPanePlan?.SelectedRow is not { } selectedRow)
             return MissingProofingCorrectionPlan();
 
@@ -544,7 +620,7 @@ public sealed class PresentationReviewWorkflowSession
     public PresentationProofingPanePlan IgnoreSelectedProofingIssue()
     {
         if (LastProofingPanePlan is null)
-            RefreshProofingRequestPlan();
+            ShowProofingPane();
 
         var previousSelection = LastProofingPanePlan!.SelectedRowIndex;
         ProofingIgnoreState = PresentationReviewWorkflowPlanner.AddProofingIgnoredIssue(
@@ -556,7 +632,7 @@ public sealed class PresentationReviewWorkflowSession
     public PresentationProofingPanePlan IgnoreAllSelectedProofingIssues()
     {
         if (LastProofingPanePlan is null)
-            RefreshProofingRequestPlan();
+            ShowProofingPane();
 
         var previousSelection = LastProofingPanePlan!.SelectedRowIndex;
         ProofingIgnoreState = PresentationReviewWorkflowPlanner.AddProofingIgnoredIssueGroup(
@@ -568,7 +644,7 @@ public sealed class PresentationReviewWorkflowSession
     public PresentationProofingPanePlan AddSelectedProofingWordToDictionary()
     {
         if (LastProofingPanePlan is null)
-            RefreshProofingRequestPlan();
+            ShowProofingPane();
 
         var previousSelection = LastProofingPanePlan!.SelectedRowIndex;
         ProofingDictionaryState = PresentationReviewWorkflowPlanner.AddProofingDictionaryWord(

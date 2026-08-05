@@ -146,7 +146,10 @@ public sealed class PresentationAccessibilityCheckerSessionTests
                 OpenMediaCaptionPane: () => callbacks.Add("media-captions-opened"),
                 RenderCommentPane: _ => callbacks.Add("comment-pane"),
                 RenderAltTextPaneIfVisible: _ => callbacks.Add("alt-text"),
+                RenderReadingOrderPaneIfVisible: _ => callbacks.Add("reading-order"),
+                PresentReadingOrderPane: _ => callbacks.Add("reading-order-presented"),
                 RenderProofingPaneIfVisible: _ => callbacks.Add("proofing-pane"),
+                PresentProofingPane: _ => callbacks.Add("proofing-presented"),
                 UpdateAfterCommentMutation: () => callbacks.Add("comment-updated"),
                 UpdateAfterCommentNavigation: () => callbacks.Add("comment-navigated"),
                 UpdateAfterProofingCorrection: () => callbacks.Add("proofing-updated")));

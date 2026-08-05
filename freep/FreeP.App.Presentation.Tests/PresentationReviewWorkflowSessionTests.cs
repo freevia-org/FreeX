@@ -34,6 +34,46 @@ public sealed class PresentationReviewWorkflowSessionTests
     }
 
     [Fact]
+    public void CommentMentionInput_NormalizesRendererCaretAndRoutesEditThroughSession()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Alice Writer",
+            Initials = "AW",
+            Text = "Please ask @No",
+            Idx = 1
+        });
+        presentation.Slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Nora Reviewer",
+            Initials = "NR",
+            Text = "Available for review.",
+            Idx = 2
+        });
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var session = CreateSession(editor, []);
+        session.SetSelectedReviewCommentIndex(0);
+
+        var picker = session.BuildCommentMentionPickerPlanForInput("Please ask @No", 0);
+        var candidate = picker.Candidates.Should().ContainSingle().Subject;
+        var result = session.ApplyCommentMention(
+            PresentationReviewWorkflowIntentKind.EditComment,
+            "Please ask @No",
+            0,
+            candidate);
+
+        picker.Query.Should().Be("No");
+        candidate.DisplayName.Should().Be("Nora Reviewer");
+        result.InsertionPlan.ShouldApply.Should().BeTrue();
+        result.InsertionPlan.UpdatedText.Should().Be("Please ask @Nora.Reviewer ");
+        result.MutationPlan!.ShouldApply.Should().BeTrue();
+        presentation.Slides[0].Comments[0].Text.Should().Be("Please ask @Nora.Reviewer");
+        session.LastCommentMentionPickerPlan.Should().BeSameAs(picker);
+        session.LastCommentMentionInsertionPlan.Should().BeSameAs(result.InsertionPlan);
+    }
+
+    [Fact]
     public void AltTextMutation_UpdatesShapeAndSharedAltTextPlans()
     {
         var presentation = Presentation.CreateEmpty();
@@ -92,6 +132,30 @@ public sealed class PresentationReviewWorkflowSessionTests
     }
 
     [Fact]
+    public void PaneTransitions_PresentAndRefreshReadingOrderAndProofingThroughCallbacks()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Title = "Intro eror";
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 1, Name = "Back" });
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 2, Name = "Front" });
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        editor.Select(1);
+        var callbacks = new List<string>();
+        var session = CreateSession(editor, callbacks);
+
+        session.ShowReadingOrderPane();
+        callbacks.Should().ContainSingle(entry => entry == "reading-order-presented");
+
+        session.ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderLater);
+        callbacks.Should().ContainSingle(entry => entry == "reading-order-pane");
+
+        session.ShowProofingPane();
+        callbacks.Should().ContainSingle(entry => entry == "proofing-presented");
+        session.SelectProofingIssueRow(0);
+        callbacks.Count(entry => entry == "proofing-presented").Should().Be(2);
+    }
+
+    [Fact]
     public void ProofingMutation_NormalizesSelectionAfterCorrectionAndTracksIgnoreAndDictionaryUpdates()
     {
         var presentation = Presentation.CreateEmpty();
@@ -136,6 +200,28 @@ public sealed class PresentationReviewWorkflowSessionTests
         ignoredSession.LastProofingPanePlan!.Message.Should().Be(PresentationReviewWorkflowPlanner.ProofingNoIssuesMessage);
     }
 
+    [Fact]
+    public void MainWindowSourceGuards_KeepReviewInputAndPaneOrchestrationInSession()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var wpf = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("_reviewWorkflowSession.BuildCommentMentionPickerPlanForInput(");
+            source.Should().Contain("_reviewWorkflowSession.ApplyCommentMention(");
+            source.Should().Contain("PresentReadingOrderPane:");
+            source.Should().Contain("PresentProofingPane:");
+            source.Should().Contain("=> _reviewWorkflowSession.ShowReadingOrderPane();");
+            source.Should().Contain("=> _reviewWorkflowSession.ShowProofingPane();");
+            source.Should().NotContain("ResolveCommentInputCaret(");
+            source.Should().NotContain("BuildCommentMentionPickerPlanForInsertionContext(");
+            source.Should().NotContain("PresentationReviewWorkflowPlanner.BuildCommentMentionInsertionPlan(");
+            source.Should().NotContain("if (LastProofingPanePlan is null)");
+        }
+    }
+
     private static PresentationReviewWorkflowSession CreateSession(
         EditingSession editor,
         List<string> callbacks)
@@ -152,7 +238,10 @@ public sealed class PresentationReviewWorkflowSessionTests
                 OpenMediaCaptionPane: () => callbacks.Add("media-captions-opened"),
                 RenderCommentPane: _ => callbacks.Add("comment-pane"),
                 RenderAltTextPaneIfVisible: _ => callbacks.Add("alt-text"),
+                RenderReadingOrderPaneIfVisible: _ => callbacks.Add("reading-order-pane"),
+                PresentReadingOrderPane: _ => callbacks.Add("reading-order-presented"),
                 RenderProofingPaneIfVisible: _ => callbacks.Add("proofing-pane"),
+                PresentProofingPane: _ => callbacks.Add("proofing-presented"),
                 UpdateAfterCommentMutation: () => callbacks.Add("comment-updated"),
                 UpdateAfterCommentNavigation: () => callbacks.Add("comment-navigated"),
                 UpdateAfterProofingCorrection: () => callbacks.Add("proofing-updated")));
