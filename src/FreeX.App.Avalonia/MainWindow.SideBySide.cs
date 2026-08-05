@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Free.Shared.Ribbon;
 using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
@@ -86,15 +87,21 @@ public sealed partial class MainWindow : Window
 
     private void EnableSideBySide(MainWindow partner)
     {
-        var workArea = GetPrimaryWorkArea();
-        var (primaryBounds, partnerBounds) = SideBySideLayoutPlanner.Tile(workArea.Width, workArea.Height);
+        var (workArea, scaling) = GetPrimaryWorkAreaMetrics();
+        var (primaryBounds, partnerBounds) = SideBySideLayoutPlanner.Tile(
+            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Width, scaling),
+            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Height, scaling));
+        var tiles = AvaloniaWindowBoundsTranslator.Translate(
+            workArea,
+            scaling,
+            [primaryBounds, partnerBounds]);
 
         _sideBySidePrimary = this;
         _sideBySidePartner = partner;
 
         // Restore Normal state and position both windows.
-        TileThisWindowToWorkArea(workArea, primaryBounds);
-        partner.TileThisWindowToWorkArea(workArea, partnerBounds);
+        TileThisWindowToWorkArea(tiles[0]);
+        partner.TileThisWindowToWorkArea(tiles[1]);
     }
 
     private static void DisableSideBySide()
@@ -232,13 +239,13 @@ public sealed partial class MainWindow : Window
         return null;
     }
 
-    /// <summary>Positions this window using work-area-relative SideBySideLayoutPlanner bounds.</summary>
-    private void TileThisWindowToWorkArea(PixelRect workArea, ShellRect bounds)
+    /// <summary>Applies translated SideBySideLayoutPlanner bounds while preserving local window policy.</summary>
+    private void TileThisWindowToWorkArea(AvaloniaWindowTile tile)
     {
         WindowState = WindowState.Normal;
-        Position = new PixelPoint(workArea.X + (int)bounds.X, workArea.Y + (int)bounds.Y);
-        Width = Math.Max(MinWidth, bounds.Width);
-        Height = Math.Max(MinHeight, bounds.Height);
+        Position = tile.Position;
+        Width = Math.Max(MinWidth, tile.Width);
+        Height = Math.Max(MinHeight, tile.Height);
     }
 
     private IReadOnlyList<MainWindow> VisibleMainWindows() =>

@@ -110,17 +110,18 @@ public sealed partial class MainWindow
     // Reuses the portable Free.Shared.Shell.WindowResetPositionPlanner to compute a centered rect.
     private void ResetWindowPosition()
     {
-        var workArea = GetPrimaryWorkArea();
+        var (workArea, scaling) = GetPrimaryWorkAreaMetrics();
         // The planner returns a rect relative to a (0,0) work-area origin; offset by the real origin.
         var reset = FreeShellShell.WindowResetPositionPlanner.Compute(
-            workArea.Width, workArea.Height, windowIndex: 0);
+            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Width, scaling),
+            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Height, scaling),
+            windowIndex: 0);
+        var tile = AvaloniaWindowBoundsTranslator.Translate(workArea, scaling, reset);
 
         WindowState = WindowState.Normal;
-        Width = reset.Width;
-        Height = reset.Height;
-        Position = new PixelPoint(
-            workArea.X + (int)reset.X,
-            workArea.Y + (int)reset.Y);
+        Width = tile.Width;
+        Height = tile.Height;
+        Position = tile.Position;
         RefreshShell(UiText.Get("RibbonWire_WindowPositionReset"));
     }
 
