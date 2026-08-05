@@ -7661,6 +7661,9 @@ public sealed partial class MainWindow : Window
         }
         else
         {
+            var previousData = smartArtShape.SmartArt is { } original
+                ? SlideCloner.CloneSmartArt(original).Data
+                : null;
             Editor.EditSmartArt(smartArtShape.Id, smartArt =>
             {
                 LastSmartArtTextPaneApplyResult = SmartArtEditingPlanner.ApplyTextPaneOutline(
@@ -7669,7 +7672,7 @@ public sealed partial class MainWindow : Window
                 if (LastSmartArtTextPaneApplyResult is not { Applied: true })
                     return false;
 
-                if (CommitSmartArtTextPaneMutation(smartArt, smartArtShape))
+                if (CommitSmartArtTextPaneMutation(smartArt, smartArtShape, previousData))
                     return true;
 
                 LastSmartArtTextPaneApplyResult = LastSmartArtTextPaneApplyResult with
@@ -8019,6 +8022,9 @@ public sealed partial class MainWindow : Window
         }
         else
         {
+            var previousData = smartArtShape.SmartArt is { } original
+                ? SlideCloner.CloneSmartArt(original).Data
+                : null;
             Editor.EditSmartArt(smartArtShape.Id, smartArt =>
             {
                 LastSmartArtTextPaneEditResult = SmartArtEditingPlanner.Apply(
@@ -8028,7 +8034,7 @@ public sealed partial class MainWindow : Window
                     return false;
 
                 _selectedSmartArtTextPaneModelId = LastSmartArtTextPaneEditResult.SelectedModelId;
-                if (CommitSmartArtTextPaneMutation(smartArt, smartArtShape))
+                if (CommitSmartArtTextPaneMutation(smartArt, smartArtShape, previousData))
                     return true;
 
                 LastSmartArtTextPaneEditResult = LastSmartArtTextPaneEditResult with
@@ -8147,7 +8153,10 @@ public sealed partial class MainWindow : Window
         RefreshSmartArtTextPane();
     }
 
-    private bool CommitSmartArtTextPaneMutation(SmartArtShape smartArt, SlideShape smartArtShape)
+    private bool CommitSmartArtTextPaneMutation(
+        SmartArtShape smartArt,
+        SlideShape smartArtShape,
+        SmartArtData? previousData = null)
     {
         LastSmartArtDataPartRewriteResult = SmartArtEditingPlanner.RewriteDataPart(smartArt);
         if (LastSmartArtDataPartRewriteResult is not { Applied: true })
@@ -8161,6 +8170,11 @@ public sealed partial class MainWindow : Window
             smartArtShape.ExtentCyEmu,
             ResolveCurrentSlideTheme(),
             Editor.CurrentSlide?.ColorMapOverride);
+        if (LastSmartArtDrawingCacheRegenerationResult is { Applied: true })
+            return true;
+
+        LastSmartArtDrawingCacheRegenerationResult =
+            SmartArtEditingPlanner.SynchronizePreservedDrawingText(smartArt, previousData);
         return LastSmartArtDrawingCacheRegenerationResult is { Applied: true };
     }
 

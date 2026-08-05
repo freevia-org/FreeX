@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Automation;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -557,14 +558,42 @@ public sealed partial class MainWindow
         var parts = row.ActionKey.Split(':', 2);
         if (parts.Length != 2 || !Enum.TryParse<AutoFilterMenuFilterKind>(parts[0], out var kind))
             return Failed(row, "AutoFilter criterion could not be parsed.");
-        var model = AutoFilterMenuPlanner.Build(new AutoFilterMenuPlan("Value", kind, []));
+        var model = AutoFilterMenuPlanner.Build(new AutoFilterMenuPlan(
+            "Value",
+            kind,
+            [AutoFilterMenuCatalog.CreateFilterFamilyEntry(kind, InvariantAutoFilterMenuTextProvider.Instance)]));
         var optionIndex = model.CriteriaOptions.ToList().FindIndex(option => option.CriteriaPrefix == parts[1]);
         if (optionIndex < 0)
             return Failed(row, "AutoFilter criterion is absent from the production menu model.");
         var criteriaBox = new TextBox();
         var panel = CreateAutoFilterCriteriaPanel(model, criteriaBox);
-        var selector = panel.GetVisualDescendants().OfType<ComboBox>().First();
+        var selector = panel.GetVisualDescendants()
+            .OfType<ComboBox>()
+            .Single(combo => AutomationProperties.GetAutomationId(combo) == "AutoFilterCriteriaOperatorBox");
         selector.SelectedIndex = optionIndex;
+        var option = model.CriteriaOptions[optionIndex];
+        string? sampleValue = null;
+        string? sampleSecondValue = null;
+        var valueBox = panel.GetVisualDescendants()
+            .OfType<TextBox>()
+            .Single(textBox => !ReferenceEquals(textBox, criteriaBox) && textBox.PlaceholderText != "Maximum");
+        if (option.RequiresValue)
+        {
+            sampleValue = AutoFilterMenuPlanner.RequiresCountCriteriaValue(option) ? "1" : "Value";
+            valueBox.Text = sampleValue;
+            if (AutoFilterMenuPlanner.RequiresSecondCriteriaValue(option))
+            {
+                var secondValueBox = panel.GetVisualDescendants()
+                    .OfType<TextBox>()
+                    .Single(textBox => textBox.PlaceholderText == "Maximum");
+                sampleSecondValue = "2";
+                secondValueBox.Text = sampleSecondValue;
+            }
+        }
+        // The panel is intentionally created off-tree for this bounded route probe. On the Linux
+        // Skia host an unattached TextBox does not raise TextChanged for programmatic fixture input,
+        // so apply the same production completion rule explicitly after selecting and seeding it.
+        criteriaBox.Text = AutoFilterMenuPlanner.BuildCompletedCriteriaText(option, sampleValue, sampleSecondValue);
         var prefixObserved = criteriaBox.Text?.StartsWith(parts[1], StringComparison.OrdinalIgnoreCase) == true ||
             string.Equals(criteriaBox.Text, parts[1], StringComparison.OrdinalIgnoreCase);
         return prefixObserved
@@ -839,7 +868,6 @@ public sealed partial class MainWindow
             nameof(WorksheetContextMenuAction.DataValidation) or
             nameof(WorksheetContextMenuAction.RowHeight) or
             nameof(WorksheetContextMenuAction.ColumnWidth) or
-            nameof(WorksheetContextMenuAction.ShowNotes) or
             nameof(WorksheetContextMenuAction.Hyperlink) or
             nameof(WorksheetContextMenuAction.PivotTableOptions) or
             nameof(WorksheetContextMenuAction.FormatCells) or
