@@ -166,6 +166,39 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
     }
 
     [Fact]
+    public void Controller_SeeksNamedMediaBookmarkAndReappliesFade()
+    {
+        var factory = new FakeBackendFactory();
+        var controller = new AvaloniaSlideShowMediaController(new Canvas(), factory);
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 45,
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 9144000,
+            ExtentCyEmu = 6858000,
+            Media = new MediaInfo
+            {
+                IsVideo = false,
+                PlaybackStartMode = MediaPlaybackStartMode.Automatically,
+                VolumePercent = 80,
+                FadeInMilliseconds = 4000,
+                Bytes = [1, 2, 3],
+                ContentType = "audio/wav",
+                Bookmarks = { new MediaBookmarkInfo { Name = "Cue", TimeMilliseconds = 2000 } },
+            },
+        });
+
+        controller.EnterSlide(slide, 960, 720, 960, 720);
+
+        var session = factory.Backend.Sessions.Single();
+        controller.TrySeekToBookmark(45, " cue ").Should().BeTrue();
+        session.LastSeek.Should().Be(TimeSpan.FromSeconds(2));
+        session.Volume.Should().Be(40);
+        controller.TrySeekToBookmark(45, "unknown").Should().BeFalse();
+    }
+
+    [Fact]
     public void Controller_ClampsVolumeToSharedZeroToHundredRange()
     {
         var factory = new FakeBackendFactory();

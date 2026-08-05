@@ -245,6 +245,34 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void SlideShowMediaInteractionPlanner_ResolvesNamedBookmarkWithinTrimWindow()
+    {
+        var media = new MediaInfo
+        {
+            TrimStartMilliseconds = 1000,
+            TrimEndMilliseconds = 2000,
+        };
+        media.Bookmarks.AddRange(
+        [
+            new MediaBookmarkInfo { Name = "Intro", TimeMilliseconds = 0 },
+            new MediaBookmarkInfo { Name = "Middle", TimeMilliseconds = 5000 },
+            new MediaBookmarkInfo { Name = "Outro", TimeMilliseconds = 30000 },
+        ]);
+
+        SlideShowMediaInteractionPlanner.TryResolveMediaBookmarkPosition(
+            media, " intro ", TimeSpan.FromSeconds(20), out var intro).Should().BeTrue();
+        intro.Should().Be(TimeSpan.FromSeconds(1));
+        SlideShowMediaInteractionPlanner.TryResolveMediaBookmarkPosition(
+            media, "MIDDLE", TimeSpan.FromSeconds(20), out var middle).Should().BeTrue();
+        middle.Should().Be(TimeSpan.FromSeconds(5));
+        SlideShowMediaInteractionPlanner.TryResolveMediaBookmarkPosition(
+            media, "Outro", TimeSpan.FromSeconds(20), out var outro).Should().BeTrue();
+        outro.Should().Be(TimeSpan.FromSeconds(18));
+        SlideShowMediaInteractionPlanner.TryResolveMediaBookmarkPosition(
+            media, "missing", TimeSpan.FromSeconds(20), out _).Should().BeFalse();
+    }
+
+    [Fact]
     public void SlideShowMediaInteractionPlanner_ComputesFadeEnvelopeAgainstTrimWindow()
     {
         var media = new MediaInfo

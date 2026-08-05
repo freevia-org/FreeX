@@ -316,6 +316,20 @@ internal sealed class AvaloniaSlideShowMediaController
         return didSeek;
     }
 
+    /// <summary>Seeks an active media session to a named authored bookmark.</summary>
+    public bool TrySeekToBookmark(uint shapeId, string bookmarkName)
+    {
+        var slot = _slots.FirstOrDefault(candidate => candidate.ShapeId == shapeId);
+        if (slot is null || !SlideShowMediaInteractionPlanner.TryResolveMediaBookmarkPosition(
+                slot.Media, bookmarkName, slot.Session.Duration, out var position))
+            return false;
+
+        var didSeek = slot.Session.Seek(position);
+        if (didSeek)
+            ApplyFade(slot.Session, slot.Media, slot.BaseVolumePercent);
+        return didSeek;
+    }
+
     public bool TrySetVolume(uint shapeId, int volume)
     {
         var slot = _slots.FirstOrDefault(candidate => candidate.ShapeId == shapeId);
