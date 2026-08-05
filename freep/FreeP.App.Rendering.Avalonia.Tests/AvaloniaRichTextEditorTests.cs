@@ -23,6 +23,30 @@ public sealed class AvaloniaRichTextEditorTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(SlideHeadlessApp).Assembly);
 
     [Fact]
+    public async Task ClipboardContextMenu_UsesRichEditorRoutesAndSelectionEnablement()
+    {
+        await Session.Dispatch(() =>
+        {
+            var editor = new AvaloniaRichTextEditor(
+                InCanvasRichClipboardPayload.FromPlainText("context text").Body,
+                backgroundAlpha: 0xCC);
+            var menu = editor.InputBox.ContextMenu;
+
+            menu.Should().NotBeNull();
+            menu!.Items.OfType<MenuItem>()
+                .Select(item => item.Header?.ToString())
+                .Should().Equal("Cut", "Copy", "Paste", "Select All");
+            menu.Items.OfType<MenuItem>().Take(2)
+                .Should().OnlyContain(item => !item.IsEnabled);
+
+            editor.SelectionStart = 0;
+            editor.SelectionEnd = editor.Text.Length;
+            menu.Items.OfType<MenuItem>().Take(2)
+                .Should().OnlyContain(item => item.IsEnabled);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task InlineImageRun_IsRetainedBySharedVisualPlan()
     {
         await Session.Dispatch(() =>
