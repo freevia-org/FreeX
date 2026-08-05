@@ -5,28 +5,20 @@ using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
+using FreeW.App.Presentation;
 
 namespace FreeW.App.Avalonia;
 
 internal static class FreeWLegalNoticeProvider
 {
-    private static readonly (string Title, string ResourceName)[] Resources =
-    [
-        ("Project License", "FreeW.Legal.ProjectLicense.txt"),
-        ("Legal Notices", "FreeW.Legal.LegalNotices.md"),
-        ("Privacy Notice", "FreeW.Legal.PrivacyNotice.md"),
-        ("Third-Party Notices", "FreeW.Legal.ThirdPartyNotices.md"),
-        ("Third-Party License Texts", "FreeW.Legal.ThirdPartyLicenses.md"),
-    ];
-
     internal static IReadOnlyList<(string Title, string ResourceName)> ExpectedEmbeddedResources =>
-        Resources;
+        FreeWLegalNoticeManifest.Resources;
 
     public static IReadOnlyList<(string Title, string Text)> GetDocuments() =>
         GetDocuments(typeof(FreeWLegalNoticeProvider).Assembly);
 
     internal static IReadOnlyList<(string Title, string Text)> GetDocuments(Assembly assembly) =>
-        EmbeddedLegalNoticeLoader.GetDocuments(assembly, Resources);
+        EmbeddedLegalNoticeLoader.GetDocuments(assembly, FreeWLegalNoticeManifest.Resources);
 }
 
 internal sealed class LegalNoticesDialog : AvaloniaLegalNoticesDialog
