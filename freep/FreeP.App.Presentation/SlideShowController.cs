@@ -20,6 +20,8 @@ public sealed class SlideShowController
     // ── Immutable presentation data ───────────────────────────────────────────────
 
     private readonly IReadOnlyList<Slide> _slides;
+    private readonly bool _showWithAnimation;
+    private readonly bool _loopUntilStopped;
 
     // ── Mutable playback state ────────────────────────────────────────────────────
 
@@ -59,9 +61,13 @@ public sealed class SlideShowController
     public SlideShowController(
         IReadOnlyList<Slide> slides,
         int startIndex,
-        int animationStartIndex = -1)
+        int animationStartIndex = -1,
+        bool showWithAnimation = true,
+        bool loopUntilStopped = false)
     {
         _slides = slides ?? throw new ArgumentNullException(nameof(slides));
+        _showWithAnimation = showWithAnimation;
+        _loopUntilStopped = loopUntilStopped;
         CurrentSlideIndex = _slides.Count == 0
             ? -1
             : Math.Clamp(startIndex, 0, _slides.Count - 1);
@@ -87,7 +93,7 @@ public sealed class SlideShowController
 
     /// <summary>Whether we are on the last slide and all its steps are done.</summary>
     public bool IsAtEnd =>
-        !HasPendingSteps && CurrentSlideIndex >= _slides.Count - 1;
+        !_loopUntilStopped && !HasPendingSteps && CurrentSlideIndex >= _slides.Count - 1;
 
     /// <summary>The ordered click-steps for the current slide (read-only).</summary>
     public IReadOnlyList<AnimationStep> CurrentSteps => _currentSteps;
@@ -125,6 +131,12 @@ public sealed class SlideShowController
             int nextIdx = CurrentSlideIndex + 1;
             GoToSlide(nextIdx);
             return new AdvanceResult.NavigateToSlide(nextIdx, _slides[nextIdx]);
+        }
+
+        if (_loopUntilStopped && _slides.Count > 0)
+        {
+            GoToSlide(0);
+            return new AdvanceResult.NavigateToSlide(0, _slides[0]);
         }
 
         return AdvanceResult.AtEnd.Instance;
@@ -185,6 +197,9 @@ public sealed class SlideShowController
     /// </summary>
     public bool StartAtAnimationIndex(int animationIndex)
     {
+        if (!_showWithAnimation)
+            return false;
+
         var slide = CurrentSlide;
         if (slide is null
             || animationIndex < 0
@@ -409,7 +424,7 @@ public sealed class SlideShowController
     {
         PendingStepIndex = 0;
         _triggerStepCursors.Clear();
-        _currentSteps = CurrentSlide is null
+        _currentSteps = !_showWithAnimation || CurrentSlide is null
             ? Array.Empty<AnimationStep>()
             : BuildSteps(CurrentSlide);
     }
