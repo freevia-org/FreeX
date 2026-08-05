@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -1367,6 +1368,72 @@ public sealed class ChartDataCommandTests
 
         chart.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Left);
         chart.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Near);
+    }
+
+    [Fact]
+    public void ChartExTitleRemoval_RemovesPreservedNativeTitleOnWrite()
+    {
+        var chart = new ChartShape
+        {
+            IsChartEx = true,
+            Title = null,
+            PreservedChartExXml = """
+                <cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex">
+                  <cx:chart>
+                    <cx:title overlay="1">
+                      <cx:tx><cx:txData><cx:v>Stale title</cx:v></cx:txData></cx:tx>
+                    </cx:title>
+                    <cx:plotArea><cx:plotAreaRegion><cx:series layoutId="column" /></cx:plotAreaRegion></cx:plotArea>
+                  </cx:chart>
+                  <cx:preservedExtension value="must-survive" />
+                </cx:chartSpace>
+                """
+        };
+
+        using var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+            PptxChartWriter.WriteChartExPart(archive, chart, 1);
+
+        package.Position = 0;
+        using var readArchive = new ZipArchive(package, ZipArchiveMode.Read);
+        using var reader = new StreamReader(readArchive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var xml = reader.ReadToEnd();
+
+        xml.Should().NotContain("<cx:title");
+        xml.Should().Contain("preservedExtension");
+        xml.Should().Contain("must-survive");
+    }
+
+    [Fact]
+    public void ChartExLegendRemoval_RemovesPreservedNativeLegendOnWrite()
+    {
+        var chart = new ChartShape
+        {
+            IsChartEx = true,
+            Legend = null,
+            PreservedChartExXml = """
+                <cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex">
+                  <cx:chart>
+                    <cx:legend pos="r" overlay="1" />
+                    <cx:plotArea><cx:plotAreaRegion><cx:series layoutId="column" /></cx:plotAreaRegion></cx:plotArea>
+                  </cx:chart>
+                  <cx:preservedExtension value="must-survive" />
+                </cx:chartSpace>
+                """
+        };
+
+        using var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+            PptxChartWriter.WriteChartExPart(archive, chart, 1);
+
+        package.Position = 0;
+        using var readArchive = new ZipArchive(package, ZipArchiveMode.Read);
+        using var reader = new StreamReader(readArchive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var xml = reader.ReadToEnd();
+
+        xml.Should().NotContain("<cx:legend");
+        xml.Should().Contain("preservedExtension");
+        xml.Should().Contain("must-survive");
     }
 
     [Fact]
