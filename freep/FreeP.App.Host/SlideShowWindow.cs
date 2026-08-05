@@ -641,7 +641,7 @@ public sealed class SlideShowWindow : Window
 
         // Check if the click lands on a media shape — toggle play/pause and consume the click
         // so it does NOT also advance the slideshow.
-        if (slide is not null && ShapeTreeLookup.Enumerate(slide).Any(s => s.Kind == SlideShapeKind.Media))
+        if (slide is not null && SlideShapeTraversal.EnumerateDepthFirst(slide).Any(s => s.Kind == SlideShapeKind.Media))
         {
             double cw = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : _slideDipW;
             double ch = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
@@ -3890,7 +3890,7 @@ public sealed class SlideShowWindow : Window
 
         foreach (var shapeId in animatedShapeIds)
         {
-            var shape = ShapeTreeLookup.Find(slide, shapeId);
+            var shape = SlideShapeTraversal.FindById(slide, shapeId);
             if (shape is null) continue;
 
             if (SlideShowAnimationBuildPlanner.IsParagraphBuild(slide, shapeId))

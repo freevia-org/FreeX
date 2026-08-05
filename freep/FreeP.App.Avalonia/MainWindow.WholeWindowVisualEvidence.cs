@@ -8,6 +8,7 @@ using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Theme;
 using FreeP.App.Compositor;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
@@ -158,7 +159,7 @@ public sealed partial class MainWindow
         var contextualIds = definition.ContextualTabs.Select(tab => tab.Id).ToHashSet(StringComparer.Ordinal);
         var visibleContextualTabs = visibleTabs.Where(contextualIds.Contains).ToArray();
         var selectedShape = Editor.CurrentSlide is { } currentSlide
-            ? ShapeTreeLookup.Enumerate(currentSlide)
+            ? SlideShapeTraversal.EnumerateDepthFirst(currentSlide)
                 .FirstOrDefault(shape => Editor.SelectedShapeIds.Contains(shape.Id))
             : null;
         var root = Content as Visual ?? this;

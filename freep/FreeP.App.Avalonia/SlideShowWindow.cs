@@ -3639,7 +3639,7 @@ public sealed class SlideShowWindow : Window
 
         foreach (var shapeId in animatedShapeIds)
         {
-            var shape = ShapeTreeLookup.Find(slide, shapeId);
+            var shape = SlideShapeTraversal.FindById(slide, shapeId);
             if (shape is null) continue;
 
             if (SlideShowAnimationBuildPlanner.IsParagraphBuild(slide, shapeId))

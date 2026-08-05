@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
@@ -73,7 +74,7 @@ internal sealed class RotationOptionsDialog : Window
     }
 
     private double InitialRotation() => _editor.SelectedShapeIds
-        .Select(id => _editor.CurrentSlide is { } slide ? ShapeTreeLookup.Find(slide, id) : null)
+        .Select(id => _editor.CurrentSlide is { } slide ? SlideShapeTraversal.FindById(slide, id) : null)
         .FirstOrDefault(shape => shape is not null)?.RotationDeg ?? 0;
 
     private static string Format(double value) => value.ToString("G", CultureInfo.CurrentCulture);

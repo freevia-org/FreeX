@@ -98,7 +98,7 @@ internal sealed class AvaloniaSlideShowMediaController
 
         foreach (var slot in _slots)
         {
-            var shape = ShapeTreeLookup.Find(slide, slot.ShapeId);
+            var shape = SlideShapeTraversal.FindById(slide, slot.ShapeId);
             if (shape?.Media is null || shape.Kind != SlideShapeKind.Media)
                 continue;
 
@@ -152,7 +152,7 @@ internal sealed class AvaloniaSlideShowMediaController
         if (!_active.Any(plan => plan.HasSource) || !EnsureBackend())
             return;
 
-        foreach (var shape in ShapeTreeLookup.Enumerate(slide).Where(shape =>
+        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide).Where(shape =>
                      shape.Kind == SlideShapeKind.Media && shape.Media is not null))
         {
             var plan = _active.First(media => media.ShapeId == shape.Id);
@@ -405,7 +405,7 @@ internal sealed class AvaloniaSlideShowMediaController
             ApplyCaptionText(slot.CaptionText, cue);
             if (cue is not null
                 && _activeSlide is { } activeSlide
-                && ShapeTreeLookup.Find(activeSlide, slot.ShapeId) is { Media: not null } shape)
+                && SlideShapeTraversal.FindById(activeSlide, slot.ShapeId) is { Media: not null } shape)
             {
                 var bounds = SlideShowMediaInteractionPlanner.ComputeMediaBounds(
                     shape,

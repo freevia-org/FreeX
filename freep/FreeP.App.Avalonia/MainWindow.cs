@@ -2471,7 +2471,7 @@ public sealed partial class MainWindow : Window
         var slidePoint = _slideCanvas.CurrentTransform.ScreenToSlide(point.X, point.Y);
         var hitId = ShapeHitTester.HitTest(slide, Editor.Presentation, slidePoint.X, slidePoint.Y);
         var shape = hitId.HasValue
-            ? ShapeTreeLookup.Find(slide, hitId.Value)
+            ? SlideShapeTraversal.FindById(slide, hitId.Value)
             : null;
         if (shape?.Kind == SlideShapeKind.Chart && shape.Chart is not null &&
             ChartSubtargetHitTester.TryHitTest(slide, Editor.Presentation, slidePoint.X, slidePoint.Y, out var chartHit))
@@ -2734,7 +2734,7 @@ public sealed partial class MainWindow : Window
 
     internal ContextMenu? BuildTableContextMenuForTests(uint shapeId)
     {
-        var shape = Editor.CurrentSlide is { } slide ? ShapeTreeLookup.Find(slide, shapeId) : null;
+        var shape = Editor.CurrentSlide is { } slide ? SlideShapeTraversal.FindById(slide, shapeId) : null;
         return shape?.Kind == SlideShapeKind.Table && shape.Table is not null
             ? BuildTableContextMenu(shape)
             : null;
@@ -4664,7 +4664,7 @@ public sealed partial class MainWindow : Window
     {
         var selectedShapeId = GetSingleSelectedShapeId();
         var shape = selectedShapeId is uint id && Editor.CurrentSlide is { } slide
-            ? ShapeTreeLookup.Find(slide, id)
+            ? SlideShapeTraversal.FindById(slide, id)
             : null;
         var info = shape?.PreservedObject;
         if (selectedShapeId is not uint zoomShapeId
@@ -4710,7 +4710,7 @@ public sealed partial class MainWindow : Window
     {
         var selectedShapeId = GetSingleSelectedShapeId();
         var shape = selectedShapeId is uint id && Editor.CurrentSlide is { } slide
-            ? ShapeTreeLookup.Find(slide, id)
+            ? SlideShapeTraversal.FindById(slide, id)
             : null;
         var info = shape?.PreservedObject;
         if (selectedShapeId is not uint zoomShapeId
@@ -4764,7 +4764,7 @@ public sealed partial class MainWindow : Window
 
         var selectedShapeId = GetSingleSelectedShapeId();
         var selectedInfo = selectedShapeId is uint shapeId && Editor.CurrentSlide is { } slide
-            ? ShapeTreeLookup.Find(slide, shapeId)?.PreservedObject
+            ? SlideShapeTraversal.FindById(slide, shapeId)?.PreservedObject
             : null;
         var summaryTargets = selectedInfo?.SummaryZoomTargets
             ?? (IReadOnlyList<SummaryZoomTarget>)Array.Empty<SummaryZoomTarget>();
@@ -4808,7 +4808,7 @@ public sealed partial class MainWindow : Window
         if (selectedShapeId is null || Editor.CurrentSlide is not { } slide)
             return;
 
-        var shape = ShapeTreeLookup.Find(slide, selectedShapeId.Value);
+        var shape = SlideShapeTraversal.FindById(slide, selectedShapeId.Value);
         if (shape?.Kind != SlideShapeKind.Zoom || shape.PreservedObject is not { } info)
             return;
 
@@ -4872,7 +4872,7 @@ public sealed partial class MainWindow : Window
         if (selectedShapeId is null || Editor.CurrentSlide is not { } slide)
             return;
 
-        var shape = ShapeTreeLookup.Find(slide, selectedShapeId.Value);
+        var shape = SlideShapeTraversal.FindById(slide, selectedShapeId.Value);
         if (shape?.Kind != SlideShapeKind.Zoom || shape.PreservedObject is not { } info)
             return;
 
@@ -8310,7 +8310,7 @@ public sealed partial class MainWindow : Window
         if (selectedShapeId is null || Editor.CurrentSlide is not { } slide)
             return null;
 
-        var shape = ShapeTreeLookup.Find(slide, selectedShapeId.Value);
+        var shape = SlideShapeTraversal.FindById(slide, selectedShapeId.Value);
         return shape?.Kind == SlideShapeKind.SmartArt && shape.SmartArt is not null
             ? shape
             : null;

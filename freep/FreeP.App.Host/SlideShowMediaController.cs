@@ -224,7 +224,7 @@ public sealed class SlideShowMediaController
         _activeSlide = slide;
         _showMediaControls = showMediaControls;
 
-        foreach (var shape in ShapeTreeLookup.Enumerate(slide))
+        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
         {
             if (shape.Kind != SlideShapeKind.Media || shape.Media is null)
                 continue;
@@ -276,7 +276,7 @@ public sealed class SlideShowMediaController
 
         foreach (var slot in _slots)
         {
-            var shape = ShapeTreeLookup.Find(slide, slot.ShapeId);
+            var shape = SlideShapeTraversal.FindById(slide, slot.ShapeId);
             if (shape?.Media is null || shape.Kind != SlideShapeKind.Media)
                 continue;
 
@@ -430,7 +430,7 @@ public sealed class SlideShowMediaController
             ApplyCaptionText(slot.CaptionText, cue);
             if (cue is not null
                 && _activeSlide is { } activeSlide
-                && ShapeTreeLookup.Find(activeSlide, slot.ShapeId) is { Media: not null } shape)
+                && SlideShapeTraversal.FindById(activeSlide, slot.ShapeId) is { Media: not null } shape)
             {
                 var bounds = ComputeMediaRect(shape, _slideDipW, _slideDipH, _canvasW, _canvasH);
                 ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue);

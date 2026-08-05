@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using Free.Shared.Ribbon.Wpf;
 using FreeP.App.Compositor;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
@@ -75,7 +76,7 @@ public sealed class RotationOptionsDialog : DialogWindow
 
     private double InitialRotation() => _editor.SelectedShapeIds
         .Select(id => _editor.CurrentSlide is { } slide
-            ? ShapeTreeLookup.Find(slide, id)
+            ? SlideShapeTraversal.FindById(slide, id)
             : null)
         .FirstOrDefault(shape => shape is not null)?.RotationDeg ?? 0;
 
