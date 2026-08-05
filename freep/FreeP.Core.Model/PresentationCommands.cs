@@ -705,13 +705,13 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
     private readonly bool _oldLoopUntilStopped;
     private readonly PresentationShowType _oldShowType;
     private readonly bool _oldShowBrowseScrollbar;
-    private readonly uint? _oldKioskRestartAfterMinutes;
+    private readonly uint? _oldKioskRestartAfterMilliseconds;
     private readonly bool _newUseSlideTimings;
     private readonly bool _newShowWithAnimation;
     private readonly bool _newLoopUntilStopped;
     private readonly PresentationShowType _newShowType;
     private readonly bool _newShowBrowseScrollbar;
-    private readonly uint? _newKioskRestartAfterMinutes;
+    private readonly uint? _newKioskRestartAfterMilliseconds;
 
     public SetSlideShowSettingsCommand(
         bool oldUseSlideTimings,
@@ -719,26 +719,26 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
         bool oldLoopUntilStopped,
         PresentationShowType oldShowType,
         bool oldShowBrowseScrollbar,
-        uint? oldKioskRestartAfterMinutes,
+        uint? oldKioskRestartAfterMilliseconds,
         bool newUseSlideTimings,
         bool newShowWithAnimation,
         bool newLoopUntilStopped,
         PresentationShowType newShowType,
         bool newShowBrowseScrollbar,
-        uint? newKioskRestartAfterMinutes)
+        uint? newKioskRestartAfterMilliseconds)
     {
         _oldUseSlideTimings = oldUseSlideTimings;
         _oldShowWithAnimation = oldShowWithAnimation;
         _oldLoopUntilStopped = oldLoopUntilStopped;
         _oldShowType = oldShowType;
         _oldShowBrowseScrollbar = oldShowBrowseScrollbar;
-        _oldKioskRestartAfterMinutes = oldKioskRestartAfterMinutes;
+        _oldKioskRestartAfterMilliseconds = oldKioskRestartAfterMilliseconds;
         _newUseSlideTimings = newUseSlideTimings;
         _newShowWithAnimation = newShowWithAnimation;
         _newLoopUntilStopped = newLoopUntilStopped;
         _newShowType = newShowType;
         _newShowBrowseScrollbar = newShowBrowseScrollbar;
-        _newKioskRestartAfterMinutes = newKioskRestartAfterMinutes;
+        _newKioskRestartAfterMilliseconds = newKioskRestartAfterMilliseconds;
     }
 
     public SetSlideShowSettingsCommand(
@@ -797,7 +797,7 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
         p.LoopUntilStopped != _newLoopUntilStopped ||
         p.ShowType != _newShowType ||
         p.ShowBrowseScrollbar != _newShowBrowseScrollbar ||
-        p.KioskRestartAfterMinutes != _newKioskRestartAfterMinutes;
+        p.KioskRestartAfterMilliseconds != _newKioskRestartAfterMilliseconds;
 
     public void Apply(Presentation p)
     {
@@ -806,7 +806,7 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
         p.LoopUntilStopped = _newLoopUntilStopped;
         p.ShowType = _newShowType;
         p.ShowBrowseScrollbar = _newShowBrowseScrollbar;
-        p.KioskRestartAfterMinutes = _newKioskRestartAfterMinutes;
+        p.KioskRestartAfterMilliseconds = _newKioskRestartAfterMilliseconds;
     }
 
     public void Revert(Presentation p)
@@ -816,7 +816,7 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
         p.LoopUntilStopped = _oldLoopUntilStopped;
         p.ShowType = _oldShowType;
         p.ShowBrowseScrollbar = _oldShowBrowseScrollbar;
-        p.KioskRestartAfterMinutes = _oldKioskRestartAfterMinutes;
+        p.KioskRestartAfterMilliseconds = _oldKioskRestartAfterMilliseconds;
     }
 }
 

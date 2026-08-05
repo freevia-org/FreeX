@@ -62,6 +62,7 @@ public sealed class SlideShowWindow : Window
     private readonly SlideShowSessionController _session;
     private readonly Action<int, string?>? _setSlideNotesText;
     private readonly DispatcherTimer  _autoAdvanceTimer;
+    private readonly DispatcherTimer  _kioskRestartTimer;
     private PresenterViewWindow? _presenterViewWindow;
     private bool _zoomShowBackgroundForTransition = true;
     private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
@@ -287,7 +288,29 @@ public sealed class SlideShowWindow : Window
         // Media controller: created now; EnterSlide is called per-slide in DisplayCurrentSlide.
         _mediaController = new SlideShowMediaController(_mediaOverlay);
 
-        _root.Children.Add(stage);
+        if (isBrowseWindow)
+        {
+            stage.Width = _slideDipW;
+            stage.Height = _slideDipH;
+            var browser = new ScrollViewer
+            {
+                Background = Brushes.Black,
+                HorizontalScrollBarVisibility = _presentation.ShowBrowseScrollbar
+                    ? ScrollBarVisibility.Auto
+                    : ScrollBarVisibility.Disabled,
+                VerticalScrollBarVisibility = _presentation.ShowBrowseScrollbar
+                    ? ScrollBarVisibility.Auto
+                    : ScrollBarVisibility.Disabled,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Content = stage,
+            };
+            _root.Children.Add(browser);
+        }
+        else
+        {
+            _root.Children.Add(stage);
+        }
 
         Content = _root;
 
@@ -298,13 +321,24 @@ public sealed class SlideShowWindow : Window
         };
         _autoAdvanceTimer.Tick += (_, _) => DoAdvance();
 
+        _kioskRestartTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            IsEnabled = false,
+        };
+        _kioskRestartTimer.Tick += (_, _) => RestartKioskShow();
+
         // ── Event wiring ───────────────────────────────────────────────────────
         KeyDown              += OnKeyDown;
         MouseLeftButtonDown  += OnMouseLeftButtonDown;
         MouseLeftButtonUp    += OnMouseLeftButtonUp;
         MouseMove            += OnMouseMove;
         SizeChanged          += (_, _) => SyncMediaOverlayLayout();
-        Loaded               += (_, _) => { Focus(); DisplayCurrentSlide(animated: false); };
+        Loaded               += (_, _) =>
+        {
+            Focus();
+            DisplayCurrentSlide(animated: false);
+            StartKioskRestartTimer();
+        };
         Closed               += (_, _) => Teardown();
     }
 
@@ -1061,6 +1095,30 @@ public sealed class SlideShowWindow : Window
     }
 
     private SlideShowSlideMetrics CurrentSlideMetrics() => new(_slideDipW, _slideDipH);
+
+    private void StartKioskRestartTimer()
+    {
+        _kioskRestartTimer.Stop();
+        if (!SlideShowKioskRestartPlanner.TryGetInterval(
+                _presentation,
+                out var interval))
+            return;
+
+        _kioskRestartTimer.Interval = interval;
+        _kioskRestartTimer.Start();
+    }
+
+    private void RestartKioskShow()
+    {
+        if (_session.IsClosed)
+            return;
+
+        ApplyHostCommand(SlideShowHostPlanner.PlanIntent(
+            SlideShowHostIntent.FirstSlide,
+            _controller,
+            _playbackRoute.Slides,
+            stopAutoAdvance: true));
+    }
 
     private void SyncMediaOverlayLayout()
     {
@@ -6073,6 +6131,7 @@ public sealed class SlideShowWindow : Window
         var now = nowUtc ?? DateTimeOffset.UtcNow;
         _session.Close(now);
         _autoAdvanceTimer.Stop();
+        _kioskRestartTimer.Stop();
         foreach (var sb in _pendingStoryboards)
         {
             try { sb.Stop(); } catch { /* ignore */ }

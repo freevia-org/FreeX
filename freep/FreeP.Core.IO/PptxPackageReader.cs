@@ -380,7 +380,7 @@ public static class PptxPackageReader
                 : PresentationShowType.PresentedBySpeaker;
         presentation.ShowBrowseScrollbar = browse is null ||
             ReadBooleanOrDefault(browse.Attribute("showScrollbar")?.Value, defaultValue: true);
-        presentation.KioskRestartAfterMinutes = kiosk?.Attribute("restart") is { } restart &&
+        presentation.KioskRestartAfterMilliseconds = kiosk?.Attribute("restart") is { } restart &&
             uint.TryParse(restart.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var restartMinutes)
                 ? restartMinutes
                 : null;

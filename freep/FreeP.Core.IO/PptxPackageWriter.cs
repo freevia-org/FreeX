@@ -2942,7 +2942,7 @@ public static class PptxPackageWriter
                 presentation.ShowBrowseScrollbar ? null : new XAttribute("showScrollbar", "0")),
             PresentationShowType.BrowsedAtKiosk => new XElement(
                 P + "kiosk",
-                presentation.KioskRestartAfterMinutes is uint restart
+                presentation.KioskRestartAfterMilliseconds is uint restart
                     ? new XAttribute("restart", restart.ToString(CultureInfo.InvariantCulture))
                     : null),
             _ => new XElement(P + "present"),
