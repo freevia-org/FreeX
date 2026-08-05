@@ -224,6 +224,31 @@ public sealed class DocumentViewHeaderFooterTests
     // ── Test 5: PAGE field resolves to 1 for page 1 ──────────────────────────────────────────────────
 
     [Fact]
+    public async Task First_section_page_restarted_at_two_uses_even_header()
+    {
+        IReadOnlyList<(string Text, double Y, TextAlignment Alignment)>? items = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Body."));
+            doc.Page.PageNumberStartAt = 2;
+            doc.Page.DifferentOddEvenPages = true;
+            doc.FinalSectionHeadersFooters.Header = new HeaderFooter("ODD HEADER");
+            doc.FinalSectionHeadersFooters.EvenHeader = new HeaderFooter("EVEN HEADER");
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 1200));
+            items = view.HeaderFooterItems;
+        });
+
+        if (!ran) return;
+        items.Should().Contain(item => item.Text == "EVEN HEADER");
+        items.Should().NotContain(item => item.Text == "ODD HEADER");
+    }
+
+    [Fact]
     public async Task Page_number_field_resolves_to_1_for_page_1()
     {
         IReadOnlyList<(string Text, double Y, TextAlignment Alignment)>? items = null;
