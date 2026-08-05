@@ -165,6 +165,12 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             "Charts",
             "Editing",
             "ChartQuickCommandPlanner.cs"));
+        var chartWorkflowSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "Charts",
+            "Editing",
+            "ChartCommandWorkflowPlanner.cs"));
 
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextDataLabelPosition(");
         chartTabsSource.Should().Contain("ChartAxisWorkflowCommandCatalog.Gridlines(useXAxis: true)");
@@ -173,8 +179,11 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         chartTabsSource.Should().Contain("ChartWorkflowTargetPlanner.FindSelectedChart(_session.ActiveSheet, _selectedDrawingObjectId)");
         chartTabsSource.Should().Contain("RunGuarded(ShowChartStyleDialogAsync)");
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextPlotAreaBorderThickness(chart.PlotAreaBorderThickness)");
-        chartQuickSource.Should().Contain("ChartQuickCommandPlanner.CanApply(chart, command.Command)");
-        chartQuickSource.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command.Command)");
+        chartQuickSource.Should().Contain("ChartCommandWorkflowPlanner.PlanQuickCommand(");
+        chartQuickSource.Should().NotContain("ChartQuickCommandPlanner.CanApply(");
+        chartQuickSource.Should().NotContain("ChartQuickCommandPlanner.Plan(");
+        chartWorkflowSource.Should().Contain("ChartQuickCommandPlanner.CanApply(chart, command.Command)");
+        chartWorkflowSource.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command.Command)");
         chartQuickPlannerSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart)");
         chartQuickPlannerSource.Should().Contain("ChartQuickFormatCycler.MergeFirstSeriesFormat(chart, updated)");
         chartDialogSources.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");

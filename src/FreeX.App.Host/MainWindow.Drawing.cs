@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -745,7 +746,15 @@ public partial class MainWindow
 
     private void OnChartBoundsChanged(Guid id, double left, double top, double width, double height)
     {
-        if (!TryExecuteCommand(new SetChartBoundsCommand(_currentSheetId, id, left, top, width, height), "Chart Bounds"))
+        if (!TryExecuteCommand(
+                ChartCommandWorkflowPlanner.BuildBoundsCommand(
+                    _currentSheetId,
+                    id,
+                    left,
+                    top,
+                    width,
+                    height),
+                "Chart Bounds"))
             return;
 
         SheetGrid.SelectedObjectId = id;

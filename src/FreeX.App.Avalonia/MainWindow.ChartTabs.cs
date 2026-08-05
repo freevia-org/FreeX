@@ -78,7 +78,8 @@ public sealed partial class MainWindow
 
     private void ApplyChartLayout(string commandLabel, ChartModel chart, ChartLayoutOptions options)
     {
-        var result = _session.ExecuteReviewCommand(new SetChartLayoutCommand(_session.ActiveSheet.Id, chart.Id, options));
+        var result = _session.ExecuteReviewCommand(
+            ChartCommandWorkflowPlanner.BuildLayoutCommand(_session.ActiveSheet.Id, chart, options));
         RefreshShell(result.Success
             ? UiText.Format(ChartWorkflowCommandCatalog.CommandAppliedStatusResourceKey, commandLabel)
             : result.ErrorMessage ?? UiText.Format(ChartWorkflowCommandCatalog.CommandFailedStatusResourceKey, commandLabel));
@@ -123,7 +124,11 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart(command, out chart))
             return;
 
-        var result = _session.ExecuteReviewCommand(new ChangeChartTypeCommand(_session.ActiveSheet.Id, chart.Id, plan.AppliedType!.Value));
+        var result = _session.ExecuteReviewCommand(
+            ChartCommandWorkflowPlanner.BuildChangeTypeCommand(
+                _session.ActiveSheet.Id,
+                chart,
+                plan.AppliedType!.Value));
         RefreshShell(result.Success
             ? UiText.Format("ChartLoc_ChangedChartTypeTo", ChartTypeChangePlanner.DisplayName(plan.AppliedType!.Value))
             : result.ErrorMessage ?? UiText.Get("ChartLoc_ChangeChartTypeFailed"));
@@ -397,13 +402,13 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart(command, out chart))
             return;
 
-        var commandResult = _session.ExecuteReviewCommand(new ChangeChartSourceCommand(
-            _session.ActiveSheet.Id,
-            chart.Id,
-            dataRange,
-            firstRowIsHeader: chart.FirstRowIsHeader,
-            firstColIsCategories: choice.FirstColumnIsCategories,
-            seriesInRows: choice.SwitchRowColumn));
+        var commandResult = _session.ExecuteReviewCommand(
+            ChartCommandWorkflowPlanner.BuildChangeSourceCommand(
+                _session.ActiveSheet.Id,
+                chart,
+                dataRange,
+                choice.FirstColumnIsCategories,
+                choice.SwitchRowColumn));
         RefreshShell(commandResult.Success
             ? UiText.Format("ChartLoc_ChartDataSourceSetTo", FormatRangeReference(dataRange))
             : commandResult.ErrorMessage ?? UiText.Get("ChartLoc_SelectDataFailed"));

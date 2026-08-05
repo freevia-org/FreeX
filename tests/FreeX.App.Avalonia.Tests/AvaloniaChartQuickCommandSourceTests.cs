@@ -10,6 +10,12 @@ public sealed class AvaloniaChartQuickCommandSourceTests
     public void ChartFormatTextTabQuickCommands_UseSharedCatalogAndPlanner()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatTextTabs.cs"));
+        var workflowSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "Charts",
+            "Editing",
+            "ChartCommandWorkflowPlanner.cs"));
 
         source.Should().Contain("ChartQuickCommandCatalog.ComboSeries");
         source.Should().Contain("ChartQuickCommandCatalog.ChartTitleColor");
@@ -18,8 +24,11 @@ public sealed class AvaloniaChartQuickCommandSourceTests
         source.Should().Contain("ChartQuickCommandCatalog.SeriesMarkerSize");
         source.Should().Contain("ChartQuickCommandCatalog.SecondaryAxisSeries");
         source.Should().Contain("private void ExecuteChartQuickCommand(");
-        source.Should().Contain("ChartQuickCommandPlanner.CanApply(chart, command.Command)");
-        source.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command.Command)");
+        source.Should().Contain("ChartCommandWorkflowPlanner.PlanQuickCommand(");
+        source.Should().NotContain("ChartQuickCommandPlanner.CanApply(");
+        source.Should().NotContain("ChartQuickCommandPlanner.Plan(");
+        workflowSource.Should().Contain("ChartQuickCommandPlanner.CanApply(chart, command.Command)");
+        workflowSource.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command.Command)");
         source.Should().Contain("ChartWorkflowUnsupportedStatus(ChartWorkflowCommandCatalog.ComboChart)");
         source.Should().Contain("ChartWorkflowUnsupportedStatus(ChartWorkflowCommandCatalog.FormatDataSeries)");
         source.Should().Contain("ChartQuickUnsupportedStatus(command)");

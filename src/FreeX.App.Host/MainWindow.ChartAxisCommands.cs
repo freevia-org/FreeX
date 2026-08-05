@@ -221,7 +221,7 @@ public partial class MainWindow
             if (plan.Options is not { } options)
                 return new FailedWorkbookCommand(GetChartAxisCommandIssueMessage(plan.Issue, command.UseXAxis));
 
-            return new SetChartLayoutCommand(_currentSheetId, chart.Id, options);
+            return ChartCommandWorkflowPlanner.BuildLayoutCommand(_currentSheetId, chart, options);
         }
 
         var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);

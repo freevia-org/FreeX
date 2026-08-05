@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services.Ribbon;
@@ -184,9 +185,9 @@ public sealed partial class MainWindow
             return;
 
         RunDrawingObjectCommand(
-            new SetChartBoundsCommand(
+            ChartCommandWorkflowPlanner.BuildBoundsCommand(
                 _session.ActiveSheet.Id,
-                chart.Id,
+                chart,
                 chart.Left,
                 chart.Top,
                 chosen.Width,
@@ -1197,7 +1198,13 @@ public sealed partial class MainWindow
         var sheetWidth = Math.Max(minimumChartWidth, container.Width / zoomFactor);
         var sheetHeight = Math.Max(minimumChartHeight, container.Height / zoomFactor);
 
-        var command = new SetChartBoundsCommand(sheet.Id, session.Chart.Id, sheetLeft, sheetTop, sheetWidth, sheetHeight);
+        var command = ChartCommandWorkflowPlanner.BuildBoundsCommand(
+            sheet.Id,
+            session.Chart,
+            sheetLeft,
+            sheetTop,
+            sheetWidth,
+            sheetHeight);
         var status = session.Kind == ObjectDragKind.Move
             ? UiText.Get("DrawingInteract_Moved")
             : UiText.Get("DrawingInteract_Resized");

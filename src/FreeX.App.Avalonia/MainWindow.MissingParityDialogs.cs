@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.Shell;
@@ -36,7 +37,10 @@ public sealed partial class MainWindow
             return;
 
         var result = _session.ExecuteReviewCommand(
-            new SetChartStyleCommand(_session.ActiveSheet.Id, chart.Id, submission.StyleId));
+            ChartCommandWorkflowPlanner.BuildStyleCommand(
+                _session.ActiveSheet.Id,
+                chart,
+                submission.StyleId));
         RefreshShell(result.Success
             ? submission.StyleId is { } styleId
                 ? UiText.Format("ChartLoc_AppliedChartStyle", styleId)

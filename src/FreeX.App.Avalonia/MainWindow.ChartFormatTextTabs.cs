@@ -104,13 +104,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!ChartQuickCommandPlanner.CanApply(chart, command.Command))
-        {
-            RefreshShell(ChartQuickUnsupportedStatus(command));
-            return;
-        }
-
-        ApplyChartLayout(command.Label, chart, ChartQuickCommandPlanner.Plan(chart, command.Command));
+        ExecuteChartQuickCommand(command);
     }
 
     private void ExecuteChartQuickCommand(
@@ -119,16 +113,28 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart(command.Label, out var chart))
-            return;
 
-        if (!ChartQuickCommandPlanner.CanApply(chart, command.Command))
+        var selectedChartId = _selectedDrawingObjectKind == SelectionPaneObjectKind.Chart
+            ? _selectedDrawingObjectId
+            : null;
+        var plan = ChartCommandWorkflowPlanner.PlanQuickCommand(
+            _session.ActiveSheet.Id,
+            _session.ActiveSheet,
+            selectedChartId,
+            ChartWorkflowTargetPolicy.SelectedOnly,
+            command);
+        if (!plan.CanExecute)
         {
-            RefreshShell(unsupportedMessage ?? ChartQuickUnsupportedStatus(command));
+            RefreshShell(plan.Issue == ChartLayoutCommandIssue.MissingChart
+                ? UiText.Format(ChartWorkflowCommandCatalog.SelectChartBeforeUsingStatusResourceKey, command.Label)
+                : unsupportedMessage ?? ChartQuickUnsupportedStatus(command));
             return;
         }
 
-        ApplyChartLayout(command.Label, chart, ChartQuickCommandPlanner.Plan(chart, command.Command));
+        var result = _session.ExecuteReviewCommand(plan.Command!);
+        RefreshShell(result.Success
+            ? UiText.Format(ChartWorkflowCommandCatalog.CommandAppliedStatusResourceKey, command.Label)
+            : result.ErrorMessage ?? UiText.Format(ChartWorkflowCommandCatalog.CommandFailedStatusResourceKey, command.Label));
     }
 
     private static string ChartQuickUnsupportedStatus(ChartQuickCommandDescriptor command) =>

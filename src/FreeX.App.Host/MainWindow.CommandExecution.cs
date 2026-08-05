@@ -392,16 +392,52 @@ public partial class MainWindow
         string missingMessage,
         Func<ChartModel, bool>? canApply,
         string? unsupportedMessage,
-        Func<ChartModel, ChartLayoutOptions> optionsFactory)
+        Func<ChartModel, ChartLayoutOptions> optionsFactory) =>
+        TryExecuteRepeatableChartLayout(
+            caption,
+            missingMessage,
+            unsupportedMessage,
+            (sheetId, sheet, selectedChartId) => ChartCommandWorkflowPlanner.PlanLayoutCommand(
+                sheetId,
+                sheet,
+                selectedChartId,
+                ChartWorkflowTargetPolicy.SelectedOrFirst,
+                optionsFactory,
+                canApply));
+
+    private bool TryExecuteRepeatableChartQuickCommand(
+        string caption,
+        string missingMessage,
+        string? unsupportedMessage,
+        ChartQuickCommandDescriptor command) =>
+        TryExecuteRepeatableChartLayout(
+            caption,
+            missingMessage,
+            unsupportedMessage,
+            (sheetId, sheet, selectedChartId) => ChartCommandWorkflowPlanner.PlanQuickCommand(
+                sheetId,
+                sheet,
+                selectedChartId,
+                ChartWorkflowTargetPolicy.SelectedOrFirst,
+                command));
+
+    private bool TryExecuteRepeatableChartLayout(
+        string caption,
+        string missingMessage,
+        string? unsupportedMessage,
+        Func<SheetId, Sheet?, Guid?, ChartLayoutCommandPlan> planFactory)
     {
         IWorkbookCommand CreateCommand()
         {
-            var chart = GetFirstChartOnCurrentSheet();
-            if (chart is null)
-                return new FailedWorkbookCommand(missingMessage);
-            if (canApply is not null && !canApply(chart))
-                return new FailedWorkbookCommand(unsupportedMessage ?? UiText.Get("MainWindowMessage_UnsupportedChartCommand"));
-            return new SetChartLayoutCommand(_currentSheetId, chart.Id, optionsFactory(chart));
+            var sheet = _workbook.GetSheet(_currentSheetId);
+            var plan = planFactory(_currentSheetId, sheet, GetSelectedChartIdOnCurrentSheet());
+            if (plan.Command is not null)
+                return plan.Command;
+
+            return new FailedWorkbookCommand(
+                plan.Issue == ChartLayoutCommandIssue.MissingChart
+                    ? missingMessage
+                    : unsupportedMessage ?? UiText.Get("MainWindowMessage_UnsupportedChartCommand"));
         }
 
         var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
@@ -450,7 +486,9 @@ public partial class MainWindow
 
     private bool ApplyChartLayoutDialogResult(string caption, ChartModel chart, ChartLayoutOptions options)
     {
-        if (!TryExecuteCommand(new SetChartLayoutCommand(_currentSheetId, chart.Id, options), caption))
+        if (!TryExecuteCommand(
+                ChartCommandWorkflowPlanner.BuildLayoutCommand(_currentSheetId, chart, options),
+                caption))
             return false;
 
         UpdateViewport();

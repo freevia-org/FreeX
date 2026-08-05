@@ -120,7 +120,12 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!TryExecuteCommand(new ChangeChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType), command.Label))
+        if (!TryExecuteCommand(
+                ChartCommandWorkflowPlanner.BuildChangeTypeCommand(
+                    _currentSheetId,
+                    chart,
+                    dialog.Result.ChartType),
+                command.Label))
             return;
 
         UpdateViewport();
@@ -157,13 +162,12 @@ public partial class MainWindow
         }
 
         if (!TryExecuteCommand(
-                new ChangeChartSourceCommand(
+                ChartCommandWorkflowPlanner.BuildChangeSourceCommand(
                     _currentSheetId,
-                    chart.Id,
+                    chart,
                     dataRange,
-                    firstRowIsHeader: chart.FirstRowIsHeader,
-                    firstColIsCategories: dialog.Result.FirstColumnIsCategories,
-                    seriesInRows: dialog.Result.SwitchRowColumn),
+                    dialog.Result.FirstColumnIsCategories,
+                    dialog.Result.SwitchRowColumn),
                 command.Label))
             return;
 
@@ -226,31 +230,30 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (dialog.Result.TargetKind == MoveChartTargetKind.NewChartSheet)
+        var input = new ChartMoveInput(
+            dialog.Result.TargetKind == MoveChartTargetKind.NewChartSheet
+                ? ChartMoveTargetKind.NewSheet
+                : ChartMoveTargetKind.ObjectInSheet,
+            dialog.Result.TargetName);
+        var movePlan = ChartCommandWorkflowPlanner.PlanMoveCommand(
+            _workbook,
+            _currentSheetId,
+            chart,
+            input);
+        if (!movePlan.CanExecute)
         {
-            if (!TryExecuteCommand(new MoveChartToNewSheetCommand(_currentSheetId, chart.Id, dialog.Result.TargetName), command.Label))
-                return;
-
-            var createdSheet = _workbook.GetSheet(dialog.Result.TargetName);
-            if (createdSheet is not null)
-                _currentSheetId = createdSheet.Id;
+            ShowCommandError(new CommandOutcome(false, movePlan.Error), command.Label);
+            return;
         }
-        else
-        {
-            var targetSheet = _workbook.GetSheet(dialog.Result.TargetName);
-            if (targetSheet is null)
-            {
-                _messageService.ShowWarning(
-                    UiText.Get("MainWindowMessage_ChartTargetSheetNotFound"),
-                    UiText.Get("MainWindowMessage_MoveChartTitle"));
-                return;
-            }
 
-            if (!TryExecuteCommand(new MoveChartCommand(_currentSheetId, chart.Id, targetSheet.Id), command.Label))
-                return;
+        if (!TryExecuteCommand(movePlan.Command!, command.Label))
+            return;
 
+        var targetSheet = movePlan.ExistingTargetSheetId is { } targetSheetId
+            ? _workbook.GetSheet(targetSheetId)
+            : _workbook.GetSheet(movePlan.TargetName);
+        if (targetSheet is not null)
             _currentSheetId = targetSheet.Id;
-        }
 
         _groupedSheetIds.Clear();
         _groupedSheetIds.Add(_currentSheetId);
@@ -268,7 +271,12 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!TryExecuteCommand(new SetChartStyleCommand(_currentSheetId, chart.Id, dialog.Result.ChartStyleId), "Chart Styles"))
+        if (!TryExecuteCommand(
+                ChartCommandWorkflowPlanner.BuildStyleCommand(
+                    _currentSheetId,
+                    chart,
+                    dialog.Result.ChartStyleId),
+                "Chart Styles"))
             return;
 
         UpdateViewport();
@@ -284,9 +292,9 @@ public partial class MainWindow
             return;
 
         if (!TryExecuteCommand(
-                new SetChartBoundsCommand(
+                ChartCommandWorkflowPlanner.BuildBoundsCommand(
                     _currentSheetId,
-                    chart.Id,
+                    chart,
                     chart.Left,
                     chart.Top,
                     dialog.Result.Width,
@@ -812,12 +820,11 @@ public partial class MainWindow
         var unsupportedMessage = command.HostUnsupportedMessageResourceKey is null
             ? null
             : UiText.Get(command.HostUnsupportedMessageResourceKey);
-        if (!TryExecuteRepeatableChartLayout(
+        if (!TryExecuteRepeatableChartQuickCommand(
                 command.Label,
                 UiText.Get(command.HostMissingSelectionMessageResourceKey),
-                chart => ChartQuickCommandPlanner.CanApply(chart, command.Command),
                 unsupportedMessage,
-                chart => ChartQuickCommandPlanner.Plan(chart, command.Command)))
+                command))
             return;
 
         UpdateViewport();
