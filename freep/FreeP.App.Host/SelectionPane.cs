@@ -9,7 +9,7 @@ namespace FreeP.App.Host;
 /// <summary>Small host adapter for the shared Selection Pane projection.</summary>
 internal sealed class SelectionPane : Border
 {
-    private EditingSession _editor;
+    private readonly PresentationSelectionPaneSession _session;
     private readonly Action? _onAccessibilityChanged;
     private readonly StackPanel _items = new();
     private readonly TextBlock _message = new();
@@ -19,7 +19,7 @@ internal sealed class SelectionPane : Border
 
     public SelectionPane(EditingSession editor, Action? onAccessibilityChanged = null)
     {
-        _editor = editor;
+        _session = new PresentationSelectionPaneSession(editor);
         _onAccessibilityChanged = onAccessibilityChanged;
         Width = 320;
         Visibility = Visibility.Collapsed;
@@ -57,19 +57,16 @@ internal sealed class SelectionPane : Border
 
     public void SetEditor(EditingSession editor)
     {
-        _editor = editor;
-        Refresh();
+        Render(_session.SetEditor(editor));
     }
 
-    public PresentationSelectionPanePlan Refresh()
+    public PresentationSelectionPanePlan CurrentPlan => _session.CurrentPlan;
+
+    public PresentationSelectionPanePlan Refresh() => Render(_session.Refresh());
+
+    private PresentationSelectionPanePlan Render(PresentationSelectionPanePlan plan)
     {
-        var plan = PresentationSelectionPanePlanner.Build(
-            _editor.CurrentSlide,
-            _editor.CurrentSlideIndex,
-            _editor.SelectedShapeIds);
-        _message.Text = plan.HasSlide
-            ? $"Slide {plan.SlideIndex + 1} ({plan.Items.Count} objects)"
-            : PresentationSelectionPanePlanner.EmptyMessage;
+        _message.Text = plan.StatusText;
         _items.Children.Clear();
         for (var index = 0; index < plan.Items.Count; index++)
             _items.Children.Add(BuildItem(plan.Items[index], index));
@@ -78,7 +75,7 @@ internal sealed class SelectionPane : Border
             PresentationPaneAccessibilityPlanner.SelectionPaneId,
             IsVisible,
             plan.Items.Count,
-            Array.FindIndex(plan.Items.ToArray(), item => item.IsSelected));
+            plan.SelectedItemIndex);
         _onAccessibilityChanged?.Invoke();
         return plan;
     }
@@ -93,7 +90,7 @@ internal sealed class SelectionPane : Border
             Margin = new Thickness(8 + (item.NestingDepth * 16), 1, 4, 1),
             ToolTip = item.SelectToolTipText,
         };
-        select.Click += (_, _) => _editor.Select(item.ShapeId);
+        select.Click += (_, _) => _session.SelectShape(item.ShapeId);
 
         var rename = new TextBox
         {
@@ -109,8 +106,9 @@ internal sealed class SelectionPane : Border
             if (committed)
                 return;
             committed = true;
-            if (!_editor.SetShapeName(item.ShapeId, rename.Text))
-                rename.Text = item.ShapeName;
+            var transition = _session.RenameShape(item.ShapeId, rename.Text);
+            if (transition.RestoreNameText is { } restoreName)
+                rename.Text = restoreName;
         }
         rename.LostFocus += (_, _) => CommitName();
         rename.KeyDown += (_, args) =>
@@ -138,8 +136,9 @@ internal sealed class SelectionPane : Border
         };
         visibility.Click += (_, _) =>
         {
-            if (_editor.ToggleShapeHidden(item.ShapeId))
-                Refresh();
+            var transition = _session.ToggleShapeVisibility(item.ShapeId);
+            if (transition.ShouldRefreshPane)
+                Render(transition.PanePlan);
         };
 
         var moveUp = new Button
@@ -185,8 +184,8 @@ internal sealed class SelectionPane : Border
 
     private void MoveItem(PresentationSelectionPaneItemPlan item, int offset)
     {
-        _editor.Select(item.ShapeId);
-        if (_editor.MoveSelectedShapeInReadingOrder(offset))
-            Refresh();
+        var transition = _session.MoveShapeInReadingOrder(item.ShapeId, offset);
+        if (transition.ShouldRefreshPane)
+            Render(transition.PanePlan);
     }
 }

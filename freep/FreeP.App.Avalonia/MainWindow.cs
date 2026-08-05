@@ -1438,10 +1438,7 @@ public sealed partial class MainWindow : Window
         var proofingPlan = LastProofingPanePlan;
         var captionPlan = LastMediaCaptionAuthoringPanePlan;
         var smartArtItemCount = _smartArtTextPaneRowsPanel?.Children.Count ?? 0;
-        var selectionPlan = PresentationSelectionPanePlanner.Build(
-            Editor.CurrentSlide,
-            Editor.CurrentSlideIndex,
-            Editor.SelectedShapeIds);
+        var selectionPlan = _selectionPane.CurrentPlan;
         var animationPlan = AnimationPanePlanner.BuildTimelinePlan(
             Editor.CurrentSlide,
             Editor.SelectedShapeIds,
@@ -1487,7 +1484,7 @@ public sealed partial class MainWindow : Window
         _paneAccessibility.ApplyPane(_selectionPane, PresentationPaneAccessibilityPlanner.SelectionPaneId,
             _selectionPane.IsVisible,
             selectionPlan.Items.Count,
-            Array.FindIndex(selectionPlan.Items.ToArray(), item => item.IsSelected));
+            selectionPlan.SelectedItemIndex);
         _paneAccessibility.ApplyPane(_animationPaneHost, PresentationPaneAccessibilityPlanner.AnimationPaneId,
             _animationPaneHost.IsVisible,
             animationPlan?.Items.Count ?? _animationPaneItemsPanel?.Children.Count ?? 0,

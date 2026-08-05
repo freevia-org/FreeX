@@ -761,20 +761,25 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
-    public void SelectionPane_source_routes_rename_through_undoable_session()
+    public void SelectionPane_source_routes_actions_through_shared_session()
     {
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "SelectionPane.cs"));
 
-        source.Should().Contain("_editor.SetShapeName(");
+        source.Should().Contain("PresentationSelectionPaneSession");
+        source.Should().Contain("_session.RenameShape(");
+        source.Should().Contain("_session.ToggleShapeVisibility(");
+        source.Should().Contain("_session.MoveShapeInReadingOrder(");
         source.Should().Contain("Key.Enter");
         source.Should().Contain("rename.LostFocus");
         source.Should().Contain("PresentationSelectionPaneItemPlan.RenameToolTipText");
         source.Should().Contain("item.VisibilityToolTipText");
         source.Should().Contain("PresentationSelectionPaneItemPlan.MoveUpToolTipText");
         source.Should().Contain("PresentationSelectionPaneItemPlan.MoveDownToolTipText");
-        source.Should().Contain("_editor.MoveSelectedShapeInReadingOrder(");
         source.Should().Contain("item.CanMoveUp");
         source.Should().Contain("item.CanMoveDown");
+        source.Should().NotContain(".SetShapeName(");
+        source.Should().NotContain(".ToggleShapeHidden(");
+        source.Should().NotContain(".MoveSelectedShapeInReadingOrder(");
     }
 
     [Fact]

@@ -2536,12 +2536,17 @@ public sealed class ReviewWorkflowAdapterTests
             "freep",
             "FreeP.App.Host",
             "SelectionPane.cs"));
-        selectionPaneSource.Should().Contain("_editor.SetShapeName(");
+        selectionPaneSource.Should().Contain("PresentationSelectionPaneSession");
+        selectionPaneSource.Should().Contain("_session.RenameShape(");
+        selectionPaneSource.Should().Contain("_session.ToggleShapeVisibility(");
+        selectionPaneSource.Should().Contain("_session.MoveShapeInReadingOrder(");
         selectionPaneSource.Should().Contain("Key.Enter");
         selectionPaneSource.Should().Contain("rename.LostFocus");
-        selectionPaneSource.Should().Contain("_editor.MoveSelectedShapeInReadingOrder(");
         selectionPaneSource.Should().Contain("item.CanMoveUp");
         selectionPaneSource.Should().Contain("item.CanMoveDown");
+        selectionPaneSource.Should().NotContain(".SetShapeName(");
+        selectionPaneSource.Should().NotContain(".ToggleShapeHidden(");
+        selectionPaneSource.Should().NotContain(".MoveSelectedShapeInReadingOrder(");
         source.Should().Contain("BuildLayoutChoiceTile(choice)");
         source.Should().Contain("BuildLayoutThumbnail(choice)");
         source.Should().NotContain("Modern resolved-thread state is not modeled yet.\";");

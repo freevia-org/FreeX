@@ -44,6 +44,26 @@ public static class PresentationSelectionPanePlanner
             items);
     }
 
+    public static PresentationSelectionPaneTransitionPlan PlanTransition(
+        PresentationSelectionPaneActionKind action,
+        bool actionApplied,
+        PresentationSelectionPanePlan panePlan,
+        string? previousName = null)
+    {
+        ArgumentNullException.ThrowIfNull(panePlan);
+
+        return new(
+            action,
+            actionApplied,
+            ShouldRefreshPane: actionApplied && action is
+                PresentationSelectionPaneActionKind.ToggleVisibility or
+                PresentationSelectionPaneActionKind.MoveInReadingOrder,
+            RestoreNameText: action == PresentationSelectionPaneActionKind.Rename && !actionApplied
+                ? previousName
+                : null,
+            panePlan);
+    }
+
     private static string DescribeKind(SlideShapeKind kind, uint id) =>
         kind switch
         {
@@ -77,6 +97,98 @@ public static class PresentationSelectionPanePlanner
     }
 }
 
+/// <summary>Renderer-neutral state and command orchestration for the Selection Pane.</summary>
+public sealed class PresentationSelectionPaneSession
+{
+    private EditingSession _editor;
+
+    public PresentationSelectionPaneSession(EditingSession editor)
+    {
+        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+        CurrentPlan = BuildCurrentPlan();
+    }
+
+    public PresentationSelectionPanePlan CurrentPlan { get; private set; }
+
+    public PresentationSelectionPanePlan SetEditor(EditingSession editor)
+    {
+        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+        return Refresh();
+    }
+
+    public PresentationSelectionPanePlan Refresh()
+    {
+        CurrentPlan = BuildCurrentPlan();
+        return CurrentPlan;
+    }
+
+    public PresentationSelectionPaneTransitionPlan SelectShape(uint shapeId)
+    {
+        _editor.Select(shapeId);
+        var panePlan = Refresh();
+        return PresentationSelectionPanePlanner.PlanTransition(
+            PresentationSelectionPaneActionKind.Select,
+            panePlan.Items.Any(item => item.ShapeId == shapeId && item.IsSelected),
+            panePlan);
+    }
+
+    public PresentationSelectionPaneTransitionPlan RenameShape(uint shapeId, string? name)
+    {
+        var previousName = CurrentPlan.Items
+            .FirstOrDefault(item => item.ShapeId == shapeId)
+            ?.ShapeName;
+        var applied = _editor.SetShapeName(shapeId, name);
+        var panePlan = Refresh();
+        return PresentationSelectionPanePlanner.PlanTransition(
+            PresentationSelectionPaneActionKind.Rename,
+            applied,
+            panePlan,
+            previousName);
+    }
+
+    public PresentationSelectionPaneTransitionPlan ToggleShapeVisibility(uint shapeId)
+    {
+        var applied = _editor.ToggleShapeHidden(shapeId);
+        var panePlan = Refresh();
+        return PresentationSelectionPanePlanner.PlanTransition(
+            PresentationSelectionPaneActionKind.ToggleVisibility,
+            applied,
+            panePlan);
+    }
+
+    public PresentationSelectionPaneTransitionPlan MoveShapeInReadingOrder(uint shapeId, int offset)
+    {
+        _editor.Select(shapeId);
+        var applied = _editor.MoveSelectedShapeInReadingOrder(offset);
+        var panePlan = Refresh();
+        return PresentationSelectionPanePlanner.PlanTransition(
+            PresentationSelectionPaneActionKind.MoveInReadingOrder,
+            applied,
+            panePlan);
+    }
+
+    private PresentationSelectionPanePlan BuildCurrentPlan() =>
+        PresentationSelectionPanePlanner.Build(
+            _editor.CurrentSlide,
+            _editor.CurrentSlideIndex,
+            _editor.SelectedShapeIds);
+}
+
+public enum PresentationSelectionPaneActionKind
+{
+    Select,
+    Rename,
+    ToggleVisibility,
+    MoveInReadingOrder,
+}
+
+public sealed record PresentationSelectionPaneTransitionPlan(
+    PresentationSelectionPaneActionKind Action,
+    bool ActionApplied,
+    bool ShouldRefreshPane,
+    string? RestoreNameText,
+    PresentationSelectionPanePlan PanePlan);
+
 public sealed record PresentationSelectionPaneItemPlan(
     int SelectionIndex,
     uint ShapeId,
@@ -108,4 +220,22 @@ public sealed record PresentationSelectionPanePlan(
 {
     public PresentationSelectionPaneItemPlan? SelectedItem =>
         Items.FirstOrDefault(item => item.IsSelected);
+
+    public int SelectedItemIndex
+    {
+        get
+        {
+            for (var index = 0; index < Items.Count; index++)
+            {
+                if (Items[index].IsSelected)
+                    return index;
+            }
+
+            return -1;
+        }
+    }
+
+    public string StatusText => HasSlide
+        ? $"Slide {SlideIndex + 1} ({Items.Count} objects)"
+        : PresentationSelectionPanePlanner.EmptyMessage;
 }

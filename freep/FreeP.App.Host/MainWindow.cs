@@ -1210,10 +1210,7 @@ public sealed partial class MainWindow : Window
         var proofingPlan = LastProofingPanePlan;
         var captionPlan = LastMediaCaptionAuthoringPanePlan;
         var smartArtItemCount = _smartArtTextPaneRowsPanel?.Children.Count ?? 0;
-        var selectionPlan = PresentationSelectionPanePlanner.Build(
-            Editor.CurrentSlide,
-            Editor.CurrentSlideIndex,
-            Editor.SelectedShapeIds);
+        var selectionPlan = _selectionPane.CurrentPlan;
         var animationPlan = _animPane?.CurrentTimelinePlanForTest;
 
         _paneAccessibility.ApplyPane(SlidePaneHost, PresentationPaneAccessibilityPlanner.SlidePaneId, true,
@@ -1248,7 +1245,7 @@ public sealed partial class MainWindow : Window
                     StringComparer.Ordinal.Equals(item.ModelId, _selectedSmartArtTextPaneModelId))) ?? -1);
         _paneAccessibility.ApplyPane(_selectionPane, PresentationPaneAccessibilityPlanner.SelectionPaneId,
             _selectionPane.Visibility == Visibility.Visible, selectionPlan.Items.Count,
-            Array.FindIndex(selectionPlan.Items.ToArray(), item => item.IsSelected));
+            selectionPlan.SelectedItemIndex);
         _paneAccessibility.ApplyPane(_animPaneHost, PresentationPaneAccessibilityPlanner.AnimationPaneId,
             _animPaneHost.Visibility == Visibility.Visible,
             animationPlan?.Items.Count ?? 0, animationPlan?.SelectedIndex ?? -1);
