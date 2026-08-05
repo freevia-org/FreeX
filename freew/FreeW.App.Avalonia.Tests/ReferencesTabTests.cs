@@ -1038,6 +1038,13 @@ public sealed class ReferencesTabTests
             .Count(paragraph => paragraph.StyleId == TableOfFigures.HeadingStyleId)
             .Should()
             .Be(1);
+        var nativeEntries = view.Document.Blocks.OfType<Paragraph>()
+            .Where(paragraph => TableOfFigures.TryGetNativeLabel(paragraph.SpanningFieldOwner, out var label)
+                && label == Captions.FigureLabelText)
+            .ToArray();
+        nativeEntries.Should().HaveCount(2);
+        nativeEntries[0].SpanningFieldStart!.Instruction.Should().Be(" TOC \\c \"Figure\" ");
+        nativeEntries[1].EndsSpanningField.Should().BeTrue();
     }
 
     [Fact]
@@ -1234,12 +1241,19 @@ public sealed class ReferencesTabTests
     [Fact]
     public void Table_of_figures_refresh_uses_caption_logical_page_label()
     {
+        var nativeField = new ComplexField(" TOC \\c \"Figure\" ");
         var view = ViewWith(
             new Paragraph(TableOfFigures.HeadingText(CaptionLabel.Figure))
             {
                 StyleId = TableOfFigures.HeadingStyleId
             },
-            new Paragraph("Old Figure\t9") { StyleId = TableOfFigures.EntryStyleId },
+            new Paragraph("Old Figure\t9")
+            {
+                StyleId = "Normal",
+                SpanningFieldStart = nativeField,
+                SpanningFieldOwner = nativeField,
+                EndsSpanningField = true
+            },
             DocumentOps.CreatePageBreak(),
             Captions.BuildCaption(CaptionLabel.Figure, 1, "Architecture"));
         view.Document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
@@ -1250,7 +1264,7 @@ public sealed class ReferencesTabTests
         view.Document.Blocks.OfType<Paragraph>()
             .Where(TableOfFigures.IsTableOfFiguresParagraph)
             .Select(paragraph => paragraph.PlainText)
-            .Should().Contain("Figure 1: Architecture\tV");
+            .Should().Contain("Figure 1: Architecture\tV").And.NotContain("Old Figure\t9");
     }
 
     [Fact]

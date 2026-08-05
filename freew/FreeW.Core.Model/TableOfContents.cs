@@ -193,11 +193,25 @@ public static class TableOfContents
     /// True when <paramref name="block"/> is a paragraph carrying a TOC style or owned by a native
     /// multi-paragraph <c>TOC</c> field.
     /// </summary>
-    public static bool IsTocParagraph(Block block) =>
-        block is Paragraph paragraph
-        && (paragraph.SpanningFieldOwner is { Keyword: "TOC" }
-            || paragraph.Runs.Any(run => run.ComplexField is { Keyword: "TOC" })
-            || IsTocStyleId(paragraph.StyleId));
+    public static bool IsTocParagraph(Block block)
+    {
+        if (block is not Paragraph paragraph)
+            return false;
+
+        var nativeFields = paragraph.Runs
+            .Select(run => run.ComplexField)
+            .Prepend(paragraph.SpanningFieldOwner)
+            .Where(field => field is { Keyword: "TOC" })
+            .ToArray();
+        return nativeFields.Length > 0
+            ? nativeFields.Any(IsNativeTableOfContentsField)
+            : IsTocStyleId(paragraph.StyleId);
+    }
+
+    private static bool IsNativeTableOfContentsField(ComplexField? field) =>
+        field is { Keyword: "TOC" }
+        && !ComplexFieldEngine.HasSwitch(field.Instruction, 'c')
+        && !ComplexFieldEngine.HasSwitch(field.Instruction, 'a');
 
     /// <summary>
     /// Builds the native field instruction using the document's actual source-style names. Imported

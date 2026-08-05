@@ -5,15 +5,14 @@ namespace FreeW.Core.Model;
 /// (see <see cref="Captions"/>). Lives in the model project so it is unit-testable without any UI,
 /// mirroring <see cref="TableOfContents"/> and <see cref="DocumentIndex"/>.
 /// <para>
-/// <see cref="Build"/> produces ordinary styled <see cref="Paragraph"/>s — a "Table of Figures"
-/// (or "Table of Tables") heading followed by one paragraph per caption of the requested
-/// <see cref="CaptionLabel"/>, in document order, each carrying the caption's text and page reference.
-/// The paragraphs use
-/// dedicated style ids (<see cref="HeadingStyleId"/> and <see cref="EntryStyleId"/>) so they:
+/// <see cref="Build"/> produces a heading followed by one styled result paragraph per caption of the
+/// requested <see cref="CaptionLabel"/>. The result paragraphs are owned by one native Word
+/// <c>TOC \c "Label"</c> spanning field so Word can update their text and page references. The
+/// dedicated style ids (<see cref="HeadingStyleId"/> and <see cref="EntryStyleId"/>) also let them:
 /// </para>
 /// <list type="bullet">
 /// <item>render with distinct formatting once <see cref="EnsureStyles"/> has registered them;</item>
-/// <item>round-trip through docx as normal styled paragraphs (no I/O changes needed); and</item>
+/// <item>round-trip through docx with their native field ownership intact; and</item>
 /// <item>act as a marker so a "refresh" can locate and replace a previously inserted region via
 /// <see cref="IsTableOfFiguresParagraph"/>.</item>
 /// </list>
@@ -52,9 +51,9 @@ public static class TableOfFigures
     /// Builds the table-of-figures paragraphs for <paramref name="document"/>: a heading
     /// (<see cref="HeadingStyleId"/>, text from <see cref="HeadingText"/>) followed by one paragraph per
     /// caption of <paramref name="label"/> found in document order. Each entry carries the caption text,
-    /// a dotted right tab, the caption page label, and the <see cref="EntryStyleId"/> style. A document
-    /// with no matching captions yields just the heading
-    /// paragraph. Deterministic and side-effect free — it never mutates <paramref name="document"/>.
+    /// a dotted right tab, the caption page label, the <see cref="EntryStyleId"/> style, and shared native
+    /// field ownership. A document with no matching captions yields just the heading paragraph.
+    /// Deterministic and side-effect free; it never mutates <paramref name="document"/>.
     /// </summary>
     public static IReadOnlyList<Paragraph> Build(
         TextDocument document,
@@ -99,8 +98,21 @@ public static class TableOfFigures
             }
         }
 
+        if (paragraphs.Count > 1)
+        {
+            var field = new ComplexField(NativeFieldInstructionFor(label));
+            for (var index = 1; index < paragraphs.Count; index++)
+                paragraphs[index].SpanningFieldOwner = field;
+            paragraphs[1].SpanningFieldStart = field;
+            paragraphs[^1].EndsSpanningField = true;
+        }
+
         return paragraphs;
     }
+
+    /// <summary>The native Word Table-of-Figures field instruction for a caption label.</summary>
+    public static string NativeFieldInstructionFor(string labelText) =>
+        $" TOC \\c \"{Captions.EscapeFieldArgument(Captions.NormalizeLabelText(labelText))}\" ";
 
     private static Paragraph CreateEntryParagraph(
         string captionText,
@@ -128,20 +140,30 @@ public static class TableOfFigures
     }
 
     /// <summary>
-    /// Infers the caption label from an existing generated table heading so Update Fields preserves the
-    /// user's selected label instead of rebuilding every table as a figure table.
+    /// Infers the caption label from native field ownership first, then from a generated table heading,
+    /// so Update Fields preserves the user's selected label.
     /// </summary>
     public static string? ExistingLabelText(TextDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
 
+        foreach (var paragraph in document.Blocks.OfType<Paragraph>())
+        {
+            if (TryGetNativeLabel(paragraph.SpanningFieldStart, out var nativeLabel)
+                || TryGetNativeLabel(paragraph.SpanningFieldOwner, out nativeLabel))
+                return nativeLabel;
+            foreach (var run in paragraph.Runs)
+                if (TryGetNativeLabel(run.ComplexField, out nativeLabel))
+                    return nativeLabel;
+        }
+
         foreach (var block in document.Blocks)
         {
-            if (block is not Paragraph paragraph
-                || !string.Equals(paragraph.StyleId, HeadingStyleId, StringComparison.Ordinal))
-            {
+            if (block is not Paragraph paragraph)
                 continue;
-            }
+
+            if (!string.Equals(paragraph.StyleId, HeadingStyleId, StringComparison.Ordinal))
+                continue;
 
             var heading = paragraph.PlainText.Trim();
             if (string.Equals(heading, "Table of Figures", StringComparison.Ordinal))
@@ -173,11 +195,39 @@ public static class TableOfFigures
     }
 
     /// <summary>
-    /// True when <paramref name="block"/> is a paragraph carrying a table-of-figures style (see
-    /// <see cref="IsTableOfFiguresStyleId"/>).
+    /// True when <paramref name="block"/> is owned by a native caption-table field or carries a
+    /// table-of-figures style (see <see cref="IsTableOfFiguresStyleId"/>).
     /// </summary>
-    public static bool IsTableOfFiguresParagraph(Block block) =>
-        block is Paragraph paragraph && IsTableOfFiguresStyleId(paragraph.StyleId);
+    public static bool IsTableOfFiguresParagraph(Block block)
+    {
+        if (block is not Paragraph paragraph)
+            return false;
+
+        var nativeFields = paragraph.Runs
+            .Select(run => run.ComplexField)
+            .Prepend(paragraph.SpanningFieldOwner)
+            .Where(field => field is { Keyword: "TOC" })
+            .ToArray();
+        return nativeFields.Length > 0
+            ? nativeFields.Any(field => TryGetNativeLabel(field, out _))
+            : IsTableOfFiguresStyleId(paragraph.StyleId);
+    }
+
+    /// <summary>True when <paramref name="field"/> is a native TOC-based table of captions.</summary>
+    public static bool TryGetNativeLabel(ComplexField? field, out string label)
+    {
+        label = string.Empty;
+        if (field is not { Keyword: "TOC" })
+            return false;
+
+        var value = ComplexFieldEngine.SwitchValue(field.Instruction, 'c')
+            ?? ComplexFieldEngine.SwitchValue(field.Instruction, 'a');
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        label = value;
+        return true;
+    }
 
     /// <summary>
     /// Registers the table-of-figures styles (<see cref="HeadingStyleId"/> and <see cref="EntryStyleId"/>)

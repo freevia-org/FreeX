@@ -366,6 +366,18 @@ public sealed class FreeWRibbonParityTests
             .ToList();
         tableText.Should().StartWith("Table of Equations");
         tableText.Skip(1).Should().BeEquivalentTo("Equation 1: First\t1", "Equation 2: Second\t1");
+        var nativeEntries = editor.Model.Blocks.OfType<Paragraph>()
+            .Where(paragraph => TableOfFigures.TryGetNativeLabel(paragraph.SpanningFieldOwner, out var label)
+                && label == Captions.EquationLabelText)
+            .ToArray();
+        nativeEntries.Should().HaveCount(2);
+        nativeEntries[0].SpanningFieldStart!.Instruction.Should().Be(" TOC \\c \"Equation\" ");
+        nativeEntries[1].EndsSpanningField.Should().BeTrue();
+        editor.Model.Blocks.OfType<Paragraph>()
+            .Where(Captions.IsCaptionParagraph)
+            .SelectMany(paragraph => paragraph.Runs)
+            .Count(run => run.ComplexField is { Keyword: "SEQ" })
+            .Should().Be(2);
     }
 
     [StaFact]
@@ -377,7 +389,14 @@ public sealed class FreeWRibbonParityTests
         {
             StyleId = TableOfFigures.HeadingStyleId
         });
-        model.Blocks.Add(new Paragraph("Old Figure\t9") { StyleId = TableOfFigures.EntryStyleId });
+        var nativeField = new ComplexField(" TOC \\c \"Figure\" ");
+        model.Blocks.Add(new Paragraph("Old Figure\t9")
+        {
+            StyleId = "Normal",
+            SpanningFieldStart = nativeField,
+            SpanningFieldOwner = nativeField,
+            EndsSpanningField = true
+        });
         model.Blocks.Add(DocumentOps.CreatePageBreak());
         model.Blocks.Add(Captions.BuildCaption(CaptionLabel.Figure, 1, "Architecture"));
         model.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
@@ -391,7 +410,7 @@ public sealed class FreeWRibbonParityTests
         editor.Model.Blocks.OfType<Paragraph>()
             .Where(TableOfFigures.IsTableOfFiguresParagraph)
             .Select(paragraph => paragraph.PlainText)
-            .Should().Contain("Figure 1: Architecture\tV");
+            .Should().Contain("Figure 1: Architecture\tV").And.NotContain("Old Figure\t9");
     }
 
     [StaFact]

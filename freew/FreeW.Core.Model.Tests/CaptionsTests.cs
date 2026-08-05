@@ -59,6 +59,9 @@ public class CaptionsTests
 
         caption.PlainText.Should().Be("Figure 1: My diagram");
         caption.StyleId.Should().Be(Captions.StyleId);
+        caption.Runs.Should().HaveCount(3);
+        caption.Runs[1].ComplexField!.Instruction.Should().Be(" SEQ Figure \\* ARABIC ");
+        caption.Runs[1].Text.Should().Be("1");
     }
 
     [Fact]
@@ -69,6 +72,16 @@ public class CaptionsTests
         caption.PlainText.Should().Be("Scheme 3: State machine");
         caption.StyleId.Should().Be(Captions.StyleId);
         Captions.IsCaptionOf(caption, "Scheme").Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildCaption_MultiwordCustomLabelQuotesNativeSequenceArgument()
+    {
+        var caption = Captions.BuildCaption("Flow Diagram", 2, "State");
+
+        caption.PlainText.Should().Be("Flow Diagram 2: State");
+        caption.Runs[1].ComplexField!.Instruction
+            .Should().Be(" SEQ \"Flow Diagram\" \\* ARABIC ");
     }
 
     [Fact]
