@@ -861,6 +861,50 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task ClipboardCopyTransfer_PublishesStandardRtfAlongsidePrivatePayload()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run { Text = "portable ", Bold = true },
+                    new Run
+                    {
+                        Text = "rich",
+                        Italic = true,
+                        Underline = true,
+                        Hyperlink = new Hyperlink { Url = "https://example.com" },
+                    },
+                },
+            });
+            var payload = new InCanvasRichClipboardPayload(
+                body,
+                InCanvasTextEditPlanner.ExtractPlainText(body));
+
+            using var transfer = AvaloniaRichTextEditor.BuildRichTextDataTransfer(payload);
+            var rtf = await transfer.TryGetValueAsync(
+                OperatingSystem.IsWindows()
+                    ? AvaloniaRichTextEditor.ExternalRtfWindowsFormat
+                    : AvaloniaRichTextEditor.ExternalRtfLinuxFormat);
+            rtf.Should().NotBeNull();
+
+            var restored = ExternalRichTextClipboardPlanner.TryParseRtf(rtf);
+            restored.Should().NotBeNull();
+            restored!.PlainText.Should().Be("portable rich");
+            restored.Body.Paragraphs.Single().Runs.Should().Contain(run =>
+                run.Text == "portable " && run.Bold);
+            restored.Body.Paragraphs.Single().Runs.Should().Contain(run =>
+                run.Text == "rich"
+                && run.Italic
+                && run.Underline
+                && run.Hyperlink!.Url == "https://example.com");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ClipboardPaste_CustomPayloadPrecedesXamlPackageRtfAndPlainText()
     {
         await Session.Dispatch(async () =>

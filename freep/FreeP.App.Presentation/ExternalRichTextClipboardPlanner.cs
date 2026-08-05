@@ -33,6 +33,15 @@ public static class ExternalRichTextClipboardPlanner
         }
     }
 
+    /// <summary>
+    /// Projects the renderer-neutral rich fragment to the standard RTF clipboard format.
+    /// Unsupported FreeP-only payloads (for example inline tables, OLE, and XamlPackage
+    /// resources) remain available through the private clipboard format; this method emits
+    /// only the text and run/paragraph semantics that RTF can represent truthfully.
+    /// </summary>
+    public static byte[] SerializeRtf(InCanvasRichClipboardPayload payload) =>
+        ExternalRichTextClipboardRtfWriter.Serialize(payload);
+
     private sealed class RtfReader
     {
         private enum Destination
