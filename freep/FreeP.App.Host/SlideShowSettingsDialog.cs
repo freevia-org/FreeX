@@ -11,6 +11,7 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly EditingSession _editor;
     private readonly CheckBox _useTimingsCheck;
     private readonly CheckBox _showAnimationCheck;
+    private readonly CheckBox _showNarrationCheck;
     private readonly CheckBox _loopCheck;
     private readonly ComboBox _showTypeCombo;
     private readonly CheckBox _showScrollbarCheck;
@@ -41,6 +42,12 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             IsChecked = !InitialState.ShowWithAnimation,
             Margin = new Thickness(0, 0, 0, 8),
         };
+        _showNarrationCheck = new CheckBox
+        {
+            Content = "Play narration",
+            IsChecked = InitialState.ShowWithNarration,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
         _loopCheck = new CheckBox
         {
             Content = "Loop until stopped",
@@ -69,6 +76,7 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         var panel = new StackPanel { Margin = new Thickness(14) };
         panel.Children.Add(_useTimingsCheck);
         panel.Children.Add(_showAnimationCheck);
+        panel.Children.Add(_showNarrationCheck);
         panel.Children.Add(_loopCheck);
         panel.Children.Add(_showTypeCombo);
         panel.Children.Add(_showScrollbarCheck);
@@ -110,11 +118,13 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         bool loopUntilStopped,
         PresentationShowType showType = PresentationShowType.PresentedBySpeaker,
         bool showBrowseScrollbar = true,
-        uint? kioskRestartAfterMilliseconds = null)
+        uint? kioskRestartAfterMilliseconds = null,
+        bool showWithNarration = true)
     {
         _useTimingsCheck.IsChecked = useSlideTimings;
         _showAnimationCheck.IsChecked = !showWithAnimation;
         _loopCheck.IsChecked = loopUntilStopped;
+        _showNarrationCheck.IsChecked = showWithNarration;
         _showTypeCombo.SelectedIndex = (int)showType;
         _showScrollbarCheck.IsChecked = showBrowseScrollbar;
         _kioskRestartText.Text = kioskRestartAfterMilliseconds?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
@@ -130,7 +140,8 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             _loopCheck.IsChecked == true,
             (PresentationShowType)Math.Clamp(_showTypeCombo.SelectedIndex, 0, 2),
             _showScrollbarCheck.IsChecked == true,
-            ParseRestartMilliseconds());
+            ParseRestartMilliseconds(),
+            _showNarrationCheck.IsChecked == true);
         if (applied && IsLoaded)
             DialogResult = true;
         return applied;

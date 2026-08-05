@@ -17,6 +17,7 @@ public sealed class SlideShowSettingsDialogTests
         GetField<CheckBox>(dialog, "_useTimingsCheck").IsChecked.Should().BeTrue();
         GetField<CheckBox>(dialog, "_showAnimationCheck").IsChecked.Should().BeFalse();
         GetField<CheckBox>(dialog, "_loopCheck").IsChecked.Should().BeFalse();
+        GetField<CheckBox>(dialog, "_showNarrationCheck").IsChecked.Should().BeTrue();
 
         dialog.ApplyForTests(
             useSlideTimings: false,
@@ -24,13 +25,15 @@ public sealed class SlideShowSettingsDialogTests
             loopUntilStopped: true,
             showType: PresentationShowType.BrowsedByIndividual,
             showBrowseScrollbar: false,
-            kioskRestartAfterMilliseconds: 12_000).Should().BeTrue();
+            kioskRestartAfterMilliseconds: 12_000,
+            showWithNarration: false).Should().BeTrue();
         editor.Presentation.UseSlideTimings.Should().BeFalse();
         editor.Presentation.ShowWithAnimation.Should().BeFalse();
         editor.Presentation.LoopUntilStopped.Should().BeTrue();
         editor.Presentation.ShowType.Should().Be(PresentationShowType.BrowsedByIndividual);
         editor.Presentation.ShowBrowseScrollbar.Should().BeFalse();
         editor.Presentation.KioskRestartAfterMilliseconds.Should().Be(12_000);
+        editor.Presentation.ShowWithNarration.Should().BeFalse();
 
         editor.Undo();
         editor.Presentation.UseSlideTimings.Should().BeTrue();
@@ -39,6 +42,7 @@ public sealed class SlideShowSettingsDialogTests
         editor.Presentation.ShowType.Should().Be(PresentationShowType.PresentedBySpeaker);
         editor.Presentation.ShowBrowseScrollbar.Should().BeTrue();
         editor.Presentation.KioskRestartAfterMilliseconds.Should().BeNull();
+        editor.Presentation.ShowWithNarration.Should().BeTrue();
     }
 
     [StaFact]

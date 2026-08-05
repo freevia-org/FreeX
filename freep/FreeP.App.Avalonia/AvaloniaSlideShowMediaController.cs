@@ -37,6 +37,7 @@ internal sealed class AvaloniaSlideShowMediaController
     private IReadOnlyList<SlideShowMediaShapePlan> _active = Array.Empty<SlideShowMediaShapePlan>();
     private Slide? _activeSlide;
     private bool _showMediaControls = true;
+    private bool _showNarration = true;
     private double _slideDipW;
     private double _slideDipH;
     private double _canvasW;
@@ -137,7 +138,8 @@ internal sealed class AvaloniaSlideShowMediaController
         int? preferredCaptionTrackIndex = null,
         int? captionSlideIndex = null,
         int? preferredCaptionSlideIndex = null,
-        bool showMediaControls = true)
+        bool showMediaControls = true,
+        bool showNarration = true)
     {
         ArgumentNullException.ThrowIfNull(slide);
         SetCanvasBounds(canvasW, canvasH);
@@ -146,14 +148,17 @@ internal sealed class AvaloniaSlideShowMediaController
         TeardownPlayback();
         _activeSlide = slide;
         _showMediaControls = showMediaControls;
+        _showNarration = showNarration;
         _active = SlideShowMediaInteractionPlanner.BuildSlidePlan(
-            slide, slideDipW, slideDipH, canvasW, canvasH, showMediaControls);
+            slide, slideDipW, slideDipH, canvasW, canvasH, showMediaControls, showNarration);
 
         if (!_active.Any(plan => plan.HasSource) || !EnsureBackend())
             return;
 
         foreach (var shape in ShapeTreeLookup.Enumerate(slide).Where(shape =>
-                     shape.Kind == SlideShapeKind.Media && shape.Media is not null))
+                     shape.Kind == SlideShapeKind.Media
+                     && shape.Media is not null
+                     && (_showNarration || shape.Media.IsVideo)))
         {
             var plan = _active.First(media => media.ShapeId == shape.Id);
             if (!plan.HasSource || !MediaPlaybackSourceFactory.TryCreate(
@@ -239,7 +244,8 @@ internal sealed class AvaloniaSlideShowMediaController
             canvasH,
             canvasX,
             canvasY,
-            _showMediaControls);
+            _showMediaControls,
+            _showNarration);
         if (!LastClick.IsHandled)
             return false;
 

@@ -2923,13 +2923,15 @@ public static class PptxPackageWriter
             root.AddFirst(showPr);
         }
 
-        foreach (var attributeName in new[] { "useTimings", "showAnimation", "loop" })
+        foreach (var attributeName in new[] { "useTimings", "showAnimation", "showNarration", "loop" })
             showPr.Attribute(attributeName)?.Remove();
 
         if (!presentation.UseSlideTimings)
             showPr.Add(new XAttribute("useTimings", "0"));
         if (!presentation.ShowWithAnimation)
             showPr.Add(new XAttribute("showAnimation", "0"));
+        if (!presentation.ShowWithNarration)
+            showPr.Add(new XAttribute("showNarration", "0"));
         if (presentation.LoopUntilStopped)
             showPr.Add(new XAttribute("loop", "1"));
 

@@ -97,7 +97,8 @@ public sealed class DialogLifecycleParityTests
                 loopUntilStopped: true,
                 showType: PresentationShowType.BrowsedAtKiosk,
                 showBrowseScrollbar: false,
-                kioskRestartAfterMilliseconds: 18_000).Should().BeTrue();
+                kioskRestartAfterMilliseconds: 18_000,
+                showWithNarration: false).Should().BeTrue();
 
             editor.Presentation.UseSlideTimings.Should().BeFalse();
             editor.Presentation.ShowWithAnimation.Should().BeFalse();
@@ -105,6 +106,7 @@ public sealed class DialogLifecycleParityTests
             editor.Presentation.ShowType.Should().Be(PresentationShowType.BrowsedAtKiosk);
             editor.Presentation.ShowBrowseScrollbar.Should().BeFalse();
             editor.Presentation.KioskRestartAfterMilliseconds.Should().Be(18_000);
+            editor.Presentation.ShowWithNarration.Should().BeFalse();
             editor.Undo();
             editor.Presentation.UseSlideTimings.Should().BeTrue();
         }, CancellationToken.None);

@@ -17,6 +17,7 @@ internal sealed class SlideShowSettingsDialog : Window
     private readonly EditingSession _editor;
     private readonly CheckBox _useTimingsCheck;
     private readonly CheckBox _showAnimationCheck;
+    private readonly CheckBox _showNarrationCheck;
     private readonly CheckBox _loopCheck;
     private readonly ComboBox _showTypeCombo;
     private readonly CheckBox _showScrollbarCheck;
@@ -31,7 +32,7 @@ internal sealed class SlideShowSettingsDialog : Window
 
         Title = "Set Up Slide Show";
         Width = 345.3333333333333;
-        Height = 190;
+        Height = 215;
         CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -46,6 +47,11 @@ internal sealed class SlideShowSettingsDialog : Window
         {
             Content = "Show without animation",
             IsChecked = !InitialState.ShowWithAnimation,
+        };
+        _showNarrationCheck = new CheckBox
+        {
+            Content = "Play narration",
+            IsChecked = InitialState.ShowWithNarration,
         };
         _loopCheck = new CheckBox
         {
@@ -68,7 +74,7 @@ internal sealed class SlideShowSettingsDialog : Window
             MinWidth = 76,
         };
 
-        foreach (var check in new[] { _useTimingsCheck, _showAnimationCheck, _loopCheck })
+        foreach (var check in new[] { _useTimingsCheck, _showAnimationCheck, _showNarrationCheck, _loopCheck })
         {
             AvaloniaCompactDialogChrome.ApplyCheckBox(check, DialogChromeStyle);
             check.Height = 22;
@@ -92,6 +98,7 @@ internal sealed class SlideShowSettingsDialog : Window
         var panel = new StackPanel { Margin = new Thickness(14), Spacing = 4 };
         panel.Children.Add(_useTimingsCheck);
         panel.Children.Add(_showAnimationCheck);
+        panel.Children.Add(_showNarrationCheck);
         panel.Children.Add(_loopCheck);
         panel.Children.Add(_showTypeCombo);
         panel.Children.Add(_showScrollbarCheck);
@@ -126,11 +133,13 @@ internal sealed class SlideShowSettingsDialog : Window
         bool loopUntilStopped,
         PresentationShowType showType = PresentationShowType.PresentedBySpeaker,
         bool showBrowseScrollbar = true,
-        uint? kioskRestartAfterMilliseconds = null)
+        uint? kioskRestartAfterMilliseconds = null,
+        bool showWithNarration = true)
     {
         _useTimingsCheck.IsChecked = useSlideTimings;
         _showAnimationCheck.IsChecked = !showWithAnimation;
         _loopCheck.IsChecked = loopUntilStopped;
+        _showNarrationCheck.IsChecked = showWithNarration;
         _showTypeCombo.SelectedIndex = (int)showType;
         _showScrollbarCheck.IsChecked = showBrowseScrollbar;
         _kioskRestartText.Text = kioskRestartAfterMilliseconds?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
@@ -146,7 +155,8 @@ internal sealed class SlideShowSettingsDialog : Window
             _loopCheck.IsChecked == true,
             (PresentationShowType)Math.Clamp(_showTypeCombo.SelectedIndex, 0, 2),
             _showScrollbarCheck.IsChecked == true,
-            ParseRestartMilliseconds());
+            ParseRestartMilliseconds(),
+            _showNarrationCheck.IsChecked == true);
         if (applied && IsVisible)
             Close(true);
         return applied;
