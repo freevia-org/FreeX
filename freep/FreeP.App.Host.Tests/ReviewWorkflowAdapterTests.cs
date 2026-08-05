@@ -1086,6 +1086,38 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_MediaBookmarkPane_AddsReplacesAndDeletes()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var mediaShape = new SlideShape
+            {
+                Id = 729,
+                Name = "Demo video",
+                Kind = SlideShapeKind.Media,
+                Media = new MediaInfo { IsVideo = true }
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
+            window.Editor.Select(mediaShape.Id);
+
+            window.SetMediaBookmarkPaneInput("Intro", 1250.25);
+            window.ApplyMediaBookmarkCreatePane().Should().BeTrue();
+            window.MediaBookmarkCount.Should().Be(1);
+            window.SetMediaBookmarkPaneInput("Demo", 2500);
+            window.ApplyMediaBookmarkReplacePane().Should().BeTrue();
+            mediaShape.Media!.Bookmarks.Single().Name.Should().Be("Demo");
+            window.ApplyMediaBookmarkDeletePane().Should().BeTrue();
+            window.MediaBookmarkCount.Should().Be(0);
+            window.IsDirty.Should().BeTrue();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_ApplyProofingCorrection_UsesSharedMutationAndRefreshesPlans()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

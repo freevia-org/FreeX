@@ -3169,7 +3169,8 @@ public static class PptxPackageWriter
     }
 
     private static bool HasMediaTiming(MediaInfo media) =>
-        IsPositiveMediaMilliseconds(media.TrimStartMilliseconds)
+        media.Bookmarks.Count > 0
+        || IsPositiveMediaMilliseconds(media.TrimStartMilliseconds)
         || IsPositiveMediaMilliseconds(media.TrimEndMilliseconds)
         || IsPositiveMediaMilliseconds(media.FadeInMilliseconds)
         || IsPositiveMediaMilliseconds(media.FadeOutMilliseconds);
@@ -3196,6 +3197,13 @@ public static class PptxPackageWriter
             mediaChildren.Add(new XElement(P14 + "trim", trimAttributes));
         if (fadeAttributes.Count > 0)
             mediaChildren.Add(new XElement(P14 + "fade", fadeAttributes));
+        if (media.Bookmarks.Count > 0)
+        {
+            mediaChildren.Add(new XElement(P14 + "bmkLst",
+                media.Bookmarks.Select(bookmark => new XElement(P14 + "bmk",
+                    new XAttribute("name", bookmark.Name),
+                    new XAttribute("time", FormatMediaMilliseconds(bookmark.TimeMilliseconds))))));
+        }
 
         return new XElement(P + "extLst",
             new XElement(P + "ext",

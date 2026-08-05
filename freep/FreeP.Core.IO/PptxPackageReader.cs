@@ -4665,6 +4665,16 @@ public static class PptxPackageReader
         var fade = mediaEl.Element(P14 + "fade");
         media.FadeInMilliseconds = ReadMediaMilliseconds(fade?.Attribute("in")?.Value);
         media.FadeOutMilliseconds = ReadMediaMilliseconds(fade?.Attribute("out")?.Value);
+
+        foreach (var bookmark in mediaEl.Element(P14 + "bmkLst")?.Elements(P14 + "bmk")
+                     ?? Enumerable.Empty<XElement>())
+        {
+            media.Bookmarks.Add(new MediaBookmarkInfo
+            {
+                Name = bookmark.Attribute("name")?.Value ?? string.Empty,
+                TimeMilliseconds = ReadMediaMilliseconds(bookmark.Attribute("time")?.Value),
+            });
+        }
     }
 
     private static double ReadMediaMilliseconds(string? value) =>
