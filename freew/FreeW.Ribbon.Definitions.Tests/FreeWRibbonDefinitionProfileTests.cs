@@ -841,7 +841,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
         markdown.Should().Contain("## Classification Rules");
         markdown.Should().Contain("profile-shape-only");
         markdown.Should().Contain("actionable-gap");
-        markdown.Should().Contain("Source literal evidence columns show exact command-id text in source files only; they are not behavior proof and never create rows.");
+        markdown.Should().Contain("Source literal evidence columns show exact command-id text in source files only; the canonical shared definition contributes to both profile-definition columns.");
+        markdown.Should().Contain("These literals are not behavior proof and never create rows.");
         markdown.Should().Contain("Behavior evidence rows");
         markdown.Should().Contain("Review comments: ThreadedCommentCommandTests.DeleteCommentAtCaret_RemovesThreadRangeAndReference");
         markdown.Should().Contain("References fields and generated regions: CitationEditorTests.InsertCitation_TaggedSourceWithQuotedFieldArgument_RenumbersOnUpdateFields");

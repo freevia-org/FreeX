@@ -626,87 +626,8 @@ public static class FreeWRibbon
                     g.Medium("freew.arrange-all", "Arrange All", RibbonCommandIconKind.Grid);
                 });
             })
-            .Tab("help", "Help", "Y", tab =>
-            {
-                tab.Group("help", "Help", "H", 100, g =>
-                {
-                    g.Large("freew.help-online", "Help Online", RibbonCommandIconKind.Help, "H", accent: RibbonCommandIconAccent.Help);
-                    g.Large("freew.feedback", "Feedback", RibbonCommandIconKind.Feedback, "F", accent: RibbonCommandIconAccent.Help);
-                    g.Large("freew.copy-diagnostics", "Copy Diagnostics", RibbonCommandIconKind.Info, "D", accent: RibbonCommandIconAccent.Help);
-                });
-                tab.Group("product", "Product", "P", 90, g =>
-                {
-                    g.Large("freew.check-updates", "Check for Updates", RibbonCommandIconKind.Refresh, "U", accent: RibbonCommandIconAccent.Help);
-                    g.Large("freew.about", "About FreeW", RibbonCommandIconKind.Info, "A", accent: RibbonCommandIconAccent.Help);
-                    g.Large("freew.legal-notices", "Legal Notices", RibbonCommandIconKind.Book, "L", accent: RibbonCommandIconAccent.Help);
-                });
-            })
-            .Tab("mailings", "Mailings", "M", tab =>
-            {
-                // Word's "Create" group (Envelopes, Labels) sits at the far left of the Mailings tab.
-                tab.Group("create", "Create", "C", 130, g =>
-                {
-                    g.Medium("freew.merge-envelopes", "Envelopes", RibbonCommandIconKind.Envelope, "E");
-                    g.Medium("freew.merge-labels", "Labels", RibbonCommandIconKind.MergeField, "L");
-                });
-                tab.Group("merge-data", "Start Mail Merge", "D", 155, g =>
-                {
-                    g.Medium("freew.start-mail-merge", "Start Mail Merge", RibbonCommandIconKind.Envelope, "S", menu: m =>
-                    {
-                        m.Item("freew.start-mail-merge-letters", "Letters", "L");
-                        m.Item("freew.start-mail-merge-directory", "Directory", "D");
-                        m.Separator();
-                        m.Item("freew.start-mail-merge-normal", "Normal Word Document", "N");
-                    });
-                    g.Medium("freew.merge-data", "Select Recipients", RibbonCommandIconKind.Recipients);
-                    g.Medium("freew.merge-edit-recipients", "Edit Recipient List", RibbonCommandIconKind.Recipients);
-                    // Filter & Sort refines the active recipient list without touching the merge template.
-                    g.Medium("freew.merge-filter-sort", "Filter & Sort Recipients", RibbonCommandIconKind.Recipients);
-                });
-                // Each Mailings group is a single labelled command so Word's command names stay readable.
-                tab.Group("merge-write", "Write & Insert Fields", "W", 145, g =>
-                {
-                    g.Medium("freew.merge-address-block", "Address Block", RibbonCommandIconKind.Recipients, "A");
-                    g.Medium("freew.merge-greeting-line", "Greeting Line", RibbonCommandIconKind.GreetingLine, "G");
-                    g.Medium("freew.merge-field", "Insert Merge Field", RibbonCommandIconKind.MergeField, "F");
-                    g.Medium("freew.merge-match-fields", "Match Fields", RibbonCommandIconKind.MergeField, "H");
-                    // Rules: Word's "Rules" dropdown — conditional expressions and special fields that are
-                    // evaluated per-record by MergeRuleEvaluator during Preview Results and Finish & Merge.
-                    g.Medium("freew.merge-rules", "Rules", RibbonCommandIconKind.Field, "U", menu: m =>
-                    {
-                        m.Item("freew.merge-rule-if", "If…Then…Else", "I");
-                        m.Separator();
-                        m.Item("freew.merge-rule-skip-record-if", "Skip Record If", "K");
-                        m.Item("freew.merge-rule-next-record-if", "Next Record If", "X");
-                        m.Separator();
-                        m.Item("freew.merge-next-record", "Next Record", "N");
-                        m.Item("freew.merge-record-number", "Merge Record #", "R");
-                        m.Item("freew.merge-sequence-number", "Merge Sequence #", "Q");
-                        m.Separator();
-                        m.Item("freew.merge-rule-fill-in", "Fill-in", "L");
-                        m.Item("freew.merge-rule-ask", "Ask", "A");
-                        m.Separator();
-                        m.Item("freew.merge-rule-set", "Set Bookmark", "B");
-                        m.Item("freew.merge-rule-ref", "Ref Bookmark", "E");
-                    });
-                });
-                tab.Group("merge-preview", "Preview Results", "P", 120, g =>
-                {
-                    g.Medium("freew.merge-preview", "Preview Results", RibbonCommandIconKind.PreviewResults);
-                    g.Icon("freew.merge-preview-first", "First Record", RibbonCommandIconKind.Previous);
-                    g.Icon("freew.merge-preview-previous", "Previous Record", RibbonCommandIconKind.Previous);
-                    g.Icon("freew.merge-preview-next", "Next Record", RibbonCommandIconKind.Next);
-                    g.Icon("freew.merge-preview-last", "Last Record", RibbonCommandIconKind.Next);
-                    g.Medium("freew.merge-find-recipient", "Find Recipient", RibbonCommandIconKind.Search);
-                    g.Medium("freew.merge-check-errors", "Check for Errors", RibbonCommandIconKind.Warning,
-                        accent: RibbonCommandIconAccent.Warning);
-                });
-                tab.Group("merge-finish", "Finish", "F", 110, g =>
-                {
-                    g.Medium("freew.merge-finish", "Finish & Merge", RibbonCommandIconKind.FinishMerge);
-                    g.Medium("freew.merge-email", "Send E-mail Messages", RibbonCommandIconKind.Envelope, "E");
-                });
-            })
+            .AddHelpTab(capabilities)
+            .AddMailingsTab(capabilities)
             .Tab("review", "Review", "R", tab =>
             {
                 tab.Group("proofing", "Proofing", "P", 100, g =>
@@ -814,18 +735,7 @@ public static class FreeWRibbon
                     g.Medium("freew.inspect-document", "Inspect Document", RibbonCommandIconKind.Search);
                 });
             })
-            .Tab("developer", "Developer", "D", tab =>
-            {
-                tab.Group("controls", "Controls", "O", 100, g =>
-                {
-                    g.Medium("freew.cc-text", "Text Control", RibbonCommandIconKind.TextBox);
-                    g.Medium("freew.cc-richtext", "Rich Text", RibbonCommandIconKind.QuickParts);
-                    g.Medium("freew.cc-checkbox", "Check Box", RibbonCommandIconKind.CheckBox);
-                    g.Medium("freew.cc-date", "Date Picker", RibbonCommandIconKind.Date);
-                    g.Medium("freew.cc-dropdown", "Drop-Down List", RibbonCommandIconKind.List);
-                    g.Medium("freew.cc-combo", "Combo Box", RibbonCommandIconKind.ChevronDown);
-                });
-            })
+            .AddDeveloperTab(capabilities)
             // ── Contextual tabs (Word "Tools" tabs) ───────────────────────────────────────────────────
             // Declared individually here, but shown/hidden by the shared RibbonContextualTabController only
             // while their selection context is active: "picture" when an image is selected, "table" when the
@@ -1325,68 +1235,7 @@ public static class FreeWRibbon
             // directly into FinalSectionHeadersFooters / PageSettings via ApplyPageSettings and
             // round-trips through DocxWriter. The contextual key "header-footer" can be activated from
             // Insert > Header / Footer commands via the ribbon controller.
-            .ContextualTab("header-footer-design", "Design",
-                new RibbonTabContext("header-footer", "Header & Footer Tools", RibbonContextColor.Purple), tab =>
-            {
-                // Header & Footer group — edit the six per-slot content areas.
-                tab.Group("hf-header-footer", "Header & Footer", "H", 120, g =>
-                {
-                    g.Medium("freew.hf-edit-header",       "Edit Header",       RibbonCommandIconKind.Header, menu: m =>
-                    {
-                        m.Item("freew.hf-edit-header",       "Default Header",     "H");
-                        m.Item("freew.hf-edit-first-header", "First-Page Header",  "F");
-                        m.Item("freew.hf-edit-even-header",  "Even-Page Header",   "E");
-                    });
-                    g.Medium("freew.hf-edit-footer",       "Edit Footer",       RibbonCommandIconKind.Footer, menu: m =>
-                    {
-                        m.Item("freew.hf-edit-footer",       "Default Footer",     "O");
-                        m.Item("freew.hf-edit-first-footer", "First-Page Footer",  "I");
-                        m.Item("freew.hf-edit-even-footer",  "Even-Page Footer",   "V");
-                    });
-                });
-                // Insert group — add page number, date/time, or document-info field into the default header.
-                tab.Group("hf-insert", "Insert", "I", 110, g =>
-                {
-                    g.Medium("freew.hf-insert-page-number", "Page Number", RibbonCommandIconKind.PageNumber, menu: m =>
-                    {
-                        m.Item("freew.hf-insert-page-number",        "In Header", "H");
-                        m.Item("freew.hf-insert-page-number-footer", "In Footer", "F");
-                    });
-                    g.Medium("freew.hf-insert-datetime", "Date && Time", RibbonCommandIconKind.Date);
-                    g.Medium("freew.hf-insert-field",    "Document Info", RibbonCommandIconKind.Field);
-                });
-                // Navigation group — go to header/footer slot and close edit mode.
-                tab.Group("hf-navigation", "Navigation", "N", 100, g =>
-                {
-                    g.Medium("freew.hf-go-to-header", "Go to Header", RibbonCommandIconKind.Header);
-                    g.Medium("freew.hf-go-to-footer", "Go to Footer", RibbonCommandIconKind.Footer);
-                });
-                // Options group — layout toggles backed by PageSettings booleans.
-                tab.Group("hf-options", "Options", "O", 90, g =>
-                {
-                    g.Medium("freew.hf-different-first-page", "Different First Page", RibbonCommandIconKind.CoverPage);
-                    g.Medium("freew.hf-different-odd-even",   "Different Odd && Even Pages", RibbonCommandIconKind.OnePage);
-                });
-                // Position group — numeric header/footer distance spinboxes backed by PageSettings.
-                tab.Group("hf-position", "Position", "P", 80, g =>
-                {
-                    g.ComboBox("freew.hf-header-from-top", "Header from Top", c => c with
-                    {
-                        Items = new[] { "0", "18", "36", "54", "72" },
-                        Width = 80
-                    });
-                    g.ComboBox("freew.hf-footer-from-bottom", "Footer from Bottom", c => c with
-                    {
-                        Items = new[] { "0", "18", "36", "54", "72" },
-                        Width = 80
-                    });
-                });
-                // Close group — exit header/footer edit mode.
-                tab.Group("hf-close", "Close", "C", 70, g =>
-                {
-                    g.Medium("freew.hf-close", "Close Header and Footer", RibbonCommandIconKind.WindowClose);
-                });
-            })
+            .AddHeaderFooterDesignTab(capabilities)
             .Build();
 
         return definition with { Tabs = OrderVisibleTabs(definition.Tabs) };

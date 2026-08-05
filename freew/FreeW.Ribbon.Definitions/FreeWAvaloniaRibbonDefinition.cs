@@ -147,34 +147,6 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("Inverse (Dark Mode)", new RibbonCommandId("freew.read-mode-color-inverse")),
         });
 
-    private static RibbonMenu BuildStartMailMergeMenu() =>
-        new(new RibbonMenuItem[]
-        {
-            new("Letters", new RibbonCommandId("freew.start-mail-merge-letters")),
-            new("Directory", new RibbonCommandId("freew.start-mail-merge-directory")),
-            RibbonMenuItem.Separator(),
-            new("Normal Word Document", new RibbonCommandId("freew.start-mail-merge-normal")),
-        });
-
-    private static RibbonMenu BuildMergeRulesMenu() =>
-        new(new RibbonMenuItem[]
-        {
-            new("If…Then…Else", new RibbonCommandId("freew.merge-rule-if")),
-            RibbonMenuItem.Separator(),
-            new("Skip Record If", new RibbonCommandId("freew.merge-rule-skip-record-if")),
-            new("Next Record If", new RibbonCommandId("freew.merge-rule-next-record-if")),
-            RibbonMenuItem.Separator(),
-            new("Next Record", new RibbonCommandId("freew.merge-next-record")),
-            new("Merge Record #", new RibbonCommandId("freew.merge-record-number")),
-            new("Merge Sequence #", new RibbonCommandId("freew.merge-sequence-number")),
-            RibbonMenuItem.Separator(),
-            new("Fill-in", new RibbonCommandId("freew.merge-rule-fill-in")),
-            new("Ask", new RibbonCommandId("freew.merge-rule-ask")),
-            RibbonMenuItem.Separator(),
-            new("Set Bookmark", new RibbonCommandId("freew.merge-rule-set")),
-            new("Ref Bookmark", new RibbonCommandId("freew.merge-rule-ref")),
-        });
-
     // AV-PICTAB: wrap-mode menu shared by the Picture / Drawing Format "Wrap Text" dropdown.
     // <paramref name="prefix"/> is "image" or "shape" so the command ids match the WPF host
     // (freew.image-wrap-* / freew.shape-wrap-*).
@@ -1078,42 +1050,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.inspect-document", "Inspect Document");
                 });
             })
-            .Tab("developer", "Developer", "D", tab =>
-            {
-                tab.Group("controls", "Controls", null, 100, g =>
-                {
-                    g.Button("freew.cc-text", "Text Control", b => b with
-                    {
-                        PreferredLayout = RibbonCommandLayoutKind.Medium,
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextBox)
-                    });
-                    g.Button("freew.cc-richtext", "Rich Text", b => b with
-                    {
-                        PreferredLayout = RibbonCommandLayoutKind.Medium,
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.QuickParts)
-                    });
-                    g.Button("freew.cc-checkbox", "Check Box", b => b with
-                    {
-                        PreferredLayout = RibbonCommandLayoutKind.Medium,
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.CheckBox)
-                    });
-                    g.Button("freew.cc-date", "Date Picker", b => b with
-                    {
-                        PreferredLayout = RibbonCommandLayoutKind.Medium,
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Date)
-                    });
-                    g.Button("freew.cc-dropdown", "Drop-Down List", b => b with
-                    {
-                        PreferredLayout = RibbonCommandLayoutKind.Medium,
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.List)
-                    });
-                    g.Button("freew.cc-combo", "Combo Box", b => b with
-                    {
-                        PreferredLayout = RibbonCommandLayoutKind.Medium,
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.ChevronDown)
-                    });
-                });
-            })
+            .AddDeveloperTab(capabilities)
             .Tab("references", "References", "S", tab =>
             {
                 // AV-REF: References-tab depth — TOC, footnotes/endnotes, captions, cross-ref, citations.
@@ -1164,101 +1101,8 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.table-of-authorities-refresh", "Update Table");
                 });
             })
-            .Tab("mailings", "Mailings", "M", tab =>
-            {
-                // AV-MAIL: Mailings-tab — the in-scope mail-merge subset over the portable MailMerge engine.
-                // Send E-mail Messages is exposed as a plan-only command; no mail is sent.
-                tab.Group("create", "Create", null, 110, g =>
-                {
-                    g.Button("freew.merge-envelopes", "Envelopes");
-                    g.Button("freew.merge-labels", "Labels");
-                });
-                tab.Group("merge-data", "Start Mail Merge", null, 120, g =>
-                {
-                    g.Dropdown("freew.start-mail-merge", "Start Mail Merge", BuildStartMailMergeMenu(), d => d with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Envelope)
-                    });
-                    g.Button("freew.merge-data", "Select Recipients");
-                    g.Button("freew.merge-edit-recipients", "Edit Recipient List");
-                    g.Button("freew.merge-filter-sort", "Filter & Sort Recipients");
-                });
-                tab.Group("merge-write", "Write & Insert Fields", null, 100, g =>
-                {
-                    g.Button("freew.merge-address-block", "Address Block");
-                    g.Button("freew.merge-greeting-line", "Greeting Line");
-                    g.Button("freew.merge-field",   "Insert Merge Field");
-                    g.Button("freew.merge-match-fields", "Match Fields");
-                    g.Dropdown("freew.merge-rules", "Rules", BuildMergeRulesMenu(), d => d with
-                    {
-                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Field)
-                    });
-                });
-                tab.Group("merge-preview", "Preview Results", null, 80, g =>
-                {
-                    g.Button("freew.merge-preview",          "Preview Results");
-                    g.Button("freew.merge-preview-first",    "First Record");
-                    g.Button("freew.merge-preview-previous", "◀ Previous");
-                    g.Button("freew.merge-preview-next",     "Next ▶");
-                    g.Button("freew.merge-preview-last",     "Last Record");
-                    g.Button("freew.merge-find-recipient",   "Find Recipient");
-                    g.Button("freew.merge-check-errors",     "Check for Errors");
-                });
-                tab.Group("merge-finish", "Finish", null, 70, g =>
-                {
-                    g.Button("freew.merge-finish", "Finish & Merge");
-                    g.Button("freew.merge-email", "Send E-mail Messages");
-                });
-            })
-            .Tab("help", "Help", "Y", tab =>
-            {
-                tab.Group("help", "Help", null, 100, g =>
-                {
-                    g.Button("freew.help-online", "Help Online", button => button with
-                    {
-                        KeyTip = "H",
-                        Icon = new RibbonCommandIcon(
-                            RibbonCommandIconKind.Help,
-                            RibbonCommandIconAccent.Help),
-                    });
-                    g.Button("freew.feedback", "Feedback", button => button with
-                    {
-                        KeyTip = "F",
-                        Icon = new RibbonCommandIcon(
-                            RibbonCommandIconKind.Feedback,
-                            RibbonCommandIconAccent.Help),
-                    });
-                    g.Button("freew.copy-diagnostics", "Copy Diagnostics", button => button with
-                    {
-                        KeyTip = "D",
-                        Icon = new RibbonCommandIcon(
-                            RibbonCommandIconKind.Info,
-                            RibbonCommandIconAccent.Help),
-                    });
-                });
-                tab.Group("product", "Product", null, 90, g =>
-                {
-                    g.Button("freew.check-updates", "Check for Updates", button => button with
-                    {
-                        KeyTip = "U",
-                        Icon = new RibbonCommandIcon(
-                            RibbonCommandIconKind.Refresh,
-                            RibbonCommandIconAccent.Help),
-                    });
-                    g.Button("freew.about", "About FreeW", button => button with
-                    {
-                        Icon = new RibbonCommandIcon(
-                            RibbonCommandIconKind.Info,
-                            RibbonCommandIconAccent.Help),
-                    });
-                    g.Button("freew.legal-notices", "Legal Notices", button => button with
-                    {
-                        Icon = new RibbonCommandIcon(
-                            RibbonCommandIconKind.Book,
-                            RibbonCommandIconAccent.Help),
-                    });
-                });
-            })
+            .AddMailingsTab(capabilities)
+            .AddHelpTab(capabilities)
             // ── Table contextual tabs (shown only when caret is in a table cell) ─────────────
             .ContextualTab("table-design", "Table Design",
                 new RibbonTabContext(capabilities.TableContextKey, "Table Tools", RibbonContextColor.Teal),
@@ -1358,64 +1202,8 @@ internal static class FreeWAvaloniaRibbonDefinition
                         g.Button("freew.table-to-text", "Convert to Text");
                     });
                 })
+            .AddHeaderFooterDesignTab(capabilities)
             // ── AV-PICTAB: Picture Format contextual tab (shown when a floating IMAGE is selected) ──
-            .ContextualTab("header-footer-design", "Design",
-                new RibbonTabContext("header-footer", "Header & Footer Tools", RibbonContextColor.Purple),
-                tab =>
-                {
-                    tab.Group("hf-header-footer", "Header & Footer", null, 120, g =>
-                    {
-                        g.Dropdown("freew.hf-edit-header", "Edit Header", new RibbonMenu(new[]
-                        {
-                            new RibbonMenuItem("Default Header", new RibbonCommandId("freew.hf-edit-header")),
-                            new RibbonMenuItem("First-Page Header", new RibbonCommandId("freew.hf-edit-first-header")),
-                            new RibbonMenuItem("Even-Page Header", new RibbonCommandId("freew.hf-edit-even-header")),
-                        }));
-                        g.Dropdown("freew.hf-edit-footer", "Edit Footer", new RibbonMenu(new[]
-                        {
-                            new RibbonMenuItem("Default Footer", new RibbonCommandId("freew.hf-edit-footer")),
-                            new RibbonMenuItem("First-Page Footer", new RibbonCommandId("freew.hf-edit-first-footer")),
-                            new RibbonMenuItem("Even-Page Footer", new RibbonCommandId("freew.hf-edit-even-footer")),
-                        }));
-                    });
-                    tab.Group("hf-insert", "Insert", null, 110, g =>
-                    {
-                        g.Dropdown("freew.hf-insert-page-number", "Page Number", new RibbonMenu(new[]
-                        {
-                            new RibbonMenuItem("In Header", new RibbonCommandId("freew.hf-insert-page-number")),
-                            new RibbonMenuItem("In Footer", new RibbonCommandId("freew.hf-insert-page-number-footer")),
-                        }));
-                        g.Button("freew.hf-insert-datetime", "Date && Time");
-                        g.Button("freew.hf-insert-field", "Document Info");
-                    });
-                    tab.Group("hf-navigation", "Navigation", null, 100, g =>
-                    {
-                        g.Button("freew.hf-go-to-header", "Go to Header");
-                        g.Button("freew.hf-go-to-footer", "Go to Footer");
-                    });
-                    tab.Group("hf-options", "Options", null, 90, g =>
-                    {
-                        g.Toggle("freew.hf-different-first-page", "Different First Page");
-                        g.Toggle("freew.hf-different-odd-even", "Different Odd && Even Pages");
-                    });
-                    tab.Group("hf-position", "Position", null, 80, g =>
-                    {
-                        g.ComboBox("freew.hf-header-from-top", "Header from Top", c => c with
-                        {
-                            Items = new[] { "0", "18", "36", "54", "72" },
-                            Width = 80
-                        });
-                        g.ComboBox("freew.hf-footer-from-bottom", "Footer from Bottom", c => c with
-                        {
-                            Items = new[] { "0", "18", "36", "54", "72" },
-                            Width = 80
-                        });
-                    });
-                    tab.Group("hf-close", "Close", null, 70, g =>
-                    {
-                        g.Button("freew.hf-close", "Close Header and Footer");
-                    });
-                })
             .ContextualTab("picture-format", "Picture Format",
                 new RibbonTabContext(capabilities.PictureContextKey, "Picture Tools", RibbonContextColor.Orange),
                 tab =>
