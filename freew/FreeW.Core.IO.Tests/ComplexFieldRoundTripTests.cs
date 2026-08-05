@@ -225,13 +225,36 @@ public class ComplexFieldRoundTripTests
         DocumentIndex.EnsureStyles(doc, "People");
         doc.Blocks.AddRange(DocumentIndex.Build(doc, identifier: "People"));
 
+        var root = DocumentXml(doc);
+        var regionXml = root.Descendants(W + "p")
+            .Where(paragraph => paragraph.Element(W + "pPr")?.Element(W + "pStyle")?
+                .Attribute(W + "val")?.Value is { } styleId
+                && (styleId == DocumentIndex.HeadingStyleIdFor("People")
+                    || styleId == DocumentIndex.EntryStyleIdFor("People")))
+            .ToArray();
+        regionXml.SelectMany(paragraph => paragraph.Descendants(W + "fldChar"))
+            .Select(field => field.Attribute(W + "fldCharType")?.Value)
+            .Should().Equal("begin", "separate", "end");
+        regionXml.SelectMany(paragraph => paragraph.Descendants(W + "instrText"))
+            .Should().ContainSingle()
+            .Which.Value.Should().Be(" INDEX \\f \"People\" \\h \"A\" \\z \"1033\" ");
+
         var reopened = RoundTrip(doc);
-        var region = reopened.Blocks.Where(block => DocumentIndex.IsIndexParagraph(block, "People")).ToArray();
+        var region = reopened.Blocks.Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
+            .Cast<Paragraph>()
+            .ToArray();
 
         region.Should().HaveCount(2);
-        region.Cast<Paragraph>().Select(paragraph => paragraph.PlainText)
-            .Should().Equal("A", "Ada, 1");
+        region.Select(paragraph => paragraph.PlainText).Should().Equal("A", "Ada, 1");
         region.Should().OnlyContain(block => !DocumentIndex.IsIndexParagraph(block, identifier: null));
+        region[0].SpanningFieldStart!.Instruction
+            .Should().Be(" INDEX \\f \"People\" \\h \"A\" \\z \"1033\" ");
+        region.Should().OnlyContain(paragraph =>
+            paragraph.SpanningFieldOwner != null
+            && paragraph.SpanningFieldOwner.Instruction == " INDEX \\f \"People\" \\h \"A\" \\z \"1033\" ");
+        region[0].EndsSpanningField.Should().BeFalse();
+        region[1].SpanningFieldStart.Should().BeNull();
+        region[1].EndsSpanningField.Should().BeTrue();
         reopened.Styles.Should().ContainKey(DocumentIndex.HeadingStyleIdFor("People"));
         reopened.Styles.Should().ContainKey(DocumentIndex.EntryStyleIdFor("People"));
     }

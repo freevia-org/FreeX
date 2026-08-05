@@ -629,6 +629,7 @@ public static class SlideCompositor
                     : "image/png",
                 DestDip = tileBounds,
                 RotationDeg = rotationDeg,
+                IsCover = IsZoomCover(properties, info.ZoomProperties),
                 CropLeft = crop.Left,
                 CropTop = crop.Top,
                 CropRight = crop.Right,
@@ -695,6 +696,7 @@ public static class SlideCompositor
                 : "image/png",
             DestDip = boundsDip,
             RotationDeg = rotationDeg,
+            IsCover = IsZoomCover(properties, info.ZoomProperties),
             CropLeft = crop.Left,
             CropTop = crop.Top,
             CropRight = crop.Right,
@@ -720,6 +722,12 @@ public static class SlideCompositor
             NormalizeZoomCrop(ReadCropValue(sourceRect, "r", fallback?.CropRight)),
             NormalizeZoomCrop(ReadCropValue(sourceRect, "b", fallback?.CropBottom)));
     }
+
+    private static bool IsZoomCover(XElement? properties, ZoomObjectProperties? fallback) =>
+        string.Equals(
+            properties?.Attribute("imageType")?.Value ?? fallback?.ImageType,
+            "cover",
+            StringComparison.OrdinalIgnoreCase);
 
     private static int? ReadCropValue(XElement? sourceRect, string attributeName, int? fallback)
     {
@@ -1186,6 +1194,11 @@ public static class SlideCompositor
                 PictureFrameGeometry = shape.Kind == SlideShapeKind.Zoom
                     ? shape.PreservedObject?.ZoomProperties?.FrameGeometry
                     : null,
+                IsCover = shape.Kind == SlideShapeKind.Zoom
+                    && string.Equals(
+                        shape.PreservedObject?.ZoomProperties?.ImageType,
+                        "cover",
+                        StringComparison.OrdinalIgnoreCase),
             });
         }
         else

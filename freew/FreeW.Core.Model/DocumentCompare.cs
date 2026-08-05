@@ -298,6 +298,9 @@ public static class DocumentCompare
             BlockCustomXml = revised.BlockCustomXml,
             Formatting = revised.Formatting,
             StyleId = revised.StyleId,
+            SpanningFieldStart = revised.SpanningFieldStart,
+            SpanningFieldOwner = revised.SpanningFieldOwner,
+            EndsSpanningField = revised.EndsSpanningField,
             DropCap = revised.DropCap,
         };
         result.BookmarkNames.AddRange(revised.BookmarkNames);
@@ -398,6 +401,9 @@ public static class DocumentCompare
             BlockCustomXml = source.BlockCustomXml,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
+            SpanningFieldStart = source.SpanningFieldStart,
+            SpanningFieldOwner = source.SpanningFieldOwner,
+            EndsSpanningField = source.EndsSpanningField,
             DropCap = source.DropCap,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
@@ -757,6 +763,9 @@ public static class DocumentCompare
             BlockCustomXml = source.BlockCustomXml,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
+            SpanningFieldStart = source.SpanningFieldStart,
+            SpanningFieldOwner = source.SpanningFieldOwner,
+            EndsSpanningField = source.EndsSpanningField,
             DropCap = source.DropCap,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
