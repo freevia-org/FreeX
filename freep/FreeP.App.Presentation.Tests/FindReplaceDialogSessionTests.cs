@@ -7,6 +7,24 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class FindReplaceDialogSessionTests
 {
     [Fact]
+    public void Constructor_ProjectsCanonicalInitialState()
+    {
+        var (editor, _) = MakeSession("text");
+
+        var session = new FindReplaceDialogSession(editor, showReplace: true);
+
+        session.InitialState.Should().Be(new FindReplaceDialogInitialState(
+            true,
+            string.Empty,
+            string.Empty,
+            MatchCase: false,
+            WholeWord: false));
+        session.LastWorkflowPlan.ShowReplace.Should().BeTrue();
+        session.LastWorkflowPlan.Query.Should().BeEmpty();
+        session.LastWorkflowPlan.Replacement.Should().BeEmpty();
+    }
+
+    [Fact]
     public void InputAndOptionChanges_OwnNormalizedStateAndInvalidateMatchPosition()
     {
         var (editor, _) = MakeSession("Cat catalog cat");
@@ -61,6 +79,23 @@ public sealed class FindReplaceDialogSessionTests
         session.SetQuery("missing");
         session.Navigate(+1).StatusKind.Should().Be(FindReplacePolicyStatusKind.NoMatches);
         callbackCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void Dispatch_MapsCanonicalActionsToNavigationAndMutationPolicy()
+    {
+        var (editor, shape) = MakeSession("cat cat");
+        var session = new FindReplaceDialogSession(editor, showReplace: true);
+        session.SetInput("cat", "dog");
+
+        session.Dispatch(FindReplaceDialogAction.FindNext).CurrentMatchIndex.Should().Be(0);
+        session.Dispatch(FindReplaceDialogAction.FindPrevious).CurrentMatchIndex.Should().Be(1);
+        session.Dispatch(FindReplaceDialogAction.ReplaceCurrent);
+        shape.TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("cat dog");
+
+        var replaceAll = session.Dispatch(FindReplaceDialogAction.ReplaceAll);
+        replaceAll.StatusText.Should().Be("1 replacement(s) made.");
+        shape.TextBody.Paragraphs[0].Runs[0].Text.Should().Be("dog dog");
     }
 
     [Fact]

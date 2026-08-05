@@ -185,6 +185,29 @@ public sealed class DialogLifecycleParityTests
     }
 
     [Fact]
+    public void FindReplace_renderer_is_a_native_adapter_over_portable_catalog_and_dispatch()
+    {
+        var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            repositoryRoot,
+            "freep",
+            "FreeP.App.Avalonia",
+            "FindReplaceDialog.cs"));
+
+        source.Should().Contain("FindReplaceDialogPlanner.BuildSurfacePlan()");
+        source.Should().Contain("_session.Dispatch(");
+        source.Should().Contain("ApplyWorkflowPlan(_session.LastWorkflowPlan)");
+        source.Should().NotContain("_session.Navigate(");
+        source.Should().NotContain("_session.ReplaceCurrent(");
+        source.Should().NotContain("_session.ReplaceAll(");
+        source.Should().NotContain("_editor.");
+        source.Should().NotContain("\"Find what:\"");
+        source.Should().NotContain("\"Replace with:\"");
+        source.Should().NotContain("\"Match case\"");
+        source.Should().NotContain("\"Whole word\"");
+    }
+
+    [Fact]
     public async Task Comments_command_reveals_empty_pane_for_first_comment_creation()
     {
         await Session.Dispatch(() =>

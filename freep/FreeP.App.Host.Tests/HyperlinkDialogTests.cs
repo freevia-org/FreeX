@@ -15,6 +15,7 @@ public sealed class HyperlinkDialogTests
             "HyperlinkDialog.cs"));
 
         source.Should().Contain("HyperlinkDialogPlanner.BuildDialogRequest(slides, current)");
+        source.Should().Contain("HyperlinkDialogPlanner.BuildSurfacePlan()");
         source.Should().Contain("new HyperlinkDialogSession(request)");
         source.Should().Contain("_session.SetInput(");
         source.Should().Contain("_session.SelectTarget(");
@@ -22,6 +23,7 @@ public sealed class HyperlinkDialogTests
         source.Should().Contain("_session.SelectSlide(");
         source.Should().Contain("_session.SetTooltipText(");
         source.Should().Contain("_session.TryAccept()");
+        source.Should().Contain("RenderInputState(state)");
         source.Should().Contain("FocusField(validation.FocusField)");
         source.Should().NotContain("HyperlinkDialogPlanner.BuildResult(");
         source.Should().NotContain("SelectedItem as HyperlinkDialogSlideOption");
@@ -32,6 +34,10 @@ public sealed class HyperlinkDialogTests
         source.Should().NotContain("slide.Title");
         source.Should().NotContain("SlideItem");
         source.Should().NotContain("private void SelectSlide(");
+        source.Should().NotContain("\"Web address:\"");
+        source.Should().NotContain("\"Slide in this presentation:\"");
+        source.Should().NotContain("\"Target slide:\"");
+        source.Should().NotContain("\"Tooltip:\"");
     }
 
     [Fact]
@@ -47,6 +53,8 @@ public sealed class HyperlinkDialogTests
         source.Should().Contain("public sealed class HyperlinkDialogSession");
         source.Should().Contain("BuildDialogRequest(");
         source.Should().Contain("BuildSlideOptions(");
+        source.Should().Contain("BuildSurfacePlan(");
+        source.Should().Contain("ResolveSelectedSlideId(");
         source.Should().Contain("ExternalUriLauncher.TryCreateAllowedUri");
         source.Should().Contain("new Hyperlink");
     }

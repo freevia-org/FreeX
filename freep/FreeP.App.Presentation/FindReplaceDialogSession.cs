@@ -21,9 +21,16 @@ public sealed class FindReplaceDialogSession
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _onNavigationOrMutation = onNavigationOrMutation;
-        ShowReplace = showReplace;
+        InitialState = FindReplaceDialogPlanner.BuildInitialState(showReplace);
+        Query = InitialState.Query;
+        Replacement = InitialState.Replacement;
+        MatchCase = InitialState.MatchCase;
+        WholeWord = InitialState.WholeWord;
+        ShowReplace = InitialState.ShowReplace;
         LastWorkflowPlan = RefreshWorkflowPlan();
     }
+
+    public FindReplaceDialogInitialState InitialState { get; }
 
     public string Query { get; private set; } = string.Empty;
 
@@ -79,6 +86,15 @@ public sealed class FindReplaceDialogSession
         WholeWord = wholeWord;
         return InvalidateSearch();
     }
+
+    public FindReplaceWorkflowPlan Dispatch(FindReplaceDialogAction action) => action switch
+    {
+        FindReplaceDialogAction.FindNext => Navigate(+1),
+        FindReplaceDialogAction.FindPrevious => Navigate(-1),
+        FindReplaceDialogAction.ReplaceCurrent => ReplaceCurrent(),
+        FindReplaceDialogAction.ReplaceAll => ReplaceAll(),
+        _ => throw new ArgumentOutOfRangeException(nameof(action), action, null),
+    };
 
     public FindReplaceWorkflowPlan Navigate(int direction)
     {

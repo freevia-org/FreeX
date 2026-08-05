@@ -15,6 +15,8 @@ internal sealed class HyperlinkDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = 26 };
+    private static readonly HyperlinkDialogSurfacePlan Surface =
+        HyperlinkDialogPlanner.BuildSurfacePlan();
     private static readonly IBrush WpfDefaultButtonBorderBrush = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
     private static readonly IBrush WpfCancelButtonBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xF1, 0xF1, 0xF1));
 
@@ -35,12 +37,7 @@ internal sealed class HyperlinkDialog : Window
         string tooltip)
     {
         var state = _session.SetInput(targetKind, url, selectedSlideIndex, tooltip);
-        _urlRadio.IsChecked = state.TargetKind == HyperlinkDialogTargetKind.Url;
-        _slideRadio.IsChecked = state.TargetKind == HyperlinkDialogTargetKind.Slide;
-        _urlBox.Text = state.UrlText;
-        _slideCombo.SelectedIndex = state.SelectedSlideIndex;
-        _tooltipBox.Text = state.TooltipText;
-        RenderTargetState(state);
+        RenderInputState(state);
         return Apply();
     }
 
@@ -54,7 +51,7 @@ internal sealed class HyperlinkDialog : Window
         ArgumentNullException.ThrowIfNull(request);
         _session = new HyperlinkDialogSession(request);
 
-        Title = HyperlinkDialogPlanner.Caption;
+        Title = Surface.Title;
         Width = 405.3333333333333;
         Height = 216;
         CanResize = false;
@@ -63,13 +60,13 @@ internal sealed class HyperlinkDialog : Window
 
         _urlRadio = new RadioButton
         {
-            Content = "Web address:",
+            Content = Surface.TargetLabel(HyperlinkDialogTargetKind.Url),
             GroupName = "HyperlinkTarget",
             Margin = new Thickness(0, 0, 0, 4),
         };
         _slideRadio = new RadioButton
         {
-            Content = "Slide in this presentation:",
+            Content = Surface.TargetLabel(HyperlinkDialogTargetKind.Slide),
             GroupName = "HyperlinkTarget",
             Margin = new Thickness(0, 0, 0, 8),
         };
@@ -119,10 +116,7 @@ internal sealed class HyperlinkDialog : Window
         });
 
         var state = _session.State;
-        _urlRadio.IsChecked = state.TargetKind == HyperlinkDialogTargetKind.Url;
-        _slideRadio.IsChecked = state.TargetKind == HyperlinkDialogTargetKind.Slide;
-        _urlBox.Text = state.UrlText;
-        _tooltipBox.Text = state.TooltipText;
+        RenderInputState(state);
         _urlRadio.TabIndex = 0;
         _slideRadio.TabIndex = 1;
         _urlBox.TabIndex = 2;
@@ -145,7 +139,6 @@ internal sealed class HyperlinkDialog : Window
 
         Content = BuildContent();
         Opened += (_, _) => ApplyWpfButtonChrome();
-        RenderTargetState(state);
     }
 
     private Control BuildContent()
@@ -178,17 +171,17 @@ internal sealed class HyperlinkDialog : Window
         Grid.SetColumnSpan(radioPanel, 2);
         grid.Children.Add(radioPanel);
 
-        AddLabel(grid, "URL:", row: 1);
+        AddLabel(grid, Surface.UrlLabel, row: 1);
         Grid.SetRow(_urlBox, 1);
         Grid.SetColumn(_urlBox, 1);
         grid.Children.Add(_urlBox);
 
-        AddLabel(grid, "Target slide:", row: 2);
+        AddLabel(grid, Surface.SlideLabel, row: 2);
         Grid.SetRow(_slideCombo, 2);
         Grid.SetColumn(_slideCombo, 1);
         grid.Children.Add(_slideCombo);
 
-        AddLabel(grid, "Tooltip:", row: 3);
+        AddLabel(grid, Surface.TooltipLabel, row: 3);
         Grid.SetRow(_tooltipBox, 3);
         Grid.SetColumn(_tooltipBox, 1);
         grid.Children.Add(_tooltipBox);
@@ -204,8 +197,8 @@ internal sealed class HyperlinkDialog : Window
             Spacing = 13,
             Margin = new Thickness(0, 2, 0, 0),
         };
-        var ok = MakeDialogButton("OK", isDefault: true, OnOk);
-        var cancel = MakeDialogButton("Cancel", isDefault: false, () => Close(null));
+        var ok = MakeDialogButton(Surface.AcceptLabel, isDefault: true, OnOk);
+        var cancel = MakeDialogButton(Surface.CancelLabel, isDefault: false, () => Close(null));
         ok.TabIndex = 5;
         cancel.TabIndex = 6;
         buttons.Children.Add(ok);
@@ -255,6 +248,16 @@ internal sealed class HyperlinkDialog : Window
         _slideCombo.Foreground = state.IsUrlInputEnabled
             ? new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70))
             : Brushes.Black;
+    }
+
+    private void RenderInputState(HyperlinkDialogViewState state)
+    {
+        _urlRadio.IsChecked = state.TargetKind == HyperlinkDialogTargetKind.Url;
+        _slideRadio.IsChecked = state.TargetKind == HyperlinkDialogTargetKind.Slide;
+        _urlBox.Text = state.UrlText;
+        _slideCombo.SelectedIndex = state.SelectedSlideIndex;
+        _tooltipBox.Text = state.TooltipText;
+        RenderTargetState(state);
     }
 
     private void ApplyWpfButtonChrome()

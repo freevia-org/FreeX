@@ -16,6 +16,23 @@ public enum HyperlinkDialogField
     Slide
 }
 
+public sealed record HyperlinkDialogTargetOption(
+    HyperlinkDialogTargetKind Kind,
+    string DisplayText);
+
+public sealed record HyperlinkDialogSurfacePlan(
+    string Title,
+    IReadOnlyList<HyperlinkDialogTargetOption> TargetOptions,
+    string UrlLabel,
+    string SlideLabel,
+    string TooltipLabel,
+    string AcceptLabel,
+    string CancelLabel)
+{
+    public string TargetLabel(HyperlinkDialogTargetKind kind) =>
+        TargetOptions.First(option => option.Kind == kind).DisplayText;
+}
+
 public sealed record HyperlinkDialogInitialState(
     HyperlinkDialogTargetKind TargetKind,
     string UrlText,
@@ -72,7 +89,8 @@ public sealed class HyperlinkDialogSession
         ArgumentNullException.ThrowIfNull(request.InitialState);
 
         SlideOptions = request.SlideOptions.ToArray();
-        var initial = request.InitialState;
+        InitialState = request.InitialState;
+        var initial = InitialState;
         var (isUrlInputEnabled, isSlideInputEnabled) = InputEnablement(initial.TargetKind);
         State = new HyperlinkDialogViewState(
             initial.TargetKind,
@@ -86,11 +104,15 @@ public sealed class HyperlinkDialogSession
 
     public IReadOnlyList<HyperlinkDialogSlideOption> SlideOptions { get; }
 
+    public HyperlinkDialogInitialState InitialState { get; }
+
     public HyperlinkDialogViewState State { get; private set; }
 
     public Hyperlink? Result { get; private set; }
 
     public HyperlinkDialogResultPlan? LastResultPlan { get; private set; }
+
+    public HyperlinkDialogApplyPlan? LastApplyPlan { get; private set; }
 
     public HyperlinkDialogViewState SelectTarget(HyperlinkDialogTargetKind targetKind)
     {
@@ -134,10 +156,9 @@ public sealed class HyperlinkDialogSession
 
     public HyperlinkDialogResultPlan TryAccept()
     {
-        var selectedSlideId = State.SelectedSlideIndex >= 0
-            && State.SelectedSlideIndex < SlideOptions.Count
-                ? SlideOptions[State.SelectedSlideIndex].Id
-                : null;
+        var selectedSlideId = HyperlinkDialogPlanner.ResolveSelectedSlideId(
+            SlideOptions,
+            State.SelectedSlideIndex);
         var plan = HyperlinkDialogPlanner.BuildResult(
             State.TargetKind,
             State.UrlText,
@@ -146,6 +167,7 @@ public sealed class HyperlinkDialogSession
 
         LastResultPlan = plan;
         Result = plan.ShouldApply ? plan.Result : null;
+        LastApplyPlan = HyperlinkDialogPlanner.BuildApplyPlan(Result);
         State = State with { ValidationText = plan.Validation?.Message ?? string.Empty };
         return plan;
     }
@@ -163,12 +185,34 @@ public sealed class HyperlinkDialogSession
 public static class HyperlinkDialogPlanner
 {
     public const string Caption = "Insert Hyperlink";
+    public const string WebAddressLabel = "Web address:";
+    public const string PresentationSlideLabel = "Slide in this presentation:";
+    public const string UrlLabel = "URL:";
+    public const string TargetSlideLabel = "Target slide:";
+    public const string TooltipLabel = "Tooltip:";
+    public const string AcceptLabel = "OK";
+    public const string CancelLabel = "Cancel";
     public const string MissingUrlMessage =
         "Please enter a URL (e.g. https://example.com).";
     public const string UnsupportedUrlMessage =
         "Only http, https, mailto, and local file URLs are supported.";
     public const string MissingSlideMessage =
         "Please select a target slide.";
+
+    public static IReadOnlyList<HyperlinkDialogTargetOption> TargetOptions { get; } =
+    [
+        new(HyperlinkDialogTargetKind.Url, WebAddressLabel),
+        new(HyperlinkDialogTargetKind.Slide, PresentationSlideLabel),
+    ];
+
+    public static HyperlinkDialogSurfacePlan BuildSurfacePlan() => new(
+        Caption,
+        TargetOptions,
+        UrlLabel,
+        TargetSlideLabel,
+        TooltipLabel,
+        AcceptLabel,
+        CancelLabel);
 
     public static HyperlinkDialogRequest BuildDialogRequest(
         IReadOnlyList<Slide> slides,
@@ -194,7 +238,7 @@ public static class HyperlinkDialogPlanner
             var title = NullIfWhiteSpace(slide.Title) ?? $"Slide {i + 1}";
             options.Add(new HyperlinkDialogSlideOption(
                 slide.Id,
-                $"{i + 1}. {title}"));
+                BuildSlideDisplayText(i, title)));
         }
 
         return options;
@@ -282,6 +326,23 @@ public static class HyperlinkDialogPlanner
         }
 
         return 0;
+    }
+
+    public static string? ResolveSelectedSlideId(
+        IReadOnlyList<HyperlinkDialogSlideOption> options,
+        int selectedSlideIndex)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return selectedSlideIndex >= 0 && selectedSlideIndex < options.Count
+            ? options[selectedSlideIndex].Id
+            : null;
+    }
+
+    public static string BuildSlideDisplayText(int slideIndex, string title)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(slideIndex);
+        ArgumentNullException.ThrowIfNull(title);
+        return $"{slideIndex + 1}. {title}";
     }
 
     private static HyperlinkDialogResultPlan BuildUrlResult(

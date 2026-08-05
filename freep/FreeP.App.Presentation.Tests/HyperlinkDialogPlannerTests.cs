@@ -5,6 +5,22 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class HyperlinkDialogPlannerTests
 {
     [Fact]
+    public void BuildSurfacePlan_OwnsTargetAndActionLabels()
+    {
+        var surface = HyperlinkDialogPlanner.BuildSurfacePlan();
+
+        surface.Title.Should().Be("Insert Hyperlink");
+        surface.TargetOptions.Should().Equal(
+            new HyperlinkDialogTargetOption(HyperlinkDialogTargetKind.Url, "Web address:"),
+            new HyperlinkDialogTargetOption(HyperlinkDialogTargetKind.Slide, "Slide in this presentation:"));
+        surface.UrlLabel.Should().Be("URL:");
+        surface.SlideLabel.Should().Be("Target slide:");
+        surface.TooltipLabel.Should().Be("Tooltip:");
+        surface.AcceptLabel.Should().Be("OK");
+        surface.CancelLabel.Should().Be("Cancel");
+    }
+
+    [Fact]
     public void BuildInitialState_NullCurrent_DefaultsToUrl()
     {
         var state = HyperlinkDialogPlanner.BuildInitialState(null);
@@ -63,6 +79,21 @@ public sealed class HyperlinkDialogPlannerTests
             new HyperlinkDialogSlideOption("s1", "1. Agenda"),
             new HyperlinkDialogSlideOption("s2", "2. Slide 2"));
         options[0].ToString().Should().Be("1. Agenda");
+    }
+
+    [Fact]
+    public void SlideDisplayAndTargetResolution_AreCanonicalAndBoundsChecked()
+    {
+        var options = new[]
+        {
+            new HyperlinkDialogSlideOption("s1", "1. Intro"),
+            new HyperlinkDialogSlideOption("s2", "2. Summary"),
+        };
+
+        HyperlinkDialogPlanner.BuildSlideDisplayText(1, "Summary").Should().Be("2. Summary");
+        HyperlinkDialogPlanner.ResolveSelectedSlideId(options, 1).Should().Be("s2");
+        HyperlinkDialogPlanner.ResolveSelectedSlideId(options, -1).Should().BeNull();
+        HyperlinkDialogPlanner.ResolveSelectedSlideId(options, 2).Should().BeNull();
     }
 
     [Fact]
@@ -185,6 +216,11 @@ public sealed class HyperlinkDialogPlannerTests
             null));
         session.Result.Should().BeEquivalentTo(plan.Result);
         session.LastResultPlan.Should().BeSameAs(plan);
+        session.LastApplyPlan.Should().Be(new HyperlinkDialogApplyPlan(
+            true,
+            null,
+            "s2",
+            "jump"));
         session.State.ValidationText.Should().BeEmpty();
     }
 
@@ -215,6 +251,7 @@ public sealed class HyperlinkDialogPlannerTests
                 HyperlinkDialogField.Url)));
         session.Result.Should().BeNull();
         session.LastResultPlan.Should().BeSameAs(plan);
+        session.LastApplyPlan.Should().Be(new HyperlinkDialogApplyPlan(false, null, null, null));
         session.State.ValidationText.Should().Be(HyperlinkDialogPlanner.UnsupportedUrlMessage);
     }
 

@@ -24,6 +24,7 @@ public sealed class HyperlinkDialogTests
             "HyperlinkDialog.cs"));
 
         source.Should().Contain("HyperlinkDialogPlanner.BuildDialogRequest(slides, current)");
+        source.Should().Contain("HyperlinkDialogPlanner.BuildSurfacePlan()");
         source.Should().Contain("new HyperlinkDialogSession(request)");
         source.Should().Contain("_session.SetInput(");
         source.Should().Contain("_session.SelectTarget(");
@@ -31,6 +32,7 @@ public sealed class HyperlinkDialogTests
         source.Should().Contain("_session.SelectSlide(");
         source.Should().Contain("_session.SetTooltipText(");
         source.Should().Contain("_session.TryAccept()");
+        source.Should().Contain("RenderInputState(state)");
         source.Should().NotContain("HyperlinkDialogPlanner.BuildResult(");
         source.Should().NotContain("SelectedItem as HyperlinkDialogSlideOption");
         source.Should().NotContain("Result = plan.Result");
@@ -38,6 +40,10 @@ public sealed class HyperlinkDialogTests
         source.Should().NotContain("new Hyperlink { Url =");
         source.Should().NotContain("new Hyperlink { TargetSlideId =");
         source.Should().NotContain("slide.Title");
+        source.Should().NotContain("\"Web address:\"");
+        source.Should().NotContain("\"Slide in this presentation:\"");
+        source.Should().NotContain("\"Target slide:\"");
+        source.Should().NotContain("\"Tooltip:\"");
     }
 
     [Fact]

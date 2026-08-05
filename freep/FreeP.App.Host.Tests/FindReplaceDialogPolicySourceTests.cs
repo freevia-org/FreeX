@@ -13,15 +13,14 @@ public sealed class FindReplaceDialogPolicySourceTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
+            source.Should().Contain("FindReplaceDialogPlanner.BuildSurfacePlan()");
             source.Should().Contain("private readonly FindReplaceDialogSession _session;");
             source.Should().Contain("_session.SetQuery(");
             source.Should().Contain("_session.SetReplacement(");
             source.Should().Contain("_session.SetMatchCase(");
             source.Should().Contain("_session.SetWholeWord(");
             source.Should().Contain("_session.SetShowReplace(");
-            source.Should().Contain("_session.Navigate(");
-            source.Should().Contain("_session.ReplaceCurrent(");
-            source.Should().Contain("_session.ReplaceAll(");
+            source.Should().Contain("_session.Dispatch(");
             source.Should().Contain("ApplyWorkflowPlan(");
             source.Should().Contain("SetInputForTests(");
             source.Should().Contain("NavigateForTests(");
@@ -35,7 +34,17 @@ public sealed class FindReplaceDialogPolicySourceTests
             source.Should().NotContain("_editor.NavigateTo(");
             source.Should().NotContain("_editor.ReplaceOne(");
             source.Should().NotContain("_editor.ReplaceAll(");
-            source.Should().NotContain("FindReplaceDialogPlanner.");
+            source.Should().NotContain("_session.Navigate(");
+            source.Should().NotContain("_session.ReplaceCurrent(");
+            source.Should().NotContain("_session.ReplaceAll(");
+            source.Should().NotContain("FindReplaceDialogPlanner.Navigate(");
+            source.Should().NotContain("\"Find what:\"");
+            source.Should().NotContain("\"Replace with:\"");
+            source.Should().NotContain("\"Match case\"");
+            source.Should().NotContain("\"Whole word\"");
+            source.Should().NotContain("\"Find Next\"");
+            source.Should().NotContain("\"Find Previous\"");
+            source.Should().NotContain("\"Replace All\"");
             source.Should().NotContain("\"No matches found.\"");
             source.Should().NotContain("\"No replacements made.\"");
             source.Should().NotContain("replacement(s) made.");
@@ -69,6 +78,11 @@ public sealed class FindReplaceDialogPolicySourceTests
         sessionSource.Should().Contain("FindReplaceDialogPlanner.Navigate(");
         sessionSource.Should().Contain("FindReplaceDialogPlanner.BuildOptions(");
         sessionSource.Should().Contain("FindReplaceDialogPlanner.BuildWorkflowPlan(");
+        sessionSource.Should().Contain("public FindReplaceWorkflowPlan Dispatch(FindReplaceDialogAction action)");
+        sessionSource.Should().Contain("FindReplaceDialogAction.FindNext => Navigate(+1)");
+        sessionSource.Should().Contain("FindReplaceDialogAction.FindPrevious => Navigate(-1)");
+        sessionSource.Should().Contain("FindReplaceDialogAction.ReplaceCurrent => ReplaceCurrent()");
+        sessionSource.Should().Contain("FindReplaceDialogAction.ReplaceAll => ReplaceAll()");
         sessionSource.Should().NotContain("System.Windows");
         sessionSource.Should().NotContain("Avalonia");
 
@@ -76,6 +90,8 @@ public sealed class FindReplaceDialogPolicySourceTests
         plannerSource.Should().Contain("FindReplaceReplacementPolicyStatus ReplacementStatus(");
         plannerSource.Should().Contain("FindReplaceDialogPolicy.Navigate(");
         plannerSource.Should().Contain("FindReplaceDialogPolicy.BuildReplacementStatus(");
+        plannerSource.Should().Contain("public sealed record FindReplaceDialogSurfacePlan(");
+        plannerSource.Should().Contain("public static FindReplaceDialogInitialState BuildInitialState(");
         plannerSource.Should().NotContain("public enum FindReplaceStatusKind");
         plannerSource.Should().NotContain("public sealed record FindReplaceNavigationPlan");
         plannerSource.Should().NotContain("public sealed record FindReplaceReplacementStatus");
