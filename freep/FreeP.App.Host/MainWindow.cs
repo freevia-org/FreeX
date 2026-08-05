@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Automation;
@@ -205,8 +204,7 @@ public sealed partial class MainWindow : Window
     private Button _mediaCaptionDeleteButton = null!;
     private Button _mediaCaptionCloseButton = null!;
     private bool _mediaCaptionPaneRefreshing;
-    private int? _selectedMediaCaptionTrackIndex;
-    private int? _selectedMediaBookmarkIndex;
+    private readonly PresentationMediaPaneSession _mediaPaneSession;
     private Border _smartArtTextPaneHost = null!;
     private TextBlock _smartArtTextPaneHeading = null!;
     private TextBlock _smartArtTextPaneMessage = null!;
@@ -247,9 +245,12 @@ public sealed partial class MainWindow : Window
     internal PresentationProofingPanePlan? LastProofingPanePlan => _reviewWorkflowSession.LastProofingPanePlan;
     internal PresentationMediaTranscriptPlan? LastMediaTranscriptPlan =>
         _reviewWorkflowSession.LastMediaTranscriptPlan;
-    internal PresentationMediaCaptionAuthoringPanePlan? LastMediaCaptionAuthoringPanePlan { get; private set; }
-    internal PresentationMediaCaptionAuthoringMutationPlan? LastMediaCaptionAuthoringMutationPlan { get; private set; }
-    internal PresentationMediaCaptionTrackMutationResult? LastMediaCaptionTrackMutationResult { get; private set; }
+    internal PresentationMediaCaptionAuthoringPanePlan? LastMediaCaptionAuthoringPanePlan =>
+        _mediaPaneSession.LastCaptionAuthoringPanePlan;
+    internal PresentationMediaCaptionAuthoringMutationPlan? LastMediaCaptionAuthoringMutationPlan =>
+        _mediaPaneSession.LastCaptionAuthoringMutationPlan;
+    internal PresentationMediaCaptionTrackMutationResult? LastMediaCaptionTrackMutationResult =>
+        _mediaPaneSession.LastCaptionTrackMutationResult;
     internal SmartArtTextPaneApplyResult? LastSmartArtTextPaneApplyResult { get; private set; }
     internal SmartArtNodeEditResult? LastSmartArtTextPaneEditResult { get; private set; }
     internal SmartArtTextPaneKeyboardRoute? LastSmartArtTextPaneKeyboardRoute { get; private set; }
@@ -377,12 +378,14 @@ public sealed partial class MainWindow : Window
     internal bool IsMediaCaptionReplaceEnabled => _mediaCaptionReplaceButton?.IsEnabled == true;
     internal bool IsMediaCaptionDeleteEnabled => _mediaCaptionDeleteButton?.IsEnabled == true;
     internal string MediaCaptionPaneTranscriptText => _mediaCaptionTranscriptBox?.Text ?? string.Empty;
-    internal int MediaVolumePercent => _mediaVolumeSlider is null ? 80 : (int)Math.Round(_mediaVolumeSlider.Value);
+    internal int MediaVolumePercent => _mediaVolumeSlider is null
+        ? 80
+        : PresentationMediaPaneSession.NormalizeVolumePercent(_mediaVolumeSlider.Value);
     internal bool IsMediaVolumeApplyEnabled => _mediaVolumeApplyButton?.IsEnabled == true;
     internal MediaPlaybackStartMode MediaPlaybackStartMode => _mediaStartModeBox?.SelectedItem is ComboBoxItem
         { Tag: MediaPlaybackStartMode startMode }
         ? startMode
-        : MediaPlaybackStartMode.InClickSequence;
+        : PresentationMediaPaneSession.GetPlaybackStartMode(-1);
     internal bool MediaLoop => _mediaLoopCheckBox?.IsChecked == true;
     internal string? ReadingOrderMoveEarlierDisabledReason =>
         LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
@@ -471,6 +474,13 @@ public sealed partial class MainWindow : Window
                 UpdateAfterCommentMutation: UpdateTitle,
                 UpdateAfterCommentNavigation: UpdateSlideCount,
                 UpdateAfterProofingCorrection: UpdateTitle));
+        _mediaPaneSession = new(
+            () => Editor,
+            new PresentationMediaPaneSessionCallbacks(
+                MarkDirty: () => _file.MarkDirty(),
+                RefreshReviewWorkflowPlans: RefreshReviewWorkflowPlans,
+                UpdateHost: UpdateTitle,
+                RefreshPane: RefreshVisibleMediaCaptionPaneFromFields));
 
         // File commands.
         _file = new FileCommands(
@@ -645,7 +655,7 @@ public sealed partial class MainWindow : Window
             _selectionPane?.Refresh();
             RefreshPaneAccessibilityMetadata();
         };
-        Editor.CurrentSlideChanged += (_, _) => { _reviewWorkflowSession.SelectedCommentIndex = null; _selectedMediaCaptionTrackIndex = null; RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); RefreshVisibleMediaCaptionPaneFromFields(); _selectionPane?.Refresh(); RefreshPaneAccessibilityMetadata(); };
+        Editor.CurrentSlideChanged += (_, _) => { _reviewWorkflowSession.SelectedCommentIndex = null; _mediaPaneSession.ClearCaptionSelection(); RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); RefreshVisibleMediaCaptionPaneFromFields(); _selectionPane?.Refresh(); RefreshPaneAccessibilityMetadata(); };
         Editor.SelectionChanged += (_, _) =>
         {
             RefreshAltTextRequestPlan();
@@ -1275,9 +1285,9 @@ public sealed partial class MainWindow : Window
         {
             if (_mediaCaptionPaneRefreshing)
                 return;
-            _selectedMediaCaptionTrackIndex = _mediaCaptionTrackBox.SelectedItem is ComboBoxItem { Tag: int trackIndex }
+            _mediaPaneSession.SelectCaptionTrack(_mediaCaptionTrackBox.SelectedItem is ComboBoxItem { Tag: int trackIndex }
                 ? trackIndex
-                : null;
+                : null);
             RefreshVisibleMediaCaptionPaneFromFields();
         };
 
@@ -1344,9 +1354,9 @@ public sealed partial class MainWindow : Window
         {
             if (_mediaCaptionPaneRefreshing)
                 return;
-            _selectedMediaBookmarkIndex = _mediaBookmarkBox.SelectedItem is ComboBoxItem { Tag: int index }
+            _mediaPaneSession.SelectBookmark(_mediaBookmarkBox.SelectedItem is ComboBoxItem { Tag: int index }
                 ? index
-                : null;
+                : null);
             RefreshVisibleMediaCaptionPaneFromFields();
         };
         _mediaBookmarkNameText = BuildMediaCaptionPaneLabel();
@@ -3461,7 +3471,7 @@ public sealed partial class MainWindow : Window
         try
         {
             if (selectedTrackIndex.HasValue)
-                _selectedMediaCaptionTrackIndex = selectedTrackIndex;
+                _mediaPaneSession.SelectCaptionTrack(selectedTrackIndex);
             _mediaCaptionLabelBox.Text = label;
             _mediaCaptionLanguageBox.Text = language;
             _mediaCaptionSourceBox.Text = source;
@@ -3483,7 +3493,7 @@ public sealed partial class MainWindow : Window
         _mediaCaptionPaneRefreshing = true;
         try
         {
-            _mediaVolumeSlider.Value = Math.Clamp(volumePercent, 0, 100);
+            _mediaVolumeSlider.Value = PresentationMediaPaneSession.NormalizeVolumePercent(volumePercent);
         }
         finally
         {
@@ -3499,7 +3509,7 @@ public sealed partial class MainWindow : Window
         _mediaCaptionPaneRefreshing = true;
         try
         {
-            _mediaStartModeBox.SelectedIndex = startMode == MediaPlaybackStartMode.Automatically ? 1 : 0;
+            _mediaStartModeBox.SelectedIndex = PresentationMediaPaneSession.GetPlaybackStartModeIndex(startMode);
             _mediaLoopCheckBox.IsChecked = loop;
         }
         finally
@@ -3510,70 +3520,22 @@ public sealed partial class MainWindow : Window
 
     internal PresentationMediaCaptionTrackMutationResult ApplyMediaCaptionPane(
         PresentationMediaCaptionAuthoringIntentKind intent)
-    {
-        var media = PresentationMediaTranscriptPlanner
-            .FindSelectedMediaShape(Editor.CurrentSlide, Editor.SelectedShapeIds)
-            ?.Media;
-        var descriptor = new PresentationMediaCaptionTrackAuthoringDescriptor(
+        => _mediaPaneSession.ApplyCaptionAuthoring(
+            intent,
             _mediaCaptionLabelBox.Text,
             _mediaCaptionLanguageBox.Text,
             _mediaCaptionSourceBox.Text,
             _mediaCaptionTranscriptBox.Text);
-        LastMediaCaptionAuthoringMutationPlan =
-            PresentationMediaTranscriptPlanner.BuildCaptionAuthoringMutationPlan(
-                media,
-                intent,
-                _selectedMediaCaptionTrackIndex ?? -1,
-                descriptor);
-        LastMediaCaptionTrackMutationResult =
-            Editor.ApplyMediaCaptionAuthoring(LastMediaCaptionAuthoringMutationPlan);
-        if (LastMediaCaptionTrackMutationResult.Succeeded)
-        {
-            _selectedMediaCaptionTrackIndex = NormalizeMediaCaptionSelectionAfterMutation(
-                media,
-                intent,
-                LastMediaCaptionTrackMutationResult.TrackIndex);
-            _file.MarkDirty();
-            RefreshReviewWorkflowPlans();
-            UpdateTitle();
-        }
 
-        RefreshVisibleMediaCaptionPaneFromFields();
-        return LastMediaCaptionTrackMutationResult;
-    }
+    internal bool ApplyMediaVolumePane() => _mediaPaneSession.ApplyVolume(MediaVolumePercent);
 
-    internal bool ApplyMediaVolumePane()
-    {
-        var changed = Editor.SetSelectedMediaVolume(MediaVolumePercent);
-        if (changed)
-        {
-            _file.MarkDirty();
-            RefreshReviewWorkflowPlans();
-            UpdateTitle();
-            RefreshVisibleMediaCaptionPaneFromFields();
-        }
+    internal bool ApplyMediaPlaybackPane() =>
+        _mediaPaneSession.ApplyPlayback(MediaPlaybackStartMode, MediaLoop);
 
-        return changed;
-    }
-
-    internal bool ApplyMediaPlaybackPane()
-    {
-        var changed = Editor.SetSelectedMediaPlaybackOptions(MediaPlaybackStartMode, MediaLoop);
-        if (changed)
-        {
-            _file.MarkDirty();
-            RefreshReviewWorkflowPlans();
-            UpdateTitle();
-            RefreshVisibleMediaCaptionPaneFromFields();
-        }
-
-        return changed;
-    }
-
-    internal double MediaTrimStartMilliseconds => ParseMediaTiming(_mediaTrimStartBox?.Text);
-    internal double MediaTrimEndMilliseconds => ParseMediaTiming(_mediaTrimEndBox?.Text);
-    internal double MediaFadeInMilliseconds => ParseMediaTiming(_mediaFadeInBox?.Text);
-    internal double MediaFadeOutMilliseconds => ParseMediaTiming(_mediaFadeOutBox?.Text);
+    internal double MediaTrimStartMilliseconds => PresentationMediaPaneSession.ParseTiming(_mediaTrimStartBox?.Text);
+    internal double MediaTrimEndMilliseconds => PresentationMediaPaneSession.ParseTiming(_mediaTrimEndBox?.Text);
+    internal double MediaFadeInMilliseconds => PresentationMediaPaneSession.ParseTiming(_mediaFadeInBox?.Text);
+    internal double MediaFadeOutMilliseconds => PresentationMediaPaneSession.ParseTiming(_mediaFadeOutBox?.Text);
 
     internal void SetMediaTimingPaneInput(double trimStart, double trimEnd, double fadeIn, double fadeOut)
     {
@@ -3582,10 +3544,11 @@ public sealed partial class MainWindow : Window
         _mediaCaptionPaneRefreshing = true;
         try
         {
-            _mediaTrimStartBox.Text = FormatMediaTiming(trimStart);
-            _mediaTrimEndBox.Text = FormatMediaTiming(trimEnd);
-            _mediaFadeInBox.Text = FormatMediaTiming(fadeIn);
-            _mediaFadeOutBox.Text = FormatMediaTiming(fadeOut);
+            var plan = PresentationMediaPaneSession.BuildTimingInputPlan(trimStart, trimEnd, fadeIn, fadeOut);
+            _mediaTrimStartBox.Text = plan.TrimStartText;
+            _mediaTrimEndBox.Text = plan.TrimEndText;
+            _mediaFadeInBox.Text = plan.FadeInText;
+            _mediaFadeOutBox.Text = plan.FadeOutText;
         }
         finally
         {
@@ -3593,26 +3556,13 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal bool ApplyMediaTimingPane()
-    {
-        var changed = Editor.SetSelectedMediaTiming(
-            MediaTrimStartMilliseconds,
-            MediaTrimEndMilliseconds,
-            MediaFadeInMilliseconds,
-            MediaFadeOutMilliseconds);
-        if (changed)
-        {
-            _file.MarkDirty();
-            RefreshReviewWorkflowPlans();
-            UpdateTitle();
-            RefreshVisibleMediaCaptionPaneFromFields();
-        }
-        return changed;
-    }
+    internal bool ApplyMediaTimingPane() => _mediaPaneSession.ApplyTiming(
+        _mediaTrimStartBox?.Text,
+        _mediaTrimEndBox?.Text,
+        _mediaFadeInBox?.Text,
+        _mediaFadeOutBox?.Text);
 
-    internal int MediaBookmarkCount => PresentationMediaTranscriptPlanner
-        .FindSelectedMediaShape(Editor.CurrentSlide, Editor.SelectedShapeIds)
-        ?.Media?.Bookmarks.Count ?? 0;
+    internal int MediaBookmarkCount => _mediaPaneSession.BuildProjection().Bookmarks.Count;
 
     internal void SetMediaBookmarkPaneInput(string name, double timeMilliseconds)
     {
@@ -3621,8 +3571,9 @@ public sealed partial class MainWindow : Window
         _mediaCaptionPaneRefreshing = true;
         try
         {
-            _mediaBookmarkNameBox.Text = name;
-            _mediaBookmarkTimeBox.Text = FormatMediaTiming(timeMilliseconds);
+            var plan = PresentationMediaPaneSession.BuildBookmarkInputPlan(name, timeMilliseconds);
+            _mediaBookmarkNameBox.Text = plan.Name;
+            _mediaBookmarkTimeBox.Text = plan.TimeText;
         }
         finally
         {
@@ -3630,96 +3581,40 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal bool ApplyMediaBookmarkCreatePane()
-    {
-        var media = SelectedMediaForPane();
-        var name = _mediaBookmarkNameBox.Text.Trim();
-        if (media is null || name.Length == 0)
-            return false;
-        var bookmarks = CloneMediaBookmarksForPane(media.Bookmarks);
-        bookmarks.Add(new MediaBookmarkInfo { Name = name, TimeMilliseconds = MediaBookmarkTimeMilliseconds });
-        _selectedMediaBookmarkIndex = bookmarks.Count - 1;
-        return ApplyMediaBookmarksPane(bookmarks);
-    }
+    internal bool ApplyMediaBookmarkCreatePane() => _mediaPaneSession.ApplyBookmark(
+        PresentationMediaBookmarkMutationIntentKind.Create,
+        _mediaBookmarkNameBox.Text,
+        _mediaBookmarkTimeBox.Text);
 
-    internal bool ApplyMediaBookmarkReplacePane()
-    {
-        var media = SelectedMediaForPane();
-        var name = _mediaBookmarkNameBox.Text.Trim();
-        if (media is null || name.Length == 0 || _selectedMediaBookmarkIndex is not int index
-            || index < 0 || index >= media.Bookmarks.Count)
-            return false;
-        var bookmarks = CloneMediaBookmarksForPane(media.Bookmarks);
-        bookmarks[index] = new MediaBookmarkInfo { Name = name, TimeMilliseconds = MediaBookmarkTimeMilliseconds };
-        return ApplyMediaBookmarksPane(bookmarks);
-    }
+    internal bool ApplyMediaBookmarkReplacePane() => _mediaPaneSession.ApplyBookmark(
+        PresentationMediaBookmarkMutationIntentKind.Replace,
+        _mediaBookmarkNameBox.Text,
+        _mediaBookmarkTimeBox.Text);
 
-    internal bool ApplyMediaBookmarkDeletePane()
-    {
-        var media = SelectedMediaForPane();
-        if (media is null || _selectedMediaBookmarkIndex is not int index
-            || index < 0 || index >= media.Bookmarks.Count)
-            return false;
-        var bookmarks = CloneMediaBookmarksForPane(media.Bookmarks);
-        bookmarks.RemoveAt(index);
-        _selectedMediaBookmarkIndex = bookmarks.Count == 0 ? null : Math.Min(index, bookmarks.Count - 1);
-        return ApplyMediaBookmarksPane(bookmarks);
-    }
+    internal bool ApplyMediaBookmarkDeletePane() => _mediaPaneSession.ApplyBookmark(
+        PresentationMediaBookmarkMutationIntentKind.Delete,
+        _mediaBookmarkNameBox.Text,
+        _mediaBookmarkTimeBox.Text);
 
-    internal double MediaBookmarkTimeMilliseconds => ParseMediaTiming(_mediaBookmarkTimeBox?.Text);
+    internal double MediaBookmarkTimeMilliseconds =>
+        PresentationMediaPaneSession.ParseTiming(_mediaBookmarkTimeBox?.Text);
 
-    private MediaInfo? SelectedMediaForPane() => PresentationMediaTranscriptPlanner
-        .FindSelectedMediaShape(Editor.CurrentSlide, Editor.SelectedShapeIds)?.Media;
-
-    private bool ApplyMediaBookmarksPane(IReadOnlyList<MediaBookmarkInfo> bookmarks)
-    {
-        var changed = Editor.SetSelectedMediaBookmarks(bookmarks);
-        if (changed)
-        {
-            _file.MarkDirty();
-            RefreshReviewWorkflowPlans();
-            UpdateTitle();
-            RefreshVisibleMediaCaptionPaneFromFields();
-        }
-        return changed;
-    }
-
-    private void RenderMediaBookmarkOptions(MediaInfo? media)
+    private void RenderMediaBookmarkOptions(PresentationMediaPaneProjection plan)
     {
         _mediaBookmarkBox.Items.Clear();
-        if (media is null)
-        {
-            _selectedMediaBookmarkIndex = null;
-        }
-        else
-        {
-            foreach (var (bookmark, bookmarkIndex) in media.Bookmarks.Select((bookmark, index) => (bookmark, index)))
-                _mediaBookmarkBox.Items.Add(new ComboBoxItem { Content = $"{bookmarkIndex + 1}. {bookmark.Name}", Tag = bookmarkIndex });
-            if (_selectedMediaBookmarkIndex is not int index || index < 0 || index >= media.Bookmarks.Count)
-                _selectedMediaBookmarkIndex = media.Bookmarks.Count > 0 ? 0 : null;
-        }
+        foreach (var bookmark in plan.Bookmarks)
+            _mediaBookmarkBox.Items.Add(new ComboBoxItem { Content = bookmark.DisplayText, Tag = bookmark.Index });
 
-        _mediaBookmarkBox.SelectedIndex = _selectedMediaBookmarkIndex ?? -1;
-        var selected = media is not null && _selectedMediaBookmarkIndex is int selectedIndex
-            && selectedIndex >= 0 && selectedIndex < media.Bookmarks.Count
-            ? media.Bookmarks[selectedIndex]
-            : null;
-        _mediaBookmarkNameBox.Text = selected?.Name ?? string.Empty;
-        _mediaBookmarkTimeBox.Text = FormatMediaTiming(selected?.TimeMilliseconds ?? 0);
-        _mediaBookmarkBox.IsEnabled = media is not null;
-        _mediaBookmarkNameBox.IsEnabled = media is not null;
-        _mediaBookmarkTimeBox.IsEnabled = media is not null;
-        _mediaBookmarkCreateButton.IsEnabled = media is not null;
-        _mediaBookmarkReplaceButton.IsEnabled = selected is not null;
-        _mediaBookmarkDeleteButton.IsEnabled = selected is not null;
+        _mediaBookmarkBox.SelectedIndex = plan.SelectedBookmarkIndex ?? -1;
+        _mediaBookmarkNameBox.Text = plan.BookmarkName;
+        _mediaBookmarkTimeBox.Text = plan.BookmarkTimeText;
+        _mediaBookmarkBox.IsEnabled = plan.HasMedia;
+        _mediaBookmarkNameBox.IsEnabled = plan.HasMedia;
+        _mediaBookmarkTimeBox.IsEnabled = plan.HasMedia;
+        _mediaBookmarkCreateButton.IsEnabled = plan.HasMedia;
+        _mediaBookmarkReplaceButton.IsEnabled = plan.HasSelectedBookmark;
+        _mediaBookmarkDeleteButton.IsEnabled = plan.HasSelectedBookmark;
     }
-
-    private static List<MediaBookmarkInfo> CloneMediaBookmarksForPane(IEnumerable<MediaBookmarkInfo> bookmarks) =>
-        bookmarks.Select(bookmark => new MediaBookmarkInfo
-        {
-            Name = bookmark.Name,
-            TimeMilliseconds = bookmark.TimeMilliseconds
-        }).ToList();
 
     private void RefreshMediaCaptionAuthoringPlans(
         string? proposedLabel,
@@ -3727,19 +3622,11 @@ public sealed partial class MainWindow : Window
         string? proposedSource,
         string? proposedTranscriptText)
     {
-        LastMediaCaptionAuthoringPanePlan =
-            PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(
-                Editor.CurrentSlide,
-                Editor.CurrentSlideIndex,
-                Editor.SelectedShapeIds,
-                _selectedMediaCaptionTrackIndex,
-                proposedLabel,
-                proposedLanguage,
-                proposedSource,
-                proposedTranscriptText);
-        _selectedMediaCaptionTrackIndex = LastMediaCaptionAuthoringPanePlan.SelectedTrackIndex >= 0
-            ? LastMediaCaptionAuthoringPanePlan.SelectedTrackIndex
-            : null;
+        _mediaPaneSession.RefreshCaptionAuthoringPanePlan(
+            proposedLabel,
+            proposedLanguage,
+            proposedSource,
+            proposedTranscriptText);
     }
 
     private void RefreshVisibleMediaCaptionPaneFromFields()
@@ -3769,24 +3656,21 @@ public sealed partial class MainWindow : Window
             RenderMediaCaptionField(_mediaCaptionLanguageText, _mediaCaptionLanguageBox, plan.Language);
             RenderMediaCaptionField(_mediaCaptionSourceText, _mediaCaptionSourceBox, plan.Source);
             RenderMediaCaptionField(_mediaCaptionTranscriptText, _mediaCaptionTranscriptBox, plan.TranscriptText);
-            var selectedMedia = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
-                Editor.CurrentSlide,
-                Editor.SelectedShapeIds)?.Media;
-            var selectedStartMode = selectedMedia?.PlaybackStartMode ?? MediaPlaybackStartMode.InClickSequence;
-            _mediaStartModeBox.SelectedIndex = selectedStartMode == MediaPlaybackStartMode.Automatically ? 1 : 0;
-            _mediaLoopCheckBox.IsChecked = selectedMedia?.Loop ?? false;
-            _mediaStartModeBox.IsEnabled = selectedMedia is not null;
-            _mediaLoopCheckBox.IsEnabled = selectedMedia is not null;
-            _mediaPlaybackApplyButton.IsEnabled = selectedMedia is not null;
-            _mediaVolumeSlider.Value = selectedMedia?.VolumePercent ?? 80;
-            _mediaVolumeSlider.IsEnabled = selectedMedia is not null;
-            _mediaVolumeApplyButton.IsEnabled = selectedMedia is not null;
-            _mediaTimingApplyButton.IsEnabled = selectedMedia is not null;
-            _mediaTrimStartBox.Text = FormatMediaTiming(selectedMedia?.TrimStartMilliseconds ?? 0);
-            _mediaTrimEndBox.Text = FormatMediaTiming(selectedMedia?.TrimEndMilliseconds ?? 0);
-            _mediaFadeInBox.Text = FormatMediaTiming(selectedMedia?.FadeInMilliseconds ?? 0);
-            _mediaFadeOutBox.Text = FormatMediaTiming(selectedMedia?.FadeOutMilliseconds ?? 0);
-            RenderMediaBookmarkOptions(selectedMedia);
+            var mediaPlan = _mediaPaneSession.BuildProjection();
+            _mediaStartModeBox.SelectedIndex = PresentationMediaPaneSession.GetPlaybackStartModeIndex(mediaPlan.PlaybackStartMode);
+            _mediaLoopCheckBox.IsChecked = mediaPlan.Loop;
+            _mediaStartModeBox.IsEnabled = mediaPlan.HasMedia;
+            _mediaLoopCheckBox.IsEnabled = mediaPlan.HasMedia;
+            _mediaPlaybackApplyButton.IsEnabled = mediaPlan.HasMedia;
+            _mediaVolumeSlider.Value = mediaPlan.VolumePercent;
+            _mediaVolumeSlider.IsEnabled = mediaPlan.HasMedia;
+            _mediaVolumeApplyButton.IsEnabled = mediaPlan.HasMedia;
+            _mediaTimingApplyButton.IsEnabled = mediaPlan.HasMedia;
+            _mediaTrimStartBox.Text = mediaPlan.Timing.TrimStartText;
+            _mediaTrimEndBox.Text = mediaPlan.Timing.TrimEndText;
+            _mediaFadeInBox.Text = mediaPlan.Timing.FadeInText;
+            _mediaFadeOutBox.Text = mediaPlan.Timing.FadeOutText;
+            RenderMediaBookmarkOptions(mediaPlan);
             ApplyMediaCaptionButtonPlan(
                 _mediaCaptionCreateButton,
                 GetMediaCaptionPaneAction(plan, PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCreateCommandId));
@@ -3805,13 +3689,6 @@ public sealed partial class MainWindow : Window
             _mediaCaptionPaneRefreshing = false;
         }
     }
-
-    private static double ParseMediaTiming(string? text) =>
-        double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value)
-            && double.IsFinite(value) ? Math.Max(0, value) : 0;
-
-    private static string FormatMediaTiming(double value) =>
-        Math.Max(0, value).ToString("0.####", CultureInfo.CurrentCulture);
 
     private void RenderMediaCaptionTrackOptions(PresentationMediaCaptionAuthoringPanePlan plan)
     {
@@ -3871,19 +3748,6 @@ public sealed partial class MainWindow : Window
         button.Content = action.Label;
         button.IsEnabled = action.IsEnabled;
         button.ToolTip = action.DisabledReason;
-    }
-
-    private static int? NormalizeMediaCaptionSelectionAfterMutation(
-        MediaInfo? media,
-        PresentationMediaCaptionAuthoringIntentKind intent,
-        int changedTrackIndex)
-    {
-        if (media is null || media.CaptionTracks.Count == 0)
-            return null;
-
-        return intent == PresentationMediaCaptionAuthoringIntentKind.Delete
-            ? Math.Min(changedTrackIndex, media.CaptionTracks.Count - 1)
-            : changedTrackIndex;
     }
 
     internal PresentationReadingOrderPlan ShowReadingOrderPane()
@@ -4648,7 +4512,7 @@ public sealed partial class MainWindow : Window
         var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
             Editor.CurrentSlide,
             Editor.SelectedShapeIds);
-        return mediaShape is not null && _selectedMediaCaptionTrackIndex is int trackIndex
+        return mediaShape is not null && _mediaPaneSession.SelectedCaptionTrackIndex is int trackIndex
             ? (Editor.CurrentSlideIndex, mediaShape.Id, trackIndex)
             : null;
     }
