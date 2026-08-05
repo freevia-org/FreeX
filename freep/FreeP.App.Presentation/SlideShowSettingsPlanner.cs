@@ -11,20 +11,24 @@ public static class SlideShowSettingsPlanner
         new(
             presentation.UseSlideTimings,
             presentation.ShowWithAnimation,
-            presentation.LoopUntilStopped);
+            presentation.LoopUntilStopped,
+            presentation.ShowType);
 
     public static bool TryApply(
         EditingSession editor,
         bool useSlideTimings,
         bool showWithAnimation,
-        bool loopUntilStopped) =>
+        bool loopUntilStopped,
+        PresentationShowType showType = PresentationShowType.PresentedBySpeaker) =>
         editor.SetSlideShowSettings(
             useSlideTimings,
             showWithAnimation,
-            loopUntilStopped);
+            loopUntilStopped,
+            showType);
 }
 
 public sealed record SlideShowSettingsState(
     bool UseSlideTimings,
     bool ShowWithAnimation,
-    bool LoopUntilStopped);
+    bool LoopUntilStopped,
+    PresentationShowType ShowType = PresentationShowType.PresentedBySpeaker);

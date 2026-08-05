@@ -115,6 +115,9 @@ public sealed class Presentation
     /// <summary>Whether slideshow playback loops back to its first slide after the last slide.</summary>
     public bool LoopUntilStopped { get; set; }
 
+    /// <summary>How PowerPoint presents the slide show window.</summary>
+    public PresentationShowType ShowType { get; set; } = PresentationShowType.PresentedBySpeaker;
+
     /// <summary>Core document properties (title, author, subject, …).</summary>
     public DocumentProperties Properties { get; } = new();
 

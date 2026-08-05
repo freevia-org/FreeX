@@ -194,13 +194,21 @@ public sealed class SlideShowWindow : Window
         _slideDipW = metrics.WidthDip;
         _slideDipH = metrics.HeightDip;
 
-        // Window chrome
-        WindowStyle  = WindowStyle.None;
-        WindowState  = WindowState.Maximized;
-        Topmost      = true;
+        // PowerPoint's speaker and kiosk modes use a borderless presentation window;
+        // individual browsing remains a normal, resizable window for document-style review.
+        var isBrowseWindow = _presentation.ShowType == PresentationShowType.BrowsedByIndividual;
+        WindowStyle  = isBrowseWindow ? WindowStyle.SingleBorderWindow : WindowStyle.None;
+        WindowState  = isBrowseWindow ? WindowState.Normal : WindowState.Maximized;
+        Topmost      = !isBrowseWindow;
+        if (isBrowseWindow)
+        {
+            Width = Math.Min(1024, SystemParameters.WorkArea.Width * 0.85);
+            Height = Math.Min(768, SystemParameters.WorkArea.Height * 0.85);
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        }
         Background   = Brushes.Black;
         Focusable    = true;
-        ResizeMode   = ResizeMode.NoResize;
+        ResizeMode   = isBrowseWindow ? ResizeMode.CanResize : ResizeMode.NoResize;
 
         // ── Visual tree ────────────────────────────────────────────────────────
 

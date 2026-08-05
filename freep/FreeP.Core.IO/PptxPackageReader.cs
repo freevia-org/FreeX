@@ -371,6 +371,11 @@ public static class PptxPackageReader
         presentation.UseSlideTimings = ReadBooleanOrDefault(showPr.Attribute("useTimings")?.Value, defaultValue: true);
         presentation.ShowWithAnimation = ReadBooleanOrDefault(showPr.Attribute("showAnimation")?.Value, defaultValue: true);
         presentation.LoopUntilStopped = ReadBooleanOrDefault(showPr.Attribute("loop")?.Value, defaultValue: false);
+        presentation.ShowType = showPr.Element(P + "browse") is not null
+            ? PresentationShowType.BrowsedByIndividual
+            : showPr.Element(P + "kiosk") is not null
+                ? PresentationShowType.BrowsedAtKiosk
+                : PresentationShowType.PresentedBySpeaker;
 
         var mediaControls = showPr.Element(P14 + "showMediaCtrls")
             ?? showPr.Element(P + "extLst")?
