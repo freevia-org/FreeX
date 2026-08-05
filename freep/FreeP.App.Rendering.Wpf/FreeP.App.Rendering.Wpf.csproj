@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="..\FreeP.App.Ole.Windows\FreeP.App.Ole.Windows.csproj" />
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
     <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
   </ItemGroup>

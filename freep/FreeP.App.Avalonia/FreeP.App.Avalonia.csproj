@@ -42,6 +42,8 @@
     <ProjectReference Include="..\FreeP.App.Recording\FreeP.App.Recording.csproj" />
     <ProjectReference Include="..\FreeP.App.Recording.Windows\FreeP.App.Recording.Windows.csproj"
                       Condition="'$(TargetPlatformIdentifier)' == 'Windows'" />
+    <ProjectReference Include="..\FreeP.App.Ole.Windows\FreeP.App.Ole.Windows.csproj"
+                      Condition="'$(TargetPlatformIdentifier)' == 'Windows'" />
     <ProjectReference Include="..\FreeP.App.Media\FreeP.App.Media.csproj" />
     <ProjectReference Include="..\FreeP.App.Rendering.Avalonia\FreeP.App.Rendering.Avalonia.csproj" />
     <ProjectReference Include="..\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj" />

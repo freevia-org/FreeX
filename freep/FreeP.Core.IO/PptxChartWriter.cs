@@ -110,6 +110,7 @@ internal static class PptxChartWriter
             try
             {
                 var preserved = XDocument.Parse(chart.PreservedChartExXml, LoadOptions.PreserveWhitespace);
+                UpdateChartExTitle(preserved, chart);
                 UpdateChartExSeriesLayouts(preserved, chart);
                 if (chart.RegenerateWorkbookOnSave)
                     UpdateChartExData(preserved, chart);
@@ -161,6 +162,47 @@ internal static class PptxChartWriter
                 new XElement(cx + "chart",
                     new XElement(cx + "plotArea",
                         new XElement(cx + "plotAreaRegion", series)))));
+    }
+
+    private static void UpdateChartExTitle(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var chartElement = document.Root?.Element(cx + "chart");
+        if (chartElement is null)
+            return;
+
+        var title = chartElement.Element(cx + "title");
+        if (chart.Title is null)
+            return;
+
+        if (title is null)
+        {
+            chartElement.AddFirst(new XElement(cx + "title",
+                new XElement(cx + "tx",
+                    new XElement(cx + "txData",
+                        new XElement(cx + "v", chart.Title)))));
+            return;
+        }
+
+        var value = title.Descendants(cx + "v").FirstOrDefault();
+        if (value is not null)
+        {
+            value.Value = chart.Title;
+            return;
+        }
+
+        var richRuns = title.Descendants(A + "t").ToList();
+        if (richRuns.Count > 0)
+        {
+            richRuns[0].Value = chart.Title;
+            foreach (var run in richRuns.Skip(1))
+                run.Value = string.Empty;
+            return;
+        }
+
+        var txData = title.Descendants(cx + "txData").FirstOrDefault();
+        if (txData is not null)
+            txData.Add(new XElement(cx + "v", chart.Title));
     }
 
     private static bool IsWaterfallChartEx(XDocument document, ChartShape chart)
