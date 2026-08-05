@@ -178,8 +178,13 @@ internal static class ExternalXamlClipboardWriter
             writer.WriteAttributeString("FontWeight", "Bold");
         if (run.Italic)
             writer.WriteAttributeString("FontStyle", "Italic");
+        var decorations = new List<string>(capacity: 2);
         if (run.Underline)
-            writer.WriteAttributeString("TextDecorations", "Underline");
+            decorations.Add("Underline");
+        if (run.Strikethrough)
+            decorations.Add("Strikethrough");
+        if (decorations.Count > 0)
+            writer.WriteAttributeString("TextDecorations", string.Join(", ", decorations));
         if (run.Color?.Resolved is { } color)
             writer.WriteAttributeString("Foreground", FormatColor(color));
         if (run.RightToLeft is { } rightToLeft)

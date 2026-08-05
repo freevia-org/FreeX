@@ -543,6 +543,103 @@ public sealed class WpfRichTextClipboardAdapterTests
     }
 
     [StaFact]
+    public void SharedXamlPackage_WithStrikethrough_IsAcceptedByNativeWpfTextRangeLoader()
+    {
+        var source = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run { Text = "underlined", Underline = true, Strikethrough = true },
+                        new Run { Text = " plain" },
+                    },
+                },
+            },
+        };
+        var payload = new InCanvasRichClipboardPayload(
+            source,
+            InCanvasTextEditPlanner.ExtractPlainText(source));
+        var packageBytes = ExternalXamlClipboardPlanner.SerializeXamlPackage(payload);
+
+        var document = new System.Windows.Documents.FlowDocument();
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        new System.Windows.Documents.TextRange(document.ContentStart, document.ContentEnd)
+            .Load(stream, DataFormats.XamlPackage);
+
+        var runs = document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>().ToArray();
+        runs.Select(run => run.Text).Should().Equal("underlined", " plain");
+        runs[0].TextDecorations.Should().Contain(decoration =>
+            decoration.Location == System.Windows.TextDecorationLocation.Underline);
+        runs[0].TextDecorations.Should().Contain(decoration =>
+            decoration.Location == System.Windows.TextDecorationLocation.Strikethrough);
+        runs[1].TextDecorations.Should().BeEmpty();
+    }
+
+    [StaFact]
+    public void NativeWpfXamlPackage_PreservesStrikethroughAndSharedPlannerReadsIt()
+    {
+        var source = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run { Text = "native strike", Strikethrough = true },
+                        new Run
+                        {
+                            Text = " link",
+                            Strikethrough = true,
+                            Hyperlink = new Hyperlink { Url = "https://example.test/native-wave161" },
+                        },
+                    },
+                },
+            },
+        };
+        var box = new RichTextBox
+        {
+            Document = TextBodyFlowDocumentConverter.ToFlowDocument(source, 12),
+        };
+        box.SelectAll();
+        var payload = InCanvasRichClipboardPlanner.Capture(
+            source,
+            new InCanvasEditorTextSelection(0, InCanvasTextEditPlanner.ExtractPlainText(source).Length));
+
+        var data = WpfRichTextClipboardAdapter.BuildDataObject(box, payload);
+        var packageBytes = ((MemoryStream)data.GetData(
+            DataFormats.XamlPackage,
+            autoConvert: false)!).ToArray();
+
+        var document = new System.Windows.Documents.FlowDocument();
+        using (var stream = new MemoryStream(packageBytes, writable: false))
+        {
+            new System.Windows.Documents.TextRange(document.ContentStart, document.ContentEnd)
+                .Load(stream, DataFormats.XamlPackage);
+        }
+
+        var nativeRuns = document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>().ToArray();
+        nativeRuns.Should().Contain(run =>
+            run.Text == "native strike"
+            && run.TextDecorations.Any(decoration =>
+                decoration.Location == System.Windows.TextDecorationLocation.Strikethrough));
+
+        var restored = ExternalXamlClipboardPlanner.TryParseXamlPackage(packageBytes);
+        restored.Should().NotBeNull();
+        restored!.Body.Paragraphs.Single().Runs.Should().Contain(run =>
+            run.Text == "native strike" && run.Strikethrough);
+        restored.Body.Paragraphs.Single().Runs.Should().Contain(run =>
+            run.Text == " link"
+            && run.Strikethrough
+            && run.Hyperlink!.Url == "https://example.test/native-wave161");
+    }
+
+    [StaFact]
     public void SharedXamlPackage_WithInlineTable_IsAcceptedByNativeWpfTextRangeLoader()
     {
         var table = new TableShape();

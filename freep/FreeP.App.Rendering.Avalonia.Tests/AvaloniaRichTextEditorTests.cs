@@ -983,7 +983,12 @@ public sealed class AvaloniaRichTextEditorTests
                                 InlineImageWidthEmu = 228_600,
                                 InlineImageHeightEmu = 114_300,
                             },
-                            new Run { Text = " after" },
+                            new Run
+                            {
+                                Text = " after",
+                                Strikethrough = true,
+                                Hyperlink = new Hyperlink { Url = "https://example.test/wave161" },
+                            },
                         },
                     },
                 },
@@ -1013,7 +1018,16 @@ public sealed class AvaloniaRichTextEditorTests
                 .Should().Equal("Before ", "\uFFFC", " after");
             privatePayload.Body.Paragraphs.Single().Runs[1].InlineImage!.Bytes
                 .Should().Equal(imageBytes);
-            ExternalRichTextClipboardPlanner.TryParseRtf(rtf).Should().NotBeNull();
+            privatePayload.Body.Paragraphs.Single().Runs[2].Strikethrough.Should().BeTrue();
+            privatePayload.Body.Paragraphs.Single().Runs[2].Hyperlink!.Url
+                .Should().Be("https://example.test/wave161");
+
+            var restoredRtf = ExternalRichTextClipboardPlanner.TryParseRtf(rtf);
+            restoredRtf.Should().NotBeNull();
+            restoredRtf!.Body.Paragraphs.Single().Runs.Should().Contain(run =>
+                run.Text == " after"
+                && run.Strikethrough
+                && run.Hyperlink!.Url == "https://example.test/wave161");
             plainText.Should().Be("Before  after");
 
             xaml.Should().NotBeNull();
@@ -1023,6 +1037,9 @@ public sealed class AvaloniaRichTextEditorTests
                 .Should().Equal("Before ", "\uFFFC", " after");
             restored.Body.Paragraphs.Single().Runs[1].InlineImage!.Bytes
                 .Should().Equal(imageBytes);
+            restored.Body.Paragraphs.Single().Runs[2].Strikethrough.Should().BeTrue();
+            restored.Body.Paragraphs.Single().Runs[2].Hyperlink!.Url
+                .Should().Be("https://example.test/wave161");
         }, CancellationToken.None);
     }
 

@@ -1227,6 +1227,68 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void SerializeXamlPackage_RoundTripsStrikethroughAndHyperlinkFormatting()
+    {
+        var body = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run { Text = "before " },
+                        new Run
+                        {
+                            Text = "crossed",
+                            Underline = true,
+                            Strikethrough = true,
+                        },
+                        new Run
+                        {
+                            Text = " link",
+                            Strikethrough = true,
+                            Hyperlink = new Hyperlink
+                            {
+                                Url = "https://example.test/wave161",
+                                Tooltip = "Wave 161",
+                            },
+                        },
+                    },
+                },
+            },
+        };
+        var payload = new InCanvasRichClipboardPayload(
+            body,
+            InCanvasTextEditPlanner.ExtractPlainText(body));
+
+        var packageBytes = ExternalXamlClipboardPlanner.SerializeXamlPackage(payload);
+        using (var package = new ZipArchive(
+                   new MemoryStream(packageBytes, writable: false),
+                   ZipArchiveMode.Read))
+        using (var stream = package.GetEntry("Xaml/Document.xaml")!.Open())
+        using (var reader = new StreamReader(stream))
+        {
+            var xaml = reader.ReadToEnd();
+            xaml.Should().Contain("TextDecorations=\"Underline, Strikethrough\"");
+            xaml.Should().Contain("TextDecorations=\"Strikethrough\"");
+            xaml.Should().Contain("NavigateUri=\"https://example.test/wave161\"");
+        }
+
+        var restored = ExternalXamlClipboardPlanner.TryParseXamlPackage(packageBytes);
+        restored.Should().NotBeNull();
+        restored!.Body.Paragraphs.Single().Runs.Select(run => run.Text)
+            .Should().Equal("before ", "crossed", " link");
+        restored.Body.Paragraphs.Single().Runs[1].Underline.Should().BeTrue();
+        restored.Body.Paragraphs.Single().Runs[1].Strikethrough.Should().BeTrue();
+        restored.Body.Paragraphs.Single().Runs[2].Strikethrough.Should().BeTrue();
+        restored.Body.Paragraphs.Single().Runs[2].Hyperlink!.Url
+            .Should().Be("https://example.test/wave161");
+        restored.Body.Paragraphs.Single().Runs[2].Hyperlink!.Tooltip
+            .Should().Be("Wave 161");
+    }
+
+    [Fact]
     public void RtfCharacterDirection_RtlchAndLtrch_PreserveMixedRunOverrides()
     {
         const string rtf =
