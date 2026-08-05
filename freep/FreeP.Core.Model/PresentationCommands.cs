@@ -702,12 +702,14 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
 {
     private readonly bool _oldUseSlideTimings;
     private readonly bool _oldShowWithAnimation;
+    private readonly bool _oldShowWithNarration;
     private readonly bool _oldLoopUntilStopped;
     private readonly PresentationShowType _oldShowType;
     private readonly bool _oldShowBrowseScrollbar;
     private readonly uint? _oldKioskRestartAfterMilliseconds;
     private readonly bool _newUseSlideTimings;
     private readonly bool _newShowWithAnimation;
+    private readonly bool _newShowWithNarration;
     private readonly bool _newLoopUntilStopped;
     private readonly PresentationShowType _newShowType;
     private readonly bool _newShowBrowseScrollbar;
@@ -720,12 +722,14 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
         PresentationShowType oldShowType,
         bool oldShowBrowseScrollbar,
         uint? oldKioskRestartAfterMilliseconds,
+        bool oldShowWithNarration,
         bool newUseSlideTimings,
         bool newShowWithAnimation,
         bool newLoopUntilStopped,
         PresentationShowType newShowType,
         bool newShowBrowseScrollbar,
-        uint? newKioskRestartAfterMilliseconds)
+        uint? newKioskRestartAfterMilliseconds,
+        bool newShowWithNarration)
     {
         _oldUseSlideTimings = oldUseSlideTimings;
         _oldShowWithAnimation = oldShowWithAnimation;
@@ -733,12 +737,14 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
         _oldShowType = oldShowType;
         _oldShowBrowseScrollbar = oldShowBrowseScrollbar;
         _oldKioskRestartAfterMilliseconds = oldKioskRestartAfterMilliseconds;
+        _oldShowWithNarration = oldShowWithNarration;
         _newUseSlideTimings = newUseSlideTimings;
         _newShowWithAnimation = newShowWithAnimation;
         _newLoopUntilStopped = newLoopUntilStopped;
         _newShowType = newShowType;
         _newShowBrowseScrollbar = newShowBrowseScrollbar;
         _newKioskRestartAfterMilliseconds = newKioskRestartAfterMilliseconds;
+        _newShowWithNarration = newShowWithNarration;
     }
 
     public SetSlideShowSettingsCommand(
@@ -755,12 +761,14 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
             PresentationShowType.PresentedBySpeaker,
             true,
             null,
+            true,
             newUseSlideTimings,
             newShowWithAnimation,
             newLoopUntilStopped,
             PresentationShowType.PresentedBySpeaker,
             true,
-            null)
+            null,
+            true)
     {
     }
 
@@ -780,12 +788,14 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
             oldShowType,
             true,
             null,
+            true,
             newUseSlideTimings,
             newShowWithAnimation,
             newLoopUntilStopped,
             newShowType,
             true,
-            null)
+            null,
+            true)
     {
     }
 
@@ -794,6 +804,7 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
     public bool HasEffect(Presentation p) =>
         p.UseSlideTimings != _newUseSlideTimings ||
         p.ShowWithAnimation != _newShowWithAnimation ||
+        p.ShowWithNarration != _newShowWithNarration ||
         p.LoopUntilStopped != _newLoopUntilStopped ||
         p.ShowType != _newShowType ||
         p.ShowBrowseScrollbar != _newShowBrowseScrollbar ||
@@ -803,6 +814,7 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
     {
         p.UseSlideTimings = _newUseSlideTimings;
         p.ShowWithAnimation = _newShowWithAnimation;
+        p.ShowWithNarration = _newShowWithNarration;
         p.LoopUntilStopped = _newLoopUntilStopped;
         p.ShowType = _newShowType;
         p.ShowBrowseScrollbar = _newShowBrowseScrollbar;
@@ -813,6 +825,7 @@ public sealed class SetSlideShowSettingsCommand : IPresentationCommand
     {
         p.UseSlideTimings = _oldUseSlideTimings;
         p.ShowWithAnimation = _oldShowWithAnimation;
+        p.ShowWithNarration = _oldShowWithNarration;
         p.LoopUntilStopped = _oldLoopUntilStopped;
         p.ShowType = _oldShowType;
         p.ShowBrowseScrollbar = _oldShowBrowseScrollbar;

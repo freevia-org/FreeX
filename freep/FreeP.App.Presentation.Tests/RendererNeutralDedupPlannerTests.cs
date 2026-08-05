@@ -180,6 +180,31 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void SlideShowMediaInteractionPlanner_SuppressesNarrationAudioButKeepsVideo()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(MediaShape(8, 0, 0, 4, 4, embedded: true));
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 9,
+            Kind = SlideShapeKind.Media,
+            OffsetXEmu = 4 * 9525,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 4 * 9525,
+            ExtentCyEmu = 4 * 9525,
+            Media = new MediaInfo { IsVideo = false, Bytes = [4, 5, 6] },
+        });
+
+        SlideShowMediaInteractionPlanner.BuildSlidePlan(
+                slide, 10, 10, 10, 10, showNarration: false)
+            .Should().ContainSingle(plan => plan.ShapeId == 8);
+
+        SlideShowMediaInteractionPlanner.PlanClick(
+                slide, 10, 10, 10, 10, 6, 2, showNarration: false)
+            .IsHandled.Should().BeFalse();
+    }
+
+    [Fact]
     public void ShowMediaControlsCommand_IsUndoableAndDefaultsOn()
     {
         var presentation = Presentation.CreateEmpty();
@@ -227,18 +252,21 @@ public sealed class RendererNeutralDedupPlannerTests
             oldShowType: PresentationShowType.PresentedBySpeaker,
             oldShowBrowseScrollbar: true,
             oldKioskRestartAfterMilliseconds: null,
+            oldShowWithNarration: true,
             newUseSlideTimings: false,
             newShowWithAnimation: false,
             newLoopUntilStopped: true,
             newShowType: PresentationShowType.BrowsedByIndividual,
             newShowBrowseScrollbar: false,
-            newKioskRestartAfterMilliseconds: 15_000));
+            newKioskRestartAfterMilliseconds: 15_000,
+            newShowWithNarration: false));
         presentation.UseSlideTimings.Should().BeFalse();
         presentation.ShowWithAnimation.Should().BeFalse();
         presentation.LoopUntilStopped.Should().BeTrue();
         presentation.ShowType.Should().Be(PresentationShowType.BrowsedByIndividual);
         presentation.ShowBrowseScrollbar.Should().BeFalse();
         presentation.KioskRestartAfterMilliseconds.Should().Be(15_000);
+        presentation.ShowWithNarration.Should().BeFalse();
         bus.Undo();
         presentation.UseSlideTimings.Should().BeTrue();
         presentation.ShowWithAnimation.Should().BeTrue();
@@ -246,6 +274,7 @@ public sealed class RendererNeutralDedupPlannerTests
         presentation.ShowType.Should().Be(PresentationShowType.PresentedBySpeaker);
         presentation.ShowBrowseScrollbar.Should().BeTrue();
         presentation.KioskRestartAfterMilliseconds.Should().BeNull();
+        presentation.ShowWithNarration.Should().BeTrue();
         bus.Redo();
 
         using var output = new MemoryStream();
@@ -258,6 +287,7 @@ public sealed class RendererNeutralDedupPlannerTests
         reopened.ShowType.Should().Be(PresentationShowType.BrowsedByIndividual);
         reopened.ShowBrowseScrollbar.Should().BeFalse();
         reopened.KioskRestartAfterMilliseconds.Should().BeNull();
+        reopened.ShowWithNarration.Should().BeFalse();
 
         using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
         using var properties = archive.GetEntry("ppt/presProps.xml")!.Open();
@@ -266,6 +296,7 @@ public sealed class RendererNeutralDedupPlannerTests
         showPr.Attribute("useTimings")!.Value.Should().Be("0");
         showPr.Attribute("showAnimation")!.Value.Should().Be("0");
         showPr.Attribute("loop")!.Value.Should().Be("1");
+        showPr.Attribute("showNarration")!.Value.Should().Be("0");
         var browse = showPr.Element(XName.Get("browse", "http://schemas.openxmlformats.org/presentationml/2006/main"));
         browse.Should().NotBeNull();
         browse!.Attribute("showScrollbar")!.Value.Should().Be("0");

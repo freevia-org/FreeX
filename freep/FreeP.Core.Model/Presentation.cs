@@ -112,6 +112,9 @@ public sealed class Presentation
     /// <summary>Whether slideshow playback runs authored shape animations.</summary>
     public bool ShowWithAnimation { get; set; } = true;
 
+    /// <summary>Whether slideshow playback plays authored narration/audio tracks.</summary>
+    public bool ShowWithNarration { get; set; } = true;
+
     /// <summary>Whether slideshow playback loops back to its first slide after the last slide.</summary>
     public bool LoopUntilStopped { get; set; }
 

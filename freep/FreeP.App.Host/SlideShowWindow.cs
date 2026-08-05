@@ -1077,7 +1077,8 @@ public sealed class SlideShowWindow : Window
             preferredCaptionTrackIndex: _preferredCaptionTrackIndex,
             captionSlideIndex: captionSlideIndex,
             preferredCaptionSlideIndex: _preferredCaptionSlideIndex,
-            showMediaControls: _presentation.ShowMediaControls);
+            showMediaControls: _presentation.ShowMediaControls,
+            showNarration: _presentation.ShowWithNarration);
 
         // Apply transition if requested.
         if (plan.Transition is { } t)

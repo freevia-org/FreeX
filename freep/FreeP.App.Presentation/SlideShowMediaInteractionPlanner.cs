@@ -36,12 +36,15 @@ public static class SlideShowMediaInteractionPlanner
         double slideDipH,
         double canvasW,
         double canvasH,
-        bool showMediaControls = true)
+        bool showMediaControls = true,
+        bool showNarration = true)
     {
         ArgumentNullException.ThrowIfNull(slide);
 
         return EnumerateShapes(slide.Shapes)
-            .Where(shape => shape.Kind == SlideShapeKind.Media && shape.Media is not null)
+            .Where(shape => shape.Kind == SlideShapeKind.Media
+                && shape.Media is not null
+                && (showNarration || shape.Media.IsVideo))
             .Select(shape => BuildShapePlan(shape, slideDipW, slideDipH, canvasW, canvasH, showMediaControls))
             .ToArray();
     }
@@ -54,9 +57,11 @@ public static class SlideShowMediaInteractionPlanner
         double canvasH,
         double canvasX,
         double canvasY,
-        bool showMediaControls = true)
+        bool showMediaControls = true,
+        bool showNarration = true)
     {
-        foreach (var media in BuildSlidePlan(slide, slideDipW, slideDipH, canvasW, canvasH, showMediaControls).Reverse())
+        foreach (var media in BuildSlidePlan(
+            slide, slideDipW, slideDipH, canvasW, canvasH, showMediaControls, showNarration).Reverse())
         {
             if (canvasX >= media.Bounds.Left && canvasX <= media.Bounds.Right &&
                 canvasY >= media.Bounds.Top && canvasY <= media.Bounds.Bottom)

@@ -14,7 +14,8 @@ public static class SlideShowSettingsPlanner
             presentation.LoopUntilStopped,
             presentation.ShowType,
             presentation.ShowBrowseScrollbar,
-            presentation.KioskRestartAfterMilliseconds);
+            presentation.KioskRestartAfterMilliseconds,
+            presentation.ShowWithNarration);
 
     public static bool TryApply(
         EditingSession editor,
@@ -23,14 +24,16 @@ public static class SlideShowSettingsPlanner
         bool loopUntilStopped,
         PresentationShowType showType = PresentationShowType.PresentedBySpeaker,
         bool showBrowseScrollbar = true,
-        uint? kioskRestartAfterMilliseconds = null) =>
+        uint? kioskRestartAfterMilliseconds = null,
+        bool showWithNarration = true) =>
         editor.SetSlideShowSettings(
             useSlideTimings,
             showWithAnimation,
             loopUntilStopped,
             showType,
             showBrowseScrollbar,
-            kioskRestartAfterMilliseconds);
+            kioskRestartAfterMilliseconds,
+            showWithNarration);
 }
 
 public sealed record SlideShowSettingsState(
@@ -39,4 +42,5 @@ public sealed record SlideShowSettingsState(
     bool LoopUntilStopped,
     PresentationShowType ShowType = PresentationShowType.PresentedBySpeaker,
     bool ShowBrowseScrollbar = true,
-    uint? KioskRestartAfterMilliseconds = null);
+    uint? KioskRestartAfterMilliseconds = null,
+    bool ShowWithNarration = true);

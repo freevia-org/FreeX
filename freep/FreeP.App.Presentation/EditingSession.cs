@@ -682,7 +682,8 @@ public sealed class EditingSession
         bool loopUntilStopped,
         PresentationShowType showType = PresentationShowType.PresentedBySpeaker,
         bool showBrowseScrollbar = true,
-        uint? kioskRestartAfterMilliseconds = null)
+        uint? kioskRestartAfterMilliseconds = null,
+        bool showWithNarration = true)
     {
         Bus.Execute(new SetSlideShowSettingsCommand(
             Presentation.UseSlideTimings,
@@ -691,15 +692,18 @@ public sealed class EditingSession
             Presentation.ShowType,
             Presentation.ShowBrowseScrollbar,
             Presentation.KioskRestartAfterMilliseconds,
+            Presentation.ShowWithNarration,
             useSlideTimings,
             showWithAnimation,
             loopUntilStopped,
             showType,
             showBrowseScrollbar,
-            kioskRestartAfterMilliseconds));
+            kioskRestartAfterMilliseconds,
+            showWithNarration));
 
         return Presentation.UseSlideTimings == useSlideTimings &&
             Presentation.ShowWithAnimation == showWithAnimation &&
+            Presentation.ShowWithNarration == showWithNarration &&
             Presentation.LoopUntilStopped == loopUntilStopped &&
             Presentation.ShowType == showType &&
             Presentation.ShowBrowseScrollbar == showBrowseScrollbar &&
