@@ -51,6 +51,89 @@ public sealed class IndexEntryUndoParityTests
     }
 
     [StaFact]
+    public void InsertIndex_DefaultAndPeopleRegionsCoexistWithMatchingEntriesOnly()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Entries"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha")),
+                DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People")),
+                DocumentIndex.MarkRun(new IndexMark("Ignored", Identifier: "Places"))
+            }
+        });
+        var editor = new DocumentView();
+        editor.LoadModel(document);
+
+        editor.InsertIndex();
+        editor.InsertIndex("People");
+
+        IndexText(editor, identifier: null).Should().Equal("Index", "Alpha, 1");
+        IndexText(editor, "People").Should().Equal("Index", "Ada, 1");
+        editor.Model.Blocks.Should().NotContain(block => DocumentIndex.IsIndexParagraph(block, "Places"));
+    }
+
+    [StaFact]
+    public void RefreshIndex_PeopleLeavesDefaultRegionUntouchedAndUpdatesPeopleOnly()
+    {
+        var defaultHeading = new Paragraph(DocumentIndex.HeadingText)
+        {
+            StyleId = DocumentIndex.HeadingStyleIdFor(identifier: null)
+        };
+        var defaultEntry = new Paragraph("Alpha, 7")
+        {
+            StyleId = DocumentIndex.EntryStyleIdFor(identifier: null)
+        };
+        var peopleHeading = new Paragraph(DocumentIndex.HeadingText)
+        {
+            StyleId = DocumentIndex.HeadingStyleIdFor("People")
+        };
+        var peopleEntry = new Paragraph("Old Person, 9")
+        {
+            StyleId = DocumentIndex.EntryStyleIdFor("People")
+        };
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(defaultHeading);
+        document.Blocks.Add(defaultEntry);
+        document.Blocks.Add(peopleHeading);
+        document.Blocks.Add(peopleEntry);
+        document.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Entries"),
+                DocumentIndex.MarkRun(new IndexMark("Beta")),
+                DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People")),
+                DocumentIndex.MarkRun(new IndexMark("Grace", Identifier: "People"))
+            }
+        });
+        var editor = new DocumentView();
+        editor.LoadModel(document);
+        editor.MarkIndexEntry(string.Empty);
+        var defaultRegionBefore = editor.Model.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, identifier: null))
+            .Cast<Paragraph>()
+            .ToArray();
+
+        editor.RefreshIndex("People");
+
+        var defaultRegionAfter = editor.Model.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, identifier: null))
+            .Cast<Paragraph>()
+            .ToArray();
+        defaultRegionAfter.Should().BeEquivalentTo(defaultRegionBefore, options => options.WithStrictOrdering());
+        IndexText(editor, "People").Should().Equal("Index", "Ada, 1", "Grace, 1");
+        editor.Model.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
+            .Should().NotContain(peopleHeading)
+            .And.NotContain(peopleEntry);
+    }
+
+    [StaFact]
     public void StructuredMarkIndexEntry_PreservesHierarchyAndCrossReferenceThroughUndo()
     {
         var editor = new DocumentView();
@@ -100,4 +183,10 @@ public sealed class IndexEntryUndoParityTests
             .SelectMany(paragraph => paragraph.Runs)
             .Select(DocumentIndex.MarkedEntry)
             .OfType<IndexMark>();
+
+    private static IEnumerable<string> IndexText(DocumentView editor, string? identifier) =>
+        editor.Model.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, identifier))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText);
 }

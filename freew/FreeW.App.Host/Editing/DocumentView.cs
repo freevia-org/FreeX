@@ -16357,18 +16357,20 @@ public sealed class DocumentView : RichTextBox
     /// styles (registered via <see cref="DocumentIndex.EnsureStyles"/>) which both give them distinct
     /// formatting and mark the region.
     /// </summary>
-    public void InsertIndex()
+    public void InsertIndex() => InsertIndex(identifier: null);
+
+    public void InsertIndex(string? identifier)
     {
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-        DocumentIndex.EnsureStyles(_model);
+        DocumentIndex.EnsureStyles(_model, identifier);
 
         // Insert at the caret's block (an index reads as back-matter); fall back to the document end.
         var index = CaretBlockIndex();
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
 
-        var entries = DocumentIndex.Build(_model, BuildGeneratedPageTextResolver());
+        var entries = DocumentIndex.Build(_model, BuildGeneratedPageTextResolver(), identifier);
         foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
     }
@@ -16378,16 +16380,18 @@ public sealed class DocumentView : RichTextBox
     /// dedicated styles from <see cref="DocumentIndex"/>; the refreshed index is inserted at the first
     /// previous index paragraph, or at the document end when there is not yet an index.
     /// </summary>
-    public void RefreshIndex()
+    public void RefreshIndex() => RefreshIndex(identifier: null);
+
+    public void RefreshIndex(string? identifier)
     {
         CommitToModel();
-        DocumentIndex.EnsureStyles(_model);
+        DocumentIndex.EnsureStyles(_model, identifier);
 
         var firstIndex = -1;
         var indexParagraphs = new List<int>();
         for (var i = 0; i < _model.Blocks.Count; i++)
         {
-            if (!DocumentIndex.IsIndexParagraph(_model.Blocks[i]))
+            if (!DocumentIndex.IsIndexParagraph(_model.Blocks[i], identifier))
                 continue;
             firstIndex = firstIndex < 0 ? i : firstIndex;
             indexParagraphs.Add(i);
@@ -16397,7 +16401,7 @@ public sealed class DocumentView : RichTextBox
         for (var i = indexParagraphs.Count - 1; i >= 0; i--)
             _commands.Execute(new DeleteParagraphCommand(indexParagraphs[i]));
 
-        var entries = DocumentIndex.Build(_model, BuildGeneratedPageTextResolver());
+        var entries = DocumentIndex.Build(_model, BuildGeneratedPageTextResolver(), identifier);
         var index = Math.Clamp(insertAt, 0, _model.Blocks.Count);
         foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
