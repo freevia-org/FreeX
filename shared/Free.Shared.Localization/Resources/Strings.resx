@@ -43,6 +43,7 @@
   <data name="File_UnsupportedExtensionFormat" xml:space="preserve"><value>Save failed: unsupported extension "{0}".</value></data>
   <data name="File_UnsupportedFileTypeFormat" xml:space="preserve"><value>{0} failed: unsupported file type "{1}".</value></data>
   <data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve"><value>English (United States)</value></data>
+  <data name="Options_AppLanguageSystemDefault" xml:space="preserve"><value>Use system default</value></data>
   <data name="Ribbon_Command_Bold_KeyTip" xml:space="preserve"><value>1</value></data>
   <data name="Ribbon_Command_Bold_Label" xml:space="preserve"><value>Bold</value></data>
   <data name="Ribbon_Command_Bullets_Label" xml:space="preserve"><value>Bullets</value></data>

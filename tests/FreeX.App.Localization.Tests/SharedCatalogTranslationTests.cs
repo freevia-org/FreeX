@@ -9,7 +9,7 @@ namespace FreeX.App.Localization.Tests;
 public sealed class SharedCatalogTranslationTests
 {
     [Fact]
-    public void SharedSatelliteTranslations_MatchTheMovedFreeXTranslationsAcrossAllCultures()
+    public void SharedSatelliteTranslations_MatchTheApprovedSharedCatalogManifest()
     {
         var manifestPath = TestWorkspaceFileLocator.Find(
             "tests", "FreeX.App.Localization.Tests", "SharedCatalogTranslationHashes.json");
@@ -25,7 +25,7 @@ public sealed class SharedCatalogTranslationTests
             var values = ResxResourceTestSupport.ReadResxValues(
                 resourceDirectory,
                 $"Strings.{culture}.resx");
-            values.Should().HaveCount(20, because: culture);
+            values.Should().HaveCount(culture == "fr-FR" ? 21 : 20, because: culture);
 
             var canonical = string.Join(
                 "\n",

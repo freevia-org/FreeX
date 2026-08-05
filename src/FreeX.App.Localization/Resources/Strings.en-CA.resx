@@ -9011,9 +9011,6 @@
     <value>Select the display language FreeX uses for menus, dialogs, and messages.</value>
   </data>
 
-<data name="Options_AppLanguageSystemDefault" xml:space="preserve">
-    <value>Use system default</value>
-  </data>
 
 <data name="Options_AppLanguageRestartNotice" xml:space="preserve">
     <value>Some open windows may keep their current language until you restart FreeX.</value>

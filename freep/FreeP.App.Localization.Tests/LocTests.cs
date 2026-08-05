@@ -52,6 +52,10 @@ public sealed class LocTests
     public void SharedCatalog_FallsBackAcrossCulturesAndPreservesFormattingContracts()
     {
         WithUiCulture("en-US", () => Loc.Get("Ribbon_Command_Bold_Label")).Should().Be("Bold");
+        WithUiCulture("en-US", () => Loc.Get("Options_AppLanguageSystemDefault"))
+            .Should().Be("Use system default");
+        WithUiCulture("fr-FR", () => Loc.Get("Options_AppLanguageSystemDefault"))
+            .Should().Be("Utiliser la langue du systeme");
         WithUiCulture("en-US", () => Loc.Format("File_CommandFailedFormat", "Open", "Denied"))
             .Should().Be("Open failed: Denied");
         WithUiCulture("fr-FR", () => Loc.Get("Common_ConfirmTitle")).Should().Be("Confirmation");

@@ -58,9 +58,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Options_AppLanguageSystemDefault" xml:space="preserve">
-    <value>Use system default</value>
-  </data>
   <data name="Ribbon_Command_Cut_KeyTip" xml:space="preserve">
     <value>X</value>
   </data>
@@ -91,14 +88,8 @@
   <data name="Ribbon_Command_ShrinkFontCompact_Label" xml:space="preserve">
     <value>A&#x2193;</value>
   </data>
-  <data name="Ribbon_Command_Subscript_Label" xml:space="preserve">
-    <value>Subscript</value>
-  </data>
   <data name="Ribbon_Command_SubscriptCompact_Label" xml:space="preserve">
     <value>X&#x2082;</value>
-  </data>
-  <data name="Ribbon_Command_Superscript_Label" xml:space="preserve">
-    <value>Superscript</value>
   </data>
   <data name="Ribbon_Command_SuperscriptCompact_Label" xml:space="preserve">
     <value>X&#xB2;</value>

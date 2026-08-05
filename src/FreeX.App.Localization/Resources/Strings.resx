@@ -14225,9 +14225,6 @@ A new blank workbook was opened instead.</value>
   <data name="SortOptions_SortOptions" xml:space="preserve">
     <value>Sort Options</value>
   </data>
-  <data name="Options_AppLanguageSystemDefault" xml:space="preserve">
-    <value>Use system default</value>
-  </data>
   <data name="MainWindow_Header_CustomizeEffects" xml:space="preserve">
     <value>Customize Effects...</value>
   </data>
