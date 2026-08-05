@@ -537,37 +537,8 @@ public partial class App : Application
     /// its siblings up front — mirroring how File &gt; Open already scopes one document per window.
     /// </summary>
     private static IReadOnlyList<AutosaveRecoveryCandidate> DeduplicateCandidatesByDocument(
-        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
-    {
-        if (candidates.Count <= 1)
-            return candidates;
-
-        var newestByDocument = new Dictionary<string, AutosaveRecoveryCandidate>(StringComparer.OrdinalIgnoreCase);
-        var ordered = new List<string>();
-
-        foreach (var candidate in candidates)
-        {
-            var documentKey = GetDocumentIdentityKey(candidate);
-            if (!newestByDocument.TryGetValue(documentKey, out var existing))
-            {
-                newestByDocument[documentKey] = candidate;
-                ordered.Add(documentKey);
-                continue;
-            }
-
-            if (GetCandidateTimestamp(candidate) > GetCandidateTimestamp(existing))
-            {
-                AutosaveSnapshotStore.DeleteCandidate(existing);
-                newestByDocument[documentKey] = candidate;
-            }
-            else
-            {
-                AutosaveSnapshotStore.DeleteCandidate(candidate);
-            }
-        }
-
-        return ordered.Select(key => newestByDocument[key]).ToList();
-    }
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates) =>
+        AutosaveRecoveryCandidateProcessor.DeduplicateByDocument(candidates);
 
     /// <summary>
     /// Identity key grouping candidates that are recovery snapshots of the same document.
@@ -612,22 +583,8 @@ public partial class App : Application
     /// own unique key so they are never incorrectly merged with an unrelated candidate.
     /// </para>
     /// </summary>
-    private static string GetDocumentIdentityKey(AutosaveRecoveryCandidate candidate)
-    {
-        if (!string.IsNullOrWhiteSpace(candidate.Sidecar.OriginalFilePath))
-        {
-            return "path:" + GetLaunchScope(candidate) + ":" + candidate.Sidecar.OriginalFilePath
-                + ":" + GetDocumentIdentityComponent(candidate);
-        }
-
-        if (!string.IsNullOrWhiteSpace(candidate.Sidecar.DisplayName))
-        {
-            return "name:" + GetLaunchScope(candidate) + ":" + candidate.Sidecar.DisplayName
-                + ":" + GetDocumentIdentityComponent(candidate);
-        }
-
-        return "snapshot:" + candidate.SnapshotPath;
-    }
+    private static string GetDocumentIdentityKey(AutosaveRecoveryCandidate candidate) =>
+        AutosaveRecoveryCandidateProcessor.GetDocumentIdentityKey(candidate);
 
     /// <summary>
     /// The DocumentId contribution to <see cref="GetDocumentIdentityKey"/>. When the sidecar
@@ -639,9 +596,7 @@ public partial class App : Application
     /// extra candidate than to silently destroy an unrelated window's unsaved edits.
     /// </summary>
     private static string GetDocumentIdentityComponent(AutosaveRecoveryCandidate candidate) =>
-        string.IsNullOrWhiteSpace(candidate.Sidecar.DocumentId)
-            ? "unknown:" + candidate.SnapshotPath
-            : candidate.Sidecar.DocumentId;
+        AutosaveRecoveryCandidateProcessor.GetDocumentIdentityComponent(candidate);
 
     /// <summary>
     /// Extracts the "{processId}-{launchTag}" scope from a snapshot's file name, e.g.
@@ -655,35 +610,11 @@ public partial class App : Application
     /// expected pattern, so a truly unrecognized name is always treated as its own distinct scope
     /// rather than accidentally merged with anything else.
     /// </summary>
-    private static string GetLaunchScope(AutosaveRecoveryCandidate candidate)
-    {
-        var baseName = Path.GetFileNameWithoutExtension(candidate.SnapshotPath);
-        var parts = baseName.Split('-');
-        if (!string.Equals(parts.Length > 0 ? parts[0] : null, "recovery", StringComparison.OrdinalIgnoreCase))
-            return candidate.SnapshotPath;
+    private static string GetLaunchScope(AutosaveRecoveryCandidate candidate) =>
+        AutosaveRecoveryCandidateProcessor.GetLaunchScope(candidate);
 
-        if (parts.Length >= 4)
-            return parts[1] + "-" + parts[2];
-        if (parts.Length == 3)
-            return parts[1];
-
-        return candidate.SnapshotPath;
-    }
-
-    private static DateTimeOffset GetCandidateTimestamp(AutosaveRecoveryCandidate candidate)
-    {
-        if (DateTimeOffset.TryParse(candidate.Sidecar.TimestampUtc, out var parsed))
-            return parsed;
-
-        try
-        {
-            return new DateTimeOffset(File.GetLastWriteTimeUtc(candidate.SnapshotPath), TimeSpan.Zero);
-        }
-        catch
-        {
-            return DateTimeOffset.MinValue;
-        }
-    }
+    private static DateTimeOffset GetCandidateTimestamp(AutosaveRecoveryCandidate candidate) =>
+        AutosaveRecoveryCandidateProcessor.ResolveTimestamp(candidate);
 
     /// <summary>
     /// Formats a candidate's autosave timestamp for display in the startup recovery prompt
@@ -713,48 +644,11 @@ public partial class App : Application
     /// recovered by keeping them.
     /// </summary>
     private static IReadOnlyList<AutosaveRecoveryCandidate> FilterCandidatesWithNewerOriginal(
-        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
-    {
-        if (candidates.Count == 0)
-            return candidates;
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates) =>
+        AutosaveRecoveryCandidateProcessor.FilterSupersededByNewerOriginal(candidates);
 
-        List<AutosaveRecoveryCandidate>? kept = null;
-        for (var i = 0; i < candidates.Count; i++)
-        {
-            var candidate = candidates[i];
-            if (IsOriginalNewerThanSnapshot(candidate))
-            {
-                kept ??= new List<AutosaveRecoveryCandidate>(candidates.Take(i));
-                try { AutosaveSnapshotStore.DeleteCandidate(candidate); } catch { /* best-effort */ }
-                continue;
-            }
-
-            kept?.Add(candidate);
-        }
-
-        return kept ?? candidates;
-    }
-
-    private static bool IsOriginalNewerThanSnapshot(AutosaveRecoveryCandidate candidate)
-    {
-        var originalPath = candidate.Sidecar.OriginalFilePath;
-        if (string.IsNullOrWhiteSpace(originalPath))
-            return false;
-
-        try
-        {
-            if (!File.Exists(originalPath))
-                return false;
-
-            var originalWriteTimeUtc = File.GetLastWriteTimeUtc(originalPath);
-            return originalWriteTimeUtc > GetCandidateTimestamp(candidate).UtcDateTime;
-        }
-        catch
-        {
-            // If the original's timestamp cannot be determined, do not block recovery on it.
-            return false;
-        }
-    }
+    private static bool IsOriginalNewerThanSnapshot(AutosaveRecoveryCandidate candidate) =>
+        AutosaveRecoveryCandidateProcessor.IsOriginalNewerThanSnapshot(candidate);
 
     /// <summary>
     /// Checks for recovery snapshots from previous crashed sessions and offers restore/discard.
@@ -786,8 +680,8 @@ public partial class App : Application
     {
         try
         {
-            var candidates = FilterCandidatesWithNewerOriginal(
-                DeduplicateCandidatesByDocument(snapshotStore.EnumerateCandidates()));
+            var candidates = AutosaveRecoveryCandidateProcessor.PrepareForRecovery(
+                snapshotStore.EnumerateCandidates());
             if (candidates.Count == 0)
                 return false;
 
