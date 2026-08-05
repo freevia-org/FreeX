@@ -11,7 +11,8 @@ param(
     [string]$FreeWEditingReferenceParityEvidenceScriptPath = "tools\Generate-FreeWEditingReferenceParityEvidence.ps1",
     [string]$FreeWPageLayoutDialogParityEvidenceScriptPath = "tools\Generate-FreeWPageLayoutDialogParityEvidence.ps1",
     [string]$FreeWCommandInventoryScriptPath = "tools\Generate-FreeWCommandInventory.ps1",
-    [string]$CrossAppParityDashboardBehaviorScriptPath = "tools\Test-CrossAppParityDashboard.ps1"
+    [string]$CrossAppParityDashboardBehaviorScriptPath = "tools\Test-CrossAppParityDashboard.ps1",
+    [string]$FreeWDialogVisualEvidenceCheckScriptPath = "tools\Test-FreeWDialogVisualEvidence.ps1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -54,5 +55,13 @@ if (-not (Test-Path -LiteralPath $resolvedCrossAppParityDashboardBehaviorScriptP
 
 Write-Host "Checking cross-app parity dashboard aggregation guards..."
 & $resolvedCrossAppParityDashboardBehaviorScriptPath
+
+$resolvedFreeWDialogVisualEvidenceCheckScriptPath = Resolve-ToolRepoPath -Path $FreeWDialogVisualEvidenceCheckScriptPath -RepoRoot $repoRoot
+if (-not (Test-Path -LiteralPath $resolvedFreeWDialogVisualEvidenceCheckScriptPath)) {
+    throw "FreeW dialog visual evidence consistency guard was not found: $resolvedFreeWDialogVisualEvidenceCheckScriptPath"
+}
+
+Write-Host "Checking FreeW canonical dialog evidence counts and scope..."
+& $resolvedFreeWDialogVisualEvidenceCheckScriptPath -Check
 
 Write-Host "Generated documentation checks passed."

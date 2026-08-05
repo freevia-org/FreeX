@@ -48,6 +48,9 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private readonly Func<bool, bool>? _navigateInlineTableCell;
     private readonly Action? _cancelInlineTableCellEdit;
     private readonly List<PendingInlineTableRows> _pendingInlineTableRows = new();
+    private readonly MenuItem _copyContextMenuItem;
+    private readonly MenuItem _cutContextMenuItem;
+    private readonly MenuItem _pasteContextMenuItem;
 
     internal AvaloniaRichTextEditor(
         TextBody? body,
@@ -95,6 +98,29 @@ internal sealed class AvaloniaRichTextEditor : Grid
         };
         AutomationProperties.SetAutomationId(InputBox, "FreePRichTextEditorInput");
 
+        _copyContextMenuItem = new MenuItem { Header = "Copy" };
+        _copyContextMenuItem.Click += async (_, _) => { _ = await CopySelectionAsync(); };
+        _cutContextMenuItem = new MenuItem { Header = "Cut" };
+        _cutContextMenuItem.Click += async (_, _) => { _ = await CutSelectionAsync(); };
+        _pasteContextMenuItem = new MenuItem { Header = "Paste" };
+        _pasteContextMenuItem.Click += async (_, _) => { _ = await PasteClipboardAsync(); };
+        var selectAllContextMenuItem = new MenuItem { Header = "Select All" };
+        selectAllContextMenuItem.Click += (_, _) =>
+        {
+            SelectionStart = 0;
+            SelectionEnd = Text.Length;
+            FocusEditor();
+        };
+        var clipboardContextMenu = new ContextMenu();
+        clipboardContextMenu.Items.Add(_cutContextMenuItem);
+        clipboardContextMenu.Items.Add(_copyContextMenuItem);
+        clipboardContextMenu.Items.Add(_pasteContextMenuItem);
+        clipboardContextMenu.Items.Add(new Separator());
+        clipboardContextMenu.Items.Add(selectAllContextMenuItem);
+        clipboardContextMenu.Opening += (_, _) => UpdateClipboardContextMenuState();
+        InputBox.ContextMenu = clipboardContextMenu;
+        UpdateClipboardContextMenuState();
+
         AutomationProperties.SetAccessibilityView(_richTextView, AccessibilityView.Raw);
 
         Children.Add(_richTextView);
@@ -107,6 +133,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
                 || args.Property == TextBox.SelectionEndProperty)
             {
                 UpdateSurfaceSelection();
+                UpdateClipboardContextMenuState();
             }
         };
         InputBox.GotFocus += (_, _) => UpdateSurfaceSelection();
@@ -494,7 +521,18 @@ internal sealed class AvaloniaRichTextEditor : Grid
         _keyboardSelectionAnchor = null;
         _keyboardSelectionCaret = null;
         _buffer.ReplacePlainText(InputBox.Text);
+        UpdateClipboardContextMenuState();
         RenderBody();
+    }
+
+    private void UpdateClipboardContextMenuState()
+    {
+        var selection = Selection;
+        bool hasSelection = !selection.IsCollapsed;
+        _copyContextMenuItem.IsEnabled = hasSelection;
+        _cutContextMenuItem.IsEnabled = hasSelection;
+        _pasteContextMenuItem.IsEnabled =
+            TopLevel.GetTopLevel(InputBox)?.Clipboard is not null;
     }
 
     private void SynchronizeText() =>

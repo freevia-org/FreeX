@@ -38,6 +38,17 @@ public sealed partial class MainWindow
 
     private bool TryHandleRibbonKeyTips(KeyEventArgs args)
     {
+        // Keep the generic Alt handler from re-opening the Data ribbon while the WPF-equivalent
+        // worksheet-editing or Backstage exclusion is active. The legacy sequence dispatcher has
+        // already reset any partial input; returning true here stops the fallback route without
+        // marking the key handled.
+        if (IsDataRibbonKeyTipAttempt(args) && !CanHandleLegacyDataFilterSequence(args))
+        {
+            ResetRibbonKeyTipSequence();
+            args.Handled = false;
+            return true;
+        }
+
         if (args.Key is Key.LeftAlt or Key.RightAlt ||
             args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.None)
         {

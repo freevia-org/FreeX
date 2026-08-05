@@ -69,6 +69,17 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().NotContain("FindSourceIndexByTag(");
     }
 
+    [Fact]
+    public void ReferencesDialogs_PreservesWpfManageSourcesSizingAndCopyControlAuthority()
+    {
+        var source = ReadReferencesDialogsSource();
+
+        source.Should().Contain("SizeToContent = SizeToContent.WidthAndHeight;");
+        source.Should().NotContain("Width = 620;");
+        source.Should().Contain("Button(\"Copy →\", () => _ = CopyMasterToCurrentAsync())");
+        source.Should().Contain("ApplyButton(button, DialogChromeStyle, minWidth: 72");
+    }
+
     private static string ReadReferencesDialogsSource()
     {
         var path = Path.Combine(

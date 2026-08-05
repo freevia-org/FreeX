@@ -774,8 +774,8 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private SourceManagementDialogState _state;
-    private readonly ListBox _masterList = new() { MinWidth = 220, Height = 190 };
-    private readonly ListBox _currentList = new() { MinWidth = 220, Height = 190 };
+    private readonly ListBox _masterList = new() { MinWidth = 220, MinHeight = 180 };
+    private readonly ListBox _currentList = new() { MinWidth = 220, MinHeight = 180 };
     private readonly TextBlock _status = new()
     {
         Foreground = Brushes.DarkRed,
@@ -792,8 +792,7 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
         _state = SourceManagementDialogPlanner.BuildInitialState(currentSources, masterSources);
 
         Title = "Manage Sources";
-        Width = 620;
-        SizeToContent = SizeToContent.Height;
+        SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
@@ -814,7 +813,7 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
                 Button("Delete", DeleteMaster)
             ]);
 
-        var copy = Button("Copy ->", () => _ = CopyMasterToCurrentAsync());
+        var copy = Button("Copy →", () => _ = CopyMasterToCurrentAsync());
         var copyBack = Button("Copy <-", () => _ = CopyCurrentToMasterAsync());
         var centerPane = new StackPanel
         {
@@ -1022,8 +1021,8 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
         var row = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
+            Spacing = 6,
+            Margin = new Thickness(0, 4, 0, 0),
         };
         foreach (var button in buttons)
             row.Children.Add(button);
@@ -1034,7 +1033,7 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
     private static Button Button(string label, Action click, bool isDefault = false, bool isCancel = false)
     {
         var button = new Button { Content = label, IsDefault = isDefault, IsCancel = isCancel };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 84, isDefault: isDefault);
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 72, isDefault: isDefault);
         button.Click += (_, _) => click();
         return button;
     }

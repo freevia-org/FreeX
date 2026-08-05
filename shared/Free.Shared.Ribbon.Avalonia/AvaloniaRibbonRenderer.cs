@@ -1530,7 +1530,10 @@ public static class AvaloniaRibbonRenderer
         // Leading large "hero" buttons each occupy their own full-height column (mirrors WPF).
         while (index < controls.Count && controls[index].PreferredLayout == RibbonCommandLayoutKind.Large)
         {
-            lane.Children.Add(BuildLargeControl(controls[index], registry, afterExecute, palette));
+            var large = BuildLargeControl(controls[index], registry, afterExecute, palette);
+            if (controls[index] is not RibbonSplitButton)
+                SetKeyTip(large, controls[index].KeyTip);
+            lane.Children.Add(large);
             index++;
         }
 
@@ -1608,7 +1611,10 @@ public static class AvaloniaRibbonRenderer
                     break;
                 case { PreferredLayout: RibbonCommandLayoutKind.Large }:
                     Flush();
-                    lane.Children.Add(BuildLargeControl(control, registry, afterExecute, palette));
+                    var large = BuildLargeControl(control, registry, afterExecute, palette);
+                    if (control is not RibbonSplitButton)
+                        SetKeyTip(large, control.KeyTip);
+                    lane.Children.Add(large);
                     break;
                 default:
                     // Keep comboboxes and buttons in separate columns so a group reads like WPF's.

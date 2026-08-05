@@ -196,6 +196,70 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
     }
 
     [Fact]
+    public async Task DataWhatIfKeytip_OpensRealGoalSeekWorkflowAndSettlesAllContinuationStates()
+    {
+        await Run(async (window, _) =>
+        {
+            window.Show();
+
+            await PressHandled(window, Key.A, KeyModifiers.Alt);
+            window.RibbonKeyTipInputForTest.Should().Be("A");
+            var tabs = window.RibbonControlForTest.Should().BeOfType<TabControl>().Subject;
+            ((TabItem)tabs.SelectedItem!).Tag.Should().Be("DataTab");
+            await PressHandled(window, Key.W);
+            window.RibbonKeyTipInputForTest.Should().Be("AW");
+
+            var whatIfFlyouts = window.RibbonControlForTest!.GetLogicalDescendants()
+                .OfType<Button>()
+                .Where(button => Equals(button.Tag, "What-If Analysis"))
+                .Select(button => button.Flyout)
+                .OfType<MenuFlyout>()
+                .ToArray();
+            whatIfFlyouts.Should().NotBeEmpty();
+            var flyout = whatIfFlyouts.First(candidate => candidate.IsOpen);
+            flyout.Items.OfType<MenuItem>().Select(item => item.Header?.ToString())
+                .Should().Equal("Goal Seek...", "Scenario Manager...", "Data Table...");
+
+            await PressHandled(window, Key.G);
+            var goalSeek = await WaitForOwnedWindow(window, "Goal Seek");
+            goalSeek.Should().NotBeNull("the G continuation must invoke the existing Goal Seek workflow");
+            goalSeek!.Close();
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
+
+            await PressHandled(window, Key.A, KeyModifiers.Alt);
+            await PressHandled(window, Key.W);
+            await PressHandled(window, Key.Escape);
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
+            flyout.IsOpen.Should().BeFalse();
+
+            await PressHandled(window, Key.A, KeyModifiers.Alt);
+            await PressHandled(window, Key.W);
+            await PressHandled(window, Key.X);
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
+            flyout.IsOpen.Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public async Task DataWhatIfKeytip_IsExcludedFromFormulaEditingAndBackstage()
+    {
+        await Run(async (window, sheet) =>
+        {
+            window.BeginFormulaEditForTest(new CellAddress(sheet.Id, 1, 1), "=1");
+            var editingStart = await Press(window, Key.A, KeyModifiers.Alt);
+            editingStart.Handled.Should().BeFalse();
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
+            window.Session.CancelFormulaEdit();
+
+            window.ShowBackstageOverlayForTest();
+            var backstageStart = await Press(window, Key.A, KeyModifiers.Alt);
+            backstageStart.Handled.Should().BeFalse();
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
+            window.IsBackstageOverlayVisibleForTest.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public async Task FreshAltAndInvalidContinuation_ResetOnlyRibbonKeytipState()
     {
         await Run(async (window, _) =>
@@ -444,5 +508,20 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
         var args = new KeyEventArgs { Key = key, KeyModifiers = modifiers };
         await window.RaiseKeyDownForTest(args);
         return args;
+    }
+
+    private static async Task<Window?> WaitForOwnedWindow(MainWindow owner, string title)
+    {
+        for (var attempt = 0; attempt < 200; attempt++)
+        {
+            var dialog = owner.OwnedWindows.FirstOrDefault(candidate =>
+                candidate.IsVisible && string.Equals(candidate.Title, title, StringComparison.Ordinal));
+            if (dialog is not null)
+                return dialog;
+
+            await Task.Delay(10);
+        }
+
+        return null;
     }
 }

@@ -2130,6 +2130,10 @@ public sealed class SlideCanvasAvaloniaTests
         source.Should().Contain("TryApplyActiveTableCellTextFormat");
         source.Should().Contain("TryApplyActiveTableCellParagraphListPreset");
         source.Should().Contain("TryNavigateActiveTableCell");
+        source.Should().Contain("IsRichTextEditActive");
+        source.Should().Contain("CopySelectionAsync");
+        source.Should().Contain("CutSelectionAsync");
+        source.Should().Contain("PasteClipboardAsync");
         source.Should().Contain("TryInsertActiveTableRowAbove");
         source.Should().Contain("TryInsertActiveTableRowBelow");
         source.Should().Contain("TryInsertActiveTableColumnLeft");

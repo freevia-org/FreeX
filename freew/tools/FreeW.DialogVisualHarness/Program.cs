@@ -122,7 +122,11 @@ static int RunCompare(string[] args)
         WpfCaptureCount: wpfCaptureCount,
         AvaloniaCaptureCount: avaloniaCaptureCount,
         Rows: rows,
-        Counts: counts);
+        Counts: counts,
+        Scope: new ComparisonScope(
+            Kind: "canonical-inputs-only",
+            Description: "Rows and counts cover only the inventory and WPF/Avalonia capture manifests supplied to this compare invocation.",
+            RefreshInstruction: "Route-local evidence remains outside this aggregate until it is merged with --baseline and --refresh-route."));
     var json = JsonSerializer.Serialize(report, JsonOptions());
     var markdown = BuildComparisonMarkdown(report);
     var html = BuildComparisonHtml(report);
@@ -450,6 +454,8 @@ static string BuildComparisonMarkdown(ComparisonReport report)
     b.AppendLine();
     b.AppendLine($"> Target: {report.TargetDpi} DPI logical pixels. Semantic checks and nonblank checks are reported separately from image parity.");
     b.AppendLine();
+    b.AppendLine($"**Evidence scope:** `{report.Scope.Kind}`. {report.Scope.Description} {report.Scope.RefreshInstruction}");
+    b.AppendLine();
     b.AppendLine($"Inventory scenarios: **{report.InventoryScenarioCount}**. Captured WPF: **{report.WpfCaptureCount}**. Captured Avalonia: **{report.AvaloniaCaptureCount}**.");
     b.AppendLine();
     b.AppendLine("| Scenario | Capture | Classification | WPF content | Avalonia content | Changed ratio | Mean channel delta | Semantic diff | Heatmap |");
@@ -466,7 +472,7 @@ static string BuildComparisonMarkdown(ComparisonReport report)
 static string BuildComparisonHtml(ComparisonReport report)
 {
     var rows = string.Join("\n", report.Rows.Select(r => $"<tr><td>{System.Net.WebUtility.HtmlEncode(r.ScenarioId)}</td><td>{r.CaptureStatus}</td><td><b>{r.Classification}</b></td><td>{ContentLabel(r.WpfContent)}</td><td>{ContentLabel(r.AvaloniaContent)}</td><td>{r.Metrics?.ChangedRatio.ToString("P2", CultureInfo.InvariantCulture) ?? ""}</td><td>{r.Metrics?.MeanAbsoluteChannelDelta.ToString("F2", CultureInfo.InvariantCulture) ?? ""}</td><td>{System.Net.WebUtility.HtmlEncode(r.SemanticDifference ?? "")}</td><td>{System.Net.WebUtility.HtmlEncode(r.HeatmapPath ?? "")}</td></tr>"));
-    return $"<!doctype html><meta charset='utf-8'><title>FreeW dialog visual comparison</title><style>body{{font:14px Segoe UI,Arial;margin:24px}}table{{border-collapse:collapse}}td,th{{border:1px solid #bbb;padding:6px;text-align:left}}b{{color:#a33}}</style><h1>FreeW Paired Dialog Visual Comparison</h1><p>96-DPI logical target. Semantic checks and pixel-content gates are separate from visual parity.</p><table><thead><tr><th>Scenario</th><th>Capture</th><th>Classification</th><th>WPF content</th><th>Avalonia content</th><th>Changed ratio</th><th>Mean delta</th><th>Semantic diff</th><th>Heatmap</th></tr></thead><tbody>{rows}</tbody></table>";
+    return $"<!doctype html><meta charset='utf-8'><title>FreeW dialog visual comparison</title><style>body{{font:14px Segoe UI,Arial;margin:24px}}table{{border-collapse:collapse}}td,th{{border:1px solid #bbb;padding:6px;text-align:left}}b{{color:#a33}}</style><h1>FreeW Paired Dialog Visual Comparison</h1><p>96-DPI logical target. Semantic checks and pixel-content gates are separate from visual parity.</p><p><strong>Evidence scope:</strong> <code>{System.Net.WebUtility.HtmlEncode(report.Scope.Kind)}</code>. {System.Net.WebUtility.HtmlEncode(report.Scope.Description)} {System.Net.WebUtility.HtmlEncode(report.Scope.RefreshInstruction)}</p><table><thead><tr><th>Scenario</th><th>Capture</th><th>Classification</th><th>WPF content</th><th>Avalonia content</th><th>Changed ratio</th><th>Mean delta</th><th>Semantic diff</th><th>Heatmap</th></tr></thead><tbody>{rows}</tbody></table>";
 }
 
 static string ContentLabel(PixelContent? content) => content is null ? "" : content.PassesContentGate ? $"pass ({content.ContentPixelRatio:P1} painted)" : $"fail: {content.Failure}";
@@ -486,7 +492,8 @@ public record Semantics(string? FocusedAutomationId, string? DefaultButton, stri
 public record ControlSemantic(string? AutomationId, string Type, string? Name, bool Enabled, bool? Checked, int? SelectedIndex);
 public record Metrics(long ComparedPixels, long ChangedPixels, double ChangedRatio, double MeanAbsoluteChannelDelta, double P95AbsoluteChannelDelta, double LuminanceSimilarity, int PerceptualHashDistance);
 public record ComparisonRow(string ScenarioId, string CaptureStatus, string Classification, Metrics? Metrics, string? SemanticDifference, string? HeatmapPath, string? Note, PixelContent? WpfContent = null, PixelContent? AvaloniaContent = null);
-public record ComparisonReport(string Schema, string GeneratedFromSha256, int TargetDpi, int InventoryScenarioCount, int WpfCaptureCount, int AvaloniaCaptureCount, IReadOnlyList<ComparisonRow> Rows, IReadOnlyDictionary<string, int> Counts);
+public record ComparisonReport(string Schema, string GeneratedFromSha256, int TargetDpi, int InventoryScenarioCount, int WpfCaptureCount, int AvaloniaCaptureCount, IReadOnlyList<ComparisonRow> Rows, IReadOnlyDictionary<string, int> Counts, ComparisonScope Scope);
+public record ComparisonScope(string Kind, string Description, string RefreshInstruction);
 public record Freshness(string ComparisonInputSha256, string InventorySha256, string WpfSha256, string AvaloniaSha256);
 
 public static class PixelContentMetrics

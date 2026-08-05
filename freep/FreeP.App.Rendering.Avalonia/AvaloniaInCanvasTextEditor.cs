@@ -103,6 +103,27 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
     /// <summary>True while a table cell is being edited in the rich overlay editor.</summary>
     public bool IsCellEditActive => _cellEditActive;
 
+    /// <summary>
+    /// True while either rich in-canvas editor owns the current text selection. Host commands
+    /// use this to keep clipboard actions on the same editor as keyboard input.
+    /// </summary>
+    public bool IsRichTextEditActive => _active || _cellEditActive;
+
+    private AvaloniaRichTextEditor? ActiveRichTextEditor =>
+        _cellEditActive ? _cellTextBox : _active ? _textBox : null;
+
+    /// <summary>Copies the active rich-text selection to the platform clipboard.</summary>
+    public Task<bool> CopySelectionAsync() =>
+        ActiveRichTextEditor?.CopySelectionAsync() ?? Task.FromResult(false);
+
+    /// <summary>Cuts the active rich-text selection through the editor's edit buffer.</summary>
+    public Task<bool> CutSelectionAsync() =>
+        ActiveRichTextEditor?.CutSelectionAsync() ?? Task.FromResult(false);
+
+    /// <summary>Pastes platform or FreeP rich clipboard data into the active editor.</summary>
+    public Task<bool> PasteClipboardAsync() =>
+        ActiveRichTextEditor?.PasteClipboardAsync() ?? Task.FromResult(false);
+
     /// <summary>The id of the table shape currently being edited, or 0 if not active.</summary>
     public uint ActiveTableShapeId => _editingTableShapeId;
 
