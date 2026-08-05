@@ -9,12 +9,16 @@ namespace FreeW.App.Host;
 internal sealed class InsertIndexDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly TextBox _identifier;
+    private readonly string _actionLabel;
     private InsertIndexDialogResult? _result;
 
-    private InsertIndexDialog(Window? owner, InsertIndexDialogState initialState)
+    private InsertIndexDialog(Window? owner, InsertIndexDialogState initialState, bool isUpdate)
     {
         Owner = owner;
-        Title = InsertIndexDialogPlanner.Title;
+        Title = isUpdate ? InsertIndexDialogPlanner.UpdateTitle : InsertIndexDialogPlanner.Title;
+        _actionLabel = isUpdate
+            ? InsertIndexDialogPlanner.UpdateButtonLabel
+            : InsertIndexDialogPlanner.InsertButtonLabel;
         Width = InsertIndexDialogPlanner.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
@@ -45,7 +49,7 @@ internal sealed class InsertIndexDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         panel.Children.Add(DialogButtonRowFactory.Create(
             Accept,
             buttonWidth: 80,
-            acceptContent: InsertIndexDialogPlanner.InsertButtonLabel,
+            acceptContent: _actionLabel,
             rowMargin: new Thickness(0, 8, 0, 12)));
         Content = panel;
 
@@ -67,7 +71,10 @@ internal sealed class InsertIndexDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Accept(closeOnSuccess: true);
 
     internal static InsertIndexDialog CreateForTest(string? identifier = null) =>
-        new(null, InsertIndexDialogPlanner.BuildInitialState(identifier));
+        new(null, InsertIndexDialogPlanner.BuildInitialState(identifier), isUpdate: false);
+
+    internal static InsertIndexDialog CreateForUpdateTest(string? identifier = null) =>
+        new(null, InsertIndexDialogPlanner.BuildInitialState(identifier), isUpdate: true);
 
     internal void SetIdentifierForTest(string? identifier) =>
         _identifier.Text = identifier;
@@ -77,9 +84,18 @@ internal sealed class InsertIndexDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     internal InsertIndexDialogResult? ResultForTest => _result;
 
+    internal string ActionLabelForTest => _actionLabel;
+
     public static InsertIndexDialogResult? Prompt(Window? owner, InsertIndexDialogState initialState)
     {
-        var dialog = new InsertIndexDialog(owner, initialState);
+        var dialog = new InsertIndexDialog(owner, initialState, isUpdate: false);
+        dialog.ShowDialog();
+        return dialog._result;
+    }
+
+    public static InsertIndexDialogResult? PromptForUpdate(Window? owner, InsertIndexDialogState initialState)
+    {
+        var dialog = new InsertIndexDialog(owner, initialState, isUpdate: true);
         dialog.ShowDialog();
         return dialog._result;
     }
