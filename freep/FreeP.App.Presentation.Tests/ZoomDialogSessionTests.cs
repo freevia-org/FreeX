@@ -1,4 +1,6 @@
+using System.Globalization;
 using FreeP.App.Compositor;
+using FreeP.App.Localization;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor.Tests;
@@ -220,6 +222,46 @@ public sealed class ZoomDialogSessionTests
         enablement.FrameBorderGlowFields.Should().BeTrue();
         enablement.FrameBorderSoftEdgeToggle.Should().BeTrue();
         enablement.FrameBorderSoftEdgeFields.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Properties_surface_plan_owns_localized_chrome_text_and_shared_metrics()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            var english = CultureInfo.GetCultureInfo("en-US");
+            CultureInfo.CurrentCulture = english;
+            CultureInfo.CurrentUICulture = english;
+
+            var surface = ZoomObjectPropertiesDialogSurfacePlanner.BuildSurfacePlan();
+
+            surface.Chrome.Should().Be(new PresentationDialogChromePlan(
+                "Zoom Format", "OK", "Cancel", 440));
+            surface.Layout.Should().Be(new ZoomObjectPropertiesDialogLayoutPlan(14, 160, 180));
+            surface.Text.UseZoomTransitionLabel.Should().Be("Use Zoom transition");
+            surface.Text.UseBorderGlowLabel.Should().Be("Use border glow");
+            surface.Text.GlowRadiusLabel.Should().Be("Glow radius (pt):");
+            surface.Text.UseBorderSoftEdgeLabel.Should().Be("Use border soft edge");
+            surface.Text.SoftEdgeRadiusLabel.Should().Be("Soft-edge radius (pt):");
+            surface.Text.FrameShapeLabel.Should().Be("Frame shape:");
+            surface.Text.ApplyToAllSummaryTilesLabel
+                .Should().Be("Apply format to all Summary Zoom tiles");
+            surface.ImageTypeOptions.Should().Equal("preview", "cover");
+
+            var pseudo = CultureInfo.GetCultureInfo(Loc.PseudoLocalizationCultureName);
+            CultureInfo.CurrentCulture = pseudo;
+            CultureInfo.CurrentUICulture = pseudo;
+
+            ZoomObjectPropertiesDialogSurfacePlanner.BuildSurfacePlan().Chrome.Title
+                .Should().StartWith("[[").And.EndWith("]]");
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
     }
 
     private static SummaryZoomTarget Target(

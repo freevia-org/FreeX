@@ -8,6 +8,7 @@ namespace FreeP.App.Host;
 internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly ZoomObjectPropertiesDialogSession _session;
+    private readonly ZoomObjectPropertiesDialogSurfacePlan _surface;
     private readonly CheckBox _returnToParent;
     private readonly CheckBox _showBackground;
     private readonly CheckBox _transitionEnabled;
@@ -61,37 +62,40 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         IReadOnlyList<ZoomObjectProperties>? summaryTileProperties = null)
     {
         _session = new ZoomObjectPropertiesDialogSession(current, summaryTargets, summaryTileProperties);
+        _surface = ZoomObjectPropertiesDialogSurfacePlanner.BuildSurfacePlan();
         var fields = _session.InitialFields;
-        Title = ZoomObjectPropertiesPlanner.DialogTitle;
-        Width = 440;
+        var layout = _surface.Layout;
+        var text = _surface.Text;
+        Title = _surface.Chrome.Title;
+        Width = _surface.Chrome.Width;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         _returnToParent = new CheckBox
         {
-            Content = "Return to parent after following the Zoom",
+            Content = text.ReturnToParentLabel,
             IsChecked = fields.ReturnToParent,
         };
         _showBackground = new CheckBox
         {
-            Content = "Show destination slide background",
+            Content = text.ShowBackgroundLabel,
             IsChecked = fields.ShowBackground,
         };
         _imageType = new ComboBox
         {
-            ItemsSource = new[] { "preview", "cover" },
+            ItemsSource = _surface.ImageTypeOptions,
             SelectedItem = fields.ImageType,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
         };
         _transitionDuration = new TextBox
         {
             Text = fields.TransitionDuration,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
         };
         _transitionEnabled = new CheckBox
         {
-            Content = "Use Zoom transition",
+            Content = text.UseZoomTransitionLabel,
             IsChecked = fields.TransitionEnabled,
         };
         _transitionEnabled.Checked += (_, _) => SyncTransitionState();
@@ -99,88 +103,88 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _frameBorderColor = new TextBox
         {
             Text = fields.FrameBorderColor,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
             ToolTip = "six-digit RGB value; for example 4472C4",
         };
         _frameBorderThemeColor = new ComboBox
         {
             ItemsSource = ZoomObjectPropertiesPlanner.FrameBorderThemeColorOptions,
             SelectedItem = fields.FrameBorderThemeColor,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
         };
         _frameBorderWidth = new TextBox
         {
             Text = fields.FrameBorderWidth,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
             ToolTip = "positive width in points; for example 1.5",
         };
         _frameBorderDash = new ComboBox
         {
             ItemsSource = ZoomObjectPropertiesPlanner.FrameBorderDashOptions,
             SelectedItem = fields.FrameBorderDash,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
         };
         _frameBorderEnabled = new CheckBox
         {
-            Content = "Use Zoom border",
+            Content = text.UseZoomBorderLabel,
             IsChecked = fields.FrameBorderEnabled,
         };
         _frameBorderEnabled.Checked += (_, _) => SyncFrameBorderState();
         _frameBorderEnabled.Unchecked += (_, _) => SyncFrameBorderState();
         _frameBorderGradientEnabled = new CheckBox
         {
-            Content = "Use gradient border",
+            Content = text.UseGradientBorderLabel,
             IsChecked = fields.FrameBorderGradientEnabled,
         };
         _frameBorderGradientStart = new TextBox
         {
             Text = fields.FrameBorderGradientStart,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
             ToolTip = "six-digit RGB value; for example 4472C4",
         };
         _frameBorderGradientEnd = new TextBox
         {
             Text = fields.FrameBorderGradientEnd,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
             ToolTip = "six-digit RGB value; for example FFFFFF",
         };
         _frameBorderGradientAngle = new TextBox
         {
             Text = fields.FrameBorderGradientAngle,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
             ToolTip = "linear angle in degrees from 0 to 360",
         };
         _frameBorderPatternEnabled = new CheckBox
         {
-            Content = "Use pattern border",
+            Content = text.UsePatternBorderLabel,
             IsChecked = fields.FrameBorderPatternEnabled,
         };
         _frameBorderPatternPreset = new ComboBox
         {
             ItemsSource = ZoomObjectPropertiesPlanner.FrameBorderPatternOptions,
             SelectedItem = fields.FrameBorderPatternPreset,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
         };
         _frameBorderPatternForeground = new TextBox
         {
             Text = fields.FrameBorderPatternForeground,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
             ToolTip = "six-digit RGB value; for example 4472C4",
         };
         _frameBorderPatternBackground = new TextBox
         {
             Text = fields.FrameBorderPatternBackground,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
             ToolTip = "six-digit RGB value; for example FFFFFF",
         };
         _frameBorderNoFillEnabled = new CheckBox
         {
-            Content = "Use no-fill border",
+            Content = text.UseNoFillBorderLabel,
             IsChecked = fields.FrameBorderNoFillEnabled,
         };
         _frameBorderThemeEnabled = new CheckBox
         {
-            Content = "Use theme border color",
+            Content = text.UseThemeBorderColorLabel,
             IsChecked = fields.FrameBorderThemeEnabled,
         };
         _frameBorderGradientEnabled.Checked += (_, _) =>
@@ -197,62 +201,62 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _frameBorderThemeEnabled.Unchecked += (_, _) => SyncFrameBorderState();
         _frameBorderShadowEnabled = new CheckBox
         {
-            Content = "Use outer border shadow",
+            Content = text.UseOuterBorderShadowLabel,
             IsChecked = fields.FrameBorderShadowEnabled,
         };
         _frameBorderShadowColor = new TextBox
         {
             Text = fields.FrameBorderShadowColor,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
             ToolTip = "six-digit RGB value; for example 404040",
         };
         _frameBorderShadowAlpha = new TextBox
         {
-            Text = fields.FrameBorderShadowAlpha, MinWidth = 180,
+            Text = fields.FrameBorderShadowAlpha, MinWidth = layout.InputMinWidth,
         };
         _frameBorderShadowBlur = new TextBox
         {
-            Text = fields.FrameBorderShadowBlur, MinWidth = 180,
+            Text = fields.FrameBorderShadowBlur, MinWidth = layout.InputMinWidth,
         };
         _frameBorderShadowDistance = new TextBox
         {
-            Text = fields.FrameBorderShadowDistance, MinWidth = 180,
+            Text = fields.FrameBorderShadowDistance, MinWidth = layout.InputMinWidth,
         };
         _frameBorderShadowDirection = new TextBox
         {
-            Text = fields.FrameBorderShadowDirection, MinWidth = 180,
+            Text = fields.FrameBorderShadowDirection, MinWidth = layout.InputMinWidth,
         };
         _frameBorderShadowEnabled.Checked += (_, _) => SyncFrameBorderState();
         _frameBorderShadowEnabled.Unchecked += (_, _) => SyncFrameBorderState();
         _frameBorderGlowEnabled = new CheckBox
         {
-            Content = "Use border glow",
+            Content = text.UseBorderGlowLabel,
             IsChecked = fields.FrameBorderGlowEnabled,
         };
         _frameBorderGlowColor = new TextBox
         {
             Text = fields.FrameBorderGlowColor,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
             ToolTip = "six-digit RGB value; for example 4472C4",
         };
         _frameBorderGlowAlpha = new TextBox
         {
-            Text = fields.FrameBorderGlowAlpha, MinWidth = 180,
+            Text = fields.FrameBorderGlowAlpha, MinWidth = layout.InputMinWidth,
         };
         _frameBorderGlowRadius = new TextBox
         {
-            Text = fields.FrameBorderGlowRadius, MinWidth = 180,
+            Text = fields.FrameBorderGlowRadius, MinWidth = layout.InputMinWidth,
         };
         _frameBorderGlowEnabled.Checked += (_, _) => SyncFrameBorderState();
         _frameBorderGlowEnabled.Unchecked += (_, _) => SyncFrameBorderState();
         _frameBorderSoftEdgeEnabled = new CheckBox
         {
-            Content = "Use border soft edge",
+            Content = text.UseBorderSoftEdgeLabel,
             IsChecked = fields.FrameBorderSoftEdgeEnabled,
         };
         _frameBorderSoftEdgeRadius = new TextBox
         {
-            Text = fields.FrameBorderSoftEdgeRadius, MinWidth = 180,
+            Text = fields.FrameBorderSoftEdgeRadius, MinWidth = layout.InputMinWidth,
         };
         _frameBorderSoftEdgeEnabled.Checked += (_, _) => SyncFrameBorderState();
         _frameBorderSoftEdgeEnabled.Unchecked += (_, _) => SyncFrameBorderState();
@@ -263,12 +267,12 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         {
             ItemsSource = ZoomObjectPropertiesPlanner.FrameGeometryOptions,
             SelectedItem = fields.FrameGeometry,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
         };
         _cropEdges = new TextBox
         {
             Text = fields.CropEdges,
-            MinWidth = 180,
+            MinWidth = layout.InputMinWidth,
             ToolTip = "left, top, right, bottom as percentages; for example 0, 5, 0, 5",
         };
 
@@ -278,80 +282,80 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             {
                 ItemsSource = _session.SummaryTargetOptions,
                 SelectedIndex = 0,
-                MinWidth = 180,
+                MinWidth = layout.InputMinWidth,
             };
-            _summaryOffset = new TextBox { MinWidth = 180 };
-            _summaryScale = new TextBox { MinWidth = 180 };
+            _summaryOffset = new TextBox { MinWidth = layout.InputMinWidth };
+            _summaryScale = new TextBox { MinWidth = layout.InputMinWidth };
             _applySummaryPropertiesToAllTiles = new CheckBox
             {
-                Content = "Apply format to all Summary Zoom tiles",
+                Content = text.ApplyToAllSummaryTilesLabel,
                 Margin = new Thickness(0, 4, 0, 0),
             };
             _summaryTile.SelectionChanged += (_, _) => LoadSummaryTileFields();
         }
 
-        var grid = new Grid { Margin = new Thickness(14) };
+        var grid = new Grid { Margin = new Thickness(layout.ContentMargin) };
         for (var i = 0; i < 35 + (_session.HasSummaryTargets ? 4 : 0); i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(layout.LabelWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         var row = 0;
-        AddRow(grid, row++, "Image source:", _imageType);
+        AddRow(grid, row++, text.ImageSourceLabel, _imageType);
         Grid.SetRow(_transitionEnabled, row++);
         Grid.SetColumnSpan(_transitionEnabled, 2);
         grid.Children.Add(_transitionEnabled);
-        AddRow(grid, row++, "Transition duration:", _transitionDuration);
+        AddRow(grid, row++, text.TransitionDurationLabel, _transitionDuration);
         Grid.SetRow(_frameBorderEnabled, row++);
         Grid.SetColumnSpan(_frameBorderEnabled, 2);
         grid.Children.Add(_frameBorderEnabled);
-        AddRow(grid, row++, "Border color:", _frameBorderColor);
+        AddRow(grid, row++, text.BorderColorLabel, _frameBorderColor);
         Grid.SetRow(_frameBorderThemeEnabled, row++);
         Grid.SetColumnSpan(_frameBorderThemeEnabled, 2);
         grid.Children.Add(_frameBorderThemeEnabled);
-        AddRow(grid, row++, "Theme color:", _frameBorderThemeColor);
+        AddRow(grid, row++, text.ThemeColorLabel, _frameBorderThemeColor);
         Grid.SetRow(_frameBorderShadowEnabled, row++);
         Grid.SetColumnSpan(_frameBorderShadowEnabled, 2);
         grid.Children.Add(_frameBorderShadowEnabled);
-        AddRow(grid, row++, "Shadow color:", _frameBorderShadowColor);
-        AddRow(grid, row++, "Shadow alpha (%):", _frameBorderShadowAlpha);
-        AddRow(grid, row++, "Shadow blur (pt):", _frameBorderShadowBlur);
-        AddRow(grid, row++, "Shadow distance (pt):", _frameBorderShadowDistance);
-        AddRow(grid, row++, "Shadow direction (deg):", _frameBorderShadowDirection);
+        AddRow(grid, row++, text.ShadowColorLabel, _frameBorderShadowColor);
+        AddRow(grid, row++, text.ShadowAlphaLabel, _frameBorderShadowAlpha);
+        AddRow(grid, row++, text.ShadowBlurLabel, _frameBorderShadowBlur);
+        AddRow(grid, row++, text.ShadowDistanceLabel, _frameBorderShadowDistance);
+        AddRow(grid, row++, text.ShadowDirectionLabel, _frameBorderShadowDirection);
         Grid.SetRow(_frameBorderGlowEnabled, row++);
         Grid.SetColumnSpan(_frameBorderGlowEnabled, 2);
         grid.Children.Add(_frameBorderGlowEnabled);
-        AddRow(grid, row++, "Glow color:", _frameBorderGlowColor);
-        AddRow(grid, row++, "Glow alpha (%):", _frameBorderGlowAlpha);
-        AddRow(grid, row++, "Glow radius (pt):", _frameBorderGlowRadius);
+        AddRow(grid, row++, text.GlowColorLabel, _frameBorderGlowColor);
+        AddRow(grid, row++, text.GlowAlphaLabel, _frameBorderGlowAlpha);
+        AddRow(grid, row++, text.GlowRadiusLabel, _frameBorderGlowRadius);
         Grid.SetRow(_frameBorderSoftEdgeEnabled, row++);
         Grid.SetColumnSpan(_frameBorderSoftEdgeEnabled, 2);
         grid.Children.Add(_frameBorderSoftEdgeEnabled);
-        AddRow(grid, row++, "Soft-edge radius (pt):", _frameBorderSoftEdgeRadius);
-        AddRow(grid, row++, "Border width (pt):", _frameBorderWidth);
-        AddRow(grid, row++, "Border dash:", _frameBorderDash);
+        AddRow(grid, row++, text.SoftEdgeRadiusLabel, _frameBorderSoftEdgeRadius);
+        AddRow(grid, row++, text.BorderWidthLabel, _frameBorderWidth);
+        AddRow(grid, row++, text.BorderDashLabel, _frameBorderDash);
         Grid.SetRow(_frameBorderGradientEnabled, row++);
         Grid.SetColumnSpan(_frameBorderGradientEnabled, 2);
         grid.Children.Add(_frameBorderGradientEnabled);
-        AddRow(grid, row++, "Gradient start:", _frameBorderGradientStart);
-        AddRow(grid, row++, "Gradient end:", _frameBorderGradientEnd);
-        AddRow(grid, row++, "Gradient angle (deg):", _frameBorderGradientAngle);
+        AddRow(grid, row++, text.GradientStartLabel, _frameBorderGradientStart);
+        AddRow(grid, row++, text.GradientEndLabel, _frameBorderGradientEnd);
+        AddRow(grid, row++, text.GradientAngleLabel, _frameBorderGradientAngle);
         Grid.SetRow(_frameBorderPatternEnabled, row++);
         Grid.SetColumnSpan(_frameBorderPatternEnabled, 2);
         grid.Children.Add(_frameBorderPatternEnabled);
-        AddRow(grid, row++, "Pattern preset:", _frameBorderPatternPreset);
-        AddRow(grid, row++, "Pattern foreground:", _frameBorderPatternForeground);
-        AddRow(grid, row++, "Pattern background:", _frameBorderPatternBackground);
+        AddRow(grid, row++, text.PatternPresetLabel, _frameBorderPatternPreset);
+        AddRow(grid, row++, text.PatternForegroundLabel, _frameBorderPatternForeground);
+        AddRow(grid, row++, text.PatternBackgroundLabel, _frameBorderPatternBackground);
         Grid.SetRow(_frameBorderNoFillEnabled, row++);
         Grid.SetColumnSpan(_frameBorderNoFillEnabled, 2);
         grid.Children.Add(_frameBorderNoFillEnabled);
-        AddRow(grid, row++, "Frame shape:", _frameGeometry);
-        AddRow(grid, row++, "Preview crop (%):", _cropEdges);
+        AddRow(grid, row++, text.FrameShapeLabel, _frameGeometry);
+        AddRow(grid, row++, text.PreviewCropLabel, _cropEdges);
         if (_summaryTile is not null)
         {
-            AddRow(grid, row++, "Summary tile:", _summaryTile);
-            AddRow(grid, row++, "Tile position (%):", _summaryOffset!);
-            AddRow(grid, row++, "Tile scale (%):", _summaryScale!);
+            AddRow(grid, row++, text.SummaryTileLabel, _summaryTile);
+            AddRow(grid, row++, text.TilePositionLabel, _summaryOffset!);
+            AddRow(grid, row++, text.TileScaleLabel, _summaryScale!);
             Grid.SetRow(_applySummaryPropertiesToAllTiles!, row++);
             Grid.SetColumnSpan(_applySummaryPropertiesToAllTiles!, 2);
             grid.Children.Add(_applySummaryPropertiesToAllTiles);
@@ -369,10 +373,10 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 14, 0, 0),
         };
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 75, Margin = new Thickness(0, 0, 8, 0) };
+        var ok = new Button { Content = _surface.Chrome.AcceptLabel, IsDefault = true, MinWidth = 75, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) => Apply();
         buttons.Children.Add(ok);
-        buttons.Children.Add(new Button { Content = "Cancel", IsCancel = true, MinWidth = 75 });
+        buttons.Children.Add(new Button { Content = _surface.Chrome.CancelLabel, IsCancel = true, MinWidth = 75 });
         Grid.SetRow(buttons, row);
         Grid.SetColumnSpan(buttons, 2);
         grid.Children.Add(buttons);
@@ -440,7 +444,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             MessageBox.Show(
                 this,
                 validation!.Message,
-                ZoomObjectPropertiesPlanner.DialogTitle,
+                _surface.Chrome.Title,
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             return;

@@ -13,8 +13,8 @@ public sealed class ZoomAuthoringParityTests
             "FreeP.App.Host",
             "ZoomObjectPropertiesDialog.cs"));
 
-        source.Should().Contain("Use Zoom transition");
         source.Should().Contain("ZoomObjectPropertiesDialogSession");
+        source.Should().Contain("ZoomObjectPropertiesDialogSurfacePlanner.BuildSurfacePlan()");
         source.Should().Contain("new ZoomObjectPropertiesDialogInput(");
         source.Should().Contain("_session.TryAccept(input, out var validation)");
         source.Should().Contain("ZoomObjectPropertiesDialogSession.BuildEnablement(");
@@ -22,22 +22,30 @@ public sealed class ZoomAuthoringParityTests
         source.Should().NotContain("ZoomObjectPropertiesPlanner.TryParse");
         source.Should().Contain("_transitionEnabled.IsChecked == true");
         source.Should().Contain("_transitionDuration.IsEnabled");
-        source.Should().Contain("Use Zoom border");
-        source.Should().Contain("Use gradient border");
-        source.Should().Contain("Use pattern border");
-        source.Should().Contain("Use no-fill border");
-        source.Should().Contain("Use theme border color");
-        source.Should().Contain("Use outer border shadow");
-        source.Should().Contain("Use border glow");
-        source.Should().Contain("Use border soft edge");
+        source.Should().Contain("text.UseZoomTransitionLabel");
+        source.Should().Contain("text.UseZoomBorderLabel");
+        source.Should().Contain("text.UseGradientBorderLabel");
+        source.Should().Contain("text.UsePatternBorderLabel");
+        source.Should().Contain("text.UseNoFillBorderLabel");
+        source.Should().Contain("text.UseThemeBorderColorLabel");
+        source.Should().Contain("text.UseOuterBorderShadowLabel");
+        source.Should().Contain("text.UseBorderGlowLabel");
+        source.Should().Contain("text.UseBorderSoftEdgeLabel");
         source.Should().Contain("FrameBorderThemeColor");
         source.Should().Contain("FrameBorderShadowEnabled:");
         source.Should().Contain("FrameBorderGlowEnabled:");
         source.Should().Contain("FrameBorderSoftEdgeEnabled:");
-        source.Should().Contain("Frame shape:");
+        source.Should().Contain("text.FrameShapeLabel");
         source.Should().Contain("_frameBorderColor.IsEnabled");
-        source.Should().Contain("Apply format to all Summary Zoom tiles");
+        source.Should().Contain("text.ApplyToAllSummaryTilesLabel");
         source.Should().Contain("ApplySummaryPropertiesToAllTiles");
+        source.Should().NotContain("\"Use Zoom transition\"");
+        source.Should().NotContain("\"Frame shape:\"");
+        source.Should().NotContain("\"Apply format to all Summary Zoom tiles\"");
+        source.Should().NotContain("\"Use border glow\"");
+        source.Should().NotContain("\"Use border soft edge\"");
+        source.Should().NotContain("Width = 440");
+        source.Should().NotContain("MinWidth = 180");
         source.Should().Contain("35 + (_session.HasSummaryTargets ? 4 : 0)",
             "the merged frame, Summary Zoom, option, and action controls need distinct grid rows");
     }

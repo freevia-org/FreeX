@@ -2836,4 +2836,127 @@
   <data name="Ribbon_Command_Audio_KeyTip" xml:space="preserve">
     <value>U</value>
   </data>
+  <data name="Dialog_ZoomFormat_Title" xml:space="preserve">
+    <value>Zoom Format</value>
+  </data>
+  <data name="Dialog_ZoomFormat_Accept" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="Dialog_ZoomFormat_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ReturnToParent" xml:space="preserve">
+    <value>Return to parent after following the Zoom</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ShowBackground" xml:space="preserve">
+    <value>Show destination slide background</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseTransition" xml:space="preserve">
+    <value>Use Zoom transition</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseBorder" xml:space="preserve">
+    <value>Use Zoom border</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseGradientBorder" xml:space="preserve">
+    <value>Use gradient border</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UsePatternBorder" xml:space="preserve">
+    <value>Use pattern border</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseNoFillBorder" xml:space="preserve">
+    <value>Use no-fill border</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseThemeBorderColor" xml:space="preserve">
+    <value>Use theme border color</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseOuterBorderShadow" xml:space="preserve">
+    <value>Use outer border shadow</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseBorderGlow" xml:space="preserve">
+    <value>Use border glow</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseBorderSoftEdge" xml:space="preserve">
+    <value>Use border soft edge</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ApplyToAllSummaryTiles" xml:space="preserve">
+    <value>Apply format to all Summary Zoom tiles</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ImageSource" xml:space="preserve">
+    <value>Image source:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_TransitionDuration" xml:space="preserve">
+    <value>Transition duration:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_BorderColor" xml:space="preserve">
+    <value>Border color:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ThemeColor" xml:space="preserve">
+    <value>Theme color:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ShadowColor" xml:space="preserve">
+    <value>Shadow color:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ShadowAlpha" xml:space="preserve">
+    <value>Shadow alpha (%):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ShadowBlur" xml:space="preserve">
+    <value>Shadow blur (pt):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ShadowDistance" xml:space="preserve">
+    <value>Shadow distance (pt):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ShadowDirection" xml:space="preserve">
+    <value>Shadow direction (deg):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_GlowColor" xml:space="preserve">
+    <value>Glow color:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_GlowAlpha" xml:space="preserve">
+    <value>Glow alpha (%):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_GlowRadius" xml:space="preserve">
+    <value>Glow radius (pt):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_SoftEdgeRadius" xml:space="preserve">
+    <value>Soft-edge radius (pt):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_BorderWidth" xml:space="preserve">
+    <value>Border width (pt):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_BorderDash" xml:space="preserve">
+    <value>Border dash:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_GradientStart" xml:space="preserve">
+    <value>Gradient start:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_GradientEnd" xml:space="preserve">
+    <value>Gradient end:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_GradientAngle" xml:space="preserve">
+    <value>Gradient angle (deg):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_PatternPreset" xml:space="preserve">
+    <value>Pattern preset:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_PatternForeground" xml:space="preserve">
+    <value>Pattern foreground:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_PatternBackground" xml:space="preserve">
+    <value>Pattern background:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_FrameShape" xml:space="preserve">
+    <value>Frame shape:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_PreviewCrop" xml:space="preserve">
+    <value>Preview crop (%):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_SummaryTile" xml:space="preserve">
+    <value>Summary tile:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_TilePosition" xml:space="preserve">
+    <value>Tile position (%):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_TileScale" xml:space="preserve">
+    <value>Tile scale (%):</value>
+  </data>
 </root>

@@ -8,7 +8,6 @@ namespace FreeP.App.Compositor;
 public static class ZoomObjectPropertiesPlanner
 {
     public const string CommandId = "freep.zoom.format";
-    public const string DialogTitle = "Zoom Format";
     public const int DefaultTransitionDurationMs = 1000;
     public const string InvalidTransitionDurationMessage =
         "Transition duration must be a positive whole number of milliseconds.";
