@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
@@ -16,6 +17,7 @@ internal sealed class SlideShowSettingsDialog : Window
     private readonly CheckBox _useTimingsCheck;
     private readonly CheckBox _showAnimationCheck;
     private readonly CheckBox _loopCheck;
+    private readonly ComboBox _showTypeCombo;
 
     internal SlideShowSettingsState InitialState { get; }
 
@@ -47,6 +49,11 @@ internal sealed class SlideShowSettingsDialog : Window
             Content = "Loop until stopped",
             IsChecked = InitialState.LoopUntilStopped,
         };
+        _showTypeCombo = new ComboBox
+        {
+            ItemsSource = new[] { "Presented by a speaker", "Browsed by an individual", "Browsed at a kiosk" },
+            SelectedIndex = (int)InitialState.ShowType,
+        };
 
         foreach (var check in new[] { _useTimingsCheck, _showAnimationCheck, _loopCheck })
         {
@@ -73,6 +80,7 @@ internal sealed class SlideShowSettingsDialog : Window
         panel.Children.Add(_useTimingsCheck);
         panel.Children.Add(_showAnimationCheck);
         panel.Children.Add(_loopCheck);
+        panel.Children.Add(_showTypeCombo);
 
         var ok = BuildButton("OK", () => Apply(), isDefault: true);
         var cancel = BuildButton("Cancel", () => Close(false), isCancel: true);
@@ -96,11 +104,16 @@ internal sealed class SlideShowSettingsDialog : Window
         return button;
     }
 
-    internal bool ApplyForTests(bool useSlideTimings, bool showWithAnimation, bool loopUntilStopped)
+    internal bool ApplyForTests(
+        bool useSlideTimings,
+        bool showWithAnimation,
+        bool loopUntilStopped,
+        PresentationShowType showType = PresentationShowType.PresentedBySpeaker)
     {
         _useTimingsCheck.IsChecked = useSlideTimings;
         _showAnimationCheck.IsChecked = !showWithAnimation;
         _loopCheck.IsChecked = loopUntilStopped;
+        _showTypeCombo.SelectedIndex = (int)showType;
         return Apply();
     }
 
@@ -110,7 +123,8 @@ internal sealed class SlideShowSettingsDialog : Window
             _editor,
             _useTimingsCheck.IsChecked == true,
             _showAnimationCheck.IsChecked != true,
-            _loopCheck.IsChecked == true);
+            _loopCheck.IsChecked == true,
+            (PresentationShowType)Math.Clamp(_showTypeCombo.SelectedIndex, 0, 2));
         if (applied && IsVisible)
             Close(true);
         return applied;

@@ -676,19 +676,26 @@ public sealed class EditingSession
     }
 
     /// <summary>Sets the presentation-wide slideshow playback settings through the undo bus.</summary>
-    public bool SetSlideShowSettings(bool useSlideTimings, bool showWithAnimation, bool loopUntilStopped)
+    public bool SetSlideShowSettings(
+        bool useSlideTimings,
+        bool showWithAnimation,
+        bool loopUntilStopped,
+        PresentationShowType showType = PresentationShowType.PresentedBySpeaker)
     {
         Bus.Execute(new SetSlideShowSettingsCommand(
             Presentation.UseSlideTimings,
             Presentation.ShowWithAnimation,
             Presentation.LoopUntilStopped,
+            Presentation.ShowType,
             useSlideTimings,
             showWithAnimation,
-            loopUntilStopped));
+            loopUntilStopped,
+            showType));
 
         return Presentation.UseSlideTimings == useSlideTimings &&
             Presentation.ShowWithAnimation == showWithAnimation &&
-            Presentation.LoopUntilStopped == loopUntilStopped;
+            Presentation.LoopUntilStopped == loopUntilStopped &&
+            Presentation.ShowType == showType;
     }
 
     /// <summary>Toggles the current slide's hidden/show state.</summary>

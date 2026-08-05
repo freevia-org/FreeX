@@ -224,16 +224,20 @@ public sealed class RendererNeutralDedupPlannerTests
             oldUseSlideTimings: true,
             oldShowWithAnimation: true,
             oldLoopUntilStopped: false,
+            oldShowType: PresentationShowType.PresentedBySpeaker,
             newUseSlideTimings: false,
             newShowWithAnimation: false,
-            newLoopUntilStopped: true));
+            newLoopUntilStopped: true,
+            newShowType: PresentationShowType.BrowsedByIndividual));
         presentation.UseSlideTimings.Should().BeFalse();
         presentation.ShowWithAnimation.Should().BeFalse();
         presentation.LoopUntilStopped.Should().BeTrue();
+        presentation.ShowType.Should().Be(PresentationShowType.BrowsedByIndividual);
         bus.Undo();
         presentation.UseSlideTimings.Should().BeTrue();
         presentation.ShowWithAnimation.Should().BeTrue();
         presentation.LoopUntilStopped.Should().BeFalse();
+        presentation.ShowType.Should().Be(PresentationShowType.PresentedBySpeaker);
         bus.Redo();
 
         using var output = new MemoryStream();
@@ -243,6 +247,7 @@ public sealed class RendererNeutralDedupPlannerTests
         reopened.UseSlideTimings.Should().BeFalse();
         reopened.ShowWithAnimation.Should().BeFalse();
         reopened.LoopUntilStopped.Should().BeTrue();
+        reopened.ShowType.Should().Be(PresentationShowType.BrowsedByIndividual);
 
         using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
         using var properties = archive.GetEntry("ppt/presProps.xml")!.Open();
@@ -251,6 +256,8 @@ public sealed class RendererNeutralDedupPlannerTests
         showPr.Attribute("useTimings")!.Value.Should().Be("0");
         showPr.Attribute("showAnimation")!.Value.Should().Be("0");
         showPr.Attribute("loop")!.Value.Should().Be("1");
+        showPr.Element(XName.Get("browse", "http://schemas.openxmlformats.org/presentationml/2006/main"))
+            .Should().NotBeNull();
     }
 
     [Fact]
