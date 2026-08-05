@@ -42,10 +42,6 @@ public partial class MainWindow
         if (!TryExecuteCommand(command, "Form Control"))
             return;
 
-        var affected = (command as IAffectedCellsCommand)?.AffectedCells;
-        if (affected is { Count: > 0 })
-            RecalculateIfAutomatic(affected);
-
         UpdateViewport();
     }
 }

@@ -223,7 +223,6 @@ public partial class MainWindow
                     summaryBelowData: true),
                 "Subtotal",
                 out var subtotalOutcome);
-            RecalculateIfAutomatic(subtotalOutcome.AffectedCells ?? []);
             await WaitForDataSubmittedWorkflowsWindowAsync(context.SubtotalRange.Start);
             captures.Add(await CaptureDataSubmittedWorkflowsWindowStateAsync(
                 outputDir,

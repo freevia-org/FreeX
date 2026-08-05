@@ -270,7 +270,6 @@ public partial class MainWindow
         if (!TryExecuteCommand(command, title, out var outcome))
             throw new InvalidOperationException(outcome.ErrorMessage ?? $"View workflows tour command '{title}' failed.");
 
-        RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();

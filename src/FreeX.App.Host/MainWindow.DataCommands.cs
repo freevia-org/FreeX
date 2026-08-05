@@ -222,16 +222,11 @@ public partial class MainWindow
             return;
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(
-            _workbook.Id,
-            () => CreateTextToColumnsCommand(CurrentGroupedEditSheetIds(), currentRange, dialog.Result));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Text to Columns");
+        if (!TryExecuteRepeatableCommand(
+                () => CreateTextToColumnsCommand(CurrentGroupedEditSheetIds(), currentRange, dialog.Result),
+                "Text to Columns",
+                out _))
             return;
-        }
-
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         PruneCorrectedValidationCircles();
     }
@@ -336,19 +331,16 @@ public partial class MainWindow
     /// </summary>
     private void ApplyAdvancedFilterResult(AdvancedFilterDialogResult result)
     {
-        var outcome = _commandBus.ExecuteRepeatable(
-            _workbook.Id,
-            () => new AdvancedFilterCommand(
+        if (!TryExecuteRepeatableCommand(
+                () => new AdvancedFilterCommand(
                 result.ListRange,
                 result.CriteriaRange,
                 result.CopyToCell,
                 result.UniqueRecordsOnly,
-                result.CopyToRange));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Advanced Filter");
+                result.CopyToRange),
+                "Advanced Filter",
+                out _))
             return;
-        }
 
         // R72-commands-sort-filter-4-3: remember an IN-PLACE Advanced Filter (no "Copy to another
         // location" destination) so Data > Reapply (MainWindow.DataFilterCommands.cs
@@ -364,7 +356,6 @@ public partial class MainWindow
                 result.UniqueRecordsOnly);
         }
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         if (result.CopyToCell is { } destinationCell)
             SetActiveCell(destinationCell);
         UpdateViewport();
@@ -420,7 +411,6 @@ public partial class MainWindow
         if (!TryExecuteRepeatableConsolidateCommand(dialog.Result, out var outcome))
             return;
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         SetActiveCell(dialog.Result.DestinationCell);
         EnsureCellVisible(dialog.Result.DestinationCell);
         UpdateViewport();
@@ -680,20 +670,11 @@ public partial class MainWindow
 
         try
         {
-            outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+            return TryExecuteRepeatableCommand(CreateCommand, "Consolidate", out outcome);
         }
         catch (Exception ex)
         {
             outcome = new CommandOutcome(false, ex.Message);
-        }
-
-        if (outcome.Success)
-        {
-            MarkWorkbookDirty();
-            _repeatPostAction = null;
-            InvalidateNavigationCaches();
-            NotifyOtherWindowsOfWorkbookChange();
-            return true;
         }
 
         ShowCommandError(outcome, "Consolidate");
@@ -764,7 +745,6 @@ public partial class MainWindow
                     out var removeOutcome))
                 return;
 
-            RecalculateIfAutomatic(removeOutcome.AffectedCells ?? []);
             UpdateViewport();
             PruneCorrectedValidationCircles();
             return;
@@ -776,7 +756,6 @@ public partial class MainWindow
                 out var outcome))
             return;
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         SelectSubtotalResultRange(
             SubtotalPlanner.ExpandRangeForInsertedSubtotalRows(sourceRange, outcome.AffectedCells));
         UpdateViewport();
@@ -896,7 +875,7 @@ public partial class MainWindow
         var changingCell = dlg.ChangingCell!.Value;
         var targetValue = dlg.TargetValue;
 
-        var result = GoalSeekService.Seek(_workbook, _recalcEngine, setCell, targetValue, changingCell);
+        var result = _session.FindGoalSeekSolution(new GoalSeekRequest(setCell, targetValue, changingCell));
 
         var statusDialog = new GoalSeekStatusDialog(result, targetValue) { Owner = this };
         if (statusDialog.ShowDialog() == true && statusDialog.ApplyResult)
@@ -904,8 +883,6 @@ public partial class MainWindow
             var cmd = new GoalSeekCommand(changingCell, result.FoundValue);
             if (TryExecuteCommand(cmd, "Goal Seek"))
             {
-                RecalculateIfAutomatic([changingCell]);
-
                 // Excel always refreshes the set cell (and the rest of the dependency chain from
                 // the changing cell) once Goal Seek applies its result, even when the workbook is
                 // in Manual calculation mode -- Goal Seek's recalculation is a deliberate one-time
@@ -917,7 +894,7 @@ public partial class MainWindow
                 // Goal Seek command does not route through.
                 if (_workbook.CalculationMode is not (WorkbookCalculationMode.Automatic or WorkbookCalculationMode.AutomaticExceptDataTables))
                 {
-                    _recalcEngine.Recalculate(_workbook, [changingCell]);
+                    _session.RecalculateChangedCellsAlways([changingCell]);
                     InvalidateNavigationCaches();
                 }
             }
@@ -1015,7 +992,6 @@ public partial class MainWindow
                 out var outcome))
             return;
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         PruneCorrectedValidationCircles();
         RefreshStatusBar();

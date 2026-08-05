@@ -153,9 +153,7 @@ public partial class MainWindow
             dlg.UseLeftColumn,
             dlg.UseBottomRow,
             dlg.UseRightColumn);
-        var outcome = _commandBus.Execute(_workbook.Id, command);
-        if (!outcome.Success)
-            ShowCommandError(outcome, "Create from Selection");
+        TryExecuteCommand(command, "Create from Selection");
     }
 
     private void UseInFormulaBtn_Click(object sender, RoutedEventArgs e)
@@ -396,7 +394,7 @@ public partial class MainWindow
     {
         RecalculateWorkbook();
 
-        var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId, _recalcEngine.CyclicCells);
+        var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId, _session.CyclicCells);
         if (issues.Count == 0)
         {
             _messageService.ShowInfo(UiText.Get("MainWindowMessage_ErrorCheckingNoIssues"), UiText.Get("MainWindowMessage_ErrorCheckingTitle"));
@@ -572,8 +570,7 @@ public partial class MainWindow
         // three explicit triggers that always force this sheet's Data Tables fresh, regardless
         // of calc mode -- see RefreshDataTablesOnSheetBeforeForcedRecalc's doc comment (mirrors
         // FreeX.App.Services.WorkbookCellEditService.RecalculateSheet).
-        RefreshDataTablesOnSheetBeforeForcedRecalc(_currentSheetId);
-        _recalcEngine.RecalculateSheetFormulas(_workbook, _currentSheetId);
+        _session.RecalculateActiveSheet();
         InvalidateNavigationCaches();
         UpdateViewport();
     }

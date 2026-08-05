@@ -8,7 +8,8 @@ public sealed record WorkbookCellEditResult(
     string? ErrorMessage,
     IReadOnlyList<CellAddress> AffectedCells,
     RecalcReport? RecalcReport,
-    WorkbookCellEditFailure? Failure = null);
+    WorkbookCellEditFailure? Failure = null,
+    bool IsNoOp = false);
 
 public enum WorkbookCellEditFailureKind
 {

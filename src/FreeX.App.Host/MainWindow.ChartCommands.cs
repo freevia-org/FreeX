@@ -32,14 +32,8 @@ public partial class MainWindow
             return command;
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Insert Chart Sheet");
+        if (!TryExecuteRepeatableCommand(CreateCommand, "Insert Chart Sheet", out _))
             return;
-        }
-
-        _repeatPostAction = null;
         if (command?.CreatedSheetId is { } createdSheetId)
         {
             _currentSheetId = createdSheetId;

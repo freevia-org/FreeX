@@ -58,7 +58,7 @@ public sealed class HomeEditingCommandSourceTests
         source.Should().Contain("new ClearDataValidationCommand(sheetId, currentRange)");
         source.Should().Contain("new ClearCommentsCommand(sheetId, currentRange)");
         source.Should().Contain("new ClearHyperlinksCommand(sheetId, currentRange)");
-        source.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? [])");
+        source.Should().NotContain("RecalculateIfAutomatic(outcome.AffectedCells ?? [])");
         source.Should().Contain("TryExecuteRepeatableCurrentSelectionRangesCommand(");
         source.Should().Contain("new ClearCommentsCommand(sheetId, currentRange)");
         source.Should().Contain("new ClearHyperlinksCommand(sheetId, currentRange)");

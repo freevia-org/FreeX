@@ -267,8 +267,10 @@ public partial class MainWindow
         sheet.GetCell(lockedCell)!.StyleId = lockedHighlightStyle;
         sheet.GetCell(allowEditCell)!.StyleId = lockedHighlightStyle;
 
-        var addRangeOutcome = _commandBus.Execute(_workbook.Id, new AllowEditRangeCommand(sheet.Id, allowEditRange));
-        if (!addRangeOutcome.Success)
+        if (!TryExecuteCommand(
+                new AllowEditRangeCommand(sheet.Id, allowEditRange),
+                "Allow Users to Edit Ranges",
+                out var addRangeOutcome))
             throw new InvalidOperationException(addRangeOutcome.ErrorMessage ?? "Review protection matrix tour could not add an allowed edit range.");
 
         var selectedPermissions = new[]
@@ -428,22 +430,18 @@ public partial class MainWindow
         List<ReviewProtectionMatrixTourCommandOutcome> commandOutcomes,
         bool refreshOnSuccess = true)
     {
-        var outcome = _commandBus.Execute(_workbook.Id, command);
+        var succeeded = TryExecuteCommand(command, title, out var outcome);
         commandOutcomes.Add(new ReviewProtectionMatrixTourCommandOutcome(
             title,
             command.Label,
             outcome.Success,
             outcome.ErrorMessage));
 
-        if (outcome.Success && refreshOnSuccess)
+        if (succeeded && refreshOnSuccess)
         {
-            MarkWorkbookDirty();
-            InvalidateNavigationCaches();
-            RecalculateAfterCommandOutcome(outcome);
             UpdateViewport();
             RefreshToolbar();
             RefreshStatusBar();
-            NotifyOtherWindowsOfWorkbookChange();
         }
 
         return outcome;

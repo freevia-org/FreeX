@@ -22,7 +22,7 @@ public sealed class FormulaSubmittedPersistenceScreenshotTourTests
         tourSource.Should().Contain("new CreateNamedRangesFromSelectionCommand(context.AuthoringRange");
         tourSource.Should().Contain("EditCellsCommand.ForFormula(context.Sheet.Id, context.NamedInsertionCell");
         tourSource.Should().Contain("new EditCellsCommand(context.Sheet.Id, formulaEdits)");
-        tourSource.Should().Contain("RecalculateIfAutomatic(formulaOutcome.AffectedCells");
+        tourSource.Should().NotContain("RecalculateIfAutomatic(formulaOutcome.AffectedCells");
         tourSource.Should().Contain("BeginFormulaBarFormulaEdit(\"=\")");
         tourSource.Should().Contain("InsertDefinedNameIntoFormula(\"TourRevenue\")");
         tourSource.Should().Contain("UseInFormulaBtn_Click(button, new RoutedEventArgs(ButtonBase.ClickEvent, button))");

@@ -293,7 +293,6 @@ public partial class MainWindow
         if (!TryExecuteCommand(command, title, out var outcome))
             throw new InvalidOperationException(outcome.ErrorMessage ?? $"Sheet-tab workflows tour command '{title}' failed.");
 
-        RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();
         RefreshSheetTabs();
         RefreshToolbar();

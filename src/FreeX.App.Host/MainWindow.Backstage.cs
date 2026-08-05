@@ -351,7 +351,7 @@ public partial class MainWindow
     private void UpdateInfoView()
     {
         // Under Manual calculation, a freshly-typed circular formula is never recalculated until
-        // F9/save/an automatic-mode edit, so _recalcEngine.CyclicCells would otherwise still be
+        // F9/save/an automatic-mode edit, so the session's cyclic-cell state would otherwise still be
         // empty here and File > Info would report zero circular references while Formulas >
         // Error Checking (which recalculates first — see ErrorCheckBtn_Click) reports the real
         // count for the identical workbook state. Recalculate here too so both surfaces agree.
@@ -364,7 +364,7 @@ public partial class MainWindow
             BackstageInfoResources.Strings,
             activeSheet,
             hasSelection: SheetGrid.SelectedRange is not null,
-            cyclicCells: _recalcEngine.CyclicCells);
+            cyclicCells: _session.CyclicCells);
         var pane = FreeXBackstageInfoPanePlanner.Build(
             FreeXBackstageInfoSurface.WpfInfoPane,
             CreateBackstageInfoPaneRequest(info));

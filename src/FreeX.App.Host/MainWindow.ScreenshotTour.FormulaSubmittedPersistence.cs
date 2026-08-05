@@ -68,7 +68,6 @@ public partial class MainWindow
                 "Use in Formula",
                 submittedCommands,
                 out var namedInsertionOutcome);
-            RecalculateIfAutomatic(namedInsertionOutcome.AffectedCells ?? [context.NamedInsertionCell]);
             context = ResolveFormulaSubmittedPersistenceCurrentContext(savedWorkbookPath, "submitted-named-reference", savedWorkbookBytes: 0);
 
             useInFormulaMenu = await OpenFormulaSubmittedPersistenceUseInFormulaMenuAsync();
@@ -227,7 +226,6 @@ public partial class MainWindow
             "Create from Selection",
             submittedCommands,
             out var namesFromSelectionOutcome);
-        RecalculateIfAutomatic(namesFromSelectionOutcome.AffectedCells ?? []);
 
         var formulaEdits = new (CellAddress Address, Cell NewCell)[]
         {
@@ -245,7 +243,6 @@ public partial class MainWindow
             "Submitted formulas and AutoSum",
             submittedCommands,
             out var formulaOutcome);
-        RecalculateIfAutomatic(formulaOutcome.AffectedCells ?? formulaEdits.Select(edit => edit.Address).ToArray());
     }
 
     private void ExecuteFormulaSubmittedPersistenceCommand(

@@ -117,17 +117,17 @@ public partial class MainWindow
                 "CommandBus.ExecuteRepeatable -> CompositeWorkbookCommand(ClearContentsCommand, ApplyStyleCommand(ClearFormatsDiff))",
                 context.ClearResultRange));
 
-            var replaceResult = FindReplaceService.TryReplaceAll(
-                _workbook,
-                _commandBus,
+            SynchronizeWorkbookSessionSelection();
+            var replaceResult = _session.ReplaceAllValues(
                 "FR_PENDING",
                 "FR_SUBMITTED",
                 new FindOptions(Within: FindWithin.Sheet, CurrentSheetId: _currentSheetId, LookIn: FindLookIn.Values),
                 matchCase: false,
                 matchEntireCell: true);
-            if (replaceResult.Failure is not null || replaceResult.ReplacedCount == 0)
-                throw new InvalidOperationException(replaceResult.Failure?.ErrorMessage ?? "Home submitted workflows tour could not execute Find/Replace.");
-            CompleteHomeSubmittedCommandMutation(replaceResult.Failure);
+            if (!replaceResult.Success || replaceResult.ReplacedCount == 0)
+                throw new InvalidOperationException(replaceResult.ErrorMessage ?? "Home submitted workflows tour could not execute Find/Replace.");
+            ApplyWorkbookSessionSelectionToRenderer();
+            CompleteHomeSubmittedCommandMutation(outcome: null);
             captures.Add(await CaptureHomeSubmittedWorkflowsWindowAsync(
                 outputDir,
                 context,
@@ -337,8 +337,7 @@ public partial class MainWindow
 
     private CommandOutcome ExecuteHomeSubmittedRepeatableCommand(string title, Func<IWorkbookCommand> createCommand)
     {
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, createCommand);
-        if (!outcome.Success)
+        if (!TryExecuteRepeatableCommand(createCommand, title, out var outcome))
             throw new InvalidOperationException(outcome.ErrorMessage ?? $"Home submitted workflows tour could not execute {title}.");
 
         CompleteHomeSubmittedCommandMutation(outcome);
@@ -347,15 +346,9 @@ public partial class MainWindow
 
     private void CompleteHomeSubmittedCommandMutation(CommandOutcome? outcome)
     {
-        MarkWorkbookDirty();
-        _repeatPostAction = null;
-        InvalidateNavigationCaches();
-        if (outcome is not null)
-            RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();
-        NotifyOtherWindowsOfWorkbookChange();
     }
 
     private async Task<HomeSubmittedWorkflowsTourManifestCapture> CaptureHomeSubmittedWorkflowsWindowAsync(

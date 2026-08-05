@@ -45,12 +45,10 @@ public partial class MainWindow
 
             captures.Add(await CaptureGoalSeekDialogForDataWhatIfTourAsync(outputDir, context));
 
-            var goalSeekResult = GoalSeekService.Seek(
-                _workbook,
-                _recalcEngine,
+            var goalSeekResult = _session.FindGoalSeekSolution(new GoalSeekRequest(
                 context.GoalSeekSetCell,
-                targetValue: 180.0,
-                context.GoalSeekChangingCell);
+                TargetValue: 180.0,
+                context.GoalSeekChangingCell));
             if (!goalSeekResult.Converged)
                 throw new InvalidOperationException("Data What-If workflows tour expected Goal Seek to converge for the seeded linear formula.");
             captures.Add(await CaptureGoalSeekStatusDialogForDataWhatIfTourAsync(outputDir, goalSeekResult));
@@ -58,7 +56,6 @@ public partial class MainWindow
                 new GoalSeekCommand(context.GoalSeekChangingCell, goalSeekResult.FoundValue),
                 "Goal Seek",
                 out var goalSeekOutcome);
-            RecalculateIfAutomatic(goalSeekOutcome.AffectedCells ?? [context.GoalSeekChangingCell]);
             captures.Add(await CaptureDataWhatIfWorkflowsWindowStateAsync(
                 outputDir,
                 context,
@@ -116,7 +113,6 @@ public partial class MainWindow
                 new ApplyScenarioCommand("Upside Plan"),
                 "Scenario Manager",
                 out var scenarioOutcome);
-            RecalculateIfAutomatic(scenarioOutcome.AffectedCells ?? [context.ScenarioUnitsCell, context.ScenarioPriceCell]);
             captures.Add(await CaptureDataWhatIfWorkflowsWindowStateAsync(
                 outputDir,
                 context,
@@ -134,7 +130,7 @@ public partial class MainWindow
                     (workbook, changedCells) =>
                     {
                         if (workbook.CalculationMode == WorkbookCalculationMode.Automatic)
-                            _recalcEngine.Recalculate(workbook, changedCells);
+                            _session.RecalculateChangedCellsAlways(changedCells);
                     }),
                 "Scenario Manager");
             var reportSheet = _workbook.Sheets.LastOrDefault(sheet => string.Equals(sheet.Name, "Scenario Summary", StringComparison.Ordinal));
@@ -176,7 +172,6 @@ public partial class MainWindow
             if (oneVariablePlanResult.Plan is not { } oneVariablePlan)
                 throw new InvalidOperationException($"Data What-If workflows tour one-variable Data Table plan failed: {oneVariablePlanResult.StatusText}");
             ExecuteDataWhatIfWorkflowsTourCommand(oneVariablePlan.CreateCommand(), "Data Table", out var oneVariableOutcome);
-            RecalculateIfAutomatic(oneVariableOutcome.AffectedCells ?? oneVariablePlan.OutputRange.AllCells().ToList());
             captures.Add(await CaptureDataWhatIfWorkflowsWindowStateAsync(
                 outputDir,
                 context,
@@ -196,7 +191,6 @@ public partial class MainWindow
             if (twoVariablePlanResult.Plan is not { } twoVariablePlan)
                 throw new InvalidOperationException($"Data What-If workflows tour two-variable Data Table plan failed: {twoVariablePlanResult.StatusText}");
             ExecuteDataWhatIfWorkflowsTourCommand(twoVariablePlan.CreateCommand(), "Data Table", out var twoVariableOutcome);
-            RecalculateIfAutomatic(twoVariableOutcome.AffectedCells ?? twoVariablePlan.OutputRange.AllCells().ToList());
             captures.Add(await CaptureDataWhatIfWorkflowsWindowStateAsync(
                 outputDir,
                 context,

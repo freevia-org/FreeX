@@ -31,92 +31,11 @@ public partial class MainWindow
         };
     }
 
-    /// <summary>
-    /// Refreshes any linked/Camera picture (Paste Special &gt; Linked Picture,
-    /// <see cref="PictureModel.IsLinkedToSourceRange"/>) whose source range overlaps
-    /// <paramref name="affectedCells"/>, rebuilding its cached cell snapshot from the live sheet
-    /// (R90-app-camera-picture-link-5-1). Before this, the WPF host never refreshed a linked
-    /// picture after the initial paste except via
-    /// RowColumnShiftHelpers.RefreshLinkedPictureSnapshot (Core.Commands), which only fires when a
-    /// structural row/column insert/delete actually moves the source range's coordinates -- an
-    /// ordinary value, fill/border, or dependent-formula-recalculation edit inside the range left
-    /// the picture showing stale, paste-time content forever. Mirrors
-    /// FreeX.App.Services.WorkbookSession's RefreshLinkedPicturesForEditedCells/
-    /// RefreshLinkedPictureCells (the equivalent refresh already performed by the Avalonia shell)
-    /// so both shells keep a linked picture's rendered content live. Called from every successful
-    /// edit-affecting command outcome in this file (with <see cref="CommandOutcome.AffectedCells"/>)
-    /// AND from <see cref="RecalculateIfAutomatic"/> (MainWindow.WorkbookUiState.cs, with the
-    /// RecalcEngine's own cascaded <c>RecalcReport.RecalculatedCells</c>) so a formula cell inside a
-    /// linked picture's source range that only changes because some other, out-of-range cell it
-    /// depends on was edited also keeps the picture live (R91-print-twin-two-tier-synthetic-sweep-3).
-    /// </summary>
-    private void RefreshLinkedPicturesAffectedBy(IReadOnlyList<CellAddress>? affectedCells)
-    {
-        if (affectedCells is not { Count: > 0 })
-            return;
-
-        foreach (var sheet in _workbook.Sheets)
-        {
-            if (sheet.Pictures.Count == 0)
-                continue;
-
-            foreach (var picture in sheet.Pictures)
-            {
-                if (!picture.IsLinkedToSourceRange || picture.LinkedSourceRange is not { } sourceRange)
-                    continue;
-
-                var sourceSheet = _workbook.GetSheet(sourceRange.Start.Sheet);
-                if (sourceSheet is null)
-                    continue;
-
-                var touched = false;
-                foreach (var edited in affectedCells)
-                {
-                    if (edited.Sheet.Equals(sourceRange.Start.Sheet) &&
-                        edited.Row >= sourceRange.Start.Row && edited.Row <= sourceRange.End.Row &&
-                        edited.Col >= sourceRange.Start.Col && edited.Col <= sourceRange.End.Col)
-                    {
-                        touched = true;
-                        break;
-                    }
-                }
-                if (!touched)
-                    continue;
-
-                RefreshLinkedPictureCellsFromLiveSheet(picture, sourceSheet, sourceRange);
-            }
-        }
-    }
-
-    /// <summary>Rebuilds a linked picture's cached cell snapshot from the live contents of its source range.</summary>
-    private void RefreshLinkedPictureCellsFromLiveSheet(PictureModel picture, Sheet sourceSheet, GridRange sourceRange)
-    {
-        picture.SourceRowCount = sourceRange.RowCount;
-        picture.SourceColumnCount = sourceRange.ColCount;
-
-        picture.Cells.Clear();
-        for (var row = sourceRange.Start.Row; row <= sourceRange.End.Row; row++)
-        {
-            for (var col = sourceRange.Start.Col; col <= sourceRange.End.Col; col++)
-            {
-                var cell = sourceSheet.GetCell(row, col);
-                var styleId = cell?.StyleId ?? sourceSheet.GetStyleOnly(row, col) ?? StyleId.Default;
-                var style = _workbook.GetStyle(styleId);
-                var value = cell?.Value ?? BlankValue.Instance;
-
-                picture.Cells.Add(new PictureCellSnapshot(
-                    row - sourceRange.Start.Row,
-                    col - sourceRange.Start.Col,
-                    DrawingInputParser.FormatPictureCellText(value),
-                    style.Clone(),
-                    value is NumberValue or DateTimeValue));
-            }
-        }
-    }
-
     private bool TryExecuteCommand(IWorkbookCommand command, string title, out CommandOutcome outcome)
     {
-        outcome = _commandBus.Execute(_workbook.Id, command);
+        SynchronizeWorkbookSessionSelection();
+        var result = _session.ExecuteCommandPreservingSelection(command);
+        outcome = ToCommandOutcome(result);
         RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
         {
             ["command"] = title,
@@ -127,9 +46,8 @@ public partial class MainWindow
             if (outcome.IsNoOp)
                 return true;
 
-            MarkWorkbookDirty();
             InvalidateNavigationCaches();
-            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
+            ApplyWorkbookSessionSelectionToRenderer();
             // A successful command may have changed the current sheet's view mode/zoom (directly,
             // via SetWorksheetViewModeCommand/SetWorksheetZoomCommand, or via a screenshot-tour
             // helper that constructs those commands itself instead of going through
@@ -156,7 +74,9 @@ public partial class MainWindow
         string title,
         out CommandOutcome outcome)
     {
-        outcome = _commandBus.ExecuteRepeatable(_workbook.Id, commandFactory);
+        SynchronizeWorkbookSessionSelection();
+        var result = _session.ExecuteRepeatableCommandPreservingSelection(commandFactory);
+        outcome = ToCommandOutcome(result);
         RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
         {
             ["command"] = title,
@@ -167,10 +87,9 @@ public partial class MainWindow
             if (outcome.IsNoOp)
                 return true;
 
-            MarkWorkbookDirty();
             _repeatPostAction = null;
             InvalidateNavigationCaches();
-            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
+            ApplyWorkbookSessionSelectionToRenderer();
             // See TryExecuteCommand above (R83-app-view-modes-5-1).
             SyncWindowViewState([_currentSheetId]);
             NotifyOtherWindowsOfWorkbookChange();
@@ -254,22 +173,7 @@ public partial class MainWindow
                 title);
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        if (outcome.Success)
-        {
-            if (outcome.IsNoOp)
-                return true;
-
-            MarkWorkbookDirty();
-            _repeatPostAction = null;
-            InvalidateNavigationCaches();
-            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
-            NotifyOtherWindowsOfWorkbookChange();
-            return true;
-        }
-
-        ShowCommandError(outcome, title);
-        return false;
+        return TryExecuteRepeatableCommand(CreateCommand, title, out _);
     }
 
     private IReadOnlyList<GridRange> GetCurrentSelectionRanges(GridRange? fallbackRange = null)
@@ -294,22 +198,7 @@ public partial class MainWindow
                 : createCommand(_currentSheetId);
         }
 
-        outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateRepeatCommand);
-        if (outcome.Success)
-        {
-            if (outcome.IsNoOp)
-                return true;
-
-            MarkWorkbookDirty();
-            _repeatPostAction = null;
-            InvalidateNavigationCaches();
-            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
-            NotifyOtherWindowsOfWorkbookChange();
-            return true;
-        }
-
-        ShowCommandError(outcome, title);
-        return false;
+        return TryExecuteRepeatableCommand(CreateRepeatCommand, title, out outcome);
     }
 
     private bool TryExecuteRepeatableGroupedSheetCommand(
@@ -333,19 +222,7 @@ public partial class MainWindow
                 title);
         }
 
-        outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateRepeatCommand);
-        if (outcome.Success)
-        {
-            MarkWorkbookDirty();
-            _repeatPostAction = null;
-            InvalidateNavigationCaches();
-            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
-            NotifyOtherWindowsOfWorkbookChange();
-            return true;
-        }
-
-        ShowCommandError(outcome, title);
-        return false;
+        return TryExecuteRepeatableCommand(CreateRepeatCommand, title, out outcome);
     }
 
     private bool TryExecuteRepeatableCurrentSelectionRangesCommand(
@@ -366,19 +243,7 @@ public partial class MainWindow
             return createCommand(range);
         }
 
-        outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateRepeatCommand);
-        if (outcome.Success)
-        {
-            MarkWorkbookDirty();
-            _repeatPostAction = null;
-            InvalidateNavigationCaches();
-            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
-            NotifyOtherWindowsOfWorkbookChange();
-            return true;
-        }
-
-        ShowCommandError(outcome, title);
-        return false;
+        return TryExecuteRepeatableCommand(CreateRepeatCommand, title, out outcome);
     }
 
     private bool TryExecuteRepeatableCurrentRangeCommand(
@@ -440,17 +305,7 @@ public partial class MainWindow
                     : unsupportedMessage ?? UiText.Get("MainWindowMessage_UnsupportedChartCommand"));
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        if (outcome.Success)
-        {
-            MarkWorkbookDirty();
-            _repeatPostAction = null;
-            NotifyOtherWindowsOfWorkbookChange();
-            return true;
-        }
-
-        ShowCommandError(outcome, caption);
-        return false;
+        return TryExecuteRepeatableCommand(CreateCommand, caption, out _);
     }
 
     private ChartModel? GetFirstChartOnCurrentSheet()
@@ -512,6 +367,13 @@ public partial class MainWindow
         Func<SheetId, IWorkbookCommand> createCommand) =>
         TryExecuteGroupedSheetCommand(title, createCommand, out _);
 
+    private static CommandOutcome ToCommandOutcome(WorkbookCellEditResult result) =>
+        new(
+            result.Success,
+            result.ErrorMessage,
+            result.AffectedCells,
+            result.IsNoOp);
+
     private bool ExecuteUndo()
         => ApplyWorkbookSessionHistoryResult(_session.UndoLastEdit());
 
@@ -572,11 +434,4 @@ public partial class MainWindow
         return true;
     }
 
-    private void RecalculateAfterCommandOutcome(CommandOutcome outcome)
-    {
-        if (outcome.AffectedCells is { Count: > 0 } affectedCells)
-            RecalculateIfAutomatic(affectedCells);
-        else
-            RecalculateWorkbook();
-    }
 }

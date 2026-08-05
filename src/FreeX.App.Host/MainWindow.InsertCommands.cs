@@ -24,7 +24,6 @@ public partial class MainWindow
                 out var outcome))
             return;
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? [range.Start]);
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();
@@ -110,17 +109,10 @@ public partial class MainWindow
             return new CompositeWorkbookCommand("Insert Sparkline", commands);
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        var executed = TryExecuteRepeatableCommand(CreateCommand, "Insert Sparkline", out _);
         useDialogLocationForInitialInsert = false;
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Insert Sparkline");
+        if (!executed)
             return;
-        }
-
-        MarkWorkbookDirty();
-        _repeatPostAction = null;
-        InvalidateNavigationCaches();
 
         SetActiveCell(firstLocation);
         EnsureCellVisible(firstLocation);

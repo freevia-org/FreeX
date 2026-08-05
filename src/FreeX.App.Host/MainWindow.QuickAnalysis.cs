@@ -187,16 +187,11 @@ public partial class MainWindow
             return;
 
         var title = operation.TotalCommandTitle ?? "Quick Analysis Total";
-        var outcome = _commandBus.ExecuteRepeatable(
-            _workbook.Id,
-            () => new EditCellsCommand(_currentSheetId, edits));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, title);
+        if (!TryExecuteRepeatableCommand(
+                () => new EditCellsCommand(_currentSheetId, edits),
+                title,
+                out _))
             return;
-        }
-
-        RecalculateIfAutomatic(outcome.AffectedCells ?? edits.Select(edit => edit.Address).ToList());
         SetActiveCell(edits[^1].Address);
         UpdateViewport();
     }

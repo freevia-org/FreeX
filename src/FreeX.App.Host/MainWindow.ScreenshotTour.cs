@@ -4780,7 +4780,6 @@ public partial class MainWindow
             {
                 throw new InvalidOperationException("Grid selection/editing tour could not execute Fill Down.");
             }
-            RecalculateIfAutomatic(fillOutcome.AffectedCells);
             UpdateViewport();
             captures.Add(await CaptureGridSelectionEditingWindowStateAsync(
                 outputDir,
@@ -4799,7 +4798,6 @@ public partial class MainWindow
             {
                 throw new InvalidOperationException("Grid selection/editing tour could not execute Clear Contents.");
             }
-            RecalculateIfAutomatic(clearOutcome.AffectedCells);
             UpdateViewport();
             SetSelectionRange(context.ClearRange, context.ClearRange.Start);
             captures.Add(await CaptureGridSelectionEditingWindowStateAsync(
@@ -5330,7 +5328,7 @@ public partial class MainWindow
                 "window-full",
                 "Remove Arrows clears the in-memory formula trace arrows and returns the sheet to value display mode."));
 
-            var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId, _recalcEngine.CyclicCells);
+            var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId, _session.CyclicCells);
             if (issues.Count == 0)
                 throw new InvalidOperationException("Formula diagnostics tour expected at least one formula error issue.");
 

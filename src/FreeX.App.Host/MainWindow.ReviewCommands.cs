@@ -452,12 +452,8 @@ public partial class MainWindow
         }
 
         var action = SheetProtectionWorkflow.CreateCommand(sheet, result);
-        var outcome = _commandBus.Execute(_workbook.Id, action.Command);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, action.Title);
+        if (!TryExecuteCommand(action.Command, action.Title))
             return;
-        }
 
         _messageService.ShowInfo(action.SuccessMessage, action.Title);
         RefreshSheetTabs();

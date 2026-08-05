@@ -224,14 +224,8 @@ public partial class MainWindow
             return ChartCommandWorkflowPlanner.BuildLayoutCommand(_currentSheetId, chart, options);
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, command.Label);
+        if (!TryExecuteRepeatableCommand(CreateCommand, command.Label, out _))
             return;
-        }
-
-        _repeatPostAction = null;
         UpdateViewport();
     }
 

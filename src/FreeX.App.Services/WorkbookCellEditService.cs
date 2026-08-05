@@ -133,6 +133,39 @@ public sealed class WorkbookCellEditService
     }
 
     /// <summary>
+    /// Applies the workbook's normal post-edit calculation policy. Manual mode still evaluates
+    /// formulas that were entered by this edit once, while leaving dependent formulas deferred.
+    /// </summary>
+    public RecalcReport? RecalculateAfterChanges(Workbook workbook, IReadOnlyList<CellAddress> affectedCells)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(affectedCells);
+
+        return RecalculateIfAutomatic(workbook, affectedCells)
+            ?? RecalculateFreshlyEnteredFormulasOnce(workbook, affectedCells);
+    }
+
+    /// <summary>
+    /// Recalculates the dirty dependency graph for Calculate Now (F9), forcing Data Table bodies
+    /// fresh without rebuilding and evaluating every formula in the workbook.
+    /// </summary>
+    public RecalcReport RecalculateDirty(Workbook workbook)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+
+        var context = new WorkbookCommandContext(workbook);
+        List<CellAddress>? refreshedCells = null;
+        foreach (var sheet in workbook.Sheets)
+        {
+            var refreshed = DataTableAutoRefreshEffects.RefreshAllTables(context, sheet);
+            if (refreshed.Count > 0)
+                (refreshedCells ??= []).AddRange(refreshed);
+        }
+
+        return _recalcEngine.Recalculate(workbook, refreshedCells ?? []);
+    }
+
+    /// <summary>
     /// Recalculates <paramref name="affectedCells"/> unconditionally, independent of the workbook's
     /// <see cref="WorkbookCalculationMode"/>. Unlike <see cref="RecalculateIfAutomatic"/> (used after
     /// live cell edits, where Manual mode intentionally defers recalculation until the user asks for
@@ -198,27 +231,7 @@ public sealed class WorkbookCellEditService
         if (TryValidateGoalSeekRequest(workbook, request, out var errorMessage))
             return WorkbookGoalSeekResult.Invalid(request, errorMessage);
 
-        // R90-app-goalseek-whatif-5-2: Goal Seek is documented by Excel as stopping "after
-        // [Maximum Iterations] iterations or when the change is smaller than [Maximum Change]" --
-        // the same workbook-level fields RecalcEngine honors for iterative calculation (see
-        // RecalcEngine's DefaultMaxIterations/DefaultMaxChange fallback below). Route them through
-        // instead of always taking GoalSeekService.Seek's own 1000/1e-6 hardcoded defaults, so a
-        // user-configured File > Options > Formulas setting actually changes Goal Seek's behavior.
-        var maxIterations = workbook.MaxCalculationIterations is int configuredIterations && configuredIterations > 0
-            ? configuredIterations
-            : 1000;
-        var tolerance = workbook.MaxCalculationChange is double configuredChange && configuredChange > 0
-            ? configuredChange
-            : 1e-6;
-
-        var seekResult = GoalSeekService.Seek(
-            workbook,
-            _recalcEngine,
-            request.SetCell,
-            request.TargetValue,
-            request.ChangingCell,
-            maxIterations,
-            tolerance);
+        var seekResult = FindGoalSeekSolution(workbook, request);
 
         if (!seekResult.Converged)
             return WorkbookGoalSeekResult.NotConverged(request, seekResult);
@@ -244,6 +257,32 @@ public sealed class WorkbookCellEditService
         }
 
         return WorkbookGoalSeekResult.AppliedResult(request, seekResult, editResult);
+    }
+
+    /// <summary>Calculates a Goal Seek proposal without applying it to the workbook.</summary>
+    public GoalSeekResult FindGoalSeekSolution(Workbook workbook, GoalSeekRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (TryValidateGoalSeekRequest(workbook, request, out var errorMessage))
+            throw new ArgumentException(errorMessage, nameof(request));
+
+        var maxIterations = workbook.MaxCalculationIterations is int configuredIterations && configuredIterations > 0
+            ? configuredIterations
+            : 1000;
+        var tolerance = workbook.MaxCalculationChange is double configuredChange && configuredChange > 0
+            ? configuredChange
+            : 1e-6;
+
+        return GoalSeekService.Seek(
+            workbook,
+            _recalcEngine,
+            request.SetCell,
+            request.TargetValue,
+            request.ChangingCell,
+            maxIterations,
+            tolerance);
     }
 
     public WorkbookCellEditResult CommitCellText(
@@ -282,6 +321,16 @@ public sealed class WorkbookCellEditService
         }
 
         var affectedCells = outcome.AffectedCells ?? [];
+        if (outcome.IsNoOp)
+        {
+            return new WorkbookCellEditResult(
+                true,
+                null,
+                affectedCells,
+                RecalcReport: null,
+                IsNoOp: true);
+        }
+
         UpdateFormulaDependencies(workbook, affectedCells);
 
         // R84-calc-crosssheet-3d-5-1: Undo/Redo of a structural sheet command (Add/Delete/Move/
@@ -295,10 +344,14 @@ public sealed class WorkbookCellEditService
         // straight into the command bus, never reaches.
         var recalcReport = outcome.RequiresFullRecalc
             ? RecalculateAll(workbook)
-            : RecalculateIfAutomatic(workbook, affectedCells)
-                ?? RecalculateFreshlyEnteredFormulasOnce(workbook, affectedCells);
+            : RecalculateAfterChanges(workbook, affectedCells);
 
-        return new WorkbookCellEditResult(true, null, affectedCells, recalcReport);
+        return new WorkbookCellEditResult(
+            true,
+            null,
+            affectedCells,
+            recalcReport,
+            IsNoOp: outcome.IsNoOp);
     }
 
     /// <summary>

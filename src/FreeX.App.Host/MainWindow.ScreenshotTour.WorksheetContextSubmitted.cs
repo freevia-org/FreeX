@@ -426,9 +426,9 @@ public partial class MainWindow
         EnsureCellVisible(context.ProtectedCell);
         UpdateViewport();
 
-        var outcome = _commandBus.ExecuteRepeatable(
-            _workbook.Id,
-            () => new ClearContentsCommand(_currentSheetId, new GridRange(context.ProtectedCell, context.ProtectedCell)));
+        SynchronizeWorkbookSessionSelection();
+        var outcome = ToCommandOutcome(_session.ExecuteRepeatableCommandPreservingSelection(
+            () => new ClearContentsCommand(_currentSheetId, new GridRange(context.ProtectedCell, context.ProtectedCell))));
         if (outcome.Success)
             throw new InvalidOperationException("Worksheet context-submitted tour expected protected Clear Contents to be rejected.");
 

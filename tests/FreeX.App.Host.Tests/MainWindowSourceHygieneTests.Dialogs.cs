@@ -194,7 +194,7 @@ public sealed partial class MainWindowSourceHygieneTests
         method.Should().Contain("useDialogLocationForInitialInsert");
         method.Should().Contain("? fallbackLocationRange");
         method.Should().Contain(": SheetGrid.SelectedRange ?? fallbackLocationRange");
-        method.Should().Contain("var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);");
+        method.Should().Contain("TryExecuteRepeatableCommand(CreateCommand, \"Insert Sparkline\", out _)");
         method.Should().Contain("useDialogLocationForInitialInsert = false;");
         method.Should().NotContain("MessageBox.Show(");
     }
@@ -280,8 +280,9 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var scenarioSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ScenarioCommands.cs");
 
-        scenarioSource.Should().Contain("_commandBus.ExecuteRepeatable(_workbook.Id, () => new ApplyScenarioCommand(name))");
-        scenarioSource.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
+        scenarioSource.Should().Contain("TryExecuteRepeatableCommand(");
+        scenarioSource.Should().Contain("() => new ApplyScenarioCommand(name)");
+        scenarioSource.Should().NotContain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
         scenarioSource.Should().Contain("CellAddress? first = null;");
         scenarioSource.Should().Contain("foreach (var cell in outcome.AffectedCells)");
         scenarioSource.Should().Contain("if (first is { } firstCell)");
@@ -300,14 +301,14 @@ public sealed partial class MainWindowSourceHygieneTests
         // than a local assigned from dialog.Result inline.
         dataSource.Should().Contain("ApplyAdvancedFilterResult(dialog.Result);");
         dataSource.Should().Contain("private void ApplyAdvancedFilterResult(AdvancedFilterDialogResult result)");
-        dataSource.Should().Contain("_commandBus.ExecuteRepeatable(");
+        dataSource.Should().Contain("TryExecuteRepeatableCommand(");
         dataSource.Should().Contain("() => new AdvancedFilterCommand(");
         dataSource.Should().Contain("result.ListRange");
         dataSource.Should().Contain("result.CriteriaRange");
         dataSource.Should().Contain("result.CopyToCell");
         dataSource.Should().Contain("result.UniqueRecordsOnly");
         dataSource.Should().Contain("result.CopyToRange");
-        dataSource.Should().NotContain("_commandBus.Execute(\r\n            _workbook.Id,\r\n            new AdvancedFilterCommand(");
+        dataSource.Should().NotContain("_commandBus.ExecuteRepeatable(");
     }
 
     [Fact]

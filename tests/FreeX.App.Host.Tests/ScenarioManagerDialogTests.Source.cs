@@ -114,7 +114,7 @@ public sealed partial class ScenarioManagerDialogTests
         // P20 fix: the Scenario Summary recalculate delegate is now unconditional (independent of
         // WorkbookCalculationMode) so Manual-mode workbooks still get a genuinely distinct
         // recalculated result per scenario column instead of repeating the same stale value.
-        handlerSource.Should().Contain("_recalcEngine.Recalculate(workbook, changedCells)");
+        handlerSource.Should().Contain("_session.RecalculateChangedCellsAlways(changedCells)");
         handlerSource.Should().Contain("dialog.SelectedAction == ScenarioManagerAction.Edit ? dialog.SelectedScenarioName : null");
         handlerSource.Should().Contain("new SaveScenarioCommand(name, changes, comment, hidden, locked, replaceScenarioName)");
         handlerSource.Should().Contain("TryParseScenarioChangingCells");

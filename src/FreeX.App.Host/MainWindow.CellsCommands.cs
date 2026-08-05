@@ -75,7 +75,6 @@ public partial class MainWindow
         else if (choice == KeyboardInsertDeleteDialogChoice.EntireColumn)
             ShiftScrollOriginForColEdit(range.Start.Col, (int)range.ColCount);
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
 
@@ -140,7 +139,6 @@ public partial class MainWindow
         else if (choice == KeyboardInsertDeleteDialogChoice.EntireColumn)
             ShiftScrollOriginForColEdit(range.Start.Col, -(int)range.ColCount);
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
 
@@ -158,12 +156,8 @@ public partial class MainWindow
         if (!_messageService.AskYesNo(
                 UiText.Format("MainWindowMessage_DeleteSheetPrompt", sheet.Name),
                 UiText.Get("MainWindowMessage_DeleteSheetTitle"))) return;
-        var outcome = _commandBus.Execute(_workbook.Id, new RemoveSheetCommand(_currentSheetId));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Delete Sheet");
+        if (!TryExecuteCommand(new RemoveSheetCommand(_currentSheetId), "Delete Sheet"))
             return;
-        }
 
         _worksheetSelections.Remove(_currentSheetId);
         _currentSheetId = _workbook.Sheets[0].Id;
@@ -365,21 +359,7 @@ public partial class MainWindow
             return commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand(title, commands);
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        if (outcome.Success)
-        {
-            if (outcome.IsNoOp)
-                return true;
-
-            MarkWorkbookDirty();
-            _repeatPostAction = null;
-            InvalidateNavigationCaches();
-            NotifyOtherWindowsOfWorkbookChange();
-            return true;
-        }
-
-        ShowCommandError(outcome, title);
-        return false;
+        return TryExecuteRepeatableCommand(CreateCommand, title, out _);
     }
 
     private void FormatDefaultWidthMenuItem_Click(object sender, RoutedEventArgs e) { FormatColWidthMenuItem_Click(sender, e); }
@@ -519,7 +499,6 @@ public partial class MainWindow
         if (!TryExecuteEditCells([edit], mode == CopyFromAboveMode.Value ? "Copy Value from Above" : "Copy Formula from Above"))
             return;
 
-        RecalculateIfAutomatic([target]);
         FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(target), target);
         UpdateViewport();
         RefreshStatusBar();
@@ -926,7 +905,6 @@ public partial class MainWindow
             return;
 
         SelectCompletedAutofillRange(sourceRange, fillRange);
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         RefreshStatusBar();
     }
@@ -990,7 +968,6 @@ public partial class MainWindow
             : FormatRangeReference(targetRange.Start, targetRange.End));
         SetFormulaBarSelectionText(FormatFormulaBarText(sheet.GetCell(targetRange.Start), targetRange.Start));
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();

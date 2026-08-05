@@ -380,14 +380,10 @@ public partial class MainWindow
         // unaffected.
         var (preTopRow, preLeftCol) = GetEffectiveViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
 
-        var outcome = _commandBus.Execute(
-            _workbook.Id,
-            new SetFreezePanesCommand(_currentSheetId, frozenRows, frozenCols));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Freeze Panes");
+        if (!TryExecuteCommand(
+                new SetFreezePanesCommand(_currentSheetId, frozenRows, frozenCols),
+                "Freeze Panes"))
             return;
-        }
 
         // This window chose the new Freeze Panes state -- remember it as THIS window's own state
         // (R89-freeze-split-per-window-1), exactly like SetWorksheetViewMode/the View-tab toggles:

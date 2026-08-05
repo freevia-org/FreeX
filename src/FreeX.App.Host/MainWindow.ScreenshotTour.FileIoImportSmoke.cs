@@ -155,7 +155,7 @@ public partial class MainWindow
 
         sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("Total revenue"));
         sheet.SetFormula(new CellAddress(sheet.Id, 5, 4), "SUM(D2:D4)");
-        _recalcEngine.RecalculateAllFormulas(_workbook);
+        _session.RecalculateWorkbook();
 
         var sampleRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 4));
         SetSelectionRange(sampleRange, sampleRange.Start);
@@ -190,7 +190,6 @@ public partial class MainWindow
             throw new InvalidOperationException(outcome.ErrorMessage ?? $"File IO/import smoke tour import failed for {Path.GetFileName(path)}.");
         }
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         var importedRange = FindFileIoImportSmokeImportedRange(imported.Sheets[0], destination);
         SetSelectionRange(importedRange, importedRange.Start);
         EnsureCellVisible(importedRange.Start);

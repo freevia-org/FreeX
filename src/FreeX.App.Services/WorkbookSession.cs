@@ -1198,10 +1198,43 @@ public sealed class WorkbookSession : IDisposable
         ArgumentNullException.ThrowIfNull(command);
 
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
-        if (!result.Success)
+        if (!result.Success || result.IsNoOp)
             return result;
 
         ApplySuccessfulEditResult(result, fallbackAddress ?? ActiveCell);
+        return result;
+    }
+
+    /// <summary>
+    /// Executes an undoable workbook command while preserving the renderer-synchronized cell
+    /// selection. The session owns dependency maintenance, calculation policy, dirty state,
+    /// linked-picture refresh, and structural-sheet fallback; the renderer remains responsible
+    /// for command construction and native UI aftermath.
+    /// </summary>
+    public WorkbookCellEditResult ExecuteCommandPreservingSelection(IWorkbookCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var sheetIdsBefore = CaptureSheetIds();
+        var hiddenStatesBefore = CaptureSheetHiddenStates();
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        ApplySuccessfulPreservedSelectionCommandResult(result, sheetIdsBefore, hiddenStatesBefore);
+        return result;
+    }
+
+    /// <summary>
+    /// Executes and records a repeatable workbook command while preserving the current selection.
+    /// The factory is re-evaluated by Repeat Last Action, so it may resolve live renderer state.
+    /// </summary>
+    public WorkbookCellEditResult ExecuteRepeatableCommandPreservingSelection(
+        Func<IWorkbookCommand> commandFactory)
+    {
+        ArgumentNullException.ThrowIfNull(commandFactory);
+
+        var sheetIdsBefore = CaptureSheetIds();
+        var hiddenStatesBefore = CaptureSheetHiddenStates();
+        var result = _cellEditService.ExecuteRepeatableEditCommand(Workbook, commandFactory);
+        ApplySuccessfulPreservedSelectionCommandResult(result, sheetIdsBefore, hiddenStatesBefore);
         return result;
     }
 
@@ -1216,6 +1249,10 @@ public sealed class WorkbookSession : IDisposable
         ApplySuccessfulEditResult(result.EditResult, request.ChangingCell);
         return result;
     }
+
+    /// <summary>Calculates a Goal Seek proposal without applying it, for hosts with a confirmation step.</summary>
+    public GoalSeekResult FindGoalSeekSolution(GoalSeekRequest request) =>
+        _cellEditService.FindGoalSeekSolution(Workbook, request);
 
     public WorkbookCellEditResult ExecuteDataTablePlan(DataTablePlan plan)
     {
@@ -4770,6 +4807,15 @@ public sealed class WorkbookSession : IDisposable
     public void RecalculateWorkbook()
     {
         _cellEditService.RecalculateAll(Workbook);
+        _selectionStatsRevision++;
+        RefreshViewport();
+    }
+
+    /// <summary>Runs Calculate Now (F9) against the dirty dependency graph.</summary>
+    public void RecalculateDirtyCells()
+    {
+        _cellEditService.RecalculateDirty(Workbook);
+        _selectionStatsRevision++;
         RefreshViewport();
     }
 
@@ -4777,7 +4823,40 @@ public sealed class WorkbookSession : IDisposable
     public void RecalculateActiveSheet()
     {
         _cellEditService.RecalculateSheet(Workbook, ActiveSheet.Id);
+        _selectionStatsRevision++;
         RefreshViewport();
+    }
+
+    /// <summary>
+    /// Applies normal post-edit calculation policy to cells changed outside the command pipeline.
+    /// Prefer session command APIs for undoable mutations.
+    /// </summary>
+    public RecalcReport? RecalculateChangedCells(IReadOnlyList<CellAddress> changedCells)
+    {
+        ArgumentNullException.ThrowIfNull(changedCells);
+
+        var report = _cellEditService.RecalculateAfterChanges(Workbook, changedCells);
+        if (report is null)
+            return null;
+
+        RefreshLinkedPicturesForEditedCells(
+            new WorkbookCellEditResult(true, null, changedCells, report));
+        _selectionStatsRevision++;
+        RefreshViewport();
+        return report;
+    }
+
+    /// <summary>Forces a recalculation from changed cells regardless of calculation mode.</summary>
+    public RecalcReport RecalculateChangedCellsAlways(IReadOnlyList<CellAddress> changedCells)
+    {
+        ArgumentNullException.ThrowIfNull(changedCells);
+
+        var report = _cellEditService.RecalculateAlways(Workbook, changedCells);
+        RefreshLinkedPicturesForEditedCells(
+            new WorkbookCellEditResult(true, null, changedCells, report));
+        _selectionStatsRevision++;
+        RefreshViewport();
+        return report;
     }
 
     private HashSet<SheetId> CaptureSheetIds() =>
@@ -6080,6 +6159,34 @@ public sealed class WorkbookSession : IDisposable
         RefreshLinkedPicturesForEditedCells(result);
         MarkDirty();
         _selectionStatsRevision++;
+        RefreshViewport();
+        EnsureActiveCellVisible();
+    }
+
+    private void ApplySuccessfulPreservedSelectionCommandResult(
+        WorkbookCellEditResult result,
+        IReadOnlySet<SheetId> sheetIdsBefore,
+        IReadOnlyDictionary<SheetId, bool> hiddenStatesBefore)
+    {
+        if (!result.Success || result.IsNoOp)
+            return;
+
+        var sheetStructureChanged = !sheetIdsBefore.SetEquals(CaptureSheetIds()) ||
+            hiddenStatesBefore.Any(pair =>
+                Workbook.GetSheet(pair.Key) is { } sheet && sheet.IsHidden != pair.Value);
+        if (sheetStructureChanged || Workbook.GetSheet(ActiveSheet.Id) is null)
+        {
+            ApplySuccessfulHistoryResult(result, sheetIdsBefore, hiddenStatesBefore);
+            return;
+        }
+
+        ActiveSheet.ActiveRow = ActiveCell.Row;
+        ActiveSheet.ActiveCol = ActiveCell.Col;
+        FormulaEditAddress = null;
+        RefreshLinkedPicturesForEditedCells(result);
+        MarkDirty();
+        _selectionStatsRevision++;
+        InvalidateAllPerViewOverridesForSheet(ActiveSheet.Id);
         RefreshViewport();
         EnsureActiveCellVisible();
     }

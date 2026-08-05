@@ -1,5 +1,8 @@
+using System.IO;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using FluentAssertions;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -99,6 +102,47 @@ public sealed class WpfWorkbookSessionOwnershipTests
     }
 
     [Fact]
+    public void MainWindow_GenericCommandExecution_UsesSessionRecalcAndPreservesRendererSelection()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
+            try
+            {
+                var sheet = workbook.GetSheetAt(0);
+                var precedent = new CellAddress(sheet.Id, 1, 1);
+                var formula = new CellAddress(sheet.Id, 1, 2);
+                var selected = new CellAddress(sheet.Id, 4, 3);
+
+                R49MainWindowTestHarness.Invoke(window, "SetActiveCell", formula);
+                window.FormulaBar.Text = "=A1*2";
+                R49MainWindowTestHarness.Invoke(window, "CommitEdit").Should().Be(true);
+                R49MainWindowTestHarness.Invoke(window, "MarkWorkbookSaved");
+                R49MainWindowTestHarness.Invoke(window, "SetActiveCell", selected);
+
+                var execute = typeof(MainWindow)
+                    .GetMethods(BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Single(method =>
+                        method.Name == "TryExecuteCommand" &&
+                        method.GetParameters().Length == 2);
+                execute.Invoke(
+                        window,
+                        [EditCellsCommand.ForValue(sheet.Id, precedent, new NumberValue(5)), "Edit Cell"])
+                    .Should().Be(true);
+
+                sheet.GetCell(formula)!.Value.Should().Be(new NumberValue(10));
+                window.Session.IsDirty.Should().BeTrue();
+                window.Session.ActiveCell.Should().Be(selected);
+                window.SheetGrid.SelectedRange.Should().Be(new GridRange(selected, selected));
+            }
+            finally
+            {
+                R49MainWindowTestHarness.Close(window);
+            }
+        });
+    }
+
+    [Fact]
     public void MainWindow_SourceKeepsWorkbookSessionAsTheLifecycleOwner()
     {
         var mainWindow = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "MainWindow.xaml.cs");
@@ -124,9 +168,42 @@ public sealed class WpfWorkbookSessionOwnershipTests
         commandExecution.Should().Contain("_session.UndoLastEdit()");
         commandExecution.Should().Contain("_session.RedoLastEdit()");
         commandExecution.Should().Contain("_session.RepeatLastAction()");
+        commandExecution.Should().Contain("_session.ExecuteCommandPreservingSelection(command)");
+        commandExecution.Should().Contain("_session.ExecuteRepeatableCommandPreservingSelection(commandFactory)");
+        commandExecution.Should().NotContain("_commandBus.Execute(");
+        commandExecution.Should().NotContain("_commandBus.ExecuteRepeatable(");
+        commandExecution.Should().NotContain("RefreshLinkedPicturesAffectedBy");
         commandExecution.Should().NotContain("_commandBus.Undo(");
         commandExecution.Should().NotContain("_commandBus.Redo(");
         commandExecution.Should().NotContain("_commandBus.RepeatLast(");
+    }
+
+    [Fact]
+    public void MainWindowSources_KeepOnlyExplicitLifecycleAndForeignWorkbookBusRecalcExclusions()
+    {
+        var hostDirectory = Path.Combine(
+            WorkspaceFileLocator.FindWorkspaceRoot(),
+            "src",
+            "FreeX.App.Host");
+        var sources = Directory.GetFiles(hostDirectory, "MainWindow*.cs")
+            .ToDictionary(path => Path.GetFileName(path)!, File.ReadAllText);
+
+        var directBusExecution = sources
+            .SelectMany(pair => Regex.Matches(pair.Value, @"_commandBus\.(?:Execute|ExecuteRepeatable)\(")
+                .Select(_ => pair.Key))
+            .ToList();
+        directBusExecution.Should().Equal("MainWindow.DataCommands.cs");
+        sources["MainWindow.DataCommands.cs"].Should().Contain("_commandBus.Execute(targetWorkbook.Id");
+
+        foreach (var (fileName, source) in sources.Where(pair => pair.Key != "MainWindow.Backstage.cs"))
+        {
+            source.Should().NotContain(
+                "_recalcEngine.Recalculate",
+                $"{fileName} should route workbook recalculation through WorkbookSession");
+        }
+
+        sources["MainWindow.Backstage.cs"].Should().Contain("new OpenWorkbookLoader(workbook => _recalcEngine.RecalculateAllFormulas(workbook))");
+        sources["MainWindow.Backstage.cs"].Should().Contain("_recalcEngine.RebuildFormulaDependencies(_workbook)");
     }
 
     private static Workbook GetWorkbookMirror(MainWindow window) =>

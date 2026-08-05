@@ -283,12 +283,8 @@ public partial class MainWindow
             return command;
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Paste");
+        if (!TryExecuteRepeatableCommand(CreateCommand, "Paste", out _))
             return;
-        }
 
         if (objectClip.IsCut)
             _drawingObjectClipboard.CompletePaste(objectClip);
@@ -733,12 +729,8 @@ public partial class MainWindow
                     ? "Paste"
                     : "Paste Special";
 
-                var pasteOutcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreatePasteCommand);
-                if (!pasteOutcome.Success)
-                {
-                    ShowCommandError(pasteOutcome, title);
+                if (!TryExecuteRepeatableCommand(CreatePasteCommand, title, out _))
                     return;
-                }
 
                 var preserveClipboardVisual = ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut);
                 _repeatPostAction = _ =>
@@ -754,12 +746,6 @@ public partial class MainWindow
                         InvalidateOsClipboardAfterCutMove();
                     }
                 };
-                if (mode != PasteMode.Formats)
-                {
-                    RecalculateIfAutomatic(pasteOutcome.AffectedCells ?? []);
-                    InvalidateNavigationCachesIfManual();
-                }
-
                 CompletePasteSelection(
                     clip.SourceRange,
                     options,
@@ -815,16 +801,10 @@ public partial class MainWindow
                 options);
         }
 
-        var fallbackOutcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateExternalPasteCommand);
-        if (!fallbackOutcome.Success)
-        {
-            ShowCommandError(fallbackOutcome, "Paste");
+        if (!TryExecuteRepeatableCommand(CreateExternalPasteCommand, "Paste", out _))
             return;
-        }
 
         _repeatPostAction = _ => CompleteExternalPasteSelection(capturedRows, expandToSelectedRange: true);
-        RecalculateIfAutomatic(fallbackOutcome.AffectedCells ?? []);
-        InvalidateNavigationCachesIfManual();
 
         CompleteExternalPasteSelection(capturedRows, expandToSelectedRange: true);
         UpdateViewport();
@@ -1369,17 +1349,11 @@ public partial class MainWindow
                 sourceAreas: clip.SourceAreas);
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Insert Copied Cells");
+        if (!TryExecuteRepeatableCommand(CreateCommand, "Insert Copied Cells", out _))
             return;
-        }
 
         var preserveClipboardVisual = ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut);
         _repeatPostAction = _ => CompletePasteSelection(clip.SourceRange, default, preserveClipboardVisual);
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
-        InvalidateNavigationCachesIfManual();
         CompletePasteSelection(clip.SourceRange, default, preserveClipboardVisual);
         if (clip.IsCut)
         {
@@ -1598,7 +1572,6 @@ public partial class MainWindow
             ClearClipboardVisualState();
         }
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         if (SheetGrid.SelectedRange is { } selectedRange)
         {
@@ -1648,7 +1621,6 @@ public partial class MainWindow
             ClearClipboardVisualState();
         }
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         if (SheetGrid.SelectedRange is { } selectedRange)
         {
@@ -1906,17 +1878,11 @@ public partial class MainWindow
                 : linkCommand;
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreatePasteLinkCommand);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Paste Link");
+        if (!TryExecuteRepeatableCommand(CreatePasteLinkCommand, "Paste Link", out _))
             return;
-        }
 
         var preserveClipboardVisual = ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut);
         _repeatPostAction = _ => CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose), preserveClipboardVisual);
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
-        InvalidateNavigationCachesIfManual();
         CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose), preserveClipboardVisual);
         if (clip.IsCut)
             _internalClipboard = null;

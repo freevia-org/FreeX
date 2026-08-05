@@ -140,14 +140,11 @@ public partial class MainWindow
         if (name is null)
             return;
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, () => new ApplyScenarioCommand(name));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Scenario Manager");
+        if (!TryExecuteRepeatableCommand(
+                () => new ApplyScenarioCommand(name),
+                "Scenario Manager",
+                out var outcome))
             return;
-        }
-
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
 
         // Scenario "Show" writes the changing cells' values directly (Sheet.SetCell), and Excel
         // always reflects a value change immediately regardless of calculation mode -- only
@@ -193,7 +190,6 @@ public partial class MainWindow
             return;
         }
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         RefreshStatusBar();
     }
@@ -229,7 +225,7 @@ public partial class MainWindow
                 // result, so Manual mode must not leave every scenario column reading the same
                 // stale pre-report value (Excel's own Scenario Summary always computes fresh
                 // per-scenario results).
-                (workbook, changedCells) => _recalcEngine.Recalculate(workbook, changedCells)),
+                (_, changedCells) => _session.RecalculateChangedCellsAlways(changedCells)),
             "Scenario Manager"))
             return;
 
@@ -298,7 +294,6 @@ public partial class MainWindow
             return;
         }
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         RefreshStatusBar();
     }

@@ -39,7 +39,6 @@ public partial class MainWindow
                 out var outcome))
             return;
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? [range.Start]);
         SetActiveCell(outcome.AffectedCells is { Count: > 0 }
             ? outcome.AffectedCells[0]
             : range.Start);
@@ -91,7 +90,6 @@ public partial class MainWindow
                 out var outcome))
             return;
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
 
@@ -147,7 +145,6 @@ public partial class MainWindow
                 out var outcome))
             return;
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
 
@@ -184,7 +181,6 @@ public partial class MainWindow
                 out var outcome))
             return;
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
 
@@ -402,7 +398,6 @@ public partial class MainWindow
                 out var outcome))
             return;
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
     private void ClearFormatsMenuItem_Click(object sender, RoutedEventArgs e) => ClearFormats();
@@ -469,7 +464,6 @@ public partial class MainWindow
                 out var outcome))
             return;
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
     /// <summary>

@@ -244,7 +244,7 @@ public partial class MainWindow
         sheet.PrintArea = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 10, 3));
         sheet.PrintGridlines = true;
         sheet.PrintHeadings = true;
-        _recalcEngine.RecalculateAllFormulas(_workbook);
+        _session.RecalculateWorkbook();
 
         var selectedRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 8, 3));
         SetSelectionRange(selectedRange, selectedRange.Start);
@@ -303,7 +303,7 @@ public partial class MainWindow
         sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("Persisted path"));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(3d));
         sheet.SetFormula(new CellAddress(sheet.Id, 8, 3), "SUM(C2:C3)");
-        _recalcEngine.RecalculateAllFormulas(_workbook);
+        _session.RecalculateWorkbook();
         var selectedRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 8, 3));
         SetSelectionRange(selectedRange, selectedRange.Start);
         EnsureCellVisible(selectedRange.Start);

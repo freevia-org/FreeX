@@ -496,9 +496,8 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("request.CollapseDialog");
         source.Should().Contain("FormatWorkbookRange(selectedRange)");
         source.Should().Contain("selectedRange => dialog.ApplyRangeSelection(request.Target, FormatWorkbookRange(selectedRange))");
-        source.Should().Contain("ExecuteRepeatable(");
+        source.Should().Contain("TryExecuteRepeatableCommand(");
         source.Should().Contain("new AdvancedFilterCommand(");
-        source.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
         source.Should().Contain("SetActiveCell(destinationCell);");
     }
 
