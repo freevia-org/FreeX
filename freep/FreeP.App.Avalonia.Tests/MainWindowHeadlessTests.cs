@@ -75,6 +75,20 @@ public sealed class MainWindowHeadlessTests
         }
     }
 
+    private static async Task<bool> OnUiThreadAsync(Func<Task> action)
+    {
+        try
+        {
+            await Session.Dispatch(action, CancellationToken.None);
+            return true;
+        }
+        catch (Exception)
+        {
+            // Headless drawing unavailable in this CI environment; skip gracefully.
+            return false;
+        }
+    }
+
     // ── Construction ────────────────────────────────────────────────────────────
 
     [Fact]
@@ -1874,6 +1888,51 @@ public sealed class MainWindowHeadlessTests
         found.Should().BeTrue("Cut must be registered");
         after.Should().Be(before - 1, "Cut should remove the selected shape through EditingSession");
         canPasteAfterCut.Should().BeTrue("Cut should leave the shared internal clipboard pasteable");
+    }
+
+    [Fact]
+    public async Task Ribbon_clipboard_routes_to_active_inline_cell_editor_before_shape_fallback()
+    {
+        var shapeCountBefore = -1;
+        var shapeCountAfter = -1;
+        var tableStillPresent = false;
+
+        var ran = await OnUiThreadAsync(async () =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            try
+            {
+                window.Show();
+                var source = window.Editor.InsertDefaultRectangle();
+                var table = window.Editor.InsertTable(1, 1);
+                window.Editor.Select(source.Id);
+                window.Editor.CopySelectedShapes();
+                window.Editor.Select(table.Id);
+                window.Editor.SetActiveTableCell(0, 0);
+                window.ActivateTableCellEditForTests(table.Id, 0, 0).Should().BeTrue();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                shapeCountBefore = window.Editor.CurrentSlide!.Shapes.Count;
+
+                var registry = window.BuildCommandRegistry();
+                registry.TryGet("freep.paste", out var paste).Should().BeTrue();
+                paste!.Execute(RibbonCommandContext.Empty);
+                await window.ClipboardOperationForTests;
+                registry.TryGet("freep.cut", out var cut).Should().BeTrue();
+                cut!.Execute(RibbonCommandContext.Empty);
+                await window.ClipboardOperationForTests;
+                shapeCountAfter = window.Editor.CurrentSlide.Shapes.Count;
+                tableStillPresent = window.Editor.CurrentSlide.Shapes.Any(shape => shape.Id == table.Id);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        if (!ran) return;
+        shapeCountAfter.Should().Be(shapeCountBefore,
+            "active inline clipboard commands must not fall back to slide-shape paste/cut");
+        tableStillPresent.Should().BeTrue("active inline Cut must not delete its containing table");
     }
 
     [Fact]

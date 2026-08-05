@@ -10282,20 +10282,44 @@ public sealed partial class MainWindow : Window
 
     private void QueueClipboardCopy()
     {
+        if (TryQueueActiveRichClipboard(static editor => editor.CopySelectionAsync()))
+            return;
+
         var request = _clipboardService.PrepareWrite(Editor);
         QueueClipboardOperation(() => _clipboardService.ExecuteCopyAsync(request));
     }
 
     private void QueueClipboardCut()
     {
+        if (TryQueueActiveRichClipboard(static editor => editor.CutSelectionAsync()))
+            return;
+
         var request = _clipboardService.PrepareWrite(Editor);
         QueueClipboardOperation(() => _clipboardService.ExecuteCutAsync(request));
     }
 
     private void QueueClipboardPaste()
     {
+        if (TryQueueActiveRichClipboard(static editor => editor.PasteClipboardAsync()))
+            return;
+
         var request = _clipboardService.PreparePaste(Editor);
         QueueClipboardOperation(() => _clipboardService.ExecutePasteAsync(request));
+    }
+
+    private bool TryQueueActiveRichClipboard(
+        Func<AvaloniaInCanvasTextEditor, Task<bool>> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        var textEditor = _textEditor;
+        if (textEditor?.IsRichTextEditActive != true)
+            return false;
+
+        QueueClipboardOperation(async () =>
+        {
+            _ = await operation(textEditor);
+        });
+        return true;
     }
 
     private void QueueClipboardOperation(Func<Task> operation)
