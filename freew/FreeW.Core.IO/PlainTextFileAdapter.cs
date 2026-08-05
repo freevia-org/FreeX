@@ -7,9 +7,10 @@ namespace FreeW.Core.IO;
 /// <summary>
 /// Reads and writes plain text (<c>.txt</c>/<c>.text</c>/<c>.log</c>). Each line becomes a
 /// <see cref="Paragraph"/> on read; each paragraph's text is written back joined by the configured
-/// line-ending on save. Writing is intentionally lossy — only characters and paragraph breaks survive, as
-/// with Word's own plain-text export. Reading honors UTF-8/UTF-16/UTF-32 byte-order marks, accepts
-/// valid bomless UTF-8, and falls back to Windows-1252 for invalid bomless UTF-8.
+/// line-ending on save. Table cells are projected as tab-delimited rows, matching the model's table-to-text
+/// convention. Writing is intentionally lossy — only characters, tabs, and paragraph breaks survive, as
+/// with Word's own plain-text export. Reading honors UTF-8/UTF-16/UTF-32 byte-order marks, accepts valid
+/// bomless UTF-8, and falls back to Windows-1252 for invalid bomless UTF-8.
 /// </summary>
 public sealed class PlainTextFileAdapter(TextSaveOptions? options = null) : IDocumentFileAdapter
 {
@@ -93,15 +94,32 @@ public sealed class PlainTextFileAdapter(TextSaveOptions? options = null) : IDoc
         var encoding = _options.EmitBom ? new UTF8Encoding(true) : _options.Encoding;
 
         using var writer = new StreamWriter(stream, encoding, bufferSize: 1024, leaveOpen: true) { NewLine = newline };
-        var first = true;
+        var firstLine = true;
         foreach (var block in document.Blocks)
         {
-            if (block is not Paragraph paragraph)
-                continue; // tables and other non-paragraph blocks are dropped (plain text has no place for them)
-            if (!first)
+            switch (block)
+            {
+                case Paragraph paragraph:
+                    WriteLine(paragraph.PlainText);
+                    break;
+                case Table table:
+                    foreach (var row in table.Rows)
+                        WriteLine(string.Join('\t', row.Cells.Select(cell => cell.PlainText)));
+                    break;
+            }
+        }
+
+        void WriteLine(string text)
+        {
+            if (!firstLine)
                 writer.Write(newline);
-            writer.Write(paragraph.PlainText);
-            first = false;
+            writer.Write(NormalizeLineEndings(text, newline));
+            firstLine = false;
         }
     }
+
+    private static string NormalizeLineEndings(string text, string newline) =>
+        text.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Replace("\n", newline, StringComparison.Ordinal);
 }
