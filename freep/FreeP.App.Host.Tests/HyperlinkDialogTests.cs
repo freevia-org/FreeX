@@ -6,7 +6,7 @@ namespace FreeP.App.Host.Tests;
 public sealed class HyperlinkDialogTests
 {
     [Fact]
-    public void HyperlinkDialog_UsesSharedPlannerForPolicy()
+    public void HyperlinkDialog_UsesSharedSessionForSemanticWorkflow()
     {
         var source = File.ReadAllText(Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
@@ -15,14 +15,23 @@ public sealed class HyperlinkDialogTests
             "HyperlinkDialog.cs"));
 
         source.Should().Contain("HyperlinkDialogPlanner.BuildDialogRequest(slides, current)");
-        source.Should().Contain("HyperlinkDialogPlanner.BuildResult(");
+        source.Should().Contain("new HyperlinkDialogSession(request)");
+        source.Should().Contain("_session.SetInput(");
+        source.Should().Contain("_session.SelectTarget(");
+        source.Should().Contain("_session.SetUrlText(");
+        source.Should().Contain("_session.SelectSlide(");
+        source.Should().Contain("_session.SetTooltipText(");
+        source.Should().Contain("_session.TryAccept()");
         source.Should().Contain("FocusField(validation.FocusField)");
+        source.Should().NotContain("HyperlinkDialogPlanner.BuildResult(");
+        source.Should().NotContain("SelectedItem as HyperlinkDialogSlideOption");
+        source.Should().NotContain("Result = plan.Result");
         source.Should().NotContain("Uri.TryCreate");
         source.Should().NotContain("new Hyperlink { Url =");
         source.Should().NotContain("new Hyperlink { TargetSlideId =");
         source.Should().NotContain("slide.Title");
         source.Should().NotContain("SlideItem");
-        source.Should().NotContain("SelectSlide(");
+        source.Should().NotContain("private void SelectSlide(");
     }
 
     [Fact]
@@ -35,6 +44,7 @@ public sealed class HyperlinkDialogTests
             "HyperlinkDialogPlanner.cs"));
 
         source.Should().Contain("public static class HyperlinkDialogPlanner");
+        source.Should().Contain("public sealed class HyperlinkDialogSession");
         source.Should().Contain("BuildDialogRequest(");
         source.Should().Contain("BuildSlideOptions(");
         source.Should().Contain("ExternalUriLauncher.TryCreateAllowedUri");

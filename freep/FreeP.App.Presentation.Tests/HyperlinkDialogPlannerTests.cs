@@ -108,6 +108,141 @@ public sealed class HyperlinkDialogPlannerTests
         request.SelectedSlideIndex.Should().Be(-1);
     }
 
+    [Fact]
+    public void Session_ProjectsInitialSlideStateAndEnablement()
+    {
+        var session = new HyperlinkDialogSession(new HyperlinkDialogRequest(
+            [
+                new HyperlinkDialogSlideOption("s1", "1. Intro"),
+                new HyperlinkDialogSlideOption("s2", "2. Summary"),
+            ],
+            new HyperlinkDialogInitialState(
+                HyperlinkDialogTargetKind.Slide,
+                string.Empty,
+                "s2",
+                "jump"),
+            1));
+
+        session.SlideOptions.Select(option => option.Id).Should().Equal("s1", "s2");
+        session.State.Should().Be(new HyperlinkDialogViewState(
+            HyperlinkDialogTargetKind.Slide,
+            string.Empty,
+            1,
+            "jump",
+            false,
+            true,
+            string.Empty));
+    }
+
+    [Fact]
+    public void Session_TracksTargetSelectionAndTextProjection()
+    {
+        var session = new HyperlinkDialogSession(new HyperlinkDialogRequest(
+            [new HyperlinkDialogSlideOption("s1", "1. Intro")],
+            new HyperlinkDialogInitialState(
+                HyperlinkDialogTargetKind.Url,
+                string.Empty,
+                null,
+                string.Empty),
+            0));
+
+        session.SelectTarget(HyperlinkDialogTargetKind.Slide);
+        session.SetUrlText("https://example.test");
+        session.SelectSlide(0);
+        session.SetTooltipText("jump");
+
+        session.State.Should().Be(new HyperlinkDialogViewState(
+            HyperlinkDialogTargetKind.Slide,
+            "https://example.test",
+            0,
+            "jump",
+            false,
+            true,
+            string.Empty));
+    }
+
+    [Fact]
+    public void Session_TryAcceptResolvesSelectedSlideAndOwnsResult()
+    {
+        var session = new HyperlinkDialogSession(new HyperlinkDialogRequest(
+            [
+                new HyperlinkDialogSlideOption("s1", "1. Intro"),
+                new HyperlinkDialogSlideOption("s2", "2. Summary"),
+            ],
+            new HyperlinkDialogInitialState(
+                HyperlinkDialogTargetKind.Url,
+                string.Empty,
+                null,
+                string.Empty),
+            0));
+        session.SetInput(HyperlinkDialogTargetKind.Slide, "ignored", 1, " jump ");
+
+        var plan = session.TryAccept();
+
+        plan.Should().BeEquivalentTo(new HyperlinkDialogResultPlan(
+            true,
+            new Hyperlink { TargetSlideId = "s2", Tooltip = "jump" },
+            null));
+        session.Result.Should().BeEquivalentTo(plan.Result);
+        session.LastResultPlan.Should().BeSameAs(plan);
+        session.State.ValidationText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Session_TryAcceptOwnsValidationAndClearsRejectedResult()
+    {
+        var session = new HyperlinkDialogSession(new HyperlinkDialogRequest(
+            [new HyperlinkDialogSlideOption("s1", "1. Intro")],
+            new HyperlinkDialogInitialState(
+                HyperlinkDialogTargetKind.Url,
+                string.Empty,
+                null,
+                string.Empty),
+            0));
+        session.SetInput(HyperlinkDialogTargetKind.Url, "https://example.test", 0, null);
+        session.TryAccept().ShouldApply.Should().BeTrue();
+        session.Result.Should().NotBeNull();
+        session.SetInput(HyperlinkDialogTargetKind.Url, "not a url", 0, null);
+
+        var plan = session.TryAccept();
+
+        plan.Should().Be(new HyperlinkDialogResultPlan(
+            false,
+            null,
+            new HyperlinkDialogValidationMessage(
+                HyperlinkDialogPlanner.Caption,
+                HyperlinkDialogPlanner.UnsupportedUrlMessage,
+                HyperlinkDialogField.Url)));
+        session.Result.Should().BeNull();
+        session.LastResultPlan.Should().BeSameAs(plan);
+        session.State.ValidationText.Should().Be(HyperlinkDialogPlanner.UnsupportedUrlMessage);
+    }
+
+    [Fact]
+    public void Session_TryAcceptRejectsOutOfRangeSlideSelection()
+    {
+        var session = new HyperlinkDialogSession(new HyperlinkDialogRequest(
+            [new HyperlinkDialogSlideOption("s1", "1. Intro")],
+            new HyperlinkDialogInitialState(
+                HyperlinkDialogTargetKind.Slide,
+                string.Empty,
+                "s1",
+                string.Empty),
+            0));
+        session.SelectSlide(4);
+
+        var plan = session.TryAccept();
+
+        plan.Should().Be(new HyperlinkDialogResultPlan(
+            false,
+            null,
+            new HyperlinkDialogValidationMessage(
+                HyperlinkDialogPlanner.Caption,
+                HyperlinkDialogPlanner.MissingSlideMessage,
+                HyperlinkDialogField.Slide)));
+        session.State.ValidationText.Should().Be(HyperlinkDialogPlanner.MissingSlideMessage);
+    }
+
     [Theory]
     [InlineData("https://example.test/path")]
     [InlineData("http://example.test")]

@@ -19,6 +19,8 @@ namespace FreeP.App.Host;
 /// </summary>
 public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly HyperlinkDialogSession _session;
+
     // ── Controls ──────────────────────────────────────────────────────────────────
 
     private readonly RadioButton _urlRadio;
@@ -33,7 +35,7 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     /// <summary>
     /// The hyperlink the user confirmed, or null if they cancelled or selected "none".
     /// </summary>
-    public Hyperlink? Result { get; private set; }
+    public Hyperlink? Result => _session.Result;
 
     // ── Construction ──────────────────────────────────────────────────────────────
 
@@ -50,8 +52,9 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     public HyperlinkDialog(HyperlinkDialogRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+        _session = new HyperlinkDialogSession(request);
 
-        Title                 = "Insert Hyperlink";
+        Title                 = HyperlinkDialogPlanner.Caption;
         Width                 = 420;
         SizeToContent         = SizeToContent.Height;
         ResizeMode            = ResizeMode.NoResize;
@@ -95,11 +98,11 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.Children.Add(slideLabel);
 
         _slideCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 4), VerticalAlignment = VerticalAlignment.Center };
-        foreach (var option in request.SlideOptions)
+        foreach (var option in _session.SlideOptions)
         {
             _slideCombo.Items.Add(option);
         }
-        _slideCombo.SelectedIndex = request.SelectedSlideIndex;
+        _slideCombo.SelectedIndex = _session.State.SelectedSlideIndex;
         Grid.SetRow(_slideCombo, 2); Grid.SetColumn(_slideCombo, 1);
         grid.Children.Add(_slideCombo);
 
@@ -130,27 +133,31 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         // ── Event wiring ────────────────────────────────────────────────────────
 
-        _urlRadio.Checked   += (_, _) => UpdateEnabled();
-        _slideRadio.Checked += (_, _) => UpdateEnabled();
-
         // ── Pre-fill from current hyperlink ─────────────────────────────────────
 
-        var initial = request.InitialState;
-        _urlRadio.IsChecked = initial.TargetKind == HyperlinkDialogTargetKind.Url;
-        _slideRadio.IsChecked = initial.TargetKind == HyperlinkDialogTargetKind.Slide;
-        _urlBox.Text = initial.UrlText;
-        _tooltipBox.Text = initial.TooltipText;
+        var state = _session.State;
+        _urlRadio.IsChecked = state.TargetKind == HyperlinkDialogTargetKind.Url;
+        _slideRadio.IsChecked = state.TargetKind == HyperlinkDialogTargetKind.Slide;
+        _urlBox.Text = state.UrlText;
+        _tooltipBox.Text = state.TooltipText;
 
-        UpdateEnabled();
+        _urlRadio.Checked += (_, _) => RenderTargetState(
+            _session.SelectTarget(HyperlinkDialogTargetKind.Url));
+        _slideRadio.Checked += (_, _) => RenderTargetState(
+            _session.SelectTarget(HyperlinkDialogTargetKind.Slide));
+        _urlBox.TextChanged += (_, _) => _session.SetUrlText(_urlBox.Text);
+        _slideCombo.SelectionChanged += (_, _) => _session.SelectSlide(_slideCombo.SelectedIndex);
+        _tooltipBox.TextChanged += (_, _) => _session.SetTooltipText(_tooltipBox.Text);
+
+        RenderTargetState(state);
     }
 
     // ── Enabled state ─────────────────────────────────────────────────────────────
 
-    private void UpdateEnabled()
+    private void RenderTargetState(HyperlinkDialogViewState state)
     {
-        bool isUrl = _urlRadio.IsChecked == true;
-        _urlBox.IsEnabled    = isUrl;
-        _slideCombo.IsEnabled = !isUrl;
+        _urlBox.IsEnabled = state.IsUrlInputEnabled;
+        _slideCombo.IsEnabled = state.IsSlideInputEnabled;
     }
 
     // ── OK handler ────────────────────────────────────────────────────────────────
@@ -161,12 +168,13 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         int selectedSlideIndex,
         string tooltip)
     {
-        _urlRadio.IsChecked = targetKind == HyperlinkDialogTargetKind.Url;
-        _slideRadio.IsChecked = targetKind == HyperlinkDialogTargetKind.Slide;
-        _urlBox.Text = url;
-        _slideCombo.SelectedIndex = selectedSlideIndex;
-        _tooltipBox.Text = tooltip;
-        UpdateEnabled();
+        var state = _session.SetInput(targetKind, url, selectedSlideIndex, tooltip);
+        _urlRadio.IsChecked = state.TargetKind == HyperlinkDialogTargetKind.Url;
+        _slideRadio.IsChecked = state.TargetKind == HyperlinkDialogTargetKind.Slide;
+        _urlBox.Text = state.UrlText;
+        _slideCombo.SelectedIndex = state.SelectedSlideIndex;
+        _tooltipBox.Text = state.TooltipText;
+        RenderTargetState(state);
         return Apply(showValidationDialog: false);
     }
 
@@ -174,20 +182,12 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private bool Apply(bool showValidationDialog)
     {
-        var targetKind = _urlRadio.IsChecked == true
-            ? HyperlinkDialogTargetKind.Url
-            : HyperlinkDialogTargetKind.Slide;
-        var selectedSlideId = (_slideCombo.SelectedItem as HyperlinkDialogSlideOption)?.Id;
-        var plan = HyperlinkDialogPlanner.BuildResult(
-            targetKind,
-            _urlBox.Text,
-            selectedSlideId,
-            _tooltipBox.Text);
+        var plan = _session.TryAccept();
 
         if (!plan.ShouldApply)
         {
             var validation = plan.Validation!;
-            _validationText.Text = validation.Message;
+            _validationText.Text = _session.State.ValidationText;
             if (showValidationDialog)
                 DialogMessageHelper.ShowWarning(this, validation.Message, validation.Caption);
             FocusField(validation.FocusField);
@@ -195,7 +195,6 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         }
 
         _validationText.Text = string.Empty;
-        Result = plan.Result;
         if (IsLoaded)
             DialogResult = true;
         return true;

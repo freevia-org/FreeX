@@ -50,6 +50,116 @@ public sealed record HyperlinkDialogApplyPlan(
     string? TargetSlideId,
     string? Tooltip);
 
+public sealed record HyperlinkDialogViewState(
+    HyperlinkDialogTargetKind TargetKind,
+    string UrlText,
+    int SelectedSlideIndex,
+    string TooltipText,
+    bool IsUrlInputEnabled,
+    bool IsSlideInputEnabled,
+    string ValidationText);
+
+/// <summary>
+/// Renderer-neutral state and acceptance workflow for the hyperlink dialog.
+/// Hosts retain native controls, event/focus wiring, validation presentation, and window closing.
+/// </summary>
+public sealed class HyperlinkDialogSession
+{
+    public HyperlinkDialogSession(HyperlinkDialogRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.SlideOptions);
+        ArgumentNullException.ThrowIfNull(request.InitialState);
+
+        SlideOptions = request.SlideOptions.ToArray();
+        var initial = request.InitialState;
+        var (isUrlInputEnabled, isSlideInputEnabled) = InputEnablement(initial.TargetKind);
+        State = new HyperlinkDialogViewState(
+            initial.TargetKind,
+            initial.UrlText ?? string.Empty,
+            request.SelectedSlideIndex,
+            initial.TooltipText ?? string.Empty,
+            isUrlInputEnabled,
+            isSlideInputEnabled,
+            string.Empty);
+    }
+
+    public IReadOnlyList<HyperlinkDialogSlideOption> SlideOptions { get; }
+
+    public HyperlinkDialogViewState State { get; private set; }
+
+    public Hyperlink? Result { get; private set; }
+
+    public HyperlinkDialogResultPlan? LastResultPlan { get; private set; }
+
+    public HyperlinkDialogViewState SelectTarget(HyperlinkDialogTargetKind targetKind)
+    {
+        var (isUrlInputEnabled, isSlideInputEnabled) = InputEnablement(targetKind);
+        State = State with
+        {
+            TargetKind = targetKind,
+            IsUrlInputEnabled = isUrlInputEnabled,
+            IsSlideInputEnabled = isSlideInputEnabled,
+        };
+        return State;
+    }
+
+    public void SetUrlText(string? urlText)
+        => State = State with { UrlText = urlText ?? string.Empty };
+
+    public void SelectSlide(int selectedSlideIndex)
+        => State = State with { SelectedSlideIndex = selectedSlideIndex };
+
+    public void SetTooltipText(string? tooltipText)
+        => State = State with { TooltipText = tooltipText ?? string.Empty };
+
+    public HyperlinkDialogViewState SetInput(
+        HyperlinkDialogTargetKind targetKind,
+        string? urlText,
+        int selectedSlideIndex,
+        string? tooltipText)
+    {
+        var (isUrlInputEnabled, isSlideInputEnabled) = InputEnablement(targetKind);
+        State = State with
+        {
+            TargetKind = targetKind,
+            UrlText = urlText ?? string.Empty,
+            SelectedSlideIndex = selectedSlideIndex,
+            TooltipText = tooltipText ?? string.Empty,
+            IsUrlInputEnabled = isUrlInputEnabled,
+            IsSlideInputEnabled = isSlideInputEnabled,
+        };
+        return State;
+    }
+
+    public HyperlinkDialogResultPlan TryAccept()
+    {
+        var selectedSlideId = State.SelectedSlideIndex >= 0
+            && State.SelectedSlideIndex < SlideOptions.Count
+                ? SlideOptions[State.SelectedSlideIndex].Id
+                : null;
+        var plan = HyperlinkDialogPlanner.BuildResult(
+            State.TargetKind,
+            State.UrlText,
+            selectedSlideId,
+            State.TooltipText);
+
+        LastResultPlan = plan;
+        Result = plan.ShouldApply ? plan.Result : null;
+        State = State with { ValidationText = plan.Validation?.Message ?? string.Empty };
+        return plan;
+    }
+
+    private static (bool IsUrlInputEnabled, bool IsSlideInputEnabled) InputEnablement(
+        HyperlinkDialogTargetKind targetKind)
+        => targetKind switch
+        {
+            HyperlinkDialogTargetKind.Url => (true, false),
+            HyperlinkDialogTargetKind.Slide => (false, true),
+            _ => throw new ArgumentOutOfRangeException(nameof(targetKind), targetKind, null),
+        };
+}
+
 public static class HyperlinkDialogPlanner
 {
     public const string Caption = "Insert Hyperlink";

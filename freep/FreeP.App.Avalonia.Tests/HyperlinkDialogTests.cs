@@ -16,7 +16,7 @@ public sealed class HyperlinkDialogTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreePHeadlessApp).Assembly);
 
     [Fact]
-    public void AvaloniaHyperlinkDialog_UsesSharedPlannerForPolicy()
+    public void AvaloniaHyperlinkDialog_UsesSharedSessionForSemanticWorkflow()
     {
         var source = File.ReadAllText(FindRepoFile(
             "freep",
@@ -24,7 +24,16 @@ public sealed class HyperlinkDialogTests
             "HyperlinkDialog.cs"));
 
         source.Should().Contain("HyperlinkDialogPlanner.BuildDialogRequest(slides, current)");
-        source.Should().Contain("HyperlinkDialogPlanner.BuildResult(");
+        source.Should().Contain("new HyperlinkDialogSession(request)");
+        source.Should().Contain("_session.SetInput(");
+        source.Should().Contain("_session.SelectTarget(");
+        source.Should().Contain("_session.SetUrlText(");
+        source.Should().Contain("_session.SelectSlide(");
+        source.Should().Contain("_session.SetTooltipText(");
+        source.Should().Contain("_session.TryAccept()");
+        source.Should().NotContain("HyperlinkDialogPlanner.BuildResult(");
+        source.Should().NotContain("SelectedItem as HyperlinkDialogSlideOption");
+        source.Should().NotContain("Result = plan.Result");
         source.Should().NotContain("Uri.TryCreate");
         source.Should().NotContain("new Hyperlink { Url =");
         source.Should().NotContain("new Hyperlink { TargetSlideId =");
