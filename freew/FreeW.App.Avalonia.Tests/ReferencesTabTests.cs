@@ -743,6 +743,77 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public Task InsertIndex_dialog_returns_default_or_trimmed_identifier() => RunOnUiThread(() =>
+    {
+        var dialog = new InsertIndexDialog();
+
+        dialog.Width.Should().Be(InsertIndexDialogPlanner.DialogWidth);
+        dialog.BuildResultForTests("   ").Identifier.Should().BeNull();
+        dialog.BuildResultForTests(" People ").Identifier.Should().Be("People");
+    });
+
+    [Fact]
+    public void Index_insert_ribbon_command_uses_owner_dialog_callback_for_selective_index()
+    {
+        var view = ViewWith(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Entries"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha")),
+                DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People")),
+                DocumentIndex.MarkRun(new IndexMark("Ignored", Identifier: "Places"))
+            }
+        });
+        var calls = 0;
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks() with
+        {
+            OpenInsertIndexDialog = () =>
+            {
+                calls++;
+                view.InsertIndex("People");
+            }
+        });
+
+        Execute(registry, "freew.index-insert");
+
+        calls.Should().Be(1);
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Ada, 1");
+        view.Document.Blocks.Should().NotContain(block =>
+            DocumentIndex.IsIndexParagraph(block, identifier: null)
+            || DocumentIndex.IsIndexParagraph(block, "Places"));
+    }
+
+    [Fact]
+    public void Index_insert_ribbon_command_without_callback_inserts_default_index()
+    {
+        var view = ViewWith(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Entries"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha")),
+                DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People"))
+            }
+        });
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.index-insert");
+
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, identifier: null))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Alpha, 1");
+        view.Document.Blocks.Should().NotContain(block =>
+            DocumentIndex.IsIndexParagraph(block, "People"));
+    }
+
+    [Fact]
     public void RefreshIndex_selective_region_updates_people_and_leaves_default_region_untouched()
     {
         var defaultHeading = new Paragraph(DocumentIndex.HeadingText)
