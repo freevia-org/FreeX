@@ -315,6 +315,7 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
     };
 
     public IndexMark? Mark { get; private set; }
+    public bool MarkAll { get; private set; }
 
     public MarkIndexEntryDialog(string? selectedText = null)
     {
@@ -376,10 +377,12 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
             Children = { _boldPageNumber, _italicPageNumber }
         });
 
-        var markButton = Button(MarkIndexEntryDialogPlanner.MarkButtonLabel, () => Accept(), isDefault: true);
+        var markButton = Button(MarkIndexEntryDialogPlanner.MarkButtonLabel, () => Accept(markAll: false), isDefault: true);
+        var markAllButton = Button(MarkIndexEntryDialogPlanner.MarkAllButtonLabel, () => Accept(markAll: true));
+        markAllButton.IsEnabled = MarkIndexEntryDialogPlanner.CanMarkAll(selectedText);
         var cancelButton = Button(MarkIndexEntryDialogPlanner.CancelButtonLabel, () => Close(), isCancel: true);
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
-            [markButton, cancelButton],
+            [markButton, markAllButton, cancelButton],
             new Thickness(
                 MarkIndexEntryDialogPlanner.ContentHorizontalMargin,
                 MarkIndexEntryDialogPlanner.ActionRowTopMargin,
@@ -417,7 +420,8 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
         UpdateCrossReferenceState();
     }
 
-    internal bool AcceptForTests() => Accept(closeOnSuccess: false);
+    internal bool AcceptForTests() => Accept(markAll: false, closeOnSuccess: false);
+    internal bool AcceptAllForTests() => Accept(markAll: true, closeOnSuccess: false);
     internal bool CrossReferenceEnabledForTests => _crossReference.IsEnabled;
     internal bool PageNumberFormattingEnabledForTests => _boldPageNumber.IsEnabled && _italicPageNumber.IsEnabled;
 
@@ -429,7 +433,7 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
         _boldPageNumber.IsChecked == true,
         _italicPageNumber.IsChecked == true);
 
-    private bool Accept(bool closeOnSuccess = true)
+    private bool Accept(bool markAll, bool closeOnSuccess = true)
     {
         if (!MarkIndexEntryDialogPlanner.TryBuildMark(CurrentState(), out var mark, out var validation))
         {
@@ -440,6 +444,7 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
 
         _status.IsVisible = false;
         Mark = mark;
+        MarkAll = markAll;
         if (closeOnSuccess)
             Close();
         return true;

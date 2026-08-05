@@ -183,6 +183,26 @@ public class DocumentIndexTests
     }
 
     [Fact]
+    public void MarkAllTargets_FindWholeTermParagraphsAndSkipGeneratedOrExistingMarks()
+    {
+        var mark = new IndexMark("Alpha", "Topic");
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Alpha starts Alpha"));
+        doc.Blocks.Add(new Paragraph("alphabet is not the term"));
+        doc.Blocks.Add(new Paragraph("Another ALPHA appears"));
+        doc.Blocks.Add(new Paragraph("Alpha, 1") { StyleId = DocumentIndex.EntryStyleId });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("Alpha"), DocumentIndex.MarkRun(mark), new Run(" already marked") }
+        });
+
+        DocumentIndex.MarkAllTargets(doc, " alpha ", mark).Should().Equal(
+            new IndexMarkTarget(0, 5),
+            new IndexMarkTarget(0, 18),
+            new IndexMarkTarget(2, 13));
+    }
+
+    [Fact]
     public void Build_DoesNotMutateTheDocument()
     {
         var doc = new TextDocument();

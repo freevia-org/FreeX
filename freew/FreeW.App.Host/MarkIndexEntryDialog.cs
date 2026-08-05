@@ -9,7 +9,7 @@ namespace FreeW.App.Host;
 /// <summary>Thin WPF host for Word's References &gt; Mark Index Entry dialog.</summary>
 internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    internal sealed record Result(IndexMark Mark);
+    internal sealed record Result(IndexMark Mark, bool MarkAll);
 
     private readonly TextBox _mainEntry;
     private readonly TextBox _subentry;
@@ -18,6 +18,7 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _crossReference;
     private readonly CheckBox _boldPageNumber;
     private readonly CheckBox _italicPageNumber;
+    private readonly Button _markAll;
     private readonly TextBlock _status;
     private Result? _result;
 
@@ -71,7 +72,7 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         };
 
         var buttons = DialogButtonRowFactory.Create(
-            Accept,
+            () => Accept(markAll: false),
             buttonWidth: 80,
             acceptContent: MarkIndexEntryDialogPlanner.MarkButtonLabel,
             rowMargin: new Thickness(
@@ -79,6 +80,15 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 MarkIndexEntryDialogPlanner.ActionRowTopMargin,
                 0,
                 MarkIndexEntryDialogPlanner.ActionRowBottomMargin));
+        _markAll = new Button
+        {
+            Content = MarkIndexEntryDialogPlanner.MarkAllButtonLabel,
+            MinWidth = 80,
+            IsEnabled = MarkIndexEntryDialogPlanner.CanMarkAll(initialState.MainEntry),
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        _markAll.Click += (_, _) => Accept(markAll: true);
+        buttons.Children.Insert(1, _markAll);
         var panel = new StackPanel
         {
             Margin = new Thickness(
@@ -141,7 +151,7 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _boldPageNumber.IsChecked == true,
         _italicPageNumber.IsChecked == true);
 
-    private bool Accept(bool closeOnSuccess = true)
+    private bool Accept(bool markAll, bool closeOnSuccess = true)
     {
         if (!MarkIndexEntryDialogPlanner.TryBuildMark(CurrentState(), out var mark, out var validation))
         {
@@ -151,13 +161,11 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         }
 
         _status.Visibility = Visibility.Collapsed;
-        _result = new Result(mark!);
+        _result = new Result(mark!, markAll);
         if (closeOnSuccess)
             Close();
         return true;
     }
-
-    private void Accept() => Accept(closeOnSuccess: true);
 
     internal static MarkIndexEntryDialog CreateForTest(string seed = "") =>
         new(null, MarkIndexEntryDialogPlanner.BuildInitialState(seed));
@@ -180,10 +188,12 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         UpdateCrossReferenceState();
     }
 
-    internal bool AcceptForTest() => Accept(closeOnSuccess: false);
+    internal bool AcceptForTest() => Accept(markAll: false, closeOnSuccess: false);
+    internal bool AcceptAllForTest() => Accept(markAll: true, closeOnSuccess: false);
     internal Result? ResultForTest => _result;
     internal bool CrossReferenceEnabledForTest => _crossReference.IsEnabled;
     internal bool PageNumberFormattingEnabledForTest => _boldPageNumber.IsEnabled && _italicPageNumber.IsEnabled;
+    internal bool MarkAllEnabledForTest => _markAll.IsEnabled;
 
     public static Result? Prompt(Window? owner, MarkIndexEntryDialogState initialState)
     {

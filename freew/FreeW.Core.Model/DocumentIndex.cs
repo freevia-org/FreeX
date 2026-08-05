@@ -17,6 +17,9 @@ public sealed record IndexMark(
     public string EntryText => Subentry.Length == 0 ? MainEntry : MainEntry + ":" + Subentry;
 }
 
+/// <summary>One body-paragraph insertion point selected by Word-style Mark All.</summary>
+public sealed record IndexMarkTarget(int BlockIndex, int TextOffset);
+
 /// <summary>
 /// Pure, WPF-free generation of a document index from hidden body <c>XE</c> marks plus legacy
 /// <see cref="TextDocument.IndexEntries"/>. Lives in the model project so it is unit-testable without
@@ -154,6 +157,76 @@ public static class DocumentIndex
             ComplexFieldEngine.SwitchValue(field.Instruction, 't') ?? string.Empty,
             ComplexFieldEngine.HasSwitch(field.Instruction, 'b'),
             ComplexFieldEngine.HasSwitch(field.Instruction, 'i')));
+    }
+
+    /// <summary>
+    /// Finds every insertion point containing <paramref name="sourceText"/> as a whole term,
+    /// case-insensitively. Generated index rows and occurrences already carrying an equivalent mark at
+    /// the same text offset are skipped. Each returned offset follows its matching occurrence.
+    /// </summary>
+    public static IReadOnlyList<IndexMarkTarget> MarkAllTargets(
+        TextDocument document,
+        string sourceText,
+        IndexMark mark)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(mark);
+        var needle = (sourceText ?? string.Empty).Trim();
+        if (needle.Length == 0)
+            return [];
+
+        var targets = new List<IndexMarkTarget>();
+        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        {
+            if (document.Blocks[blockIndex] is not Paragraph paragraph || IsIndexParagraph(paragraph))
+                continue;
+
+            var markedOffsets = new HashSet<int>();
+            var textOffset = 0;
+            foreach (var run in paragraph.Runs)
+            {
+                if (MarksEquivalent(MarkedEntry(run), mark))
+                    markedOffsets.Add(textOffset);
+                textOffset += run.Text.Length;
+            }
+
+            foreach (var match in FindWholeTerms(paragraph.PlainText, needle))
+            {
+                var insertionOffset = match + needle.Length;
+                if (!markedOffsets.Contains(insertionOffset))
+                    targets.Add(new IndexMarkTarget(blockIndex, insertionOffset));
+            }
+        }
+
+        return targets;
+    }
+
+    /// <summary>Case-insensitive equality for the complete semantic XE mark payload.</summary>
+    public static bool MarksEquivalent(IndexMark? left, IndexMark right)
+    {
+        ArgumentNullException.ThrowIfNull(right);
+        return left is not null
+            && string.Equals(left.EntryText, right.EntryText, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(left.CrossReference, right.CrossReference, StringComparison.OrdinalIgnoreCase)
+            && left.BoldPageNumber == right.BoldPageNumber
+            && left.ItalicPageNumber == right.ItalicPageNumber;
+    }
+
+    private static IEnumerable<int> FindWholeTerms(string text, string needle)
+    {
+        var start = 0;
+        while (start <= text.Length - needle.Length)
+        {
+            var match = text.IndexOf(needle, start, StringComparison.OrdinalIgnoreCase);
+            if (match < 0)
+                yield break;
+            var leftBoundary = match == 0 || !char.IsLetterOrDigit(text[match - 1]);
+            var rightIndex = match + needle.Length;
+            var rightBoundary = rightIndex == text.Length || !char.IsLetterOrDigit(text[rightIndex]);
+            if (leftBoundary && rightBoundary)
+                yield return match;
+            start = match + 1;
+        }
     }
 
     private static void AppendNode(
