@@ -21,6 +21,13 @@ public sealed record SlideShowMediaClickPlan(
     public static SlideShowMediaClickPlan NotMedia { get; } = new(false, false, null);
 }
 
+public readonly record struct SlideShowMediaTrimWindow(
+    TimeSpan Start,
+    TimeSpan End)
+{
+    public bool IsTrimmed => Start > TimeSpan.Zero || End < TimeSpan.MaxValue;
+}
+
 /// <summary>
 /// Shared slideshow media hit-testing and source policy. WPF and Avalonia keep
 /// native playback optional, but they must agree on hit rectangles and consume
@@ -104,6 +111,51 @@ public static class SlideShowMediaInteractionPlanner
     /// Native WPF and LibVLC adapters consume different representations of this value.
     /// </summary>
     public static int NormalizeVolumePercent(int volume) => Math.Clamp(volume, 0, 100);
+
+    /// <summary>
+    /// Resolves PowerPoint's trim-from-start/trim-from-end values against the
+    /// duration reported by the active playback engine. Unknown durations keep
+    /// the start trim (which can be applied before playback) and leave the end
+    /// open until the engine reports a duration.
+    /// </summary>
+    public static SlideShowMediaTrimWindow ResolveTrimWindow(
+        MediaInfo media,
+        TimeSpan duration)
+    {
+        ArgumentNullException.ThrowIfNull(media);
+
+        var start = PositiveMilliseconds(media.TrimStartMilliseconds);
+        if (duration <= TimeSpan.Zero)
+            return new SlideShowMediaTrimWindow(start, TimeSpan.MaxValue);
+
+        var endTrim = PositiveMilliseconds(media.TrimEndMilliseconds);
+        var end = duration - endTrim;
+        if (end < start)
+            end = start;
+
+        return new SlideShowMediaTrimWindow(start, end);
+    }
+
+    public static bool IsAtOrPastTrimEnd(
+        MediaInfo media,
+        TimeSpan position,
+        TimeSpan duration)
+    {
+        var window = ResolveTrimWindow(media, duration);
+        return window.End != TimeSpan.MaxValue && position >= window.End;
+    }
+
+    public static TimeSpan ClampToTrimStart(MediaInfo media, TimeSpan position)
+    {
+        ArgumentNullException.ThrowIfNull(media);
+        var start = PositiveMilliseconds(media.TrimStartMilliseconds);
+        return position < start ? start : position;
+    }
+
+    private static TimeSpan PositiveMilliseconds(double value) =>
+        value > 0 && double.IsFinite(value)
+            ? TimeSpan.FromMilliseconds(Math.Min(value, TimeSpan.MaxValue.TotalMilliseconds))
+            : TimeSpan.Zero;
 
     private static SlideShowMediaShapePlan BuildShapePlan(
         SlideShape shape,
