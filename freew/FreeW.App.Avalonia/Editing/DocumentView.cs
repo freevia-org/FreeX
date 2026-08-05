@@ -124,6 +124,9 @@ public sealed class DocumentView : Control
     // AV-TAB: leader spans emitted during body tab layout; drawn in Render before glyph text.
     // Each entry: (X1=tab start, X2=segment start, Y=page-space top, LineHeight, Leader kind, RunFmt for color/size).
     private readonly List<(double X1, double X2, double Y, double LineHeight, TabLeader Leader, RunFormatting Fmt)> _tabLeaderSpans = new();
+    // Display-only automatic hyphens. BreakOffset remains a model-relative caret boundary; the
+    // visible hyphen itself is deliberately absent from _placed and therefore cannot enter the model.
+    private readonly List<AutomaticHyphenGlyph> _automaticHyphenGlyphs = new();
     // AV-TBL4: extended to carry per-cell shading brush and shared per-edge border plans.
     // Fill: IBrush? combines table-style fills (header/band) with per-cell ShadingColorHex.
     // Border: bool = table-level outer border; CellBorderPlan: per-edge override planned from the model.
@@ -2518,6 +2521,18 @@ public sealed class DocumentView : Control
         }
     }
 
+    internal IReadOnlyList<(int Block, int BreakOffset, double X, double Y, double W, double LineHeight)>
+        AutomaticHyphenGlyphs
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _automaticHyphenGlyphs
+                .Select(item => (item.Block, item.BreakOffset, item.X, item.Y, item.W, item.LineHeight))
+                .ToList();
+        }
+    }
+
     /// <summary>
     /// Returns placed glyphs for a specific table cell and paragraph — including sentinels.
     /// Suitable for BE1/BE2 layout tests. Only available to the test assembly.
@@ -3425,6 +3440,24 @@ public sealed class DocumentView : Control
         // Group consecutive same-line, same-format glyphs (excluding the page-left offset) into runs.
         var glyphs = _placed
             .Where(p => !p.Sentinel && p.Ch != '\0' && !p.Fmt.Hidden)
+            .Concat(_automaticHyphenGlyphs
+                .Where(glyph => !glyph.Fmt.Hidden)
+                .Select(glyph => new PlacedChar(
+                    glyph.Block,
+                    glyph.BreakOffset,
+                    glyph.X,
+                    glyph.Y,
+                    glyph.W,
+                    glyph.LineHeight,
+                    glyph.Fmt,
+                    '-',
+                    Sentinel: false,
+                    CommentId: glyph.CommentId,
+                    Revision: glyph.Revision,
+                    RevisionAuthor: glyph.RevisionAuthor,
+                    Link: glyph.Link,
+                    HasFormatRevision: glyph.FormatRevision is not null,
+                    FormatRevisionAuthor: glyph.FormatRevision?.Author)))
             .OrderBy(p => p.Y)
             .ThenBy(p => p.X)
             .ToList();
@@ -6659,6 +6692,7 @@ public sealed class DocumentView : Control
         _footnotePhysicalPagePlan = DocumentFootnotePhysicalPagePlan.Empty;
         _bodyPageCount = 0;
         _tabLeaderSpans.Clear(); // AV-TAB
+        _automaticHyphenGlyphs.Clear();
 
         _surfacePlan = DocumentViewLayoutPlanner.BuildSurfacePlan(
             _doc.Page,
@@ -6779,6 +6813,7 @@ public sealed class DocumentView : Control
                 _cellHits.Clear();
                 _shapeTextCaretStops.Clear();
                 _tabLeaderSpans.Clear();
+                _automaticHyphenGlyphs.Clear();
                 _layoutContentY = 0;
                 RunBodyLayoutBlocks(textWidth);
 
@@ -7062,6 +7097,13 @@ public sealed class DocumentView : Control
             _tabLeaderSpans[i] = (first.X, second.X, first.Y, item.LineHeight, item.Leader, item.Fmt);
         }
 
+        for (var i = 0; i < _automaticHyphenGlyphs.Count; i++)
+        {
+            var item = _automaticHyphenGlyphs[i];
+            var point = Move(item.X, item.Y);
+            _automaticHyphenGlyphs[i] = item with { X = point.X, Y = point.Y };
+        }
+
         for (var i = 0; i < _rects.Count; i++)
         {
             var item = _rects[i];
@@ -7254,6 +7296,15 @@ public sealed class DocumentView : Control
             var span = _tabLeaderSpans[i];
             _tabLeaderSpans[i] = (span.X1, span.X2, span.Y + offsetFor(span.X1, span.Y), span.LineHeight,
                 span.Leader, span.Fmt);
+        }
+
+        for (var i = 0; i < _automaticHyphenGlyphs.Count; i++)
+        {
+            var glyph = _automaticHyphenGlyphs[i];
+            _automaticHyphenGlyphs[i] = glyph with
+            {
+                Y = glyph.Y + offsetFor(glyph.X, glyph.Y),
+            };
         }
 
         for (var i = 0; i < _rects.Count; i++)
@@ -8821,7 +8872,8 @@ public sealed class DocumentView : Control
         IReadOnlyList<double> heights,
         double availableWidth,
         ParagraphFormatting pf,
-        double naturalLineHeightScale)
+        double naturalLineHeightScale,
+        IReadOnlyDictionary<int, double> automaticHyphenWidths)
     {
         if (cells.Count == 0)
             return ApplyLineSpacing(DefaultFontSizePt * PxPerPoint * 1.3 * naturalLineHeightScale, pf);
@@ -8846,13 +8898,22 @@ public sealed class DocumentView : Control
 
             if (lineWidth + measured[index] > availableWidth && index > lineStart)
             {
-                var breakAt = lastBreak >= lineStart ? lastBreak + 1 : index;
+                var spaceBreakAt = lastBreak >= lineStart ? lastBreak + 1 : -1;
+                var automaticBreak = FindLatestAutomaticHyphenBreak(
+                    lineStart, index, availableWidth, measured, automaticHyphenWidths);
+                var breakAt = automaticBreak.BreakAt > spaceBreakAt
+                    ? automaticBreak.BreakAt
+                    : spaceBreakAt > lineStart ? spaceBreakAt : index;
                 AddLine(lineStart, breakAt);
                 lineStart = breakAt;
                 lineWidth = 0;
                 lastBreak = -1;
                 for (var carried = lineStart; carried < index; carried++)
+                {
+                    if (cells[carried].Ch == ' ')
+                        lastBreak = carried;
                     lineWidth += measured[carried];
+                }
             }
 
             lineWidth += measured[index];
@@ -8860,6 +8921,31 @@ public sealed class DocumentView : Control
 
         AddLine(lineStart, cells.Count);
         return totalHeight;
+    }
+
+    private static (int BreakAt, double HyphenWidth) FindLatestAutomaticHyphenBreak(
+        int lineStart,
+        int overflowIndex,
+        double availableWidth,
+        IReadOnlyList<double> measured,
+        IReadOnlyDictionary<int, double> automaticHyphenWidths)
+    {
+        var width = 0.0;
+        var bestBreakAt = -1;
+        var bestHyphenWidth = 0.0;
+        for (var cellIndex = lineStart; cellIndex < overflowIndex; cellIndex++)
+        {
+            width += measured[cellIndex];
+            var breakOffset = cellIndex + 1;
+            if (automaticHyphenWidths.TryGetValue(breakOffset, out var hyphenWidth)
+                && width + hyphenWidth <= availableWidth)
+            {
+                bestBreakAt = breakOffset;
+                bestHyphenWidth = hyphenWidth;
+            }
+        }
+
+        return (bestBreakAt, bestHyphenWidth);
     }
 
     // ── AV-WRAP: wrap-exclusion helpers ───────────────────────────────────────────────────────────────
@@ -9040,6 +9126,22 @@ public sealed class DocumentView : Control
             }
         }
 
+        var automaticHyphenationText = new string(cells.Select(cell =>
+            !IsTextHiddenInCurrentView(cell.Fmt)
+            && reviewPolicy.RevisionDecision(cell.Revision).IsTextVisible
+            && cell.EquationElement is null
+                ? cell.Ch
+                : ' ').ToArray());
+        var automaticHyphenWidths = AutomaticHyphenationDisplayPlanner.BuildBreakOffsets(
+                automaticHyphenationText,
+                _doc.Page,
+                pf)
+            .Where(offset => offset > 0 && offset < cells.Count)
+            .Distinct()
+            .ToDictionary(
+                offset => offset,
+                offset => BuildForLayout("-", cells[offset - 1].Fmt).WidthIncludingTrailingWhitespace);
+
         // Keep the full paragraph together for the ordinary text path. This mirrors the WPF host's
         // default-on widow policy without changing tabs, equations, drop caps, or wrapped float layout.
         var keepParagraphTogether = pf.KeepLinesTogether || !pf.WidowControlIsSet || pf.WidowControl;
@@ -9050,7 +9152,7 @@ public sealed class DocumentView : Control
         if (keepParagraphTogether && supportsCompleteParagraphPlanning)
         {
             var paragraphHeight = MeasurePlainParagraphHeight(
-                cells, measured, heights, availableWidth, pf, naturalLineHeightScale);
+                cells, measured, heights, availableWidth, pf, naturalLineHeightScale, automaticHyphenWidths);
             ReserveCompleteParagraph(paragraphHeight);
         }
 
@@ -9108,13 +9210,22 @@ public sealed class DocumentView : Control
 
             if (lineWidth + measured[i] > lineAvail && i > lineStart)
             {
-                var breakAt = lastBreak >= lineStart ? lastBreak + 1 : i;
+                var spaceBreakAt = lastBreak >= lineStart ? lastBreak + 1 : -1;
+                var automaticBreak = FindLatestAutomaticHyphenBreak(
+                    lineStart, i, lineAvail, measured, automaticHyphenWidths);
+                var useAutomaticHyphen = automaticBreak.BreakAt > spaceBreakAt;
+                var breakAt = useAutomaticHyphen
+                    ? automaticBreak.BreakAt
+                    : spaceBreakAt > lineStart ? spaceBreakAt : i;
                 // AV-WRAP: push past any TopAndBottom exclusion zones before emitting.
                 if (_wrapExclusions.Count > 0)
                     AdvancePastTopAndBottomExclusions(lineH2, lineAlignWidth);
                 EmitLinePaged(blockIndex, cells, measured, heights, lineStart, breakAt, alignment,
                     lineAlignWidth, paraLeftInset + lineExtraInset, pf,
-                    naturalLineHeightScale: naturalLineHeightScale);
+                    naturalLineHeightScale: naturalLineHeightScale,
+                    automaticHyphenWidth: useAutomaticHyphen ? automaticBreak.HyphenWidth : 0,
+                    automaticHyphenSourceCell: useAutomaticHyphen ? cells[breakAt - 1] : null,
+                    automaticHyphenBreakOffset: useAutomaticHyphen ? breakAt : -1);
                 lineIndex++;
                 lineStart = breakAt;
                 lineWidth = 0;
@@ -9129,6 +9240,8 @@ public sealed class DocumentView : Control
                 {
                     if (cells[k].Ch == '\t' && reviewPolicy.IsRevisionTextVisible(cells[k].Revision))
                         measured[k] = ComputeTabMeasuredWidth(lineWidth + paraLeftInset + newLineExtraInset, pf, defaultTabStopPt);
+                    if (cells[k].Ch == ' ')
+                        lastBreak = k;
                     lineWidth += measured[k];
                 }
             }
@@ -9170,9 +9283,12 @@ public sealed class DocumentView : Control
         double leftInset,
         ParagraphFormatting pf,
         bool isLast = false,
-        double naturalLineHeightScale = 1.0)
+        double naturalLineHeightScale = 1.0,
+        double automaticHyphenWidth = 0,
+        Cell? automaticHyphenSourceCell = null,
+        int automaticHyphenBreakOffset = -1)
     {
-        double lineWidth = 0;
+        double lineWidth = automaticHyphenWidth;
         // Natural line height: use the tallest glyph but also respect line-spacing rule.
         double naturalHeight = DefaultFontSizePt * PxPerPoint * 1.3;
         for (var c = from; c < to; c++)
@@ -9215,6 +9331,7 @@ public sealed class DocumentView : Control
                 var visibleWidth = 0.0;
                 for (var c = from; c <= lastNonSpaceIdx; c++)
                     visibleWidth += measured[c];
+                visibleWidth += automaticHyphenWidth;
                 // Count inter-word spaces strictly between the first and last non-space cell.
                 var spaceCount = 0;
                 for (var c = from; c < lastNonSpaceIdx; c++)
@@ -9421,6 +9538,26 @@ public sealed class DocumentView : Control
             // Extra inter-word gap for justify alignment: only for spaces before the last non-space cell.
             if (wordGap > 0 && cells[c].Ch == ' ' && c < lastNonSpaceIdx)
                 x += wordGap;
+        }
+
+        if (automaticHyphenWidth > 0
+            && automaticHyphenSourceCell is { } sourceCell
+            && automaticHyphenBreakOffset >= 0)
+        {
+            _automaticHyphenGlyphs.Add(new AutomaticHyphenGlyph(
+                blockIndex,
+                automaticHyphenBreakOffset,
+                x,
+                pageSpaceY,
+                automaticHyphenWidth,
+                lineHeight,
+                sourceCell.Fmt,
+                sourceCell.CommentId,
+                sourceCell.Revision,
+                sourceCell.RevisionAuthor,
+                sourceCell.Link,
+                sourceCell.FormatRevision));
+            x += automaticHyphenWidth;
         }
 
         // End-of-line / end-of-paragraph sentinel carries the caret slot after the last char.
@@ -11866,6 +12003,94 @@ public sealed class DocumentView : Control
                 DrawFormatRevisionDecoration(context, positionedPc, ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor));
             if (!pc.IsCell && proofingOffsets.Contains((pc.Block, pc.Offset)))
                 DrawProofingSquiggle(context, positionedPc);
+        }
+
+        foreach (var glyph in _automaticHyphenGlyphs)
+        {
+            if (IsTextHiddenInCurrentView(glyph.Fmt))
+                continue;
+            var revisionDecision = reviewPolicy.RevisionDecision(glyph.Revision);
+            if (!revisionDecision.IsTextVisible)
+                continue;
+
+            var drawFmt = glyph.Fmt;
+            if (glyph.Link is { HasTarget: true })
+            {
+                drawFmt = drawFmt with
+                {
+                    ColorHex = string.IsNullOrWhiteSpace(drawFmt.ColorHex) ? HyperlinkColorHex : drawFmt.ColorHex,
+                    Underline = true,
+                };
+            }
+            var revisionColorHex = ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, glyph.RevisionAuthor);
+            if (revisionDecision.IsRevisionStylingApplied)
+                drawFmt = drawFmt with { ColorHex = revisionColorHex };
+            var formatRevisionHighlighted = glyph.FormatRevision is not null
+                && reviewPolicy.ShouldHighlightFormattingChanges;
+            if (formatRevisionHighlighted && string.IsNullOrWhiteSpace(drawFmt.ColorHex))
+            {
+                drawFmt = drawFmt with
+                {
+                    ColorHex = ReviewRevisionColorPlanner.ResolveColorHex(
+                        revisionColors,
+                        glyph.FormatRevision?.Author),
+                };
+            }
+
+            if (glyph.CommentId is { } commentId && reviewPolicy.ShouldHighlightComments)
+            {
+                var tint = IsCommentResolved(commentId) ? ResolvedCommentTintBrush : CommentTintBrush;
+                context.FillRectangle(tint, new Rect(glyph.X, glyph.Y, Math.Max(1, glyph.W), glyph.LineHeight));
+            }
+
+            var drawY = glyph.Y;
+            if (glyph.Fmt.VerticalAlign == VerticalAlign.Superscript)
+            {
+                drawFmt = drawFmt with
+                {
+                    FontSizePt = (drawFmt.FontSizePt ?? DefaultFontSizePt) * SuperSubScale,
+                };
+                drawY += glyph.LineHeight * SuperYRaiseFraction;
+            }
+            else if (glyph.Fmt.VerticalAlign == VerticalAlign.Subscript)
+            {
+                drawFmt = drawFmt with
+                {
+                    FontSizePt = (drawFmt.FontSizePt ?? DefaultFontSizePt) * SuperSubScale,
+                };
+                drawY += glyph.LineHeight * SubYLowerFraction;
+            }
+
+            drawY += RunBaselinePositionPlanner.ResolveOffsetDip(drawFmt, PxPerPoint);
+            context.DrawText(Build("-", drawFmt), new Point(glyph.X, drawY));
+
+            var placedGlyph = new PlacedChar(
+                glyph.Block,
+                glyph.BreakOffset,
+                glyph.X,
+                glyph.Y,
+                glyph.W,
+                glyph.LineHeight,
+                drawFmt,
+                '-',
+                Sentinel: false,
+                CommentId: glyph.CommentId,
+                Revision: glyph.Revision,
+                RevisionAuthor: glyph.RevisionAuthor,
+                Link: glyph.Link,
+                HasFormatRevision: glyph.FormatRevision is not null,
+                FormatRevisionAuthor: glyph.FormatRevision?.Author);
+            if (drawFmt.Underline)
+                DrawDecoration(context, placedGlyph, glyph.Y + glyph.LineHeight * 0.82, drawFmt);
+            DrawStrikethroughDecorations(context, placedGlyph, drawFmt);
+            DrawRevisionDecoration(context, placedGlyph, revisionDecision, revisionColorHex);
+            if (formatRevisionHighlighted)
+            {
+                DrawFormatRevisionDecoration(
+                    context,
+                    placedGlyph,
+                    ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, glyph.FormatRevision?.Author));
+            }
         }
 
         foreach (var (mx, my, text, fmt) in _markers)
@@ -24627,6 +24852,20 @@ public sealed class DocumentView : Control
         LinkInfo? Link = null,
         FormatRevision? FormatRevision = null,
         EquationVisualElement? EquationElement = null);
+
+    private readonly record struct AutomaticHyphenGlyph(
+        int Block,
+        int BreakOffset,
+        double X,
+        double Y,
+        double W,
+        double LineHeight,
+        RunFormatting Fmt,
+        int? CommentId,
+        RevisionKind Revision,
+        string? RevisionAuthor,
+        LinkInfo? Link,
+        FormatRevision? FormatRevision);
 
     /// <summary>
     /// AV-LINK: a hyperlink target carried alongside a glyph/run. Exactly one of <see cref="Url"/> (external)
