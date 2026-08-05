@@ -861,6 +861,16 @@ public sealed class ReferencesTabTests
     });
 
     [Fact]
+    public Task MarkIndexEntry_dialog_carries_trimmed_optional_identifier() => RunOnUiThread(() =>
+    {
+        var dialog = new MarkIndexEntryDialog("Alpha");
+        dialog.SetForTests("Alpha", null, false, null, identifier: " People ");
+
+        dialog.AcceptForTests().Should().BeTrue();
+        dialog.Mark.Should().Be(new IndexMark("Alpha", Identifier: "People"));
+    });
+
+    [Fact]
     public Task MarkIndexEntry_dialog_returns_mark_all_action_for_selected_text() => RunOnUiThread(() =>
     {
         var dialog = new MarkIndexEntryDialog("Alpha");
@@ -869,6 +879,7 @@ public sealed class ReferencesTabTests
         dialog.AcceptAllForTests().Should().BeTrue();
         dialog.MarkAll.Should().BeTrue();
         dialog.Mark.Should().Be(new IndexMark("Alpha"));
+        dialog.Mark!.Identifier.Should().BeEmpty();
     });
 
     [Fact]

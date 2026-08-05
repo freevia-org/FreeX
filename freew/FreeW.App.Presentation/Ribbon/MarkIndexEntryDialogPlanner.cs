@@ -12,6 +12,7 @@ public enum IndexEntryReferenceKind
 public sealed record MarkIndexEntryDialogState(
     string MainEntry,
     string Subentry,
+    string Identifier,
     IndexEntryReferenceKind ReferenceKind,
     string BookmarkName,
     string CrossReference,
@@ -35,6 +36,7 @@ public static class MarkIndexEntryDialogPlanner
     public const string Title = "Mark Index Entry";
     public const string MainEntryLabel = "Main entry:";
     public const string SubentryLabel = "Subentry (optional):";
+    public const string IdentifierLabel = "Index identifier (optional):";
     public const string OptionsLabel = "Options:";
     public const string CurrentPageLabel = "Current page";
     public const string PageRangeLabel = "Page range:";
@@ -53,6 +55,7 @@ public static class MarkIndexEntryDialogPlanner
     public static MarkIndexEntryDialogState BuildInitialState(string? selectedText) =>
         new(
             (selectedText ?? string.Empty).Trim(),
+            string.Empty,
             string.Empty,
             IndexEntryReferenceKind.CurrentPage,
             string.Empty,
@@ -104,7 +107,8 @@ public static class MarkIndexEntryDialogPlanner
             crossReference,
             BoldPageNumber: state.ReferenceKind != IndexEntryReferenceKind.CrossReference && state.BoldPageNumber,
             ItalicPageNumber: state.ReferenceKind != IndexEntryReferenceKind.CrossReference && state.ItalicPageNumber,
-            BookmarkName: bookmarkName);
+            BookmarkName: bookmarkName,
+            Identifier: state.Identifier.Trim());
         validation = null;
         return true;
     }

@@ -15,7 +15,20 @@ public sealed class MarkIndexEntryDialogTests
         dialog.BookmarkSelectorEnabledForTest.Should().BeFalse();
         dialog.PageNumberFormattingEnabledForTest.Should().BeTrue();
         dialog.AcceptForTest().Should().BeTrue();
+        dialog.ResultForTest!.Mark.Identifier.Should().BeEmpty();
         dialog.ResultForTest!.Mark.Should().Be(new IndexMark("Animals"));
+    }
+
+    [StaFact]
+    public void Dialog_CarriesTrimmedOptionalIdentifierThroughSharedPlanner()
+    {
+        var dialog = MarkIndexEntryDialog.CreateForTest();
+        dialog.SetForTest("Alpha", null, false, null, identifier: " People ");
+
+        dialog.AcceptForTest().Should().BeTrue();
+        dialog.ResultForTest!.Mark.Should().Be(new IndexMark(
+            "Alpha",
+            Identifier: "People"));
     }
 
     [StaFact]
