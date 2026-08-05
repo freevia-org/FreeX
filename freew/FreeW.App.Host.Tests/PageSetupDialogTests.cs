@@ -11,7 +11,7 @@ namespace FreeW.App.Host.Tests;
 /// <see cref="System.Windows.Window"/> (STA); these tests construct it (so its control wiring is exercised
 /// without a modal loop) and verify the apply path through <see cref="DocumentView.ApplyPageSettings"/> —
 /// the same single commit + re-render path the Page Setup ribbon command uses — mutates the model's
-/// <see cref="PageSettings"/> exactly as the dialog's <see cref="PageSetupDialog.Result"/> describes.
+/// <see cref="PageSettings"/> exactly as the dialog's <see cref="PageSetupDialogResult"/> describes.
 /// </summary>
 public sealed class PageSetupDialogTests
 {
@@ -78,7 +78,7 @@ public sealed class PageSetupDialogTests
         var view = ViewWith();
 
         // Mirror the exact mutation block the PageSetupCommand applies from a dialog Result.
-        var result = new PageSetupDialog.Result(
+        var result = new PageSetupDialogResult(
             MarginTopPt: 54,
             MarginBottomPt: 60,
             MarginLeftPt: 66,
@@ -142,13 +142,24 @@ public sealed class PageSetupDialogTests
             "FreeW.App.Host",
             "PageSetupDialog.cs"));
 
-        Assert.Contains("PageSetupDialogPlanner.BuildInitialState(", source);
-        Assert.Contains("PageSetupDialogPlanner.TryBuildResult(", source);
+        Assert.Contains("PageSetupDialogPlanner.CreateSession(", source);
+        Assert.Contains("_session.PlanPaperSelection(", source);
+        Assert.Contains("_session.PlanDimensionEdit(", source);
+        Assert.Contains("_session.PlanAcceptance(this)", source);
+        Assert.Contains("ApplyEnabledState(_session.EnabledState)", source);
         Assert.DoesNotContain("PaperSizes =", source);
         Assert.DoesNotContain("SectionStartValues =", source);
         Assert.DoesNotContain("TryParse(_top.Text", source);
+        Assert.DoesNotContain("new PageSetupDialogInput(", source);
+        Assert.DoesNotContain("PageSetupDialogPlanner.BuildInitialState(", source);
+        Assert.DoesNotContain("PageSetupDialogPlanner.ApplyPaperPreset(", source);
+        Assert.DoesNotContain("PageSetupDialogPlanner.PaperIndexFor(", source);
+        Assert.DoesNotContain("PageSetupDialogPlanner.TryBuildResult(", source);
+        Assert.DoesNotContain("double.TryParse(", source);
+        Assert.DoesNotContain("new PageSetupDialogResult(", source);
+        Assert.DoesNotContain("ToHostResult", source);
         Assert.Contains("PageSetupDialogPlanner.PresentationMetrics", source);
-        Assert.Contains("metrics.Validation", source);
+        Assert.Contains("IPageSetupDialogControlSource", source);
     }
 
     [StaFact]

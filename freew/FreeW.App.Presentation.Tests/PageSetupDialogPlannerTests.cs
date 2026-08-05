@@ -88,6 +88,120 @@ public sealed class PageSetupDialogPlannerTests
     }
 
     [Fact]
+    public void Session_ProjectsInitialPaperStateAndKeepsDimensionsEditable()
+    {
+        var session = PageSetupDialogPlanner.CreateSession(
+            new PageSettings { WidthPt = 612.4, HeightPt = 791.6 },
+            SectionBreakKind.NextPage,
+            CultureInfo.InvariantCulture);
+
+        session.InitialState.PaperSizeIndex.Should().Be(0);
+        session.InitialState.WidthText.Should().Be("612.4");
+        session.InitialState.HeightText.Should().Be("791.6");
+        session.PaperOptions.Should().Equal(PageSetupDialogPlanner.HostPaperOptions);
+        session.EnabledState.Should().Be(new PageSetupDialogEnabledState(true, true));
+
+        var letter = session.PlanPaperSelection(session.InitialState.PaperSizeIndex);
+        letter.UpdateDimensions.Should().BeTrue();
+        letter.WidthText.Should().Be("612");
+        letter.HeightText.Should().Be("792");
+        letter.EnabledState.Should().Be(new PageSetupDialogEnabledState(true, true));
+
+        var custom = session.PlanPaperSelection(PageSetupDialogPlanner.CustomIndex(session.PaperOptions));
+        custom.UpdateDimensions.Should().BeFalse();
+        custom.WidthText.Should().BeNull();
+        custom.HeightText.Should().BeNull();
+        custom.EnabledState.Should().Be(new PageSetupDialogEnabledState(true, true));
+    }
+
+    [Fact]
+    public void Session_NormalizesCultureAwareDimensionEditsToTheSharedPaperSelection()
+    {
+        var culture = CultureInfo.GetCultureInfo("fr-FR");
+        var session = PageSetupDialogPlanner.CreateSession(
+            new PageSettings(),
+            SectionBreakKind.NextPage,
+            culture);
+
+        var a4 = session.PlanDimensionEdit("595,3", "841,9", currentPaperSizeIndex: 0);
+        a4.UpdatePaperSize.Should().BeTrue();
+        a4.PaperSizeIndex.Should().Be(4);
+        a4.EnabledState.Should().Be(new PageSetupDialogEnabledState(true, true));
+
+        var invalid = session.PlanDimensionEdit("wide", "841,9", currentPaperSizeIndex: 4);
+        invalid.UpdatePaperSize.Should().BeFalse();
+        invalid.PaperSizeIndex.Should().Be(4);
+    }
+
+    [Fact]
+    public void Session_ProjectsControlValuesAndConstructsThePortableResult()
+    {
+        var session = PageSetupDialogPlanner.CreateSession(
+            new PageSettings(),
+            SectionBreakKind.NextPage,
+            CultureInfo.InvariantCulture);
+        var source = new TestControlSource(
+            MarginTopText: "50",
+            MarginBottomText: "72",
+            MarginLeftText: "40",
+            MarginRightText: "72",
+            GutterText: "18",
+            GutterPositionIndex: 1,
+            OrientationIndex: 1,
+            MultiplePagesIndex: 1,
+            WidthText: "1224",
+            HeightText: "792",
+            PaperSizeIndex: PageSetupDialogPlanner.CustomIndex(session.PaperOptions),
+            SectionStartIndex: 2,
+            DifferentFirstPage: true,
+            DifferentOddEvenPages: true,
+            HeaderDistanceText: "30",
+            FooterDistanceText: "40",
+            VerticalAlignmentIndex: 2);
+
+        var projected = session.ProjectControlState(source);
+        projected.GutterPositionIndex.Should().Be(1);
+        projected.PaperSizeIndex.Should().Be(PageSetupDialogPlanner.CustomIndex(session.PaperOptions));
+
+        var acceptance = session.PlanAcceptance(source);
+        acceptance.IsAccepted.Should().BeTrue();
+        acceptance.ErrorMessage.Should().BeNull();
+        acceptance.Result.Should().Be(new PageSetupDialogResult(
+            MarginTopPt: 50,
+            MarginBottomPt: 72,
+            MarginLeftPt: 40,
+            MarginRightPt: 72,
+            GutterPt: 18,
+            Landscape: true,
+            MirrorMargins: true,
+            WidthPt: 792,
+            HeightPt: 1224,
+            SectionStart: SectionBreakKind.EvenPage,
+            DifferentFirstPage: true,
+            DifferentOddEvenPages: true,
+            HeaderDistancePt: 30,
+            FooterDistancePt: 40,
+            VerticalAlignment: PageVerticalAlignment.Justified,
+            GutterAtTop: true));
+    }
+
+    [Fact]
+    public void Session_NormalizesValidationFailuresToTheSharedDialogMessage()
+    {
+        var session = PageSetupDialogPlanner.CreateSession(
+            new PageSettings(),
+            SectionBreakKind.NextPage,
+            CultureInfo.InvariantCulture);
+        var state = ValidControlState() with { MarginTopText = "-1" };
+
+        var acceptance = session.PlanAcceptance(state);
+
+        acceptance.IsAccepted.Should().BeFalse();
+        acceptance.Result.Should().BeNull();
+        acceptance.ErrorMessage.Should().Be(PageSetupDialogPlanner.UnifiedValidationMessage);
+    }
+
+    [Fact]
     public void TryBuildResult_UnifiedDialog_PreservesExistingValidationMessageAndSwapsLandscapeInput()
     {
         var input = new PageSetupDialogInput(
@@ -291,4 +405,42 @@ public sealed class PageSetupDialogPlannerTests
         UseSelectedPaperPreset: true,
         GeometryMode: PageSetupGeometryMode.NormalizeToOrientation,
         ValidationProfile: PageSetupValidationProfile.CompactDialog);
+
+    private static PageSetupDialogControlState ValidControlState() => new(
+        MarginTopText: "72",
+        MarginBottomText: "72",
+        MarginLeftText: "72",
+        MarginRightText: "72",
+        GutterText: "0",
+        GutterPositionIndex: 0,
+        OrientationIndex: 0,
+        MultiplePagesIndex: 0,
+        WidthText: "612",
+        HeightText: "792",
+        PaperSizeIndex: 0,
+        SectionStartIndex: 1,
+        DifferentFirstPage: false,
+        DifferentOddEvenPages: false,
+        HeaderDistanceText: "36",
+        FooterDistanceText: "36",
+        VerticalAlignmentIndex: 0);
+
+    private sealed record TestControlSource(
+        string? MarginTopText,
+        string? MarginBottomText,
+        string? MarginLeftText,
+        string? MarginRightText,
+        string? GutterText,
+        int GutterPositionIndex,
+        int OrientationIndex,
+        int MultiplePagesIndex,
+        string? WidthText,
+        string? HeightText,
+        int PaperSizeIndex,
+        int SectionStartIndex,
+        bool DifferentFirstPage,
+        bool DifferentOddEvenPages,
+        string? HeaderDistanceText,
+        string? FooterDistanceText,
+        int VerticalAlignmentIndex) : IPageSetupDialogControlSource;
 }

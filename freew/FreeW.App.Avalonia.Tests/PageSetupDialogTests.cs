@@ -638,11 +638,22 @@ public sealed class PageSetupDialogTests
             "FreeW.App.Avalonia",
             "PageSetupDialog.cs"));
 
-        source.Should().Contain("PageSetupDialogPlanner.BuildInitialState(");
-        source.Should().Contain("PageSetupDialogPlanner.TryBuildResult(");
+        source.Should().Contain("PageSetupDialogPlanner.CreateSession(");
+        source.Should().Contain("_session.PlanPaperSelection(");
+        source.Should().Contain("_session.PlanDimensionEdit(");
+        source.Should().Contain("_session.PlanAcceptance(this)");
+        source.Should().Contain("ApplyEnabledState(_session.EnabledState)");
         source.Should().NotContain("PaperSizes =");
         source.Should().NotContain("TryParseNonNeg(");
         source.Should().NotContain("TryParsePos(");
+        source.Should().NotContain("new PageSetupDialogInput(");
+        source.Should().NotContain("PageSetupDialogPlanner.BuildInitialState(");
+        source.Should().NotContain("PageSetupDialogPlanner.ApplyPaperPreset(");
+        source.Should().NotContain("PageSetupDialogPlanner.PaperIndexFor(");
+        source.Should().NotContain("PageSetupDialogPlanner.TryBuildResult(");
+        source.Should().NotContain("double.TryParse(");
+        source.Should().NotContain("new PageSetupDialogResult(");
+        source.Should().Contain("IPageSetupDialogControlSource");
     }
 
 
