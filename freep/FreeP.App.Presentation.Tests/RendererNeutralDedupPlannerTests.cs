@@ -982,10 +982,11 @@ public sealed class RendererNeutralDedupPlannerTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("SlideShowPlaybackPlanner.PlanTransition");
+            source.Should().Contain("SlideShowTransitionPlaybackCoordinator.Play");
             source.Should().Contain("SlideShowPlaybackPlanner.PlanAnimationStep");
             source.Should().Contain("SlideShowPlaybackPlanner.PlanFallbackAnimation");
             source.Should().NotContain("SlideShowTransitionPlanner.Plan(t)");
+            source.Should().NotContain("switch (plan.ActionKind)");
             source.Should().NotContain("switch (anim.Preset)");
         }
     }

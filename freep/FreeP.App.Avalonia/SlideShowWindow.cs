@@ -61,7 +61,7 @@ namespace FreeP.App.Avalonia;
 /// Actual audio/video playback uses the LibVLCSharp adapter with poster/click fallback
 /// when a platform cannot load its native LibVLC runtime.
 /// </summary>
-public sealed class SlideShowWindow : Window
+public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRenderer
 {
     // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -1014,11 +1014,17 @@ public sealed class SlideShowWindow : Window
 
     private void PlayTransition(Slide slide, SlideTransition t)
     {
-        if (t.Sound?.AudioBytes is { Length: > 0 })
-            _mediaController.PlayTransitionSound(t.Sound);
+        SlideShowTransitionPlaybackCoordinator.Play(_presentation, slide, t, this);
+    }
 
-        var plan = SlideShowPlaybackPlanner.PlanTransition(_presentation, slide, t);
-        t = plan.EffectiveTransition;
+    void ISlideShowTransitionPlaybackRenderer.PlayTransitionSound(SlideTransition transition)
+    {
+        if (transition.Sound?.AudioBytes is { Length: > 0 })
+            _mediaController.PlayTransitionSound(transition.Sound);
+    }
+
+    void ISlideShowTransitionPlaybackRenderer.ResetTransitionVisuals()
+    {
         _transitionBackImage.IsVisible = false;
         _transitionBackImage.Clip = null;
         _transitionBackImage.RenderTransform = null;
@@ -1027,177 +1033,49 @@ public sealed class SlideShowWindow : Window
         _transitionFlashOverlay.IsVisible = false;
         _transitionFlashOverlay.Opacity = 0;
         _slideCanvas.ZIndex = 0;
-        switch (plan.ActionKind)
-        {
-            case SlideShowTransitionPlaybackActionKind.ShowInstant:
-                ShowSlideInstant(slide);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Fade:
-                PlayFadeTransition(slide, plan.DurationMs);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Flash:
-                PlayFlashTransition(slide, plan.DurationMs);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Split:
-                PlaySplitTransition(slide, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Blinds:
-                PlayBlindsTransition(slide, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.RandomBars:
-                PlayRandomBarsTransition(slide, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Strips:
-                PlayStripsTransition(slide, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Wheel:
-                PlayWheelTransition(slide, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Zoom:
-                PlayZoomTransition(slide, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Pan:
-                PlayPanTransition(slide, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Gallery:
-                PlayGalleryTransition(slide, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Conveyor:
-                PlayConveyorTransition(slide, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Window:
-                PlayWindowTransition(slide, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Morph:
-                PlayMorphTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Flip:
-                PlayFlipTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Cube:
-                PlayCubeTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Rotate:
-                PlayRotateTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Honeycomb:
-                PlayHoneycombTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Switch:
-                PlaySwitchTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Orbit:
-                PlayOrbitTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Ferris:
-                PlayFerrisTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Flythrough:
-                PlayFlythroughTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Glitter:
-                PlayGlitterTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Ripple:
-                PlayRippleTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Wind:
-                PlayWindTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Curtains:
-                PlayCurtainsTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Shred:
-                PlayShredTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Drape:
-                PlayDrapeTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Vortex:
-                PlayVortexTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Warp:
-                PlayWarpTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Fracture:
-                PlayFractureTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Crush:
-                PlayCrushTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Prism:
-                PlayPrismTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Prestige:
-                PlayPrestigeTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.PageCurl:
-                PlayPageCurlTransition(slide, t, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Dissolve:
-                PlayDissolveTransition(slide, plan.DurationMs);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Box:
-                PlayBoxTransition(slide, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Reveal:
-                PlayRevealTransition(slide, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Uncover:
-                PlayUncoverTransition(slide, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Cover:
-                PlayCoverTransition(slide, plan);
-                return;
-
-            case SlideShowTransitionPlaybackActionKind.Push:
-                PlayPushTransition(slide, plan);
-                return;
-
-            default:
-                PlayFadeTransition(slide, plan.DurationMs);
-                return;
-        }
     }
+
+    void ISlideShowTransitionPlaybackRenderer.ShowInstant(Slide slide, SlideShowTransitionPlaybackPlan plan) => ShowSlideInstant(slide);
+    void ISlideShowTransitionPlaybackRenderer.PlayFade(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFadeTransition(slide, plan.DurationMs);
+    void ISlideShowTransitionPlaybackRenderer.PlayFlash(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFlashTransition(slide, plan.DurationMs);
+    void ISlideShowTransitionPlaybackRenderer.PlayDissolve(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayDissolveTransition(slide, plan.DurationMs);
+    void ISlideShowTransitionPlaybackRenderer.PlayBox(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayBoxTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayReveal(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayRevealTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayUncover(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayUncoverTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayCover(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayCoverTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlaySplit(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlaySplitTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayBlinds(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayBlindsTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayRandomBars(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayRandomBarsTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayStrips(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayStripsTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayWheel(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayWheelTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayZoom(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayZoomTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayPan(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPanTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayGallery(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayGalleryTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayConveyor(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayConveyorTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayWindow(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayWindowTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayMorph(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayMorphTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayFlip(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFlipTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayCube(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayCubeTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayRotate(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayRotateTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayHoneycomb(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayHoneycombTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlaySwitch(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlaySwitchTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayOrbit(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayOrbitTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayFerris(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFerrisTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayFlythrough(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFlythroughTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayGlitter(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayGlitterTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayRipple(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayRippleTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayWind(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayWindTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayCurtains(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayCurtainsTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayShred(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayShredTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayDrape(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayDrapeTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayFracture(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFractureTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayCrush(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayCrushTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayPrism(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPrismTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayPrestige(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPrestigeTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayWarp(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayWarpTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayVortex(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayVortexTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayPageCurl(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPageCurlTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayPush(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPushTransition(slide, plan);
 
     private void PlayFadeTransition(Slide slide, int durationMs)
     {
