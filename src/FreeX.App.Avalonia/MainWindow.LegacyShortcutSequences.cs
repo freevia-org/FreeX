@@ -123,6 +123,17 @@ public sealed partial class MainWindow
         _inlineCellEditor is null &&
         !IsTextEditingEventSource(args);
 
+    private bool IsDataRibbonKeyTipAttempt(KeyEventArgs args, string? directAltToken = null)
+    {
+        var sequenceActive = _ribbonKeyTipInput.Length > 0;
+        var token = directAltToken ?? (args.KeyModifiers == KeyModifiers.Alt
+            ? ToRibbonKeyTipToken(args.Key)
+            : null);
+        return sequenceActive && _ribbonKeyTipInput.StartsWith("A", StringComparison.OrdinalIgnoreCase) ||
+            !sequenceActive && token == "A" ||
+            _ribbonKeyTipsVisible && args.KeyModifiers == KeyModifiers.None && args.Key == Key.A;
+    }
+
     private bool TryHandleLegacyEditPasteSpecialSequence(KeyEventArgs args)
     {
         var sequenceActive = _legacyEditPasteSpecialSequenceState !=
@@ -200,6 +211,20 @@ public sealed partial class MainWindow
     private bool TryHandleCataloguedRibbonKeyTipSequence(KeyEventArgs args)
     {
         var sequenceActive = _ribbonKeyTipInput.Length > 0;
+        var directAltToken = args.KeyModifiers == KeyModifiers.Alt
+            ? ToRibbonKeyTipToken(args.Key)
+            : null;
+
+        // WPF keeps ribbon access keys out of the worksheet editing and Backstage scopes. The
+        // Data tab is the next legacy-compatible family exercised here (Alt+A, W), so apply the
+        // same boundary before the generic catalog can select the tab or open its live flyout.
+        if (IsDataRibbonKeyTipAttempt(args, directAltToken) &&
+            !CanHandleLegacyDataFilterSequence(args))
+        {
+            ResetRibbonKeyTipSequence();
+            return false;
+        }
+
         if (sequenceActive &&
             (args.Key is Key.LeftAlt or Key.RightAlt ||
              args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.None))
@@ -210,9 +235,6 @@ public sealed partial class MainWindow
             return false;
         }
 
-        var directAltToken = args.KeyModifiers == KeyModifiers.Alt
-            ? ToRibbonKeyTipToken(args.Key)
-            : null;
         var visibleContinuation = _ribbonKeyTipsVisible && args.KeyModifiers == KeyModifiers.None;
         if (!sequenceActive && directAltToken is null && !visibleContinuation)
             return false;
