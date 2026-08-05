@@ -149,6 +149,7 @@ public sealed class SlideShowMediaController
         MediaElement? Element,
         string? TempPath,
         bool ShowWhenStopped,
+        MediaInfo? Media = null,
         PresentationMediaTranscriptTrackDescriptor? CaptionTrack = null,
         Border? CaptionHost = null,
         TextBlock? CaptionText = null);
@@ -167,7 +168,11 @@ public sealed class SlideShowMediaController
         {
             Interval = TimeSpan.FromMilliseconds(100),
         };
-        _captionTimer.Tick += (_, _) => UpdateCaptions();
+        _captionTimer.Tick += (_, _) =>
+        {
+            EnforceTrimWindows();
+            UpdateCaptions();
+        };
     }
 
     internal string? CaptionTextForTest(uint shapeId) =>
@@ -261,7 +266,8 @@ public sealed class SlideShowMediaController
             _slots.Add(slot);
         }
 
-        _captionTimer.IsEnabled = _slots.Any(slot => slot.CaptionTrack is not null);
+        _captionTimer.IsEnabled = _slots.Any(slot =>
+            slot.CaptionTrack is not null || HasTrimWindow(slot.Media));
         UpdateCaptions();
     }
 
@@ -507,7 +513,7 @@ public sealed class SlideShowMediaController
         if (source is null)
         {
             // Still record the tempPath for cleanup (written but URI was unparseable).
-            return new MediaSlot(shapeId, null, tempPath, media.ShowWhenStopped);
+            return new MediaSlot(shapeId, null, tempPath, media.ShowWhenStopped, media);
         }
 
         MediaElement? element = null;
@@ -534,6 +540,11 @@ public sealed class SlideShowMediaController
                 element.Visibility = Visibility.Collapsed;
             };
 
+            element.MediaOpened += (_, _) =>
+            {
+                SeekToTrimStart(element, media);
+            };
+
             element.MediaEnded += (_, _) =>
             {
                 if (!media.Loop)
@@ -545,7 +556,7 @@ public sealed class SlideShowMediaController
 
                 try
                 {
-                    element.Position = TimeSpan.Zero;
+                    SeekToTrimStart(element, media);
                     element.Play();
                     element.Tag = true;
                 }
@@ -558,6 +569,7 @@ public sealed class SlideShowMediaController
             _overlay.Children.Add(element);
             if (media.PlaybackStartMode == MediaPlaybackStartMode.Automatically)
             {
+                SeekToTrimStart(element, media);
                 element.Play();
                 element.Tag = true;
                 if (isVideo)
@@ -570,7 +582,7 @@ public sealed class SlideShowMediaController
             element = null;
         }
 
-        return new MediaSlot(shapeId, element, tempPath, media.ShowWhenStopped);
+        return new MediaSlot(shapeId, element, tempPath, media.ShowWhenStopped, media);
     }
 
     private Uri? ResolveSource(MediaInfo media, out string? tempPath)
@@ -609,13 +621,28 @@ public sealed class SlideShowMediaController
         if (position < TimeSpan.Zero)
             return false;
 
-        var element = _slots.FirstOrDefault(slot => slot.ShapeId == shapeId)?.Element;
-        if (element is null)
+        var slot = _slots.FirstOrDefault(candidate => candidate.ShapeId == shapeId);
+        if (slot?.Element is not { } element)
             return false;
 
         try
         {
-            element.Position = position;
+            var media = slot.Media;
+            if (media is null)
+            {
+                element.Position = position;
+            }
+            else
+            {
+                var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
+                    media,
+                    element.NaturalDuration.HasTimeSpan
+                        ? element.NaturalDuration.TimeSpan
+                        : TimeSpan.Zero);
+                element.Position = window.End != TimeSpan.MaxValue && position > window.End
+                    ? window.End
+                    : SlideShowMediaInteractionPlanner.ClampToTrimStart(media, position);
+            }
             return true;
         }
         catch (InvalidOperationException)
@@ -670,11 +697,71 @@ public sealed class SlideShowMediaController
             }
             else
             {
+                SeekToTrimStart(el, slot.Media);
                 el.Play();
                 el.Tag = true;
                 el.Visibility = Visibility.Visible;
             }
         }
         catch { /* ignore */ }
+    }
+
+    private void EnforceTrimWindows()
+    {
+        foreach (var slot in _slots)
+        {
+            if (slot.Element is not { } element || slot.Media is not { } media)
+                continue;
+
+            if (element.Tag is not true)
+                continue;
+
+            var duration = element.NaturalDuration.HasTimeSpan
+                ? element.NaturalDuration.TimeSpan
+                : TimeSpan.Zero;
+            if (!SlideShowMediaInteractionPlanner.IsAtOrPastTrimEnd(
+                    media, element.Position, duration))
+                continue;
+
+            if (media.Loop)
+            {
+                SeekToTrimStart(element, media);
+                element.Play();
+            }
+            else
+            {
+                element.Pause();
+                element.Tag = false;
+                if (!slot.ShowWhenStopped)
+                    element.Visibility = Visibility.Collapsed;
+            }
+        }
+    }
+
+    private static bool HasTrimWindow(MediaInfo? media) =>
+        media is not null &&
+        (media.TrimStartMilliseconds > 0 || media.TrimEndMilliseconds > 0);
+
+    private static void SeekToTrimStart(MediaElement element, MediaInfo? media)
+    {
+        if (media is null)
+            return;
+
+        try
+        {
+            var position = element.Position;
+            var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
+                media,
+                element.NaturalDuration.HasTimeSpan
+                    ? element.NaturalDuration.TimeSpan
+                    : TimeSpan.Zero);
+            if (window.End != TimeSpan.MaxValue && position >= window.End)
+                element.Position = window.Start;
+            else if (position < window.Start)
+                element.Position = window.Start;
+        }
+        catch (InvalidOperationException)
+        {
+        }
     }
 }
