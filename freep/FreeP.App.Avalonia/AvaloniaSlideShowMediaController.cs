@@ -24,6 +24,7 @@ internal sealed class AvaloniaSlideShowMediaController
         public required IMediaPlaybackSession Session { get; init; }
         public required MediaInfo Media { get; init; }
         public required bool ShowWhenStopped { get; init; }
+        public required int BaseVolumePercent { get; set; }
         public VideoView? VideoView { get; init; }
         public PresentationMediaTranscriptTrackDescriptor? CaptionTrack { get; init; }
         public Border? CaptionHost { get; init; }
@@ -179,10 +180,11 @@ internal sealed class AvaloniaSlideShowMediaController
             try
             {
                 var session = _backend!.CreateSession();
+                var baseVolumePercent = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(shape.Media.VolumePercent);
                 session.Failed += OnSessionFailed;
                 session.Open(source!);
                 SeekToTrimStart(session, shape.Media);
-                session.Volume = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(shape.Media.VolumePercent);
+                ApplyFade(session, shape.Media, baseVolumePercent);
                 VideoView? view = null;
                 if (shape.Media.IsVideo && session is LibVlcMediaPlaybackSession)
                 {
@@ -220,6 +222,7 @@ internal sealed class AvaloniaSlideShowMediaController
                     Session = session,
                     Media = shape.Media,
                     ShowWhenStopped = shape.Media.ShowWhenStopped,
+                    BaseVolumePercent = baseVolumePercent,
                     VideoView = view,
                     CaptionTrack = captionTrack,
                     CaptionHost = captionHost,
@@ -227,7 +230,7 @@ internal sealed class AvaloniaSlideShowMediaController
                 });
                 if (shape.Media.PlaybackStartMode == MediaPlaybackStartMode.Automatically)
                 {
-                    StartPlayback(session, shape.Media);
+                    StartPlayback(session, shape.Media, baseVolumePercent);
                     if (view is not null)
                         view.IsVisible = true;
                 }
@@ -246,7 +249,7 @@ internal sealed class AvaloniaSlideShowMediaController
         }
 
         _captionTimer.IsEnabled = _slots.Any(slot =>
-            slot.CaptionTrack is not null || HasTrimWindow(slot.Media));
+            slot.CaptionTrack is not null || HasPlaybackEnvelope(slot.Media));
         UpdateCaptions();
     }
 
@@ -285,7 +288,7 @@ internal sealed class AvaloniaSlideShowMediaController
         }
         else
         {
-            StartPlayback(slot.Session, slot.Media);
+            StartPlayback(slot.Session, slot.Media, slot.BaseVolumePercent);
             if (slot.VideoView is not null)
                 slot.VideoView.IsVisible = true;
         }
@@ -307,14 +310,18 @@ internal sealed class AvaloniaSlideShowMediaController
         var bounded = window.End != TimeSpan.MaxValue && position > window.End
             ? window.End
             : SlideShowMediaInteractionPlanner.ClampToTrimStart(slot.Media, position);
-        return slot.Session.Seek(bounded);
+        var didSeek = slot.Session.Seek(bounded);
+        if (didSeek)
+            ApplyFade(slot.Session, slot.Media, slot.BaseVolumePercent);
+        return didSeek;
     }
 
     public bool TrySetVolume(uint shapeId, int volume)
     {
         var slot = _slots.FirstOrDefault(candidate => candidate.ShapeId == shapeId);
         if (slot is null) return false;
-        slot.Session.Volume = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(volume);
+        slot.BaseVolumePercent = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(volume);
+        ApplyFade(slot.Session, slot.Media, slot.BaseVolumePercent);
         return true;
     }
 
@@ -543,14 +550,17 @@ internal sealed class AvaloniaSlideShowMediaController
     {
         foreach (var slot in _slots)
         {
-            if (slot.Session.State != MediaPlaybackState.Playing ||
-                !SlideShowMediaInteractionPlanner.IsAtOrPastTrimEnd(
+            if (slot.Session.State != MediaPlaybackState.Playing)
+                continue;
+
+            ApplyFade(slot.Session, slot.Media, slot.BaseVolumePercent);
+            if (!SlideShowMediaInteractionPlanner.IsAtOrPastTrimEnd(
                     slot.Media, slot.Session.Position, slot.Session.Duration))
                 continue;
 
             if (slot.Media.Loop)
             {
-                StartPlayback(slot.Session, slot.Media);
+                StartPlayback(slot.Session, slot.Media, slot.BaseVolumePercent);
             }
             else
             {
@@ -561,13 +571,28 @@ internal sealed class AvaloniaSlideShowMediaController
         }
     }
 
-    private static bool HasTrimWindow(MediaInfo media) =>
-        media.TrimStartMilliseconds > 0 || media.TrimEndMilliseconds > 0;
+    private static bool HasPlaybackEnvelope(MediaInfo media) =>
+        HasPositiveTiming(media.TrimStartMilliseconds) ||
+        HasPositiveTiming(media.TrimEndMilliseconds) ||
+        HasPositiveTiming(media.FadeInMilliseconds) ||
+        HasPositiveTiming(media.FadeOutMilliseconds);
 
-    private static void StartPlayback(IMediaPlaybackSession session, MediaInfo media)
+    private static bool HasPositiveTiming(double value) => value > 0 && double.IsFinite(value);
+
+    private static void StartPlayback(IMediaPlaybackSession session, MediaInfo media, int baseVolumePercent)
     {
         SeekToTrimStart(session, media);
+        ApplyFade(session, media, baseVolumePercent);
         session.Play();
+    }
+
+    private static void ApplyFade(IMediaPlaybackSession session, MediaInfo media, int baseVolumePercent)
+    {
+        session.Volume = SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent(
+            media,
+            baseVolumePercent,
+            session.Position,
+            session.Duration);
     }
 
     private static void SeekToTrimStart(IMediaPlaybackSession session, MediaInfo media)

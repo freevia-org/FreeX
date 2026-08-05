@@ -132,6 +132,40 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
     }
 
     [Fact]
+    public void Controller_AppliesFadeEnvelopeToStartAndSeekVolume()
+    {
+        var factory = new FakeBackendFactory();
+        var controller = new AvaloniaSlideShowMediaController(new Canvas(), factory);
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 44,
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 9144000,
+            ExtentCyEmu = 6858000,
+            Media = new MediaInfo
+            {
+                IsVideo = false,
+                PlaybackStartMode = MediaPlaybackStartMode.Automatically,
+                VolumePercent = 80,
+                FadeInMilliseconds = 4000,
+                FadeOutMilliseconds = 3000,
+                Bytes = [1, 2, 3],
+                ContentType = "audio/wav",
+            },
+        });
+
+        controller.EnterSlide(slide, 960, 720, 960, 720);
+
+        var session = factory.Backend.Sessions.Single();
+        session.Volume.Should().Be(0);
+        controller.TrySeek(44, TimeSpan.FromSeconds(2)).Should().BeTrue();
+        session.Volume.Should().Be(40);
+        controller.TrySeek(44, TimeSpan.FromSeconds(58.5)).Should().BeTrue();
+        session.Volume.Should().Be(40);
+    }
+
+    [Fact]
     public void Controller_ClampsVolumeToSharedZeroToHundredRange()
     {
         var factory = new FakeBackendFactory();
