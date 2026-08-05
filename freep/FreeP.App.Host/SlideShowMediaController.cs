@@ -148,6 +148,7 @@ public sealed class SlideShowMediaController
         uint ShapeId,
         MediaElement? Element,
         string? TempPath,
+        bool ShowWhenStopped,
         PresentationMediaTranscriptTrackDescriptor? CaptionTrack = null,
         Border? CaptionHost = null,
         TextBlock? CaptionText = null);
@@ -357,7 +358,7 @@ public sealed class SlideShowMediaController
         if (slot is null)
             return true;
 
-        TogglePlayPause(slot.Element);
+        TogglePlayPause(slot);
         return true;
     }
 
@@ -506,7 +507,7 @@ public sealed class SlideShowMediaController
         if (source is null)
         {
             // Still record the tempPath for cleanup (written but URI was unparseable).
-            return new MediaSlot(shapeId, null, tempPath);
+            return new MediaSlot(shapeId, null, tempPath, media.ShowWhenStopped);
         }
 
         MediaElement? element = null;
@@ -519,7 +520,9 @@ public sealed class SlideShowMediaController
                 Source           = source,
                 Volume           = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(media.VolumePercent) / 100d,
                 // For audio: collapse the visual (no video frame to show).
-                Visibility       = isVideo ? Visibility.Visible : Visibility.Collapsed,
+                Visibility       = isVideo && media.ShowWhenStopped
+                    ? Visibility.Visible
+                    : Visibility.Collapsed,
                 IsHitTestVisible = false,   // we do our own hit-testing
             };
 
@@ -534,7 +537,11 @@ public sealed class SlideShowMediaController
             element.MediaEnded += (_, _) =>
             {
                 if (!media.Loop)
+                {
+                    if (!media.ShowWhenStopped && isVideo)
+                        element.Visibility = Visibility.Collapsed;
                     return;
+                }
 
                 try
                 {
@@ -553,6 +560,8 @@ public sealed class SlideShowMediaController
             {
                 element.Play();
                 element.Tag = true;
+                if (isVideo)
+                    element.Visibility = Visibility.Visible;
             }
         }
         catch
@@ -561,7 +570,7 @@ public sealed class SlideShowMediaController
             element = null;
         }
 
-        return new MediaSlot(shapeId, element, tempPath);
+        return new MediaSlot(shapeId, element, tempPath, media.ShowWhenStopped);
     }
 
     private Uri? ResolveSource(MediaInfo media, out string? tempPath)
@@ -641,8 +650,9 @@ public sealed class SlideShowMediaController
         Canvas.SetTop(el, r.Y);
     }
 
-    private static void TogglePlayPause(MediaElement? el)
+    private static void TogglePlayPause(MediaSlot slot)
     {
+        var el = slot.Element;
         if (el is null) return;
         try
         {
@@ -655,11 +665,14 @@ public sealed class SlideShowMediaController
             {
                 el.Pause();
                 el.Tag = false;
+                if (!slot.ShowWhenStopped)
+                    el.Visibility = Visibility.Collapsed;
             }
             else
             {
                 el.Play();
                 el.Tag = true;
+                el.Visibility = Visibility.Visible;
             }
         }
         catch { /* ignore */ }

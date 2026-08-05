@@ -22,6 +22,7 @@ internal sealed class AvaloniaSlideShowMediaController
     {
         public required uint ShapeId { get; init; }
         public required IMediaPlaybackSession Session { get; init; }
+        public required bool ShowWhenStopped { get; init; }
         public VideoView? VideoView { get; init; }
         public PresentationMediaTranscriptTrackDescriptor? CaptionTrack { get; init; }
         public Border? CaptionHost { get; init; }
@@ -183,6 +184,11 @@ internal sealed class AvaloniaSlideShowMediaController
                         (LibVlcMediaPlaybackSession)session,
                         plan.Bounds);
                 }
+                session.Ended += (_, _) =>
+                {
+                    if (view is not null && !shape.Media!.ShowWhenStopped)
+                        view.IsVisible = false;
+                };
 
                 var captionTrack = captionSlideIndex is int currentSlideIndex
                     ? PresentationMediaTranscriptPlanner.SelectPlaybackTrack(
@@ -206,13 +212,22 @@ internal sealed class AvaloniaSlideShowMediaController
                 {
                     ShapeId = shape.Id,
                     Session = session,
+                    ShowWhenStopped = shape.Media.ShowWhenStopped,
                     VideoView = view,
                     CaptionTrack = captionTrack,
                     CaptionHost = captionHost,
                     CaptionText = captionText,
                 });
                 if (shape.Media.PlaybackStartMode == MediaPlaybackStartMode.Automatically)
+                {
                     session.Play();
+                    if (view is not null)
+                        view.IsVisible = true;
+                }
+                else if (view is not null && !shape.Media.ShowWhenStopped)
+                {
+                    view.IsVisible = false;
+                }
             }
             catch (Exception ex)
             {
@@ -255,9 +270,17 @@ internal sealed class AvaloniaSlideShowMediaController
             return true;
 
         if (slot.Session.State == MediaPlaybackState.Playing)
+        {
             slot.Session.Pause();
+            if (slot.VideoView is not null && !slot.ShowWhenStopped)
+                slot.VideoView.IsVisible = false;
+        }
         else
+        {
             slot.Session.Play();
+            if (slot.VideoView is not null)
+                slot.VideoView.IsVisible = true;
+        }
         return true;
     }
 

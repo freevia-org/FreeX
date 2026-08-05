@@ -6447,6 +6447,10 @@ public static class PptxPackageReader
             if (int.TryParse(volumeToken, NumberStyles.Integer, CultureInfo.InvariantCulture, out var volume))
                 shape.Media.VolumePercent = Math.Clamp((int)Math.Round(volume / 1000d), 0, 100);
 
+            shape.Media.ShowWhenStopped = ReadBooleanOrDefault(
+                mediaNode.Attribute("showWhenStopped")?.Value,
+                defaultValue: true);
+
             var repeatCount = cTn?.Attribute("repeatCount")?.Value;
             shape.Media.Loop = string.Equals(repeatCount, "indefinite", StringComparison.OrdinalIgnoreCase)
                 || (int.TryParse(repeatCount, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)

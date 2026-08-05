@@ -182,6 +182,7 @@ public sealed partial class MainWindow : Window
     private TextBlock _mediaStartModeText = null!;
     private ComboBox _mediaStartModeBox = null!;
     private CheckBox _mediaLoopCheckBox = null!;
+    private CheckBox _mediaShowWhenStoppedCheckBox = null!;
     private Button _mediaPlaybackApplyButton = null!;
     private TextBlock _mediaTrimStartText = null!;
     private TextBox _mediaTrimStartBox = null!;
@@ -377,6 +378,7 @@ public sealed partial class MainWindow : Window
         ? startMode
         : MediaPlaybackStartMode.InClickSequence;
     internal bool MediaLoop => _mediaLoopCheckBox?.IsChecked == true;
+    internal bool MediaShowWhenStopped => _mediaShowWhenStoppedCheckBox?.IsChecked != false;
     internal string? ReadingOrderMoveEarlierDisabledReason =>
         LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
             action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)?.DisabledReason;
@@ -1311,6 +1313,12 @@ public sealed partial class MainWindow : Window
             Content = "Loop until stopped",
             Margin = new Thickness(12, 2, 12, 4),
         };
+        _mediaShowWhenStoppedCheckBox = new CheckBox
+        {
+            Content = "Show when stopped",
+            Margin = new Thickness(12, 2, 12, 4),
+            IsChecked = true,
+        };
         _mediaPlaybackApplyButton = BuildMediaCaptionPaneButton();
         _mediaPlaybackApplyButton.Content = "Apply playback";
         _mediaPlaybackApplyButton.Click += (_, _) => ApplyMediaPlaybackPane();
@@ -1401,6 +1409,7 @@ public sealed partial class MainWindow : Window
         panel.Children.Add(_mediaStartModeText);
         panel.Children.Add(_mediaStartModeBox);
         panel.Children.Add(_mediaLoopCheckBox);
+        panel.Children.Add(_mediaShowWhenStoppedCheckBox);
         panel.Children.Add(_mediaVolumeText);
         panel.Children.Add(_mediaVolumeSlider);
         panel.Children.Add(_mediaTrimStartText);
@@ -3592,7 +3601,10 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal void SetMediaPlaybackPaneInput(MediaPlaybackStartMode startMode, bool loop)
+    internal void SetMediaPlaybackPaneInput(
+        MediaPlaybackStartMode startMode,
+        bool loop,
+        bool showWhenStopped = true)
     {
         if (!IsMediaCaptionPaneVisible)
             ShowMediaCaptionPane();
@@ -3602,6 +3614,7 @@ public sealed partial class MainWindow : Window
         {
             _mediaStartModeBox.SelectedIndex = startMode == MediaPlaybackStartMode.Automatically ? 1 : 0;
             _mediaLoopCheckBox.IsChecked = loop;
+            _mediaShowWhenStoppedCheckBox.IsChecked = showWhenStopped;
         }
         finally
         {
@@ -3659,7 +3672,10 @@ public sealed partial class MainWindow : Window
 
     internal bool ApplyMediaPlaybackPane()
     {
-        var changed = Editor.SetSelectedMediaPlaybackOptions(MediaPlaybackStartMode, MediaLoop);
+        var changed = Editor.SetSelectedMediaPlaybackOptions(
+            MediaPlaybackStartMode,
+            MediaLoop,
+            MediaShowWhenStopped);
         if (changed)
         {
             _file.MarkDirty();
@@ -3876,8 +3892,10 @@ public sealed partial class MainWindow : Window
             var selectedStartMode = selectedMedia?.PlaybackStartMode ?? MediaPlaybackStartMode.InClickSequence;
             _mediaStartModeBox.SelectedIndex = selectedStartMode == MediaPlaybackStartMode.Automatically ? 1 : 0;
             _mediaLoopCheckBox.IsChecked = selectedMedia?.Loop ?? false;
+            _mediaShowWhenStoppedCheckBox.IsChecked = selectedMedia?.ShowWhenStopped ?? true;
             _mediaStartModeBox.IsEnabled = selectedMedia is not null;
             _mediaLoopCheckBox.IsEnabled = selectedMedia is not null;
+            _mediaShowWhenStoppedCheckBox.IsEnabled = selectedMedia is not null;
             _mediaPlaybackApplyButton.IsEnabled = selectedMedia is not null;
             _mediaVolumeSlider.Value = selectedMedia?.VolumePercent ?? 80;
             _mediaVolumeSlider.IsEnabled = selectedMedia is not null;
