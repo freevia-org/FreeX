@@ -21133,11 +21133,7 @@ public sealed class DocumentView : Control
 
     private IReadOnlyList<Paragraph> BuildTableOfContents()
     {
-        var physicalPageOf = BuildCrossReferencePageResolver();
-        var pageTextOf = physicalPageOf is null
-            ? null
-            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_doc, physicalPageOf);
-        return TableOfContents.Build(_doc, pageTextOf);
+        return TableOfContents.Build(_doc, BuildGeneratedPageTextResolver());
     }
 
     /// <summary>
@@ -21733,7 +21729,7 @@ public sealed class DocumentView : Control
     {
         labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_doc);
-        InsertGeneratedReferenceBlocks(TableOfFigures.Build(_doc, labelText), "Insert Table of Figures", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+        InsertGeneratedReferenceBlocks(BuildTableOfFigures(labelText), "Insert Table of Figures", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
     }
 
     public void RefreshTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
@@ -21745,7 +21741,18 @@ public sealed class DocumentView : Control
     {
         labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_doc);
-        RefreshGeneratedReferenceBlocks(TableOfFigures.IsTableOfFiguresParagraph, () => TableOfFigures.Build(_doc, labelText), "Update Table of Figures");
+        RefreshGeneratedReferenceBlocks(TableOfFigures.IsTableOfFiguresParagraph, () => BuildTableOfFigures(labelText), "Update Table of Figures");
+    }
+
+    private IReadOnlyList<Paragraph> BuildTableOfFigures(string labelText) =>
+        TableOfFigures.Build(_doc, labelText, BuildGeneratedPageTextResolver());
+
+    private Func<int, string?>? BuildGeneratedPageTextResolver()
+    {
+        var physicalPageOf = BuildCrossReferencePageResolver();
+        return physicalPageOf is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_doc, physicalPageOf);
     }
 
     public void MarkCitation(string? longCitation = null)

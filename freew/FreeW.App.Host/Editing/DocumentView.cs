@@ -1652,11 +1652,7 @@ public sealed class DocumentView : RichTextBox
     // InsertParagraphCommand each (kept in order), then re-render. The bus's Changed event redraws.
     private void InsertTocAt(int at)
     {
-        var physicalPageOf = BuildCrossReferencePageResolver();
-        var pageTextOf = physicalPageOf is null
-            ? null
-            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_model, physicalPageOf);
-        var toc = TableOfContents.Build(_model, pageTextOf);
+        var toc = TableOfContents.Build(_model, BuildGeneratedPageTextResolver());
         var index = Math.Clamp(at, 0, _model.Blocks.Count);
         foreach (var paragraph in toc)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
@@ -16606,10 +16602,18 @@ public sealed class DocumentView : RichTextBox
     // InsertParagraphCommand each (kept in order). The bus's Changed event redraws.
     private void InsertTableOfFiguresAt(int at, string labelText)
     {
-        var entries = TableOfFigures.Build(_model, labelText);
+        var entries = TableOfFigures.Build(_model, labelText, BuildGeneratedPageTextResolver());
         var index = Math.Clamp(at, 0, _model.Blocks.Count);
         foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+    }
+
+    private Func<int, string?>? BuildGeneratedPageTextResolver()
+    {
+        var physicalPageOf = BuildCrossReferencePageResolver();
+        return physicalPageOf is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_model, physicalPageOf);
     }
 
     /// <summary>
