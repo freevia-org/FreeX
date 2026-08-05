@@ -1050,9 +1050,13 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        // The working copy: a deep-cloned snapshot of the sheet's rules that every button below edits
-        // in place. Nothing here reaches the live sheet until Commit() runs on OK.
-        var workingRules = ConditionalFormatManageModel.CloneAll(_session.ActiveSheet.ConditionalFormats);
+        var scopePlan = ManageConditionalFormatsPlanner.CreateDialogPlan(
+            _session.ActiveSheet,
+            _session.SelectedRange);
+        var manageSession = new ManageConditionalFormatsSession(
+            _session.ActiveSheet.ConditionalFormats,
+            scopePlan.DefaultScopeOption.Range,
+            ManageConditionalFormatsWorkingCopyPolicy.FullSheet);
 
         var dialog = new Window
         {
@@ -1082,17 +1086,10 @@ public sealed partial class MainWindow
         // columns (the WPF GridView), instead of the default single-string row. Toggling Stop If
         // True mutates the matching rule directly in the working copy (mirroring the WPF grid's
         // two-way-bound checkbox column) — it never touches the live sheet until Commit().
-        listBox.ItemTemplate = new FuncDataTemplate<ConditionalFormatRuleListItem>(
+        listBox.ItemTemplate = new FuncDataTemplate<ManageConditionalFormatRuleProjection>(
             (item, _) => BuildManageConditionalFormatRow(item, isChecked =>
             {
-                foreach (var rule in workingRules)
-                {
-                    if (rule.Id == item.Id)
-                    {
-                        rule.StopIfTrue = isChecked;
-                        break;
-                    }
-                }
+                manageSession.SetStopIfTrue(item.Id, isChecked);
             }),
             supportsRecycling: true);
 
@@ -1134,7 +1131,6 @@ public sealed partial class MainWindow
 
         // Shared with the WPF host: builds Sheet/Table/Selection options, adding "This Table"
         // only when the current selection sits inside a structured table (FindSelectionTableRange).
-        var scopePlan = ManageConditionalFormatsPlanner.CreateDialogPlan(_session.ActiveSheet, _session.SelectedRange);
         var scopeItems = scopePlan.ScopeOptions
             .Select(option => new ManageConditionalFormatScopeItem(
                 UiText.Get(option.LabelKey).Replace("_", string.Empty, StringComparison.Ordinal),
@@ -1153,15 +1149,14 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(scopeBox, "ManageConditionalFormatsScopeBox");
         AutomationProperties.SetName(scopeBox, UiText.Get("ManageConditionalFormats_ShowFormattingRulesFor").Replace("_", string.Empty, StringComparison.Ordinal));
 
-        // The scope filter shared by BuildList (what the listBox shows) and MoveInWorkingCopy (what
-        // "neighbour" means for Move Up/Down) — a single source of truth so the toolbar can never act
-        // on a different subset than the one the user is looking at.
+        // The shared session uses this scope for both the list projection and move neighbours.
         GridRange? CurrentScope() => scopeBox.SelectedItem is ManageConditionalFormatScopeItem { Range: { } range } ? range : null;
 
         void Reload(Guid? selectId = null)
         {
             var scope = CurrentScope();
-            var items = ConditionalFormatManageModel.BuildList(workingRules, scope);
+            manageSession.SetScope(scope);
+            var items = manageSession.BuildProjection();
             listBox.ItemsSource = items;
             emptyText.IsVisible = items.Count == 0;
             if (items.Count > 0)
@@ -1183,7 +1178,7 @@ public sealed partial class MainWindow
 
         void SyncAppliesTo()
         {
-            appliesToBox.Text = listBox.SelectedItem is ConditionalFormatRuleListItem item
+            appliesToBox.Text = listBox.SelectedItem is ManageConditionalFormatRuleProjection item
                 ? FormatRangeReference(item.Rule.AppliesTo)
                 : string.Empty;
         }
@@ -1222,7 +1217,7 @@ public sealed partial class MainWindow
 
         void SyncCommandState()
         {
-            var hasSelection = listBox.SelectedItem is ConditionalFormatRuleListItem;
+            var hasSelection = listBox.SelectedItem is ManageConditionalFormatRuleProjection;
             editButton.IsEnabled = hasSelection;
             duplicateButton.IsEnabled = hasSelection;
             deleteButton.IsEnabled = hasSelection;
@@ -1247,64 +1242,56 @@ public sealed partial class MainWindow
                 return;
 
             // Append to the working copy only — nothing reaches the live sheet until Commit().
-            workingRules = ConditionalFormatManageModel.AddToWorkingCopy(workingRules, built);
+            manageSession.Add(built);
             Reload(built.Id);
         };
 
         editButton.Click += async (_, _) =>
         {
-            if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
+            if (listBox.SelectedItem is not ManageConditionalFormatRuleProjection item)
                 return;
 
             var edited = await ShowConditionalFormatRuleEditorAsync(item.Rule);
             if (edited is null)
                 return;
 
-            var updated = ConditionalFormatManageModel.ReplaceInWorkingCopy(workingRules, edited);
-            if (updated is null)
+            if (!manageSession.Replace(edited))
                 return;
 
-            workingRules = updated;
             Reload(edited.Id);
         };
 
         deleteButton.Click += (_, _) =>
         {
-            if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
+            if (listBox.SelectedItem is not ManageConditionalFormatRuleProjection item)
                 return;
 
-            var remaining = ConditionalFormatManageModel.DeleteFromWorkingCopy(workingRules, item.Id);
-            if (remaining is null)
+            if (!manageSession.Delete(item.Id))
                 return;
 
-            workingRules = remaining;
             Reload();
         };
 
         duplicateButton.Click += async (_, _) =>
         {
-            if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
+            if (listBox.SelectedItem is not ManageConditionalFormatRuleProjection item)
                 return;
 
             var duplicateId = Guid.NewGuid();
-            var updated = ConditionalFormatManageModel.DuplicateInWorkingCopy(workingRules, item.Id, duplicateId);
-            if (updated is null)
+            if (!manageSession.Duplicate(item.Id, duplicateId))
                 return;
 
-            workingRules = updated;
             Reload(duplicateId);
         };
 
         void Move(ConditionalFormatRuleMoveDirection direction)
         {
-            if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
+            if (listBox.SelectedItem is not ManageConditionalFormatRuleProjection item)
                 return;
 
-            var updated = ConditionalFormatManageModel.MoveInWorkingCopy(workingRules, CurrentScope(), item.Id, direction);
-            if (updated is null)
+            if (!manageSession.Move(item.Id, direction))
                 return;
 
-            workingRules = updated;
             Reload(item.Id);
         }
 
@@ -1313,7 +1300,7 @@ public sealed partial class MainWindow
 
         applyAppliesToButton.Click += (_, _) =>
         {
-            if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
+            if (listBox.SelectedItem is not ManageConditionalFormatRuleProjection item)
                 return;
 
             var reference = appliesToBox.Text;
@@ -1324,11 +1311,9 @@ public sealed partial class MainWindow
                 return;
             }
 
-            var updated = ConditionalFormatManageModel.ApplyRangeInWorkingCopy(workingRules, item.Id, range);
-            if (updated is null)
+            if (!manageSession.ApplyRange(item.Id, range))
                 return;
 
-            workingRules = updated;
             Reload(item.Id);
         };
 
@@ -1337,7 +1322,7 @@ public sealed partial class MainWindow
             // A single atomic replace-all: one undo step for every New/Edit/Delete/Duplicate/Move/
             // AppliesTo/Stop-If-True edit made in this dialog session.
             RunConditionalFormatCommand(
-                new ReplaceAllConditionalFormatsCommand(_session.ActiveSheet.Id, workingRules),
+                manageSession.CreateApplyCommand(_session.ActiveSheet.Id),
                 UiText.Get("InsertLoc_CfManageRulesApplied"));
         }
 
@@ -1516,7 +1501,7 @@ public sealed partial class MainWindow
     /// edits the working-copy rule directly rather than requiring the rule editor).
     /// </summary>
     private Control BuildManageConditionalFormatRow(
-        ConditionalFormatRuleListItem item,
+        ManageConditionalFormatRuleProjection item,
         Action<bool> onStopIfTrueToggled)
     {
         var rule = item.Rule;
@@ -1543,7 +1528,7 @@ public sealed partial class MainWindow
         };
 
         AddCell(RowText(rule.Priority.ToString(global::System.Globalization.CultureInfo.InvariantCulture)), 0);
-        AddCell(RowText(item.Description), 1);
+        AddCell(RowText(ResolveManageConditionalFormatDescription(item.Description)), 1);
         AddCell(BuildConditionalFormatPreviewSwatch(rule), 2);
         AddCell(RowText(FormatRangeReference(rule.AppliesTo)), 3);
         // Stop-If-True: an interactive checkbox that mutates the working-copy rule directly
@@ -1560,6 +1545,34 @@ public sealed partial class MainWindow
         AddCell(stopBox, 4);
         return grid;
     }
+
+    private static string ResolveManageConditionalFormatDescription(
+        ManageConditionalFormatRuleDescription description)
+    {
+        if (description.ResourceKey is null)
+            return description.LiteralText ?? string.Empty;
+
+        if (description.Arguments.Count == 0)
+            return UiText.Get(description.ResourceKey);
+
+        var arguments = description.Arguments
+            .Select(ResolveManageConditionalFormatDescriptionArgument)
+            .Cast<object>()
+            .ToArray();
+        return UiText.Format(description.ResourceKey, arguments);
+    }
+
+    private static string ResolveManageConditionalFormatDescriptionArgument(
+        ManageConditionalFormatDescriptionArgument argument) =>
+        argument switch
+        {
+            LiteralDescriptionArgument literal => literal.Text,
+            ResourceDescriptionArgument resource => UiText.Get(resource.ResourceKey),
+            ResourceListDescriptionArgument resourceList => string.Join(
+                UiText.Get(resourceList.SeparatorKey),
+                resourceList.ResourceKeys.Select(UiText.Get)),
+            _ => string.Empty
+        };
 
     /// <summary>A compact preview of a rule's effect for the Format column (mirrors the WPF swatch).</summary>
     private Control BuildConditionalFormatPreviewSwatch(ConditionalFormat rule)

@@ -5567,11 +5567,12 @@ public sealed class AvaloniaShellSourceTests
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(appliesToBox, \"ManageConditionalFormatsAppliesToBox\");");
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(applyAppliesToButton, \"ManageConditionalFormatsApplyAppliesToButton\");");
         // The Manage dialog now stages edits against a working copy and commits on OK (H32):
-        // moves/applies-to mutate the working copy via the shared model, and OK replaces the
+        // moves/applies-to mutate the working copy via the shared session, and OK replaces the
         // sheet's rules in one undoable command.
-        cfSource.Should().Contain("ConditionalFormatManageModel.MoveInWorkingCopy(");
-        cfSource.Should().Contain("ConditionalFormatManageModel.ApplyRangeInWorkingCopy(");
-        cfSource.Should().Contain("new ReplaceAllConditionalFormatsCommand(_session.ActiveSheet.Id, workingRules),");
+        cfSource.Should().Contain("new ManageConditionalFormatsSession(");
+        cfSource.Should().Contain("manageSession.Move(item.Id, direction)");
+        cfSource.Should().Contain("manageSession.ApplyRange(item.Id, range)");
+        cfSource.Should().Contain("manageSession.CreateApplyCommand(_session.ActiveSheet.Id),");
         cfSource.Should().Contain("_session.TryResolveReferenceRange(reference, out var range)");
 
         // Launch-smoke probe wiring for both dialogs.

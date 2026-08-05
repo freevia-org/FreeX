@@ -327,6 +327,18 @@ public static class ManageConditionalFormatsPlanner
         return Reprioritize(result);
     }
 
+    public static IReadOnlyList<ConditionalFormat> AddRule(
+        IReadOnlyList<ConditionalFormat> rules,
+        ConditionalFormat newRule)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        ArgumentNullException.ThrowIfNull(newRule);
+
+        var result = Reprioritize(rules).ToList();
+        result.Add(CloneWithPriority(newRule, result.Count + 1));
+        return result;
+    }
+
     public static IReadOnlyList<ConditionalFormat> ReplaceRule(
         IReadOnlyList<ConditionalFormat> rules,
         ConditionalFormat editedRule)
@@ -350,17 +362,31 @@ public static class ManageConditionalFormatsPlanner
     public static IReadOnlyList<ConditionalFormat> MoveRule(
         IReadOnlyList<ConditionalFormat> rules,
         Guid ruleId,
+        ConditionalFormatRuleMoveDirection direction) =>
+        MoveRule(rules, scope: null, ruleId, direction);
+
+    public static IReadOnlyList<ConditionalFormat> MoveRule(
+        IReadOnlyList<ConditionalFormat> rules,
+        GridRange? scope,
+        Guid ruleId,
         ConditionalFormatRuleMoveDirection direction)
     {
         var result = Reprioritize(rules).ToList();
+        var visible = scope is not { } range
+            ? result
+            : result.Where(rule => RuleOverlapsSelection(rule, range)).ToList();
+        var visibleIndex = FindRuleIndex(visible, ruleId);
+        if (visibleIndex < 0)
+            return result;
+
+        var visibleTarget = direction == ConditionalFormatRuleMoveDirection.Up
+            ? visibleIndex - 1
+            : visibleIndex + 1;
+        if (visibleTarget < 0 || visibleTarget >= visible.Count)
+            return result;
+
         var index = FindRuleIndex(result, ruleId);
-        if (index < 0)
-            return result;
-
-        var target = direction == ConditionalFormatRuleMoveDirection.Up ? index - 1 : index + 1;
-        if (target < 0 || target >= result.Count)
-            return result;
-
+        var target = FindRuleIndex(result, visible[visibleTarget].Id);
         (result[index], result[target]) = (result[target], result[index]);
         return Reprioritize(result);
     }

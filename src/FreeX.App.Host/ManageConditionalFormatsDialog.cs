@@ -24,6 +24,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     private readonly Sheet _sheet;
     private readonly ManageConditionalFormatsDialogPlan _dialogPlan;
+    private readonly ManageConditionalFormatsSession _manageSession;
     private readonly Action<ConditionalFormatAppliesToRangeSelectionRequest>? _requestAppliesToRangeSelection;
     private readonly Action<IReadOnlyList<ConditionalFormat>>? _applyRules;
 
@@ -51,6 +52,10 @@ public sealed partial class ManageConditionalFormatsDialog : Window
     {
         _sheet     = sheet;
         _dialogPlan = ManageConditionalFormatsPlanner.CreateDialogPlan(sheet, selection);
+        _manageSession = new ManageConditionalFormatsSession(
+            sheet.ConditionalFormats,
+            _dialogPlan.DefaultScopeOption.Range,
+            ManageConditionalFormatsWorkingCopyPolicy.CurrentScope);
         _requestAppliesToRangeSelection = requestAppliesToRangeSelection;
         _applyRules = applyRules;
 
@@ -204,22 +209,8 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     private void PopulateRules()
     {
-        _rules.Clear();
-        var scopeRange = CurrentScopeRange();
-
-        var source = scopeRange is { } range
-            ? _sheet.ConditionalFormats.Where(r => r.AllRanges.Any(ar => RangesOverlap(ar, range)))
-            : (IEnumerable<ConditionalFormat>)_sheet.ConditionalFormats;
-
-        // Rule list order need not match Priority order after load, so sort by priority before
-        // reassigning 1..N positions - otherwise a no-edit open+OK silently inverts precedence.
-        var priority = 1;
-        foreach (var rule in source.OrderBy(r => r.Priority))
-        {
-            // Work on a shallow clone so we don't mutate the live sheet until OK/Apply
-            var copy = CloneWithPriority(rule, priority++);
-            _rules.Add(copy);
-        }
+        _manageSession.SetScope(CurrentScopeRange(), _sheet.ConditionalFormats);
+        ReloadWorkingRules();
     }
 
     // Toolbar button handlers
@@ -232,9 +223,8 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         dlg.Owner = this;
         if (dlg.ShowDialog() == true && dlg.ResultRule is { } newRule)
         {
-            var copy = CloneWithPriority(newRule, _rules.Count + 1);
-            _rules.Add(copy);
-            _listView.SelectedItem = copy;
+            _manageSession.Add(newRule);
+            ReloadWorkingRules(newRule.Id);
         }
     }
 
@@ -249,9 +239,8 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         var dlg = new ConditionalFormatDialog(selected) { Owner = this };
         if (dlg.ShowDialog() == true && dlg.ResultRule is { } edited)
         {
-            ReplaceWorkingRules(
-                ManageConditionalFormatsPlanner.ReplaceRule(_rules, edited),
-                edited.Id);
+            if (_manageSession.Replace(edited))
+                ReloadWorkingRules(edited.Id);
         }
     }
 
@@ -270,7 +259,10 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         }
 
         var selectedIndex = _rules.IndexOf(selected);
-        ReplaceWorkingRules(ManageConditionalFormatsPlanner.DeleteRule(_rules, selected.Id));
+        if (!_manageSession.Delete(selected.Id))
+            return;
+
+        ReloadWorkingRules();
         if (_rules.Count > 0)
             _listView.SelectedIndex = Math.Min(selectedIndex, _rules.Count - 1);
     }
@@ -284,9 +276,8 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         }
 
         var duplicateId = Guid.NewGuid();
-        ReplaceWorkingRules(
-            ManageConditionalFormatsPlanner.DuplicateRule(_rules, selected.Id, duplicateId),
-            duplicateId);
+        if (_manageSession.Duplicate(selected.Id, duplicateId))
+            ReloadWorkingRules(duplicateId);
     }
 
     private void MoveUp_Click(object sender, RoutedEventArgs e)
@@ -294,9 +285,8 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         if (_listView.SelectedItem is not ConditionalFormat selected)
             return;
 
-        ReplaceWorkingRules(
-            ManageConditionalFormatsPlanner.MoveRule(_rules, selected.Id, ConditionalFormatRuleMoveDirection.Up),
-            selected.Id);
+        if (_manageSession.Move(selected.Id, ConditionalFormatRuleMoveDirection.Up))
+            ReloadWorkingRules(selected.Id);
     }
 
     private void MoveDown_Click(object sender, RoutedEventArgs e)
@@ -304,9 +294,8 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         if (_listView.SelectedItem is not ConditionalFormat selected)
             return;
 
-        ReplaceWorkingRules(
-            ManageConditionalFormatsPlanner.MoveRule(_rules, selected.Id, ConditionalFormatRuleMoveDirection.Down),
-            selected.Id);
+        if (_manageSession.Move(selected.Id, ConditionalFormatRuleMoveDirection.Down))
+            ReloadWorkingRules(selected.Id);
     }
 
     private void ListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -352,38 +341,20 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     private void CommitResult()
     {
-        ReassignPriorities();
-        ResultRules = BuildResultRules(
-            _sheet.ConditionalFormats,
-            CurrentScopeRange(),
-            IsFilteringToRange(),
-            _rules);
+        ResultRules = _manageSession.BuildResultRules(_sheet.ConditionalFormats);
     }
 
     // Helpers
 
-    private void ReassignPriorities()
-    {
-        // ObservableCollection items are mutable objects; create new copies with updated priority.
-        for (var i = 0; i < _rules.Count; i++)
-        {
-            var r = _rules[i];
-            if (r.Priority != i + 1)
-                _rules[i] = CloneWithPriority(r, i + 1);
-        }
-    }
-
-    private void ReplaceWorkingRules(IReadOnlyList<ConditionalFormat> plannedRules, Guid? selectedRuleId = null)
+    private void ReloadWorkingRules(Guid? selectedRuleId = null)
     {
         _rules.Clear();
-        foreach (var rule in plannedRules)
+        foreach (var rule in _manageSession.VisibleRules)
             _rules.Add(rule);
 
         if (selectedRuleId is { } id)
             _listView.SelectedItem = FindWorkingRuleById(id);
     }
-
-    private bool IsFilteringToRange() => CurrentScopeRange() is not null;
 
     private GridRange? CurrentScopeRange() =>
         _scopeBox.SelectedItem is ComboBoxItem { Tag: ManageConditionalFormatScopeOption selectedScope }
@@ -410,7 +381,8 @@ public sealed partial class ManageConditionalFormatsDialog : Window
                     rangeBox.SelectAll();
                     if (rule is not null)
                     {
-                        AppliesToRangeSelectionRequest = CreateAppliesToRangeSelectionRequest(rule.Id, rangeBox.Text);
+                        AppliesToRangeSelectionRequest = ManageConditionalFormatsPlanner
+                            .CreateAppliesToRangeSelectionRequest(rule.Id, rangeBox.Text);
                         _requestAppliesToRangeSelection?.Invoke(AppliesToRangeSelectionRequest);
                     }
                 }
@@ -444,12 +416,10 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     public void ApplyAppliesToRangeSelection(Guid ruleId, GridRange range)
     {
-        if (!_rules.Any(rule => rule.Id == ruleId))
+        if (!_manageSession.ApplyRange(ruleId, range))
             return;
 
-        ReplaceWorkingRules(
-            ManageConditionalFormatsPlanner.ApplyRuleRange(_rules, ruleId, range),
-            ruleId);
+        ReloadWorkingRules(ruleId);
         FocusRulesList();
     }
 }

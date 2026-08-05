@@ -10,20 +10,20 @@ public sealed class ConditionalFormatDedupSourceTests
     {
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
         var hostFacadePath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "ManageConditionalFormatsPlanner.cs");
-        var dialogSource = DialogSourceTestSupport.ReadHostSources(
-            "ManageConditionalFormatsDialog.cs",
-            "ManageConditionalFormatsDialog.Rules.cs");
+        var hostRulesFacadePath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "ManageConditionalFormatsDialog.Rules.cs");
+        var dialogSource = DialogSourceTestSupport.ReadHostSourceFile("ManageConditionalFormatsDialog.cs");
         var presentationSource = DialogSourceTestSupport.ReadPresentationSources(
             "ConditionalFormatting",
             "ManageConditionalFormatsPlanner.cs");
 
         File.Exists(hostFacadePath)
             .Should().BeFalse("the WPF host should call the shared manage planner directly instead of keeping a pass-through facade");
+        File.Exists(hostRulesFacadePath)
+            .Should().BeFalse("the WPF dialog should not retain test-only pass-throughs to the shared planner");
         dialogSource.Should().Contain(
             "using ManageConditionalFormatsPlanner = FreeX.App.Presentation.ConditionalFormatting.ManageConditionalFormatsPlanner;");
-        dialogSource.Should().Contain("ManageConditionalFormatsPlanner.BuildResultRules(");
-        dialogSource.Should().Contain("ManageConditionalFormatsPlanner.DuplicateRule(");
-        dialogSource.Should().Contain("ManageConditionalFormatsPlanner.RangesOverlap(");
+        dialogSource.Should().Contain("new ManageConditionalFormatsSession(");
+        dialogSource.Should().Contain("_manageSession.BuildResultRules(");
         dialogSource.Should().Contain("ConditionalFormatRuleMoveDirection.Up");
         dialogSource.Should().Contain("ConditionalFormatRuleMoveDirection.Down");
 
@@ -31,6 +31,42 @@ public sealed class ConditionalFormatDedupSourceTests
         presentationSource.Should().Contain("FindRuleIndex");
         presentationSource.Should().Contain("src.Clone(id)");
         presentationSource.Should().Contain("result.Insert(index + 1");
+        presentationSource.Should().Contain("public static IReadOnlyList<ConditionalFormat> AddRule(");
+    }
+
+    [Fact]
+    public void ManageConditionalFormatsLifecycle_IsSharedByWpfAndAvalonia()
+    {
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var avaloniaFacadePath = Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Avalonia",
+            "Dialogs",
+            "ConditionalFormatManageModel.cs");
+        var wpfSource = DialogSourceTestSupport.ReadHostSourceFile("ManageConditionalFormatsDialog.cs");
+        var avaloniaSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.ConditionalFormat.cs"));
+        var sessionSource = DialogSourceTestSupport.ReadPresentationSources(
+            "ConditionalFormatting",
+            "ManageConditionalFormatsSession.cs");
+
+        File.Exists(avaloniaFacadePath).Should().BeFalse(
+            "the Avalonia-only working-copy model was replaced by the portable manager session");
+        wpfSource.Should().Contain("new ManageConditionalFormatsSession(");
+        wpfSource.Should().Contain("_manageSession.BuildResultRules(");
+        avaloniaSource.Should().Contain("new ManageConditionalFormatsSession(");
+        avaloniaSource.Should().Contain("manageSession.BuildProjection()");
+        avaloniaSource.Should().Contain("manageSession.CreateApplyCommand(");
+        avaloniaSource.Should().NotContain("ConditionalFormatManageModel");
+
+        sessionSource.Should().Contain("public sealed class ManageConditionalFormatsSession");
+        sessionSource.Should().Contain("ManageConditionalFormatsPlanner.AddRule(");
+        sessionSource.Should().Contain("ManageConditionalFormatsPlanner.MoveRule(");
+        sessionSource.Should().Contain("ManageConditionalFormatsPlanner.ApplyRuleRange(");
     }
 
     [Fact]
