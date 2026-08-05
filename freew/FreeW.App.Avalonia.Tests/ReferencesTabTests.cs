@@ -712,6 +712,88 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void Index_commands_insert_default_and_selective_regions_with_matching_entries_only()
+    {
+        var view = ViewWith(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Entries"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha")),
+                DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People")),
+                DocumentIndex.MarkRun(new IndexMark("Ignored", Identifier: "Places"))
+            }
+        });
+
+        view.InsertIndex();
+        view.InsertIndex("People");
+
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, identifier: null))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Alpha, 1");
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Ada, 1");
+        view.Document.Blocks
+            .Should().NotContain(block => DocumentIndex.IsIndexParagraph(block, "Places"));
+    }
+
+    [Fact]
+    public void RefreshIndex_selective_region_updates_people_and_leaves_default_region_untouched()
+    {
+        var defaultHeading = new Paragraph(DocumentIndex.HeadingText)
+        {
+            StyleId = DocumentIndex.HeadingStyleIdFor(identifier: null)
+        };
+        var defaultEntry = new Paragraph("Alpha, 7")
+        {
+            StyleId = DocumentIndex.EntryStyleIdFor(identifier: null)
+        };
+        var peopleHeading = new Paragraph(DocumentIndex.HeadingText)
+        {
+            StyleId = DocumentIndex.HeadingStyleIdFor("People")
+        };
+        var peopleEntry = new Paragraph("Old Person, 9")
+        {
+            StyleId = DocumentIndex.EntryStyleIdFor("People")
+        };
+        var view = ViewWith(
+            defaultHeading,
+            defaultEntry,
+            peopleHeading,
+            peopleEntry,
+            new Paragraph
+            {
+                Runs =
+                {
+                    new Run("Entries"),
+                    DocumentIndex.MarkRun(new IndexMark("Beta")),
+                    DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People")),
+                    DocumentIndex.MarkRun(new IndexMark("Grace", Identifier: "People"))
+                }
+            });
+
+        view.RefreshIndex("People");
+
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, identifier: null))
+            .Should().Equal(defaultHeading, defaultEntry);
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Ada, 1", "Grace, 1");
+        view.Document.Blocks
+            .Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
+            .Should().NotContain(peopleHeading)
+            .And.NotContain(peopleEntry);
+    }
+
+    [Fact]
     public void Table_of_figures_commands_insert_and_refresh_caption_table()
     {
         var view = ViewWith();
