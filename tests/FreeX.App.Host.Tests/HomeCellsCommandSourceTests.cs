@@ -74,12 +74,11 @@ public sealed class HomeCellsCommandSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
 
         source.Should().Contain("private void SheetCtxHide_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("HideSheet(tab.Id);");
+        source.Should().Contain("HideSheets(selectedSheetIds);");
         source.Should().Contain("private void SheetCtxUnhide_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("UnhideSheet();");
         source.Should().Contain("private void HideCurrentSheet()");
-        source.Should().Contain("HideSheet(_currentSheetId);");
-        source.Should().Contain("private void HideSheet(SheetId sheetId)");
+        source.Should().Contain("private void HideSheets(IReadOnlyCollection<SheetId> sheetIds)");
         source.Should().Contain("new SetSheetHiddenCommand(sheetId, hidden: true)");
         source.Should().Contain("private void UnhideSheet()");
         source.Should().Contain("new UnhideSheetDialog(hiddenSheets.Select(sheet => sheet.Name))");
@@ -92,12 +91,12 @@ public sealed class HomeCellsCommandSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
 
         source.Should().Contain("private void SheetCtxTabColor_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("ColorSheetTab(tab.Id);");
+        source.Should().Contain("ColorSheetTabs(tab.Id, selectedSheetIds);");
         source.Should().Contain("private void ColorCurrentSheetTab()");
-        source.Should().Contain("ColorSheetTab(_currentSheetId);");
-        source.Should().Contain("private void ColorSheetTab(SheetId sheetId)");
+        source.Should().Contain("ColorSheetTabs(_currentSheetId, selectedSheetIds);");
+        source.Should().Contain("private void ColorSheetTabs(SheetId sheetId, IReadOnlyCollection<SheetId> sheetIds)");
         source.Should().Contain("TryShowColorPicker(\"Tab Color\"");
-        source.Should().Contain("new SetSheetTabColorCommand(sheetId, tabColor)");
+        source.Should().Contain("new SetSheetTabColorCommand(id, tabColor)");
     }
 
 }
