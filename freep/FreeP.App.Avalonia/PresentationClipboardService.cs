@@ -218,11 +218,17 @@ internal sealed class AvaloniaClipboardShapeRenderer : IPresentationClipboardSha
         using var full = new RenderTargetBitmap(new PixelSize(WidthPx, HeightPx));
         full.Render(canvas);
 
-        var crop = CalculateCrop(presentation, shapes);
-        if (crop.Width == WidthPx && crop.Height == HeightPx)
+        var crop = PresentationClipboardShapeCropPlanner.Plan(
+            presentation,
+            shapes,
+            WidthPx,
+            HeightPx);
+        if (crop.IsFullFrame(WidthPx, HeightPx))
             return Save(full);
 
-        var cropped = new CroppedBitmap(full, crop);
+        var cropped = new CroppedBitmap(
+            full,
+            new PixelRect(crop.X, crop.Y, crop.Width, crop.Height));
         var image = new Image
         {
             Source = cropped,
@@ -237,27 +243,6 @@ internal sealed class AvaloniaClipboardShapeRenderer : IPresentationClipboardSha
         using var output = new RenderTargetBitmap(new PixelSize(crop.Width, crop.Height));
         output.Render(image);
         return Save(output);
-    }
-
-    private static PixelRect CalculateCrop(
-        Presentation presentation,
-        IReadOnlyList<SlideShape> shapes)
-    {
-        if (presentation.SlideSizeCxEmu <= 0 || presentation.SlideSizeCyEmu <= 0)
-            return new PixelRect(0, 0, WidthPx, HeightPx);
-
-        var scaleX = WidthPx / (double)presentation.SlideSizeCxEmu;
-        var scaleY = HeightPx / (double)presentation.SlideSizeCyEmu;
-        var left = shapes.Min(shape => shape.OffsetXEmu * scaleX);
-        var top = shapes.Min(shape => shape.OffsetYEmu * scaleY);
-        var right = shapes.Max(shape => (shape.OffsetXEmu + shape.ExtentCxEmu) * scaleX);
-        var bottom = shapes.Max(shape => (shape.OffsetYEmu + shape.ExtentCyEmu) * scaleY);
-
-        var x = Math.Clamp((int)Math.Floor(left), 0, WidthPx - 1);
-        var y = Math.Clamp((int)Math.Floor(top), 0, HeightPx - 1);
-        var width = Math.Clamp((int)Math.Ceiling(right) - x, 1, WidthPx - x);
-        var height = Math.Clamp((int)Math.Ceiling(bottom) - y, 1, HeightPx - y);
-        return new PixelRect(x, y, width, height);
     }
 
     private static byte[] Save(Bitmap bitmap)

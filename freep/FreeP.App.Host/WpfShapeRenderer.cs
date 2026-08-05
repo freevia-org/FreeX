@@ -3,6 +3,7 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeP.App.Compositor;
 using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
 
@@ -77,48 +78,17 @@ public sealed class WpfShapeRenderer : IShapeRenderer
         rtb.Render(canvas);
         rtb.Freeze();
 
-        // Crop to the bounding box of the selected shapes (in slide-pixel coords).
-        // Slide dimensions in EMU from presentation.
-        double slideW = presentation.SlideSizeCxEmu;
-        double slideH = presentation.SlideSizeCyEmu;
-
-        if (slideW <= 0 || slideH <= 0)
-            return EncodePng(rtb);
-
-        double scaleX = widthPx  / slideW;
-        double scaleY = heightPx / slideH;
-
-        // Union rect of all selected shapes in pixel coordinates.
-        double left   = double.MaxValue, top    = double.MaxValue;
-        double right  = double.MinValue, bottom = double.MinValue;
-
-        foreach (var s in shapes)
-        {
-            double sl = s.OffsetXEmu  * scaleX;
-            double st = s.OffsetYEmu  * scaleY;
-            double sr = sl + s.ExtentCxEmu * scaleX;
-            double sb = st + s.ExtentCyEmu * scaleY;
-            if (sl < left)   left   = sl;
-            if (st < top)    top    = st;
-            if (sr > right)  right  = sr;
-            if (sb > bottom) bottom = sb;
-        }
-
-        // Clamp to canvas bounds.
-        left   = Math.Max(0, left);
-        top    = Math.Max(0, top);
-        right  = Math.Min(widthPx,  right);
-        bottom = Math.Min(heightPx, bottom);
-
-        int cropW = (int)Math.Max(1, Math.Ceiling(right  - left));
-        int cropH = (int)Math.Max(1, Math.Ceiling(bottom - top));
-
-        if (cropW >= widthPx && cropH >= heightPx)
+        var crop = PresentationClipboardShapeCropPlanner.Plan(
+            presentation,
+            shapes,
+            widthPx,
+            heightPx);
+        if (crop.IsFullFrame(widthPx, heightPx))
             return EncodePng(rtb);
 
         // Crop via CroppedBitmap.
         var cropped = new CroppedBitmap(rtb,
-            new Int32Rect((int)left, (int)top, cropW, cropH));
+            new Int32Rect(crop.X, crop.Y, crop.Width, crop.Height));
         cropped.Freeze();
 
         return EncodePng(cropped);
