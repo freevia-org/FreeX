@@ -269,6 +269,64 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void SynchronizePreservedDrawingText_UpdatesOneCachedShapeWithoutRebuildingLayout()
+    {
+        var (_, smartArt) = MakeSmartArtSession();
+        smartArt.Data!.IsLiveLayoutSupported = false;
+        var previousData = SlideCloner.CloneSmartArt(smartArt).Data!;
+        var drawingPart = smartArt.Parts[smartArt.DrawingPartPath!];
+        drawingPart.Bytes = System.Text.Encoding.UTF8.GetBytes(
+            "<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" " +
+            "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><dsp:spTree>" +
+            "<dsp:sp><dsp:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr b=\"1\"/><a:t>Plan</a:t></a:r></a:p></dsp:txBody></dsp:sp>" +
+            "</dsp:spTree></dsp:drawing>");
+        smartArt.FallbackShapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Plan", Bold = true } },
+                    },
+                },
+            },
+        });
+
+        SmartArtEditingPlanner.Apply(
+            smartArt.Data,
+            SmartArtNodeEditIntent.ChangeText("n1", "Plan revised"))
+            .Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+
+        var regenerated = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt, 0, 0, 7_315_200, 3_657_600, new PresentationTheme());
+        regenerated.Applied.Should().BeFalse();
+
+        var synchronized = SmartArtEditingPlanner.SynchronizePreservedDrawingText(
+            smartArt, previousData);
+        synchronized.Applied.Should().BeTrue(synchronized.Message);
+        smartArt.FallbackShapes.Single().PlainText.Should().Be("Plan revised");
+        System.Text.Encoding.UTF8.GetString(drawingPart.Bytes).Should().Contain("Plan revised");
+        System.Text.Encoding.UTF8.GetString(drawingPart.Bytes).Should().Contain("b=\"1\"");
+    }
+
+    [Fact]
+    public void SynchronizePreservedDrawingText_RejectsStructuralChanges()
+    {
+        var (_, smartArt) = MakeSmartArtSession();
+        smartArt.Data!.IsLiveLayoutSupported = false;
+        var previousData = SlideCloner.CloneSmartArt(smartArt).Data!;
+
+        smartArt.Data.Nodes.Add(new SmartArtNode { ModelId = "n3", Text = "Ship", Level = 0 });
+
+        SmartArtEditingPlanner.SynchronizePreservedDrawingText(smartArt, previousData)
+            .Applied.Should().BeFalse();
+    }
+
+    [Fact]
     public void GroupedSmartArt_LayoutAndConvertRoutesRemainUndoable()
     {
         var (session, _) = MakeSmartArtSession();

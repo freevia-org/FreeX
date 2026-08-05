@@ -926,6 +926,50 @@ public sealed class SlideShowHostPlannerTests
     }
 
     [Fact]
+    public void PlanZoomNavigation_ReturnToParent_preserves_transition_on_advance()
+    {
+        var presentation = MakePresentation(3);
+        var controller = new SlideShowController(presentation.Slides, startIndex: 0);
+
+        SlideShowHostPlanner.PlanZoomNavigation(
+            controller,
+            presentation.Slides,
+            targetSlideIndex: 2,
+            returnToParent: true,
+            transitionDurationMs: 1400,
+            showBackground: false);
+
+        var command = SlideShowHostPlanner.PlanAdvance(controller);
+
+        command.SlideIndex.Should().Be(0);
+        command.AnimateSlide.Should().BeTrue();
+        command.TransitionDurationMs.Should().Be(1400);
+        command.UseDestinationBackground.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanZoomNavigation_ReturnToParent_preserves_transition_on_back()
+    {
+        var presentation = MakePresentation(3);
+        var controller = new SlideShowController(presentation.Slides, startIndex: 0);
+
+        SlideShowHostPlanner.PlanZoomNavigation(
+            controller,
+            presentation.Slides,
+            targetSlideIndex: 2,
+            returnToParent: true,
+            transitionDurationMs: 850,
+            showBackground: false);
+
+        var command = SlideShowHostPlanner.PlanBack(controller);
+
+        command.SlideIndex.Should().Be(0);
+        command.AnimateSlide.Should().BeTrue();
+        command.TransitionDurationMs.Should().Be(850);
+        command.UseDestinationBackground.Should().BeFalse();
+    }
+
+    [Fact]
     public void PlanZoomNavigation_without_return_to_parent_keeps_normal_advance()
     {
         var presentation = MakePresentation(3);

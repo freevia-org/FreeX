@@ -93,6 +93,7 @@ public sealed partial class MainWindow
         {
             Content = gallery,
             Height = 230,
+            Focusable = true,
             HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
         };
@@ -121,10 +122,9 @@ public sealed partial class MainWindow
                 buttonRow,
             },
         };
-        dialog.Opened += (_, _) => gallery.Children
-            .OfType<RadioButton>()
-            .FirstOrDefault(static option => option.IsChecked == true)?
-            .Focus();
+        // WPF focuses the gallery control itself. Focusing a checked child inside the scroll host can
+        // trigger a re-entrant bring-into-view/layout pass while the headless capture is rendering.
+        dialog.Opened += (_, _) => scroll.Focus();
 
         return await dialog.ShowDialog<ChartStyleDialogSubmission?>(this);
     }

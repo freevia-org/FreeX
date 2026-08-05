@@ -83,9 +83,113 @@ internal static class ExternalXamlClipboardWriter
             return;
         }
 
-        foreach (var paragraph in body.Paragraphs)
-            WriteParagraphBlocks(writer, paragraph, images);
+        for (var index = 0; index < body.Paragraphs.Count;)
+        {
+            if (TryGetListMarker(body.Paragraphs[index], out _))
+            {
+                WriteList(writer, body.Paragraphs, ref index, images);
+                continue;
+            }
+
+            WriteParagraphBlocks(writer, body.Paragraphs[index], images);
+            index++;
+        }
     }
+
+    private static void WriteList(
+        XmlWriter writer,
+        IReadOnlyList<Paragraph> paragraphs,
+        ref int index,
+        List<PackageImage> images)
+    {
+        var first = paragraphs[index];
+        if (!TryGetListMarker(first, out var marker))
+            return;
+
+        var listStartIndex = index;
+        var level = Math.Clamp(first.Level, 0, 8);
+        writer.WriteStartElement("List", XamlNamespace);
+        writer.WriteAttributeString("MarkerStyle", marker.Style);
+        if (first.BulletKind == BulletKind.Auto && first.AutoNumStartAtSpecified)
+            writer.WriteAttributeString(
+                "StartIndex",
+                Math.Clamp(first.AutoNumStartAt, 1, 999_999).ToString(CultureInfo.InvariantCulture));
+
+        while (index < paragraphs.Count)
+        {
+            var paragraph = paragraphs[index];
+            if (!TryGetListMarker(paragraph, out var paragraphMarker))
+                break;
+
+            var paragraphLevel = Math.Clamp(paragraph.Level, 0, 8);
+            if (paragraphLevel < level
+                || paragraphLevel == level && paragraphMarker.Style != marker.Style
+                || paragraphLevel == level
+                    && index != listStartIndex
+                    && paragraph.BulletKind == BulletKind.Auto
+                    && paragraph.AutoNumStartAtSpecified)
+            {
+                break;
+            }
+
+            if (paragraphLevel > level)
+            {
+                // A nested List must be a block inside the preceding ListItem. The normal
+                // model path always supplies that parent; a malformed leading jump is left
+                // for the outer loop to emit at its own level rather than inventing content.
+                break;
+            }
+
+            writer.WriteStartElement("ListItem", XamlNamespace);
+            WriteParagraphBlocks(writer, paragraph, images);
+            index++;
+
+            while (index < paragraphs.Count
+                && TryGetListMarker(paragraphs[index], out _)
+                && Math.Clamp(paragraphs[index].Level, 0, 8) > level)
+            {
+                WriteList(writer, paragraphs, ref index, images);
+            }
+
+            writer.WriteEndElement();
+        }
+
+        writer.WriteEndElement();
+    }
+
+    private static bool TryGetListMarker(Paragraph paragraph, out ListMarker marker)
+    {
+        marker = default;
+        if (paragraph.BulletSuppressed)
+            return false;
+
+        if (paragraph.BulletKind == BulletKind.Auto)
+        {
+            marker = new ListMarker(paragraph.AutoNumType switch
+            {
+                AutoNumType.ArabicPeriod or AutoNumType.ArabicParenR or AutoNumType.ArabicParenBoth => "Decimal",
+                AutoNumType.AlphaLcPeriod or AutoNumType.AlphaLcParenR or AutoNumType.AlphaLcParenBoth => "LowerLatin",
+                AutoNumType.AlphaUcPeriod or AutoNumType.AlphaUcParenR or AutoNumType.AlphaUcParenBoth => "UpperLatin",
+                AutoNumType.RomanLcPeriod or AutoNumType.RomanLcParenR => "LowerRoman",
+                AutoNumType.RomanUcPeriod or AutoNumType.RomanUcParenR => "UpperRoman",
+                _ => "Decimal",
+            });
+            return true;
+        }
+
+        if (paragraph.BulletKind != BulletKind.Char)
+            return false;
+
+        marker = paragraph.BulletChar switch
+        {
+            "\u25E6" => new ListMarker("Circle"),
+            "\u25AA" or "\u25A0" or "\u25A1" => new ListMarker("Square"),
+            _ => new ListMarker("Disc"),
+        };
+        return true;
+    }
+
+    private readonly record struct ListMarker(string Style);
 
     private static void WriteParagraphBlocks(
         XmlWriter writer,

@@ -591,6 +591,80 @@ public static class SmartArtEditingPlanner
             shapes.Count);
     }
 
+    /// <summary>
+    /// Updates one uniquely matched text-bearing shape in an imported native drawing cache.
+    /// This is intentionally limited to a single text-only data change with unchanged node
+    /// topology. Unsupported layout mutations must continue to fail rather than replacing an
+    /// authored cache with a guessed live layout.
+    /// </summary>
+    public static SmartArtDrawingCacheRegenerationResult SynchronizePreservedDrawingText(
+        SmartArtShape? smartArt,
+        SmartArtData? previousData)
+    {
+        if (smartArt?.Data is not { } currentData || previousData is null)
+            return NotAppliedDrawingCacheResult(smartArt, "No before/after SmartArt data is available.");
+
+        var previousNodes = EnumerateNodes(previousData.Nodes).ToArray();
+        var currentNodes = EnumerateNodes(currentData.Nodes).ToArray();
+        var changedNodes = previousNodes.Zip(currentNodes)
+            .Where(pair => !string.Equals(
+                NormalizeText(pair.First.Text),
+                NormalizeText(pair.Second.Text),
+                StringComparison.Ordinal))
+            .ToArray();
+        if (previousNodes.Length != currentNodes.Length || changedNodes.Length != 1)
+        {
+            return NotAppliedDrawingCacheResult(
+                smartArt,
+                "Preserved SmartArt cache synchronization requires exactly one text-only node change.");
+        }
+
+        var oldText = NormalizeText(changedNodes[0].First.Text);
+        var newText = NormalizeText(changedNodes[0].Second.Text);
+        var drawingPart = FindDrawingPart(smartArt);
+        if (drawingPart is null || drawingPart.Bytes.Length == 0)
+            return NotAppliedDrawingCacheResult(smartArt, "No preserved SmartArt drawing cache is available.");
+
+        XDocument document;
+        try
+        {
+            document = ParseXml(drawingPart.Bytes);
+        }
+        catch (Exception ex) when (ex is FormatException or XmlException)
+        {
+            return NotAppliedDrawingCacheResult(smartArt, "The preserved SmartArt drawing cache is malformed.");
+        }
+
+        var matchingBodies = document.Descendants(Dsp + "txBody")
+            .Where(body => string.Equals(ReadDrawingText(body), oldText, StringComparison.Ordinal))
+            .ToArray();
+        if (matchingBodies.Length != 1 || !ReplaceDrawingText(matchingBodies[0], newText))
+        {
+            return NotAppliedDrawingCacheResult(
+                smartArt,
+                "The changed SmartArt node does not map to one cached text shape.");
+        }
+
+        var matchingFallbacks = smartArt.FallbackShapes
+            .Where(shape => shape.TextBody is not null &&
+                            string.Equals(NormalizeText(shape.PlainText), oldText, StringComparison.Ordinal))
+            .ToArray();
+        if (matchingFallbacks.Length != 1 || !ReplaceShapeText(matchingFallbacks[0], newText))
+        {
+            return NotAppliedDrawingCacheResult(
+                smartArt,
+                "The changed SmartArt node does not map to one cached model shape.");
+        }
+
+        drawingPart.Bytes = SerializeXml(document);
+        return new SmartArtDrawingCacheRegenerationResult(
+            true,
+            "One text edit was applied to the preserved native SmartArt drawing cache.",
+            drawingPart.PartPath,
+            CountNodes(currentData),
+            smartArt.FallbackShapes.Count);
+    }
+
     private static SmartArtNodeEditResult ChangeText(
         SmartArtData data,
         SmartArtNode target,
@@ -1024,6 +1098,75 @@ public static class SmartArtEditingPlanner
 
     private static string NormalizeText(string? text) =>
         (text ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+
+    private static IEnumerable<SmartArtNode> EnumerateNodes(IEnumerable<SmartArtNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            yield return node;
+            foreach (var child in EnumerateNodes(node.Children))
+                yield return child;
+        }
+    }
+
+    private static string ReadDrawingText(XElement body) =>
+        string.Join("\n", body.Elements(A + "p")
+            .Select(paragraph => string.Concat(paragraph.Descendants(A + "t").Select(text => text.Value))));
+
+    private static bool ReplaceDrawingText(XElement body, string text)
+    {
+        var paragraphs = body.Elements(A + "p").ToArray();
+        var lines = text.Split('\n');
+        if (paragraphs.Length != lines.Length)
+            return false;
+
+        for (var index = 0; index < paragraphs.Length; index++)
+        {
+            var textNodes = paragraphs[index].Descendants(A + "t").ToArray();
+            if (textNodes.Length == 0)
+                return false;
+
+            textNodes[0].Value = lines[index];
+            foreach (var textNode in textNodes.Skip(1))
+                textNode.Value = string.Empty;
+        }
+
+        return true;
+    }
+
+    private static bool ReplaceShapeText(SlideShape shape, string text)
+    {
+        if (shape.TextBody is not { } body)
+            return false;
+
+        var paragraphs = body.Paragraphs;
+        var lines = text.Split('\n');
+        if (paragraphs.Count != lines.Length)
+            return false;
+
+        for (var index = 0; index < paragraphs.Count; index++)
+        {
+            var runs = paragraphs[index].Runs;
+            if (runs.Count == 0)
+                runs.Add(new Run());
+
+            runs[0].Text = lines[index];
+            for (var runIndex = 1; runIndex < runs.Count; runIndex++)
+                runs[runIndex].Text = string.Empty;
+        }
+
+        return true;
+    }
+
+    private static SmartArtDrawingCacheRegenerationResult NotAppliedDrawingCacheResult(
+        SmartArtShape? smartArt,
+        string message) =>
+        new(
+            false,
+            message,
+            smartArt is null ? null : FindDrawingPart(smartArt)?.PartPath,
+            smartArt?.Data is null ? 0 : CountNodes(smartArt.Data),
+            smartArt?.FallbackShapes.Count ?? 0);
 
     private static SmartArtTextPaneKeyboardRoute Route(
         string routeId,

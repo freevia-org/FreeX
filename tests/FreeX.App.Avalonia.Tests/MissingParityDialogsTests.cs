@@ -56,27 +56,36 @@ public sealed class MissingParityDialogsTests
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
-                window.Show();
-                window.Measure(new global::Avalonia.Size(1120, 720));
-                window.Arrange(new global::Avalonia.Rect(0, 0, 1120, 720));
-                window.UpdateLayout();
+                try
+                {
+                    window.Show();
+                    window.Measure(new global::Avalonia.Size(1120, 720));
+                    window.Arrange(new global::Avalonia.Rect(0, 0, 1120, 720));
+                    window.UpdateLayout();
 
-                var results = await window.CaptureParitySurfacesAsync(
-                    outputDirectory,
-                    targetSurfaceId: catalogId);
+                    var results = await window.CaptureParitySurfacesAsync(
+                        outputDirectory,
+                        targetSurfaceId: catalogId);
 
-                results.Should().ContainSingle();
-                results[0].Id.Should().Be(expectedSurfaceId);
-                results[0].Captured.Should().BeTrue(results[0].Note);
-                var pngPath = Path.Combine(outputDirectory, results[0].PngFileName);
-                File.Exists(pngPath).Should().BeTrue();
-                ParityCaptureOutputGuard.ValidatePngOutput(pngPath).Should().BeNull();
-                new FileInfo(pngPath).Length.Should().BeGreaterThan(2_048,
-                    "a populated dialog capture should not collapse to a near-blank PNG");
-                ReadPngDimensions(pngPath).Should().Be((expectedWidth, expectedHeight),
-                    "the complete fixed-size dialog client area should be captured without edge clipping");
-
-                window.Close();
+                    results.Should().ContainSingle();
+                    results[0].Id.Should().Be(expectedSurfaceId);
+                    results[0].Captured.Should().BeTrue(results[0].Note);
+                    var pngPath = Path.Combine(outputDirectory, results[0].PngFileName);
+                    File.Exists(pngPath).Should().BeTrue();
+                    ParityCaptureOutputGuard.ValidatePngOutput(pngPath).Should().BeNull();
+                    new FileInfo(pngPath).Length.Should().BeGreaterThan(2_048,
+                        "a populated dialog capture should not collapse to a near-blank PNG");
+                    ReadPngDimensions(pngPath).Should().Be((expectedWidth, expectedHeight),
+                        "the complete fixed-size dialog client area should be captured without edge clipping");
+                    window.OwnedWindows.Should().BeEmpty(
+                        "a completed parity capture must release its modal before the next theory row starts");
+                }
+                finally
+                {
+                    foreach (var owned in window.OwnedWindows.ToArray())
+                        owned.Close();
+                    window.Close();
+                }
             }, CancellationToken.None);
         }
         finally
