@@ -92,6 +92,42 @@ public class PlainTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_BomlessInvalidUtf8_FallsBackToWindows1252()
+    {
+        byte[] bytes =
+        [
+            0x43, 0x61, 0x66, 0xE9, 0x20,
+            0x80, 0x20,
+            0x93, 0x71, 0x75, 0x6F, 0x74, 0x65, 0x94,
+        ];
+
+        using var stream = new MemoryStream(bytes);
+        LinesOf(new PlainTextFileAdapter().Load(stream))
+            .Should().Equal("Caf\u00e9 \u20ac \u201cquote\u201d");
+    }
+
+    [Fact]
+    public void Load_BomlessValidUtf8_RemainsUtf8()
+    {
+        var bytes = Encoding.UTF8.GetBytes("Caf\u00e9 \u20ac \u201cquote\u201d");
+
+        using var stream = new MemoryStream(bytes);
+        LinesOf(new PlainTextFileAdapter().Load(stream))
+            .Should().Equal("Caf\u00e9 \u20ac \u201cquote\u201d");
+    }
+
+    [Fact]
+    public void Load_LeavesCallerStreamOpen()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("text"));
+
+        _ = new PlainTextFileAdapter().Load(stream);
+
+        stream.CanRead.Should().BeTrue();
+        stream.Position.Should().Be(stream.Length);
+    }
+
+    [Fact]
     public void Save_WritesOnlyParagraphCharactersAndDropsNonTextStructures()
     {
         var document = TextDocument.CreateEmpty();
