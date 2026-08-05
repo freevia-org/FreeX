@@ -200,6 +200,66 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void RegenerateSmartArtDrawingCache_PreservesAuthoredEffectsByModelId()
+    {
+        var (_, smartArt) = MakeSmartArtSession();
+        var container = new SlideShape
+        {
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 7_315_200,
+            ExtentCyEmu = 3_657_600,
+        };
+
+        SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            container.OffsetXEmu,
+            container.OffsetYEmu,
+            container.ExtentCxEmu,
+            container.ExtentCyEmu,
+            new PresentationTheme()).Applied.Should().BeTrue();
+
+        var drawingPath = smartArt.DrawingPartPath!;
+        var drawing = System.Xml.Linq.XDocument.Parse(
+            System.Text.Encoding.UTF8.GetString(smartArt.Parts[drawingPath].Bytes));
+        var dsp = System.Xml.Linq.XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var a = System.Xml.Linq.XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var sourceShape = drawing.Descendants(dsp + "sp").First();
+        var modelId = sourceShape.Attribute("modelId")!.Value;
+        smartArt.FallbackShapes.Select(shape => shape.Id.ToString()).Should().Contain(modelId);
+        sourceShape.Element(dsp + "spPr")!.Add(
+            new System.Xml.Linq.XElement(
+                a + "effectLst",
+                new System.Xml.Linq.XElement(
+                    a + "outerShdw",
+                    new System.Xml.Linq.XAttribute("blurRad", "50800"),
+                    new System.Xml.Linq.XAttribute("dist", "38100"),
+                    new System.Xml.Linq.XAttribute("dir", "2700000"),
+                    new System.Xml.Linq.XAttribute("algn", "ctr"))));
+        smartArt.Parts[drawingPath].Bytes = System.Text.Encoding.UTF8.GetBytes(drawing.ToString());
+        smartArt.Data!.Nodes[0].Text = "Updated";
+
+        SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            container.OffsetXEmu,
+            container.OffsetYEmu,
+            container.ExtentCxEmu,
+            container.ExtentCyEmu,
+            new PresentationTheme()).Applied.Should().BeTrue();
+
+        var updated = System.Xml.Linq.XDocument.Parse(
+            System.Text.Encoding.UTF8.GetString(smartArt.Parts[drawingPath].Bytes));
+        var updatedShape = updated.Descendants(dsp + "sp")
+            .Single(shape => shape.Attribute("modelId")?.Value == modelId);
+        var updatedProperties = updatedShape.Element(dsp + "spPr");
+        updatedProperties.Should().NotBeNull();
+        var updatedEffects = updatedProperties?.Element(a + "effectLst");
+        updatedEffects.Should().NotBeNull();
+        updatedEffects!.Element(a + "outerShdw")!.Attribute("blurRad")!.Value.Should().Be("50800");
+        updatedShape.Descendants(a + "t").Should().Contain(element => element.Value == "Updated");
+    }
+
+    [Fact]
     public void GroupedSmartArt_LayoutAndConvertRoutesRemainUndoable()
     {
         var (session, _) = MakeSmartArtSession();

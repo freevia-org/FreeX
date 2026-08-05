@@ -1206,13 +1206,15 @@ public static class SmartArtEditingPlanner
                 firstShape.AddBeforeSelf(groupProperties);
         }
 
-        foreach (var staleShape in sourceSpTree.Elements().Where(IsDrawingShapeElement).ToList())
-            staleShape.Remove();
-
         var generatedShapes = generatedSpTree.Elements()
             .Where(IsDrawingShapeElement)
             .Select(element => new XElement(element))
             .ToArray();
+        PreserveAuthoredDrawingVisuals(generatedShapes, sourceSpTree);
+
+        foreach (var staleShape in sourceSpTree.Elements().Where(IsDrawingShapeElement).ToList())
+            staleShape.Remove();
+
         var extensionList = sourceSpTree.Elements()
             .FirstOrDefault(element => element.Name.LocalName == "extLst");
         if (extensionList is null)
@@ -1221,6 +1223,44 @@ public static class SmartArtEditingPlanner
             extensionList.AddBeforeSelf(generatedShapes);
 
         return sourceDocument;
+    }
+
+    private static void PreserveAuthoredDrawingVisuals(
+        IReadOnlyList<XElement> generatedShapes,
+        XElement sourceSpTree)
+    {
+        var sourceByModelId = sourceSpTree
+            .Descendants()
+            .Where(IsDrawingShapeElement)
+            .Select(element => (ModelId: element.Attribute("modelId")?.Value?.Trim(), Element: element))
+            .Where(item => !string.IsNullOrWhiteSpace(item.ModelId))
+            .GroupBy(item => item.ModelId!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().Element, StringComparer.Ordinal);
+
+        foreach (var generatedShape in generatedShapes)
+        {
+            var modelId = generatedShape.Attribute("modelId")?.Value?.Trim();
+            if (string.IsNullOrWhiteSpace(modelId) ||
+                !sourceByModelId.TryGetValue(modelId, out var sourceShape))
+            {
+                continue;
+            }
+
+            var sourceProperties = sourceShape.Element(Dsp + "spPr");
+            var generatedProperties = generatedShape.Element(Dsp + "spPr");
+            if (sourceProperties is null || generatedProperties is null)
+                continue;
+
+            foreach (var name in new[] { A + "effectLst", A + "scene3d", A + "sp3d", A + "extLst" })
+            {
+                var authoredPayload = sourceProperties.Element(name);
+                if (authoredPayload is null)
+                    continue;
+
+                generatedProperties.Element(name)?.Remove();
+                generatedProperties.Add(new XElement(authoredPayload));
+            }
+        }
     }
 
     private static bool IsDrawingShapeElement(XElement element) =>
