@@ -13,7 +13,7 @@ internal sealed class SlideSizeDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
-    private readonly EditingSession _editor;
+    private readonly SlideSizeDialogSession _session;
     private readonly ComboBox _presetCombo;
     private readonly RadioButton _inchesRadio;
     private readonly RadioButton _centimetersRadio;
@@ -22,19 +22,18 @@ internal sealed class SlideSizeDialog : Window
     private readonly TextBlock _widthUnitLabel;
     private readonly TextBlock _heightUnitLabel;
     private readonly TextBlock _validationText;
-    private SlideSizeDialogUnit _unit = SlideSizeDialogUnit.Inches;
     private bool _suppressSelectionRefresh;
 
-    internal SlideSizeDialogResultPlan? LastResultPlan { get; private set; }
-    internal SlideSizeDialogInitialState InitialState { get; }
+    internal SlideSizeDialogResultPlan? LastResultPlan => _session.LastResultPlan;
+    internal SlideSizeDialogInitialState InitialState => _session.InitialState;
     internal string WidthText => _widthBox.Text ?? string.Empty;
     internal string HeightText => _heightBox.Text ?? string.Empty;
     internal string ValidationText => _validationText.Text ?? string.Empty;
-    internal SlideSizeDialogUnit Unit => _unit;
+    internal SlideSizeDialogUnit Unit => _session.Unit;
 
     public SlideSizeDialog(EditingSession editor)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+        _session = new SlideSizeDialogSession(editor);
 
         Title = "Slide Size";
         Width = 365.3333333333333;
@@ -46,7 +45,7 @@ internal sealed class SlideSizeDialog : Window
 
         _presetCombo = new ComboBox
         {
-            ItemsSource = new[] { "Standard (4:3)", "Widescreen (16:9)", "Custom" },
+            ItemsSource = SlideSizeDialogSession.PresetNames,
             Margin = new Thickness(4),
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
@@ -84,11 +83,7 @@ internal sealed class SlideSizeDialog : Window
             DialogChromeStyle,
             new Thickness(0, 8, 0, 0));
 
-        InitialState = SlideSizeDialogPlanner.BuildInitialState(
-            _editor.Presentation.SlideSizeCxEmu,
-            _editor.Presentation.SlideSizeCyEmu,
-            _unit);
-        LoadInitialState(InitialState);
+        LoadInitialState();
         Content = BuildContent();
 
         KeyDown += (_, e) =>
@@ -103,10 +98,7 @@ internal sealed class SlideSizeDialog : Window
 
     internal bool TryParseEmu(out long cxEmu, out long cyEmu)
     {
-        var parse = SlideSizeDialogPlanner.TryParsePositiveSize(
-            _widthBox.Text ?? string.Empty,
-            _heightBox.Text ?? string.Empty,
-            _unit);
+        var parse = _session.TryParse(_widthBox.Text, _heightBox.Text);
         cxEmu = parse.CxEmu;
         cyEmu = parse.CyEmu;
         return parse.IsValid;
@@ -117,12 +109,10 @@ internal sealed class SlideSizeDialog : Window
         _suppressSelectionRefresh = true;
         try
         {
-            _unit = unit;
+            var display = _session.SetInputUnit(widthText, heightText, unit);
             _inchesRadio.IsChecked = unit == SlideSizeDialogUnit.Inches;
             _centimetersRadio.IsChecked = unit == SlideSizeDialogUnit.Centimeters;
-            _widthBox.Text = widthText;
-            _heightBox.Text = heightText;
-            ApplyUnitLabels(unit == SlideSizeDialogUnit.Inches ? "in" : "cm");
+            ApplyDisplay(display);
         }
         finally
         {
@@ -177,13 +167,13 @@ internal sealed class SlideSizeDialog : Window
         return grid;
     }
 
-    private void LoadInitialState(SlideSizeDialogInitialState state)
+    private void LoadInitialState()
     {
         _suppressSelectionRefresh = true;
         try
         {
-            _presetCombo.SelectedIndex = ToPresetIndex(state.Preset);
-            ApplyDisplay(state.Display);
+            _presetCombo.SelectedIndex = _session.InitialPresetIndex;
+            ApplyDisplay(_session.InitialState.Display);
         }
         finally
         {
@@ -196,9 +186,7 @@ internal sealed class SlideSizeDialog : Window
         if (_suppressSelectionRefresh)
             return;
 
-        var display = SlideSizeDialogPlanner.BuildPresetSelectionDisplay(
-            PresetFromIndex(_presetCombo.SelectedIndex),
-            _unit);
+        var display = _session.SelectPreset(_presetCombo.SelectedIndex);
         if (display is not null)
             ApplyDisplay(display);
     }
@@ -211,27 +199,21 @@ internal sealed class SlideSizeDialog : Window
         var newUnit = _centimetersRadio.IsChecked == true
             ? SlideSizeDialogUnit.Centimeters
             : SlideSizeDialogUnit.Inches;
-        if (newUnit == _unit)
+        if (newUnit == _session.Unit)
             return;
 
-        var display = SlideSizeDialogPlanner.BuildUnitChangeDisplay(
-            _widthBox.Text ?? string.Empty,
-            _heightBox.Text ?? string.Empty,
-            _unit,
+        var display = _session.ChangeUnit(
+            _widthBox.Text,
+            _heightBox.Text,
             newUnit);
-        _unit = newUnit;
         ApplyDisplay(display);
     }
 
     private bool Apply(bool showValidation = true)
     {
-        LastResultPlan = SlideSizeDialogPlanner.BuildOkResult(
-            _widthBox.Text ?? string.Empty,
-            _heightBox.Text ?? string.Empty,
-            _unit);
-        if (!SlideSizeDialogPlanner.TryApplyResult(_editor, LastResultPlan))
+        if (!_session.TryApply(_widthBox.Text, _heightBox.Text))
         {
-            var validation = LastResultPlan.Validation!;
+            var validation = LastResultPlan!.Validation!;
             _validationText.Text = validation.Message;
             _validationText.IsVisible = showValidation;
             FocusField(validation.FocusField);
@@ -313,17 +295,4 @@ internal sealed class SlideSizeDialog : Window
         VerticalAlignment = VerticalAlignment.Center,
     };
 
-    private static int ToPresetIndex(SlideSizeDialogPreset preset) => preset switch
-    {
-        SlideSizeDialogPreset.Widescreen169 => 1,
-        SlideSizeDialogPreset.Custom => 2,
-        _ => 0,
-    };
-
-    private static SlideSizeDialogPreset PresetFromIndex(int selectedIndex) => selectedIndex switch
-    {
-        1 => SlideSizeDialogPreset.Widescreen169,
-        2 => SlideSizeDialogPreset.Custom,
-        _ => SlideSizeDialogPreset.Standard43,
-    };
 }

@@ -14,7 +14,7 @@ internal sealed class HeaderFooterDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
-    private readonly EditingSession _editor;
+    private readonly HeaderFooterDialogSession _session;
     private readonly CheckBox _dateTimeCheck;
     private readonly ComboBox _dateFormatCombo;
     private readonly CheckBox _fixedDateCheck;
@@ -24,16 +24,14 @@ internal sealed class HeaderFooterDialog : Window
     private readonly CheckBox _slideNumberCheck;
     private readonly CheckBox _dontShowOnTitleSlideCheck;
 
-    internal HeaderFooterState InitialState { get; }
-    internal HeaderFooterApplyPlan? LastApplyPlan { get; private set; }
-    internal HeaderFooterCommandFocus RequestedFocus { get; }
+    internal HeaderFooterState InitialState => _session.InitialState;
+    internal HeaderFooterApplyPlan? LastApplyPlan => _session.LastApplyPlan;
+    internal HeaderFooterCommandFocus RequestedFocus => _session.RequestedFocus;
 
     public HeaderFooterDialog(EditingSession editor, HeaderFooterCommandFocus focus)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        RequestedFocus = focus;
-        InitialState = HeaderFooterCommandPlanner.BuildState(editor);
-        var defaults = HeaderFooterCommandPlanner.BuildDefaultOptions(InitialState, focus);
+        _session = new HeaderFooterDialogSession(editor, focus);
+        var defaults = _session.InitialInput;
 
         Title = "Header and Footer";
         Width = 345.3333333333333;
@@ -46,17 +44,15 @@ internal sealed class HeaderFooterDialog : Window
         _dateTimeCheck = new CheckBox { Content = "Date and time", IsChecked = defaults.ShowDateTime };
         _dateFormatCombo = new ComboBox
         {
-            ItemsSource = HeaderFooterCommandPlanner.DateFormatOptions,
-            SelectedItem = HeaderFooterCommandPlanner.DateFormatOptions.FirstOrDefault(option =>
-                StringComparer.Ordinal.Equals(option.FieldType, defaults.DateTimeFieldType)) ??
-                HeaderFooterCommandPlanner.DateFormatOptions[0],
+            ItemsSource = HeaderFooterDialogSession.DateFormatOptions,
+            SelectedIndex = defaults.DateFormatIndex,
             MinWidth = 260,
             Margin = new Thickness(20, 0, 0, 4),
         };
         _fixedDateCheck = new CheckBox
         {
             Content = "Fixed",
-            IsChecked = defaults.DateTimeMode == HeaderFooterDateTimeMode.Fixed,
+            IsChecked = defaults.UseFixedDateTime,
             Margin = new Thickness(20, 0, 0, 4),
         };
         _fixedDateBox = new TextBox
@@ -137,17 +133,15 @@ internal sealed class HeaderFooterDialog : Window
         string dateTimeFieldType = "datetime1",
         string fixedDateTimeText = "")
     {
-        _dateTimeCheck.IsChecked = showDateTime;
-        _dateFormatCombo.SelectedItem = HeaderFooterCommandPlanner.DateFormatOptions.FirstOrDefault(option =>
-            StringComparer.Ordinal.Equals(option.FieldType, dateTimeFieldType)) ??
-            HeaderFooterCommandPlanner.DateFormatOptions[0];
-        _fixedDateCheck.IsChecked = dateTimeMode == HeaderFooterDateTimeMode.Fixed;
-        _fixedDateBox.Text = fixedDateTimeText;
-        _footerCheck.IsChecked = showFooter;
-        _footerBox.Text = footerText;
-        _slideNumberCheck.IsChecked = showSlideNumber;
-        _dontShowOnTitleSlideCheck.IsChecked = suppressOnTitleSlide;
-        UpdateEnabledState();
+        ApplyInput(HeaderFooterDialogSession.CreateInput(
+            showDateTime,
+            showFooter,
+            showSlideNumber,
+            footerText,
+            suppressOnTitleSlide,
+            dateTimeMode,
+            dateTimeFieldType,
+            fixedDateTimeText));
     }
 
     private Control BuildContent()
@@ -234,38 +228,45 @@ internal sealed class HeaderFooterDialog : Window
 
     private void UpdateEnabledState()
     {
-        var showDateTime = _dateTimeCheck.IsChecked == true;
-        var fixedDate = _fixedDateCheck.IsChecked == true;
-        _dateFormatCombo.IsEnabled = showDateTime && !fixedDate;
-        _fixedDateCheck.IsEnabled = showDateTime;
-        _fixedDateBox.IsEnabled = showDateTime && fixedDate;
-        _footerBox.IsEnabled = _footerCheck.IsChecked == true;
+        var enabled = HeaderFooterDialogSession.BuildEnabledState(ReadInput());
+        _dateFormatCombo.IsEnabled = enabled.IsDateFormatEnabled;
+        _fixedDateCheck.IsEnabled = enabled.IsDateTimeModeEnabled;
+        _fixedDateBox.IsEnabled = enabled.IsFixedDateTimeTextEnabled;
+        _footerBox.IsEnabled = enabled.IsFooterTextEnabled;
     }
 
     private bool Apply(HeaderFooterApplyScope scope)
     {
-        var dateFormat = _dateFormatCombo.SelectedItem as HeaderFooterDateFormatOption ??
-            HeaderFooterCommandPlanner.DateFormatOptions[0];
-        var options = new HeaderFooterApplyOptions(
-            _dateTimeCheck.IsChecked == true,
-            _footerCheck.IsChecked == true,
-            _slideNumberCheck.IsChecked == true,
-            _footerBox.Text ?? string.Empty,
-            scope,
-            _dontShowOnTitleSlideCheck.IsChecked == true,
-            _fixedDateCheck.IsChecked == true
-                ? HeaderFooterDateTimeMode.Fixed
-                : HeaderFooterDateTimeMode.AutoUpdate,
-            dateFormat.FieldType,
-            _fixedDateBox.Text ?? string.Empty);
-
-        if (!HeaderFooterCommandPlanner.TryApply(_editor, options, out var plan))
+        if (!_session.TryApply(ReadInput(), scope))
             return false;
 
-        LastApplyPlan = plan;
         if (IsVisible)
             Close(true);
         return true;
+    }
+
+    private HeaderFooterDialogInputState ReadInput() =>
+        HeaderFooterDialogSession.CreateInput(
+            _dateTimeCheck.IsChecked == true,
+            _footerCheck.IsChecked == true,
+            _slideNumberCheck.IsChecked == true,
+            _footerBox.Text,
+            _dontShowOnTitleSlideCheck.IsChecked == true,
+            _fixedDateCheck.IsChecked == true,
+            _dateFormatCombo.SelectedIndex,
+            _fixedDateBox.Text);
+
+    private void ApplyInput(HeaderFooterDialogInputState input)
+    {
+        _dateTimeCheck.IsChecked = input.ShowDateTime;
+        _dateFormatCombo.SelectedIndex = input.DateFormatIndex;
+        _fixedDateCheck.IsChecked = input.UseFixedDateTime;
+        _fixedDateBox.Text = input.FixedDateTimeText;
+        _footerCheck.IsChecked = input.ShowFooter;
+        _footerBox.Text = input.FooterText;
+        _slideNumberCheck.IsChecked = input.ShowSlideNumber;
+        _dontShowOnTitleSlideCheck.IsChecked = input.SuppressOnTitleSlide;
+        UpdateEnabledState();
     }
 
     private void FocusRequestedControl()
