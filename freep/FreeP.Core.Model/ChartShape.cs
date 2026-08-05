@@ -420,6 +420,37 @@ public sealed class ChartPointStyle
     public ChartMarkerStyle? Marker { get; set; }
 }
 
+/// <summary>
+/// One native ChartEx value-color stop position. A stop may be tied to an
+/// explicit numeric value, a percentage of the series range, or an extreme
+/// endpoint. The distinction is retained because PowerPoint uses it when the
+/// underlying data range changes.
+/// </summary>
+public sealed class ChartValueColorPosition
+{
+    public double? Number { get; set; }
+    public double? Percent { get; set; }
+    public bool IsExtreme { get; set; }
+}
+
+/// <summary>
+/// Native ChartEx value-driven gradient colors and optional stop positions.
+/// This is separate from per-point <see cref="ChartPointStyle"/> overrides.
+/// </summary>
+public sealed class ChartValueColorScale
+{
+    public ThemeAwareColor? MinColor { get; set; }
+    public ThemeAwareColor? MidColor { get; set; }
+    public ThemeAwareColor? MaxColor { get; set; }
+
+    public ChartValueColorPosition? MinPosition { get; set; }
+    public ChartValueColorPosition? MidPosition { get; set; }
+    public ChartValueColorPosition? MaxPosition { get; set; }
+
+    /// <summary>Native cx:valueColorPositions/@count when authored.</summary>
+    public int? PositionCount { get; set; }
+}
+
 /// <summary>Authored workbook formula references for a chart series.</summary>
 public sealed class ChartSeriesFormulaReferences
 {
@@ -493,6 +524,12 @@ public sealed class ChartSeries
 
     /// <summary>Per-point style overrides (keyed by zero-based point index).</summary>
     public Dictionary<int, ChartPointStyle> PointStyles { get; } = new();
+
+    /// <summary>
+    /// Native ChartEx min/mid/max value-color gradient and its optional numeric
+    /// or percentage stop positions.
+    /// </summary>
+    public ChartValueColorScale? ValueColorScale { get; set; }
 
     // ── Scatter / Bubble extension fields ────────────────────────────────────────
 

@@ -2081,6 +2081,87 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void Edit_NativeChartExValueColors_RoundTripsGradientStopsAndPositions()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        const string drawingMlUri = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace cxNs = chartExUri;
+        XNamespace aNs = drawingMlUri;
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XAttribute(XNamespace.Xmlns + "a", drawingMlUri),
+                new XElement(cxNs + "chartData", new XElement(cxNs + "data", new XAttribute("id", 0))),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion",
+                            new XElement(cxNs + "series",
+                                new XAttribute("layoutId", "histogram"),
+                                new XElement(cxNs + "tx",
+                                    new XElement(cxNs + "txData", new XElement(cxNs + "v", "Revenue"))),
+                                new XElement(cxNs + "valueColors",
+                                    new XElement(cxNs + "minColor",
+                                        new XElement(aNs + "solidFill",
+                                            new XElement(aNs + "srgbClr", new XAttribute("val", "FF0000")))),
+                                    new XElement(cxNs + "midColor",
+                                        new XElement(aNs + "solidFill",
+                                            new XElement(aNs + "srgbClr", new XAttribute("val", "FFFF00")))),
+                                    new XElement(cxNs + "maxColor",
+                                        new XElement(aNs + "solidFill",
+                                            new XElement(aNs + "srgbClr", new XAttribute("val", "00FF00"))))),
+                                new XElement(cxNs + "valueColorPositions",
+                                    new XAttribute("count", "3"),
+                                    new XElement(cxNs + "min",
+                                        new XElement(cxNs + "number", new XAttribute("val", "0"))),
+                                    new XElement(cxNs + "mid",
+                                        new XElement(cxNs + "percent", new XAttribute("val", "50"))),
+                                    new XElement(cxNs + "max",
+                                        new XElement(cxNs + "extremeValue"))),
+                                new XElement(cxNs + "dataId", new XAttribute("val", 0))))))));
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting)
+        };
+        chart.Categories.AddRange(["Q1", "Q2"]);
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+
+        var importedPath = WriteToPptx(BuildPresWithChart(chart));
+        var imported = PptxPackageReader.Read(importedPath).Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        var importedScale = imported.Series[0].ValueColorScale!;
+        importedScale.MinColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xFF0000));
+        importedScale.MidColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xFFFF00));
+        importedScale.MaxColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x00FF00));
+        importedScale.PositionCount.Should().Be(3);
+        importedScale.MinPosition!.Number.Should().Be(0);
+        importedScale.MidPosition!.Percent.Should().Be(50);
+        importedScale.MaxPosition!.IsExtreme.Should().BeTrue();
+
+        importedScale.MidColor = new ThemeAwareColor(SrgbColor.FromRgb(0x0000FF));
+        importedScale.MidPosition = new ChartValueColorPosition { Number = 25 };
+        var editedPath = WriteToPptx(BuildPresWithChart(imported));
+        using var archive = ZipFile.OpenRead(editedPath);
+        var edited = XDocument.Load(archive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var editedSeries = edited.Descendants(cxNs + "series").Single();
+        editedSeries.Element(cxNs + "valueColors")!
+            .Element(cxNs + "midColor")!
+            .Element(aNs + "solidFill")!
+            .Element(aNs + "srgbClr")!
+            .Attribute("val")!.Value.Should().Be("0000FF");
+        editedSeries.Element(cxNs + "valueColorPositions")!
+            .Element(cxNs + "mid")!
+            .Element(cxNs + "number")!
+            .Attribute("val")!.Value.Should().Be("25");
+        editedSeries.Elements().Select(element => element.Name.LocalName)
+            .Should().ContainInOrder("tx", "valueColors", "valueColorPositions", "dataId");
+    }
+
+    [Fact]
     public void Edit_NativeSingleSeriesChartEx_UpdatesDataWithoutChangingFamilyPayload()
     {
         const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";

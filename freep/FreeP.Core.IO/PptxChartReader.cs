@@ -278,6 +278,7 @@ internal static class PptxChartReader
                 series.Values.AddRange(ReadChartExValues(valueLevel));
             }
 
+            series.ValueColorScale = ReadChartExValueColorScale(seriesElement, scheme);
             ReadChartExDataPoints(seriesElement, scheme, series);
             ReadChartExDataLabels(seriesElement.Element(Cx + "dataLabels"), scheme, series);
 
@@ -285,6 +286,54 @@ internal static class PptxChartReader
         }
 
         return shape;
+    }
+
+    private static ChartValueColorScale? ReadChartExValueColorScale(
+        XElement seriesElement,
+        PresentationColorScheme scheme)
+    {
+        var colors = seriesElement.Element(Cx + "valueColors");
+        var positions = seriesElement.Element(Cx + "valueColorPositions");
+        if (colors is null && positions is null)
+            return null;
+
+        var scale = new ChartValueColorScale
+        {
+            MinColor = ReadChartExValueColor(colors?.Element(Cx + "minColor"), scheme),
+            MidColor = ReadChartExValueColor(colors?.Element(Cx + "midColor"), scheme),
+            MaxColor = ReadChartExValueColor(colors?.Element(Cx + "maxColor"), scheme),
+            PositionCount = ParseNullableInt(positions?.Attribute("count")?.Value),
+            MinPosition = ReadChartExValueColorPosition(positions?.Element(Cx + "min")),
+            MidPosition = ReadChartExValueColorPosition(positions?.Element(Cx + "mid")),
+            MaxPosition = ReadChartExValueColorPosition(positions?.Element(Cx + "max")),
+        };
+        return scale;
+    }
+
+    private static ThemeAwareColor? ReadChartExValueColor(
+        XElement? element,
+        PresentationColorScheme scheme) =>
+        element is null
+            ? null
+            : PptxColorReader.TryReadColor(element.Element(A + "solidFill"), scheme);
+
+    private static ChartValueColorPosition? ReadChartExValueColorPosition(XElement? element)
+    {
+        if (element is null)
+            return null;
+
+        if (element.Element(Cx + "extremeValue") is not null)
+            return new ChartValueColorPosition { IsExtreme = true };
+
+        var number = element.Element(Cx + "number")?.Attribute("val")?.Value;
+        if (double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out var numberValue))
+            return new ChartValueColorPosition { Number = numberValue };
+
+        var percent = element.Element(Cx + "percent")?.Attribute("val")?.Value;
+        if (double.TryParse(percent, NumberStyles.Float, CultureInfo.InvariantCulture, out var percentValue))
+            return new ChartValueColorPosition { Percent = percentValue };
+
+        return null;
     }
 
     private static void ReadChartExDataPoints(
