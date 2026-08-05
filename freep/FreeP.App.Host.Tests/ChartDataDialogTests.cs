@@ -805,24 +805,28 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [Fact]
-    public void ChartDataDialog_UsesSharedPlannerForPolicy()
+    public void ChartDataDialog_UsesSharedSessionForWorkflow()
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartDataDialog.cs");
 
-        source.Should().Contain("ChartDataDialogPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildTableProjection()");
+        source.Should().Contain("new ChartDataDialogSession(editor)");
+        source.Should().Contain("_session.BuildTableProjection()");
         source.Should().Contain("new ChartRowViewModel(row)");
         source.Should().Contain("MakeEditableHeader(seriesColumn)");
-        source.Should().Contain("_planner.BuildCommitPlan(ReadCategoryEditsFromGrid())");
-        source.Should().Contain("commit.ChartType");
-        source.Should().Contain("_planner.AddSeries()");
-        source.Should().Contain("_planner.AddCategory()");
-        source.Should().Contain("_planner.RemoveSeriesAt(seriesIndex)");
-        source.Should().Contain("_planner.RemoveCategoryAt(categoryIndex)");
-        source.Should().Contain("_planner.MoveCategory(categoryIndex, categoryIndex + delta)");
-        source.Should().Contain("_planner.SwitchRowsAndColumns()");
+        source.Should().Contain("_session.BuildCommitPlan()");
+        source.Should().Contain("_session.TryApplyEdits(");
+        source.Should().Contain("_session.TryCommit(");
+        source.Should().Contain("_session.AddSeries()");
+        source.Should().Contain("_session.AddCategory()");
+        source.Should().Contain("_session.RemoveActiveSeries()");
+        source.Should().Contain("_session.RemoveActiveCategory()");
+        source.Should().Contain("_session.MoveActiveCategory(delta)");
+        source.Should().Contain("_session.SwitchRowsAndColumns()");
         source.Should().Contain("ChartDataDialogPlanner.FormatCellValue(");
         source.Should().Contain("ChartDataDialogPlanner.ParseCellValue(");
+        source.Should().NotContain("ChartDataDialogPlanner.FromChart(");
+        source.Should().NotContain("_planner.");
+        source.Should().NotContain("ReplaceChartData(");
         source.Should().NotContain("private readonly List<string>       _categories");
         source.Should().NotContain("private readonly List<string>       _seriesNames");
         source.Should().NotContain("private readonly List<List<double?>> _values");

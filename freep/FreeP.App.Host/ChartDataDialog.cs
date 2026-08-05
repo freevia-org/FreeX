@@ -35,8 +35,8 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     // ── State ─────────────────────────────────────────────────────────────────────
 
-    private readonly EditingSession          _editor;
-    private readonly ChartDataDialogPlanner _planner;
+    private readonly ChartDataDialogSession _session;
+    private readonly List<IndexedTextBox> _seriesNameBoxes = [];
 
     // ── Controls ──────────────────────────────────────────────────────────────────
 
@@ -61,46 +61,40 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     /// </summary>
     public ChartDataDialog(EditingSession editor)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-
-        var chart = editor.SelectedChart
-            ?? throw new InvalidOperationException("No chart is currently selected.");
-
-        // Deep-copy the data so we don't mutate the live model until OK is pressed.
-        // W7: preserve gap (null) entries — do NOT coerce to 0.0 here.
-        _planner = ChartDataDialogPlanner.FromChart(chart);
+        _session = new ChartDataDialogSession(editor);
+        var surface = ChartDataDialogPlanner.BuildSurfacePlan();
 
         // ── Window chrome ─────────────────────────────────────────────────────────
-        Title          = "Edit Chart Data";
-        Width          = 640;
-        Height         = 440;
+        Title          = surface.Title;
+        Width          = surface.Width;
+        Height         = surface.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode     = ResizeMode.CanResize;
         Background     = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         // ── Toolbar ───────────────────────────────────────────────────────────────
-        _addSeriesBtn    = MakeToolbarButton("+ Series",    OnAddSeries);
-        _removeSeriesBtn = MakeToolbarButton("- Series",    OnRemoveSeries);
-        _moveSeriesUpBtn = MakeToolbarButton("Move Series Up", OnMoveSeriesUp);
-        _moveSeriesDownBtn = MakeToolbarButton("Move Series Down", OnMoveSeriesDown);
-        _addCatBtn       = MakeToolbarButton("+ Category",  OnAddCategory);
-        _removeCatBtn    = MakeToolbarButton("- Category",  OnRemoveCategory);
-        _moveCatLeftBtn  = MakeToolbarButton("Move Category Left", OnMoveCategoryLeft);
-        _moveCatRightBtn = MakeToolbarButton("Move Category Right", OnMoveCategoryRight);
-        _switchRowsAndColumnsBtn = MakeToolbarButton("Switch Row/Column", OnSwitchRowsAndColumns);
+        _addSeriesBtn    = MakeToolbarButton(surface.AddSeriesLabel, OnAddSeries);
+        _removeSeriesBtn = MakeToolbarButton(surface.RemoveSeriesLabel, OnRemoveSeries);
+        _moveSeriesUpBtn = MakeToolbarButton(surface.MoveSeriesUpLabel, OnMoveSeriesUp);
+        _moveSeriesDownBtn = MakeToolbarButton(surface.MoveSeriesDownLabel, OnMoveSeriesDown);
+        _addCatBtn       = MakeToolbarButton(surface.AddCategoryLabel, OnAddCategory);
+        _removeCatBtn    = MakeToolbarButton(surface.RemoveCategoryLabel, OnRemoveCategory);
+        _moveCatLeftBtn  = MakeToolbarButton(surface.MoveCategoryLeftLabel, OnMoveCategoryLeft);
+        _moveCatRightBtn = MakeToolbarButton(surface.MoveCategoryRightLabel, OnMoveCategoryRight);
+        _switchRowsAndColumnsBtn = MakeToolbarButton(surface.SwitchRowsAndColumnsLabel, OnSwitchRowsAndColumns);
         _chartTypeCombo = new ComboBox
         {
             ItemsSource = ChartDataDialogPlanner.ChartTypeOptions,
             DisplayMemberPath = nameof(ChartDataDialogChartTypeOption.Label),
             SelectedValuePath = nameof(ChartDataDialogChartTypeOption.Value),
-            SelectedValue = _planner.SelectedChartType,
+            SelectedValue = _session.SelectedChartType,
             Width = 170,
             Margin = new Thickness(8, 0, 4, 0),
         };
         _chartTypeCombo.SelectionChanged += (_, _) =>
         {
             if (_chartTypeCombo.SelectedValue is ChartType chartType)
-                _planner.SetChartType(chartType);
+                _session.SetChartType(chartType);
         };
 
         var toolbar = new WrapPanel { Margin = new Thickness(4, 4, 4, 2) };
@@ -116,7 +110,7 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         toolbar.Children.Add(_switchRowsAndColumnsBtn);
         toolbar.Children.Add(new TextBlock
         {
-            Text = ChartDataDialogPlanner.ChartTypeLabel,
+            Text = surface.ChartTypeLabel,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 2, 0),
         });
@@ -171,9 +165,9 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     internal ChartDataDialogCommitPlan BuildCommitPlanForTests()
     {
-        if (!TryCommitPendingEdit())
+        if (!TryFlushPendingEdits())
             throw new InvalidOperationException("The chart data grid contains an invalid value.");
-        return _planner.BuildCommitPlan(ReadCategoryEditsFromGrid());
+        return _session.BuildCommitPlan();
     }
 
     internal bool PrepareValidationForVisualEvidence()
@@ -192,7 +186,7 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             return false;
         editor.Text = "not-a-number";
         editor.Focus();
-        var committed = TryCommitPendingEdit();
+        var committed = TryFlushPendingEdits();
         return !committed && !string.IsNullOrWhiteSpace(_validationText.Text);
     }
 
@@ -207,9 +201,10 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         // Flush any pending edits before rebuilding.
         _grid.CommitEdit(DataGridEditingUnit.Row, exitEditingMode: true);
 
-        var table = _planner.BuildTableProjection();
+        var table = _session.BuildTableProjection();
 
         _grid.Columns.Clear();
+        _seriesNameBoxes.Clear();
 
         // Column 0: Category label (editable text).
         var catCol = new DataGridTextColumn
@@ -258,7 +253,14 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             MinWidth    = 60,
             Padding     = new Thickness(2),
         };
-        tb.LostFocus += (_, _) => seriesColumn.Name = tb.Text;
+        _seriesNameBoxes.Add(new IndexedTextBox(seriesColumn.SeriesIndex, tb));
+        tb.LostFocus += (_, _) => _session.TryApplyEdits(
+            new ChartDataDialogEdits(
+                [new ChartDataDialogSeriesNameEdit(seriesColumn.SeriesIndex, tb.Text)],
+                [],
+                []),
+            CultureInfo.CurrentCulture,
+            out _);
         return tb;
     }
 
@@ -266,21 +268,22 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void OnAddSeries()
     {
-        _planner.AddSeries();
+        _session.AddSeries();
         RebuildGrid();
     }
 
     private void OnRemoveSeries()
     {
-        if (!TryCommitPendingEdit())
+        if (!TryFlushPendingEdits())
             return;
 
-        var table = _planner.BuildTableProjection();
+        var table = _session.BuildTableProjection();
         var displayIndex = _grid.CurrentColumn?.DisplayIndex ?? -1;
         var seriesIndex = displayIndex > 0 && displayIndex <= table.SeriesColumns.Count
             ? table.SeriesColumns[displayIndex - 1].SeriesIndex
-            : _planner.SeriesCount - 1;
-        if (_planner.RemoveSeriesAt(seriesIndex))
+            : -1;
+        _session.SelectSeries(seriesIndex);
+        if (_session.RemoveActiveSeries())
             RebuildGrid();
     }
 
@@ -290,34 +293,35 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void MoveActiveSeries(int delta)
     {
-        if (!TryCommitPendingEdit())
+        if (!TryFlushPendingEdits())
             return;
 
-        var table = _planner.BuildTableProjection();
+        var table = _session.BuildTableProjection();
         var displayIndex = _grid.CurrentColumn?.DisplayIndex ?? -1;
-        if (displayIndex <= 0 || displayIndex > table.SeriesColumns.Count)
-            return;
-
-        var sourceIndex = table.SeriesColumns[displayIndex - 1].SeriesIndex;
-        if (_planner.MoveSeries(sourceIndex, sourceIndex + delta))
+        var seriesIndex = displayIndex > 0 && displayIndex <= table.SeriesColumns.Count
+            ? table.SeriesColumns[displayIndex - 1].SeriesIndex
+            : -1;
+        _session.SelectSeries(seriesIndex);
+        if (_session.MoveActiveSeries(delta))
             RebuildGrid();
     }
 
     private void OnAddCategory()
     {
-        _planner.AddCategory();
+        _session.AddCategory();
         RebuildGrid();
     }
 
     private void OnRemoveCategory()
     {
-        if (!TryCommitPendingEdit())
+        if (!TryFlushPendingEdits())
             return;
 
         var categoryIndex = _grid.SelectedIndex >= 0
             ? _grid.SelectedIndex
-            : _planner.CategoryCount - 1;
-        if (_planner.RemoveCategoryAt(categoryIndex))
+            : -1;
+        _session.SelectCategory(categoryIndex);
+        if (_session.RemoveActiveCategory())
             RebuildGrid();
     }
 
@@ -327,22 +331,23 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void MoveActiveCategory(int delta)
     {
-        if (!TryCommitPendingEdit())
+        if (!TryFlushPendingEdits())
             return;
 
         var categoryIndex = _grid.SelectedIndex >= 0
             ? _grid.SelectedIndex
-            : _planner.CategoryCount - 1;
-        if (_planner.MoveCategory(categoryIndex, categoryIndex + delta))
+            : -1;
+        _session.SelectCategory(categoryIndex);
+        if (_session.MoveActiveCategory(delta))
             RebuildGrid();
     }
 
     private void OnSwitchRowsAndColumns()
     {
-        if (!TryCommitPendingEdit())
+        if (!TryFlushPendingEdits())
             return;
 
-        _planner.SwitchRowsAndColumns();
+        _session.SwitchRowsAndColumns();
         RebuildGrid();
     }
 
@@ -350,40 +355,54 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void OnOk()
     {
-        // Flush any cell being edited.
-        if (!TryCommitPendingEdit())
+        if (!TryCommitNativeEdit())
             return;
+        if (!_session.TryCommit(
+                ReadEditsFromGrid(),
+                CultureInfo.CurrentCulture,
+                out var validation))
+        {
+            ShowValidation(validation);
+            return;
+        }
         _validationText.Text = string.Empty;
-
-        // Flush row-bound category labels that have not yet lost focus.
-        var commit = _planner.BuildCommitPlan(ReadCategoryEditsFromGrid());
-
-        // W7: pass nullable values so gaps stay null in the committed model.
-        _editor.ReplaceChartData(
-            commit.Categories,
-            commit.SeriesNames,
-            commit.ValuesForCommand(),
-            commit.ChartType,
-            commit.XValuesForCommand(),
-            commit.BubbleSizesForCommand());
 
         DialogResult = true;
         Close();
     }
 
-    private void ShowValidation() => _validationText.Text = ChartDataDialogPlanner.InvalidNumericValueMessage;
+    private void ShowValidation(ChartDataDialogValidationDecision? validation = null) =>
+        _validationText.Text = validation?.Message ?? ChartDataDialogPlanner.InvalidNumericValueMessage;
 
-    private bool TryCommitPendingEdit()
+    private bool TryFlushPendingEdits()
+    {
+        if (!TryCommitNativeEdit())
+            return false;
+        if (_session.TryApplyEdits(
+                ReadEditsFromGrid(),
+                CultureInfo.CurrentCulture,
+                out var validation))
+        {
+            return true;
+        }
+
+        ShowValidation(validation);
+        return false;
+    }
+
+    private bool TryCommitNativeEdit()
     {
         var editor = FindVisualDescendants<TextBox>(_grid).FirstOrDefault(box => box.IsKeyboardFocusWithin);
         var isValueColumn = _grid.CurrentColumn?.DisplayIndex > 0;
-        if (isValueColumn && editor is not null &&
-            !string.IsNullOrWhiteSpace(editor.Text) &&
-            ChartDataDialogPlanner.ParseCellValue(editor.Text, CultureInfo.CurrentCulture) is null)
+        if (isValueColumn && editor is not null)
         {
-            ShowValidation();
-            editor.Focus();
-            return false;
+            var validation = _session.ValidateValueEdit(editor.Text, CultureInfo.CurrentCulture);
+            if (!validation.IsValid)
+            {
+                ShowValidation(validation);
+                editor.Focus();
+                return false;
+            }
         }
 
         if (!_grid.CommitEdit(DataGridEditingUnit.Row, exitEditingMode: true))
@@ -408,14 +427,20 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     // ── Helpers ───────────────────────────────────────────────────────────────────
 
-    private IEnumerable<ChartDataDialogCategoryEdit> ReadCategoryEditsFromGrid()
+    private ChartDataDialogEdits ReadEditsFromGrid()
     {
         if (_grid.ItemsSource is IEnumerable<ChartRowViewModel> rows)
         {
-            return rows.Select(row => row.ToCategoryEdit()).ToList();
+            var rowList = rows.ToList();
+            return new ChartDataDialogEdits(
+                _seriesNameBoxes
+                    .Select(box => new ChartDataDialogSeriesNameEdit(box.Index, box.TextBox.Text))
+                    .ToArray(),
+                rowList.Select(row => row.ToCategoryEdit()).ToArray(),
+                rowList.SelectMany(row => row.ToValueEdits()).ToArray());
         }
 
-        return Array.Empty<ChartDataDialogCategoryEdit>();
+        return ChartDataDialogEdits.Empty;
     }
 
     private static Button MakeToolbarButton(string label, Action onClick)
@@ -457,6 +482,15 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         public ChartDataDialogCategoryEdit ToCategoryEdit()
         {
             return new ChartDataDialogCategoryEdit(CategoryIndex, Category);
+        }
+
+        public IEnumerable<ChartDataDialogValueEdit> ToValueEdits()
+        {
+            return _row.Values.Select(cell => new ChartDataDialogValueEdit(
+                cell.SeriesIndex,
+                cell.CategoryIndex,
+                cell.Value,
+                cell.Kind));
         }
     }
 
@@ -510,4 +544,6 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             return ChartDataDialogPlanner.ParseCellValue(value, culture);
         }
     }
+
+    private sealed record IndexedTextBox(int Index, TextBox TextBox);
 }
