@@ -371,11 +371,19 @@ public static class PptxPackageReader
         presentation.UseSlideTimings = ReadBooleanOrDefault(showPr.Attribute("useTimings")?.Value, defaultValue: true);
         presentation.ShowWithAnimation = ReadBooleanOrDefault(showPr.Attribute("showAnimation")?.Value, defaultValue: true);
         presentation.LoopUntilStopped = ReadBooleanOrDefault(showPr.Attribute("loop")?.Value, defaultValue: false);
-        presentation.ShowType = showPr.Element(P + "browse") is not null
+        var browse = showPr.Element(P + "browse");
+        var kiosk = showPr.Element(P + "kiosk");
+        presentation.ShowType = browse is not null
             ? PresentationShowType.BrowsedByIndividual
-            : showPr.Element(P + "kiosk") is not null
+            : kiosk is not null
                 ? PresentationShowType.BrowsedAtKiosk
                 : PresentationShowType.PresentedBySpeaker;
+        presentation.ShowBrowseScrollbar = browse is null ||
+            ReadBooleanOrDefault(browse.Attribute("showScrollbar")?.Value, defaultValue: true);
+        presentation.KioskRestartAfterMinutes = kiosk?.Attribute("restart") is { } restart &&
+            uint.TryParse(restart.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var restartMinutes)
+                ? restartMinutes
+                : null;
 
         var mediaControls = showPr.Element(P14 + "showMediaCtrls")
             ?? showPr.Element(P + "extLst")?
