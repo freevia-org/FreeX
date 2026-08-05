@@ -19,6 +19,7 @@
     <Project Path="shared/Free.Shared.Theme/Free.Shared.Theme.csproj" />
     <Project Path="shared/Free.Shared.Theme.Wpf/Free.Shared.Theme.Wpf.csproj" />
     <Project Path="shared/Free.Shared.Theme.Avalonia/Free.Shared.Theme.Avalonia.csproj" />
+    <Project Path="shared/Free.Shared.TextSearch/Free.Shared.TextSearch.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj" />

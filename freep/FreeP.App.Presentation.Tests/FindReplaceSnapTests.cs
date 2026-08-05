@@ -190,6 +190,44 @@ public sealed class PresentationTextSearchTests
         results[0].CharStart.Should().Be(0);
     }
 
+    [Theory]
+    [InlineData("xcat")]
+    [InlineData("catx")]
+    [InlineData("_cat")]
+    [InlineData("cat_")]
+    [InlineData("9cat")]
+    [InlineData("cat9")]
+    [InlineData("\u03B2cat")]
+    [InlineData("cat\u03B2")]
+    [InlineData("\u0661cat")]
+    [InlineData("cat\u0661")]
+    public void FindAll_WholeWord_RejectsAdjacentWordCharacters(string runText)
+    {
+        var p = Helpers.MakePresentation(1);
+        p.Slides[0].Shapes.Add(Helpers.MakeShape(1, runText));
+
+        var results = PresentationTextSearch.FindAll(
+            p,
+            "cat",
+            new TextSearchOptions { WholeWord = true });
+
+        results.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FindAll_WholeWord_AcceptsPunctuationBoundaries()
+    {
+        var p = Helpers.MakePresentation(1);
+        p.Slides[0].Shapes.Add(Helpers.MakeShape(1, "cat,cat.cat/cat"));
+
+        var results = PresentationTextSearch.FindAll(
+            p,
+            "cat",
+            new TextSearchOptions { WholeWord = true });
+
+        results.Select(result => result.CharStart).Should().Equal(0, 4, 8, 12);
+    }
+
     [Fact]
     public void FindAll_TableCell_FindsTextInCell()
     {

@@ -1,4 +1,5 @@
 using Free.Shared.Drawing;
+using Free.Shared.TextSearch;
 
 namespace FreeP.Core.Model;
 
@@ -171,10 +172,6 @@ public static class PresentationTextSearch
         string query, TextSearchOptions opts,
         List<TextSearchMatch> results)
     {
-        var comparison = opts.MatchCase
-            ? StringComparison.Ordinal
-            : StringComparison.OrdinalIgnoreCase;
-
         for (int pi = 0; pi < body.Paragraphs.Count; pi++)
         {
             var para = body.Paragraphs[pi];
@@ -184,20 +181,12 @@ public static class PresentationTextSearch
                 var text = run.Text;
                 if (string.IsNullOrEmpty(text)) continue;
 
-                int startIdx = 0;
-                while (true)
+                foreach (var (start, length) in PlainTextSearch.FindAll(
+                    text,
+                    query,
+                    opts.MatchCase,
+                    opts.WholeWord))
                 {
-                    int idx = text.IndexOf(query, startIdx, comparison);
-                    if (idx < 0) break;
-
-                    int endIdx = idx + query.Length;
-
-                    if (opts.WholeWord && !IsWholeWord(text, idx, endIdx))
-                    {
-                        startIdx = idx + 1;
-                        continue;
-                    }
-
                     results.Add(new TextSearchMatch
                     {
                         SlideIndex     = slideIndex,
@@ -207,28 +196,12 @@ public static class PresentationTextSearch
                         TableCol       = tableCol,
                         ParagraphIndex = pi,
                         RunIndex       = ri,
-                        CharStart      = idx,
-                        CharEnd        = endIdx,
-                        MatchedText    = text.Substring(idx, query.Length),
+                        CharStart      = start,
+                        CharEnd        = start + length,
+                        MatchedText    = text.Substring(start, length),
                     });
-
-                    // Advance past the END of the matched text so overlapping
-                    // occurrences are not reported as separate matches (matches
-                    // Word/PowerPoint find semantics).  Guard against an empty
-                    // query (Math.Max) to avoid an infinite loop.
-                    startIdx = idx + Math.Max(1, query.Length);
-                    if (startIdx >= text.Length) break;
                 }
             }
         }
     }
-
-    private static bool IsWholeWord(string text, int start, int end)
-    {
-        bool leftOk  = start == 0 || !IsWordChar(text[start - 1]);
-        bool rightOk = end == text.Length || !IsWordChar(text[end]);
-        return leftOk && rightOk;
-    }
-
-    private static bool IsWordChar(char c) => char.IsLetterOrDigit(c) || c == '_';
 }

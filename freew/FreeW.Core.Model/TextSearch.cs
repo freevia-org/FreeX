@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using Free.Shared.TextSearch;
 
 namespace FreeW.Core.Model;
 
@@ -63,26 +64,8 @@ public static class TextSearch
             yield break;
         }
 
-        var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
-        var start = 0;
-        while (start <= haystack.Length - needle.Length)
-        {
-            var index = haystack.IndexOf(needle, start, comparison);
-            if (index < 0)
-                yield break;
-
-            if (!wholeWord || IsWholeWordMatch(haystack, index, needle.Length))
-            {
-                yield return (index, needle.Length);
-                // Advance past the match so spans never overlap.
-                start = index + needle.Length;
-            }
-            else
-            {
-                // Not a whole-word hit: step one character so the next candidate can still be found.
-                start = index + 1;
-            }
-        }
+        foreach (var match in PlainTextSearch.FindAll(haystack, needle, matchCase, wholeWord))
+            yield return match;
     }
 
     /// <summary>
@@ -179,21 +162,6 @@ public static class TextSearch
     /// (or the document edge). A word character is a letter, a digit, or an underscore
     /// (<see cref="char.IsLetterOrDigit(char)"/> or <c>'_'</c>).
     /// </summary>
-    public static bool IsWholeWordMatch(string text, int start, int length)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-        if (start < 0 || length < 0 || start + length > text.Length)
-            throw new ArgumentOutOfRangeException(nameof(start));
-
-        if (start > 0 && IsWordChar(text[start - 1]))
-            return false;
-
-        var after = start + length;
-        if (after < text.Length && IsWordChar(text[after]))
-            return false;
-
-        return true;
-    }
-
-    private static bool IsWordChar(char c) => char.IsLetterOrDigit(c) || c == '_';
+    public static bool IsWholeWordMatch(string text, int start, int length) =>
+        PlainTextSearch.IsWholeWordMatch(text, start, length);
 }

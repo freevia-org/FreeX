@@ -14,6 +14,7 @@
     <Project Path="shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
     <Project Path="shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj" />
     <Project Path="shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
+    <Project Path="shared/Free.Shared.TextSearch/Free.Shared.TextSearch.csproj" />
   </Folder>
   <Folder Name="/freew/">
     <Project Path="freew/FreeW.Core.Model/FreeW.Core.Model.csproj" />

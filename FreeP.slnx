@@ -10,6 +10,7 @@
     <Project Path="shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
     <Project Path="shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj" />
     <Project Path="shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
+    <Project Path="shared/Free.Shared.TextSearch/Free.Shared.TextSearch.csproj" />
   </Folder>
   <Folder Name="/freep/">
     <Project Path="freep/FreeP.Core.Model/FreeP.Core.Model.csproj" />
