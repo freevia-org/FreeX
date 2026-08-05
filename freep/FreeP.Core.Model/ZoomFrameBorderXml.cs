@@ -16,13 +16,16 @@ internal static class ZoomFrameBorderXml
         ZoomFrameBorderGradient? gradient = null,
         ZoomFrameBorderPattern? pattern = null,
         bool? noFill = null,
-        ThemeColorSlot? themeColor = null)
+        ThemeColorSlot? themeColor = null,
+        ZoomFrameBorderShadow? shadow = null,
+        bool? shadowEnabled = null)
     {
         if (noFill == false)
             noFill = null;
 
         // Null means the model did not understand the native line; preserve it verbatim.
-        if (color is null && widthEmu is null && dash is null && gradient is null && pattern is null && noFill is null && themeColor is null)
+        if (color is null && widthEmu is null && dash is null && gradient is null && pattern is null && noFill is null && themeColor is null
+            && shadow is null && shadowEnabled is null)
             return;
 
         var shapeProperties = zoomProperties.Elements().FirstOrDefault(element =>
@@ -46,6 +49,8 @@ internal static class ZoomFrameBorderXml
                 line.Add(new XElement(Drawing + "prstDash",
                     new XAttribute("val", ToDashToken(dashValue))));
         }
+
+        SetOuterShadow(shapeProperties, shadow, shadowEnabled);
 
         var solidFill = line?.Elements(Drawing + "solidFill").FirstOrDefault();
         if (gradient is not null && pattern is not null)
@@ -173,6 +178,51 @@ internal static class ZoomFrameBorderXml
                      || element.Name == Drawing + "pattFill"
                      || element.Name == Drawing + "noFill").ToArray())
             fill.Remove();
+    }
+
+    private static void SetOuterShadow(
+        XElement shapeProperties,
+        ZoomFrameBorderShadow? shadow,
+        bool? shadowEnabled)
+    {
+        if (shadow is null && shadowEnabled is null)
+            return;
+
+        var effectList = shapeProperties.Elements(Drawing + "effectLst").FirstOrDefault();
+        var outerShadow = effectList?.Elements(Drawing + "outerShdw").FirstOrDefault();
+        if (shadowEnabled == false)
+        {
+            outerShadow?.Remove();
+            if (effectList is not null && !effectList.Elements().Any())
+                effectList.Remove();
+            return;
+        }
+
+        if (shadow is null)
+            return;
+
+        effectList ??= new XElement(Drawing + "effectLst");
+        outerShadow ??= new XElement(Drawing + "outerShdw");
+        outerShadow.ReplaceAttributes(
+            new XAttribute("blurRad", shadow.BlurRadiusEmu),
+            new XAttribute("dist", shadow.DistanceEmu),
+            new XAttribute("dir", shadow.Direction));
+        outerShadow.Elements().Remove();
+        outerShadow.Add(
+            new XElement(Drawing + "srgbClr",
+                new XAttribute("val", shadow.Color),
+                new XElement(Drawing + "alpha",
+                    new XAttribute("val", shadow.Alpha))));
+        if (outerShadow.Parent is null)
+            effectList.Add(outerShadow);
+        if (effectList.Parent is null)
+        {
+            var line = shapeProperties.Elements(Drawing + "ln").FirstOrDefault();
+            if (line is null)
+                shapeProperties.Add(effectList);
+            else
+                line.AddAfterSelf(effectList);
+        }
     }
 
     private static string ToDashToken(OutlineDash dash) => dash switch

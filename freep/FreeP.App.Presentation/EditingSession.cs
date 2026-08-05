@@ -757,6 +757,12 @@ public sealed class EditingSession
         {
             ImageType = properties.ImageType?.Trim().ToLowerInvariant(),
             TransitionDuration = properties.TransitionDuration?.Trim(),
+            FrameBorderShadow = properties.FrameBorderShadow is { } shadow
+                ? shadow with { Color = shadow.Color.Trim().TrimStart('#').ToUpperInvariant() }
+                : null,
+            FrameBorderShadowEnabled = properties.FrameBorderShadow is not null
+                ? true
+                : properties.FrameBorderShadowEnabled == false ? false : null,
         };
         return Equals(shape.PreservedObject.ZoomProperties, normalized);
     }

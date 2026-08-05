@@ -1804,8 +1804,49 @@ public static class PptxPackageReader
             ReadZoomFrameBorderGradient(properties),
             ReadZoomFrameBorderPattern(properties),
             ReadZoomFrameBorderNoFill(properties),
-            ReadZoomFrameBorderThemeColor(properties));
+            ReadZoomFrameBorderThemeColor(properties),
+            ReadZoomFrameBorderShadow(properties),
+            ReadZoomFrameBorderShadowEnabled(properties));
         return value.IsEmpty ? null : value;
+    }
+
+    private static ZoomFrameBorderShadow? ReadZoomFrameBorderShadow(XElement properties)
+    {
+        var shadow = properties.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase))
+            ?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "outerShdw", StringComparison.OrdinalIgnoreCase));
+        var color = shadow?.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "srgbClr", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value?.Trim().TrimStart('#');
+        if (color is not { Length: 6 } || !color.All(Uri.IsHexDigit))
+            return null;
+
+        var alpha = ParseNullableInt(shadow?.Descendants().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "alpha", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("val")?.Value) ?? 50000;
+        var blur = ParseNullableLong(shadow?.Attribute("blurRad")?.Value) ?? 0;
+        var distance = ParseNullableLong(shadow?.Attribute("dist")?.Value) ?? 0;
+        var direction = ParseNullableInt(shadow?.Attribute("dir")?.Value) ?? 0;
+        if (alpha is < 0 or > 100000 || blur < 0 || distance < 0
+            || direction is < 0 or > 21600000)
+            return null;
+
+        return new ZoomFrameBorderShadow(color.ToUpperInvariant(), alpha, blur, distance, direction);
+    }
+
+    private static bool? ReadZoomFrameBorderShadowEnabled(XElement properties)
+    {
+        var shapeProperties = properties.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "spPr", StringComparison.OrdinalIgnoreCase));
+        var effectList = shapeProperties?.Elements().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "effectLst", StringComparison.OrdinalIgnoreCase));
+        return effectList?.Elements().Any(element =>
+            string.Equals(element.Name.LocalName, "outerShdw", StringComparison.OrdinalIgnoreCase)) == true
+            ? true
+            : null;
     }
 
     private static string? ReadZoomFrameGeometry(XElement properties)
@@ -7366,6 +7407,11 @@ public static class PptxPackageReader
 
     private static int? ParseNullableInt(string? value) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+
+    private static long? ParseNullableLong(string? value) =>
+        long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : null;
 

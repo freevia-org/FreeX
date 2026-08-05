@@ -195,6 +195,33 @@ public sealed class PresentationViewZoomPlannerTests
             .Should().Contain(ThemeColorSlot.Accent2);
     }
 
+    [Fact]
+    public void Zoom_border_shadow_normalizes_editable_values()
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderShadow(
+                "#404040", "50", "4", "3", "45", enabled: true, out var normalized)
+            .Should().BeTrue();
+
+        normalized.Should().Be(new ZoomFrameBorderShadow(
+            "404040", 50000, 50800, 38100, 2700000));
+        ZoomObjectPropertiesPlanner.IsFrameBorderShadowEnabled(
+                new ZoomObjectProperties(FrameBorderShadow: normalized))
+            .Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("GGGGGG", "50", "4", "3", "45")]
+    [InlineData("404040", "101", "4", "3", "45")]
+    [InlineData("404040", "50", "-1", "3", "45")]
+    [InlineData("404040", "50", "4", "3", "361")]
+    public void Zoom_border_shadow_rejects_invalid_values(
+        string color, string alpha, string blur, string distance, string direction)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderShadow(
+                color, alpha, blur, distance, direction, enabled: true, out _)
+            .Should().BeFalse();
+    }
+
     [Theory]
     [InlineData("not-a-pattern", "4472C4", "FFFFFF")]
     [InlineData("pct50", "GGGGGG", "FFFFFF")]
