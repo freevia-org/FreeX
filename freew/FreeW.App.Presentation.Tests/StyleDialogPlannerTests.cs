@@ -100,4 +100,138 @@ public sealed class StyleDialogPlannerTests
 
         rows.First().Id.Should().Be(custom.Id);
     }
+
+    [Fact]
+    public void NewSession_ProjectsSortedOptionsAndDefaultStyle()
+    {
+        var names = new Dictionary<string, string>
+        {
+            ["Heading1"] = "Heading 1",
+            ["Normal"] = "Normal",
+        };
+
+        var session = StyleDialogPlanner.CreateNewSession(names, "Heading1");
+
+        session.InitialState.Title.Should().Be("New Style");
+        session.InitialState.Name.Should().BeEmpty();
+        session.InitialState.NameIsReadOnly.Should().BeFalse();
+        session.InitialState.BasedOnOptions.Select(option => option.Key)
+            .Should().Equal("(none)", "Heading 1", "Normal");
+        session.InitialState.BasedOnIndex.Should().Be(1);
+        session.InitialState.NextStyleIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void ModifySession_ProjectsExistingStyleAndMapsAcceptance()
+    {
+        var names = new Dictionary<string, string>
+        {
+            ["Heading1"] = "Heading 1",
+            ["Normal"] = "Normal",
+        };
+        var existing = new DocumentStyle
+        {
+            Id = "Callout",
+            Name = "Callout",
+            BasedOnStyleId = "Normal",
+            NextStyleId = "Heading1",
+            Run = RunFormatting.Default with { Bold = true, FontSizePt = 14, ColorHex = "#FF0000" },
+            Paragraph = ParagraphFormatting.Default with { Alignment = TextAlignment.Center },
+        };
+        var session = StyleDialogPlanner.CreateModifySession(names, existing);
+
+        session.InitialState.Name.Should().Be("Callout");
+        session.InitialState.NameIsReadOnly.Should().BeTrue();
+        session.InitialState.BasedOnOptions[session.InitialState.BasedOnIndex].Value.Should().Be("Normal");
+        session.InitialState.NextStyleOptions[session.InitialState.NextStyleIndex].Value.Should().Be("Heading1");
+
+        var acceptance = session.PlanAcceptance(new StyleDialogControlState(
+            session.InitialState.Name,
+            session.InitialState.BasedOnIndex,
+            session.InitialState.NextStyleIndex,
+            session.InitialState.Bold,
+            session.InitialState.Italic,
+            session.InitialState.Underline,
+            session.InitialState.FontSizeIndex,
+            session.InitialState.ColorIndex,
+            session.InitialState.AlignmentIndex));
+
+        acceptance.IsAccepted.Should().BeTrue();
+        acceptance.Result!.BasedOnId.Should().Be("Normal");
+        acceptance.Result.NextStyleId.Should().Be("Heading1");
+        acceptance.Result.Run.Bold.Should().BeTrue();
+        acceptance.Result.Paragraph.Alignment.Should().Be(TextAlignment.Center);
+    }
+
+    [Fact]
+    public void Session_OwnsNameValidationMessage()
+    {
+        var session = StyleDialogPlanner.CreateNewSession(
+            new Dictionary<string, string>(),
+            defaultBasedOnId: null);
+        var state = session.InitialState;
+
+        var acceptance = session.PlanAcceptance(new StyleDialogControlState(
+            "   ",
+            state.BasedOnIndex,
+            state.NextStyleIndex,
+            state.Bold,
+            state.Italic,
+            state.Underline,
+            state.FontSizeIndex,
+            state.ColorIndex,
+            state.AlignmentIndex));
+
+        acceptance.IsAccepted.Should().BeFalse();
+        acceptance.ErrorMessage.Should().Be("Please enter a style name.");
+    }
+
+    [Fact]
+    public void ManageSession_PreservesSelectionAcrossSortsAndProjectsButtons()
+    {
+        var document = TextDocument.CreateEmpty();
+        var custom = StyleManager.CreateStyle(
+            document,
+            "Callout",
+            null,
+            RunFormatting.Default,
+            ParagraphFormatting.Default);
+        var session = StyleDialogPlanner.CreateManageStylesSession(document, custom.Id);
+
+        session.State.SelectedRow!.Id.Should().Be(custom.Id);
+        session.State.Buttons.Should().Be(new ManageStyleButtonState(true, true, true));
+
+        var sorted = session.PlanSort(1);
+
+        sorted.SortOrder.Should().Be(StyleDialogSortOrder.ByType);
+        sorted.SelectedRow!.Id.Should().Be(custom.Id);
+        session.PlanAction(ManageStyleActionKind.Delete, sorted.SelectedIndex)
+            .Should().Be(new ManageStyleAction.Delete(custom.Id));
+    }
+
+    [Fact]
+    public void ManageSession_RejectsDeleteForBuiltInStyle()
+    {
+        var document = TextDocument.CreateEmpty();
+        var session = StyleDialogPlanner.CreateManageStylesSession(document, "Normal");
+
+        session.State.SelectedRow!.IsBuiltIn.Should().BeTrue();
+        session.State.Buttons.DeleteEnabled.Should().BeFalse();
+        session.PlanAction(ManageStyleActionKind.Delete, session.State.SelectedIndex).Should().BeNull();
+        session.PlanAction(ManageStyleActionKind.Apply, session.State.SelectedIndex)
+            .Should().Be(new ManageStyleAction.Apply("Normal"));
+    }
+
+    [Theory]
+    [InlineData(-1, StyleDialogSortOrder.Alphabetical)]
+    [InlineData(0, StyleDialogSortOrder.Alphabetical)]
+    [InlineData(1, StyleDialogSortOrder.ByType)]
+    [InlineData(2, StyleDialogSortOrder.ByUse)]
+    [InlineData(9, StyleDialogSortOrder.Alphabetical)]
+    public void SortOrderForIndex_NormalizesRendererSelection(
+        int selectedIndex,
+        StyleDialogSortOrder expected)
+    {
+        StyleDialogPlanner.SortOrderForIndex(selectedIndex).Should().Be(expected);
+    }
 }

@@ -5,19 +5,20 @@ namespace FreeW.App.Host.Tests;
 public sealed class FontDialogPolicySourceGuardTests
 {
     [Fact]
-    public void FontDialog_DelegatesCatalogsStateValidationAndResultConstructionToPresentationPlanner()
+    public void FontDialog_DelegatesInteractionStateAndAcceptanceToPresentationSession()
     {
         var source = ReadHostSource("FontDialog.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain("FontDialogPlanner.BuildInitialState(");
+        source.Should().Contain("FontDialogPlanner.CreateSession(");
+        source.Should().Contain("session.InitialState");
+        source.Should().Contain("session.PlanAcceptance(new FontDialogControlState(");
+        source.Should().Contain("session.PlanVerticalAlignmentToggle(");
         source.Should().Contain("FontDialogPlanner.SizeChoices");
         source.Should().Contain("FontDialogPlanner.ColorChoices");
         source.Should().Contain("FontDialogPlanner.LigatureChoices");
         source.Should().Contain("FontDialogPlanner.NumberFormChoices");
         source.Should().Contain("FontDialogPlanner.NumberSpacingChoices");
-        source.Should().Contain("new FontDialogInput(");
-        source.Should().Contain("FontDialogPlanner.TryBuildResult(");
         source.Should().Contain("Double strikethrough");
         source.Should().Contain("state.DoubleStrikethrough");
         source.Should().Contain("Content = \"Hidden\"");
@@ -42,6 +43,8 @@ public sealed class FontDialogPolicySourceGuardTests
         source.Should().NotContain("double.TryParse(");
         source.Should().NotContain("int.TryParse(");
         source.Should().NotContain("NumberStyles.");
+        source.Should().NotContain("new FontDialogInput(");
+        source.Should().NotContain("FontDialogPlanner.TryBuildResult(");
         source.Should().NotContain("current with");
         source.Should().NotContain("FontSizePt   =");
         source.Should().NotContain("ColorHex     =");

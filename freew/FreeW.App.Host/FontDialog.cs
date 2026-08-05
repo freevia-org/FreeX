@@ -24,7 +24,8 @@ internal static class FontDialog
     public static RunFormatting? Prompt(Window? owner, RunFormatting current)
     {
         RunFormatting? result = null;
-        var state = FontDialogPlanner.BuildInitialState(current, CultureInfo.CurrentCulture);
+        var session = FontDialogPlanner.CreateSession(current, CultureInfo.CurrentCulture);
+        var state = session.InitialState;
 
         var dialog = new Window
         {
@@ -60,6 +61,27 @@ internal static class FontDialog
         var superCheck     = new CheckBox { Content = "Superscript",      IsChecked = state.Superscript,   Margin = new Thickness(0, 0, 12, 4) };
         var subCheck       = new CheckBox { Content = "Subscript",        IsChecked = state.Subscript,     Margin = new Thickness(0, 0, 0, 4) };
 
+        superCheck.Checked += (_, _) =>
+        {
+            var alignment = session.PlanVerticalAlignmentToggle(
+                superCheck.IsChecked == true,
+                subCheck.IsChecked == true,
+                FontDialogVerticalAlignmentToggle.Superscript,
+                superCheck.IsChecked);
+            superCheck.IsChecked = alignment.Superscript;
+            subCheck.IsChecked = alignment.Subscript;
+        };
+        subCheck.Checked += (_, _) =>
+        {
+            var alignment = session.PlanVerticalAlignmentToggle(
+                superCheck.IsChecked == true,
+                subCheck.IsChecked == true,
+                FontDialogVerticalAlignmentToggle.Subscript,
+                subCheck.IsChecked);
+            superCheck.IsChecked = alignment.Superscript;
+            subCheck.IsChecked = alignment.Subscript;
+        };
+
         var colorBox = new ComboBox { MinWidth = 180, Margin = new Thickness(0, 0, 0, 8) };
         foreach (var color in FontDialogPlanner.ColorChoices)
             colorBox.Items.Add(color.Label);
@@ -75,14 +97,14 @@ internal static class FontDialog
             effectsWrap.Children.Add(cb);
         fontPanel.Children.Add(effectsWrap);
 
-        var spacingBox = NumberTextBox(state.CharacterSpacingText);
+        var spacingBox = NumberTextBox(state.CharacterSpacingText ?? string.Empty);
         var kerningBox = new TextBox
         {
             Text = state.KerningMinSizeText,
             MinWidth = 100,
             Margin = new Thickness(0, 0, 0, 8),
         };
-        var positionBox = NumberTextBox(state.PositionText);
+        var positionBox = NumberTextBox(state.PositionText ?? string.Empty);
 
         var ligatureBox = new ComboBox { MinWidth = 180, Margin = new Thickness(0, 0, 0, 8) };
         foreach (var ligature in FontDialogPlanner.LigatureChoices)
@@ -122,14 +144,14 @@ internal static class FontDialog
 
         void Accept()
         {
-            var input = new FontDialogInput(
+            var acceptance = session.PlanAcceptance(new FontDialogControlState(
                 familyBox.Text,
                 sizeBox.Text,
                 colorBox.SelectedIndex,
-                boldCheck.IsChecked == true,
-                italicCheck.IsChecked == true,
-                underlineCheck.IsChecked == true,
-                strikeCheck.IsChecked == true,
+                boldCheck.IsChecked,
+                italicCheck.IsChecked,
+                underlineCheck.IsChecked,
+                strikeCheck.IsChecked,
                 smallCapsCheck.IsChecked == true,
                 allCapsCheck.IsChecked == true,
                 superCheck.IsChecked == true,
@@ -141,20 +163,18 @@ internal static class FontDialog
                 stylisticBox.Text,
                 numberFormBox.SelectedIndex,
                 numberSpacingBox.SelectedIndex,
-                doubleStrikeCheck.IsChecked == true,
-                hiddenCheck.IsChecked == true);
+                doubleStrikeCheck.IsChecked,
+                hiddenCheck.IsChecked));
 
-            if (!FontDialogPlanner.TryBuildResult(
-                    input,
-                    current,
-                    CultureInfo.CurrentCulture,
-                    out result,
-                    out var errorMessage))
+            if (!acceptance.IsAccepted)
             {
-                DialogMessageHelper.ShowWarning(dialog, errorMessage ?? FontDialogPlanner.FontSizeValidationMessage);
+                DialogMessageHelper.ShowWarning(
+                    dialog,
+                    acceptance.ErrorMessage ?? string.Empty);
                 return;
             }
 
+            result = acceptance.Result!.Formatting;
             dialog.DialogResult = true;
         }
 

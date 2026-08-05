@@ -5,20 +5,23 @@ namespace FreeW.App.Avalonia.Tests;
 public sealed class FontDialogPolicySourceGuardTests
 {
     [Fact]
-    public void FontDialog_DelegatesFullCatalogsStateValidationAndResultConstructionToPresentationPlanner()
+    public void FontDialog_DelegatesInteractionStateAcceptanceAndApplyPlanningToPresentationSession()
     {
         var source = ReadAvaloniaSource("FontDialog.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain("FontDialogPlanner.BuildInitialState(");
+        source.Should().Contain("_session = FontDialogPlanner.CreateSession(");
+        source.Should().Contain("_session.InitialState");
+        source.Should().Contain("_session.PlanAcceptance(new FontDialogControlState(");
+        source.Should().Contain("_session.PlanVerticalAlignmentToggle(");
+        source.Should().Contain("_session.BuildApplyPlan(result)");
+        source.Should().Contain("ExecuteApplyPlan(");
+        source.Should().Contain("FontDialogApplyCommand.SetFamily");
         source.Should().Contain("FontDialogPlanner.SizeChoices");
         source.Should().Contain("FontDialogPlanner.ColorChoices");
         source.Should().Contain("FontDialogPlanner.LigatureChoices");
         source.Should().Contain("FontDialogPlanner.NumberFormChoices");
         source.Should().Contain("FontDialogPlanner.NumberSpacingChoices");
-        source.Should().Contain("new FontDialogInput(");
-        source.Should().Contain("FontDialogPlanner.TryBuildResult(");
-        source.Should().Contain("ToDialogResult(planned!)");
         source.Should().Contain("Double strikethrough");
         source.Should().Contain("DoubleStrikethroughIndeterminate");
         source.Should().Contain("Check(\"Hidden\", threeState: true)");
@@ -40,6 +43,9 @@ public sealed class FontDialogPolicySourceGuardTests
         source.Should().NotContain("NumberStyles.");
         source.Should().NotContain("Math.Clamp(");
         source.Should().NotContain("SelectedHex(");
+        source.Should().NotContain("new FontDialogInput(");
+        source.Should().NotContain("FontDialogPlanner.TryBuildResult(");
+        source.Should().NotContain("ToDialogResult(");
         source.Should().NotContain("Invalid font size:");
     }
 

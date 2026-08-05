@@ -36,15 +36,7 @@ public sealed class FontDialog : FreeWDialogWindow
             RemoveFocusAdorner = true,
         };
 
-    private readonly RunFormatting _original;
-    private readonly bool _boldIndeterminate;
-    private readonly bool _italicIndeterminate;
-    private readonly bool _underlineIndeterminate;
-    private readonly bool _strikeIndeterminate;
-    private readonly bool _doubleStrikeIndeterminate;
-    private readonly bool _hiddenIndeterminate;
-    private readonly bool _familyIndeterminate;
-    private readonly bool _sizeIndeterminate;
+    private readonly FontDialogSession _session;
 
     private readonly TextBox _familyBox;
     private readonly ComboBox _sizeBox;
@@ -75,15 +67,18 @@ public sealed class FontDialog : FreeWDialogWindow
 
     public FontDialog(DocumentView.SelectionFormatting selection)
     {
-        _original = selection.Run;
-        _boldIndeterminate = selection.BoldIndeterminate;
-        _italicIndeterminate = selection.ItalicIndeterminate;
-        _underlineIndeterminate = selection.UnderlineIndeterminate;
-        _strikeIndeterminate = selection.StrikethroughIndeterminate;
-        _doubleStrikeIndeterminate = selection.DoubleStrikethroughIndeterminate;
-        _hiddenIndeterminate = selection.HiddenIndeterminate;
-        _familyIndeterminate = selection.FamilyIndeterminate;
-        _sizeIndeterminate = selection.SizeIndeterminate;
+        _session = FontDialogPlanner.CreateSession(
+            new FontDialogSelectionState(
+                selection.Run,
+                selection.BoldIndeterminate,
+                selection.ItalicIndeterminate,
+                selection.UnderlineIndeterminate,
+                selection.StrikethroughIndeterminate,
+                selection.FamilyIndeterminate,
+                selection.SizeIndeterminate,
+                selection.DoubleStrikethroughIndeterminate,
+                selection.HiddenIndeterminate),
+            CultureInfo.CurrentCulture);
 
         Title = "Font";
         Width = 460;
@@ -93,26 +88,26 @@ public sealed class FontDialog : FreeWDialogWindow
         ShowInTaskbar = false;
         TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
 
-        var state = FontDialogPlanner.BuildInitialState(_original, CultureInfo.CurrentCulture);
+        var state = _session.InitialState;
 
-        _familyBox = TextBox(_familyIndeterminate ? string.Empty : state.FontFamilyText, minWidth: 200);
+        _familyBox = TextBox(state.FontFamilyText ?? string.Empty, minWidth: 200);
         _sizeBox = Combo(
             FontDialogPlanner.SizeChoices.Select(choice => choice.Label),
             selectedIndex: -1,
             minWidth: 80,
             editable: true);
-        _sizeBox.Text = _sizeIndeterminate ? string.Empty : state.FontSizeText;
+        _sizeBox.Text = state.FontSizeText;
         _colorBox = Combo(
             FontDialogPlanner.ColorChoices.Select(choice => choice.Label),
             state.ColorIndex,
             minWidth: 180);
 
-        _boldChk.IsChecked = _boldIndeterminate ? null : state.Bold;
-        _italicChk.IsChecked = _italicIndeterminate ? null : state.Italic;
-        _underlineChk.IsChecked = _underlineIndeterminate ? null : state.Underline;
-        _strikeChk.IsChecked = _strikeIndeterminate ? null : state.Strikethrough;
-        _doubleStrikeChk.IsChecked = _doubleStrikeIndeterminate ? null : state.DoubleStrikethrough;
-        _hiddenChk.IsChecked = _hiddenIndeterminate ? null : state.Hidden;
+        _boldChk.IsChecked = state.Bold;
+        _italicChk.IsChecked = state.Italic;
+        _underlineChk.IsChecked = state.Underline;
+        _strikeChk.IsChecked = state.Strikethrough;
+        _doubleStrikeChk.IsChecked = state.DoubleStrikethrough;
+        _hiddenChk.IsChecked = state.Hidden;
         _smallCapsChk.IsChecked = state.SmallCaps;
         _allCapsChk.IsChecked = state.AllCaps;
         _superChk.IsChecked = state.Superscript;
@@ -121,23 +116,33 @@ public sealed class FontDialog : FreeWDialogWindow
 
         _superChk.IsCheckedChanged += (_, _) =>
         {
-            if (_superChk.IsChecked == true)
-                _subChk.IsChecked = false;
+            var alignment = _session.PlanVerticalAlignmentToggle(
+                _superChk.IsChecked == true,
+                _subChk.IsChecked == true,
+                FontDialogVerticalAlignmentToggle.Superscript,
+                _superChk.IsChecked);
+            _superChk.IsChecked = alignment.Superscript;
+            _subChk.IsChecked = alignment.Subscript;
         };
         _subChk.IsCheckedChanged += (_, _) =>
         {
-            if (_subChk.IsChecked == true)
-                _superChk.IsChecked = false;
+            var alignment = _session.PlanVerticalAlignmentToggle(
+                _superChk.IsChecked == true,
+                _subChk.IsChecked == true,
+                FontDialogVerticalAlignmentToggle.Subscript,
+                _subChk.IsChecked);
+            _superChk.IsChecked = alignment.Superscript;
+            _subChk.IsChecked = alignment.Subscript;
         };
 
-        _spacingBox = TextBox(state.CharacterSpacingText, minWidth: 100);
-        _kerningBox = TextBox(state.KerningMinSizeText, minWidth: 100);
-        _positionBox = TextBox(state.PositionText, minWidth: 100);
+        _spacingBox = TextBox(state.CharacterSpacingText ?? string.Empty, minWidth: 100);
+        _kerningBox = TextBox(state.KerningMinSizeText ?? string.Empty, minWidth: 100);
+        _positionBox = TextBox(state.PositionText ?? string.Empty, minWidth: 100);
         _ligatureBox = Combo(
             FontDialogPlanner.LigatureChoices.Select(choice => choice.Label),
             state.LigatureIndex,
             minWidth: 180);
-        _stylisticBox = TextBox(state.StylisticSetText, minWidth: 100);
+        _stylisticBox = TextBox(state.StylisticSetText ?? string.Empty, minWidth: 100);
         ToolTip.SetTip(_stylisticBox, FontDialogPlanner.StylisticSetToolTip);
         _numberFormBox = Combo(
             FontDialogPlanner.NumberFormChoices.Select(choice => choice.Label),
@@ -233,6 +238,8 @@ public sealed class FontDialog : FreeWDialogWindow
         };
     }
 
+    // Compatibility input retained for existing editor-facing tests and callers. Production dialog
+    // acceptance returns FontDialogWorkflowResult directly; conversion policy remains in the session.
     public sealed record FontDialogResult(
         string? Family,
         double? SizePt,
@@ -256,23 +263,19 @@ public sealed class FontDialog : FreeWDialogWindow
         NumberSpacing NumberSpacing = NumberSpacing.Default,
         bool AdvancedChanged = false,
         bool? DoubleStrikethrough = null,
-        bool? Hidden = null);
+        bool? Hidden = null) : IFontDialogResultSource;
 
     private void OnOk()
     {
         _status.IsVisible = false;
-        var input = new FontDialogInput(
-            _familyIndeterminate && string.IsNullOrWhiteSpace(_familyBox.Text)
-                ? _original.FontFamily
-                : _familyBox.Text,
-            _sizeIndeterminate && string.IsNullOrWhiteSpace(_sizeBox.Text)
-                ? FormatOptional(_original.FontSizePt)
-                : _sizeBox.Text,
+        var acceptance = _session.PlanAcceptance(new FontDialogControlState(
+            _familyBox.Text,
+            _sizeBox.Text,
             _colorBox.SelectedIndex,
-            _boldIndeterminate ? _original.Bold : _boldChk.IsChecked == true,
-            _italicIndeterminate ? _original.Italic : _italicChk.IsChecked == true,
-            _underlineIndeterminate ? _original.Underline : _underlineChk.IsChecked == true,
-            _strikeIndeterminate ? _original.Strikethrough : _strikeChk.IsChecked == true,
+            _boldChk.IsChecked,
+            _italicChk.IsChecked,
+            _underlineChk.IsChecked,
+            _strikeChk.IsChecked,
             _smallCapsChk.IsChecked == true,
             _allCapsChk.IsChecked == true,
             _superChk.IsChecked == true,
@@ -284,113 +287,107 @@ public sealed class FontDialog : FreeWDialogWindow
             _stylisticBox.Text,
             _numberFormBox.SelectedIndex,
             _numberSpacingBox.SelectedIndex,
-            _doubleStrikeIndeterminate ? _original.DoubleStrikethrough : _doubleStrikeChk.IsChecked == true,
-            _hiddenIndeterminate ? _original.Hidden : _hiddenChk.IsChecked == true);
+            _doubleStrikeChk.IsChecked,
+            _hiddenChk.IsChecked));
 
-        if (!FontDialogPlanner.TryBuildResult(
-                input,
-                _original,
-                CultureInfo.CurrentCulture,
-                out var planned,
-                out var errorMessage))
+        if (!acceptance.IsAccepted)
         {
-            _status.Text = errorMessage ?? FontDialogPlanner.FontSizeValidationMessage;
+            _status.Text = acceptance.ErrorMessage ?? string.Empty;
             _status.IsVisible = true;
             return;
         }
 
-        Close(ToDialogResult(planned!));
+        Close(acceptance.Result);
     }
 
-    private FontDialogResult ToDialogResult(RunFormatting result) => new(
-        Family: result.FontFamily,
-        SizePt: result.FontSizePt,
-        Bold: _boldIndeterminate ? null : result.Bold,
-        Italic: _italicIndeterminate ? null : result.Italic,
-        Underline: _underlineIndeterminate ? null : result.Underline,
-        Strikethrough: _strikeIndeterminate ? null : result.Strikethrough,
-        VerticalAlign: result.VerticalAlign,
-        SmallCaps: result.SmallCaps,
-        AllCaps: result.AllCaps,
-        ColorHex: result.ColorHex,
-        HighlightHex: _original.HighlightColorHex,
-        FamilyChanged: !_familyIndeterminate || !string.IsNullOrWhiteSpace(_familyBox.Text),
-        SizeChanged: !_sizeIndeterminate || !string.IsNullOrWhiteSpace(_sizeBox.Text),
-        CharacterSpacingPt: result.CharacterSpacingPt,
-        KerningMinSizePt: result.KerningMinSizePt,
-        PositionPt: result.PositionPt,
-        Ligatures: result.Ligatures,
-        StylisticSet: result.StylisticSet,
-        NumberForm: result.NumberForm,
-        NumberSpacing: result.NumberSpacing,
-        AdvancedChanged: true,
-        DoubleStrikethrough: _doubleStrikeIndeterminate ? null : result.DoubleStrikethrough,
-        Hidden: _hiddenIndeterminate ? null : result.Hidden);
+    public static void ApplyResult(DocumentView editor, FontDialogWorkflowResult result, RunFormatting original)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(result);
+
+        var session = FontDialogPlanner.CreateSession(original, CultureInfo.CurrentCulture);
+        ExecuteApplyPlan(editor, session.BuildApplyPlan(result));
+    }
 
     public static void ApplyResult(DocumentView editor, FontDialogResult result, RunFormatting original)
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(result);
 
+        var session = FontDialogPlanner.CreateSession(original, CultureInfo.CurrentCulture);
+        ExecuteApplyPlan(editor, session.BuildApplyPlan(session.ImportResult(result)));
+    }
+
+    private static void ExecuteApplyPlan(DocumentView editor, FontDialogApplyPlan plan)
+    {
         editor.BeginFontUndoGroup();
         try
         {
-            if (result.FamilyChanged && result.Family != original.FontFamily)
-                editor.SetSelectionFontFamily(result.Family ?? string.Empty);
-            if (result.SizeChanged && result.SizePt != original.FontSizePt && result.SizePt.HasValue)
-                editor.SetSelectionFontSize(result.SizePt.Value);
-            if (result.Bold.HasValue && result.Bold.Value != original.Bold)
-                editor.ToggleBold();
-            if (result.Italic.HasValue && result.Italic.Value != original.Italic)
-                editor.ToggleItalic();
-            if (result.Underline.HasValue && result.Underline.Value != original.Underline)
-                editor.ToggleUnderline();
-            if (result.Strikethrough.HasValue && result.Strikethrough.Value != original.Strikethrough)
-                editor.ToggleStrikethrough();
-            if (result.DoubleStrikethrough.HasValue
-                && result.DoubleStrikethrough.Value != original.DoubleStrikethrough)
-                editor.ToggleDoubleStrikethrough();
-            if (result.Hidden.HasValue && result.Hidden.Value != original.Hidden)
-                editor.ToggleHidden();
-
-            if (result.VerticalAlign != original.VerticalAlign)
+            foreach (var command in plan.Commands)
             {
-                if (result.VerticalAlign == VerticalAlign.Superscript)
-                    editor.ToggleSuperscript();
-                else if (result.VerticalAlign == VerticalAlign.Subscript)
-                    editor.ToggleSubscript();
-                else if (original.VerticalAlign == VerticalAlign.Superscript)
-                    editor.ToggleSuperscript();
-                else if (original.VerticalAlign == VerticalAlign.Subscript)
-                    editor.ToggleSubscript();
-            }
-
-            if (result.ColorHex != original.ColorHex)
-                editor.SetFontColor(result.ColorHex);
-            if (result.HighlightHex != original.HighlightColorHex)
-                editor.SetHighlightColor(result.HighlightHex);
-            if (result.SmallCaps != original.SmallCaps)
-                editor.ToggleSmallCaps();
-            if (result.AllCaps != original.AllCaps)
-                editor.ToggleAllCaps();
-
-            if (result.AdvancedChanged)
-            {
-                editor.ApplyAdvancedFontFormatting(original with
+                switch (command)
                 {
-                    CharacterSpacingPt = result.CharacterSpacingPt,
-                    KerningMinSizePt = result.KerningMinSizePt,
-                    PositionPt = result.PositionPt,
-                    Ligatures = result.Ligatures,
-                    StylisticSet = result.StylisticSet,
-                    NumberForm = result.NumberForm,
-                    NumberSpacing = result.NumberSpacing,
-                });
+                    case FontDialogApplyCommand.SetFamily setFamily:
+                        editor.SetSelectionFontFamily(setFamily.Family ?? string.Empty);
+                        break;
+                    case FontDialogApplyCommand.SetSize setSize:
+                        editor.SetSelectionFontSize(setSize.SizePt);
+                        break;
+                    case FontDialogApplyCommand.Toggle toggle:
+                        ExecuteToggle(editor, toggle.Target);
+                        break;
+                    case FontDialogApplyCommand.SetColor setColor:
+                        editor.SetFontColor(setColor.ColorHex);
+                        break;
+                    case FontDialogApplyCommand.SetHighlight setHighlight:
+                        editor.SetHighlightColor(setHighlight.ColorHex);
+                        break;
+                    case FontDialogApplyCommand.ApplyAdvanced applyAdvanced:
+                        editor.ApplyAdvancedFontFormatting(applyAdvanced.Formatting);
+                        break;
+                }
             }
         }
         finally
         {
-            editor.CommitFontUndoGroup("Font");
+            editor.CommitFontUndoGroup(plan.UndoLabel);
+        }
+    }
+
+    private static void ExecuteToggle(DocumentView editor, FontDialogToggleCommand target)
+    {
+        switch (target)
+        {
+            case FontDialogToggleCommand.Bold:
+                editor.ToggleBold();
+                break;
+            case FontDialogToggleCommand.Italic:
+                editor.ToggleItalic();
+                break;
+            case FontDialogToggleCommand.Underline:
+                editor.ToggleUnderline();
+                break;
+            case FontDialogToggleCommand.Strikethrough:
+                editor.ToggleStrikethrough();
+                break;
+            case FontDialogToggleCommand.DoubleStrikethrough:
+                editor.ToggleDoubleStrikethrough();
+                break;
+            case FontDialogToggleCommand.Hidden:
+                editor.ToggleHidden();
+                break;
+            case FontDialogToggleCommand.Superscript:
+                editor.ToggleSuperscript();
+                break;
+            case FontDialogToggleCommand.Subscript:
+                editor.ToggleSubscript();
+                break;
+            case FontDialogToggleCommand.SmallCaps:
+                editor.ToggleSmallCaps();
+                break;
+            case FontDialogToggleCommand.AllCaps:
+                editor.ToggleAllCaps();
+                break;
         }
     }
 
@@ -400,9 +397,10 @@ public sealed class FontDialog : FreeWDialogWindow
         ArgumentNullException.ThrowIfNull(editor);
 
         var selection = editor.GetSelectionFormatting();
-        var result = await new FontDialog(selection).ShowDialog<FontDialogResult?>(owner);
+        var dialog = new FontDialog(selection);
+        var result = await dialog.ShowDialog<FontDialogWorkflowResult?>(owner);
         if (result is not null)
-            ApplyResult(editor, result, selection.Run);
+            ExecuteApplyPlan(editor, dialog._session.BuildApplyPlan(result));
     }
 
     private static void AddField(Panel panel, string label, Control control)
@@ -466,6 +464,4 @@ public sealed class FontDialog : FreeWDialogWindow
             FontParagraphDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
     }
 
-    private static string FormatOptional(double? value) =>
-        value?.ToString("0.##", CultureInfo.CurrentCulture) ?? string.Empty;
 }

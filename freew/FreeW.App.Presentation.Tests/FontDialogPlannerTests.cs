@@ -36,165 +36,6 @@ public sealed class FontDialogPlannerTests
     }
 
     [Fact]
-    public void BasicCatalogs_ExposeAvaloniaDialogChoicesInDisplayOrder()
-    {
-        FontDialogPlanner.BasicFamilyChoices
-            .Should().Equal("Calibri", "Arial", "Times New Roman", "Inter", "Verdana", "Georgia", "Courier New");
-
-        FontDialogPlanner.BasicSizeChoices.Select(choice => choice.Label)
-            .Should().Equal("8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36", "48", "72");
-
-        FontDialogPlanner.BasicColorChoices.Select(choice => choice.Label)
-            .Should().Equal("Automatic", "Black", "Dark Red", "Red", "Orange", "Yellow", "Green", "Blue", "Dark Blue", "Purple", "White");
-
-        FontDialogPlanner.BasicColorChoices.Select(choice => choice.Hex)
-            .Should().Equal(null, "#000000", "#C00000", "#FF0000", "#FF6600", "#FFFF00", "#00B050", "#0070C0", "#00008B", "#7030A0", "#FFFFFF");
-
-        FontDialogPlanner.HighlightColorChoices.Select(choice => choice.Label)
-            .Should().Equal("None", "Yellow", "Bright Green", "Cyan", "Magenta", "Red", "Dark Blue", "Teal", "Dark Red", "Dark Yellow", "Gray 50%", "Gray 25%", "Black", "White");
-    }
-
-    [Fact]
-    public void BuildBasicInitialState_ProjectsCurrentFormattingToAvaloniaDialogState()
-    {
-        var current = new RunFormatting
-        {
-            FontFamily = "Cambria",
-            FontSizePt = 10.125,
-            ColorHex = "#ff6600",
-            HighlightColorHex = "#00ffff",
-            Bold = true,
-            Italic = true,
-            Underline = true,
-            Strikethrough = true,
-            SmallCaps = true,
-            AllCaps = true,
-            VerticalAlign = VerticalAlign.Superscript,
-        };
-
-        var state = FontDialogPlanner.BuildBasicInitialState(current, CultureInfo.InvariantCulture);
-
-        state.FontFamilyText.Should().Be("Cambria");
-        state.FontSizeText.Should().Be("10.125");
-        state.ColorIndex.Should().Be(4);
-        state.HighlightColorIndex.Should().Be(3);
-        state.Bold.Should().BeTrue();
-        state.Italic.Should().BeTrue();
-        state.Underline.Should().BeTrue();
-        state.Strikethrough.Should().BeTrue();
-        state.SmallCaps.Should().BeTrue();
-        state.AllCaps.Should().BeTrue();
-        state.Superscript.Should().BeTrue();
-        state.Subscript.Should().BeFalse();
-    }
-
-    [Fact]
-    public void BuildBasicInitialState_BlanksIndeterminateFamilyAndSize()
-    {
-        var current = new RunFormatting
-        {
-            FontFamily = "Aptos",
-            FontSizePt = 13,
-        };
-
-        var state = FontDialogPlanner.BuildBasicInitialState(
-            current,
-            CultureInfo.InvariantCulture,
-            familyIndeterminate: true,
-            sizeIndeterminate: true);
-
-        state.FontFamilyText.Should().BeEmpty();
-        state.FontSizeText.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void TryBuildBasicResult_ConstructsAvaloniaDialogResult()
-    {
-        var input = ValidBasicInput() with
-        {
-            FontFamilyText = "  Cambria  ",
-            FontSizeText = "13",
-            ColorIndex = 7,
-            HighlightColorIndex = 1,
-            Bold = null,
-            Italic = true,
-            Underline = true,
-            Strikethrough = false,
-            SmallCaps = true,
-            AllCaps = true,
-            Superscript = true,
-            Subscript = true,
-        };
-
-        FontDialogPlanner.TryBuildBasicResult(
-                input,
-                CultureInfo.InvariantCulture,
-                out var result,
-                out var errorMessage)
-            .Should().BeTrue();
-
-        errorMessage.Should().BeNull();
-        result.Should().NotBeNull();
-        result!.Family.Should().Be("Cambria");
-        result.SizePt.Should().Be(13);
-        result.Bold.Should().BeNull();
-        result.Italic.Should().BeTrue();
-        result.Underline.Should().BeTrue();
-        result.Strikethrough.Should().BeFalse();
-        result.VerticalAlign.Should().Be(VerticalAlign.Superscript);
-        result.SmallCaps.Should().BeTrue();
-        result.AllCaps.Should().BeTrue();
-        result.ColorHex.Should().Be("#0070C0");
-        result.HighlightHex.Should().Be("#FFFF00");
-        result.FamilyChanged.Should().BeTrue();
-        result.SizeChanged.Should().BeTrue();
-    }
-
-    [Fact]
-    public void TryBuildBasicResult_PreservesIndeterminateBlankFamilyAndSize()
-    {
-        var input = ValidBasicInput() with
-        {
-            FontFamilyText = "",
-            FontSizeText = "",
-            FamilyIndeterminate = true,
-            SizeIndeterminate = true,
-        };
-
-        FontDialogPlanner.TryBuildBasicResult(
-                input,
-                CultureInfo.InvariantCulture,
-                out var result,
-                out var errorMessage)
-            .Should().BeTrue();
-
-        errorMessage.Should().BeNull();
-        result!.Family.Should().BeNull();
-        result.SizePt.Should().BeNull();
-        result.FamilyChanged.Should().BeFalse();
-        result.SizeChanged.Should().BeFalse();
-    }
-
-    [Theory]
-    [InlineData("0")]
-    [InlineData("bad")]
-    [InlineData("1639")]
-    public void TryBuildBasicResult_ValidatesFontSizeRange(string fontSizeText)
-    {
-        var input = ValidBasicInput() with { FontSizeText = fontSizeText };
-
-        FontDialogPlanner.TryBuildBasicResult(
-                input,
-                CultureInfo.InvariantCulture,
-                out var result,
-                out var errorMessage)
-            .Should().BeFalse();
-
-        result.Should().BeNull();
-        errorMessage.Should().Be($"Invalid font size: \"{fontSizeText}\". Enter a number between 1 and 1638.");
-    }
-
-    [Fact]
     public void BuildInitialState_ProjectsCurrentRunFormattingToDialogState()
     {
         var current = new RunFormatting
@@ -485,6 +326,125 @@ public sealed class FontDialogPlannerTests
         result.WebHidden.Should().BeTrue();
     }
 
+    [Fact]
+    public void Session_ProjectsMixedSelectionToIndeterminateControls()
+    {
+        var session = FontDialogPlanner.CreateSession(
+            new FontDialogSelectionState(
+                RunFormatting.Default with
+                {
+                    FontFamily = "Arial",
+                    FontSizePt = 11,
+                    Bold = true,
+                    DoubleStrikethrough = true,
+                },
+                BoldIndeterminate: true,
+                FamilyIndeterminate: true,
+                SizeIndeterminate: true,
+                DoubleStrikethroughIndeterminate: true),
+            CultureInfo.InvariantCulture);
+
+        session.InitialState.FontFamilyText.Should().BeEmpty();
+        session.InitialState.FontSizeText.Should().BeEmpty();
+        session.InitialState.Bold.Should().BeNull();
+        session.InitialState.DoubleStrikethrough.Should().BeNull();
+    }
+
+    [Fact]
+    public void Session_UnchangedMixedControlsStayUnapplied()
+    {
+        var session = FontDialogPlanner.CreateSession(
+            new FontDialogSelectionState(
+                RunFormatting.Default with { FontFamily = "Arial", FontSizePt = 11, Bold = true },
+                BoldIndeterminate: true,
+                FamilyIndeterminate: true,
+                SizeIndeterminate: true),
+            CultureInfo.InvariantCulture);
+
+        var acceptance = session.PlanAcceptance(session.InitialState);
+
+        acceptance.IsAccepted.Should().BeTrue();
+        acceptance.Result!.Bold.Should().BeNull();
+        acceptance.Result.FamilyChanged.Should().BeFalse();
+        acceptance.Result.SizeChanged.Should().BeFalse();
+        var plan = session.BuildApplyPlan(acceptance.Result);
+        plan.Commands.OfType<FontDialogApplyCommand.SetFamily>().Should().BeEmpty();
+        plan.Commands.OfType<FontDialogApplyCommand.SetSize>().Should().BeEmpty();
+        plan.Commands.OfType<FontDialogApplyCommand.Toggle>()
+            .Should().NotContain(toggle => toggle.Target == FontDialogToggleCommand.Bold);
+    }
+
+    [Fact]
+    public void Session_ExplicitMixedControlChangesProduceOrderedApplyPlan()
+    {
+        var session = FontDialogPlanner.CreateSession(
+            new FontDialogSelectionState(
+                RunFormatting.Default with { FontFamily = "Arial", FontSizePt = 11, Bold = true },
+                BoldIndeterminate: true,
+                FamilyIndeterminate: true,
+                SizeIndeterminate: true),
+            CultureInfo.InvariantCulture);
+        var state = session.InitialState with
+        {
+            FontFamilyText = "Cambria",
+            FontSizeText = "14",
+            Bold = false,
+            Superscript = true,
+            SmallCaps = true,
+            ColorIndex = 3,
+            CharacterSpacingText = "1.5",
+        };
+
+        var acceptance = session.PlanAcceptance(state);
+        var plan = session.BuildApplyPlan(acceptance.Result!);
+
+        acceptance.IsAccepted.Should().BeTrue();
+        acceptance.Result!.Bold.Should().BeFalse();
+        plan.UndoLabel.Should().Be(FontDialogSession.UndoLabel);
+        plan.Commands.Should().SatisfyRespectively(
+            command => command.Should().BeOfType<FontDialogApplyCommand.SetFamily>(),
+            command => command.Should().BeOfType<FontDialogApplyCommand.SetSize>(),
+            command => command.Should().BeEquivalentTo(
+                new FontDialogApplyCommand.Toggle(FontDialogToggleCommand.Bold)),
+            command => command.Should().BeEquivalentTo(
+                new FontDialogApplyCommand.Toggle(FontDialogToggleCommand.Superscript)),
+            command => command.Should().BeOfType<FontDialogApplyCommand.SetColor>(),
+            command => command.Should().BeEquivalentTo(
+                new FontDialogApplyCommand.Toggle(FontDialogToggleCommand.SmallCaps)),
+            command => command.Should().BeOfType<FontDialogApplyCommand.ApplyAdvanced>());
+    }
+
+    [Fact]
+    public void Session_EnforcesSuperscriptSubscriptExclusivity()
+    {
+        var session = FontDialogPlanner.CreateSession(RunFormatting.Default, CultureInfo.InvariantCulture);
+
+        session.PlanVerticalAlignmentToggle(
+                superscript: true,
+                subscript: true,
+                FontDialogVerticalAlignmentToggle.Subscript,
+                isChecked: true)
+            .Should().Be(new FontDialogVerticalAlignmentState(Superscript: false, Subscript: true));
+        session.PlanVerticalAlignmentToggle(
+                superscript: true,
+                subscript: true,
+                FontDialogVerticalAlignmentToggle.Superscript,
+                isChecked: true)
+            .Should().Be(new FontDialogVerticalAlignmentState(Superscript: true, Subscript: false));
+    }
+
+    [Fact]
+    public void Session_NormalizesValidationFailure()
+    {
+        var session = FontDialogPlanner.CreateSession(RunFormatting.Default, CultureInfo.InvariantCulture);
+
+        var acceptance = session.PlanAcceptance(session.InitialState with { FontSizeText = "bad" });
+
+        acceptance.IsAccepted.Should().BeFalse();
+        acceptance.Result.Should().BeNull();
+        acceptance.ErrorMessage.Should().Be(FontDialogPlanner.FontSizeValidationMessage);
+    }
+
     private static FontDialogInput ValidInput() => new(
         FontFamilyText: "Calibri",
         FontSizeText: "11",
@@ -505,19 +465,4 @@ public sealed class FontDialogPlannerTests
         NumberFormIndex: 0,
         NumberSpacingIndex: 0);
 
-    private static FontDialogBasicInput ValidBasicInput() => new(
-        FontFamilyText: "Calibri",
-        FontSizeText: "11",
-        FamilyIndeterminate: false,
-        SizeIndeterminate: false,
-        ColorIndex: 0,
-        HighlightColorIndex: 0,
-        Bold: false,
-        Italic: false,
-        Underline: false,
-        Strikethrough: false,
-        SmallCaps: false,
-        AllCaps: false,
-        Superscript: false,
-        Subscript: false);
 }
