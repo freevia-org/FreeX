@@ -37,7 +37,7 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
         ArgumentNullException.ThrowIfNull(sourceEditor);
         return new SectionAwareDocumentPaginator(
             sourceEditor,
-            PaginatedEditorPanel.Build(sourceEditor));
+            PaginatedEditorPanel.Build(sourceEditor, includeParityBlankPages: true));
     }
 
     public override bool IsPageCountValid => true;

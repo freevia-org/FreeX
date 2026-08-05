@@ -128,6 +128,54 @@ public sealed class PrintLayoutTests
         Assert.Equal(1, paginator.PageCount);
     }
 
+    [StaTheory]
+    [InlineData(SectionBreakKind.EvenPage, 2, false)]
+    [InlineData(SectionBreakKind.OddPage, 3, true)]
+    public void BuildPaginator_HomogeneousParitySection_InsertsOnlyRequiredPhysicalBlank(
+        SectionBreakKind breakKind,
+        int expectedPageCount,
+        bool expectsBlankPage)
+    {
+        var document = BuildHomogeneousTwoSectionDocument(breakKind);
+        var footer = new HeaderFooter();
+        var footerParagraph = new Paragraph();
+        footerParagraph.Runs.Add(Run.NumPagesField());
+        footer.Paragraphs.Add(footerParagraph);
+        document.Footer = footer;
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var panel = PaginatedEditorPanel.Build(view, includeParityBlankPages: true);
+        var paginator = PrintLayout.BuildPaginator(view);
+        paginator.ComputePageCount();
+
+        Assert.Equal(expectedPageCount, panel.PageBoxes.Count);
+        Assert.Equal(expectedPageCount, paginator.PageCount);
+        for (var pageIndex = 0; pageIndex < expectedPageCount; pageIndex++)
+            Assert.NotSame(System.Windows.Documents.DocumentPage.Missing, paginator.GetPage(pageIndex));
+        Assert.Equal(expectsBlankPage, panel.PageBoxes.Any(box => box.IsParitySyntheticPage));
+        Assert.Contains("First section", BodyText(panel.PageBoxes.First()));
+        Assert.Contains("Second section", BodyText(panel.PageBoxes.Last()));
+        Assert.Equal(expectedPageCount.ToString(), panel.PageBoxes.Last().PageNumberText);
+        Assert.NotNull(panel.PageBoxes.Last().FooterSubEditor);
+        Assert.Equal(
+            expectedPageCount.ToString(),
+            BodyText(panel.PageBoxes.Last().FooterSubEditor!).Trim());
+
+        if (expectsBlankPage)
+        {
+            var blank = panel.PageBoxes[1];
+            Assert.True(blank.IsParitySyntheticPage);
+            Assert.True(blank.Body.IsReadOnly);
+            Assert.True(string.IsNullOrWhiteSpace(BodyText(blank)));
+            Assert.Empty(blank.FootnoteIds);
+            Assert.Empty(blank.EndnoteIds);
+            Assert.Null(blank.HeaderSubEditor);
+            Assert.Null(blank.FooterSubEditor);
+            Assert.Equal([1, 2, 3], panel.PageBoxes.Select(box => box.PageNumber));
+        }
+    }
+
     [StaFact]
     public void BuildPaginator_ListCompactionBeforeHomogeneousSection_PreservesPageBoundary()
     {
@@ -197,4 +245,14 @@ public sealed class PrintLayoutTests
         document.Blocks.Add(new Paragraph("Second section"));
         return document;
     }
+
+    private static string BodyText(PageBox box) =>
+        new System.Windows.Documents.TextRange(
+            box.Body.Document.ContentStart,
+            box.Body.Document.ContentEnd).Text;
+
+    private static string BodyText(DocumentView view) =>
+        new System.Windows.Documents.TextRange(
+            view.Document.ContentStart,
+            view.Document.ContentEnd).Text;
 }

@@ -138,7 +138,10 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// </list>
     /// </para>
     /// </summary>
-    internal static PaginatedEditorPanel Build(DocumentView sourceEditor, bool horizontalFlow = false)
+    internal static PaginatedEditorPanel Build(
+        DocumentView sourceEditor,
+        bool horizontalFlow = false,
+        bool includeParityBlankPages = false)
     {
         var model = sourceEditor.Model;
 
@@ -185,32 +188,70 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         // Phase 4 + W18: resolve header/footer slots per page, routing to the correct section's
         // SectionHeadersFooters (per-section tracking) and passing pageCount for live page numbers.
         var pageToSection = HeaderFooterPagePlanner.MapPagesToSections(model, assignment, pageCount);
-        var pageNumberDisplay = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSection, model, assignment);
+        var physicalPages = includeParityBlankPages
+            ? HeaderFooterPagePlanner.BuildPhysicalPagePlan(pageToSection, model.Sections)
+            : pageToSection.Select((pageSection, bodyPageIndex) => new SectionPhysicalPagePlan(
+                bodyPageIndex,
+                bodyPageIndex,
+                pageSection,
+                IsParityBlank: false)).ToList();
+        var bodyToPhysicalPage = physicalPages
+            .Where(page => page.BodyPageIndex is not null)
+            .ToDictionary(page => page.BodyPageIndex!.Value, page => page.PhysicalPageIndex);
+        var physicalAssignments = assignment
+            .Select(bodyPageIndex => bodyPageIndex >= 0
+                && bodyToPhysicalPage.TryGetValue(bodyPageIndex, out var physicalPageIndex)
+                    ? physicalPageIndex
+                    : HeaderFooterPagePlanner.UnassignedBlockPageIndex)
+            .ToArray();
+        var physicalPageSections = physicalPages.Select(page => page.PageSection).ToList();
+        var pageNumberDisplay = PageNumberFormatDialogPlanner.BuildDisplayPlans(
+            physicalPageSections,
+            model,
+            physicalAssignments);
         var differentOddEvenPages = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model);
         var hasEndnotes = model.Endnotes.Count > 0;
         var endnoteIds = model.Endnotes.Keys.OrderBy(k => k).ToList();
         var requiresDedicatedEndnotePage = hasEndnotes && RequiresDedicatedEndnotePage(sourceEditor);
-        var totalBoxCount = requiresDedicatedEndnotePage ? pageCount + 1 : pageCount;
+        var physicalBodyPageCount = physicalPages.Count;
+        var totalBoxCount = requiresDedicatedEndnotePage
+            ? physicalBodyPageCount + 1
+            : physicalBodyPageCount;
         var boxes = new List<PageBox>(totalBoxCount);
-        for (var i = 0; i < pageCount; i++)
+        foreach (var physicalPage in physicalPages)
         {
+            var pageSection = physicalPage.PageSection;
+            if (physicalPage.IsParityBlank)
+            {
+                boxes.Add(new PageBox(
+                    physicalPage.PhysicalPageIndex + 1,
+                    pageSection.PageSettings,
+                    Array.Empty<System.Windows.Documents.Block>(),
+                    pageCount: totalBoxCount,
+                    isParitySyntheticPage: true));
+                continue;
+            }
+
+            var bodyPageIndex = physicalPage.BodyPageIndex!.Value;
             // SG: use this page's section's own PageSettings for geometry (width, height, margins).
             // This makes portrait → landscape section breaks render each page at the correct size.
-            var pageSection = pageToSection[i];
             var slots = HeaderFooterPagePlanner.ResolveSlots(
                 pageSection.HeadersFooters,
                 pageSection.SectionRelativePageNumber,
                 pageSection.PageSettings,
                 differentOddEvenPages,
-                pageNumberDisplay[i].LogicalPageNumber);
-            var box = new PageBox(i + 1, pageSection.PageSettings, shards[i],
+                pageNumberDisplay[physicalPage.PhysicalPageIndex].LogicalPageNumber);
+            var box = new PageBox(
+                physicalPage.PhysicalPageIndex + 1,
+                pageSection.PageSettings,
+                shards[bodyPageIndex],
                 sourceModel: model,
                 headerSlot: slots.Header, headerSlotName: slots.HeaderSlotName,
                 footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
                 pageCount: totalBoxCount,
-                pageNumberText: pageNumberDisplay[i].Text,
-                footnoteIds: pageFootnoteIds[i],
-                endnoteIds: hasEndnotes && !requiresDedicatedEndnotePage && i == pageCount - 1
+                pageNumberText: pageNumberDisplay[physicalPage.PhysicalPageIndex].Text,
+                footnoteIds: pageFootnoteIds[bodyPageIndex],
+                endnoteIds: hasEndnotes && !requiresDedicatedEndnotePage && bodyPageIndex == pageCount - 1
                     ? endnoteIds
                     : null);
             // W21: record which section this page belongs to so CommitHeaderFooterSlots can write
@@ -225,7 +266,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         // Use the final section's page settings for the endnotes page.
         if (requiresDedicatedEndnotePage)
             boxes.Add(BuildDedicatedEndnotePage(
-                model, pageCount, assignment, pageToSection,
+                model, physicalBodyPageCount, physicalAssignments, physicalPageSections,
                 differentOddEvenPages, endnoteIds));
 
         // Wire neighbour links for cross-page caret routing.

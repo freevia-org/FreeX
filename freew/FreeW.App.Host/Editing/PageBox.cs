@@ -85,6 +85,12 @@ internal sealed class PageBox : Border
     /// </summary>
     internal bool IsEndnoteSyntheticPage { get; private set; }
 
+    /// <summary>
+    /// True when this is a print-only blank page inserted to satisfy an EvenPage or OddPage section
+    /// start. It owns no model blocks, notes, or editable header/footer slots.
+    /// </summary>
+    internal bool IsParitySyntheticPage { get; private set; }
+
     // ── Phase 4: in-page editable header/footer sub-editors ───────────────────────────────────────
 
     /// <summary>
@@ -181,7 +187,8 @@ internal sealed class PageBox : Border
         string? pageNumberText = null,
         IReadOnlyList<int>? footnoteIds = null,
         IReadOnlyList<int>? endnoteIds = null,
-        bool isEndnoteSyntheticPage = false)
+        bool isEndnoteSyntheticPage = false,
+        bool isParitySyntheticPage = false)
     {
         PageNumber = pageNumber;
         PageNumberText = pageNumberText
@@ -193,6 +200,7 @@ internal sealed class PageBox : Border
         if (endnoteIds is { Count: > 0 })
             EndnoteIds = endnoteIds;
         IsEndnoteSyntheticPage = isEndnoteSyntheticPage;
+        IsParitySyntheticPage = isParitySyntheticPage;
 
         var (pageWidth, _) = PageLayout.PageSizeDip(page);
         var (marginLeft, marginTop, marginRight, marginBottom) = PageLayout.MarginsDip(page);
@@ -251,6 +259,7 @@ internal sealed class PageBox : Border
         Body = new RichTextBox
         {
             Document = bodyFlow,
+            IsReadOnly = isParitySyntheticPage,
             IsDocumentEnabled = true,
             AcceptsTab = true,
             Background = Brushes.Transparent,

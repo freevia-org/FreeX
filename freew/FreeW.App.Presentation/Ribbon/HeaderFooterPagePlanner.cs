@@ -16,6 +16,12 @@ public sealed record HeaderFooterSlotPlan(
     HeaderFooterSlotKind FooterSlot,
     string FooterSlotName);
 
+public sealed record SectionPhysicalPagePlan(
+    int PhysicalPageIndex,
+    int? BodyPageIndex,
+    HeaderFooterPageSectionPlan PageSection,
+    bool IsParityBlank);
+
 public static class HeaderFooterPagePlanner
 {
     public const int UnassignedBlockPageIndex = -1;
@@ -27,6 +33,63 @@ public static class HeaderFooterPagePlanner
         return document.Page.DifferentOddEvenPages
             || document.Blocks.OfType<Paragraph>().Any(p => p.SectionBreak?.Page.DifferentOddEvenPages == true);
     }
+
+    public static IReadOnlyList<SectionPhysicalPagePlan> BuildPhysicalPagePlan(
+        IReadOnlyList<HeaderFooterPageSectionPlan> bodyPages,
+        IReadOnlyList<Section> sections)
+    {
+        ArgumentNullException.ThrowIfNull(bodyPages);
+        ArgumentNullException.ThrowIfNull(sections);
+
+        if (bodyPages.Count == 0)
+            return Array.Empty<SectionPhysicalPagePlan>();
+        if (sections.Count == 0)
+            throw new ArgumentException("At least one section is required.", nameof(sections));
+
+        var result = new List<SectionPhysicalPagePlan>(bodyPages.Count + sections.Count - 1);
+        for (var bodyPageIndex = 0; bodyPageIndex < bodyPages.Count; bodyPageIndex++)
+        {
+            var current = bodyPages[bodyPageIndex];
+            if (bodyPageIndex > 0)
+            {
+                var previous = bodyPages[bodyPageIndex - 1];
+                if (current.SectionIndex != previous.SectionIndex)
+                {
+                    var boundarySectionIndex = Math.Clamp(current.SectionIndex - 1, 0, sections.Count - 1);
+                    var breakKind = sections[boundarySectionIndex].BreakKind;
+                    var candidatePhysicalPageNumber = result.Count + 1;
+                    if (RequiresParityBlank(candidatePhysicalPageNumber, breakKind))
+                    {
+                        var blankSection = previous with
+                        {
+                            SectionRelativePageNumber = previous.SectionRelativePageNumber + 1
+                        };
+                        result.Add(new SectionPhysicalPagePlan(
+                            result.Count,
+                            BodyPageIndex: null,
+                            blankSection,
+                            IsParityBlank: true));
+                    }
+                }
+            }
+
+            result.Add(new SectionPhysicalPagePlan(
+                result.Count,
+                bodyPageIndex,
+                current,
+                IsParityBlank: false));
+        }
+
+        return result;
+    }
+
+    private static bool RequiresParityBlank(int candidatePhysicalPageNumber, SectionBreakKind breakKind) =>
+        breakKind switch
+        {
+            SectionBreakKind.EvenPage => candidatePhysicalPageNumber % 2 != 0,
+            SectionBreakKind.OddPage => candidatePhysicalPageNumber % 2 == 0,
+            _ => false
+        };
 
     public static HeaderFooterSlotPlan ResolveSlots(
         SectionHeadersFooters headersFooters,
