@@ -2317,6 +2317,7 @@ public sealed class EditingSession
             LinkUrl = media.LinkUrl
         };
         staged.CaptionTracks.AddRange(CloneCaptionTracks(before));
+        staged.Bookmarks.AddRange(CloneMediaBookmarks(media.Bookmarks));
 
         var result = PresentationMediaTranscriptPlanner.ApplyCaptionAuthoringMutation(staged, plan);
         if (!result.Succeeded)
@@ -2405,6 +2406,25 @@ public sealed class EditingSession
         return true;
     }
 
+    /// <summary>Replaces selected media bookmarks through one shared undoable command.</summary>
+    public bool SetSelectedMediaBookmarks(IReadOnlyList<MediaBookmarkInfo> bookmarks)
+    {
+        ArgumentNullException.ThrowIfNull(bookmarks);
+        var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
+            CurrentSlide,
+            SelectedShapeIds);
+        var media = mediaShape?.Media;
+        if (mediaShape is null || media is null)
+            return false;
+
+        Bus.Execute(new SetMediaBookmarksCommand(
+            CurrentSlideIndex,
+            mediaShape.Id,
+            media.Bookmarks,
+            bookmarks));
+        return true;
+    }
+
     /// <summary>
     /// Runs a custom-show authoring mutation against a staged snapshot and commits the resulting
     /// collection through the shared undo bus. The planner remains responsible for validation and
@@ -2447,6 +2467,14 @@ public sealed class EditingSession
             Language = track.Language,
             Label = track.Label,
             IsExternal = track.IsExternal
+        }).ToList();
+
+    private static List<MediaBookmarkInfo> CloneMediaBookmarks(
+        IEnumerable<MediaBookmarkInfo> bookmarks) =>
+        bookmarks.Select(bookmark => new MediaBookmarkInfo
+        {
+            Name = bookmark.Name,
+            TimeMilliseconds = bookmark.TimeMilliseconds
         }).ToList();
 
     private static List<PresentationCustomShow> CloneCustomShows(

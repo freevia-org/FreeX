@@ -293,4 +293,55 @@ public sealed class MediaCaptionCommandTests
         editor.Redo();
         mediaShape.Media.FadeOutMilliseconds.Should().Be(750);
     }
+
+    [Fact]
+    public void SetMediaBookmarksCommand_UndoAndRedoRestoresOrderedBookmarks()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var mediaShape = new SlideShape
+        {
+            Id = 56,
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo { IsVideo = true },
+        };
+        mediaShape.Media.Bookmarks.Add(new MediaBookmarkInfo { Name = "Old", TimeMilliseconds = 10 });
+        presentation.Slides[0].Shapes.Add(mediaShape);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetMediaBookmarksCommand(
+            0,
+            mediaShape.Id,
+            mediaShape.Media.Bookmarks,
+            [new MediaBookmarkInfo { Name = "Intro", TimeMilliseconds = 1250.25 }]));
+
+        mediaShape.Media.Bookmarks.Should().ContainSingle()
+            .Which.Name.Should().Be("Intro");
+        bus.Undo();
+        mediaShape.Media.Bookmarks.Should().ContainSingle().Which.Name.Should().Be("Old");
+        bus.Redo();
+        mediaShape.Media.Bookmarks.Single().TimeMilliseconds.Should().Be(1250.25);
+    }
+
+    [Fact]
+    public void EditingSessionSelectedMediaBookmarks_UsesUndoBus()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var mediaShape = new SlideShape
+        {
+            Id = 57,
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo { IsVideo = false },
+        };
+        presentation.Slides[0].Shapes.Add(mediaShape);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        editor.Select(mediaShape.Id);
+
+        editor.SetSelectedMediaBookmarks([new MediaBookmarkInfo { Name = "Cue", TimeMilliseconds = 800 }])
+            .Should().BeTrue();
+        mediaShape.Media.Bookmarks.Should().ContainSingle().Which.Name.Should().Be("Cue");
+        editor.Undo();
+        mediaShape.Media.Bookmarks.Should().BeEmpty();
+        editor.Redo();
+        mediaShape.Media.Bookmarks.Should().ContainSingle().Which.TimeMilliseconds.Should().Be(800);
+    }
 }

@@ -297,12 +297,22 @@ public sealed partial class MainWindow : Window
     private TextBlock _mediaFadeOutText = null!;
     private TextBox _mediaFadeOutBox = null!;
     private Button _mediaTimingApplyButton = null!;
+    private TextBlock _mediaBookmarkText = null!;
+    private ComboBox _mediaBookmarkBox = null!;
+    private TextBlock _mediaBookmarkNameText = null!;
+    private TextBox _mediaBookmarkNameBox = null!;
+    private TextBlock _mediaBookmarkTimeText = null!;
+    private TextBox _mediaBookmarkTimeBox = null!;
+    private Button _mediaBookmarkCreateButton = null!;
+    private Button _mediaBookmarkReplaceButton = null!;
+    private Button _mediaBookmarkDeleteButton = null!;
     private Button _mediaCaptionCreateButton = null!;
     private Button _mediaCaptionReplaceButton = null!;
     private Button _mediaCaptionDeleteButton = null!;
     private Button _mediaCaptionCloseButton = null!;
     private bool _mediaCaptionPaneRefreshing;
     private int? _selectedMediaCaptionTrackIndex;
+    private int? _selectedMediaBookmarkIndex;
     private Border _smartArtTextPaneHost = null!;
     private TextBlock _smartArtTextPaneHeading = null!;
     private TextBlock _smartArtTextPaneMessage = null!;
@@ -1718,6 +1728,33 @@ public sealed partial class MainWindow : Window
         _mediaTimingApplyButton = BuildMediaCaptionPaneButton();
         _mediaTimingApplyButton.Content = "Apply timing";
         _mediaTimingApplyButton.Click += (_, _) => ApplyMediaTimingPane();
+        _mediaBookmarkText = BuildMediaCaptionPaneLabel();
+        _mediaBookmarkText.Text = "Media bookmarks";
+        _mediaBookmarkBox = new ComboBox { Margin = new Thickness(12, 0, 12, 4), MinHeight = 28 };
+        _mediaBookmarkBox.SelectionChanged += (_, _) =>
+        {
+            if (_mediaCaptionPaneRefreshing)
+                return;
+            _selectedMediaBookmarkIndex = _mediaBookmarkBox.SelectedItem is ComboBoxItem { Tag: int index }
+                ? index
+                : null;
+            RefreshVisibleMediaCaptionPaneFromFields();
+        };
+        _mediaBookmarkNameText = BuildMediaCaptionPaneLabel();
+        _mediaBookmarkNameText.Text = "Bookmark name";
+        _mediaBookmarkNameBox = BuildMediaCaptionPaneTextBox(singleLine: true);
+        _mediaBookmarkTimeText = BuildMediaCaptionPaneLabel();
+        _mediaBookmarkTimeText.Text = "Bookmark time (ms)";
+        _mediaBookmarkTimeBox = BuildMediaCaptionPaneTextBox(singleLine: true);
+        _mediaBookmarkCreateButton = BuildMediaCaptionPaneButton();
+        _mediaBookmarkCreateButton.Content = "Add bookmark";
+        _mediaBookmarkCreateButton.Click += (_, _) => ApplyMediaBookmarkCreatePane();
+        _mediaBookmarkReplaceButton = BuildMediaCaptionPaneButton();
+        _mediaBookmarkReplaceButton.Content = "Replace bookmark";
+        _mediaBookmarkReplaceButton.Click += (_, _) => ApplyMediaBookmarkReplacePane();
+        _mediaBookmarkDeleteButton = BuildMediaCaptionPaneButton();
+        _mediaBookmarkDeleteButton.Content = "Delete bookmark";
+        _mediaBookmarkDeleteButton.Click += (_, _) => ApplyMediaBookmarkDeletePane();
         _mediaCaptionCreateButton = BuildMediaCaptionPaneButton();
         _mediaCaptionReplaceButton = BuildMediaCaptionPaneButton();
         _mediaCaptionDeleteButton = BuildMediaCaptionPaneButton();
@@ -1768,6 +1805,12 @@ public sealed partial class MainWindow : Window
                     _mediaFadeInBox,
                     _mediaFadeOutText,
                     _mediaFadeOutBox,
+                    _mediaBookmarkText,
+                    _mediaBookmarkBox,
+                    _mediaBookmarkNameText,
+                    _mediaBookmarkNameBox,
+                    _mediaBookmarkTimeText,
+                    _mediaBookmarkTimeBox,
                     new WrapPanel
                     {
                         HorizontalAlignment = HorizontalAlignment.Right,
@@ -1780,6 +1823,9 @@ public sealed partial class MainWindow : Window
                             _mediaVolumeApplyButton,
                             _mediaPlaybackApplyButton,
                             _mediaTimingApplyButton,
+                            _mediaBookmarkCreateButton,
+                            _mediaBookmarkReplaceButton,
+                            _mediaBookmarkDeleteButton,
                             _mediaCaptionCloseButton,
                         },
                     },
@@ -8498,6 +8544,117 @@ public sealed partial class MainWindow : Window
         return changed;
     }
 
+    internal int MediaBookmarkCount => PresentationMediaTranscriptPlanner
+        .FindSelectedMediaShape(Editor.CurrentSlide, Editor.SelectedShapeIds)
+        ?.Media?.Bookmarks.Count ?? 0;
+
+    internal void SetMediaBookmarkPaneInput(string name, double timeMilliseconds)
+    {
+        if (!IsMediaCaptionPaneVisible)
+            ShowMediaCaptionPane();
+        _mediaCaptionPaneRefreshing = true;
+        try
+        {
+            _mediaBookmarkNameBox.Text = name;
+            _mediaBookmarkTimeBox.Text = FormatMediaTiming(timeMilliseconds);
+        }
+        finally
+        {
+            _mediaCaptionPaneRefreshing = false;
+        }
+    }
+
+    internal bool ApplyMediaBookmarkCreatePane()
+    {
+        var media = SelectedMediaForPane();
+        var name = (_mediaBookmarkNameBox.Text ?? string.Empty).Trim();
+        if (media is null || name.Length == 0)
+            return false;
+        var bookmarks = CloneMediaBookmarksForPane(media.Bookmarks);
+        bookmarks.Add(new MediaBookmarkInfo { Name = name, TimeMilliseconds = MediaBookmarkTimeMilliseconds });
+        _selectedMediaBookmarkIndex = bookmarks.Count - 1;
+        return ApplyMediaBookmarksPane(bookmarks);
+    }
+
+    internal bool ApplyMediaBookmarkReplacePane()
+    {
+        var media = SelectedMediaForPane();
+        var name = (_mediaBookmarkNameBox.Text ?? string.Empty).Trim();
+        if (media is null || name.Length == 0 || _selectedMediaBookmarkIndex is not int index
+            || index < 0 || index >= media.Bookmarks.Count)
+            return false;
+        var bookmarks = CloneMediaBookmarksForPane(media.Bookmarks);
+        bookmarks[index] = new MediaBookmarkInfo { Name = name, TimeMilliseconds = MediaBookmarkTimeMilliseconds };
+        return ApplyMediaBookmarksPane(bookmarks);
+    }
+
+    internal bool ApplyMediaBookmarkDeletePane()
+    {
+        var media = SelectedMediaForPane();
+        if (media is null || _selectedMediaBookmarkIndex is not int index
+            || index < 0 || index >= media.Bookmarks.Count)
+            return false;
+        var bookmarks = CloneMediaBookmarksForPane(media.Bookmarks);
+        bookmarks.RemoveAt(index);
+        _selectedMediaBookmarkIndex = bookmarks.Count == 0 ? null : Math.Min(index, bookmarks.Count - 1);
+        return ApplyMediaBookmarksPane(bookmarks);
+    }
+
+    internal double MediaBookmarkTimeMilliseconds => ParseMediaTiming(_mediaBookmarkTimeBox?.Text);
+
+    private MediaInfo? SelectedMediaForPane() => PresentationMediaTranscriptPlanner
+        .FindSelectedMediaShape(Editor.CurrentSlide, Editor.SelectedShapeIds)?.Media;
+
+    private bool ApplyMediaBookmarksPane(IReadOnlyList<MediaBookmarkInfo> bookmarks)
+    {
+        var changed = Editor.SetSelectedMediaBookmarks(bookmarks);
+        if (changed)
+        {
+            _fileWorkflow.MarkDirty();
+            RefreshReviewWorkflowPlans();
+            UpdateStatus();
+            RefreshVisibleMediaCaptionPaneFromFields();
+        }
+        return changed;
+    }
+
+    private void RenderMediaBookmarkOptions(MediaInfo? media)
+    {
+        _mediaBookmarkBox.Items.Clear();
+        if (media is null)
+        {
+            _selectedMediaBookmarkIndex = null;
+        }
+        else
+        {
+            foreach (var (bookmark, bookmarkIndex) in media.Bookmarks.Select((bookmark, index) => (bookmark, index)))
+                _mediaBookmarkBox.Items.Add(new ComboBoxItem { Content = $"{bookmarkIndex + 1}. {bookmark.Name}", Tag = bookmarkIndex });
+            if (_selectedMediaBookmarkIndex is not int index || index < 0 || index >= media.Bookmarks.Count)
+                _selectedMediaBookmarkIndex = media.Bookmarks.Count > 0 ? 0 : null;
+        }
+
+        _mediaBookmarkBox.SelectedIndex = _selectedMediaBookmarkIndex ?? -1;
+        var selected = media is not null && _selectedMediaBookmarkIndex is int selectedIndex
+            && selectedIndex >= 0 && selectedIndex < media.Bookmarks.Count
+            ? media.Bookmarks[selectedIndex]
+            : null;
+        _mediaBookmarkNameBox.Text = selected?.Name ?? string.Empty;
+        _mediaBookmarkTimeBox.Text = FormatMediaTiming(selected?.TimeMilliseconds ?? 0);
+        _mediaBookmarkBox.IsEnabled = media is not null;
+        _mediaBookmarkNameBox.IsEnabled = media is not null;
+        _mediaBookmarkTimeBox.IsEnabled = media is not null;
+        _mediaBookmarkCreateButton.IsEnabled = media is not null;
+        _mediaBookmarkReplaceButton.IsEnabled = selected is not null;
+        _mediaBookmarkDeleteButton.IsEnabled = selected is not null;
+    }
+
+    private static List<MediaBookmarkInfo> CloneMediaBookmarksForPane(IEnumerable<MediaBookmarkInfo> bookmarks) =>
+        bookmarks.Select(bookmark => new MediaBookmarkInfo
+        {
+            Name = bookmark.Name,
+            TimeMilliseconds = bookmark.TimeMilliseconds
+        }).ToList();
+
     private void RefreshMediaCaptionAuthoringPlans(
         string? proposedLabel,
         string? proposedLanguage,
@@ -8563,6 +8720,7 @@ public sealed partial class MainWindow : Window
             _mediaTrimEndBox.Text = FormatMediaTiming(selectedMedia?.TrimEndMilliseconds ?? 0);
             _mediaFadeInBox.Text = FormatMediaTiming(selectedMedia?.FadeInMilliseconds ?? 0);
             _mediaFadeOutBox.Text = FormatMediaTiming(selectedMedia?.FadeOutMilliseconds ?? 0);
+            RenderMediaBookmarkOptions(selectedMedia);
             ApplyMediaCaptionButtonPlan(
                 _mediaCaptionCreateButton,
                 GetMediaCaptionPaneAction(plan, PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCreateCommandId));

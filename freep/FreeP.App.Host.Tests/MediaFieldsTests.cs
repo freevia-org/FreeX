@@ -201,6 +201,11 @@ public sealed class MediaFieldsTests
                 TrimEndMilliseconds = 29596.7072,
                 FadeInMilliseconds = 1000,
                 FadeOutMilliseconds = 250.5,
+                Bookmarks =
+                {
+                    new MediaBookmarkInfo { Name = "Intro", TimeMilliseconds = 1250.25 },
+                    new MediaBookmarkInfo { Name = "Demo", TimeMilliseconds = 9375 },
+                },
                 Bytes = [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70],
                 ContentType = "video/mp4",
             },
@@ -222,6 +227,9 @@ public sealed class MediaFieldsTests
             media.Element(p14 + "trim")!.Attribute("end")!.Value.Should().Be("29596.7072");
             media.Element(p14 + "fade")!.Attribute("in")!.Value.Should().Be("1000");
             media.Element(p14 + "fade")!.Attribute("out")!.Value.Should().Be("250.5");
+            media.Descendants(p14 + "bmk").Select(element =>
+                    (element.Attribute("name")!.Value, element.Attribute("time")!.Value))
+                .Should().Equal(("Intro", "1250.25"), ("Demo", "9375"));
             slideXml.Descendants(p + "pic").Should().ContainSingle();
         }
 
@@ -232,6 +240,8 @@ public sealed class MediaFieldsTests
         timing.TrimEndMilliseconds.Should().BeApproximately(29596.7072, 0.0001);
         timing.FadeInMilliseconds.Should().Be(1000);
         timing.FadeOutMilliseconds.Should().Be(250.5);
+        timing.Bookmarks.Select(bookmark => (bookmark.Name, bookmark.TimeMilliseconds))
+            .Should().Equal(("Intro", 1250.25), ("Demo", 9375d));
     }
 
     [Fact]

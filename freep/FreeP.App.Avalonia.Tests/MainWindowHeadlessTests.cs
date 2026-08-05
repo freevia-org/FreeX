@@ -5703,6 +5703,48 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Media_bookmark_pane_adds_replaces_and_deletes()
+    {
+        var count = -1;
+        var name = string.Empty;
+        var appliedCreate = false;
+        var appliedReplace = false;
+        var appliedDelete = false;
+        var dirty = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var mediaShape = new SlideShape
+            {
+                Id = 730,
+                Name = "Demo video",
+                Kind = SlideShapeKind.Media,
+                Media = new MediaInfo { IsVideo = true }
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
+            window.Editor.Select(mediaShape.Id);
+
+            window.SetMediaBookmarkPaneInput("Intro", 1250.25);
+            appliedCreate = window.ApplyMediaBookmarkCreatePane();
+            window.SetMediaBookmarkPaneInput("Demo", 2500);
+            appliedReplace = window.ApplyMediaBookmarkReplacePane();
+            name = mediaShape.Media!.Bookmarks.Single().Name;
+            appliedDelete = window.ApplyMediaBookmarkDeletePane();
+            count = window.MediaBookmarkCount;
+            dirty = window.IsDirty;
+        });
+
+        if (!ran) return;
+        appliedCreate.Should().BeTrue();
+        appliedReplace.Should().BeTrue();
+        appliedDelete.Should().BeTrue();
+        name.Should().Be("Demo");
+        count.Should().Be(0);
+        dirty.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Review_comment_add_edit_routes_through_shared_mutation_plan()
     {
         SlideComment? addedComment = null;
