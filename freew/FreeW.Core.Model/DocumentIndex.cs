@@ -4,14 +4,17 @@ namespace FreeW.Core.Model;
 /// The semantic payload of one hidden Word <c>XE</c> mark. <paramref name="Subentry"/> may contain
 /// colon-separated second/third-level text, matching Word's field-code convention. A non-empty
 /// <paramref name="CrossReference"/> is the exact text carried by XE's <c>\t</c> switch (for example,
-/// <c>See Vehicles</c>) and replaces the page number for that occurrence.
+/// <c>See Vehicles</c>) and replaces the page number for that occurrence. A non-empty
+/// <paramref name="BookmarkName"/> carries XE's <c>\r</c> switch and resolves the first-to-last page of
+/// that bookmark instead of the XE field's own page.
 /// </summary>
 public sealed record IndexMark(
     string MainEntry,
     string Subentry = "",
     string CrossReference = "",
     bool BoldPageNumber = false,
-    bool ItalicPageNumber = false)
+    bool ItalicPageNumber = false,
+    string BookmarkName = "")
 {
     /// <summary>The colon-delimited entry text serialized as XE's first argument.</summary>
     public string EntryText => Subentry.Length == 0 ? MainEntry : MainEntry + ":" + Subentry;
@@ -126,6 +129,8 @@ public static class DocumentIndex
         var instruction = $" XE \"{Escape(normalized.EntryText)}\"";
         if (normalized.CrossReference.Length > 0)
             instruction += $" \\t \"{Escape(normalized.CrossReference)}\"";
+        if (normalized.BookmarkName.Length > 0)
+            instruction += $" \\r \"{Escape(normalized.BookmarkName)}\"";
         if (normalized.BoldPageNumber)
             instruction += " \\b";
         if (normalized.ItalicPageNumber)
@@ -156,7 +161,8 @@ public static class DocumentIndex
             subentry,
             ComplexFieldEngine.SwitchValue(field.Instruction, 't') ?? string.Empty,
             ComplexFieldEngine.HasSwitch(field.Instruction, 'b'),
-            ComplexFieldEngine.HasSwitch(field.Instruction, 'i')));
+            ComplexFieldEngine.HasSwitch(field.Instruction, 'i'),
+            ComplexFieldEngine.SwitchValue(field.Instruction, 'r') ?? string.Empty));
     }
 
     /// <summary>
@@ -209,7 +215,8 @@ public static class DocumentIndex
             && string.Equals(left.EntryText, right.EntryText, StringComparison.OrdinalIgnoreCase)
             && string.Equals(left.CrossReference, right.CrossReference, StringComparison.OrdinalIgnoreCase)
             && left.BoldPageNumber == right.BoldPageNumber
-            && left.ItalicPageNumber == right.ItalicPageNumber;
+            && left.ItalicPageNumber == right.ItalicPageNumber
+            && string.Equals(left.BookmarkName, right.BookmarkName, StringComparison.Ordinal);
     }
 
     private static IEnumerable<int> FindWholeTerms(string text, string needle)
@@ -239,7 +246,7 @@ public static class DocumentIndex
         var pages = node.Occurrences
             .Where(occurrence => occurrence.Mark.CrossReference.Length == 0)
             .GroupBy(
-                occurrence => ResolvePageText(document, occurrence.BlockIndex, pageTextOf),
+                occurrence => ResolvePageText(document, occurrence, pageTextOf),
                 StringComparer.Ordinal)
             .Select(group => new IndexPageReference(
                 group.Key,
@@ -297,7 +304,8 @@ public static class DocumentIndex
             mark.Subentry.Trim(),
             mark.CrossReference.Trim(),
             mark.BoldPageNumber,
-            mark.ItalicPageNumber);
+            mark.ItalicPageNumber,
+            mark.BookmarkName.Trim());
 
     private static string Escape(string value) =>
         value.Replace("\\", "\\\\", StringComparison.Ordinal)
@@ -305,21 +313,75 @@ public static class DocumentIndex
 
     private static string ResolvePageText(
         TextDocument document,
-        int? blockIndex,
+        IndexOccurrence occurrence,
         Func<int, string?>? pageTextOf)
     {
-        if (blockIndex is not { } index)
+        if (occurrence.Mark.BookmarkName.Length > 0
+            && ResolveBookmarkRange(document, occurrence.Mark.BookmarkName) is { } range)
+        {
+            var first = ResolveBlockPageText(document, range.StartBlockIndex, pageTextOf);
+            var last = ResolveBlockPageText(document, range.EndBlockIndex, pageTextOf);
+            return string.Equals(first, last, StringComparison.Ordinal)
+                ? first
+                : first + "\u2013" + last;
+        }
+
+        if (occurrence.BlockIndex is not { } index)
             return "1";
 
-        var pageText = pageTextOf?.Invoke(index);
+        return ResolveBlockPageText(document, index, pageTextOf);
+    }
+
+    private static string ResolveBlockPageText(
+        TextDocument document,
+        int blockIndex,
+        Func<int, string?>? pageTextOf)
+    {
+        var pageText = pageTextOf?.Invoke(blockIndex);
         if (!string.IsNullOrEmpty(pageText))
             return pageText;
 
-        return (CrossReferences.ExplicitPageNumberAtBlock(document, index) ?? 1)
+        return (CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex) ?? 1)
             .ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
+    private static BookmarkBlockRange? ResolveBookmarkRange(TextDocument document, string bookmarkName)
+    {
+        for (var startBlockIndex = 0; startBlockIndex < document.Blocks.Count; startBlockIndex++)
+        {
+            if (document.Blocks[startBlockIndex] is not Paragraph startParagraph)
+                continue;
+
+            var startBoundary = startParagraph.BookmarkBoundaries.FirstOrDefault(boundary =>
+                boundary.Kind == BookmarkBoundaryKind.Start
+                && string.Equals(boundary.Name, bookmarkName, StringComparison.Ordinal));
+            if (startBoundary is null)
+                continue;
+
+            for (var endBlockIndex = startBlockIndex; endBlockIndex < document.Blocks.Count; endBlockIndex++)
+            {
+                if (document.Blocks[endBlockIndex] is Paragraph endParagraph
+                    && endParagraph.BookmarkBoundaries.Any(boundary =>
+                        boundary.Kind == BookmarkBoundaryKind.End
+                        && string.Equals(boundary.PairKey, startBoundary.PairKey, StringComparison.Ordinal)))
+                {
+                    return new BookmarkBlockRange(startBlockIndex, endBlockIndex);
+                }
+            }
+
+            return new BookmarkBlockRange(startBlockIndex, startBlockIndex);
+        }
+
+        var location = Bookmarks.List(document).FirstOrDefault(candidate =>
+            string.Equals(candidate.Name, bookmarkName, StringComparison.Ordinal));
+        return location.Name is { Length: > 0 }
+            ? new BookmarkBlockRange(location.BlockIndex, location.BlockIndex)
+            : null;
+    }
+
     private sealed record IndexOccurrence(IndexMark Mark, int? BlockIndex);
+
+    private sealed record BookmarkBlockRange(int StartBlockIndex, int EndBlockIndex);
 
     private sealed record IndexPageReference(string Label, bool Bold, bool Italic);
 

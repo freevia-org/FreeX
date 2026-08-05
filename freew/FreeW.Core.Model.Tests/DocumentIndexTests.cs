@@ -183,6 +183,56 @@ public class DocumentIndexTests
     }
 
     [Fact]
+    public void MarkRun_SerializesAndParsesBookmarkPageRangeSwitch()
+    {
+        var run = DocumentIndex.MarkRun(new IndexMark(
+            "Alpha",
+            BoldPageNumber: true,
+            BookmarkName: "TopicRange"));
+
+        run.ComplexField!.Instruction.Should().Be(" XE \"Alpha\" \\r \"TopicRange\" \\b ");
+        DocumentIndex.MarkedEntry(run).Should().Be(new IndexMark(
+            "Alpha",
+            BoldPageNumber: true,
+            BookmarkName: "TopicRange"));
+    }
+
+    [Fact]
+    public void Build_BookmarkPageRangeUsesFirstAndLastLogicalPageLabels()
+    {
+        var doc = new TextDocument();
+        var start = new Paragraph("Range start");
+        start.BookmarkNames.Add("TopicRange");
+        start.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "42", BookmarkBoundaryKind.Start, 0, "TopicRange"));
+        doc.Blocks.Add(start);
+        doc.Blocks.Add(new Paragraph("Range middle"));
+        var end = new Paragraph
+        {
+            Runs =
+            {
+                new Run("Range end"),
+                DocumentIndex.MarkRun(new IndexMark(
+                    "Alpha",
+                    ItalicPageNumber: true,
+                    BookmarkName: "TopicRange"))
+            }
+        };
+        end.BookmarkBoundaries.Add(new BookmarkBoundary("42", BookmarkBoundaryKind.End, 0));
+        doc.Blocks.Add(end);
+
+        var entry = DocumentIndex.Build(doc, blockIndex => blockIndex switch
+        {
+            0 => "iv",
+            2 => "vi",
+            _ => null
+        }).Single(paragraph => paragraph.PlainText == "Alpha, iv\u2013vi");
+
+        entry.Runs.Select(run => run.Text).Should().Equal("Alpha", ", ", "iv\u2013vi");
+        entry.Runs[^1].Formatting.Italic.Should().BeTrue();
+    }
+
+    [Fact]
     public void MarkAllTargets_FindWholeTermParagraphsAndSkipGeneratedOrExistingMarks()
     {
         var mark = new IndexMark("Alpha", "Topic");
