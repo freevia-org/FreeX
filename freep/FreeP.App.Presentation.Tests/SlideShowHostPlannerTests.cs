@@ -4,6 +4,22 @@ namespace FreeP.App.Compositor.Tests;
 
 public sealed class SlideShowHostPlannerTests
 {
+    [Fact]
+    public void KioskRestartPlanner_UsesPresentationMillisecondsOnlyForKioskMode()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.ShowType = PresentationShowType.BrowsedAtKiosk;
+        presentation.KioskRestartAfterMilliseconds = 20_000;
+
+        SlideShowKioskRestartPlanner.TryGetInterval(presentation, out var interval)
+            .Should().BeTrue();
+        interval.Should().Be(TimeSpan.FromSeconds(20));
+
+        presentation.ShowType = PresentationShowType.PresentedBySpeaker;
+        SlideShowKioskRestartPlanner.TryGetInterval(presentation, out _)
+            .Should().BeFalse();
+    }
+
     [Theory]
     [InlineData("Escape", SlideShowHostIntent.Close)]
     [InlineData("Right", SlideShowHostIntent.Advance)]

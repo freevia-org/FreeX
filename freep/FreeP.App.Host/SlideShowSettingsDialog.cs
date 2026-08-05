@@ -61,7 +61,7 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         };
         _kioskRestartText = new TextBox
         {
-            Text = InitialState.KioskRestartAfterMinutes?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            Text = InitialState.KioskRestartAfterMilliseconds?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
             MinWidth = 76,
             Margin = new Thickness(0, 0, 0, 12),
         };
@@ -72,7 +72,7 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         panel.Children.Add(_loopCheck);
         panel.Children.Add(_showTypeCombo);
         panel.Children.Add(_showScrollbarCheck);
-        panel.Children.Add(new Label { Content = "Kiosk restart minutes (optional)" });
+        panel.Children.Add(new Label { Content = "Kiosk restart milliseconds (optional)" });
         panel.Children.Add(_kioskRestartText);
         panel.Children.Add(BuildButtonRow());
         Content = panel;
@@ -110,14 +110,14 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         bool loopUntilStopped,
         PresentationShowType showType = PresentationShowType.PresentedBySpeaker,
         bool showBrowseScrollbar = true,
-        uint? kioskRestartAfterMinutes = null)
+        uint? kioskRestartAfterMilliseconds = null)
     {
         _useTimingsCheck.IsChecked = useSlideTimings;
         _showAnimationCheck.IsChecked = !showWithAnimation;
         _loopCheck.IsChecked = loopUntilStopped;
         _showTypeCombo.SelectedIndex = (int)showType;
         _showScrollbarCheck.IsChecked = showBrowseScrollbar;
-        _kioskRestartText.Text = kioskRestartAfterMinutes?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+        _kioskRestartText.Text = kioskRestartAfterMilliseconds?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
         return Apply();
     }
 
@@ -130,14 +130,14 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             _loopCheck.IsChecked == true,
             (PresentationShowType)Math.Clamp(_showTypeCombo.SelectedIndex, 0, 2),
             _showScrollbarCheck.IsChecked == true,
-            ParseRestartMinutes());
+            ParseRestartMilliseconds());
         if (applied && IsLoaded)
             DialogResult = true;
         return applied;
     }
 
-    private uint? ParseRestartMinutes() =>
-        uint.TryParse(_kioskRestartText.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var minutes)
-            ? minutes
+    private uint? ParseRestartMilliseconds() =>
+        uint.TryParse(_kioskRestartText.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var milliseconds)
+            ? milliseconds
             : null;
 }

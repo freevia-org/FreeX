@@ -64,7 +64,7 @@ internal sealed class SlideShowSettingsDialog : Window
         };
         _kioskRestartText = new TextBox
         {
-            Text = InitialState.KioskRestartAfterMinutes?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            Text = InitialState.KioskRestartAfterMilliseconds?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
             MinWidth = 76,
         };
 
@@ -95,7 +95,7 @@ internal sealed class SlideShowSettingsDialog : Window
         panel.Children.Add(_loopCheck);
         panel.Children.Add(_showTypeCombo);
         panel.Children.Add(_showScrollbarCheck);
-        panel.Children.Add(new TextBlock { Text = "Kiosk restart minutes (optional)" });
+        panel.Children.Add(new TextBlock { Text = "Kiosk restart milliseconds (optional)" });
         panel.Children.Add(_kioskRestartText);
 
         var ok = BuildButton("OK", () => Apply(), isDefault: true);
@@ -126,14 +126,14 @@ internal sealed class SlideShowSettingsDialog : Window
         bool loopUntilStopped,
         PresentationShowType showType = PresentationShowType.PresentedBySpeaker,
         bool showBrowseScrollbar = true,
-        uint? kioskRestartAfterMinutes = null)
+        uint? kioskRestartAfterMilliseconds = null)
     {
         _useTimingsCheck.IsChecked = useSlideTimings;
         _showAnimationCheck.IsChecked = !showWithAnimation;
         _loopCheck.IsChecked = loopUntilStopped;
         _showTypeCombo.SelectedIndex = (int)showType;
         _showScrollbarCheck.IsChecked = showBrowseScrollbar;
-        _kioskRestartText.Text = kioskRestartAfterMinutes?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+        _kioskRestartText.Text = kioskRestartAfterMilliseconds?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
         return Apply();
     }
 
@@ -146,14 +146,14 @@ internal sealed class SlideShowSettingsDialog : Window
             _loopCheck.IsChecked == true,
             (PresentationShowType)Math.Clamp(_showTypeCombo.SelectedIndex, 0, 2),
             _showScrollbarCheck.IsChecked == true,
-            ParseRestartMinutes());
+            ParseRestartMilliseconds());
         if (applied && IsVisible)
             Close(true);
         return applied;
     }
 
-    private uint? ParseRestartMinutes() =>
-        uint.TryParse(_kioskRestartText.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var minutes)
-            ? minutes
+    private uint? ParseRestartMilliseconds() =>
+        uint.TryParse(_kioskRestartText.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var milliseconds)
+            ? milliseconds
             : null;
 }

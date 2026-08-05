@@ -72,6 +72,7 @@ public sealed class SlideShowWindow : Window
     private readonly Action<int, string?>? _setSlideNotesText;
     private readonly AvaloniaSlideShowMediaController _mediaController;
     private readonly DispatcherTimer  _autoAdvanceTimer;
+    private readonly DispatcherTimer  _kioskRestartTimer;
     private PresenterViewWindow? _presenterViewWindow;
     private bool _zoomShowBackgroundForTransition = true;
     private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
@@ -300,7 +301,29 @@ public sealed class SlideShowWindow : Window
         stage.Children.Add(_screenModeOverlay);
 
         _root = new Panel { Background = Brushes.Black };
-        _root.Children.Add(stage);
+        if (isBrowseWindow)
+        {
+            stage.Width = _slideDipW;
+            stage.Height = _slideDipH;
+            var browser = new ScrollViewer
+            {
+                Background = Brushes.Black,
+                HorizontalScrollBarVisibility = _presentation.ShowBrowseScrollbar
+                    ? global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
+                    : global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+                VerticalScrollBarVisibility = _presentation.ShowBrowseScrollbar
+                    ? global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
+                    : global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Content = stage,
+            };
+            _root.Children.Add(browser);
+        }
+        else
+        {
+            _root.Children.Add(stage);
+        }
 
         Content = _root;
 
@@ -311,12 +334,23 @@ public sealed class SlideShowWindow : Window
         };
         _autoAdvanceTimer.Tick += (_, _) => DoAdvance();
 
+        _kioskRestartTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            IsEnabled = false,
+        };
+        _kioskRestartTimer.Tick += (_, _) => RestartKioskShow();
+
         // ── Event wiring ───────────────────────────────────────────────────────
         KeyDown             += OnKeyDown;
         PointerPressed      += OnPointerPressed;
         PointerMoved        += OnPointerMoved;
         PointerReleased     += OnPointerReleased;
-        Opened              += (_, _) => { Focus(); DisplayCurrentSlide(animated: false); };
+        Opened              += (_, _) =>
+        {
+            Focus();
+            DisplayCurrentSlide(animated: false);
+            StartKioskRestartTimer();
+        };
         Closed              += (_, _) => Teardown();
     }
 
@@ -1090,6 +1124,30 @@ public sealed class SlideShowWindow : Window
     }
 
     private SlideShowSlideMetrics CurrentSlideMetrics() => new(_slideDipW, _slideDipH);
+
+    private void StartKioskRestartTimer()
+    {
+        _kioskRestartTimer.Stop();
+        if (!SlideShowKioskRestartPlanner.TryGetInterval(
+                _presentation,
+                out var interval))
+            return;
+
+        _kioskRestartTimer.Interval = interval;
+        _kioskRestartTimer.Start();
+    }
+
+    private void RestartKioskShow()
+    {
+        if (_session.IsClosed)
+            return;
+
+        ApplyHostCommand(SlideShowHostPlanner.PlanIntent(
+            SlideShowHostIntent.FirstSlide,
+            _controller,
+            _playbackRoute.Slides,
+            stopAutoAdvance: true));
+    }
 
     private void SyncMediaOverlayBounds()
     {
@@ -6207,6 +6265,7 @@ public sealed class SlideShowWindow : Window
         var now = nowUtc ?? DateTimeOffset.UtcNow;
         _session.Close(now);
         _autoAdvanceTimer.Stop();
+        _kioskRestartTimer.Stop();
         // DA3: stop ALL per-frame animation/transition timers so they don't keep
         // ticking against the closed window's canvas.  A running DispatcherTimer is
         // rooted by the dispatcher and will NOT be collected automatically.

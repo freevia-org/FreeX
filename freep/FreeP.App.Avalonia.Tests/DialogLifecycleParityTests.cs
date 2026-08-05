@@ -97,14 +97,14 @@ public sealed class DialogLifecycleParityTests
                 loopUntilStopped: true,
                 showType: PresentationShowType.BrowsedAtKiosk,
                 showBrowseScrollbar: false,
-                kioskRestartAfterMinutes: 18).Should().BeTrue();
+                kioskRestartAfterMilliseconds: 18_000).Should().BeTrue();
 
             editor.Presentation.UseSlideTimings.Should().BeFalse();
             editor.Presentation.ShowWithAnimation.Should().BeFalse();
             editor.Presentation.LoopUntilStopped.Should().BeTrue();
             editor.Presentation.ShowType.Should().Be(PresentationShowType.BrowsedAtKiosk);
             editor.Presentation.ShowBrowseScrollbar.Should().BeFalse();
-            editor.Presentation.KioskRestartAfterMinutes.Should().Be(18);
+            editor.Presentation.KioskRestartAfterMilliseconds.Should().Be(18_000);
             editor.Undo();
             editor.Presentation.UseSlideTimings.Should().BeTrue();
         }, CancellationToken.None);

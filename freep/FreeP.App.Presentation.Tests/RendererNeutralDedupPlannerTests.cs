@@ -226,26 +226,26 @@ public sealed class RendererNeutralDedupPlannerTests
             oldLoopUntilStopped: false,
             oldShowType: PresentationShowType.PresentedBySpeaker,
             oldShowBrowseScrollbar: true,
-            oldKioskRestartAfterMinutes: null,
+            oldKioskRestartAfterMilliseconds: null,
             newUseSlideTimings: false,
             newShowWithAnimation: false,
             newLoopUntilStopped: true,
             newShowType: PresentationShowType.BrowsedByIndividual,
             newShowBrowseScrollbar: false,
-            newKioskRestartAfterMinutes: 15));
+            newKioskRestartAfterMilliseconds: 15_000));
         presentation.UseSlideTimings.Should().BeFalse();
         presentation.ShowWithAnimation.Should().BeFalse();
         presentation.LoopUntilStopped.Should().BeTrue();
         presentation.ShowType.Should().Be(PresentationShowType.BrowsedByIndividual);
         presentation.ShowBrowseScrollbar.Should().BeFalse();
-        presentation.KioskRestartAfterMinutes.Should().Be(15);
+        presentation.KioskRestartAfterMilliseconds.Should().Be(15_000);
         bus.Undo();
         presentation.UseSlideTimings.Should().BeTrue();
         presentation.ShowWithAnimation.Should().BeTrue();
         presentation.LoopUntilStopped.Should().BeFalse();
         presentation.ShowType.Should().Be(PresentationShowType.PresentedBySpeaker);
         presentation.ShowBrowseScrollbar.Should().BeTrue();
-        presentation.KioskRestartAfterMinutes.Should().BeNull();
+        presentation.KioskRestartAfterMilliseconds.Should().BeNull();
         bus.Redo();
 
         using var output = new MemoryStream();
@@ -257,7 +257,7 @@ public sealed class RendererNeutralDedupPlannerTests
         reopened.LoopUntilStopped.Should().BeTrue();
         reopened.ShowType.Should().Be(PresentationShowType.BrowsedByIndividual);
         reopened.ShowBrowseScrollbar.Should().BeFalse();
-        reopened.KioskRestartAfterMinutes.Should().BeNull();
+        reopened.KioskRestartAfterMilliseconds.Should().BeNull();
 
         using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
         using var properties = archive.GetEntry("ppt/presProps.xml")!.Open();
@@ -276,7 +276,7 @@ public sealed class RendererNeutralDedupPlannerTests
     {
         var presentation = Presentation.CreateEmpty();
         presentation.ShowType = PresentationShowType.BrowsedAtKiosk;
-        presentation.KioskRestartAfterMinutes = 20;
+        presentation.KioskRestartAfterMilliseconds = 20_000;
 
         using var output = new MemoryStream();
         PptxPackageWriter.Write(presentation, output);
@@ -284,13 +284,13 @@ public sealed class RendererNeutralDedupPlannerTests
         var reopened = PptxPackageReader.Read(new MemoryStream(bytes));
 
         reopened.ShowType.Should().Be(PresentationShowType.BrowsedAtKiosk);
-        reopened.KioskRestartAfterMinutes.Should().Be(20);
+        reopened.KioskRestartAfterMilliseconds.Should().Be(20_000);
         using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
         using var properties = archive.GetEntry("ppt/presProps.xml")!.Open();
         XDocument.Load(properties).Descendants(XName.Get(
                 "kiosk", "http://schemas.openxmlformats.org/presentationml/2006/main"))
             .Single()
-            .Attribute("restart")!.Value.Should().Be("20");
+            .Attribute("restart")!.Value.Should().Be("20000");
     }
 
     [Fact]

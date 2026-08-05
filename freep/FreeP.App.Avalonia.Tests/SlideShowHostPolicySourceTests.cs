@@ -5,6 +5,22 @@ namespace FreeP.App.Avalonia.Tests;
 public sealed class SlideShowHostPolicySourceTests
 {
     [Fact]
+    public void AvaloniaSlideShowWindow_ConsumesBrowseScrollbarAndKioskRestartState()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Avalonia",
+            "SlideShowWindow.cs"));
+
+        source.Should().Contain("HorizontalScrollBarVisibility = _presentation.ShowBrowseScrollbar");
+        source.Should().Contain("VerticalScrollBarVisibility = _presentation.ShowBrowseScrollbar");
+        source.Should().Contain("SlideShowKioskRestartPlanner.TryGetInterval(");
+        source.Should().Contain("StartKioskRestartTimer");
+        source.Should().Contain("RestartKioskShow");
+    }
+
+    [Fact]
     public void Avalonia_named_custom_show_preserves_wpf_owner_handoff()
     {
         var source = File.ReadAllText(Path.Combine(

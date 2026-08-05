@@ -24,13 +24,13 @@ public sealed class SlideShowSettingsDialogTests
             loopUntilStopped: true,
             showType: PresentationShowType.BrowsedByIndividual,
             showBrowseScrollbar: false,
-            kioskRestartAfterMinutes: 12).Should().BeTrue();
+            kioskRestartAfterMilliseconds: 12_000).Should().BeTrue();
         editor.Presentation.UseSlideTimings.Should().BeFalse();
         editor.Presentation.ShowWithAnimation.Should().BeFalse();
         editor.Presentation.LoopUntilStopped.Should().BeTrue();
         editor.Presentation.ShowType.Should().Be(PresentationShowType.BrowsedByIndividual);
         editor.Presentation.ShowBrowseScrollbar.Should().BeFalse();
-        editor.Presentation.KioskRestartAfterMinutes.Should().Be(12);
+        editor.Presentation.KioskRestartAfterMilliseconds.Should().Be(12_000);
 
         editor.Undo();
         editor.Presentation.UseSlideTimings.Should().BeTrue();
@@ -38,7 +38,7 @@ public sealed class SlideShowSettingsDialogTests
         editor.Presentation.LoopUntilStopped.Should().BeFalse();
         editor.Presentation.ShowType.Should().Be(PresentationShowType.PresentedBySpeaker);
         editor.Presentation.ShowBrowseScrollbar.Should().BeTrue();
-        editor.Presentation.KioskRestartAfterMinutes.Should().BeNull();
+        editor.Presentation.KioskRestartAfterMilliseconds.Should().BeNull();
     }
 
     [StaFact]
