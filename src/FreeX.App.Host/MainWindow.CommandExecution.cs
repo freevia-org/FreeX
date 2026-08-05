@@ -522,9 +522,7 @@ public partial class MainWindow
         // If so, restore the clean state; otherwise mark dirty. The version check (in addition
         // to the raw depth) guards against a trim-then-refill aliasing the save-point depth with
         // different entries than were actually on the stack at save time.
-        var undoDepthNow = _commandBus.GetUndoStackDepth(_workbook.Id);
-        var undoStackVersionNow = _commandBus.GetUndoStackVersion(_workbook.Id);
-        if (!_documentState.TryMarkCleanIfAtSavePoint(undoDepthNow, undoStackVersionNow))
+        if (!_session.TryMarkCleanIfAtSavePoint())
             MarkWorkbookDirty();
         else
         {
@@ -570,9 +568,7 @@ public partial class MainWindow
         // If so, restore the clean state; otherwise mark dirty. The version check (in addition
         // to the raw depth) guards against a trim-then-refill aliasing the save-point depth with
         // different entries than were actually on the stack at save time.
-        var undoDepthNow = _commandBus.GetUndoStackDepth(_workbook.Id);
-        var undoStackVersionNow = _commandBus.GetUndoStackVersion(_workbook.Id);
-        if (!_documentState.TryMarkCleanIfAtSavePoint(undoDepthNow, undoStackVersionNow))
+        if (!_session.TryMarkCleanIfAtSavePoint())
             MarkWorkbookDirty();
         else
         {

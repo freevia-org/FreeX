@@ -455,7 +455,7 @@ public partial class MainWindow
 
     private void UpdateViewport()
     {
-        if (SheetGrid == null || _viewportService == null) return;
+        if (_workbookSessionDisposed || SheetGrid == null || _viewportService == null) return;
 
         // Dismiss the AutoFilter dropdown flyout if we've moved to a different sheet.
         CloseAutoFilterDropdownOnSheetChange();
@@ -472,6 +472,7 @@ public partial class MainWindow
             SyncPageLayoutScaleToFitControls(sheet);
         }
         EnsureActiveCellSelection(sheet);
+        SynchronizeWorkbookSessionSelection();
 
         var (topRow, leftCol) = GetEffectiveViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
         topRow = ClampViewportOrigin(

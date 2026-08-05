@@ -566,21 +566,21 @@ public partial class MainWindow
             // release its sheets from the shared app-lifetime RecalcEngine's volatile-cell
             // tracking, dependency graph, and dependency-plan cache before dropping the reference,
             // or that state leaks for the life of the app (see RecalcEngine.RetireWorkbook).
-            _recalcEngine.RetireWorkbook(outgoingWorkbook);
             // R114-commands-workbook-retire-1: this window's CommandBus is app-lifetime too (see
             // App.CreateWorkbookCommandBus) and is keyed by WorkbookId with no other eviction path
             // -- without this the outgoing workbook's undo/redo stack (up to the 50 MB byte
             // budget) would stay a live entry in it forever.
             _commandBus.Retire(outgoingWorkbook.Id);
         }
-        _workbook = wb;
-        _workbookRef.Current = wb;
+        ReplaceWorkbookSession(new StartupWorkbookLoadResult(
+            wb,
+            wb.Name,
+            "Created new workbook.",
+            IsFallback: false));
         InvalidateToolbarVisualState();
         _worksheetSelections.Clear();
         _worksheetViewStates.Clear();
-        _currentSheetId = wb.Sheets[0].Id;
         InvalidateNavigationCaches();
-        _currentFilePath = null;
         _currentFileSourceLastWriteTimeUtc = null;
         _currentXlsxFeatureReport = null;
         _isWorkbookReadOnly = false;
@@ -706,7 +706,6 @@ public partial class MainWindow
                 // volatile-cell tracking, dependency graph, and dependency-plan cache before
                 // dropping the reference, or that state leaks for the life of the app (see
                 // RecalcEngine.RetireWorkbook).
-                _recalcEngine.RetireWorkbook(outgoingWorkbook);
                 // R114-commands-workbook-retire-1: this window's CommandBus is app-lifetime too
                 // (see App.CreateWorkbookCommandBus) and is keyed by WorkbookId with no other
                 // eviction path -- without this the outgoing workbook's undo/redo stack (up to the
@@ -714,8 +713,16 @@ public partial class MainWindow
                 _commandBus.Retire(outgoingWorkbook.Id);
             }
             _currentXlsxFeatureReport = plan.FeatureReport;
-            _workbook = plan.Workbook;
-            _workbookRef.Current = plan.Workbook;
+            ReplaceWorkbookSession(new StartupWorkbookLoadResult(
+                plan.Workbook,
+                plan.DisplayName,
+                plan.Status,
+                IsFallback: false,
+                SourcePath: plan.SourcePath,
+                OpenedAsTemplate: plan.OpenedAsTemplate,
+                FeatureReport: plan.FeatureReport,
+                LoadWarnings: result.LoadWarnings,
+                SourceFileAccessIdentity: plan.SourceFileAccessIdentity));
             // OpenWorkbookLoader only recalculates (and thereby rebuilds the dependency graph) when
             // the file demands a full recalc on load; most real-world workbooks trust their cached
             // values and skip that branch entirely (WorkbookOpenService.ShouldRecalculateLoadedFormulas).
@@ -735,7 +742,6 @@ public partial class MainWindow
             _worksheetViewStates.Clear();
             _currentSheetId = plan.ActiveSheetId;
             InvalidateNavigationCaches();
-            _currentFilePath = plan.CurrentFilePath;
             _currentFileSourceLastWriteTimeUtc = result.SourceLastWriteTimeUtc;
             UpdateTitleBar();
             MarkWorkbookSaved();

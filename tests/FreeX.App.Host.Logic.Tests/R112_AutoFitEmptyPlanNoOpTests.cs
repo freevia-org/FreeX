@@ -39,10 +39,7 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class R112_AutoFitEmptyPlanNoOpTests
 {
-    private static WorkbookDocumentState GetDocumentState(MainWindow window) =>
-        (WorkbookDocumentState)typeof(MainWindow)
-            .GetField("_documentState", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .GetValue(window)!;
+    private static WorkbookSession GetDocumentState(MainWindow window) => window.Session;
 
     [Fact]
     public void FormatAutoRowMenuItem_Click_WholeColumnSelection_IsNoOp_NoUndoEntryNoDirty()

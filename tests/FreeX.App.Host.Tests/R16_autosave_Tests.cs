@@ -46,22 +46,23 @@ public sealed class R16_autosave_Tests
     private static MainWindow CreateWindow(
         WorkbookRef workbookRef,
         WorkbookWindowRegistry registry,
-        WorkbookDocumentState documentState)
+        WorkbookDocumentState documentState,
+        ICommandBus commandBus,
+        RecalcEngine recalcEngine,
+        WorkbookSession? workbookSession = null)
     {
-        var graph = new DependencyGraph();
-        var evaluator = new FormulaEvaluator();
-        var commandBus = new CommandBus(_ => new TestCommandContext(workbookRef.Current));
         var window = new MainWindow(
             NullLogger<MainWindow>.Instance,
             new ViewportService(),
             commandBus,
-            new RecalcEngine(graph, evaluator),
+            recalcEngine,
             [],
             workbookRef,
             workbookRef.Current,
             NullUserMessageService.Instance,
             documentState,
-            windowRegistry: registry)
+            windowRegistry: registry,
+            workbookSession: workbookSession)
         {
             WindowState = WindowState.Normal,
             Width = 1280,
@@ -100,8 +101,10 @@ public sealed class R16_autosave_Tests
             var workbookRef = new WorkbookRef { Current = workbook };
             var registry = new WorkbookWindowRegistry();
             var documentState = new WorkbookDocumentState();
+            var commandBus = new CommandBus(_ => new TestCommandContext(workbookRef.Current));
+            var recalcEngine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
 
-            var primary = CreateWindow(workbookRef, registry, documentState);
+            var primary = CreateWindow(workbookRef, registry, documentState, commandBus, recalcEngine);
             primary.AttachAutosaveService(new AutosaveService(store), store);
             primary.Show();
             primary.Activate();
@@ -109,7 +112,13 @@ public sealed class R16_autosave_Tests
 
             // A "New Window" sibling over the same shared document — gets its own independent
             // autosave snapshot (per J25), just like MultiWindowAutosaveOwnershipTests exercises.
-            var secondary = CreateWindow(workbookRef, registry, documentState);
+            var secondary = CreateWindow(
+                workbookRef,
+                registry,
+                documentState,
+                commandBus,
+                recalcEngine,
+                primary.Session.CreateSiblingView(1, 1));
             secondary.AttachAutosaveService(new AutosaveService(store), store);
             secondary.Show();
             secondary.Activate();

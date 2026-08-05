@@ -8,6 +8,41 @@ namespace FreeX.App.Services;
 
 public sealed class WorkbookSessionFactory
 {
+    /// <summary>
+    /// Creates a session over host-provided command, calculation, viewport, and document-state
+    /// services. This lets an existing renderer migrate to <see cref="WorkbookSession"/> ownership
+    /// without creating a second command history or recalculation graph.
+    /// </summary>
+    public WorkbookSession CreateHostOwned(
+        StartupWorkbookLoadResult source,
+        ICommandBus commandBus,
+        RecalcEngine recalcEngine,
+        IViewportService viewportService,
+        IEnumerable<IFileAdapter> adapters,
+        WorkbookDocumentState documentState,
+        double viewportHeight,
+        double viewportWidth,
+        bool includeObjects = false)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(commandBus);
+        ArgumentNullException.ThrowIfNull(recalcEngine);
+        ArgumentNullException.ThrowIfNull(viewportService);
+        ArgumentNullException.ThrowIfNull(adapters);
+        ArgumentNullException.ThrowIfNull(documentState);
+
+        return new WorkbookSession(
+            source,
+            adapters.ToList(),
+            new WorkbookCellEditService(commandBus, recalcEngine),
+            new WorkbookSheetSelectionService(),
+            viewportService,
+            viewportHeight,
+            viewportWidth,
+            includeObjects,
+            documentState: documentState);
+    }
+
     public WorkbookSession Create(
         StartupWorkbookLoadResult source,
         double viewportHeight,

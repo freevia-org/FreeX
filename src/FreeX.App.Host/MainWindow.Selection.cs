@@ -1956,6 +1956,40 @@ public partial class MainWindow
             SheetGrid.SelectedRanges = ranges;
     }
 
+    /// <summary>
+    /// Projects the native WPF grid selection into the shared application session. GridView
+    /// remains the input/rendering surface during this migration, while WorkbookSession is the
+    /// authoritative portable view state consumed by future command slices.
+    /// </summary>
+    private void SynchronizeWorkbookSessionSelection()
+    {
+        if (_workbookSessionDisposed)
+            return;
+
+        if (!ReferenceEquals(_session.Workbook, _workbook))
+            throw new InvalidOperationException("The WPF workbook mirror diverged from WorkbookSession.");
+
+        if (SheetGrid.SelectedRange is not { } primaryRange ||
+            primaryRange.Start.Sheet != _currentSheetId ||
+            primaryRange.End.Sheet != _currentSheetId)
+        {
+            return;
+        }
+
+        var selectedRanges = SheetGrid.SelectedRanges?
+            .Where(range =>
+                range.Start.Sheet == _currentSheetId &&
+                range.End.Sheet == _currentSheetId)
+            .ToList() ?? [primaryRange];
+        if (!selectedRanges.Contains(primaryRange))
+            selectedRanges.Add(primaryRange);
+
+        var activeCell = _selectionAnchor is { } anchor && primaryRange.Contains(anchor)
+            ? anchor
+            : primaryRange.Start;
+        _session.SynchronizeSelectionState(_currentSheetId, primaryRange, selectedRanges, activeCell);
+    }
+
     private void SetCellAddressBoxSelectionText(string text)
     {
         if (CellAddressBox.Text == text)

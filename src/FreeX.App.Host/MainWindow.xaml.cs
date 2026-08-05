@@ -33,11 +33,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
 
     private readonly ILogger<MainWindow> _logger;
     private readonly IViewportService _viewportService;
-    // ── Per-window document context: _workbookRef + _commandBus + _documentState ──
-    // Each window owns its document's ref/bus/state. Windows opened via View > New Window
-    // share the originating window's instances (several views of one document); File > Open
-    // or File > New in such a view swaps in fresh instances (DetachFromSharedDocumentContext)
-    // so the new document is independent of the siblings (H39). Not readonly for that reason.
+    // Transitional WPF command infrastructure. WorkbookSession owns document and view state;
+    // these remain mutable until command execution moves behind the shared session API.
     private ICommandBus _commandBus;
     private ICommandStackChangeNotifier? _commandStackChangeNotifier;
     private readonly IUserMessageService _messageService;
@@ -48,6 +45,9 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private readonly AppDiagnosticsOptions _diagnosticsOptions;
     private readonly RibbonKeyTipMode _ribbonKeyTipMode = new();
     private readonly KeyboardCommandDispatcher _keyboardCommandDispatcher = new();
+    private readonly WorkbookSessionFactory _sessionFactory = new();
+    private WorkbookSession _session;
+    private bool _workbookSessionDisposed;
     private readonly StandaloneAltKeyTipTracker _standaloneAltKeyTipTracker = new();
     private RibbonKeyTipScope _ribbonKeyTipScope = RibbonKeyTipScope.None;
     private string _ribbonKeyTipSequence = "";
@@ -93,26 +93,24 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     // "New Window" sibling's save broadcasts the gate into this window, so the input surface is
     // only re-enabled once every hold on it has released (R115-app-host-save-race).
     private int _saveGateHoldCount;
-    // ── Dirty / save-state cluster: canonical state lives in _documentState ──
-    // These private properties delegate to the injected WorkbookDocumentState service.
+    // Dirty/save state is owned by WorkbookSession. These private properties preserve the names
+    // used across the WPF partial-class surface while that renderer is migrated incrementally.
     // They preserve the same names used across the 50-file partial-class surface so
     // all callers continue to compile without mass edits.
     //
-    // Mutations go through the MarkWorkbookDirty / MarkWorkbookSaved methods in
-    // MainWindow.WorkbookLifecycle.cs, which call _documentState directly.  The
-    // read-only getters here allow all the partial files to read the same state.
-    private bool _workbookDirty => _documentState.IsDirty;
+    // Mutations go through MainWindow.WorkbookLifecycle.cs and delegate to the session.
+    private bool _workbookDirty => _session.IsDirty;
     private bool _suppressClosePrompt
     {
-        get => _documentState.SuppressClosePrompt;
-        set => _documentState.SuppressClosePrompt = value;
+        get => _session.SuppressClosePrompt;
+        set => _session.SuppressClosePrompt = value;
     }
     private string? _currentFilePath
     {
-        get => _documentState.CurrentFilePath;
-        set => _documentState.SetCurrentFilePath(value);
+        get => _session.CurrentFilePath;
+        set => _session.SetCurrentFilePathFromHost(value);
     }
-    private int _workbookDirtyGeneration => _documentState.DirtyGeneration;
+    private int _workbookDirtyGeneration => _session.DirtyGeneration;
     private bool _closeAfterSaveInProgress;
     private CellAddress? _selectionAnchorField;
     // The true active/anchor cell of the current selection (e.g. where a Shift+arrow
@@ -318,7 +316,6 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private bool _suppressScrollBroadcast;
 
     // ── Per-document save/dirty state service (shared by the views of one document) ──
-    private WorkbookDocumentState _documentState;
     private readonly NewWorkbookNameSequence _newWorkbookNameSequence;
 
     public MainWindow(
@@ -336,11 +333,11 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         AppDiagnosticsOptions? diagnosticsOptions = null,
         FreeXOptions? options = null,
         WorkbookWindowRegistry? windowRegistry = null,
-        NewWorkbookNameSequence? newWorkbookNameSequence = null)
+        NewWorkbookNameSequence? newWorkbookNameSequence = null,
+        WorkbookSession? workbookSession = null)
     {
         // The MainWindow DI factory supplies a fresh per-document WorkbookDocumentState (View >
         // New Window passes the originating window's instead); tests that omit it get a default.
-        _documentState = documentState ?? new WorkbookDocumentState();
         _newWorkbookNameSequence = newWorkbookNameSequence ?? new NewWorkbookNameSequence();
         _logger = logger;
         _viewportService = viewportService;
@@ -353,8 +350,25 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         _diagnosticsMetadata = diagnosticsMetadata ?? AppDiagnosticsMetadata.Create(AppInfo.VersionText);
         _diagnosticsOptions = diagnosticsOptions ?? AppDiagnosticsOptions.CreateDefault();
         _workbookRef = workbookRef;
-        _workbook = workbook;
-        _currentSheetId = _workbook.Sheets[0].Id;
+        _session = workbookSession ?? _sessionFactory.CreateHostOwned(
+            new StartupWorkbookLoadResult(
+                workbook,
+                workbook.Name,
+                "Initialized workbook.",
+                IsFallback: false,
+                SourcePath: documentState?.CurrentFilePath),
+            commandBus,
+            recalcEngine,
+            viewportService,
+            fileAdapters,
+            documentState ?? new WorkbookDocumentState(),
+            viewportHeight: 1,
+            viewportWidth: 1,
+            includeObjects: true);
+        if (!ReferenceEquals(_session.Workbook, workbook))
+            throw new ArgumentException("The supplied workbook session must own the supplied workbook.", nameof(workbookSession));
+        _workbook = _session.Workbook;
+        _currentSheetId = _session.ActiveSheet.Id;
         _options = options ?? FreeXOptions.Load();
         _windowRegistry = windowRegistry;
         // A window handed a workbook that a registered window already views is a secondary view
@@ -513,6 +527,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         _logger.LogInformation("MainWindow initialized with Workbook {WorkbookId}", _workbook.Id);
     }
 
+    internal WorkbookSession Session => _session;
+
     private void RecordDiagnosticEvent(string eventName, IReadOnlyDictionary<string, string?>? properties = null) =>
         _diagnostics?.RecordEvent(eventName, properties);
 
@@ -592,6 +608,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     {
         if (_commandStackChangeNotifier is not null)
             _commandStackChangeNotifier.StackChanged -= CommandStackChangeNotifier_StackChanged;
+        _workbookSessionDisposed = true;
+        _session.Dispose();
     }
 
     private void UpdateMaxRestoreButtonState()

@@ -439,6 +439,7 @@ public partial class MainWindow
 
     private void RefreshToolbarAfterSelectionChange()
     {
+        SynchronizeWorkbookSessionSelection();
         RefreshPivotFieldListPaneAfterSelectionChange();
 
         if (CanSkipSelectionToolbarRefresh())

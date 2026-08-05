@@ -14,7 +14,7 @@ public partial class MainWindow
     {
         // Delegates to this document's WorkbookDocumentState (shared by its "New Window" views).
         // MarkDirty() increments DirtyGeneration and sets IsDirty = true in one atomic step.
-        _documentState.MarkDirty();
+        _session.MarkDirtyFromHost();
         UpdateTitleBar();
         // Fan out the title-bar refresh to this document's other views so they reflect
         // the dirty indicator without needing a full viewport refresh.
@@ -28,13 +28,36 @@ public partial class MainWindow
         // can detect when the stack returns to the save point and clear the dirty flag cleanly.
         // The version (not just the depth) guards against the stack having been trimmed and
         // refilled to the same depth with different entries — see TryMarkCleanIfAtSavePoint.
-        var undoDepth = _commandBus.GetUndoStackDepth(_workbook.Id);
-        var undoStackVersion = _commandBus.GetUndoStackVersion(_workbook.Id);
-        _documentState.MarkSavedAtUndoDepth(undoDepth, undoStackVersion);
+        _session.MarkSavedFromHost();
         UpdateTitleBar();
         // Fan out to this document's sibling views so they also reflect the saved (clean) state.
         _windowRegistry?.NotifyDocumentStateChanged(this);
         NotifyAutosaveSaved();
+    }
+
+    /// <summary>
+    /// Replaces this window's document owner while preserving its WPF command/recalc adapters.
+    /// An outgoing shared session stays alive until its remaining sibling views close.
+    /// </summary>
+    private void ReplaceWorkbookSession(StartupWorkbookLoadResult source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var previousSession = _session;
+        _workbookRef.Current = source.Workbook;
+        _session = _sessionFactory.CreateHostOwned(
+            source,
+            _commandBus,
+            _recalcEngine,
+            _viewportService,
+            _fileAdapters,
+            new Free.Shared.AppServices.WorkbookDocumentState(),
+            viewportHeight: Math.Max(1, SheetGrid?.ActualHeight ?? 1),
+            viewportWidth: Math.Max(1, SheetGrid?.ActualWidth ?? 1),
+            includeObjects: true);
+        _workbook = _session.Workbook;
+        _currentSheetId = _session.ActiveSheet.Id;
+        previousSession.Dispose();
     }
 
     private async Task<SaveChangesConfirmation> ConfirmSaveBeforeDestructiveActionAsync(string message)
@@ -206,19 +229,9 @@ public partial class MainWindow
         _sparklineValueCache.Clear();
         _toolbarVisualStateCache.Clear();
 
-        // This is definitively the last live window over the outgoing workbook (the
-        // IsFinalWorkbookWindowClose() check above returned true), so its sheets can never be
-        // recalculated again: release them from the shared app-lifetime RecalcEngine's
-        // volatile-cell tracking, dependency graph, and dependency-plan cache before dropping the
-        // reference, or that state leaks for the life of the app (see RecalcEngine.RetireWorkbook).
-        _recalcEngine.RetireWorkbook(_workbook);
-        var replacement = NewWorkbookFactory.Create(_options);
-        _workbook = replacement;
-        _workbookRef.Current = replacement;
-        _currentSheetId = replacement.Sheets[0].Id;
-        // If there are still sibling windows (unusual for a final-close path but
-        // possible if IsFinalWorkbookWindowClose() was incorrect), notify them.
-        NotifyOtherWindowsOfWorkbookChange();
+        // WorkbookSession.Dispose owns calculation/package retirement; command history remains
+        // WPF infrastructure for this migration slice and is retired explicitly here.
+        _commandBus.Retire(_workbook.Id);
     }
 
     private void ReleaseWorkbookUiStateForClose()

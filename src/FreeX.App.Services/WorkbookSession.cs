@@ -264,13 +264,16 @@ public sealed class WorkbookSession : IDisposable
         double viewportHeight,
         double viewportWidth,
         bool includeObjects,
-        WorkbookSession? sharedDocumentStateOwner = null)
+        WorkbookSession? sharedDocumentStateOwner = null,
+        WorkbookDocumentState? documentState = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(adapters);
         ArgumentNullException.ThrowIfNull(cellEditService);
         ArgumentNullException.ThrowIfNull(sheetSelectionService);
         ArgumentNullException.ThrowIfNull(viewportService);
+        if (sharedDocumentStateOwner is not null && documentState is not null)
+            throw new ArgumentException("A sibling session already supplies the shared document state.", nameof(documentState));
 
         _source = source;
         _adapters = adapters;
@@ -281,7 +284,7 @@ public sealed class WorkbookSession : IDisposable
         _viewportWidth = NormalizeViewportDimension(viewportWidth, fallback: 1);
         _includeObjects = includeObjects;
         _sharedDocumentStateOwner = sharedDocumentStateOwner;
-        _documentState = sharedDocumentStateOwner?._documentState ?? new WorkbookDocumentState();
+        _documentState = sharedDocumentStateOwner?._documentState ?? documentState ?? new WorkbookDocumentState();
 
         Workbook = source.Workbook;
         if (sharedDocumentStateOwner is null)
@@ -665,6 +668,16 @@ public sealed class WorkbookSession : IDisposable
     public bool IsDirty => _documentState.IsDirty;
 
     /// <summary>
+    /// Controls the next close prompt for this document. This belongs to the shared document
+    /// state so every renderer and every sibling view observes the same lifecycle decision.
+    /// </summary>
+    public bool SuppressClosePrompt
+    {
+        get => _documentState.SuppressClosePrompt;
+        set => _documentState.SuppressClosePrompt = value;
+    }
+
+    /// <summary>
     /// Monotonically-increasing counter, incremented with every transition to dirty.
     /// The async save path captures the shared <see cref="WorkbookDocumentState"/> generation
     /// before awaiting and compares afterwards to detect edits that arrived mid-save.
@@ -853,6 +866,50 @@ public sealed class WorkbookSession : IDisposable
         ActiveSheet.ActiveCol = ActiveCell.Col;
         FormulaEditAddress = null;
         EnsureActiveCellVisible();
+    }
+
+    /// <summary>
+    /// Synchronizes selection state supplied by a renderer that still owns viewport scrolling.
+    /// Unlike the interactive selection methods, this does not scroll or rebuild the portable
+    /// viewport, so adopting the state cannot overwrite that renderer's per-window view origin.
+    /// </summary>
+    public void SynchronizeSelectionState(
+        SheetId sheetId,
+        GridRange primaryRange,
+        IReadOnlyList<GridRange> ranges,
+        CellAddress activeCell)
+    {
+        ThrowIfDisposed();
+        if (primaryRange.Start.Sheet != sheetId || primaryRange.End.Sheet != sheetId)
+            throw new ArgumentException("The primary range must belong to the synchronized sheet.", nameof(primaryRange));
+        if (ranges.Count == 0)
+            throw new ArgumentException("At least one selected range is required.", nameof(ranges));
+        foreach (var range in ranges)
+        {
+            if (range.Start.Sheet != sheetId || range.End.Sheet != sheetId)
+                throw new ArgumentException("Every selected range must belong to the synchronized sheet.", nameof(ranges));
+        }
+
+        if (!primaryRange.Contains(activeCell))
+            throw new ArgumentOutOfRangeException(nameof(activeCell), "The active cell must be inside the primary range.");
+
+        if (ActiveSheet.Id != sheetId)
+            RememberActiveWorksheetSelection();
+
+        var selection = _sheetSelectionService.SelectSheet(Workbook, sheetId, _groupedSheetIds);
+        if (selection.Sheet.Id != sheetId)
+            throw new ArgumentOutOfRangeException(nameof(sheetId), "The synchronized sheet must be visible and selectable.");
+
+        ActiveSheet = selection.Sheet;
+        RefreshSheetTabsForActiveSheet();
+        ValidateSelectionRange(primaryRange, nameof(primaryRange));
+        foreach (var range in ranges)
+            ValidateSelectionRange(range, nameof(ranges));
+        SetSelectedRanges(primaryRange, ranges);
+        ActiveCell = activeCell;
+        ActiveSheet.ActiveRow = activeCell.Row;
+        ActiveSheet.ActiveCol = activeCell.Col;
+        FormulaEditAddress = null;
     }
 
     /// <summary>
@@ -5672,7 +5729,7 @@ public sealed class WorkbookSession : IDisposable
     /// <see cref="ApplySuccessfulHistoryResult"/>. Leaves <see cref="IsDirty"/> untouched when no
     /// save point was recorded or the stack has not returned to it.
     /// </summary>
-    private bool TryMarkCleanIfAtSavePoint()
+    public bool TryMarkCleanIfAtSavePoint()
     {
         var currentUndoDepth = _cellEditService.GetUndoStackDepth(Workbook.Id);
         var wasDirty = IsDirty;
@@ -5692,6 +5749,34 @@ public sealed class WorkbookSession : IDisposable
     /// document-state dirty-marking call for edits.
     /// </summary>
     public void MarkDirtyForRecovery() => MarkDirty();
+
+    /// <summary>
+    /// Records a mutation performed by a renderer that has not yet moved its command execution
+    /// into <see cref="WorkbookSession"/>. This is the migration boundary for the WPF host;
+    /// portable and Avalonia commands already call <see cref="MarkDirty"/> internally.
+    /// </summary>
+    public void MarkDirtyFromHost() => MarkDirty();
+
+    /// <summary>
+    /// Captures the current command-history position as the clean save point. Renderers should
+    /// call this only after a completed save or after adopting a freshly opened/new workbook.
+    /// </summary>
+    public void MarkSavedFromHost()
+    {
+        RecordUndoSavePoint();
+        NotifyWorkbookChanged();
+    }
+
+    /// <summary>
+    /// Associates a path with the current document without changing its dirty state. Recovery
+    /// and transitional renderer workflows use this when the file identity changes separately
+    /// from save completion.
+    /// </summary>
+    public void SetCurrentFilePathFromHost(string? path)
+    {
+        CurrentFilePath = path;
+        NotifyWorkbookChanged();
+    }
 
     private static CellAddress FirstAffectedCellOrDefault(
         IReadOnlyList<CellAddress> affectedCells,

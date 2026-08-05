@@ -59,7 +59,6 @@ public partial class MainWindow
         _commandStackChangeNotifier = _commandBus as ICommandStackChangeNotifier;
         if (_commandStackChangeNotifier is not null)
             _commandStackChangeNotifier.StackChanged += CommandStackChangeNotifier_StackChanged;
-        _documentState = new WorkbookDocumentState();
     }
 
     private void RegisterWithWindowRegistry()
@@ -86,7 +85,8 @@ public partial class MainWindow
     /// </summary>
     private void AdoptSharedWorkbook()
     {
-        _workbook = _workbookRef.Current;
+        _workbook = _session.Workbook;
+        _workbookRef.Current = _workbook;
         InvalidateToolbarVisualState();
         // Open on the same sheet as the originating window, if we can find it via
         // the registry.  Fall back to Sheets[0].
@@ -199,7 +199,7 @@ public partial class MainWindow
     /// <summary>Re-reads the shared workbook into this window's viewport/status after an edit elsewhere.</summary>
     public void RefreshFromSharedWorkbook()
     {
-        var workbook = _workbookRef.Current;
+        var workbook = _session.Workbook;
         if (_workbook.Id != workbook.Id)
         {
             // The shared ref was repointed at a different workbook (defensive: the File > Open /
@@ -210,6 +210,7 @@ public partial class MainWindow
             CloseFindReplaceDialogIfOpen();
         }
         _workbook = workbook;
+        _workbookRef.Current = workbook;
         if (_workbook.GetSheet(_currentSheetId) is null && _workbook.Sheets.Count > 0)
             _currentSheetId = _workbook.Sheets[0].Id;
 
@@ -313,12 +314,24 @@ public partial class MainWindow
         // (see the MainWindow factory in App.ConfigureServices). The ctor sees a registered
         // window (this one) with the same DocumentId and flags itself secondary, so it adopts
         // the shared workbook on load instead of creating a fresh one.
-        var newWindow = ActivatorUtilities.CreateInstance<MainWindow>(
-            App.Services,
-            _commandBus,
-            _workbookRef,
-            _workbookRef.Current,
-            _documentState);
+        var siblingSession = _session.CreateSiblingView(
+            Math.Max(1, SheetGrid.ActualHeight),
+            Math.Max(1, SheetGrid.ActualWidth));
+        MainWindow newWindow;
+        try
+        {
+            newWindow = ActivatorUtilities.CreateInstance<MainWindow>(
+                App.Services,
+                _commandBus,
+                _workbookRef,
+                _workbookRef.Current,
+                siblingSession);
+        }
+        catch
+        {
+            siblingSession.Dispose();
+            throw;
+        }
 
         // Record that THIS window invoked New Window, before the new window loads/adopts the
         // shared workbook, so ResolveAdoptedSheetId opens it on this window's current sheet —
