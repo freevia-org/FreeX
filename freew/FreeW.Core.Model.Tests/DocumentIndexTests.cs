@@ -198,6 +198,59 @@ public class DocumentIndexTests
     }
 
     [Fact]
+    public void MarkRun_SerializesAndParsesAlternateIndexIdentifier()
+    {
+        var run = DocumentIndex.MarkRun(new IndexMark(
+            "Alpha",
+            BoldPageNumber: true,
+            Identifier: "People"));
+
+        run.ComplexField!.Instruction.Should().Be(" XE \"Alpha\" \\f \"People\" \\b ");
+        DocumentIndex.MarkedEntry(run).Should().Be(new IndexMark(
+            "Alpha",
+            BoldPageNumber: true,
+            Identifier: "People"));
+    }
+
+    [Fact]
+    public void Build_FiltersAlternateIdentifiersAndTreatsIAsDefault()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha")) } });
+        doc.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun(new IndexMark("Beta", Identifier: "I")) } });
+        doc.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun(new IndexMark("Carol", Identifier: "People")) } });
+        doc.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun(new IndexMark("Dave", Identifier: "people")) } });
+        doc.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun(new IndexMark("Rome", Identifier: "Places")) } });
+        doc.IndexEntries.Add(new IndexEntry("Zebra"));
+
+        DocumentIndex.Build(doc).Select(paragraph => paragraph.PlainText).Should().Equal(
+            "Index", "Alpha, 1", "Beta, 1", "Zebra, 1");
+        DocumentIndex.Build(doc, identifier: "People").Select(paragraph => paragraph.PlainText).Should().Equal(
+            "Index", "Carol, 1", "Dave, 1");
+        DocumentIndex.Build(doc, identifier: "Places").Select(paragraph => paragraph.PlainText).Should().Equal(
+            "Index", "Rome, 1");
+    }
+
+    [Fact]
+    public void AlternateIndexStylesIdentifyOnlyTheirOwnGeneratedRegion()
+    {
+        var doc = TextDocument.CreateEmpty();
+        DocumentIndex.EnsureStyles(doc, "People");
+        var paragraphs = DocumentIndex.Build(doc, identifier: "People");
+
+        var headingStyle = DocumentIndex.HeadingStyleIdFor("People");
+        var entryStyle = DocumentIndex.EntryStyleIdFor("People");
+        doc.Styles.Should().ContainKey(headingStyle);
+        doc.Styles.Should().ContainKey(entryStyle);
+        paragraphs[0].StyleId.Should().Be(headingStyle);
+        DocumentIndex.IsIndexParagraph(paragraphs[0]).Should().BeTrue();
+        DocumentIndex.IsIndexParagraph(paragraphs[0], "People").Should().BeTrue();
+        DocumentIndex.IsIndexParagraph(paragraphs[0], "Places").Should().BeFalse();
+        DocumentIndex.IsIndexParagraph(paragraphs[0], null).Should().BeFalse();
+        DocumentIndex.HeadingStyleIdFor("people").Should().Be(headingStyle);
+    }
+
+    [Fact]
     public void Build_BookmarkPageRangeUsesFirstAndLastLogicalPageLabels()
     {
         var doc = new TextDocument();

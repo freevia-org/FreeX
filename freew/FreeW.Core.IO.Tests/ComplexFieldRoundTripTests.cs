@@ -189,6 +189,31 @@ public class ComplexFieldRoundTripTests
     }
 
     [Fact]
+    public void AlternateIndexIdentifier_RoundTripsExactXeSwitch()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Alpha"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha", Identifier: "People"))
+            }
+        });
+
+        DocumentXml(doc).Descendants(W + "instrText").Single().Value
+            .Should().Be(" XE \"Alpha\" \\f \"People\" ");
+
+        var reopened = RoundTrip(doc);
+        var run = reopened.Blocks.OfType<Paragraph>().Single().Runs.Single(candidate => candidate.ComplexField is not null);
+        DocumentIndex.MarkedEntry(run).Should().Be(new IndexMark("Alpha", Identifier: "People"));
+        DocumentIndex.Build(reopened, identifier: "People").Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Index", "Alpha, 1");
+        DocumentIndex.Build(reopened).Should().ContainSingle();
+    }
+
+    [Fact]
     public void NativeMailMergeControlFields_EmitInstructionsAndRoundTripCachedLabels()
     {
         var doc = TextDocument.CreateEmpty();
