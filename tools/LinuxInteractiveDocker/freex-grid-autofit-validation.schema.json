@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FreeX physical grid AutoFit postcondition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "suite", "platform", "shell", "app", "viewport", "column", "row", "hiddenRowBoundary"],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "suite": { "const": "freex-grid-autofit-physical" },
+    "platform": { "const": "linux" },
+    "shell": { "const": "avalonia" },
+    "app": { "const": "FreeX" },
+    "viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height", "dpi"],
+      "properties": {
+        "width": { "const": 1280 },
+        "height": { "const": 820 },
+        "dpi": { "const": 96 }
+      }
+    },
+    "column": {
+      "$ref": "#/$defs/resizeProof"
+    },
+    "row": {
+      "$ref": "#/$defs/resizeProof"
+    },
+    "hiddenRowBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targetStart", "targetEnd", "hiddenRowsBefore", "hiddenRowsAfter", "beforeHeights", "afterHeights", "unhidden", "sized", "boundaryX", "boundaryY"],
+      "properties": {
+        "targetStart": { "const": 4 },
+        "targetEnd": { "const": 5 },
+        "hiddenRowsBefore": { "const": [4, 5] },
+        "hiddenRowsAfter": { "type": "array", "maxItems": 2, "items": { "type": "integer", "minimum": 4, "maximum": 5 } },
+        "beforeHeights": { "type": "array", "minItems": 2, "items": { "type": "integer", "minimum": 0 } },
+        "afterHeights": { "type": "array", "minItems": 2, "items": { "type": "integer", "minimum": 0 } },
+        "unhidden": { "type": "boolean" },
+        "sized": { "type": "boolean" },
+        "boundaryX": { "type": "integer", "minimum": 1 },
+        "boundaryY": { "type": "integer", "minimum": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "resizeProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seedCell", "beforeSize", "afterSize", "boundaryX", "boundaryY", "grew"],
+      "properties": {
+        "seedCell": { "type": "string", "pattern": "^[A-Z]+[1-9][0-9]*$" },
+        "beforeSize": { "type": "integer", "minimum": 1 },
+        "afterSize": { "type": "integer", "minimum": 1 },
+        "boundaryX": { "type": "integer", "minimum": 1 },
+        "boundaryY": { "type": "integer", "minimum": 1 },
+        "grew": { "const": true }
+      }
+    }
+  }
+}

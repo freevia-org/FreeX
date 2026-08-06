@@ -16,7 +16,8 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("CreateColumnHeaderCell(col, colMetrics[colIndex], selected, zoomFactor)");
         source.Should().Contain("CreateRowHeaderCell(row, rowMetric, selectedRow, zoomFactor)");
         source.Should().Contain("AddColumnResizeHandle(header, col, metric, zoomFactor)");
-        source.Should().Contain("AddRowResizeHandle(header, row, metric, zoomFactor)");
+        source.Should().Contain("AddRowResizeHandle(header, resizeRow, resizeHeight)");
+        source.Should().Contain("GridResizePreviewPlanner.GetRowResizeRange(sheet, selectedRange: null, visibleRow + 1).Start");
         source.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Column");
         source.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Row");
         source.Should().Contain("IsHeaderResizeHotspot(point.Position, header.Bounds, HeaderResizeKind.Column)");

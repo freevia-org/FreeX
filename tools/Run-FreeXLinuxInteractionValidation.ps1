@@ -53,8 +53,10 @@ $harness = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $containerName = "freex-linux-interactive-freex-$Port"
 $x11ProbeScript = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freex-input-probes.sh"
 $native3dFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave66Native3DFixture.ps1"
+$gridAutofitFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave164GridAutofitFixture.ps1"
 $nestedOutlineFilterFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave100NestedOutlineFilterFixture.ps1"
 $native3dSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-native-3d-formula-validation.schema.json"
+$gridAutofitSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-grid-autofit-validation.schema.json"
 $nameBoxObjectsSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-name-box-dropdown-objects-validation.schema.json"
 $pivotDetailsFixturePath = Join-Path $repoRoot "tests/FreeX.App.Avalonia.Tests/Fixtures/FreeX_wave50_pivot_fields.xlsx"
 $runnerSchemaVersion = 2
@@ -381,6 +383,92 @@ function Assert-NameBoxDropdownObjectPostcondition {
     }
     if ($violations.Count -gt 0) {
         throw "Name Box object postcondition failed exact four-kind validation: $($violations -join '; ')."
+    }
+}
+
+function Assert-GridAutofitPostcondition {
+    param([Parameter(Mandatory = $true)][string]$EvidenceDirectory)
+
+    if (-not (Test-Path -LiteralPath $gridAutofitSchemaPath -PathType Leaf)) {
+        throw "Grid AutoFit validation schema is missing: $gridAutofitSchemaPath"
+    }
+    $schema = Get-Content -LiteralPath $gridAutofitSchemaPath -Raw | ConvertFrom-Json
+    if ([int]$schema.properties.schemaVersion.const -ne 2 -or
+        [string]$schema.properties.suite.const -ne "freex-grid-autofit-physical" -or
+        @($schema.required) -join "," -ne "schemaVersion,suite,platform,shell,app,viewport,column,row,hiddenRowBoundary") {
+        throw "Grid AutoFit validation schema is not the expected version 2 contract."
+    }
+
+    $postconditionPath = Join-Path $EvidenceDirectory "grid-autofit-postcondition.json"
+    if (-not (Test-Path -LiteralPath $postconditionPath -PathType Leaf)) {
+        throw "Grid AutoFit probe did not emit its required schema-v2 postcondition: $postconditionPath"
+    }
+    try {
+        $postcondition = Get-Content -LiteralPath $postconditionPath -Raw | ConvertFrom-Json
+    } catch {
+        throw "Grid AutoFit postcondition is not valid JSON: $postconditionPath"
+    }
+
+    $expectedRoot = @("schemaVersion", "suite", "platform", "shell", "app", "viewport", "column", "row", "hiddenRowBoundary")
+    $actualRoot = @($postcondition.PSObject.Properties.Name)
+    if ((@($actualRoot | Sort-Object) -join ",") -ne (@($expectedRoot | Sort-Object) -join ",")) {
+        throw "Grid AutoFit postcondition root fields do not match the committed schema-v2 contract."
+    }
+    foreach ($section in @("viewport", "column", "row", "hiddenRowBoundary")) {
+        $actualFields = @($postcondition.$section.PSObject.Properties.Name)
+        $expectedFields = switch ($section) {
+            "viewport" { @("width", "height", "dpi") }
+            "column" { @("seedCell", "beforeSize", "afterSize", "boundaryX", "boundaryY", "grew") }
+            "row" { @("seedCell", "beforeSize", "afterSize", "boundaryX", "boundaryY", "grew") }
+            "hiddenRowBoundary" { @("targetStart", "targetEnd", "hiddenRowsBefore", "hiddenRowsAfter", "beforeHeights", "afterHeights", "unhidden", "sized", "boundaryX", "boundaryY") }
+        }
+        if ((@($actualFields | Sort-Object) -join ",") -ne (@($expectedFields | Sort-Object) -join ",")) {
+            throw "Grid AutoFit postcondition '$section' fields do not match the committed schema-v2 contract."
+        }
+    }
+
+    $resizeProofs = @(
+        @{ Name = "column"; Cell = "A1" },
+        @{ Name = "row"; Cell = "B2" }
+    )
+    foreach ($proof in $resizeProofs) {
+        $value = $postcondition.($proof.Name)
+        if ([string]$value.seedCell -ne $proof.Cell -or
+            [int]$value.beforeSize -lt 1 -or
+            [int]$value.afterSize -le [int]$value.beforeSize -or
+            [int]$value.boundaryX -lt 1 -or
+            [int]$value.boundaryY -lt 1 -or
+            $value.grew -ne $true) {
+            throw "Grid AutoFit $($proof.Name) postcondition did not prove exact growth from the physical boundary."
+        }
+    }
+
+    $hidden = $postcondition.hiddenRowBoundary
+    $hiddenRowsAfter = @($hidden.hiddenRowsAfter | ForEach-Object { [int]$_ })
+    $hiddenRowsAfterValid =
+        $hiddenRowsAfter.Count -le 2 -and
+        (@($hiddenRowsAfter | Where-Object { $_ -lt 4 -or $_ -gt 5 }).Count -eq 0) -and
+        (@($hiddenRowsAfter | Group-Object | Where-Object Count -gt 1).Count -eq 0)
+    if ([int]$postcondition.schemaVersion -ne 2 -or
+        [string]$postcondition.suite -ne "freex-grid-autofit-physical" -or
+        [string]$postcondition.platform -ne "linux" -or
+        [string]$postcondition.shell -ne "avalonia" -or
+        [string]$postcondition.app -ne "FreeX" -or
+        [int]$postcondition.viewport.width -ne 1280 -or
+        [int]$postcondition.viewport.height -ne 820 -or
+        [int]$postcondition.viewport.dpi -ne 96 -or
+        (@($hidden.hiddenRowsBefore | ForEach-Object { [int]$_ }) -join ",") -ne "4,5" -or
+        -not $hiddenRowsAfterValid -or
+        (@($hidden.beforeHeights | ForEach-Object { [int]$_ }) -join ",") -ne "0,0" -or
+        @($hidden.afterHeights).Count -ne 2 -or
+        @($hidden.afterHeights | Where-Object { [int]$_ -lt 0 }).Count -gt 0 -or
+        [int]$hidden.targetStart -ne 4 -or
+        [int]$hidden.targetEnd -ne 5 -or
+        $hidden.unhidden -isnot [bool] -or
+        $hidden.sized -isnot [bool] -or
+        [int]$hidden.boundaryX -lt 1 -or
+        [int]$hidden.boundaryY -lt 1) {
+        throw "Grid AutoFit hidden-row diagnostic does not satisfy the schema-v2 contiguous rows 4:5 contract."
     }
 }
 
@@ -1095,6 +1183,16 @@ try {
             throw "formula-3d-native-xlsx requires an .xlsx PhysicalDocumentPath."
         }
     }
+    if ($PhysicalProbeSelector -eq "grid-autofit") {
+        if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
+            $PhysicalDocumentPath = Join-Path $reportDirectory "fixtures/freex-wave164-grid-autofit.xlsx"
+            & $gridAutofitFixtureGenerator -OutputPath $PhysicalDocumentPath
+        }
+        if (-not (Test-Path -LiteralPath $PhysicalDocumentPath -PathType Leaf) -or
+            [IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx") {
+            throw "grid-autofit requires an existing .xlsx PhysicalDocumentPath."
+        }
+    }
     if ($PhysicalProbeSelector -eq "outline-nested-save-reopen" -and
         ([IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx")) {
         throw "outline-nested-save-reopen requires an .xlsx PhysicalDocumentPath."
@@ -1241,7 +1339,11 @@ try {
             "grid-selection-border-copy-physical"
         )
     } elseif ($PhysicalProbeSelector -eq "grid-autofit") {
-        @("grid-header-double-click-autofit-column-physical")
+        @(
+            "grid-header-double-click-autofit-column-physical",
+            "grid-header-double-click-autofit-row-physical",
+            "grid-header-double-click-autofit-hidden-row-boundary-physical"
+        )
     } elseif ($PhysicalProbeSelector -eq "split-pane-pointer") {
         @(
             "split-pane-divider-drag-physical",
@@ -1370,7 +1472,11 @@ try {
             "grid-selection-border-copy-physical"
         )
     } elseif ($PhysicalProbeSelector -eq "grid-autofit") {
-        @("grid-header-double-click-autofit-column-physical")
+        @(
+            "grid-header-double-click-autofit-column-physical",
+            "grid-header-double-click-autofit-row-physical",
+            "grid-header-double-click-autofit-hidden-row-boundary-physical"
+        )
     } elseif ($PhysicalProbeSelector -eq "split-pane-pointer") {
         @(
             "split-pane-divider-drag-physical",
@@ -1477,6 +1583,9 @@ try {
     }
     if ($PhysicalProbeSelector -eq "formula-whole-range-point") {
         Assert-FormulaWholeRangePointPostcondition -EvidenceDirectory $x11EvidenceDirectory
+    }
+    if ($PhysicalProbeSelector -eq "grid-autofit") {
+        Assert-GridAutofitPostcondition -EvidenceDirectory $x11EvidenceDirectory
     }
     if ($PhysicalProbeSelector -eq "name-box-dropdown") {
         Assert-NameBoxDropdownObjectPostcondition -EvidenceDirectory $x11EvidenceDirectory
