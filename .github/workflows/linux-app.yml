@@ -141,6 +141,16 @@ jobs:
             --logger "trx;LogFileName=freex-${{ matrix.runtime }}-avalonia-tests.trx" \
             --results-directory artifacts
 
+          dotnet test tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.csproj \
+            --configuration Release \
+            --logger "trx;LogFileName=freex-${{ matrix.runtime }}-avalonia-capture-tests-1.trx" \
+            --results-directory artifacts
+
+          dotnet test tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch2.csproj \
+            --configuration Release \
+            --logger "trx;LogFileName=freex-${{ matrix.runtime }}-avalonia-capture-tests-2.trx" \
+            --results-directory artifacts
+
       - name: Build app project
         shell: bash
         run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release

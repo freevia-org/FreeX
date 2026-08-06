@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="FreeX.App.Avalonia.Tests" />
+    <InternalsVisibleTo Include="FreeX.App.Avalonia.CaptureTests" />
+    <InternalsVisibleTo Include="FreeX.App.Avalonia.CaptureTests.Batch2" />
   </ItemGroup>
 
   <ItemGroup>

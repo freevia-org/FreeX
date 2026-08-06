@@ -20,20 +20,10 @@ using AvaloniaPath = Avalonia.Controls.Shapes.Path;
 using SelectionPaneObjectKind = FreeX.Core.Model.SelectionPaneObjectKind;
 
 [assembly: AvaloniaTestApplication(typeof(FreeX.App.Avalonia.Tests.RibbonHeadlessApp))]
-[assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerAssembly)]
+[assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerTest)]
 [assembly: Xunit.CollectionBehavior(DisableTestParallelization = true)]
 
 namespace FreeX.App.Avalonia.Tests;
-
-/// <summary>Minimal headless Avalonia app providing a Fluent theme so styled controls can measure.</summary>
-public sealed class RibbonHeadlessApp : Application
-{
-    public override void Initialize() => Styles.Add(new FluentTheme());
-
-    public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<RibbonHeadlessApp>()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true });
-}
 
 [Collection("AvaloniaHeadless")]
 public sealed class AvaloniaRibbonRendererTests

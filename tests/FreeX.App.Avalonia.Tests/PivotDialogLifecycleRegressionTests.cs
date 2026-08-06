@@ -75,6 +75,7 @@ public sealed class PivotDialogLifecycleRegressionTests
                 owner.Show();
                 ConfigurePivotDialogLifecycle(dialog, initial);
                 dialog.Show(owner);
+                dialog.Activate();
                 dialog.UpdateLayout();
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Background);
@@ -82,6 +83,7 @@ public sealed class PivotDialogLifecycleRegressionTests
                 initial.IsFocused.Should().BeTrue();
                 next.Focus().Should().BeTrue();
 
+                owner.Activate();
                 dialog.Activate();
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Background);
@@ -118,6 +120,7 @@ public sealed class PivotDialogLifecycleRegressionTests
             {
                 ConfigureDialogTabCycle(dialog, root);
                 dialog.Show();
+                dialog.Activate();
                 dialog.UpdateLayout();
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
 

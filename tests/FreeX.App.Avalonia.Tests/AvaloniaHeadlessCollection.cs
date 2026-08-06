@@ -1,10 +1,4 @@
 using Avalonia.Headless;
-using Xunit.Abstractions;
-using Xunit.Sdk;
-
-[assembly: TestCollectionOrderer(
-    "FreeX.App.Avalonia.Tests.AvaloniaHeadlessCollectionOrderer",
-    "FreeX.App.Avalonia.Tests")]
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -12,8 +6,7 @@ namespace FreeX.App.Avalonia.Tests;
 /// Groups the Avalonia headless tests under a stable collection name. Correctness does not depend
 /// on every session owner carrying this marker: the assembly-level xUnit collection behavior in
 /// <c>AvaloniaRibbonRendererTests.cs</c> serializes every test class, including newly added owners.
-/// The assembly uses one serialized Avalonia dispatcher. Capture-heavy tests run last so their
-/// retained render resources cannot affect ordinary behavior tests.
+/// Avalonia retains a fresh isolated application per dispatch so UI state cannot leak between tests.
 /// </summary>
 [CollectionDefinition("AvaloniaHeadless", DisableParallelization = true)]
 public sealed class AvaloniaHeadlessCollection;
@@ -30,23 +23,10 @@ internal static class AvaloniaParityCaptureSession
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 }
 
-public sealed class AvaloniaHeadlessCollectionOrderer : ITestCollectionOrderer
+public static class AvaloniaHeadlessCollectionOrderer
 {
     internal const string ParityCaptureCollectionName = "AvaloniaParityCapture";
     internal const string PostCaptureCollectionName = "AvaloniaPostCapture";
-
-    public IEnumerable<ITestCollection> OrderTestCollections(
-        IEnumerable<ITestCollection> testCollections) =>
-        testCollections
-            .OrderBy(CollectionOrder)
-            .ThenBy(collection => collection.DisplayName, StringComparer.Ordinal);
-
-    private static int CollectionOrder(ITestCollection collection) =>
-        collection.DisplayName.Contains(PostCaptureCollectionName, StringComparison.Ordinal)
-            ? 2
-            : collection.DisplayName.Contains(ParityCaptureCollectionName, StringComparison.Ordinal)
-                ? 1
-                : 0;
 }
 
 [Collection("AvaloniaHeadless")]
@@ -69,11 +49,11 @@ public sealed class AvaloniaHeadlessIsolationTests
         var isolation = assembly
             .GetCustomAttributes(typeof(global::Avalonia.Headless.AvaloniaTestIsolationAttribute), inherit: false)
             .Should()
-            .ContainSingle("recreating Avalonia's dispatcher after every test can strand the shared worker")
+            .ContainSingle("each dispatch must release its application and render resources")
             .Which
             .Should()
             .BeOfType<global::Avalonia.Headless.AvaloniaTestIsolationAttribute>()
             .Which;
-        isolation.IsolationLevel.Should().Be(global::Avalonia.Headless.AvaloniaTestIsolationLevel.PerAssembly);
+        isolation.IsolationLevel.Should().Be(global::Avalonia.Headless.AvaloniaTestIsolationLevel.PerTest);
     }
 }

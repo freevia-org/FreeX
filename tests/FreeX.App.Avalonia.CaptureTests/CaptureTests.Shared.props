@@ -1,0 +1,56 @@
+<Project>
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\shared\Free.Shared.Theme.Avalonia\Free.Shared.Theme.Avalonia.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\tools\FreeX.ParityCompare.Core\FreeX.ParityCompare.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless" />
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="FluentAssertions" />
+    <Using Include="Free.Shared.Drawing" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)AvaloniaCaptureAssembly.cs" Link="AvaloniaCaptureAssembly.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\AvaloniaHeadlessTestApp.cs" Link="AvaloniaHeadlessTestApp.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\ChartFormatDialogLifecycleRegressionTests.cs" Link="ChartFormatDialogLifecycleRegressionTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\ConsolidateDialogLifecycleRegressionTests.cs" Link="ConsolidateDialogLifecycleRegressionTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\DialogInteractionValidationTests.cs" Link="DialogInteractionValidationTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\DialogTabCycleResidualTests.cs" Link="DialogTabCycleResidualTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\HighlightCellsRuleDialogLifecycleRegressionTests.cs" Link="HighlightCellsRuleDialogLifecycleRegressionTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\ManageConditionalFormatsDialogLifecycleRegressionTests.cs" Link="ManageConditionalFormatsDialogLifecycleRegressionTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\MissingParityDialogsTests.cs" Link="MissingParityDialogsTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\OwnedDialogLifecycleRegressionTests.cs" Link="OwnedDialogLifecycleRegressionTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\ParityCaptureTests.cs" Link="ParityCaptureTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\PivotDialogLifecycleRegressionTests.cs" Link="PivotDialogLifecycleRegressionTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\ScenarioManagerDialogRenderParityTests.cs" Link="ScenarioManagerDialogRenderParityTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\SelectionPaneDialogLifecycleRegressionTests.cs" Link="SelectionPaneDialogLifecycleRegressionTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\ShapeEffectsDialogLifecycleRegressionTests.cs" Link="ShapeEffectsDialogLifecycleRegressionTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\ShapeGradientDialogLifecycleRegressionTests.cs" Link="ShapeGradientDialogLifecycleRegressionTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\SpellCheckDialogLifecycleRegressionTests.cs" Link="SpellCheckDialogLifecycleRegressionTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\TextToColumnsDialogLifecycleRegressionTests.cs" Link="TextToColumnsDialogLifecycleRegressionTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\WatchWindowDialogLifecycleRegressionTests.cs" Link="WatchWindowDialogLifecycleRegressionTests.cs" />
+  </ItemGroup>
+  <PropertyGroup>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <Nullable>enable</Nullable>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
