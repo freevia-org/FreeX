@@ -69,6 +69,8 @@ public static class PresentationAnimationCommandPlanner
             new PresentationAnimationCommandPlan("freep.anim.emphasis.blink", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Blink),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.color-pulse", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ColorPulse),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.change-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ChangeColor),
+            new PresentationAnimationCommandPlan("freep.anim.emphasis.change-fill-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ChangeFillColor),
+            new PresentationAnimationCommandPlan("freep.anim.emphasis.change-font-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ChangeColor),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.grow-with-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.GrowWithColor),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.wave", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Wave),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.shimmer", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Shimmer),
@@ -144,12 +146,18 @@ public static class PresentationAnimationCommandPlanner
                     return false;
                 }
 
-                if (!TryGetSelectedShapeId(editor, out _))
+                if (!TryGetSelectedShapeId(editor, out uint selectedShapeId))
                 {
                     return false;
                 }
 
-                editor.AddAnimation(0, BuildAnimation(kind, preset));
+                var animation = BuildAnimation(kind, preset, selectedShapeId);
+                if (StringComparer.Ordinal.Equals(plan.CommandId, "freep.anim.emphasis.change-font-color"))
+                {
+                    animation = BuildFontColorAnimation(selectedShapeId);
+                }
+
+                editor.AddAnimation(selectedShapeId, animation);
                 return true;
 
             case PresentationAnimationCommandIntentKind.AddMotionPath:
@@ -238,14 +246,88 @@ public static class PresentationAnimationCommandPlanner
         }
     }
 
-    public static ShapeAnimation BuildAnimation(AnimationKind kind, AnimationPreset preset) =>
-        new()
+    public static ShapeAnimation BuildAnimation(
+        AnimationKind kind,
+        AnimationPreset preset,
+        uint shapeId = 0)
+    {
+        var animation = new ShapeAnimation
         {
+            ShapeId = shapeId,
             Kind = kind,
             Preset = preset,
             Trigger = AnimationTrigger.OnClick,
             DurationMs = DefaultDurationMs,
         };
+
+        if (preset == AnimationPreset.ChangeFillColor)
+        {
+            animation.RawPresetClass = "emph";
+            animation.RawPresetId = 1;
+            animation.RawPresetSubtype = "2";
+            animation.PreservedFillBehaviorXml = BuildDefaultFillColorBehaviorXml(shapeId);
+        }
+
+        return animation;
+    }
+
+    public static ShapeAnimation BuildFontColorAnimation(uint shapeId)
+    {
+        var animation = BuildAnimation(AnimationKind.Emphasis, AnimationPreset.ChangeColor, shapeId);
+        AuthorFontColorBehavior(animation, shapeId);
+        return animation;
+    }
+
+    private static void AuthorFontColorBehavior(ShapeAnimation animation, uint shapeId)
+    {
+        animation.RawPresetClass = "emph";
+        animation.RawPresetId = 3;
+        animation.RawPresetSubtype = "0";
+        animation.PreservedColorBehaviorXml = BuildDefaultFontColorBehaviorXml(shapeId);
+    }
+
+    private static string BuildDefaultFillColorBehaviorXml(uint shapeId) => $"""
+        <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <p:animClr clrSpc="rgb" dir="cw">
+            <p:cBhvr>
+              <p:cTn id="1" dur="500" fill="hold"/>
+              <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+              <p:attrNameLst><p:attrName>fillcolor</p:attrName></p:attrNameLst>
+            </p:cBhvr>
+            <p:to><a:schemeClr val="accent2"/></p:to>
+          </p:animClr>
+          <p:set>
+            <p:cBhvr>
+              <p:cTn id="2" dur="500" fill="hold"/>
+              <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+              <p:attrNameLst><p:attrName>fill.type</p:attrName></p:attrNameLst>
+            </p:cBhvr>
+            <p:to><p:strVal val="solid"/></p:to>
+          </p:set>
+          <p:set>
+            <p:cBhvr>
+              <p:cTn id="3" dur="500" fill="hold"/>
+              <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+              <p:attrNameLst><p:attrName>fill.on</p:attrName></p:attrNameLst>
+            </p:cBhvr>
+            <p:to><p:strVal val="true"/></p:to>
+          </p:set>
+        </p:childTnLst>
+        """;
+
+    private static string BuildDefaultFontColorBehaviorXml(uint shapeId) => $"""
+        <p:animClr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                   xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                   clrSpc="rgb" dir="cw">
+          <p:cBhvr>
+            <p:cTn id="1" dur="500" fill="hold"/>
+            <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+            <p:attrNameLst><p:attrName>style.color</p:attrName></p:attrNameLst>
+          </p:cBhvr>
+          <p:to><a:schemeClr val="accent2"/></p:to>
+        </p:animClr>
+        """;
 
     public static ShapeAnimation BuildMotionAnimation(PresentationMotionPathPreset preset)
     {
@@ -370,6 +452,9 @@ public static class PresentationAnimationCommandPlanner
             WheelSpokeCount = animation.WheelSpokeCount,
             EffectSubtype = animation.EffectSubtype,
             ScaleBehavior = animation.ScaleBehavior?.Clone(),
+            PreservedColorBehaviorXml = animation.PreservedColorBehaviorXml,
+            PreservedNumericBehaviorXml = animation.PreservedNumericBehaviorXml,
+            PreservedFillBehaviorXml = animation.PreservedFillBehaviorXml,
             RawPresetClass = animation.RawPresetClass,
             RawPresetId = animation.RawPresetId,
             RawPresetSubtype = animation.RawPresetSubtype,

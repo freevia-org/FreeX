@@ -105,6 +105,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     // Per-shape animation state for the current slide.
     // Maps shapeId → the Image element in _animOverlay that represents that shape.
     private readonly Dictionary<uint, Control> _animElements = new();
+    private readonly Dictionary<uint, Control> _animFillElements = new();
     private readonly Dictionary<uint, IReadOnlyList<Control>> _paragraphAnimElements = new();
 
     // Track which shapes have been revealed.
@@ -3247,6 +3248,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     {
         _animOverlay.Children.Clear();
         _animElements.Clear();
+        _animFillElements.Clear();
         _paragraphAnimElements.Clear();
         _revealedShapes.Clear();
 
@@ -3351,6 +3353,32 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             _animOverlay.Children.Add(img);
             _animElements[shapeId] = img;
 
+            if (slide.Animations.Any(a => a.ShapeId == shapeId
+                                          && a.Preset == AnimationPreset.ChangeFillColor)
+                && shape.Fill is not ShapeFill.None)
+            {
+                var fillMaskShape = SlideCloner.CloneShape(shape);
+                fillMaskShape.TextBody = null;
+                fillMaskShape.Outline = null;
+                var fillBitmap = RenderShapeToOverlayBitmap(slide, fillMaskShape, w, h);
+                if (fillBitmap is not null)
+                {
+                    var fillTint = new Rectangle
+                    {
+                        Width = w,
+                        Height = h,
+                        Fill = new SolidColorBrush(Colors.Transparent),
+                        Opacity = 0,
+                        OpacityMask = new ImageBrush(fillBitmap) { Stretch = Stretch.None },
+                        IsHitTestVisible = false,
+                    };
+                    Canvas.SetLeft(fillTint, 0);
+                    Canvas.SetTop(fillTint, 0);
+                    _animOverlay.Children.Add(fillTint);
+                    _animFillElements[shapeId] = fillTint;
+                }
+            }
+
             // DA1: hide this shape in the base canvas — the overlay image is the sole copy.
             _slideCanvas.SuppressedShapeIds.Add(shapeId);
         }
@@ -3439,6 +3467,14 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             if (!_animElements.TryGetValue(anim.ShapeId, out var element))
             {
                 PlayFallbackAnimation(anim, plan.DelayMs, plan.DurationMs);
+                continue;
+            }
+
+            if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeFillColor
+                && _animFillElements.TryGetValue(anim.ShapeId, out var fillElement))
+            {
+                PlayShapeAnimationWithTiming(fillElement, plan, onReveal: null);
+                _revealedShapes.Add(anim.ShapeId);
                 continue;
             }
 
@@ -3683,6 +3719,13 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
             case SlideShowShapeAnimationEffectKind.ColorPulse:
             case SlideShowShapeAnimationEffectKind.ChangeColor:
+                EmphasisPulseEffect(element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.ChangeFillColor:
+                FillColorEffect(element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.GrowWithColor:
             case SlideShowShapeAnimationEffectKind.Shimmer:
             case SlideShowShapeAnimationEffectKind.Bold:
@@ -5079,6 +5122,31 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                     AnimateScale(el, scale, plan.PeakScale, 1, plan.DurationMs / 2));
             });
         }
+    }
+
+    private void FillColorEffect(Control element, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        if (element is not Rectangle rectangle
+            || rectangle.Fill is not SolidColorBrush brush
+            || plan.ColorFromHex is null
+            || plan.ColorToHex is null
+            || !TryParseAnimationColor(plan.ColorFromHex, out var from)
+            || !TryParseAnimationColor(plan.ColorToHex, out var to))
+        {
+            return;
+        }
+
+        DelayedAction(plan.DelayMs, () =>
+        {
+            AnimateColorKeyframes(
+                plan.DurationMs,
+                new[] { (from, 0.0), (to, 1.0) },
+                value => brush.Color = value);
+            AnimateKeyframes(
+                plan.DurationMs,
+                new[] { (0.0, 0.0), (1.0, 1.0) },
+                value => rectangle.Opacity = value);
+        });
     }
 
     private void AddAuthoredColorOverlay(Control element, SlideShowShapeAnimationPlaybackPlan plan)

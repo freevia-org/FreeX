@@ -560,6 +560,7 @@ public static class SlideShowPlaybackFramePlanner
             SlideShowShapeAnimationEffectKind.Blink => SlideShowAnimationVisualTrackKind.Opacity,
             SlideShowShapeAnimationEffectKind.ColorPulse
                 or SlideShowShapeAnimationEffectKind.ChangeColor
+                or SlideShowShapeAnimationEffectKind.ChangeFillColor
                 or SlideShowShapeAnimationEffectKind.GrowWithColor
                 or SlideShowShapeAnimationEffectKind.Shimmer
                 or SlideShowShapeAnimationEffectKind.Bold

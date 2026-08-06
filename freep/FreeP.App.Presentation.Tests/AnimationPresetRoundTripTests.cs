@@ -118,7 +118,11 @@ public sealed class AnimationPresetRoundTripTests
     public void IndefiniteRepeatTimingRoundTripsWithoutFiniteCount()
     {
         var presentation = Presentation.CreateEmpty();
-        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+        });
         presentation.Slides[0].Animations.Add(new ShapeAnimation
         {
             ShapeId = 7,
@@ -374,6 +378,212 @@ public sealed class AnimationPresetRoundTripTests
                 && element.Attribute("presetID")?.Value == "3");
         cTn.Attribute("presetSubtype")!.Value.Should().Be("0");
         slideXml.Descendants(p + "animClr").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void ImportedChangeFontSizeRetainsNativeBehaviorAndUsesGrowPlayback()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Grow,
+            RawPresetClass = "emph",
+            RawPresetId = 4,
+            RawPresetSubtype = "2",
+            ScaleBehavior = AnimationScaleBehavior.FromTo(1.5),
+            PreservedNumericBehaviorXml = """
+                <p:anim xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" to="1.5" calcmode="lin" valueType="num">
+                  <p:cBhvr override="childStyle">
+                    <p:cTn id="77" dur="2000" fill="hold"/>
+                    <p:tgtEl><p:spTgt spid="7"/></p:tgtEl>
+                    <p:attrNameLst><p:attrName>style.fontSize</p:attrName></p:attrNameLst>
+                  </p:cBhvr>
+                </p:anim>
+                """,
+        });
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+
+        animation.Preset.Should().Be(AnimationPreset.Grow);
+        animation.RawPresetClass.Should().Be("emph");
+        animation.RawPresetId.Should().Be(4);
+        animation.RawPresetSubtype.Should().Be("2");
+        animation.ScaleBehavior!.ToX.Should().Be(AnimationScaleBehavior.Format(1.5));
+        animation.PreservedNumericBehaviorXml.Should().Contain("style.fontSize");
+        AnimationAmountSemantics.ResolveScale(animation.Preset, animation.ScaleBehavior).Should().Be(1.5);
+        SlideShowPlaybackPlanner.PlanShapeAnimation(animation, startDelayMs: 0)
+            .EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.GrowShrink);
+
+        var clonedAnimation = SlideCloner.CloneSlide(reloaded.Slides[0]).Animations.Single();
+        clonedAnimation.PreservedNumericBehaviorXml.Should().Be(animation.PreservedNumericBehaviorXml);
+
+        using var second = new MemoryStream();
+        PptxPackageWriter.Write(reloaded, second);
+        using var archive = new ZipArchive(new MemoryStream(second.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetClass")?.Value == "emph"
+                && element.Attribute("presetID")?.Value == "4");
+        cTn.Attribute("presetSubtype")!.Value.Should().Be("2");
+        cTn.Descendants(p + "anim").Should().ContainSingle()
+            .Which.Descendants(p + "attrName").Single().Value.Should().Be("style.fontSize");
+        cTn.Descendants(p + "animScale").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ImportedChangeFillColorRetainsFillTargetAndNativeSetters()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x4472C4)),
+        });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.ChangeFillColor,
+            RawPresetClass = "emph",
+            RawPresetId = 1,
+            RawPresetSubtype = "2",
+            PreservedFillBehaviorXml = """
+                <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+                  <p:animClr clrSpc="rgb" dir="cw">
+                    <p:cBhvr>
+                      <p:cTn id="6" dur="2000" fill="hold"/>
+                      <p:tgtEl><p:spTgt spid="7"/></p:tgtEl>
+                      <p:attrNameLst><p:attrName>fillcolor</p:attrName></p:attrNameLst>
+                    </p:cBhvr>
+                    <p:to><a:schemeClr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" val="accent2"/></p:to>
+                  </p:animClr>
+                  <p:set>
+                    <p:cBhvr><p:cTn id="7" dur="2000" fill="hold"/><p:tgtEl><p:spTgt spid="7"/></p:tgtEl><p:attrNameLst><p:attrName>fill.type</p:attrName></p:attrNameLst></p:cBhvr>
+                    <p:to><p:strVal val="solid"/></p:to>
+                  </p:set>
+                  <p:set>
+                    <p:cBhvr><p:cTn id="8" dur="2000" fill="hold"/><p:tgtEl><p:spTgt spid="7"/></p:tgtEl><p:attrNameLst><p:attrName>fill.on</p:attrName></p:attrNameLst></p:cBhvr>
+                    <p:to><p:strVal val="true"/></p:to>
+                  </p:set>
+                </p:childTnLst>
+                """,
+        });
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+
+        animation.Preset.Should().Be(AnimationPreset.ChangeFillColor);
+        animation.RawPresetClass.Should().Be("emph");
+        animation.RawPresetId.Should().Be(1);
+        animation.PreservedFillBehaviorXml.Should().Contain("fillcolor");
+        animation.PreservedFillBehaviorXml.Should().Contain("fill.type");
+        animation.PreservedFillBehaviorXml.Should().Contain("fill.on");
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            animation,
+            startDelayMs: 0,
+            presentation: reloaded);
+        plan.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ChangeFillColor);
+        plan.ColorFromHex.Should().Be("4472C4");
+        plan.ColorToHex.Should().Be("ED7D31");
+
+        var clonedAnimation = SlideCloner.CloneSlide(reloaded.Slides[0]).Animations.Single();
+        clonedAnimation.PreservedFillBehaviorXml.Should().Be(animation.PreservedFillBehaviorXml);
+
+        using var second = new MemoryStream();
+        PptxPackageWriter.Write(reloaded, second);
+        using var archive = new ZipArchive(new MemoryStream(second.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetClass")?.Value == "emph"
+                && element.Attribute("presetID")?.Value == "1");
+        cTn.Descendants(p + "animClr").Single()
+            .Descendants(p + "attrName").Single().Value.Should().Be("fillcolor");
+        cTn.Descendants(p + "strVal")
+            .Select(element => element.Attribute("val")?.Value)
+            .Should().Contain(new[] { "solid", "true" });
+    }
+
+    [Fact]
+    public void AuthoredChangeFillColorWritesNativePowerPointBehavior()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(
+            PresentationAnimationCommandPlanner.BuildAnimation(
+                AnimationKind.Emphasis,
+                AnimationPreset.ChangeFillColor,
+                shapeId: 7));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+
+        var reloaded = PptxPackageReader.Read(new MemoryStream(stream.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+        animation.Preset.Should().Be(AnimationPreset.ChangeFillColor);
+        animation.RawPresetClass.Should().Be("emph");
+        animation.RawPresetId.Should().Be(1);
+        animation.RawPresetSubtype.Should().Be("2");
+        animation.PreservedFillBehaviorXml.Should().Contain("fillcolor");
+        animation.PreservedFillBehaviorXml.Should().Contain("accent2");
+        animation.PreservedFillBehaviorXml.Should().Contain("spid=\"7\"");
+
+        using var archive = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        slideXml.Descendants(p + "animClr")
+            .Single()
+            .Descendants(p + "attrName")
+            .Single()
+            .Value.Should().Be("fillcolor");
+    }
+
+    [Fact]
+    public void AuthoredChangeFontColorWritesNativePowerPointBehavior()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(
+            PresentationAnimationCommandPlanner.BuildFontColorAnimation(shapeId: 7));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+
+        var reloaded = PptxPackageReader.Read(new MemoryStream(stream.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+        animation.Preset.Should().Be(AnimationPreset.ChangeColor);
+        animation.RawPresetClass.Should().Be("emph");
+        animation.RawPresetId.Should().Be(3);
+        animation.RawPresetSubtype.Should().Be("0");
+        animation.PreservedColorBehaviorXml.Should().Contain("style.color");
+        animation.PreservedColorBehaviorXml.Should().Contain("accent2");
+        animation.PreservedColorBehaviorXml.Should().Contain("spid=\"7\"");
+
+        using var archive = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetClass")?.Value == "emph"
+                && element.Attribute("presetID")?.Value == "3");
+        cTn.Descendants(p + "animClr")
+            .Single()
+            .Descendants(p + "attrName")
+            .Single()
+            .Value.Should().Be("style.color");
     }
 
     [Fact]

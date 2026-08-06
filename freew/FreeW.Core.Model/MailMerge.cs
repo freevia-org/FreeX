@@ -2001,9 +2001,92 @@ public static class MailMerge
         if (value.Length == 0)
             return string.Empty;
 
+        value = ApplyMergeFieldNumericPicture(value, field.Instruction);
         var before = ComplexFieldEngine.SwitchValue(field.Instruction, 'b') ?? string.Empty;
         var after = ComplexFieldEngine.SwitchValue(field.Instruction, 'f') ?? string.Empty;
-        return before + value + after;
+        return ApplyMergeFieldGeneralFormats(before + value + after, field.Instruction);
+    }
+
+    private static string ApplyMergeFieldNumericPicture(string value, string instruction)
+    {
+        var picture = ComplexFieldEngine.SwitchValue(instruction, '#');
+        if (picture is not ("$#,##0.00" or "0.0%")
+            || !double.TryParse(
+                value,
+                NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.InvariantCulture,
+                out var number))
+        {
+            return value;
+        }
+
+        if (picture == "$#,##0.00" && number < 0)
+            return value;
+
+        // These common pictures are exact Word-calibrated signatures. Word's wider picture language has
+        // operators (including x and conditional signs) that are not .NET-compatible, so unknown pictures
+        // intentionally preserve the source value until their semantics are modeled separately. Word's
+        // percent sign is a literal suffix and does not multiply the input by 100.
+        var netPicture = picture.Replace("%", "\\%", StringComparison.Ordinal);
+        var formatted = TableFormulaEvaluator.Format(number, netPicture);
+        if (picture != "$#,##0.00")
+            return formatted;
+
+        var decimalIndex = formatted.IndexOf('.');
+        var integerEnd = decimalIndex >= 0 ? decimalIndex : formatted.Length;
+        var integerDigits = formatted[..integerEnd].Count(char.IsDigit);
+        var padding = Math.Max(0, 4 - integerDigits);
+        return "$" + new string(' ', padding) + formatted.TrimStart('$');
+    }
+
+    private static string ApplyMergeFieldGeneralFormats(string value, string instruction)
+    {
+        foreach (var format in ComplexFieldEngine.SwitchValues(instruction, '*'))
+        {
+            value = format.ToUpperInvariant() switch
+            {
+                "UPPER" => value.ToUpperInvariant(),
+                "LOWER" => value.ToLowerInvariant(),
+                "FIRSTCAP" => CapitalizeFirstLetter(value),
+                "CAPS" => CapitalizeWordInitials(value),
+                _ => value
+            };
+        }
+        return value;
+    }
+
+    private static string CapitalizeFirstLetter(string value)
+    {
+        var chars = value.ToCharArray();
+        for (var i = 0; i < chars.Length; i++)
+        {
+            if (!char.IsLetter(chars[i]))
+                continue;
+            chars[i] = char.ToUpperInvariant(chars[i]);
+            break;
+        }
+        return new string(chars);
+    }
+
+    private static string CapitalizeWordInitials(string value)
+    {
+        var chars = value.ToCharArray();
+        var atWordStart = true;
+        for (var i = 0; i < chars.Length; i++)
+        {
+            if (char.IsWhiteSpace(chars[i])
+                || char.IsPunctuation(chars[i]) && chars[i] is not '\'' and not '’')
+            {
+                atWordStart = true;
+            }
+            else if (char.IsLetter(chars[i]))
+            {
+                if (atWordStart)
+                    chars[i] = char.ToUpperInvariant(chars[i]);
+                atWordStart = false;
+            }
+        }
+        return new string(chars);
     }
 
     private static void TransformBlockText(

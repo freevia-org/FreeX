@@ -236,6 +236,97 @@ public class MailMergeTests
             .PlainText.Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("Upper", "ADA LOVELACE")]
+    [InlineData("Lower", "ada lovelace")]
+    [InlineData("FirstCap", "Ada LOVELACE")]
+    [InlineData("Caps", "Ada LOVELACE")]
+    public void MergeRecord_AppliesNativeGeneralTextFormat(string format, string expected)
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    $" MERGEFIELD Name \\* {format} \\* MERGEFORMAT ",
+                    "«Name»")
+            }
+        });
+        var row = new Dictionary<string, string> { ["Name"] = "ada LOVELACE" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be(expected);
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be(expected);
+    }
+
+    [Fact]
+    public void MergeRecord_GeneralFormatIncludesConditionalText()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD Name \\b \"pre-\" \\f \"-post\" \\* Upper \\* MERGEFORMAT ",
+                    "«Name»")
+            }
+        });
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string> { ["Name"] = "ada LOVELACE" });
+
+        merged.PlainText.Should().Be("PRE-ADA LOVELACE-POST");
+    }
+
+    [Fact]
+    public void MergeRecord_CapsUsesWordPunctuationBoundariesButKeepsApostrophesInternal()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" MERGEFIELD Name \\* Caps ", "«Name»") }
+        });
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string>
+            {
+                ["Name"] = "ada-lovelace ada/lovelace o'connor"
+            });
+
+        merged.PlainText.Should().Be("Ada-Lovelace Ada/Lovelace O'connor");
+    }
+
+    [Theory]
+    [InlineData("1234.5", "$#,##0.00", "$1,234.50")]
+    [InlineData("12.5", "$#,##0.00", "$  12.50")]
+    [InlineData("0.125", "0.0%", "0.1%")]
+    [InlineData("abc", "0.00", "abc")]
+    [InlineData("1234.5", "x##", "1234.5")]
+    [InlineData("-12.5", "$#,##0.00", "-12.5")]
+    public void MergeRecord_AppliesNativeNumericPicture(string value, string picture, string expected)
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    $" MERGEFIELD Value \\# \"{picture}\" \\* MERGEFORMAT ",
+                    "«Value»")
+            }
+        });
+
+        var row = new Dictionary<string, string> { ["Value"] = value };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be(expected);
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be(expected);
+    }
+
     [Fact]
     public void MergeRecordWithRules_ResolvesNativeMergeFieldAlongsideRules()
     {
