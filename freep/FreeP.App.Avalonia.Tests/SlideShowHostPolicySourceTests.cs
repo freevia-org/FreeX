@@ -364,10 +364,16 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("TeeterEffect(element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Blink:");
         source.Should().Contain("BlinkEffect(element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.FlashBulb:");
+        source.Should().Contain("FlashBulbEffect(element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Flicker:");
+        source.Should().Contain("FlickerEffect(element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Wave:");
         source.Should().Contain("WaveEffect(element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.ColorPulse:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.ChangeColor:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.ColorWave:");
+        source.Should().Contain("ColorWaveEffect(element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.GrowWithColor:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Shimmer:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Bold:");

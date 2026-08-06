@@ -102,7 +102,10 @@ public enum SlideShowShapeAnimationEffectKind
     Spin,
     Teeter,
     Blink,
+    FlashBulb,
+    Flicker,
     ColorPulse,
+    ColorWave,
     ChangeColor,
     ChangeFontStyle,
     ChangeFillColor,
@@ -510,11 +513,11 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Grow or AnimationPreset.Shrink => SlideShowShapeAnimationEffectKind.GrowShrink,
             AnimationPreset.Spin => SlideShowShapeAnimationEffectKind.Spin,
             AnimationPreset.Teeter => SlideShowShapeAnimationEffectKind.Teeter,
-            AnimationPreset.Blink
-                or AnimationPreset.FlashBulb
-                or AnimationPreset.Flicker => SlideShowShapeAnimationEffectKind.Blink,
-            AnimationPreset.ColorPulse
-                or AnimationPreset.ColorWave => SlideShowShapeAnimationEffectKind.ColorPulse,
+            AnimationPreset.Blink => SlideShowShapeAnimationEffectKind.Blink,
+            AnimationPreset.FlashBulb => SlideShowShapeAnimationEffectKind.FlashBulb,
+            AnimationPreset.Flicker => SlideShowShapeAnimationEffectKind.Flicker,
+            AnimationPreset.ColorPulse => SlideShowShapeAnimationEffectKind.ColorPulse,
+            AnimationPreset.ColorWave => SlideShowShapeAnimationEffectKind.ColorWave,
             AnimationPreset.ChangeColor => SlideShowShapeAnimationEffectKind.ChangeColor,
             AnimationPreset.ChangeFontStyle => SlideShowShapeAnimationEffectKind.ChangeFontStyle,
             AnimationPreset.ChangeLineColor => SlideShowShapeAnimationEffectKind.ChangeColor,
@@ -538,6 +541,7 @@ public static class SlideShowPlaybackPlanner
             return ResolveFillColorBehavior(animation, presentation, effectiveClrMap);
 
         if (effectKind is not (SlideShowShapeAnimationEffectKind.ColorPulse
+            or SlideShowShapeAnimationEffectKind.ColorWave
             or SlideShowShapeAnimationEffectKind.ChangeColor
             or SlideShowShapeAnimationEffectKind.GrowWithColor
             or SlideShowShapeAnimationEffectKind.Shimmer)

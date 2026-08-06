@@ -2014,10 +2014,10 @@ public sealed class SlideShowPlaybackPlannerTests
         {
             [AnimationPreset.Teeter] = SlideShowShapeAnimationEffectKind.Teeter,
             [AnimationPreset.Blink] = SlideShowShapeAnimationEffectKind.Blink,
-            [AnimationPreset.FlashBulb] = SlideShowShapeAnimationEffectKind.Blink,
-            [AnimationPreset.Flicker] = SlideShowShapeAnimationEffectKind.Blink,
+            [AnimationPreset.FlashBulb] = SlideShowShapeAnimationEffectKind.FlashBulb,
+            [AnimationPreset.Flicker] = SlideShowShapeAnimationEffectKind.Flicker,
             [AnimationPreset.ColorPulse] = SlideShowShapeAnimationEffectKind.ColorPulse,
-            [AnimationPreset.ColorWave] = SlideShowShapeAnimationEffectKind.ColorPulse,
+            [AnimationPreset.ColorWave] = SlideShowShapeAnimationEffectKind.ColorWave,
             [AnimationPreset.ChangeColor] = SlideShowShapeAnimationEffectKind.ChangeColor,
             [AnimationPreset.ChangeLineColor] = SlideShowShapeAnimationEffectKind.ChangeColor,
             [AnimationPreset.ChangeFontStyle] = SlideShowShapeAnimationEffectKind.ChangeFontStyle,
@@ -2043,6 +2043,33 @@ public sealed class SlideShowPlaybackPlannerTests
             plan.EffectKind.Should().Be(effectKind);
             plan.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
         }
+    }
+
+    [Fact]
+    public void DistinctEmphasisFamiliesExposeDistinctFrameContracts()
+    {
+        var flashBulb = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation { ShapeId = 71, Kind = AnimationKind.Emphasis, Preset = AnimationPreset.FlashBulb, DurationMs = 600 },
+            startDelayMs: 0);
+        var flicker = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation { ShapeId = 72, Kind = AnimationKind.Emphasis, Preset = AnimationPreset.Flicker, DurationMs = 600 },
+            startDelayMs: 0);
+        var colorWave = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation { ShapeId = 73, Kind = AnimationKind.Emphasis, Preset = AnimationPreset.ColorWave, DurationMs = 600 },
+            startDelayMs: 0);
+
+        var flashFrame = SlideShowPlaybackFramePlanner.PlanFrame(flashBulb, 60, 960, 540);
+        var flickerFrame = SlideShowPlaybackFramePlanner.PlanFrame(flicker, 300, 960, 540);
+        var colorWaveFrame = SlideShowPlaybackFramePlanner.PlanFrame(colorWave, 150, 960, 540);
+
+        flashFrame.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.FlashBulb);
+        flashFrame.TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Opacity);
+        flashFrame.Opacity.Should().BeApproximately(0.05, 0.0001);
+        flickerFrame.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Flicker);
+        flickerFrame.Opacity.Should().BeApproximately(0.15, 0.0001);
+        colorWaveFrame.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ColorWave);
+        colorWaveFrame.TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Emphasis);
+        colorWaveFrame.Opacity.Should().BeApproximately(0.65, 0.0001);
     }
 
     [Theory]
