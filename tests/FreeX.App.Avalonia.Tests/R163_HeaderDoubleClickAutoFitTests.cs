@@ -158,6 +158,31 @@ public sealed class R163_HeaderDoubleClickAutoFitTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public void HiddenBoundaryFirstPress_DoesNotStartZeroSizeResizeCapture()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var rowHeader = source[
+            source.IndexOf("private Control CreateRowHeaderCell(", StringComparison.Ordinal)..
+            source.IndexOf("private uint ResolveRowResizeHandleTarget", StringComparison.Ordinal)];
+        var rowHandle = source[
+            source.IndexOf("private Control AddRowResizeHandle(", StringComparison.Ordinal)..
+            source.IndexOf("private static Border CreateHeaderResizeHandle", StringComparison.Ordinal)];
+
+        var parentGuard = rowHeader.IndexOf("else if (resizeRow != row)", StringComparison.Ordinal);
+        var hiddenGuard = rowHandle.IndexOf("if (displayedHeight <= 0)", StringComparison.Ordinal);
+        var beginResize = rowHandle.IndexOf("BeginHeaderResize(", StringComparison.Ordinal);
+
+        parentGuard.Should().BeGreaterThanOrEqualTo(0);
+        rowHeader[parentGuard..rowHeader.IndexOf("BeginHeaderResize(", StringComparison.Ordinal)]
+            .Should().Contain("args.Handled = true");
+        hiddenGuard.Should().BeGreaterThanOrEqualTo(0);
+        beginResize.Should().BeGreaterThan(hiddenGuard,
+            "a collapsed hidden-row boundary must not capture a zero-size first click");
+        rowHandle[hiddenGuard..beginResize].Should().Contain("args.Handled = true");
+        rowHandle[hiddenGuard..beginResize].Should().Contain("return;");
+    }
+
     private static void InvokeAutoFitColumnFromHeader(MainWindow window, uint col) =>
         typeof(MainWindow)
             .GetMethod("AutoFitColumnFromHeader", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -167,4 +192,16 @@ public sealed class R163_HeaderDoubleClickAutoFitTests
         typeof(MainWindow)
             .GetMethod("AutoFitRowFromHeader", BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(window, [row]);
+
+    private static string RepoFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
+            directory = directory.Parent;
+
+        if (directory is null)
+            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
+
+        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
+    }
 }

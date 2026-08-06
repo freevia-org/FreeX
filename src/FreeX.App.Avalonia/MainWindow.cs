@@ -7546,15 +7546,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var header = CreateHeaderCell(row.ToString(), selected, IsActiveHeaderRow(row), zoomFactor);
         header.Padding = new Thickness(GetRowOutlineGutterWidth(_session.Viewport, zoomFactor), 0, 0, 0);
         header.Cursor = new Cursor(StandardCursorType.Hand);
+        var resizeRow = ResolveRowResizeHandleTarget(row);
+        var resizeHeight = resizeRow == row ? GetDisplayedRowHeight(metric, zoomFactor) : 0;
         header.PointerPressed += (_, args) =>
         {
             var point = args.GetCurrentPoint(header);
             if (IsHeaderResizeHotspot(point.Position, header.Bounds, HeaderResizeKind.Row))
             {
                 if (args.ClickCount >= 2)
-                    AutoFitRowFromHeader(row);
+                    AutoFitRowFromHeader(resizeRow);
+                else if (resizeRow != row)
+                {
+                    // Keep a first press on a collapsed boundary from capturing a zero-size
+                    // resize through the header parent before the overlaid handle sees it.
+                    args.Handled = true;
+                    return;
+                }
                 else
-                    BeginHeaderResize(args, header, HeaderResizeKind.Row, row, GetDisplayedRowHeight(metric, zoomFactor));
+                    BeginHeaderResize(args, header, HeaderResizeKind.Row, resizeRow, resizeHeight);
 
                 args.Handled = true;
                 return;
@@ -7585,8 +7594,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         header.PointerMoved += (_, args) => ContinueHeaderSelectionDrag(args, HeaderResizeKind.Row, row);
         header.PointerReleased += (_, args) => EndHeaderSelectionDrag(args);
-        var resizeRow = ResolveRowResizeHandleTarget(row);
-        var resizeHeight = resizeRow == row ? GetDisplayedRowHeight(metric, zoomFactor) : 0;
         return AddRowResizeHandle(header, resizeRow, resizeHeight);
     }
 
@@ -8149,6 +8156,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (args.ClickCount >= 2)
             {
                 AutoFitRowFromHeader(row);
+                args.Handled = true;
+                return;
+            }
+
+            // A handle immediately before a hidden run has no displayed row height. Do not start
+            // a zero-size drag on the first press: its no-movement release commits a zero-height
+            // command and rebuilds the grid before Avalonia can deliver the second press to this
+            // same boundary. Leaving the handle stable preserves ClickCount == 2 for the real
+            // contiguous hidden-row AutoFit gesture.
+            if (displayedHeight <= 0)
+            {
                 args.Handled = true;
                 return;
             }
