@@ -133,9 +133,12 @@ public sealed class DialogChromeDedupSourceGuardTests
             "AvaloniaCompactDialogChrome.cs"));
 
         source.Should().Contain("ContentPresenter.PaddingProperty, new Thickness(0)");
-        source.Should().Contain("TabItem.MarginProperty, new Thickness(0, 0, -1, -1)");
-        source.Should().Contain("TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)");
-        source.Should().Contain("Layoutable.MinHeightProperty, style.TabHeight ?? style.ControlHeight");
+        source.Should().Contain("TabItem.MarginProperty,");
+        source.Should().Contain("new Thickness(0, 0, -DialogTabChromeMetrics.AdjacentTabOverlap, 0)");
+        source.Should().Contain("TabItem.BorderThicknessProperty,");
+        source.Should().Contain("DialogTabChromeMetrics.PaneBorderThickness,");
+        source.Should().Contain("var tabHeight = style.TabHeight ?? style.ControlHeight;");
+        source.Should().Contain("Layoutable.MinHeightProperty, tabHeight");
         source.Should().Contain("TabItem.PaddingProperty, new Thickness(6, 2)");
     }
 

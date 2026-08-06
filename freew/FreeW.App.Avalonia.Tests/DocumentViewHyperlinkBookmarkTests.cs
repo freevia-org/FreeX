@@ -608,8 +608,12 @@ public sealed class DocumentViewHyperlinkBookmarkTests
 
     /// <summary>
     /// ExternalUriLauncher.TryCreateAllowedUri (used by MainWindow.OpenExternalUri) accepts the
-    /// safe schemes (http/https/mailto/ftp) and rejects unsafe ones (javascript, unknown, empty).
-    /// This tests the scheme guard without invoking Process.Start.
+    /// safe schemes (http/https/mailto/ftp/well-formed local file) and rejects unsafe ones
+    /// (javascript, unknown, empty). "file" is deliberately on the shared allowlist — Word-style
+    /// hyperlinks to local files are a supported feature, mirroring FreeX's own well-tested
+    /// ExternalUriLauncherTests contract for the same shared component — so a syntactically
+    /// well-formed file:// URI is accepted here. This tests the scheme guard without invoking
+    /// Process.Start.
     /// </summary>
     [Theory]
     [InlineData("https://example.com/page", true)]
@@ -617,7 +621,7 @@ public sealed class DocumentViewHyperlinkBookmarkTests
     [InlineData("mailto:user@example.com", true)]
     [InlineData("ftp://files.example.com/data", true)]
     [InlineData("javascript:alert(1)", false)]
-    [InlineData("file:///etc/passwd", false)]
+    [InlineData("file:///etc/passwd", true)]
     [InlineData("data:text/html,<h1>x</h1>", false)]
     [InlineData("", false)]
     [InlineData("   ", false)]
