@@ -36,6 +36,8 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("Use border soft edge");
         source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderSoftEdge(");
         source.Should().Contain("Use border reflection");
+        source.Should().Contain("Reflection blur (pt):");
+        source.Should().Contain("FormatFrameBorderReflectionBlur");
         source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderReflection(");
         source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameGeometry(");
         source.Should().Contain("Frame shape:");
