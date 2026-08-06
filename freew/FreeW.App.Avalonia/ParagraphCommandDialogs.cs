@@ -650,7 +650,6 @@ public sealed class SortDialog : FreeWDialogWindow
     public static void ApplyResult(DocumentView editor, SortDialogResult result)
     {
         ArgumentNullException.ThrowIfNull(editor);
-        ArgumentNullException.ThrowIfNull(result);
 
         if (editor.IsCaretInTable())
             editor.SortCaretTableRows(result.Kind, result.Ascending, result.CaseSensitive, result.HasHeaderRow);
@@ -666,7 +665,7 @@ public sealed class SortDialog : FreeWDialogWindow
         var dialog = new SortDialog(editor.IsCaretInTable());
         var result = await dialog.ShowDialog<SortDialogResult?>(owner);
         if (result is not null)
-            ApplyResult(editor, result);
+            ApplyResult(editor, result.Value);
     }
 
     private void Accept()
