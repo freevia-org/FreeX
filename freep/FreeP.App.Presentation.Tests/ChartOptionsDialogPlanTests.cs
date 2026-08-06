@@ -74,6 +74,48 @@ public sealed class ChartOptionsDialogPlanTests
         action.Should().Throw<ArgumentException>().WithMessage("*Duplicate chart dialog field*");
     }
 
+    [Fact]
+    public void DataTablePlanPreservesInheritedThreeStateTypography()
+    {
+        var session = new ChartDataTableOptionsDialogSession(CreateEditor(new ChartShape()));
+
+        var plan = session.BuildDialogPlan();
+
+        plan.IsScrollable.Should().BeTrue();
+        plan.Field(ChartOptionsDialogFieldId.Bold).IsThreeState.Should().BeTrue();
+        plan.Field(ChartOptionsDialogFieldId.Bold).IsChecked.Should().BeNull();
+        plan.Field(ChartOptionsDialogFieldId.Italic).IsThreeState.Should().BeTrue();
+        plan.Groups.Select(group => group.Id).Should().Equal("table", "appearance", "table-text");
+    }
+
+    [Fact]
+    public void AreaTargetTransitionRebuildsPortableDefaults()
+    {
+        var session = new ChartAreaOptionsDialogSession(CreateEditor(new ChartShape()));
+
+        session.BuildDialogPlan().Field(ChartOptionsDialogFieldId.AreaTarget).SelectedIndex.Should().Be(0);
+        session.SelectTarget(1);
+        var plotAreaPlan = session.BuildDialogPlan();
+
+        plotAreaPlan.Field(ChartOptionsDialogFieldId.AreaTarget).SelectedIndex.Should().Be(1);
+        plotAreaPlan.Groups.Select(group => group.Id).Should().Equal("target", "fill", "outline");
+    }
+
+    [Theory]
+    [InlineData(ChartType.Pie, false)]
+    [InlineData(ChartType.OfPie, true)]
+    public void PiePlanOwnsConditionalSecondaryPlotFields(ChartType chartType, bool hasSecondaryFields)
+    {
+        var chart = new ChartShape { ChartType = chartType };
+        var session = new ChartPieOptionsDialogSession(CreateEditor(chart));
+
+        var plan = session.BuildDialogPlan();
+
+        plan.Fields.ContainsKey(ChartOptionsDialogFieldId.OfPieType).Should().Be(hasSecondaryFields);
+        plan.IsScrollable.Should().Be(hasSecondaryFields);
+        plan.Height.Should().Be(hasSecondaryFields ? ChartPieOptionsPlanner.DefaultDialogHeight : 250);
+    }
+
     private static ChartShape CreateBubbleChart() => new()
     {
         ChartType = ChartType.Bubble,

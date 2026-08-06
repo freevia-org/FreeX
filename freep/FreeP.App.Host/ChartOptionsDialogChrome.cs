@@ -191,14 +191,27 @@ internal sealed class ChartOptionsDialogForm
     public bool IsChecked(ChartOptionsDialogFieldId fieldId) =>
         Control<CheckBox>(fieldId).IsChecked == true;
 
+    public bool? NullableChecked(ChartOptionsDialogFieldId fieldId) =>
+        Control<CheckBox>(fieldId).IsChecked;
+
     public void SetText(ChartOptionsDialogFieldId fieldId, string? value) =>
         Control<TextBox>(fieldId).Text = value ?? string.Empty;
 
     public void SetSelectedIndex(ChartOptionsDialogFieldId fieldId, int value) =>
         Control<ComboBox>(fieldId).SelectedIndex = value;
 
-    public void SetChecked(ChartOptionsDialogFieldId fieldId, bool value) =>
+    public void SetChecked(ChartOptionsDialogFieldId fieldId, bool? value) =>
         Control<CheckBox>(fieldId).IsChecked = value;
+
+    public void SetChoices(
+        ChartOptionsDialogFieldId fieldId,
+        IReadOnlyList<string> choices,
+        int selectedIndex)
+    {
+        var combo = Control<ComboBox>(fieldId);
+        combo.ItemsSource = choices;
+        combo.SelectedIndex = selectedIndex;
+    }
 
     public void ApplyPlan(ChartOptionsDialogPlan plan)
     {
@@ -250,6 +263,7 @@ internal sealed class ChartOptionsDialogForm
             {
                 Content = field.Label,
                 IsChecked = field.IsChecked,
+                IsThreeState = field.IsThreeState,
             },
             _ => throw new ArgumentOutOfRangeException(nameof(field.ControlKind)),
         };
