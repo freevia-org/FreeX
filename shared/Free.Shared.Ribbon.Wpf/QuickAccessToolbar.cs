@@ -62,7 +62,7 @@ public sealed record QuickAccessToolbarRenderOptions
     public double? FontSize { get; init; }
 
     /// <summary>Whether to set the WPF <see cref="FrameworkElement.ToolTip"/> to the descriptor tooltip.
-    /// Default true. A host that surfaces tooltips through a richer mechanism (e.g. FreeX's RibbonTooltip)
+    /// Default true. A host that surfaces tooltips through a richer mechanism (e.g. <see cref="RibbonTooltip"/>)
     /// sets this false and applies its own in <see cref="CustomizeButton"/>.</summary>
     public bool SetWpfToolTip { get; init; } = true;
 

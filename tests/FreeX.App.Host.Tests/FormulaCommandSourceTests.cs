@@ -41,8 +41,8 @@ public sealed class FormulaCommandSourceTests
 
         xaml.Should().Contain("x:Name=\"FormulaBarFxButton\"");
         xaml.Should().Contain("Click=\"InsertFunctionBtn_Click\"");
-        xaml.Should().Contain("local:RibbonTooltip.KeyTip=\"FX\"");
-        xaml.Should().Contain("local:RibbonMetadata.CommandName=\"Insert Function\"");
+        xaml.Should().Contain("ribbonWpf:RibbonTooltip.KeyTip=\"FX\"");
+        xaml.Should().Contain("ribbonWpf:RibbonMetadata.CommandName=\"Insert Function\"");
     }
 
     [Theory]

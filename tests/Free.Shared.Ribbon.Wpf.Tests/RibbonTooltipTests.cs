@@ -1,11 +1,13 @@
+using System.Runtime.ExceptionServices;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
-using FreeX.App.Host;
+using Free.Shared.Ribbon.Wpf;
 
-namespace FreeX.App.Host.Tests;
+namespace Free.Shared.Ribbon.Wpf.Tests;
 
+[Trait("Category", "RibbonUiLane")]
 public sealed class RibbonTooltipTests
 {
     [Fact]
@@ -302,4 +304,56 @@ public sealed class RibbonTooltipTests
     }
 
     private static void RunSta(Action action) => StaTestRunner.Run(action);
+
+    private static class StaTestRunner
+    {
+        private static readonly object Sync = new();
+        private static readonly Lazy<System.Windows.Threading.Dispatcher> Dispatcher = new(CreateDispatcher);
+
+        public static void Run(Action action)
+        {
+            var dispatcher = Dispatcher.Value;
+            if (dispatcher.CheckAccess())
+            {
+                action();
+                return;
+            }
+
+            lock (Sync)
+            {
+                Exception? failure = null;
+                dispatcher.Invoke(() =>
+                {
+                    try
+                    {
+                        action();
+                    }
+                    catch (Exception ex)
+                    {
+                        failure = ex;
+                    }
+                });
+
+                if (failure is not null)
+                    ExceptionDispatchInfo.Capture(failure).Throw();
+            }
+        }
+
+        private static System.Windows.Threading.Dispatcher CreateDispatcher()
+        {
+            System.Windows.Threading.Dispatcher? dispatcher = null;
+            using var ready = new ManualResetEventSlim();
+            var thread = new Thread(() =>
+            {
+                dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
+                ready.Set();
+                System.Windows.Threading.Dispatcher.Run();
+            });
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.IsBackground = true;
+            thread.Start();
+            ready.Wait();
+            return dispatcher!;
+        }
+    }
 }

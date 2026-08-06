@@ -11,14 +11,14 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void TitledRibbonControls_HaveAltKeyTips()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
+        XNamespace ribbonWpf = "clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf";
 
         var missing = document
             .Descendants()
-            .Where(element => element.Attribute(local + "RibbonTooltip.Title") is not null)
+            .Where(element => element.Attribute(ribbonWpf + "RibbonTooltip.Title") is not null)
             .Where(element => element.Attribute("Click")?.Value is not ("SsPinItem_Click" or "SsUnpinItem_Click"))
-            .Where(element => element.Attribute(local + "RibbonTooltip.KeyTip") is null)
-            .Select(element => LocalizedAttribute(element, local + "RibbonTooltip.Title") ?? element.Name.LocalName)
+            .Where(element => element.Attribute(ribbonWpf + "RibbonTooltip.KeyTip") is null)
+            .Select(element => LocalizedAttribute(element, ribbonWpf + "RibbonTooltip.Title") ?? element.Name.LocalName)
             .ToList();
 
         missing.Should().BeEmpty("visible titled ribbon controls should participate in Excel-style Alt keytip navigation");
@@ -28,16 +28,16 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void RibbonTabs_DoNotReuseCommandKeyTipsWithinTheSameTab()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
+        XNamespace ribbonWpf = "clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var duplicates = document
             .Descendants(presentation + "TabItem")
             .SelectMany(tab =>
                 tab.Descendants()
-                    .Where(element => element.Attribute(local + "RibbonTooltip.KeyTip") is not null)
+                    .Where(element => element.Attribute(ribbonWpf + "RibbonTooltip.KeyTip") is not null)
                     .Where(element => element.Name != presentation + "MenuItem")
-                    .GroupBy(element => element.Attribute(local + "RibbonTooltip.KeyTip")!.Value, StringComparer.OrdinalIgnoreCase)
+                    .GroupBy(element => element.Attribute(ribbonWpf + "RibbonTooltip.KeyTip")!.Value, StringComparer.OrdinalIgnoreCase)
                     .Where(group => group.Count() > 1)
                     .Select(group => $"{LocalizedAttribute(tab, "Header") ?? "Tab"}:{group.Key}"))
             .ToList();
@@ -49,7 +49,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void RibbonTabs_DoNotUseCommandKeyTipPrefixesWithinTheSameTab()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
+        XNamespace ribbonWpf = "clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var collisions = document
@@ -57,17 +57,17 @@ public sealed partial class MainWindowXamlKeyTipTests
             .SelectMany(tab =>
             {
                 var commands = tab.Descendants()
-                    .Where(element => element.Attribute(local + "RibbonTooltip.KeyTip") is not null)
+                    .Where(element => element.Attribute(ribbonWpf + "RibbonTooltip.KeyTip") is not null)
                     .Where(element => element.Name != presentation + "MenuItem")
                     .Select(element => new
                     {
                         Scope = LocalizedAttribute(tab, "Header") ?? "Tab",
-                        Name = LocalizedAttribute(element, local + "RibbonTooltip.Title")
+                        Name = LocalizedAttribute(element, ribbonWpf + "RibbonTooltip.Title")
                             ?? LocalizedAttribute(element, "Content")
                             ?? LocalizedAttribute(element, "Header")
                             ?? element.Attribute("Click")?.Value
                             ?? element.Name.LocalName,
-                        KeyTip = element.Attribute(local + "RibbonTooltip.KeyTip")!.Value
+                        KeyTip = element.Attribute(ribbonWpf + "RibbonTooltip.KeyTip")!.Value
                     })
                     .ToList();
 
@@ -98,7 +98,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void KeyedRibbonDropDowns_HaveKeyTipsForDirectMenuItems()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
+        XNamespace ribbonWpf = "clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var missing = document
@@ -106,9 +106,9 @@ public sealed partial class MainWindowXamlKeyTipTests
             .SelectMany(button => button
                 .Descendants(presentation + "ContextMenu")
                 .Elements(presentation + "MenuItem")
-                .Where(menuItem => menuItem.Attribute(local + "RibbonTooltip.KeyTip") is null)
+                .Where(menuItem => menuItem.Attribute(ribbonWpf + "RibbonTooltip.KeyTip") is null)
                 .Select(menuItem =>
-                    $"{LocalizedAttribute(button, local + "RibbonTooltip.Title")}:{LocalizedAttribute(menuItem, "Header")}"))
+                    $"{LocalizedAttribute(button, ribbonWpf + "RibbonTooltip.Title")}:{LocalizedAttribute(menuItem, "Header")}"))
             .ToList();
 
         missing.Should().BeEmpty("audited ribbon dropdown menus should be reachable through staged Alt keytips");
@@ -118,13 +118,13 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void AllContextMenuCommands_HaveKeyTipsForDirectMenuItems()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
+        XNamespace ribbonWpf = "clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var missing = document
             .Descendants(presentation + "ContextMenu")
             .Elements(presentation + "MenuItem")
-            .Where(menuItem => menuItem.Attribute(local + "RibbonTooltip.KeyTip") is null)
+            .Where(menuItem => menuItem.Attribute(ribbonWpf + "RibbonTooltip.KeyTip") is null)
             .Select(menuItem => LocalizedAttribute(menuItem, "Header") ?? "MenuItem")
             .ToList();
 
@@ -135,7 +135,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void DirectContextMenuKeyTips_DoNotUsePrefixCollisions()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
+        XNamespace ribbonWpf = "clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var collisions = document
@@ -147,7 +147,7 @@ public sealed partial class MainWindowXamlKeyTipTests
                     .Select(item => new
                     {
                         Header = LocalizedAttribute(item, "Header") ?? "MenuItem",
-                        KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value
+                        KeyTip = item.Attribute(ribbonWpf + "RibbonTooltip.KeyTip")?.Value
                     })
                     .Where(item => !string.IsNullOrWhiteSpace(item.KeyTip))
                     .ToList();

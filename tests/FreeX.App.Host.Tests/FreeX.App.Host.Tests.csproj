@@ -20,6 +20,10 @@
     <Using Include="Xunit" />
     <Using Include="Free.Shared.Drawing" />
     <Using Include="Free.Shared.Ribbon" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonMetadata" Alias="RibbonMetadata" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonMetadataRole" Alias="RibbonMetadataRole" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonCommandContentLayout" Alias="RibbonCommandContentLayout" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonTooltip" Alias="RibbonTooltip" />
     <Using Include="FreeX.Ribbon.Definitions" />
     <Using Include="FreeX.App.Services.Ribbon" />
     <Using Include="FreeX.App.Presentation.FormulaBar" />

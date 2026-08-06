@@ -14,7 +14,8 @@ internal static class RibbonXamlCatalogSnapshotReader
 {
     private static readonly XNamespace Presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
     private static readonly XNamespace Xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
-    private static readonly XNamespace Local = "clr-namespace:FreeX.App.Host";
+    private static readonly XNamespace RibbonWpf =
+        "clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf";
 
     public static RibbonCatalog ReadMainWindow() => BuildCatalog(FreeXRibbon.Build());
 
@@ -37,9 +38,9 @@ internal static class RibbonXamlCatalogSnapshotReader
             .Elements(Presentation + "TabItem")
             .Select(tab => new RibbonTabDefinition(
                 LocalizedXamlTestSupport.ResolveLocalizedValue((string?)tab.Attribute("Header")) ?? "",
-                (string?)tab.Attribute(Local + "RibbonMetadata.CatalogId"),
+                (string?)tab.Attribute(RibbonWpf + "RibbonMetadata.CatalogId"),
                 (string?)tab.Attribute(Xaml + "Name"),
-                (string?)tab.Attribute(Local + "RibbonTooltip.KeyTip"),
+                (string?)tab.Attribute(RibbonWpf + "RibbonTooltip.KeyTip"),
                 string.Equals((string?)tab.Attribute("Visibility"), "Collapsed", StringComparison.Ordinal),
                 []))
             .ToArray();
@@ -57,7 +58,7 @@ internal static class RibbonXamlCatalogSnapshotReader
             BuildCatalog(FreeXRibbon.Build()),
             document.Descendants().Attributes("Click").Count(),
             document.Descendants().Attributes("AutomationProperties.AutomationId").Count(),
-            document.Descendants().Attributes(Local + "RibbonTooltip.KeyTip").Count());
+            document.Descendants().Attributes(RibbonWpf + "RibbonTooltip.KeyTip").Count());
     }
 
     private static RibbonCatalog BuildCatalog(SharedRibbon.RibbonDefinition definition) =>

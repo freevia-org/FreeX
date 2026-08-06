@@ -66,8 +66,8 @@ public partial class MainWindow
 
     // Builds a QAT button from a neutral descriptor through the shared Free.Shared.Ribbon.Wpf QAT renderer
     // (style, glyph, size, hit-test-in-chrome, automation id/name — the construction FreeX and FreeW shared),
-    // then layers FreeX-only decorations the renderer leaves to the host: the RibbonTooltip title/key-tip/
-    // description, RibbonMetadata, the per-command customization context menu, and the sender/args click that
+    // then layers FreeX-only decorations the renderer leaves to the host: localized tooltip/key-tip metadata,
+    // command metadata, the per-command customization context menu, and the sender/args click that
     // forwards to ExecuteQuickAccessToolbarCommand. The neutral QuickAccessToolbarCatalog and command state
     // live in FreeX.App.Services.Ribbon; this WPF layer only renders and dispatches them.
     private Button CreateQuickAccessToolbarButton(
@@ -103,7 +103,7 @@ public partial class MainWindow
 
     // FreeX-side QAT render options: the shared renderer draws the button (TitleBarQatButton on the navy
     // caption, or RibbonBtn when shown below the ribbon) with FreeX's own RibbonIcon glyph factory so the
-    // icons match the rest of the app. FreeX keeps its own RibbonTooltip (not the WPF ToolTip), name
+    // icons match the rest of the app. FreeX keeps localized RibbonTooltip metadata, name
     // registration (tracked for rebuild) and click (sender/args), so those shared hooks are turned off.
     private SharedQatOptions QuickAccessToolbarRenderOptions(
         bool showBelowRibbon,

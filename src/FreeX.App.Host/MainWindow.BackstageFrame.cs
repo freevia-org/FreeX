@@ -57,10 +57,8 @@ public partial class MainWindow
 
     private void DecorateBackstageNavButton(BackstageEntry? entry, Button button)
     {
-        // The shared frame stamps the shared RibbonTooltip attached properties on each nav button, but
-        // FreeX's Alt-keytip overlay (MainWindow.KeyTips.cs) reads FreeX's own RibbonTooltip attached
-        // properties. Mirror key-tip/title/description onto the FreeX properties so the rail still lights up
-        // under Alt and shows the Excel-style hover card, exactly as the hand-rolled rail did.
+        // The shared frame stamps RibbonTooltip metadata on each nav button. Reapply localized values here
+        // so FreeX's Alt overlay and hover card keep the same key tips and copy as the hand-rolled rail.
         var keyTip = entry?.KeyTip ?? "B"; // null entry == back arrow
         var title = entry?.TooltipTitle ?? UiText.Get("MainWindow_TooltipTitle_Back");
         RibbonTooltip.SetKeyTip(button, keyTip);

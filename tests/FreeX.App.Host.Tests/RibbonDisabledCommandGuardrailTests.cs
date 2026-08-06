@@ -7,7 +7,8 @@ namespace FreeX.App.Host.Tests;
 public sealed class RibbonDisabledCommandGuardrailTests
 {
     private static readonly XNamespace Presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-    private static readonly XNamespace Local = "clr-namespace:FreeX.App.Host";
+    private static readonly XNamespace RibbonWpf =
+        "clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf";
     private static readonly XNamespace Xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
 
     [Fact]
@@ -50,7 +51,7 @@ public sealed class RibbonDisabledCommandGuardrailTests
         if (!CommandElementNames.Contains(element.Name.LocalName))
             return false;
 
-        return AttributeValue(element, Local + "RibbonMetadata.CommandName") is not null;
+        return AttributeValue(element, RibbonWpf + "RibbonMetadata.CommandName") is not null;
     }
 
     private static IEnumerable<GuardedRibbonCommand> ReadVisibleRibbonCommands()
@@ -87,8 +88,8 @@ public sealed class RibbonDisabledCommandGuardrailTests
             .Where(IsRibbonGroupPanel)
             .Select(ReadGroupName)
             .FirstOrDefault() ?? "";
-        var commandName = AttributeValue(element, Local + "RibbonMetadata.CommandName") ?? "";
-        var description = AttributeValue(element, Local + "RibbonTooltip.Description") ?? "";
+        var commandName = AttributeValue(element, RibbonWpf + "RibbonMetadata.CommandName") ?? "";
+        var description = AttributeValue(element, RibbonWpf + "RibbonTooltip.Description") ?? "";
         var path = BuildCommandPath(element, commandName);
         var lineNumber = element is IXmlLineInfo lineInfo && lineInfo.HasLineInfo()
             ? lineInfo.LineNumber
@@ -115,7 +116,7 @@ public sealed class RibbonDisabledCommandGuardrailTests
             .Ancestors()
             .Reverse()
             .Where(IsRibbonCommandElement)
-            .Select(ancestor => AttributeValue(ancestor, Local + "RibbonMetadata.CommandName"))
+            .Select(ancestor => AttributeValue(ancestor, RibbonWpf + "RibbonMetadata.CommandName"))
             .Where(name => !string.IsNullOrWhiteSpace(name));
 
         return string.Join(" > ", ancestorCommands.Append(commandName));

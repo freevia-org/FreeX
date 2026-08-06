@@ -13,7 +13,7 @@ public sealed class TableDesignCommandSourceTests
         var source = ReadHostSourceFile("MainWindow.TableDesignCommands.cs");
 
         xaml.Should().NotContain("TableDesignHeaderRowBtn");
-        xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Header Row\"");
+        xaml.Should().NotContain("ribbonWpf:RibbonMetadata.CommandName=\"Header Row\"");
         xaml.Should().NotContain("MainWindow_TooltipDescription_HeaderRowsRemainVisibleForStructuredTablesInFreeX");
         source.Should().NotContain("TableDesignHeaderRowBtn");
     }

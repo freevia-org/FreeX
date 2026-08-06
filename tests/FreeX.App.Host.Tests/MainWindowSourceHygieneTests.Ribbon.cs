@@ -7,6 +7,23 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class MainWindowSourceHygieneTests
 {
     [Fact]
+    public void RibbonAttachedProperties_AreOwnedBySharedWpf()
+    {
+        var hostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
+        var hostProject = DialogSourceTestSupport.ReadHostSources("FreeX.App.Host.csproj");
+        var mainWindowXaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+
+        File.Exists(Path.Combine(hostDirectory, "RibbonMetadata.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(hostDirectory, "RibbonTooltip.cs")).Should().BeFalse();
+        hostProject.Should().Contain("Free.Shared.Ribbon.Wpf.RibbonMetadata");
+        hostProject.Should().Contain("Free.Shared.Ribbon.Wpf.RibbonTooltip");
+        mainWindowXaml.Should().Contain(
+            "xmlns:ribbonWpf=\"clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf\"");
+        mainWindowXaml.Should().NotContain("local:RibbonMetadata.");
+        mainWindowXaml.Should().NotContain("local:RibbonTooltip.");
+    }
+
+    [Fact]
     public void RibbonSplitButtonHover_UsesRibbonButtonHoverBrushInsteadOfMenuHoverBrush()
     {
         var ribbonDropdownSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonDropdown.cs");
@@ -25,7 +42,7 @@ public sealed partial class MainWindowSourceHygieneTests
     public void RibbonSplitButtons_CanRouteDropdownZoneToADirectAction()
     {
         var ribbonDropdownSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonDropdown.cs");
-        var metadataSource = DialogSourceTestSupport.ReadHostSources("RibbonMetadata.cs");
+        var metadataSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonMetadata.cs");
 
         metadataSource.Should().Contain("public static readonly RoutedEvent DropdownClickEvent");
         metadataSource.Should().Contain("public static void AddDropdownClickHandler(DependencyObject element, RoutedEventHandler handler)");

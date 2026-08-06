@@ -52,9 +52,9 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Attribute("Value")
             ?.Value;
 
-    private static string? CommandName(XElement element, XNamespace local) =>
-        element.Attribute(local + "RibbonMetadata.CommandName")?.Value ??
-        LocalizedAttribute(element, local + "RibbonTooltip.Title");
+    private static string? CommandName(XElement element, XNamespace ribbonWpf) =>
+        element.Attribute(ribbonWpf + "RibbonMetadata.CommandName")?.Value ??
+        LocalizedAttribute(element, ribbonWpf + "RibbonTooltip.Title");
 
     private static string? LocalizedAttribute(XElement element, XName name) =>
         ResolveLocalizedValue(element.Attribute(name)?.Value);
