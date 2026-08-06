@@ -7,6 +7,8 @@ public sealed class SetChartAreaOptionsCommand : IPresentationCommand
     private readonly uint _shapeId;
     private readonly ChartAreaOptions _newOptions;
     private ChartAreaOptions? _oldOptions;
+    private bool _oldChartExChartAreaEditRequested;
+    private bool _oldChartExPlotAreaEditRequested;
 
     public SetChartAreaOptionsCommand(int slideIndex, uint shapeId, ChartAreaOptions options)
     {
@@ -20,7 +22,12 @@ public sealed class SetChartAreaOptionsCommand : IPresentationCommand
     public void Apply(Presentation presentation)
     {
         if (!TryGetChart(presentation, out var chart)) return;
-        _oldOptions ??= ReadOptions(chart, _newOptions.Target);
+        if (_oldOptions is null)
+        {
+            _oldOptions = ReadOptions(chart, _newOptions.Target);
+            _oldChartExChartAreaEditRequested = chart.ChartExChartAreaEditRequested;
+            _oldChartExPlotAreaEditRequested = chart.ChartExPlotAreaEditRequested;
+        }
         Apply(chart, _newOptions);
     }
 
@@ -28,6 +35,8 @@ public sealed class SetChartAreaOptionsCommand : IPresentationCommand
     {
         if (!TryGetChart(presentation, out var chart) || _oldOptions is null) return;
         Apply(chart, _oldOptions);
+        chart.ChartExChartAreaEditRequested = _oldChartExChartAreaEditRequested;
+        chart.ChartExPlotAreaEditRequested = _oldChartExPlotAreaEditRequested;
     }
 
     private bool TryGetChart(Presentation presentation, out ChartShape chart)
@@ -51,11 +60,15 @@ public sealed class SetChartAreaOptionsCommand : IPresentationCommand
         {
             chart.ChartAreaFill = options.Fill;
             chart.ChartAreaOutline = options.Outline;
+            if (chart.IsChartEx)
+                chart.ChartExChartAreaEditRequested = true;
         }
         else
         {
             chart.PlotAreaFill = options.Fill;
             chart.PlotAreaOutline = options.Outline;
+            if (chart.IsChartEx)
+                chart.ChartExPlotAreaEditRequested = true;
         }
     }
 }
