@@ -2069,7 +2069,7 @@ public static class MailMerge
         value = ApplyMergeFieldNumericPicture(value, field.Instruction);
         var before = ComplexFieldEngine.SwitchValue(field.Instruction, 'b') ?? string.Empty;
         var after = ComplexFieldEngine.SwitchValue(field.Instruction, 'f') ?? string.Empty;
-        return ApplyMergeFieldGeneralFormats(before + value + after, field.Instruction);
+        return ApplyMergeFieldGeneralFormats(value, before, after, field.Instruction);
     }
 
     private static CultureInfo MergeFieldCulture(Run run)
@@ -2220,20 +2220,244 @@ public static class MailMerge
         return "$" + new string(' ', padding) + formatted.TrimStart('$');
     }
 
-    private static string ApplyMergeFieldGeneralFormats(string value, string instruction)
+    private const string MergeFieldNumberFormatError =
+        "Error! Number cannot be represented in specified format.";
+
+    private static string ApplyMergeFieldGeneralFormats(
+        string value,
+        string before,
+        string after,
+        string instruction)
     {
-        foreach (var format in ComplexFieldEngine.SwitchValues(instruction, '*'))
+        var formats = ComplexFieldEngine.SwitchValues(instruction, '*')
+            .Where(format => !format.Equals("MERGEFORMAT", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var hasConditionalText = before.Length > 0 || after.Length > 0;
+        var input = before + value + after;
+
+        // Word's lone numeric result switch owns the complete non-empty merge result and suppresses
+        // conditional \b/\f text when the data is numeric. Multiple result switches instead process
+        // the assembled conditional result in order; a numeric switch then leaves nonnumeric text alone.
+        var conditionalTextIsPunctuationOnly = (before + after).All(character =>
+            !char.IsLetterOrDigit(character));
+        if (hasConditionalText
+            && formats.Length > 0
+            && IsMergeFieldNumericGeneralFormat(formats[0])
+            && TryParseMergeFieldNumber(value, out _)
+            && (formats.Length == 1 || conditionalTextIsPunctuationOnly))
         {
-            value = format.ToUpperInvariant() switch
+            input = value;
+        }
+
+        foreach (var format in formats)
+        {
+            input = format.ToUpperInvariant() switch
             {
-                "UPPER" => value.ToUpperInvariant(),
-                "LOWER" => value.ToLowerInvariant(),
-                "FIRSTCAP" => CapitalizeFirstLetter(value),
-                "CAPS" => CapitalizeWordInitials(value),
-                _ => value
+                "UPPER" => input.ToUpperInvariant(),
+                "LOWER" => input.ToLowerInvariant(),
+                "FIRSTCAP" => CapitalizeFirstLetter(input),
+                "CAPS" => CapitalizeWordInitials(input),
+                _ => ApplyMergeFieldNumericGeneralFormat(input, format)
             };
         }
-        return value;
+        return input;
+    }
+
+    private static bool IsMergeFieldNumericGeneralFormat(string format) =>
+        format.ToUpperInvariant() is
+            "ARABIC" or "ROMAN" or "ALPHABETIC" or "HEX" or "ORDINAL"
+            or "ORDTEXT" or "CARDTEXT" or "DOLLARTEXT";
+
+    private static string ApplyMergeFieldNumericGeneralFormat(string value, string format)
+    {
+        if (!IsMergeFieldNumericGeneralFormat(format)
+            || !TryParseMergeFieldNumber(value, out var number))
+        {
+            return value;
+        }
+
+        var rounded = decimal.Round(number, 0, MidpointRounding.AwayFromZero);
+        return format.ToUpperInvariant() switch
+        {
+            "ARABIC" => rounded.ToString("0", CultureInfo.InvariantCulture),
+            "ROMAN" => FormatMergeFieldRoman(rounded, lower: format == "roman"),
+            "ALPHABETIC" => FormatMergeFieldAlphabetic(rounded, lower: format == "alphabetic"),
+            "HEX" => FormatMergeFieldHex(rounded),
+            "ORDINAL" => FormatMergeFieldOrdinal(rounded),
+            "ORDTEXT" => FormatMergeFieldNumberWords(rounded, ordinal: true),
+            "CARDTEXT" => FormatMergeFieldNumberWords(rounded, ordinal: false),
+            "DOLLARTEXT" => FormatMergeFieldDollarText(number),
+            _ => value
+        };
+    }
+
+    private static bool TryParseMergeFieldNumber(string value, out decimal number) =>
+        decimal.TryParse(
+            value,
+            NumberStyles.Float | NumberStyles.AllowThousands,
+            CultureInfo.InvariantCulture,
+            out number);
+
+    private static string FormatMergeFieldRoman(decimal rounded, bool lower)
+    {
+        if (rounded == 0)
+            return string.Empty;
+        if (rounded is < 1 or > 32767)
+            return MergeFieldNumberFormatError;
+
+        (int Value, string Symbol)[] map =
+        [
+            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+            (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+            (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")
+        ];
+        var remaining = decimal.ToInt32(rounded);
+        var result = new System.Text.StringBuilder();
+        foreach (var (amount, symbol) in map)
+        {
+            while (remaining >= amount)
+            {
+                result.Append(symbol);
+                remaining -= amount;
+            }
+        }
+        var text = result.ToString();
+        return lower ? text.ToLowerInvariant() : text;
+    }
+
+    private static string FormatMergeFieldAlphabetic(decimal rounded, bool lower)
+    {
+        if (rounded == 0)
+            return string.Empty;
+        if (rounded is < 1 or > 780)
+            return MergeFieldNumberFormatError;
+
+        var value = decimal.ToInt32(rounded);
+        var letter = (char)((lower ? 'a' : 'A') + (value - 1) % 26);
+        var count = (value - 1) / 26 + 1;
+        return new string(letter, count);
+    }
+
+    private static string FormatMergeFieldHex(decimal rounded)
+    {
+        if (rounded is < 0 or > 65535)
+            return MergeFieldNumberFormatError;
+        return decimal.ToInt32(rounded).ToString("X", CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatMergeFieldOrdinal(decimal rounded)
+    {
+        var absolute = decimal.Abs(rounded);
+        var lastTwo = decimal.ToInt32(absolute % 100);
+        var last = decimal.ToInt32(absolute % 10);
+        var suffix = lastTwo is >= 11 and <= 13
+            ? "th"
+            : last switch
+            {
+                1 => "st",
+                2 => "nd",
+                3 => "rd",
+                _ => "th"
+            };
+        return rounded.ToString("0", CultureInfo.InvariantCulture) + suffix;
+    }
+
+    private static string FormatMergeFieldNumberWords(decimal rounded, bool ordinal)
+    {
+        if (rounded is < 0 or > 999999)
+            return MergeFieldNumberFormatError;
+        var number = decimal.ToInt32(rounded);
+        return ordinal ? NumberToOrdinalWords(number) : NumberToCardinalWords(number);
+    }
+
+    private static string FormatMergeFieldDollarText(decimal number)
+    {
+        if (number < 0)
+            return MergeFieldNumberFormatError;
+
+        var whole = decimal.Truncate(number);
+        if (whole > 999999)
+            return MergeFieldNumberFormatError;
+
+        var cents = decimal.ToInt32(decimal.Round(
+            (number - whole) * 100,
+            0,
+            MidpointRounding.AwayFromZero)) % 100;
+        return $"{NumberToCardinalWords(decimal.ToInt32(whole))} and {cents:00}/100";
+    }
+
+    private static readonly string[] CardinalOnes =
+    [
+        "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+        "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+        "seventeen", "eighteen", "nineteen"
+    ];
+
+    private static readonly string[] CardinalTens =
+    [
+        "", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"
+    ];
+
+    private static readonly string[] OrdinalOnes =
+    [
+        "zeroth", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth",
+        "ninth", "tenth", "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth",
+        "sixteenth", "seventeenth", "eighteenth", "nineteenth"
+    ];
+
+    private static readonly string[] OrdinalTens =
+    [
+        "", "", "twentieth", "thirtieth", "fortieth", "fiftieth", "sixtieth",
+        "seventieth", "eightieth", "ninetieth"
+    ];
+
+    private static string NumberToCardinalWords(int value)
+    {
+        if (value < 20)
+            return CardinalOnes[value];
+        if (value < 100)
+        {
+            var remainder = value % 10;
+            return CardinalTens[value / 10]
+                + (remainder == 0 ? string.Empty : "-" + CardinalOnes[remainder]);
+        }
+        if (value < 1000)
+        {
+            var remainder = value % 100;
+            return CardinalOnes[value / 100] + " hundred"
+                + (remainder == 0 ? string.Empty : " " + NumberToCardinalWords(remainder));
+        }
+
+        var thousands = value / 1000;
+        var tail = value % 1000;
+        return NumberToCardinalWords(thousands) + " thousand"
+            + (tail == 0 ? string.Empty : " " + NumberToCardinalWords(tail));
+    }
+
+    private static string NumberToOrdinalWords(int value)
+    {
+        if (value < 20)
+            return OrdinalOnes[value];
+        if (value < 100)
+        {
+            var remainder = value % 10;
+            return remainder == 0
+                ? OrdinalTens[value / 10]
+                : CardinalTens[value / 10] + "-" + OrdinalOnes[remainder];
+        }
+        if (value < 1000)
+        {
+            var remainder = value % 100;
+            return remainder == 0
+                ? CardinalOnes[value / 100] + " hundredth"
+                : CardinalOnes[value / 100] + " hundred " + NumberToOrdinalWords(remainder);
+        }
+
+        var thousands = value / 1000;
+        var tail = value % 1000;
+        return tail == 0
+            ? NumberToCardinalWords(thousands) + " thousandth"
+            : NumberToCardinalWords(thousands) + " thousand " + NumberToOrdinalWords(tail);
     }
 
     private static string CapitalizeFirstLetter(string value)

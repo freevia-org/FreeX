@@ -281,6 +281,141 @@ public class MailMergeTests
         merged.PlainText.Should().Be("PRE-ADA LOVELACE-POST");
     }
 
+    [Theory]
+    [InlineData("27", "Arabic", "27")]
+    [InlineData("12.5", "Arabic", "13")]
+    [InlineData("27", "ROMAN", "XXVII")]
+    [InlineData("27", "roman", "xxvii")]
+    [InlineData("4000", "ROMAN", "MMMM")]
+    [InlineData("0", "ROMAN", "")]
+    [InlineData("-3", "ROMAN", "Error! Number cannot be represented in specified format.")]
+    [InlineData("32768", "ROMAN", "Error! Number cannot be represented in specified format.")]
+    [InlineData("27", "ALPHABETIC", "AA")]
+    [InlineData("27", "alphabetic", "aa")]
+    [InlineData("0", "ALPHABETIC", "")]
+    [InlineData("-3", "ALPHABETIC", "Error! Number cannot be represented in specified format.")]
+    [InlineData("703", "ALPHABETIC", "AAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    [InlineData("781", "ALPHABETIC", "Error! Number cannot be represented in specified format.")]
+    [InlineData("27", "Hex", "1B")]
+    [InlineData("0", "Hex", "0")]
+    [InlineData("-3", "Hex", "Error! Number cannot be represented in specified format.")]
+    [InlineData("65535", "Hex", "FFFF")]
+    [InlineData("65536", "Hex", "Error! Number cannot be represented in specified format.")]
+    [InlineData("-21", "Ordinal", "-21st")]
+    [InlineData("12.5", "Ordinal", "13th")]
+    [InlineData("0", "OrdText", "zeroth")]
+    [InlineData("-3", "OrdText", "Error! Number cannot be represented in specified format.")]
+    [InlineData("1234", "OrdText", "one thousand two hundred thirty-fourth")]
+    [InlineData("0", "CardText", "zero")]
+    [InlineData("999999", "CardText", "nine hundred ninety-nine thousand nine hundred ninety-nine")]
+    [InlineData("1000000", "CardText", "Error! Number cannot be represented in specified format.")]
+    [InlineData("0", "DollarText", "zero and 00/100")]
+    [InlineData("999999.5", "DollarText", "nine hundred ninety-nine thousand nine hundred ninety-nine and 50/100")]
+    [InlineData("12.005", "DollarText", "twelve and 01/100")]
+    [InlineData("12.995", "DollarText", "twelve and 00/100")]
+    [InlineData("abc", "CardText", "abc")]
+    public void MergeRecord_AppliesNativeGeneralNumericFormat(
+        string value,
+        string format,
+        string expected)
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    $" MERGEFIELD Value \\* {format} \\* MERGEFORMAT ",
+                    "Â«ValueÂ»")
+            }
+        });
+        var row = new Dictionary<string, string> { ["Value"] = value };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be(expected);
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be(expected);
+    }
+
+    [Fact]
+    public void MergeRecord_LoneGeneralNumericFormatSuppressesConditionalTextLikeWord()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD Value \\b \"[\" \\f \"]\" \\* Roman ",
+                    "Â«ValueÂ»")
+            }
+        });
+        var row = new Dictionary<string, string> { ["Value"] = "27" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be("XXVII");
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be("XXVII");
+    }
+
+    [Fact]
+    public void MergeRecord_NonnumericGeneralNumericFormatKeepsConditionalText()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD Value \\b \"[\" \\f \"]\" \\* Roman ",
+                    "Â«ValueÂ»")
+            }
+        });
+        var row = new Dictionary<string, string> { ["Value"] = "abc" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be("[abc]");
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be("[abc]");
+    }
+
+    [Fact]
+    public void MergeRecord_CombinedGeneralFormatsSuppressPunctuationOnlyConditionalText()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD Value \\b \"[\" \\f \"]\" \\* Roman \\* Upper ",
+                    "Â«ValueÂ»")
+            }
+        });
+        var row = new Dictionary<string, string> { ["Value"] = "27" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be("XXVII");
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be("XXVII");
+    }
+
+    [Fact]
+    public void MergeRecord_CombinedGeneralFormatsProcessConditionalTextInOrder()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD Value \\b \"pre-\" \\f \"-post\" \\* CardText \\* Upper ",
+                    "Â«ValueÂ»")
+            }
+        });
+        var row = new Dictionary<string, string> { ["Value"] = "27" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be("PRE-27-POST");
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be("PRE-27-POST");
+    }
+
     [Fact]
     public void MergeRecord_CapsUsesWordPunctuationBoundariesButKeepsApostrophesInternal()
     {
