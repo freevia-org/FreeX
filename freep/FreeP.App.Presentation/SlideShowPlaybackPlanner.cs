@@ -203,6 +203,11 @@ public sealed record SlideShowFallbackAnimationPlaybackPlan(
     double FromOpacity,
     double FlashOpacity);
 
+public sealed record SlideShowFontStylePlaybackPlan(
+    bool? Italic,
+    bool? Bold,
+    bool? Underline);
+
 /// <summary>
 /// Logical visibility behavior for an animation whose visual overlay could not be built.
 /// Hosts use this shared plan to preserve PowerPoint's step semantics without inventing
@@ -239,6 +244,53 @@ public static class SlideShowPlaybackPlanner
     public const double ConveyorTiltDegrees = 3.0;
     public const double WindowStartScale = 0.92;
     public const double WindowInitialOpenFactor = 0.18;
+
+    public static SlideShowFontStylePlaybackPlan ResolveFontStyleBehavior(ShapeAnimation animation)
+    {
+        if (string.IsNullOrWhiteSpace(animation.PreservedFontStyleBehaviorXml))
+            return new(null, null, null);
+
+        bool? italic = null;
+        bool? bold = null;
+        bool? underline = null;
+
+        try
+        {
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            var root = XElement.Parse(animation.PreservedFontStyleBehaviorXml, LoadOptions.PreserveWhitespace);
+            foreach (var setter in root.Descendants(p + "set"))
+            {
+                var attrName = setter.Descendants(p + "attrName")
+                    .Select(element => element.Value.Trim())
+                    .FirstOrDefault();
+                var value = setter.Descendants(p + "strVal")
+                    .Select(element => element.Attribute("val")?.Value.Trim())
+                    .FirstOrDefault();
+                if (string.IsNullOrWhiteSpace(attrName) || value is null)
+                    continue;
+
+                switch (attrName)
+                {
+                    case "style.fontStyle":
+                        italic = value.Equals("italic", StringComparison.OrdinalIgnoreCase);
+                        break;
+                    case "style.fontWeight":
+                        bold = value.Equals("bold", StringComparison.OrdinalIgnoreCase);
+                        break;
+                    case "style.textDecorationUnderline":
+                        underline = value.Equals("true", StringComparison.OrdinalIgnoreCase)
+                            || value == "1";
+                        break;
+                }
+            }
+        }
+        catch (XmlException)
+        {
+            return new(null, null, null);
+        }
+
+        return new(italic, bold, underline);
+    }
 
     public static SlideShowTransitionPlaybackPlan PlanTransition(SlideTransition transition)
     {
