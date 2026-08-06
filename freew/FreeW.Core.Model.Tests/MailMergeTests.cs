@@ -2108,6 +2108,62 @@ public class MailMergeTests
         merged.Should().ContainSingle().Which.PlainText.Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData("Upper", "ADA LOVELACE")]
+    [InlineData("Lower", "ada lovelace")]
+    [InlineData("FirstCap", "Ada LOVELACE")]
+    [InlineData("Caps", "Ada LOVELACE")]
+    public void MergeAllWithRules_NativeFillIn_AppliesGeneralResultFormat(
+        string format,
+        string expected)
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    $" FILLIN \"Name\" \\o \\* {format} \\* MERGEFORMAT ",
+                    "cached")
+            }
+        });
+        var state = new MergeState();
+        state.FillInAnswers["Name"] = "ada LOVELACE";
+
+        var merged = MailMerge.MergeAllWithRules(
+            template,
+            new MergeData(["Recipient"], [["one"]]),
+            state);
+
+        merged.Should().ContainSingle().Which.PlainText.Should().Be(expected);
+    }
+
+    [Fact]
+    public void MergeAllWithRules_NativeAsk_AppliesGeneralResultFormatToBookmark()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " ASK Manager \"Who is the manager?\" \\o \\* Caps ",
+                    "cached"),
+                Run.ComplexFieldRun(" REF Manager ", "cached reference")
+            }
+        });
+        var state = new MergeState();
+        state.AskAnswers["Manager"] = "margaret HAMILTON";
+
+        var merged = MailMerge.MergeAllWithRules(
+            template,
+            new MergeData(["Recipient"], [["one"]]),
+            state);
+
+        merged.Should().ContainSingle().Which.PlainText.Should().Be("Margaret HAMILTON");
+        state.Bookmarks["Manager"].Should().Be("Margaret HAMILTON");
+    }
+
     [Fact]
     public void MergeAllWithRules_NativeInteractiveFieldWithoutOnceSwitch_RemainsAField()
     {
