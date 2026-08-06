@@ -46,6 +46,22 @@ public sealed class ProofingArchitectureSourceGuardTests
             .Should().BeFalse();
     }
 
+    [Fact]
+    public void ReviewWorkflow_ReusesProofingNavigationAndDisplayPolicies()
+    {
+        var reviewPlanner = Read("src", "FreeX.App.Services", "ReviewWorkflowPlanner.cs");
+        var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
+
+        reviewPlanner.Should().Contain("SpellCheckWorkflowPlanner.FilterIssues(");
+        reviewPlanner.Should().Contain("CommentNavigationPlanner.OrderedNoteAddresses(");
+        reviewPlanner.Should().Contain("CommentNavigationPlanner.FindNext(");
+        reviewPlanner.Should().NotContain("BuildCommandForIssueText(");
+        reviewPlanner.Should().NotContain("FindFirstAfter(");
+        avalonia.Should().Contain("ReviewWorkflowPlanner.CreateDisplayModel(plan)");
+        avalonia.Should().NotContain("private static string FormatReviewWorkflowSummary(");
+        avalonia.Should().NotContain("private static string FormatSpellingIssueSource(");
+    }
+
     private static string Read(params string[] path) =>
         File.ReadAllText(Path.Combine([RepositoryRoot(), .. path]));
 

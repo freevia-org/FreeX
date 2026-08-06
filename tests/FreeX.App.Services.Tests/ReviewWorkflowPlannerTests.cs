@@ -54,9 +54,9 @@ public sealed class ReviewWorkflowPlannerTests
             workbook,
             sheet.Id,
             ignoredWords: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "TEH" },
-            ignoredIssues: new HashSet<ReviewSpellingIssueKey>
+            ignoredIssues: new HashSet<SpellingIssueKey>
             {
-                ReviewWorkflowPlanner.CreateSpellingIssueKey(ignoredIssue)
+                SpellCheckWorkflowPlanner.CreateIssueKey(ignoredIssue)
             });
 
         plan.SpellingIssues.Should().BeEmpty();
@@ -106,7 +106,7 @@ public sealed class ReviewWorkflowPlannerTests
         sheet.Comments[c3] = "note";
         var session = CreateSession(workbook);
         var issue = session.GetReviewWorkflowPlan().SpellingIssues.Single(issue => issue.Word == "teh");
-        var command = ReviewWorkflowPlanner.BuildSpellingReplacementCommand(issue, "the");
+        var command = SpellCheckWorkflowPlanner.BuildReplacementCommand(issue, "the");
 
         var editResult = session.ExecuteReviewCommand(command, issue.Address);
         var navigationResult = session.GoToNextNote();
@@ -117,6 +117,33 @@ public sealed class ReviewWorkflowPlannerTests
         navigationResult.Success.Should().BeTrue();
         navigationResult.SelectedRange.Should().Be(new GridRange(c3, c3));
         session.ActiveCell.Should().Be(c3);
+    }
+
+    [Fact]
+    public void CreateDisplayModel_FormatsSummaryAndBoundedRendererNeutralPreviews()
+    {
+        var workbook = WorkbookFactory.Create();
+        var sheet = workbook.Sheets.Single();
+        for (uint row = 1; row <= 7; row++)
+        {
+            var address = new CellAddress(sheet.Id, row, 1);
+            sheet.SetCell(address, new TextValue("teh"));
+            sheet.Comments[address] = row == 1
+                ? "line one\nline two"
+                : $"note {row}";
+        }
+
+        var display = ReviewWorkflowPlanner.CreateDisplayModel(
+            ReviewWorkflowPlanner.CreatePlan(workbook, sheet.Id));
+
+        display.Summary.Should().Contain("Sheets: 1");
+        display.Summary.Should().Contain("Spelling issues: 7");
+        display.SpellingIssues.Should().HaveCount(7);
+        display.SpellingIssues[0].Should().Be("A1: teh -> the (cell text)");
+        display.SpellingIssues[^1].Should().Be("... and 1 more");
+        display.Notes[0].Should().Be("A1: line one line two");
+        display.Notes[^1].Should().Be("... and 1 more");
+        display.ThreadedComments.Should().Equal("No threaded comments on the active sheet.");
     }
 
     private static WorkbookSession CreateSession(Workbook workbook) =>

@@ -1199,7 +1199,7 @@ public sealed class WorkbookSession : IDisposable
     public ReviewWorkflowPlan GetReviewWorkflowPlan(
         IReadOnlySet<string>? customDictionary = null,
         ISet<string>? ignoredWords = null,
-        ISet<ReviewSpellingIssueKey>? ignoredIssues = null) =>
+        ISet<SpellingIssueKey>? ignoredIssues = null) =>
         ReviewWorkflowPlanner.CreatePlan(
             Workbook,
             ActiveSheet.Id,

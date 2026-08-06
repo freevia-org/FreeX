@@ -3526,15 +3526,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ReviewNotesList");
         source.Should().Contain("ReviewCommentsList");
         source.Should().Contain("AutomationProperties.SetAutomationId(closeButton, \"ReviewCloseButton\");");
-        source.Should().Contain("private static string FormatReviewWorkflowSummary(ReviewWorkflowPlan plan)");
-        source.Should().Contain("plan.Statistics");
-        source.Should().Contain("plan.SpellingIssues.Count");
-        source.Should().Contain("plan.AccessibilityIssues.Count");
-        source.Should().Contain("plan.Notes.Count");
-        source.Should().Contain("plan.ThreadedComments.Count");
-        source.Should().Contain("private static IReadOnlyList<string> FormatReviewSpellingIssues(IReadOnlyList<SpellingIssue> issues)");
-        source.Should().Contain("private static IReadOnlyList<string> FormatReviewAccessibilityIssues(IReadOnlyList<AccessibilityIssue> issues)");
-        source.Should().Contain("private static IReadOnlyList<string> FormatReviewCommentItems(");
+        source.Should().Contain("var display = ReviewWorkflowPlanner.CreateDisplayModel(plan);");
+        source.Should().Contain("Text = display.Summary");
+        source.Should().Contain("display.SpellingIssues");
+        source.Should().Contain("display.AccessibilityIssues");
+        source.Should().Contain("display.Notes");
+        source.Should().Contain("display.ThreadedComments");
+        source.Should().NotContain("private static string FormatReviewWorkflowSummary(");
+        source.Should().NotContain("private static IReadOnlyList<string> FormatReviewSpellingIssues(");
 
         source.Should().Contain("private void NavigateReviewNote(bool previous)");
         source.Should().Contain("() => ReviewSessionController.NavigateNote(previous)");
@@ -3552,9 +3551,13 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("public WorkbookNavigationResult GoToNextNote(bool previous = false)");
         sessionSource.Should().Contain("public WorkbookNavigationResult GoToNextThreadedComment(bool previous = false)");
         plannerSource.Should().Contain("public sealed record ReviewWorkflowPlan(");
+        plannerSource.Should().Contain("public sealed record ReviewWorkflowDisplayModel(");
+        plannerSource.Should().Contain("public static ReviewWorkflowDisplayModel CreateDisplayModel(");
         plannerSource.Should().Contain("WorkbookStatisticsService.GetStatistics(workbook)");
         plannerSource.Should().Contain("AccessibilityCheckerService.FindIssues(workbook)");
         plannerSource.Should().Contain("SpellCheckService.FindIssues(workbook, activeSheetId, customDictionary)");
+        plannerSource.Should().Contain("SpellCheckWorkflowPlanner.FilterIssues(");
+        plannerSource.Should().Contain("CommentNavigationPlanner.FindNext(");
         plannerSource.Should().Contain("public static ReviewNavigationPlan FindNextNote(");
         plannerSource.Should().Contain("public static ReviewNavigationPlan FindNextThreadedComment(");
 

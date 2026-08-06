@@ -16535,6 +16535,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         var plan = _session.GetReviewWorkflowPlan();
+        var display = ReviewWorkflowPlanner.CreateDisplayModel(plan);
         var dialog = new Window
         {
             Title = focusAccessibility ? "Accessibility Check" : "Review Summary",
@@ -16549,7 +16550,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var summaryBlock = new TextBlock
         {
-            Text = FormatReviewWorkflowSummary(plan),
+            Text = display.Summary,
             TextWrapping = TextWrapping.Wrap,
             LineHeight = 21,
         };
@@ -16560,19 +16561,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var spellingList = CreateReviewPreviewList(
             "Spelling issues",
             "ReviewSpellingIssuesList",
-            FormatReviewSpellingIssues(plan.SpellingIssues));
+            display.SpellingIssues);
         var accessibilityList = CreateReviewPreviewList(
             "Accessibility issues",
             "ReviewAccessibilityIssuesList",
-            FormatReviewAccessibilityIssues(plan.AccessibilityIssues));
+            display.AccessibilityIssues);
         var notesList = CreateReviewPreviewList(
             "Notes",
             "ReviewNotesList",
-            FormatReviewCommentItems(plan.Notes, "No notes on the active sheet."));
+            display.Notes);
         var commentsList = CreateReviewPreviewList(
             "Threaded comments",
             "ReviewCommentsList",
-            FormatReviewCommentItems(plan.ThreadedComments, "No threaded comments on the active sheet."));
+            display.ThreadedComments);
 
         var closeButton = new Button
         {
@@ -16686,25 +16687,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             $"Selected {FormatRangeReference(_session.SelectedRange)} ({statusLabel})");
     }
 
-    private static string FormatReviewWorkflowSummary(ReviewWorkflowPlan plan)
-    {
-        var statistics = plan.Statistics;
-        return string.Join(Environment.NewLine,
-            $"Sheets: {statistics.WorksheetCount}",
-            $"Cells with data: {statistics.CellCount}",
-            $"Formulas: {statistics.FormulaCount}",
-            $"Workbook comments: {statistics.CommentCount}",
-            $"Charts: {statistics.ChartCount}",
-            $"Pictures: {statistics.PictureCount}",
-            $"Shapes and text boxes: {statistics.ShapeCount}",
-            $"Named ranges: {statistics.NamedRangeCount}",
-            "",
-            $"Spelling issues: {plan.SpellingIssues.Count}",
-            $"Accessibility issues: {plan.AccessibilityIssues.Count}",
-            $"Notes on active sheet: {plan.Notes.Count}",
-            $"Threaded comments on active sheet: {plan.ThreadedComments.Count}");
-    }
-
     private static StackPanel CreateReviewPreviewSection(string header, ListBox list) =>
         new()
         {
@@ -16734,73 +16716,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetName(list, name);
         AutomationProperties.SetAutomationId(list, automationId);
         return list;
-    }
-
-    private static IReadOnlyList<string> FormatReviewSpellingIssues(IReadOnlyList<SpellingIssue> issues) =>
-        CreateReviewPreviewItems(
-            issues,
-            issue =>
-            {
-                var suggestion = string.IsNullOrWhiteSpace(issue.Suggestion) ? "no suggestion" : issue.Suggestion;
-                return $"{FormatCellReference(issue.Address)}: {issue.Word} -> {suggestion} ({FormatSpellingIssueSource(issue.Source)})";
-            },
-            "No spelling issues.");
-
-    private static IReadOnlyList<string> FormatReviewAccessibilityIssues(IReadOnlyList<AccessibilityIssue> issues) =>
-        CreateReviewPreviewItems(
-            issues,
-            issue => $"{TrimReviewPreview(issue.SheetName)}!{TrimReviewPreview(issue.Location)}: {TrimReviewPreview(issue.Message)}",
-            "No accessibility issues.");
-
-    private static IReadOnlyList<string> FormatReviewCommentItems(
-        IReadOnlyList<ReviewCommentListItem> items,
-        string emptyMessage) =>
-        CreateReviewPreviewItems(
-            items,
-            item => $"{FormatCellReference(item.Address)}: {TrimReviewPreview(item.PreviewText)}",
-            emptyMessage);
-
-    private static IReadOnlyList<string> CreateReviewPreviewItems<T>(
-        IReadOnlyList<T> items,
-        Func<T, string> format,
-        string emptyMessage)
-    {
-        if (items.Count == 0)
-            return [emptyMessage];
-
-        const int previewLimit = 6;
-        var preview = items
-            .Take(previewLimit)
-            .Select(format)
-            .ToList();
-        if (items.Count > preview.Count)
-            preview.Add($"... and {items.Count - preview.Count} more");
-
-        return preview;
-    }
-
-    private static string FormatSpellingIssueSource(SpellingIssueSource source) =>
-        source switch
-        {
-            SpellingIssueSource.CellText => "cell text",
-            SpellingIssueSource.Note => "note",
-            SpellingIssueSource.ThreadedComment => "threaded comment",
-            SpellingIssueSource.ThreadedCommentReply => "threaded reply",
-            _ => "spelling"
-        };
-
-    private static string TrimReviewPreview(string text)
-    {
-        var normalized = string.Join(
-            " ",
-            text.Split(['\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries)).Trim();
-        if (string.IsNullOrWhiteSpace(normalized))
-            return "(blank)";
-
-        const int maxLength = 96;
-        return normalized.Length <= maxLength
-            ? normalized
-            : normalized[..(maxLength - 3)] + "...";
     }
 
     private async Task ShowFormatCellsDialogAsync(int initialTabIndex = 0)
