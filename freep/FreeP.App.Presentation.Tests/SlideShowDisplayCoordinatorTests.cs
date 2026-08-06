@@ -5,6 +5,29 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class SlideShowDisplayCoordinatorTests
 {
     [Fact]
+    public void CoordinatorSource_RemainsFrameworkNeutralAndExcludesMediaPlaybackSession()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowDisplayCoordinator.cs"));
+
+        source.Should().Contain("public sealed class SlideShowDisplayCoordinator");
+        source.Should().Contain("public interface ISlideShowDisplayRenderer");
+        source.Should().Contain("SlideShowDisplayRendererOperationKind.CancelVisualOperations");
+        source.Should().Contain("SlideShowDisplayRendererOperationKind.EnterMediaSlide");
+        source.Should().NotContain("System.Windows");
+        source.Should().NotContain("Avalonia");
+        source.Should().NotContain("DispatcherTimer");
+        source.Should().NotContain("Storyboard");
+        source.Should().NotContain("SlideShowMediaPlaybackSession");
+        source.Should().NotContain("SlideShowMediaController");
+        source.Should().NotContain("Geometry");
+    }
+
+    [Fact]
     public void Display_ExecutesCancellationOverlayTransitionTimerAndPresenterInOrder()
     {
         var coordinator = new SlideShowDisplayCoordinator();
