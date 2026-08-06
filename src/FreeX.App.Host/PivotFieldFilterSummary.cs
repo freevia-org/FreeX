@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -46,10 +47,7 @@ public static class PivotFieldFilterSummary
         pivotTable.LabelFilters.LastOrDefault(filter => filter.SourceFieldIndex == sourceFieldIndex);
 
     public static PivotValueFilterModel? FindValueFilter(PivotTableModel pivotTable, int sourceFieldIndex) =>
-        pivotTable.ValueFilters.LastOrDefault(filter => BelongsToSourceField(filter, sourceFieldIndex));
-
-    public static bool BelongsToSourceField(PivotValueFilterModel filter, int sourceFieldIndex) =>
-        filter.SourceFieldIndex is null || filter.SourceFieldIndex == sourceFieldIndex;
+        pivotTable.ValueFilters.LastOrDefault(filter => PivotFilterOwnership.BelongsToSourceField(filter, sourceFieldIndex));
 
     public static bool HasExplicitItemSelection(IReadOnlyList<string> selectedItems, int allItemCount)
     {

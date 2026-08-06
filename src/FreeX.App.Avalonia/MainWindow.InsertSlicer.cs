@@ -4,7 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-using FreeX.App.Avalonia.Pivot;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 

@@ -1,27 +1,27 @@
-using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia.Pivot;
+namespace FreeX.App.Presentation.PivotUI;
 
 /// <summary>
-/// Pure glue that turns an <em>allowed</em> <see cref="PivotFieldDropResult"/> (produced by
+/// Renderer-neutral planning that turns an <em>allowed</em> <see cref="PivotFieldDropResult"/> (produced by
 /// <see cref="PivotFieldDragValidator"/>) into the <see cref="ConfigurePivotTableLayoutCommand"/> the shell
 /// executes to apply a field-pane drag. The validator yields only the source-field membership of the four
 /// layout areas (a <see cref="PivotLayoutPlan"/>); this factory rebuilds the concrete
 /// <see cref="PivotFieldModel"/>/<see cref="PivotDataFieldModel"/> lists, preserving every existing field's
 /// per-field state (drag permissions, selections, aggregation/format) and synthesizing a fresh data field
 /// with the validator's default aggregation when a brand-new field lands in the values area.
-/// Kept UI-free so the mapping can be asserted without a running app.
+/// Shared by WPF and Avalonia so field preservation, aggregation defaults, and command composition are
+/// application policy rather than renderer glue.
 /// </summary>
-internal static class PivotFieldLayoutCommandFactory
+public static class PivotFieldLayoutPlanner
 {
     /// <summary>
     /// Builds the layout command for an allowed drop. Returns null when the result is not allowed, carries no
     /// resulting layout, or the move would leave the values area empty (the layout command rejects a pivot
     /// with no data field, so the shell should ignore the drag instead of surfacing a guard failure).
     /// </summary>
-    internal static ConfigurePivotTableLayoutCommand? TryCreate(
+    public static ConfigurePivotTableLayoutCommand? TryCreateCommand(
         SheetId sheetId,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
@@ -50,7 +50,7 @@ internal static class PivotFieldLayoutCommandFactory
     /// Rebuilds the four concrete field lists from a resolved <see cref="PivotLayoutPlan"/>. Exposed
     /// (internal) so the mapping is unit-testable independently of command construction.
     /// </summary>
-    internal static PivotFieldAreas BuildAreas(
+    public static PivotFieldAreas BuildAreas(
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
         PivotLayoutPlan layout,
@@ -145,7 +145,7 @@ internal static class PivotFieldLayoutCommandFactory
 }
 
 /// <summary>The four concrete pivot field lists a layout command consumes.</summary>
-internal sealed record PivotFieldAreas(
+public sealed record PivotFieldAreas(
     IReadOnlyList<PivotFieldModel> RowFields,
     IReadOnlyList<PivotFieldModel> ColumnFields,
     IReadOnlyList<PivotFieldModel> PageFields,

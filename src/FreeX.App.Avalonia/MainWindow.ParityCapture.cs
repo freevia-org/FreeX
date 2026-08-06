@@ -14,7 +14,6 @@ using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Avalonia.Dialogs;
-using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.Backstage;

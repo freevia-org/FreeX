@@ -1,11 +1,10 @@
-using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia.Pivot;
+namespace FreeX.App.Presentation.PivotUI;
 
 /// <summary>Which kind of pivot command a header action maps to (so callers/tests can assert intent).</summary>
-internal enum PivotHeaderCommandKind
+public enum PivotHeaderCommandKind
 {
     None,
     Layout,
@@ -14,14 +13,14 @@ internal enum PivotHeaderCommandKind
 
 /// <summary>
 /// The outcome of mapping a header-dropdown menu action to a workbook command. A
-/// <see cref="PivotHeaderMenuCommandResult"/> is either <see cref="Command"/>-bearing (the shell executes it
+/// <see cref="PivotHeaderCommandPlan"/> is either <see cref="PivotHeaderCommandPlan.Command"/>-bearing (the shell executes it
 /// and refreshes), <see cref="IsNoOp"/> (the action is valid but produces no change — e.g. clearing a sort
 /// that is not set), or <see cref="IsDeferred"/> with a <see cref="DeferredReason"/> (the action needs a
 /// dialog or a command that does not exist yet, so the shell skips it). For executable results the
 /// <see cref="Kind"/> plus the planned <see cref="Areas"/>/<see cref="Sorts"/>/filter lists expose the exact
 /// command parameters so the mapping can be asserted without applying the command against a workbook.
 /// </summary>
-internal sealed record PivotHeaderMenuCommandResult(
+public sealed record PivotHeaderCommandPlan(
     IWorkbookCommand? Command,
     PivotHeaderCommandKind Kind = PivotHeaderCommandKind.None,
     bool IsNoOp = false,
@@ -32,25 +31,25 @@ internal sealed record PivotHeaderMenuCommandResult(
     IReadOnlyList<PivotLabelFilterModel>? LabelFilters = null,
     IReadOnlyList<PivotValueFilterModel>? ValueFilters = null)
 {
-    internal static PivotHeaderMenuCommandResult NoOp { get; } = new(null, IsNoOp: true);
+    public static PivotHeaderCommandPlan NoOp { get; } = new(null, IsNoOp: true);
 
-    internal static PivotHeaderMenuCommandResult Deferred(string reason) =>
+    public static PivotHeaderCommandPlan Deferred(string reason) =>
         new(null, IsDeferred: true, DeferredReason: reason);
 }
 
 /// <summary>
-/// Pure glue mapping a chosen <see cref="PivotHeaderMenuAction"/> (from
+/// Renderer-neutral mapping from a chosen <see cref="PivotHeaderMenuAction"/> (from
 /// <see cref="PivotHeaderDropdownMenuBuilder.BuildMenu"/>) to the workbook command the shell executes. Sort
 /// and clear actions build a <see cref="ConfigurePivotTableViewCommand"/>; move/remove actions reuse the
-/// shared <see cref="PivotFieldDragValidator"/> + <see cref="PivotFieldLayoutCommandFactory"/> so a header
+/// shared <see cref="PivotFieldDragValidator"/> + <see cref="PivotFieldLayoutPlanner"/> so a header
 /// "Move to Columns"/"Remove Field" follows the exact same layout rules as a field-pane drag. Actions that
 /// require a dialog (filters, field settings, custom sort) remain deferred at this UI-free boundary because
 /// the shell routes them through existing dialog continuations.
-/// Kept UI-free so the mapping can be asserted without a running app.
+/// This is shared application policy; renderers retain menu realization and dialog lifecycle only.
 /// </summary>
-internal static class PivotHeaderMenuCommandFactory
+public static class PivotHeaderCommandPlanner
 {
-    internal static PivotHeaderMenuCommandResult Create(
+    public static PivotHeaderCommandPlan Create(
         SheetId sheetId,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
@@ -65,7 +64,7 @@ internal static class PivotHeaderMenuCommandFactory
 
         return action switch
         {
-            PivotHeaderMenuAction.Separator => PivotHeaderMenuCommandResult.NoOp,
+            PivotHeaderMenuAction.Separator => PivotHeaderCommandPlan.NoOp,
             PivotHeaderMenuAction.SortAscending =>
                 Sort(sheetId, pivotTable, target, PivotSortDirection.Ascending),
             PivotHeaderMenuAction.SortDescending =>
@@ -85,21 +84,21 @@ internal static class PivotHeaderMenuCommandFactory
             PivotHeaderMenuAction.RemoveField =>
                 Move(sheetId, pivotTable, headers, target, PivotFieldBucket.Available, validator),
             PivotHeaderMenuAction.LabelFilter =>
-                PivotHeaderMenuCommandResult.Deferred("Label filter is routed through the existing dialog continuation."),
+                PivotHeaderCommandPlan.Deferred("Label filter is routed through the existing dialog continuation."),
             PivotHeaderMenuAction.ValueFilter =>
-                PivotHeaderMenuCommandResult.Deferred("Value filter is routed through the existing dialog continuation."),
+                PivotHeaderCommandPlan.Deferred("Value filter is routed through the existing dialog continuation."),
             PivotHeaderMenuAction.MoreSortOptions =>
-                PivotHeaderMenuCommandResult.Deferred("More Sort Options is routed through the existing dialog continuation."),
+                PivotHeaderCommandPlan.Deferred("More Sort Options is routed through the existing dialog continuation."),
             PivotHeaderMenuAction.FieldSettings =>
-                PivotHeaderMenuCommandResult.Deferred("Field Settings is routed through the existing dialog continuation."),
+                PivotHeaderCommandPlan.Deferred("Field Settings is routed through the existing dialog continuation."),
             PivotHeaderMenuAction.ValueFieldSettings =>
-                PivotHeaderMenuCommandResult.Deferred("Value Field Settings is routed through the existing dialog continuation."),
-            _ => PivotHeaderMenuCommandResult.Deferred($"Unhandled pivot header action {action}."),
+                PivotHeaderCommandPlan.Deferred("Value Field Settings is routed through the existing dialog continuation."),
+            _ => PivotHeaderCommandPlan.Deferred($"Unhandled pivot header action {action}."),
         };
     }
 
     // A value-area header sorts that data field; a label/page/row/column header sorts the field's labels.
-    private static PivotHeaderMenuCommandResult Sort(
+    private static PivotHeaderCommandPlan Sort(
         SheetId sheetId,
         PivotTableModel pivotTable,
         PivotHeaderDropdownTargetModel target,
@@ -111,7 +110,7 @@ internal static class PivotHeaderMenuCommandFactory
         {
             var dataFieldIndex = target.DataFieldIndex ?? FindDataFieldIndex(pivotTable, target.SourceFieldIndex);
             if (dataFieldIndex is null)
-                return PivotHeaderMenuCommandResult.NoOp;
+                return PivotHeaderCommandPlan.NoOp;
 
             sort = new PivotSortModel(PivotSortTarget.Value, direction, DataFieldIndex: dataFieldIndex.Value);
             isSameField = existing =>
@@ -129,16 +128,16 @@ internal static class PivotHeaderMenuCommandFactory
     }
 
     // Shared layout-command result builder, capturing the resolved field areas for assertion.
-    private static PivotHeaderMenuCommandResult LayoutResult(
+    private static PivotHeaderCommandPlan LayoutResult(
         SheetId sheetId,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
         PivotFieldDropResult dropResult)
     {
         if (!dropResult.IsAllowed || dropResult.ResultingLayout is not { } layout || layout.Values.Count == 0)
-            return PivotHeaderMenuCommandResult.NoOp;
+            return PivotHeaderCommandPlan.NoOp;
 
-        var areas = PivotFieldLayoutCommandFactory.BuildAreas(
+        var areas = PivotFieldLayoutPlanner.BuildAreas(
             pivotTable, headers, layout, dropResult.DefaultSummaryFunction);
         var command = new ConfigurePivotTableLayoutCommand(
             sheetId,
@@ -147,10 +146,10 @@ internal static class PivotHeaderMenuCommandFactory
             areas.ColumnFields,
             areas.PageFields,
             areas.DataFields);
-        return new PivotHeaderMenuCommandResult(command, PivotHeaderCommandKind.Layout, Areas: areas);
+        return new PivotHeaderCommandPlan(command, PivotHeaderCommandKind.Layout, Areas: areas);
     }
 
-    private static PivotHeaderMenuCommandResult ClearSort(
+    private static PivotHeaderCommandPlan ClearSort(
         SheetId sheetId,
         PivotTableModel pivotTable,
         PivotHeaderDropdownTargetModel target)
@@ -163,7 +162,7 @@ internal static class PivotHeaderMenuCommandFactory
             .Where(sort => !SortMatchesTarget(sort, target, dataFieldIndex))
             .ToList();
         if (sorts.Count == pivotTable.Sorts.Count)
-            return PivotHeaderMenuCommandResult.NoOp;
+            return PivotHeaderCommandPlan.NoOp;
 
         return ViewCommand(sheetId, pivotTable, sorts: sorts);
     }
@@ -177,7 +176,7 @@ internal static class PivotHeaderMenuCommandFactory
             : sort.FieldIndex == target.SourceFieldIndex;
 
     // Clear both the label and value filters that belong to the field (the header badge counts either).
-    private static PivotHeaderMenuCommandResult ClearFilter(
+    private static PivotHeaderCommandPlan ClearFilter(
         SheetId sheetId,
         PivotTableModel pivotTable,
         PivotHeaderDropdownTargetModel target)
@@ -186,20 +185,20 @@ internal static class PivotHeaderMenuCommandFactory
             .Where(filter => filter.SourceFieldIndex != target.SourceFieldIndex)
             .ToList();
         var valueFilters = pivotTable.ValueFilters
-            .Where(filter => !PivotValueFilterOwnership.BelongsToSourceField(filter, target.SourceFieldIndex))
+            .Where(filter => !PivotFilterOwnership.BelongsToSourceField(filter, target.SourceFieldIndex))
             .ToList();
 
         if (labelFilters.Count == pivotTable.LabelFilters.Count &&
             valueFilters.Count == pivotTable.ValueFilters.Count)
         {
-            return PivotHeaderMenuCommandResult.NoOp;
+            return PivotHeaderCommandPlan.NoOp;
         }
 
         return ViewCommand(sheetId, pivotTable, labelFilters: labelFilters, valueFilters: valueFilters);
     }
 
     // Move/remove route through the same validate → layout-command path the field pane uses.
-    private static PivotHeaderMenuCommandResult Move(
+    private static PivotHeaderCommandPlan Move(
         SheetId sheetId,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
@@ -213,7 +212,7 @@ internal static class PivotHeaderMenuCommandFactory
     }
 
     // Reorder within the field's current area by re-inserting at an adjacent index.
-    private static PivotHeaderMenuCommandResult Reorder(
+    private static PivotHeaderCommandPlan Reorder(
         SheetId sheetId,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
@@ -223,15 +222,15 @@ internal static class PivotHeaderMenuCommandFactory
     {
         var (bucket, fields) = ResolveAxis(pivotTable, target.Area);
         if (fields is null)
-            return PivotHeaderMenuCommandResult.NoOp;
+            return PivotHeaderCommandPlan.NoOp;
 
         var currentIndex = IndexOfSourceField(fields, target.SourceFieldIndex);
         if (currentIndex < 0)
-            return PivotHeaderMenuCommandResult.NoOp;
+            return PivotHeaderCommandPlan.NoOp;
 
         var targetIndex = currentIndex + delta;
         if (targetIndex < 0 || targetIndex >= fields.Count)
-            return PivotHeaderMenuCommandResult.NoOp;
+            return PivotHeaderCommandPlan.NoOp;
 
         var request = new PivotFieldDropRequest(target.SourceFieldIndex, bucket, targetIndex);
         var result = validator.Validate(pivotTable, headers, request);
@@ -271,7 +270,7 @@ internal static class PivotHeaderMenuCommandFactory
         return null;
     }
 
-    private static PivotHeaderMenuCommandResult ViewCommand(
+    private static PivotHeaderCommandPlan ViewCommand(
         SheetId sheetId,
         PivotTableModel pivotTable,
         IReadOnlyList<PivotLabelFilterModel>? labelFilters = null,
@@ -283,7 +282,7 @@ internal static class PivotHeaderMenuCommandFactory
         var resolvedSorts = sorts ?? pivotTable.Sorts.ToList();
         var command = new ConfigurePivotTableViewCommand(
             sheetId, pivotTable.Name, resolvedLabels, resolvedValues, resolvedSorts);
-        return new PivotHeaderMenuCommandResult(
+        return new PivotHeaderCommandPlan(
             command,
             PivotHeaderCommandKind.View,
             Sorts: resolvedSorts,

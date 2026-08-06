@@ -4,7 +4,6 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Free.Shared.AppServices;
-using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.Interactions;
 using FreeX.App.Presentation.PivotUI;

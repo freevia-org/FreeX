@@ -1,4 +1,4 @@
-using FreeX.App.Avalonia.Pivot;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services;
 using FreeX.Core.IO;
 using FreeX.Core.Model;

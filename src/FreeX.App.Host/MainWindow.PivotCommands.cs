@@ -1322,7 +1322,7 @@ public partial class MainWindow
             PivotUiPlanner.SetFieldSelectedItems(pivotTable.ColumnFields, sourceIndex, null),
             PivotUiPlanner.SetFieldSelectedItems(pivotTable.PageFields, sourceIndex, null),
             pivotTable.LabelFilters.Where(filter => filter.SourceFieldIndex != sourceIndex).ToList(),
-            pivotTable.ValueFilters.Where(filter => !PivotFieldFilterSummary.BelongsToSourceField(filter, sourceIndex)).ToList(),
+            pivotTable.ValueFilters.Where(filter => !PivotFilterOwnership.BelongsToSourceField(filter, sourceIndex)).ToList(),
             pivotTable.Sorts.ToList());
     }
 
@@ -1346,7 +1346,7 @@ public partial class MainWindow
             pivotTable.ColumnFields.ToList(),
             pivotTable.PageFields.ToList(),
             pivotTable.LabelFilters.ToList(),
-            pivotTable.ValueFilters.Where(filter => !PivotFieldFilterSummary.BelongsToSourceField(filter, sourceIndex)).ToList(),
+            pivotTable.ValueFilters.Where(filter => !PivotFilterOwnership.BelongsToSourceField(filter, sourceIndex)).ToList(),
             pivotTable.Sorts.ToList());
     }
 

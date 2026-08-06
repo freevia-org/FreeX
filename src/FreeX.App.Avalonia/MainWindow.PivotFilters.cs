@@ -9,7 +9,6 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -182,7 +181,7 @@ public sealed partial class MainWindow
         var hasItemFilter = exposeActiveFilterActions && currentSet is { Count: > 0 } && currentSet.Count < members.Count;
         var labelFilter = pivot.LabelFilters.LastOrDefault(filter => filter.SourceFieldIndex == target.SourceFieldIndex);
         var valueFilter = pivot.ValueFilters.LastOrDefault(filter =>
-            PivotValueFilterOwnership.BelongsToSourceField(filter, target.SourceFieldIndex));
+            PivotFilterOwnership.BelongsToSourceField(filter, target.SourceFieldIndex));
 
         var checkBoxes = new List<CheckBox>();
         var listPanel = new StackPanel();
@@ -586,7 +585,7 @@ public sealed partial class MainWindow
             pages,
             pivot.LabelFilters.Where(filter => filter.SourceFieldIndex != target.SourceFieldIndex).ToList(),
             pivot.ValueFilters.Where(filter =>
-                !PivotValueFilterOwnership.BelongsToSourceField(filter, target.SourceFieldIndex)).ToList());
+                !PivotFilterOwnership.BelongsToSourceField(filter, target.SourceFieldIndex)).ToList());
     }
 
     private void RemovePivotLabelFilter(PivotTableModel pivot, int sourceFieldIndex) =>
@@ -606,7 +605,7 @@ public sealed partial class MainWindow
             pivot.PageFields.ToList(),
             pivot.LabelFilters.ToList(),
             pivot.ValueFilters.Where(filter =>
-                !PivotValueFilterOwnership.BelongsToSourceField(filter, sourceFieldIndex)).ToList());
+                !PivotFilterOwnership.BelongsToSourceField(filter, sourceFieldIndex)).ToList());
 
     private static IReadOnlyList<PivotFieldModel> CloneFieldsWithSelection(
         IReadOnlyList<PivotFieldModel> fields,
@@ -783,7 +782,7 @@ public sealed partial class MainWindow
         }
 
         var existing = pivot.ValueFilters
-            .FirstOrDefault(filter => PivotValueFilterOwnership.BelongsToSourceField(filter, target.SourceFieldIndex));
+            .FirstOrDefault(filter => PivotFilterOwnership.BelongsToSourceField(filter, target.SourceFieldIndex));
 
         var kindBox = new ComboBox { MinWidth = 200 };
         foreach (var (label, _) in PivotFieldFilterPlanner.ValueFilterKinds)

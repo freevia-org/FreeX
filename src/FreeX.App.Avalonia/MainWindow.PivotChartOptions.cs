@@ -3,7 +3,6 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 
-using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;

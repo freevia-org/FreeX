@@ -6,7 +6,6 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using System.Text.Json;
-using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -25,8 +24,8 @@ namespace FreeX.App.Avalonia;
 /// (<see cref="PivotHeaderDropdownMenuBuilder"/>). All mutations route through the shared pivot mutation
 /// commands (<see cref="ConfigurePivotTableLayoutCommand"/>/<see cref="ConfigurePivotTableViewCommand"/>) via
 /// the session's command path, then refresh the grid and the pane. The non-UI mapping (validated drop →
-/// command, menu action → command) lives in <see cref="PivotFieldLayoutCommandFactory"/> /
-/// <see cref="PivotHeaderMenuCommandFactory"/> so it can be unit-tested without a running app.
+/// command, menu action → command) lives in <see cref="PivotFieldLayoutPlanner"/> /
+/// <see cref="PivotHeaderCommandPlanner"/> so it can be unit-tested without a running app.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -537,7 +536,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        var command = PivotFieldLayoutCommandFactory.TryCreate(_session.ActiveSheet.Id, pivot, headers, result);
+        var command = PivotFieldLayoutPlanner.TryCreateCommand(_session.ActiveSheet.Id, pivot, headers, result);
         if (command is null)
         {
             ShowEditIssue(UiText.Get("PivotLoc_NeedsValueField"));
@@ -657,7 +656,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        var result = PivotHeaderMenuCommandFactory.Create(
+        var result = PivotHeaderCommandPlanner.Create(
             _session.ActiveSheet.Id, pivot, headers, target, action, validator);
 
         if (result.IsDeferred)

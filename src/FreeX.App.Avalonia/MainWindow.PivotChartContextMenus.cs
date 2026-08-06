@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services.Ribbon;
@@ -198,7 +197,7 @@ public sealed partial class MainWindow
         var hasFilter = hasItemFilter ||
             pivot.LabelFilters.Any(filter => filter.SourceFieldIndex == sourceIndex) ||
             pivot.ValueFilters.Any(filter =>
-                PivotValueFilterOwnership.BelongsToSourceField(filter, sourceIndex));
+                PivotFilterOwnership.BelongsToSourceField(filter, sourceIndex));
         var summary = hasFilter ? $"{target.FieldCaption}: Filtered" : $"{target.FieldCaption}: (All)";
 
         return new PivotChartFieldContextMenuState(
