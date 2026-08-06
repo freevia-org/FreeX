@@ -2031,16 +2031,12 @@ internal static class FreeWRibbonCommands
     // Escape or another click cancels it). The timestamp of the last Execute call detects a double-click.
     private sealed class FormatPainterCommand(DocumentView editor) : IRibbonCommand
     {
-        private DateTime _lastExecute = DateTime.MinValue;
-        private const double DoubleClickMs = 500;
+        private readonly FormatPainterActivationSession _activation = new();
 
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var now = DateTime.UtcNow;
-            var isDouble = (now - _lastExecute).TotalMilliseconds <= DoubleClickMs;
-            _lastExecute = now;
-            editor.ArmFormatPainter(locked: isDouble);
+            editor.ArmFormatPainter(locked: _activation.Activate());
         }
     }
 

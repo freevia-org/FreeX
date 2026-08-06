@@ -936,15 +936,11 @@ internal static class FreeWAvaloniaRibbonCommands
 
     private sealed class FormatPainterCommand(DocumentView editor) : IRibbonCommand
     {
-        private DateTime _lastExecute = DateTime.MinValue;
-        private const double DoubleClickMs = 500;
+        private readonly FormatPainterActivationSession _activation = new();
 
         public void Execute(RibbonCommandContext context)
         {
-            var now = DateTime.UtcNow;
-            var isDoubleClick = (now - _lastExecute).TotalMilliseconds <= DoubleClickMs;
-            _lastExecute = now;
-            editor.ArmFormatPainter(locked: isDoubleClick);
+            editor.ArmFormatPainter(locked: _activation.Activate());
             editor.Focus();
         }
     }
