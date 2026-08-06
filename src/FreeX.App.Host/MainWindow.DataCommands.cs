@@ -95,19 +95,42 @@ public partial class MainWindow
             var targetSheetId = _currentSheetId;
             var destination = SheetGrid.SelectedRange?.Start ?? new CellAddress(targetSheetId, 1, 1);
 
-            var imported = await Task.Run(() =>
-            {
-                using var stream = System.IO.File.OpenRead(importPath);
-                return adapter.Load(stream);
-            });
+            var importResult = await WorkbookImportWorkflow.ImportPathAsync(
+                importPath,
+                ext,
+                adapter,
+                targetSheetId,
+                destination,
+                command => _commandBus.Execute(targetWorkbook.Id, command));
 
-            if (imported.Sheets.Count == 0)
+            if (importResult.Outcome == WorkbookImportExecutionOutcome.EmptyWorkbook)
             {
-                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, "empty_workbook", imported.Sheets.Count));
+                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(
+                    ext, format?.FormatName ?? adapter.FormatName, importResult.Reason, importResult.WorksheetCount));
                 return;
             }
 
-            var outcome = _commandBus.Execute(targetWorkbook.Id, new ImportSheetCommand(targetSheetId, destination, imported.Sheets[0]));
+            if (importResult.Outcome == WorkbookImportExecutionOutcome.Failed)
+            {
+                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(
+                    ext,
+                    format?.FormatName ?? adapter.FormatName,
+                    importResult.Reason,
+                    importResult.WorksheetCount,
+                    importResult.ErrorDetail));
+                ShowOwnedMessage(
+                    importResult.UserMessage ?? "Failed to import data.",
+                    UiText.Get("MainWindowMessage_GetDataTitle"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                return;
+            }
+
+            if (importResult.Outcome == WorkbookImportExecutionOutcome.Canceled)
+                return;
+
+            var outcome = importResult.CommandOutcome
+                ?? throw new InvalidOperationException("Import command did not produce a result.");
             RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
             {
                 ["command"] = "Get Data",
@@ -117,7 +140,8 @@ public partial class MainWindow
             {
                 if (ReferenceEquals(_workbook, targetWorkbook))
                     ShowCommandError(outcome, "Get Data");
-                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, "command_failed", imported.Sheets.Count));
+                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(
+                    ext, format?.FormatName ?? adapter.FormatName, importResult.Reason, importResult.WorksheetCount));
                 return;
             }
 
@@ -143,11 +167,12 @@ public partial class MainWindow
                 RefreshStatusBar();
             }
 
-            RecordDiagnosticEvent("import_completed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, null, imported.Sheets.Count));
+            RecordDiagnosticEvent("import_completed", BuildImportDiagnosticProperties(
+                ext, format?.FormatName ?? adapter.FormatName, worksheetCount: importResult.WorksheetCount));
         }
         catch (Exception ex)
         {
-            var diagnostic = ImportFailureDiagnosticFactory.FromException(ext, ex);
+            var diagnostic = WorkbookImportFailurePlanner.FromException(ext, ex);
             RecordDiagnosticEvent(
                 "import_failed",
                 BuildImportDiagnosticProperties(

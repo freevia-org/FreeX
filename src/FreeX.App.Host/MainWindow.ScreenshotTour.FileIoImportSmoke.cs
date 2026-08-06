@@ -232,7 +232,7 @@ public partial class MainWindow
 
     private async Task<FileIoImportSmokeTourManifestCapture> CaptureFileIoImportSmokeImportWarningAsync(string outputDir)
     {
-        var diagnostic = ImportFailureDiagnosticFactory.FromException(
+        var diagnostic = WorkbookImportFailurePlanner.FromException(
             ".xml",
             new InvalidDataException("The selected XML file could not be parsed as SpreadsheetML."));
         var caption = UiText.Get("MainWindowMessage_GetDataTitle");

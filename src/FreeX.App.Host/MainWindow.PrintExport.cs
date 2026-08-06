@@ -24,6 +24,16 @@ public partial class MainWindow
 
     private void PrintButton_Click(object sender, RoutedEventArgs e)
     {
+        var workflowPlan = WorkbookPrintWorkflow.CreatePlan(
+            _workbook,
+            SheetGrid.SelectedRange is not null,
+            new PrintJobRequest(
+                WorkbookExportPrintScope.ActiveSheet,
+                ActiveSheetIndex: _workbook.ActiveSheetIndex),
+            PrintExportHostCapabilities.WindowsWpf());
+        if (!workflowPlan.IsReady)
+            return;
+
         var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
         var sheet = _workbook.GetSheet(_currentSheetId);
         var settings = sheet is null
@@ -154,19 +164,29 @@ public partial class MainWindow
             return;
         }
 
-        if (!ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError, WpfExportPlannerTextResolver.Instance))
+        var exportResult = await WorkbookExportWorkflow.ExecuteBooleanAsync(
+            request,
+            (effectiveRequest, _) => effectiveRequest.Format == ExportFormat.Pdf
+                ? ExportAsPdf(
+                    effectiveRequest.Path,
+                    WpfExportDescriptionPlanner.DescribeRequest(effectiveRequest),
+                    effectiveRequest.Options)
+                : ExportAsXps(
+                    effectiveRequest.Path,
+                    WpfExportDescriptionPlanner.DescribeRequest(effectiveRequest),
+                    effectiveRequest.Options),
+            WpfExportPlannerTextResolver.Instance);
+        if (exportResult.Outcome == WorkbookExportExecutionOutcome.ValidationFailed)
         {
             ShowOwnedMessage(
-                publishOptionsError ?? UiText.Get("MainWindowMessage_ExportUnsupportedOptions"),
+                exportResult.Message,
                 UiText.Get("MainWindowMessage_ExportOptionsTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             return;
         }
 
-        var exported = request.Format == ExportFormat.Pdf
-            ? await ExportAsPdf(request.Path, WpfExportDescriptionPlanner.DescribeRequest(request), request.Options)
-            : await ExportAsXps(request.Path, WpfExportDescriptionPlanner.DescribeRequest(request), request.Options);
+        var exported = exportResult.Succeeded;
         if (exported && request.Options.OpenAfterPublish)
             OpenExportedFile(request.ActualPath);
         // Return to the workbook after a successful export instead of leaving the user

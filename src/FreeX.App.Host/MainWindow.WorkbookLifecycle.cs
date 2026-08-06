@@ -63,14 +63,14 @@ public partial class MainWindow
 
     private async Task<SaveChangesConfirmation> ConfirmSaveBeforeDestructiveActionAsync(string message)
     {
-        return await WorkbookFileLifecycleCoordinator.ConfirmBeforeDestructiveActionAsync(
+        return await _fileWorkflow.ConfirmBeforeDestructiveActionAsync(
             _workbookDirty,
             () => Task.FromResult(PromptSaveChangesBeforeDestructiveAction(message)),
             SaveResolvedAsync);
     }
 
     private Task<bool> CanProceedAfterSaveBeforeDestructiveActionAsync(string message) =>
-        WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(
+        _fileWorkflow.CanProceedAfterDirtyGateWithCleanSaveAsync(
             _workbookDirty,
             () => Task.FromResult(PromptSaveChangesBeforeDestructiveAction(message)),
             SaveResolvedAsync,
@@ -89,7 +89,7 @@ public partial class MainWindow
     /// </summary>
     private async Task<bool> SaveResolvedAsync()
     {
-        return await WorkbookFileLifecycleCoordinator.SaveResolvedAsync(
+        return await _fileWorkflow.SaveResolvedAsync(
             _workbookDirty,
             _currentFilePath,
             ResolveExistingSaveTarget,
@@ -104,9 +104,8 @@ public partial class MainWindow
     /// original path.
     /// </summary>
     private FileSaveTarget? ResolveExistingSaveTarget() =>
-        !_isWorkbookReadOnly &&
-        FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)
-            ? target
+        !_isWorkbookReadOnly
+            ? _fileWorkflow.ResolveExistingSaveTarget(_currentFilePath)
             : null;
 
     private SaveChangesPrompt PromptSaveChangesBeforeDestructiveAction(string message)

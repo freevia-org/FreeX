@@ -36,6 +36,7 @@ public sealed record WorkbookOpenWorkflowRequest(
     WorkbookOpenTarget Target,
     Func<WorkbookOpenWorkflowContext, CancellationToken, Task> ApplyOpenAsync,
     bool SuppressRecentFiles = false,
+    string? CompletionDisplayName = null,
     IProgress<WorkbookOpenProgressUpdate>? Progress = null,
     Func<WorkbookOpenTarget, CancellationToken, Task<WorkbookFileWorkflowPreparation>>? PrepareAsync = null,
     CancellationToken CancellationToken = default);
@@ -64,7 +65,9 @@ public sealed record WorkbookSaveWorkflowRequest(
     CancellationToken CancellationToken = default,
     string? CompletionDisplayName = null,
     Func<FileSaveTarget, CancellationToken, Task<bool>>? ConfirmTargetAsync = null,
-    Func<CancellationToken, Task<WorkbookSaveExecutionPreparation>>? PrepareAsync = null);
+    Func<CancellationToken, Task<WorkbookSaveExecutionPreparation>>? PrepareAsync = null,
+    Action? ExecutionStarting = null,
+    Action? ExecutionCompleted = null);
 
 public sealed record WorkbookSaveWorkflowResult(
     WorkbookFileOperationOutcome Outcome,
@@ -177,6 +180,22 @@ public sealed class WorkbookFileWorkflow
             ? target
             : null;
 
+    public bool ShouldSkipSaveTargetWrite(
+        bool isDirty,
+        string? currentFilePath,
+        FileSaveTarget target) =>
+        WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(isDirty, currentFilePath, target)
+            == WorkbookSaveTargetIntent.SkipCleanCurrentPath;
+
+    public WorkbookSavePathNormalizationPlan PlanSavePathNormalization(
+        string selectedPath,
+        string defaultExtension,
+        Func<string, bool> fileExists) =>
+        WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(
+            selectedPath,
+            defaultExtension,
+            fileExists);
+
     public async Task<WorkbookOpenWorkflowResult> OpenAsync(WorkbookOpenWorkflowRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -203,7 +222,8 @@ public sealed class WorkbookFileWorkflow
             var completionPlan = WorkbookFileCompletionPlanner.PlanOpen(
                 request.Target,
                 result,
-                request.SuppressRecentFiles);
+                request.SuppressRecentFiles,
+                request.CompletionDisplayName);
             var context = new WorkbookOpenWorkflowContext(request.Target, result, completionPlan);
             await request.ApplyOpenAsync(context, request.CancellationToken).ConfigureAwait(true);
             request.CancellationToken.ThrowIfCancellationRequested();
@@ -252,6 +272,15 @@ public sealed class WorkbookFileWorkflow
                     SkippedCleanWrite: true);
             }
 
+            var targetValidationMessage = _validateSaveTarget?.Invoke(request.Target);
+            if (!string.IsNullOrWhiteSpace(targetValidationMessage))
+            {
+                return new WorkbookSaveWorkflowResult(
+                    WorkbookFileOperationOutcome.Rejected,
+                    request.Target,
+                    targetValidationMessage);
+            }
+
             if (request.ConfirmTargetAsync is not null &&
                 !await request.ConfirmTargetAsync(request.Target, request.CancellationToken).ConfigureAwait(true))
             {
@@ -277,29 +306,41 @@ public sealed class WorkbookFileWorkflow
                     WorkbookFileWorkflowMessages.SaveCanceled);
             }
 
-            var executionResult = await executionStart.Execution!.ExecuteAsync(new WorkbookSaveExecutionRequest(
-                request.CancellationToken,
-                request.ProjectViewStateForSave,
-                request.SaveAsync,
-                request.PrepareAsync)).ConfigureAwait(true);
+            var executionStarted = false;
+            try
+            {
+                request.ExecutionStarting?.Invoke();
+                executionStarted = true;
 
-            if (!executionResult.Succeeded)
-                return FromSaveExecutionFailure(request.Target, executionResult);
+                var executionResult = await executionStart.Execution!.ExecuteAsync(new WorkbookSaveExecutionRequest(
+                    request.CancellationToken,
+                    request.ProjectViewStateForSave,
+                    request.SaveAsync,
+                    request.PrepareAsync)).ConfigureAwait(true);
 
-            var completionPlan = executionResult.CompletionPlan
-                ?? throw new InvalidOperationException("A successful save did not produce a completion plan.");
-            request.ApplyCompletion(completionPlan);
+                if (!executionResult.Succeeded)
+                    return FromSaveExecutionFailure(request.Target, executionResult);
 
-            RecentFileRegistrationResult? registration = null;
-            if (completionPlan.ApplyFileContext && completionPlan.FileContext is { } fileContext)
-                registration = RegisterRecentFile(fileContext.RecentFileRegistration);
+                var completionPlan = executionResult.CompletionPlan
+                    ?? throw new InvalidOperationException("A successful save did not produce a completion plan.");
+                request.ApplyCompletion(completionPlan);
 
-            return new WorkbookSaveWorkflowResult(
-                WorkbookFileOperationOutcome.Succeeded,
-                request.Target,
-                Message: "",
-                executionResult,
-                RecentFileRegistration: registration);
+                RecentFileRegistrationResult? registration = null;
+                if (completionPlan.ApplyFileContext && completionPlan.FileContext is { } fileContext)
+                    registration = RegisterRecentFile(fileContext.RecentFileRegistration);
+
+                return new WorkbookSaveWorkflowResult(
+                    WorkbookFileOperationOutcome.Succeeded,
+                    request.Target,
+                    Message: "",
+                    executionResult,
+                    RecentFileRegistration: registration);
+            }
+            finally
+            {
+                if (executionStarted)
+                    request.ExecutionCompleted?.Invoke();
+            }
         }
         catch (OperationCanceledException ex) when (request.CancellationToken.IsCancellationRequested)
         {

@@ -483,11 +483,14 @@ public sealed partial class MainWindow
                 : _session.SelectedRange.Start;
         }
 
-        var command = new ImportSheetCommand(destination.Sheet, destination, sourceSheet);
-        var outcome = _session.ExecuteReviewCommand(command);
-        if (!outcome.Success)
+        var importResult = WorkbookImportWorkflow.ApplyImportedWorkbookEdit(
+            imported,
+            destination.Sheet,
+            destination,
+            command => _session.ExecuteReviewCommand(command));
+        if (!importResult.Succeeded)
         {
-            error = outcome.ErrorMessage ?? UiText.Get("GetData_ImportFailed");
+            error = importResult.CellEditResult?.ErrorMessage ?? UiText.Get("GetData_ImportFailed");
             return false;
         }
 

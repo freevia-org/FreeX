@@ -455,6 +455,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private readonly WorkbookSessionFactory _sessionFactory = new();
     private readonly WorkbookOpenService _openService = new();
     private readonly WorkbookSaveService _saveService = new();
+    private readonly WorkbookFileWorkflow _fileWorkflow;
     private readonly IWorkbookShareSheetService _workbookShareSheetService;
     private readonly IWorkbookFileAccessService _workbookFileAccessService;
     private readonly IPlatformPrinter _platformPrinter;
@@ -1384,6 +1385,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
         }
+
+        _fileWorkflow = new WorkbookFileWorkflow(
+            _session.FileAdapters,
+            _openService,
+            request => RecentFileRegistrationService.RegisterIfNeeded(_recentFiles, request),
+            recentFilesChanged: () => RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving),
+            validateSaveTarget: target => WorkbookSaveTargetPolicy.BlockUnsupportedXlsxFeatures(
+                target,
+                _session.CurrentXlsxFeatureReport));
 
         _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
         _session.WorkbookChanged += Session_WorkbookChanged;
@@ -15592,7 +15602,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        if (_session.TryResolveOpenTarget(plan.LocalPath, out var target, out var message) &&
+        if (_fileWorkflow.TryResolveOpenTarget(plan.LocalPath, out var target, out var message) &&
             target is not null)
         {
             await OpenWorkbookPathAsync(target.Path);
@@ -27043,7 +27053,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var plan = OpenRecentWorkbookMenuPlanner.Create(
             _recentFiles.Snapshot(),
             File.Exists,
-            path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null);
+            path => _fileWorkflow.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null);
         if (plan.ItemCount == 0)
         {
             menu.Items.Add(new NativeMenuItem
@@ -27074,12 +27084,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         string path,
         WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
-        if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _) ||
+        if (!_fileWorkflow.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _) ||
             target is null)
         {
             _recentFiles.Remove(path);
             RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
-            ShowOpenIssue($"Recent workbook no longer exists: {path}");
+            ShowOpenIssue(WorkbookFileWorkflowMessages.RecentWorkbookMissing(path));
             return;
         }
 
@@ -27090,7 +27100,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             _recentFiles.Remove(path);
             RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
-            ShowOpenIssue($"Recent workbook no longer exists: {path}");
+            ShowOpenIssue(WorkbookFileWorkflowMessages.RecentWorkbookMissing(path));
             return;
         }
 
@@ -27105,17 +27115,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
-        if (!_session.TryResolveOpenTarget(path, out var target, out _) ||
+        if (!_fileWorkflow.TryResolveOpenTarget(path, out var target, out _) ||
             target is null ||
             !File.Exists(target.Path))
             return;
 
-        RecentFileRegistrationService.RegisterIfNeeded(
-            _recentFiles,
-            new RecentFileRegistrationRequest(
-                target.Path,
-                FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity));
-        RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
+        _fileWorkflow.RegisterRecentFile(new RecentFileRegistrationRequest(
+            target.Path,
+            FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity));
     }
 
     private static bool HasOnlyCommandModifier(KeyModifiers modifiers)
@@ -28418,7 +28425,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (!await ConfirmBeforeDestructiveWorkbookActionAsync("Open Workbook", "Discard and Open"))
                 return;
 
-            var openPlan = WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _session.OpenFormats);
+            var openPlan = WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _fileWorkflow.OpenFormats);
             if (!openPlan.CanShowPicker)
             {
                 ShowOpenIssue(openPlan.Message);
@@ -28494,7 +28501,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             !await ConfirmBeforeDestructiveWorkbookActionAsync("Open Workbook", "Discard and Open"))
             return;
 
-        if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out var message))
+        if (!_fileWorkflow.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out var message))
         {
             ShowOpenIssue(message);
             return;
@@ -28557,7 +28564,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var plan = WorkbookOpenIngressPlanner.SelectOpenableExistingLocalFile(
             candidates.Select(candidate => candidate.LocalPath),
             candidatePath =>
-                _session.TryResolveOpenTarget(candidatePath, out var target, out var unsupportedMessage)
+                _fileWorkflow.TryResolveOpenTarget(candidatePath, out var target, out var unsupportedMessage)
                     ? WorkbookOpenIngressResolution.Resolved(target!.Path)
                     : WorkbookOpenIngressResolution.Failed(unsupportedMessage));
         if (!plan.Success)
@@ -28597,21 +28604,39 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     _statusText.Foreground = Brush(67, 113, 83);
                 });
 
-            using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(
-                StorageProvider,
-                target.FileAccessIdentity);
-            var result = await _openService.LoadAsync(
-                target.Path,
-                target.Adapter,
-                target.Extension,
-                target.Format,
-                progress,
-                operationCancellation.Token);
-            operationCancellation.Token.ThrowIfCancellationRequested();
+            var workflowResult = await _fileWorkflow.OpenAsync(new WorkbookOpenWorkflowRequest(
+                target,
+                ApplyOpenedWorkbookAsync,
+                CompletionDisplayName: Path.GetFileName(target.Path),
+                Progress: progress,
+                PrepareAsync: async (openTarget, _) => new WorkbookFileWorkflowPreparation(
+                    await _workbookFileAccessService.BeginAccessAsync(
+                        StorageProvider,
+                        openTarget.FileAccessIdentity)),
+                CancellationToken: operationCancellation.Token));
+            if (!workflowResult.Succeeded)
+            {
+                ShowOpenIssue(workflowResult.Message);
+                return;
+            }
+
+            return;
+
+            Task ApplyOpenedWorkbookAsync(
+                WorkbookOpenWorkflowContext context,
+                CancellationToken cancellationToken)
+            {
+            var result = context.Result;
+            cancellationToken.ThrowIfCancellationRequested();
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
-            ReplaceSession(_sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true));
+            ReplaceSession(_sessionFactory.CreateOpened(
+                target,
+                result,
+                viewportHeight,
+                viewportWidth,
+                includeObjects: true,
+                completionPlan: context.CompletionPlan));
             RefreshViewportSizeForZoom();
-            RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
             // Capture the write-time snapshot this workbook was opened from so a later Save to the
             // SAME path can detect a concurrent second writer (see _currentFileSourceLastWriteTimeUtc)
             // -- mirrors the WPF host's equivalent capture in MainWindow.Backstage.cs
@@ -28631,6 +28656,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // ApplyReadOnlyRecommendedPromptIfNeeded (MainWindow.Backstage.cs), called at the same
             // point in the open sequence, right after the session/shell refresh.
             ApplyReadOnlyRecommendedPromptIfNeeded(_session.Workbook);
+            return Task.CompletedTask;
+            }
         }
         catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
         {
@@ -28721,7 +28748,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return false;
 
-        return await WorkbookFileLifecycleCoordinator.SaveResolvedAsync(
+        return await _fileWorkflow.SaveResolvedAsync(
             isDirty: _session.IsDirty,
             currentFilePath: _session.CurrentFilePath,
             resolveCurrentTarget: ResolveExistingSaveTarget,
@@ -28737,7 +28764,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// WPF host's <c>MainWindow.WorkbookLifecycle.ResolveExistingSaveTarget</c>).
     /// </summary>
     private FileSaveTarget? ResolveExistingSaveTarget() =>
-        !_isWorkbookReadOnly && _session.CanSaveCurrentSource(out var target) ? target : null;
+        !_isWorkbookReadOnly
+            ? _fileWorkflow.ResolveExistingSaveTarget(_session.CurrentFilePath)
+            : null;
 
     private async Task ShareWorkbookAsync()
     {
@@ -28934,7 +28963,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _workbookSaveAsPickerOverride is not null);
             var savePlan = WorkbookFileCommandPlanner.PlanSaveAsPicker(
                 canShowPicker,
-                _session.SaveFormats,
+                _fileWorkflow.SaveFormats,
                 _session.Workbook.Name,
                 _session.DisplayName,
                 NativeWorkbookExtension);
@@ -28975,7 +29004,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     return false;
                 }
 
-                var pathPlan = WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(
+                var pathPlan = _fileWorkflow.PlanSavePathNormalization(
                     path,
                     NativeWorkbookExtension,
                     File.Exists);
@@ -28987,7 +29016,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 }
 
                 path = pathPlan.Path;
-                if (!_session.TryResolveSaveTarget(path, out var target, out var message))
+                if (!_fileWorkflow.TryResolveSaveTarget(path, out var target, out var message))
                 {
                     ShowSaveIssue(message);
                     return false;
@@ -29005,91 +29034,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
     }
 
-    private async Task ExportActiveSheetPdfAsync()
-    {
-        if (!TryBeginFileOperation())
-            return;
-
-        try
-        {
-            if (!TryCommitPendingFormulaEdit())
-                return;
-
-            if (!StorageProvider.CanSave)
-            {
-                ShowExportIssue(UiText.Get("MainLoc_PdfExportUnavailable"));
-                return;
-            }
-
-            var exportOptions = await ShowExportOptionsDialogAsync(ExportContentScope.ActiveSheet, ExportFormat.Pdf);
-            if (exportOptions is null)
-                return;
-
-            var storageFile = await ShowPortablePdfSavePickerAsync("Export to PDF");
-
-            if (storageFile is null)
-                return;
-
-            using (storageFile)
-            {
-                var path = storageFile.LocalPath;
-                if (string.IsNullOrWhiteSpace(path))
-                {
-                    ShowExportIssue(UiText.Get("MainLoc_PdfExportRequiresLocalPath"));
-                    return;
-                }
-
-                var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);
-                if (exportTargetPlan.ShouldConfirmNormalizedOverwrite &&
-                    !await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path))
-                {
-                    ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
-                    return;
-                }
-
-                path = exportTargetPlan.Path;
-                try
-                {
-                    _statusText.Text = "Exporting PDF...";
-                    _statusText.Foreground = Brush(67, 113, 83);
-
-                    var exportPrintPlan = CreatePortablePdfPrintPlan(exportOptions, WorkbookExportPrintOutputKind.Pdf);
-                    var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
-                    if (!exportPlan.IsReady)
-                    {
-                        ShowExportIssue(exportPlan.StatusText);
-                        return;
-                    }
-
-                    if (!TryPreparePortablePdfExportPlan(exportPlan, exportOptions, out var effectiveExportPlan, out var optionsError))
-                    {
-                        ShowExportIssue(optionsError ?? UiText.Get("MainWindowMessage_ExportUnsupportedOptions"));
-                        return;
-                    }
-
-                    // Prefer the Unicode-capable Skia writer (shapes + auto-embeds/subsets fonts), and
-                    // fall back to the dependency-free WinAnsi writer when Skia is unavailable
-                    // (headless/no-Skia). The routing decision lives in AvaloniaPdfDocumentExporter so it
-                    // is exercised by tests.
-                    using var pdfBuffer = new MemoryStream();
-                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
-                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
-
-                    RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));
-                    if (exportOptions.OpenAfterPublish)
-                        await TryOpenExportedPdfAsync(path);
-                }
-                catch (Exception ex)
-                {
-                    ShowExportIssue(UiText.Format("MainLoc_PdfExportFailed", ex.Message));
-                }
-            }
-        }
-        finally
-        {
-            EndFileOperation();
-        }
-    }
+    private Task ExportActiveSheetPdfAsync() =>
+        ExportWorkbookPdfAsync(
+            WorkbookExportPrintScope.ActiveSheet,
+            WorkbookExportPrintOutputKind.Pdf);
 
     private bool TryBeginFileOperation()
     {
@@ -29328,6 +29276,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         try
         {
+            if (!TryCommitPendingFormulaEdit())
+                return;
+
             if (!StorageProvider.CanSave)
             {
                 ShowExportIssue(UiText.Get("MainLoc_PdfExportUnavailable"));
@@ -29369,30 +29320,57 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 path = exportTargetPlan.Path;
                 try
                 {
-                    _statusText.Text = "Exporting PDF...";
-                    _statusText.Foreground = Brush(67, 113, 83);
+                    var request = ExportPlanner.PlanExport(path, ExportFormat.Pdf, exportOptions);
+                    var workflowResult = await WorkbookExportWorkflow.ExecuteAsync(
+                        request,
+                        async (effectiveRequest, cancellationToken) =>
+                        {
+                            _statusText.Text = "Exporting PDF...";
+                            _statusText.Foreground = Brush(67, 113, 83);
 
-                    var exportPrintPlan = CreatePortablePdfPrintPlan(exportOptions, outputKind);
-                    var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
-                    if (!exportPlan.IsReady)
-                    {
-                        ShowExportIssue(exportPlan.StatusText);
-                        return;
-                    }
+                            var exportPrintPlan = CreatePortablePdfPrintPlan(effectiveRequest.Options, outputKind);
+                            var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
+                            if (!exportPlan.IsReady)
+                            {
+                                ShowExportIssue(exportPlan.StatusText);
+                                return;
+                            }
 
-                    if (!TryPreparePortablePdfExportPlan(exportPlan, exportOptions, out var effectiveExportPlan, out var optionsError))
-                    {
-                        ShowExportIssue(optionsError ?? UiText.Get("MainWindowMessage_ExportUnsupportedOptions"));
-                        return;
-                    }
+                            if (!TryPreparePortablePdfExportPlan(
+                                    exportPlan,
+                                    effectiveRequest.Options,
+                                    out var effectiveExportPlan,
+                                    out var optionsError))
+                            {
+                                ShowExportIssue(optionsError ?? UiText.Get("MainWindowMessage_ExportUnsupportedOptions"));
+                                return;
+                            }
 
-                    using var pdfBuffer = new MemoryStream();
-                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
-                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
+                            using var pdfBuffer = new MemoryStream();
+                            var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(
+                                _session.Workbook,
+                                effectiveExportPlan,
+                                pdfBuffer,
+                                options: null,
+                                workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
+                            await File.WriteAllBytesAsync(
+                                effectiveRequest.Path,
+                                pdfBuffer.ToArray(),
+                                cancellationToken);
 
-                    RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));
-                    if (exportOptions.OpenAfterPublish)
-                        await TryOpenExportedPdfAsync(path);
+                            RefreshShell(UiText.Format(
+                                "MainLoc_StatusFileName",
+                                outcome.Result.StatusText,
+                                Path.GetFileName(effectiveRequest.Path)));
+                            if (effectiveRequest.Options.OpenAfterPublish)
+                                await TryOpenExportedPdfAsync(effectiveRequest.Path);
+                        });
+                    if (workflowResult.Outcome == WorkbookExportExecutionOutcome.ValidationFailed)
+                        ShowExportIssue(workflowResult.Message);
+                    else if (workflowResult.Outcome == WorkbookExportExecutionOutcome.Failed)
+                        ShowExportIssue(UiText.Format(
+                            "MainLoc_PdfExportFailed",
+                            workflowResult.Exception?.Message ?? workflowResult.Message));
                 }
                 catch (Exception ex)
                 {
@@ -29471,40 +29449,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         FileSaveTarget target,
         WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
-        if (WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(_session.IsDirty, _session.CurrentFilePath, target)
-            == WorkbookSaveTargetIntent.SkipCleanCurrentPath)
+        if (_fileWorkflow.ShouldSkipSaveTargetWrite(_session.IsDirty, _session.CurrentFilePath, target))
         {
             return true;
         }
 
         var targetPath = target.Path;
         var sessionAtSaveStart = _session;
-        var executionStart = WorkbookSaveExecutionCoordinator.Begin(new WorkbookSaveExecutionStartRequest(
-            sessionAtSaveStart.CurrentFilePath,
-            target,
-            _currentFileSourceLastWriteTimeUtc,
-            GetCurrentWorkbook: () => _session.Workbook,
-            GetDirtyGeneration: () => _session.DirtyGeneration,
-            ConfirmExternallyModifiedOverwrite: path =>
-                ResolveExternallyModifiedFileOverwriteConfirm(path) == UserMessageResult.Yes,
-            CompletionDisplayName: Path.GetFileName(targetPath)));
-        if (!executionStart.CanExecute)
-            return false;
-
-        var saveExecution = executionStart.Execution!;
-        _isSaving = true;
         // R119-avalonia-file-op-cancel: this is the single choke point every save path funnels
         // through (Save, Save As, autosave-triggered saves), so wiring the cancellable token here
         // reaches all of them at once, mirroring the WPF host's SaveWorkbookToTargetAsync in
         // MainWindow.Backstage.cs.
         using var operationCancellation = BeginFileOperationCancellation();
-        UpdateSaveButton();
         try
         {
-            _statusText.Text = WorkbookProgressTextFormatter
-                .FormatSave("preparing", TimeSpan.Zero, percent: null, UiText.Get)
-                .Detail;
-            _statusText.Foreground = Brush(67, 113, 83);
             var progress = new Progress<WorkbookSaveProgressUpdate>(
                 update =>
                 {
@@ -29517,8 +29475,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // shared Sheet fields before the writer reads them, so a save from THIS view persists
             // what THIS view is displaying rather than whichever sibling view last touched those
             // shared fields. Must run synchronously, before the workbook is handed off below.
-            var executionResult = await saveExecution.ExecuteAsync(new WorkbookSaveExecutionRequest(
-                operationCancellation.Token,
+            var workflowResult = await _fileWorkflow.SaveTargetAsync(new WorkbookSaveWorkflowRequest(
+                sessionAtSaveStart.IsDirty,
+                sessionAtSaveStart.CurrentFilePath,
+                target,
+                _currentFileSourceLastWriteTimeUtc,
+                GetCurrentWorkbook: () => _session.Workbook,
+                GetDirtyGeneration: () => _session.DirtyGeneration,
+                ConfirmExternallyModifiedOverwrite: path =>
+                    ResolveExternallyModifiedFileOverwriteConfirm(path) == UserMessageResult.Yes,
                 ProjectViewStateForSave: sessionAtSaveStart.ReconcileViewStateForSave,
                 SaveAsync: invocation => _saveService.SaveAsync(
                     invocation.Target.Path,
@@ -29536,9 +29501,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                         StorageProvider,
                         fileAccessIdentity);
                     return new WorkbookSaveExecutionPreparation(fileAccessIdentity, fileAccess);
+                },
+                ApplyCompletion: plan => _session.ApplySaveCompletion(plan),
+                CancellationToken: operationCancellation.Token,
+                CompletionDisplayName: Path.GetFileName(targetPath),
+                ExecutionStarting: () =>
+                {
+                    _isSaving = true;
+                    _statusText.Text = WorkbookProgressTextFormatter
+                        .FormatSave("preparing", TimeSpan.Zero, percent: null, UiText.Get)
+                        .Detail;
+                    _statusText.Foreground = Brush(67, 113, 83);
+                    UpdateSaveButton();
+                },
+                ExecutionCompleted: () =>
+                {
+                    _isSaving = false;
+                    UpdateSaveButton();
                 }));
 
-            if (executionResult.Outcome == WorkbookSaveExecutionOutcome.ExternalWriteConflict)
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.ExternalWriteConflict)
             {
                 ShowSaveIssue(UiText.Format(
                     "MainWindowMessage_ExternallyModifiedFileBody",
@@ -29546,29 +29528,40 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return false;
             }
 
-            if (executionResult.Outcome == WorkbookSaveExecutionOutcome.Canceled)
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.Rejected)
+            {
+                if (!string.Equals(
+                        workflowResult.Message,
+                        WorkbookFileWorkflowMessages.SaveCanceled,
+                        StringComparison.Ordinal))
+                {
+                    ShowSaveIssue(workflowResult.Message);
+                }
+                return false;
+            }
+
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.Canceled)
             {
                 ShowSaveIssue("Save canceled.");
                 return false;
             }
 
-            if (executionResult.Outcome == WorkbookSaveExecutionOutcome.Failed)
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.Failed)
             {
-                ShowSaveIssue($"Save failed: {executionResult.Exception?.Message ?? "Unknown error."}");
+                ShowSaveIssue($"Save failed: {workflowResult.Exception?.Message ?? "Unknown error."}");
                 return false;
             }
 
+            var executionResult = workflowResult.ExecutionResult
+                ?? throw new InvalidOperationException("A successful save did not produce an execution result.");
             var completionPlan = executionResult.CompletionPlan
                 ?? throw new InvalidOperationException("A successful save did not produce a completion plan.");
-            _session.ApplySaveCompletion(completionPlan);
             // The save just wrote targetPath -- refresh the "known good" write-time snapshot to the
             // file's new on-disk timestamp so the very next save doesn't mistake THIS save's own
             // write for an external modification (mirrors the WPF host's equivalent refresh).
             if (completionPlan.ApplyFileContext)
             {
                 _currentFileSourceLastWriteTimeUtc = executionResult.SavedLastWriteTimeUtc;
-                if (completionPlan.FileContext is { } fileContext)
-                    RecordRecentWorkbook(fileContext.Path, fileContext.FileAccessIdentity);
             }
             // A clean save means there is nothing left to recover from — delete the crash-recovery
             // snapshot immediately rather than waiting for window close (mirrors WPF's
@@ -29585,7 +29578,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
         finally
         {
-            _isSaving = false;
             ClearFileOperationCancellation(operationCancellation);
             UpdateSaveButton();
         }
@@ -29800,7 +29792,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _pendingDirtyWorkbookGate = gateCompletion.Task;
         try
         {
-            return await WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(
+            return await _fileWorkflow.CanProceedAfterDirtyGateWithCleanSaveAsync(
                 isDirty: true,
                 async () => ToSaveChangesPrompt(await ShowDirtyWorkbookCloseDialogAsync(title, discardButtonText)),
                 SaveCurrentWorkbookAsync,

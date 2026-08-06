@@ -85,10 +85,14 @@ public sealed partial class MainWindow
         ClearSelectedDrawingObject();
 
         var hasSelection = HasPrintSelection(_session.SelectedRange);
-        var scopePlan = WorkbookExportScopePlanner.Build(
+        var workflowPlan = WorkbookPrintWorkflow.CreatePlan(
             _session.Workbook,
             hasSelection,
-            WorkbookExportPrintSurface.MacOs);
+            new PrintJobRequest(
+                WorkbookExportPrintScope.ActiveSheet,
+                ActiveSheetIndex: ResolveActiveSheetIndex()),
+            PrintExportHostCapabilities.AvaloniaPortable());
+        var scopePlan = workflowPlan.Readiness.ScopePlan;
 
         if (!scopePlan.CanExport)
         {
@@ -377,47 +381,59 @@ public sealed partial class MainWindow
         if (_isSaving)
             return;
 
-        var jobPlan = PrintJobPlanner.CreatePlanFromPageSetup(
+        var workflowPlan = WorkbookPrintWorkflow.CreatePlan(
             _session.Workbook,
+            HasPrintSelection(_session.SelectedRange),
             request,
-            WorkbookExportPrintSurface.MacOs);
+            PrintExportHostCapabilities.AvaloniaPortable(
+                canSubmitToPlatformPrinter: canSpool,
+                hasPrinterDestination: !string.IsNullOrWhiteSpace(printerId)));
+        var result = await WorkbookPrintWorkflow.ExecutePortableAsync(
+            workflowPlan,
+            printerId,
+            BuildPrintJobTitle(),
+            RenderPrintReadyPdfAsync,
+            SpoolPrintJobAsync,
+            SavePrintReadyPdfAsync);
 
-        if (!jobPlan.IsReady)
+        if (result.Succeeded)
         {
-            ShowExportIssue(jobPlan.StatusText);
+            if (result.Submission is { } submission)
+                RefreshShell(UiText.Format("Print_Sent", submission.StatusText));
+            else if (result.Fallback is { } fallback)
+                RefreshShell(fallback.StatusText);
             return;
         }
 
-        var exportPlan = PortablePdfExportPlanner.CreatePlan(jobPlan.ExportPrintPlan);
-        if (!exportPlan.IsReady)
+        if (result.Outcome == WorkbookPrintExecutionOutcome.Canceled &&
+            string.IsNullOrWhiteSpace(result.StatusText))
         {
-            ShowExportIssue(exportPlan.StatusText);
             return;
         }
 
-        byte[] documentBytes;
-        try
-        {
-            using var pdfBuffer = new MemoryStream();
-            Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
-            documentBytes = pdfBuffer.ToArray();
-        }
-        catch (Exception ex)
-        {
-            ShowExportIssue(UiText.Format("Print_RenderFailed", ex.Message));
-            return;
-        }
-
-        if (canSpool)
-        {
-            await SpoolPrintJobAsync(jobPlan, printerId, documentBytes);
-            return;
-        }
-
-        await SavePrintReadyPdfAsync(documentBytes);
+        ShowExportIssue(result.Exception is not null
+            ? UiText.Format("Print_RenderFailed", result.Exception.Message)
+            : result.StatusText);
     }
 
-    private async Task SpoolPrintJobAsync(PrintJobPlan jobPlan, string? printerId, byte[] documentBytes)
+    private Task<byte[]> RenderPrintReadyPdfAsync(
+        PortablePdfExportPlan exportPlan,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var pdfBuffer = new MemoryStream();
+        Pdf.AvaloniaPdfDocumentExporter.Save(
+            _session.Workbook,
+            exportPlan,
+            pdfBuffer,
+            options: null,
+            workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
+        return Task.FromResult(pdfBuffer.ToArray());
+    }
+
+    private async Task<PrintSubmissionResult> SpoolPrintJobAsync(
+        PrintJobSubmission submission,
+        CancellationToken cancellationToken)
     {
         _isSaving = true;
         UpdateSaveButton();
@@ -426,20 +442,7 @@ public sealed partial class MainWindow
             _statusText.Text = UiText.Get("Print_Spooling");
             _statusText.Foreground = Brush(67, 113, 83);
 
-            var submission = new PrintJobSubmission(
-                printerId ?? "",
-                documentBytes,
-                jobPlan.Copies,
-                jobPlan.Collate,
-                jobPlan.FirstPage,
-                jobPlan.LastPage,
-                BuildPrintJobTitle());
-
-            var result = await _platformPrinter.SubmitAsync(submission);
-            if (result.Succeeded)
-                RefreshShell(UiText.Format("Print_Sent", result.StatusText));
-            else
-                ShowExportIssue(result.StatusText);
+            return await _platformPrinter.SubmitAsync(submission, cancellationToken);
         }
         finally
         {
@@ -452,51 +455,54 @@ public sealed partial class MainWindow
     /// No-spooler fallback: write the print-ready PDF where the user chooses. This keeps Print useful on
     /// hosts without CUPS (and is what tests exercise via <see cref="NullPlatformPrinter"/>).
     /// </summary>
-    private async Task SavePrintReadyPdfAsync(byte[] documentBytes)
+    private async Task<WorkbookPrintFallbackResult> SavePrintReadyPdfAsync(
+        byte[] documentBytes,
+        CancellationToken cancellationToken)
     {
         if (!TryBeginFileOperation())
-            return;
+            return WorkbookPrintFallbackResult.Canceled(statusText: "");
 
         try
         {
             if (!StorageProvider.CanSave)
             {
-                ShowExportIssue(UiText.Get("Print_NoSpoolerNoSave"));
-                return;
+                return WorkbookPrintFallbackResult.Failure(UiText.Get("Print_NoSpoolerNoSave"));
             }
 
             var storageFile = await ShowPortablePdfSavePickerAsync(UiText.Get("Print_SaveAsPdfButton"));
 
             if (storageFile is null)
-                return;
+                return WorkbookPrintFallbackResult.Canceled(statusText: "");
 
             using (storageFile)
             {
                 var path = storageFile.LocalPath;
                 if (string.IsNullOrWhiteSpace(path))
                 {
-                    ShowExportIssue(UiText.Get("Print_RequiresLocalPath"));
-                    return;
+                    return WorkbookPrintFallbackResult.Failure(UiText.Get("Print_RequiresLocalPath"));
                 }
 
                 var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);
                 if (exportTargetPlan.ShouldConfirmNormalizedOverwrite &&
                     !await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path))
                 {
-                    ShowExportIssue(UiText.Get("Print_SaveCanceled"));
-                    return;
+                    return WorkbookPrintFallbackResult.Canceled(UiText.Get("Print_SaveCanceled"));
                 }
 
                 path = exportTargetPlan.Path;
 
                 try
                 {
-                    await File.WriteAllBytesAsync(path, documentBytes);
-                    RefreshShell(UiText.Format("Print_SavedPdf", Path.GetFileName(path)));
+                    await File.WriteAllBytesAsync(path, documentBytes, cancellationToken);
+                    return WorkbookPrintFallbackResult.Success(
+                        UiText.Format("Print_SavedPdf", Path.GetFileName(path)),
+                        path);
                 }
                 catch (Exception ex)
                 {
-                    ShowExportIssue(UiText.Format("Print_RenderFailed", ex.Message));
+                    return WorkbookPrintFallbackResult.Failure(
+                        UiText.Format("Print_RenderFailed", ex.Message),
+                        ex);
                 }
             }
         }

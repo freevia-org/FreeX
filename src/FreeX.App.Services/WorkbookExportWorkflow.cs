@@ -23,6 +23,37 @@ public sealed record WorkbookExportExecutionResult(
 /// </summary>
 public static class WorkbookExportWorkflow
 {
+    public static WorkbookExportScopePlan CreateScopePlan(
+        FreeX.Core.Model.Workbook workbook,
+        bool hasSelection,
+        WorkbookExportPrintSurface surface) =>
+        WorkbookExportScopePlanner.Build(workbook, hasSelection, surface);
+
+    public static async Task<WorkbookExportExecutionResult> ExecuteBooleanAsync(
+        ExportRequest request,
+        Func<ExportRequest, CancellationToken, Task<bool>> exportAsync,
+        ExportPlannerTextResolver? textResolver = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(exportAsync);
+
+        var exportSucceeded = false;
+        var result = await ExecuteAsync(
+            request,
+            async (effectiveRequest, token) =>
+                exportSucceeded = await exportAsync(effectiveRequest, token).ConfigureAwait(true),
+            textResolver,
+            cancellationToken).ConfigureAwait(true);
+
+        return result.Succeeded && !exportSucceeded
+            ? result with
+            {
+                Outcome = WorkbookExportExecutionOutcome.Failed,
+                Message = "Export did not complete."
+            }
+            : result;
+    }
+
     public static async Task<WorkbookExportExecutionResult> ExecuteAsync(
         ExportRequest request,
         Func<ExportRequest, CancellationToken, Task> exportAsync,

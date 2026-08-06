@@ -153,7 +153,7 @@ public sealed partial class MainWindow
             return;
 
         var hasSelection = HasPrintSelection(_session.SelectedRange);
-        var scopePlan = WorkbookExportScopePlanner.Build(
+        var scopePlan = WorkbookExportWorkflow.CreateScopePlan(
             _session.Workbook,
             hasSelection,
             WorkbookExportPrintSurface.MacOs);

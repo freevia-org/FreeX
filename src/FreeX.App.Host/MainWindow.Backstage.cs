@@ -641,7 +641,7 @@ public partial class MainWindow
 
     private async Task OpenFileAsync(string path, bool suppressRecentFiles = false)
     {
-        if (!WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, path, out var target, out var openTargetMessage))
+        if (!_fileWorkflow.TryResolveOpenTarget(path, out var target, out var openTargetMessage))
         {
             // Surface the planner's discarded failure reason (e.g. "Unsupported file type: .txt." or
             // the renamed-file content/extension mismatch message) instead of silently no-opping, the
@@ -672,27 +672,51 @@ public partial class MainWindow
             _operationProgressFileName = System.IO.Path.GetFileName(target.Path);
             ShowOpenProgress(CreateOpenProgress("preparing", TimeSpan.Zero, 1));
 
-            var progress = new Progress<OpenProgressUpdate>(
-                update => ShowOpenProgress(update.Title, update.Detail, update.Percent));
-            var loader = new OpenWorkbookLoader(workbook => _recalcEngine.RecalculateAllFormulas(workbook));
-            var result = await loader.LoadAsync(
-                target.Path,
-                target.Adapter,
-                ext,
-                target.Format,
-                progress,
-                operationCancellation.Token);
-            operationCancellation.Token.ThrowIfCancellationRequested();
-
-            var plan = WorkbookFileCompletionPlanner.PlanOpen(
+            var progress = new Progress<WorkbookOpenProgressUpdate>(update =>
+                ShowOpenProgress(FromSharedOpenProgressText(WorkbookProgressTextFormatter.FormatOpen(update, UiText.Get))));
+            var workflowResult = await _fileWorkflow.OpenAsync(new WorkbookOpenWorkflowRequest(
                 target,
-                new FreeX.App.Services.WorkbookOpenResult(
-                    result.Workbook,
-                    result.FeatureReport,
-                    result.DisplayName,
-                    result.OpenedAsTemplate,
-                    result.LoadWarnings ?? []),
-                suppressRecentFiles);
+                ApplyOpenedWorkbookAsync,
+                suppressRecentFiles,
+                Progress: progress,
+                CancellationToken: operationCancellation.Token));
+
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.Canceled)
+            {
+                RecordDiagnosticEvent("workbook_open_canceled", new Dictionary<string, string?>
+                {
+                    ["extension"] = ext,
+                    ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                    ["format"] = target.Format.FormatName
+                });
+                return;
+            }
+
+            if (!workflowResult.Succeeded)
+            {
+                var exception = workflowResult.Exception ?? new InvalidOperationException(workflowResult.Message);
+                RecordDiagnosticEvent("workbook_open_failed", new Dictionary<string, string?>
+                {
+                    ["extension"] = ext,
+                    ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                    ["format"] = target.Format.FormatName,
+                    ["reason"] = exception.GetType().Name
+                });
+                ShowOwnedMessage(
+                    UiText.Format("MainWindowMessage_OpenFileFailed", exception.Message),
+                    UiText.Get("MainWindowMessage_OpenErrorTitle"),
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            return;
+
+            Task ApplyOpenedWorkbookAsync(
+                WorkbookOpenWorkflowContext context,
+                CancellationToken cancellationToken)
+            {
+            var plan = context.CompletionPlan;
+            var result = context.Result;
             CloseFindReplaceDialogIfOpen();
             // When "New Window" siblings still view the current document, leave their context
             // (workbook ref / command bus / dirty state) untouched and continue on a fresh one:
@@ -760,9 +784,8 @@ public partial class MainWindow
             // process (View > New Window), each window's cached _recentFiles snapshot goes stale
             // the moment a sibling window registers/pins/removes an entry. Writing through the
             // stale cache would silently clobber the sibling's write (last-writer-wins data loss).
-            RecentFileRegistrationService.RegisterIfNeeded(ReloadRecentFilesStore, plan.RecentFileRegistration);
             ShowOpenProgress(CreateOpenProgress("preparing view", TimeSpan.Zero, null));
-            operationCancellation.Token.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
             ApplyOpenedWorksheetViewState();
             RefreshSheetTabs();
             HideStartScreen();
@@ -777,6 +800,8 @@ public partial class MainWindow
                 ["format"] = target.Format.FormatName,
                 ["worksheetCount"] = _workbook.Sheets.Count.ToString()
             });
+            return Task.CompletedTask;
+            }
         }
         catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
         {
@@ -1295,8 +1320,8 @@ public partial class MainWindow
 
         if (result.Chosen)
         {
-            if (!WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, result.FileName!, result.FilterIndex, out var target) ||
-                target is null)
+            if (!_fileWorkflow.TryResolveSaveTarget(
+                    result.FileName!, out var target, out _, result.FilterIndex) || target is null)
             {
                 return false;
             }
@@ -1312,8 +1337,7 @@ public partial class MainWindow
         if (_isSavingFile)
             return false;
 
-        if (WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(_workbookDirty, _currentFilePath, target)
-            == WorkbookSaveTargetIntent.SkipCleanCurrentPath)
+        if (_fileWorkflow.ShouldSkipSaveTargetWrite(_workbookDirty, _currentFilePath, target))
             return true;
 
         var ext = System.IO.Path.GetExtension(target.Path).ToLowerInvariant();
@@ -1330,18 +1354,6 @@ public partial class MainWindow
         {
             return false;
         }
-
-        var executionStart = WorkbookSaveExecutionCoordinator.Begin(new WorkbookSaveExecutionStartRequest(
-            _currentFilePath,
-            target,
-            _currentFileSourceLastWriteTimeUtc,
-            GetCurrentWorkbook: () => _workbook,
-            GetDirtyGeneration: () => _workbookDirtyGeneration,
-            ConfirmExternallyModifiedOverwrite: ConfirmExternallyModifiedFileOverwrite));
-        if (!executionStart.CanExecute)
-            return false;
-
-        var saveExecution = executionStart.Execution!;
 
         using var operationCancellation = BeginFileOperationCancellation();
         try
@@ -1366,8 +1378,14 @@ public partial class MainWindow
             ShowSaveProgress(CreateSaveProgress("preparing", TimeSpan.Zero, 1));
             var progress = new Progress<SaveProgressUpdate>(
                 update => ShowSaveProgress(update.Title, update.Detail, update.Percent));
-            var executionResult = await saveExecution.ExecuteAsync(new WorkbookSaveExecutionRequest(
-                operationCancellation.Token,
+            var workflowResult = await _fileWorkflow.SaveTargetAsync(new WorkbookSaveWorkflowRequest(
+                _workbookDirty,
+                _currentFilePath,
+                target,
+                _currentFileSourceLastWriteTimeUtc,
+                GetCurrentWorkbook: () => _workbook,
+                GetDirtyGeneration: () => _workbookDirtyGeneration,
+                ConfirmExternallyModifiedOverwrite: ConfirmExternallyModifiedFileOverwrite,
                 ProjectViewStateForSave: ReconcileViewStateForSave,
                 SaveAsync: invocation => new SaveWorkbookWriter().SaveAsync(
                     invocation.Target.Path,
@@ -1375,9 +1393,11 @@ public partial class MainWindow
                     invocation.Workbook,
                     progress,
                     invocation.CancellationToken,
-                    invocation.ExpectedLastWriteTimeUtc)));
+                    invocation.ExpectedLastWriteTimeUtc),
+                ApplyCompletion: ApplyWpfSaveCompletion,
+                CancellationToken: operationCancellation.Token));
 
-            if (executionResult.Outcome == WorkbookSaveExecutionOutcome.Canceled)
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.Canceled)
             {
                 RecordDiagnosticEvent("workbook_save_canceled", new Dictionary<string, string?>
                 {
@@ -1388,7 +1408,10 @@ public partial class MainWindow
                 return false;
             }
 
-            if (executionResult.Outcome == WorkbookSaveExecutionOutcome.ExternalWriteConflict)
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.Rejected)
+                return false;
+
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.ExternalWriteConflict)
             {
                 RecordDiagnosticEvent("workbook_save_externally_modified", new Dictionary<string, string?>
                 {
@@ -1403,9 +1426,9 @@ public partial class MainWindow
                 return false;
             }
 
-            if (executionResult.Outcome == WorkbookSaveExecutionOutcome.Failed)
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.Failed)
             {
-                var saveException = executionResult.Exception ?? new InvalidOperationException("Save failed.");
+                var saveException = workflowResult.Exception ?? new InvalidOperationException("Save failed.");
                 RecordDiagnosticEvent("workbook_save_failed", new Dictionary<string, string?>
                 {
                     ["extension"] = ext,
@@ -1420,32 +1443,9 @@ public partial class MainWindow
                 return false;
             }
 
-            var plan = executionResult.CompletionPlan
+            var executionResult = workflowResult.ExecutionResult
                 ?? throw new InvalidOperationException("A successful save did not produce a completion plan.");
-
-            if (plan.ApplyFileContext && plan.FileContext is { } fileContext)
-            {
-                _currentFilePath = fileContext.Path;
-                _workbook.Name = fileContext.DisplayName;
-                RecentFileRegistrationService.RegisterIfNeeded(ReloadRecentFilesStore, fileContext.RecentFileRegistration);
-            }
-            if (plan.ApplyFileContext)
-            {
-                // The save just wrote target.Path, so refresh our "known good" write-time snapshot
-                // to the file's new on-disk timestamp -- otherwise the very next save would think
-                // ITS OWN prior write was an external modification and warn spuriously.
-                _currentFileSourceLastWriteTimeUtc = executionResult.SavedLastWriteTimeUtc;
-            }
-
-            if (plan.MarkSaved)
-                MarkWorkbookSaved();
-
-            UpdateTitleBar();
-            // Notify sibling windows so they pick up the new file path/name in their
-            // title bars.  MarkWorkbookSaved() already fans out the dirty-state change;
-            // this call ensures the full viewport/title refresh for the file-context.
-            if (plan.ApplyFileContext)
-                NotifyOtherWindowsOfWorkbookChange();
+            _currentFileSourceLastWriteTimeUtc = executionResult.SavedLastWriteTimeUtc;
             ShowXlsxSaveWarningsIfNeeded(executionResult.Warnings);
             RecordDiagnosticEvent("workbook_saved", new Dictionary<string, string?>
             {
@@ -1479,6 +1479,22 @@ public partial class MainWindow
             _windowRegistry?.BroadcastSaveInProgress(this, inProgress: false);
             HideSaveProgress();
         }
+    }
+
+    private void ApplyWpfSaveCompletion(SaveCompletionPlan plan)
+    {
+        if (plan.ApplyFileContext && plan.FileContext is { } fileContext)
+        {
+            _currentFilePath = fileContext.Path;
+            _workbook.Name = fileContext.DisplayName;
+        }
+
+        if (plan.MarkSaved)
+            MarkWorkbookSaved();
+
+        UpdateTitleBar();
+        if (plan.ApplyFileContext)
+            NotifyOtherWindowsOfWorkbookChange();
     }
 
     private void ShowSaveProgress(string title, string detail, double? percent = null)

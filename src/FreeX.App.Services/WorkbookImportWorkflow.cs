@@ -22,7 +22,8 @@ public sealed record WorkbookImportExecutionResult(
     Exception? Exception = null,
     string? Reason = null,
     string? UserMessage = null,
-    string? ErrorDetail = null)
+    string? ErrorDetail = null,
+    WorkbookCellEditResult? CellEditResult = null)
 {
     public bool Succeeded => Outcome == WorkbookImportExecutionOutcome.Succeeded;
 }
@@ -157,5 +158,42 @@ public static class WorkbookImportWorkflow
             imported.Sheets.Count,
             outcome,
             imported);
+    }
+
+    public static WorkbookImportExecutionResult ApplyImportedWorkbookEdit(
+        Workbook imported,
+        SheetId targetSheetId,
+        CellAddress destination,
+        Func<ImportSheetCommand, WorkbookCellEditResult> executeCommand)
+    {
+        ArgumentNullException.ThrowIfNull(imported);
+        ArgumentNullException.ThrowIfNull(executeCommand);
+
+        if (imported.Sheets.Count == 0)
+        {
+            return new WorkbookImportExecutionResult(
+                WorkbookImportExecutionOutcome.EmptyWorkbook,
+                WorksheetCount: 0,
+                ImportedWorkbook: imported,
+                Reason: "empty_workbook");
+        }
+
+        var outcome = executeCommand(new ImportSheetCommand(targetSheetId, destination, imported.Sheets[0]));
+        if (!outcome.Success)
+        {
+            return new WorkbookImportExecutionResult(
+                WorkbookImportExecutionOutcome.CommandFailed,
+                imported.Sheets.Count,
+                ImportedWorkbook: imported,
+                Reason: "command_failed",
+                UserMessage: outcome.ErrorMessage,
+                CellEditResult: outcome);
+        }
+
+        return new WorkbookImportExecutionResult(
+            WorkbookImportExecutionOutcome.Succeeded,
+            imported.Sheets.Count,
+            ImportedWorkbook: imported,
+            CellEditResult: outcome);
     }
 }

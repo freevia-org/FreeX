@@ -155,6 +155,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private readonly Dictionary<SheetId, SplitPaneViewportOffsets> _splitPaneViewportOffsets = [];
     private readonly List<FormulaTraceArrow> _formulaTraceArrows = [];
     private readonly RecentFilesStore _recentFiles;
+    private readonly WorkbookFileWorkflow _fileWorkflow;
     private readonly IWorkbookShareService _shareService = new WindowsWorkbookShareService();
     private List<RecentFileViewModel> _allRecentItems = [];
     private AppOptions _options;
@@ -379,6 +380,10 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         // never matches a registered window's document and initializes its own workbook (H39).
         _adoptSharedWorkbookOnLoad = windowRegistry?.HasWindowForDocument(workbook.Id) == true;
         _recentFiles = RecentFilesStore.Load();
+        _fileWorkflow = new WorkbookFileWorkflow(
+            _fileAdapters,
+            new WorkbookOpenService(openedWorkbook => _recalcEngine.RecalculateAllFormulas(openedWorkbook)),
+            request => RecentFileRegistrationService.RegisterIfNeeded(ReloadRecentFilesStore, request));
 
         InitializeComponent();
         ApplySisterAppClientFrameContractRows();

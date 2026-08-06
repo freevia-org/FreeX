@@ -308,6 +308,8 @@ public sealed class WorkbookSession : IDisposable
             command => _cellEditService.ExecuteEditCommand(Workbook, command));
     }
 
+    public IReadOnlyList<IFileAdapter> FileAdapters => _adapters;
+
     /// <summary>
     /// Creates a view-local session over this session's document. Workbook, command history,
     /// save/dirty metadata, and file identity remain shared; selection, viewport, formula-edit,
