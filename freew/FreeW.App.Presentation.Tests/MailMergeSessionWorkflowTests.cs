@@ -1,0 +1,221 @@
+using FreeW.App.Presentation.Ribbon;
+
+namespace FreeW.App.Presentation.Tests;
+
+public sealed class MailMergeSessionWorkflowTests
+{
+    [Fact]
+    public void LoadRecipients_EndsPreviewAndReturnsEditableTemplateForNativeLoading()
+    {
+        var template = DocumentWith($"Hello {MailMerge.FieldOpen}Name{MailMerge.FieldClose}");
+        var session = new MailMergeSession
+        {
+            Template = template,
+            CurrentIndex = 2,
+        };
+        var workflow = new MailMergeSessionWorkflow(session);
+        var data = MergeData.FromCsv("Name\nAda");
+
+        var transition = workflow.LoadRecipients(data);
+
+        transition.DocumentToLoad.Should().BeSameAs(template);
+        transition.Message.Should().Be("Loaded 1 record(s) with 1 field(s).");
+        session.Data.Should().BeSameAs(data);
+        session.IsPreviewing.Should().BeFalse();
+        session.CurrentIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void PreviewNavigation_EntersOnceAndAlwaysRendersFromEditableTemplate()
+    {
+        var template = DocumentWith($"Hello {MailMerge.FieldOpen}Name{MailMerge.FieldClose}");
+        var workflow = WorkflowWith("Name\nAda\nGrace");
+
+        var next = workflow.NavigatePreview(template, MailMergePreviewNavigationAction.Next);
+        var previous = workflow.NavigatePreview(
+            next.DocumentToLoad!,
+            MailMergePreviewNavigationAction.Previous);
+
+        next.Success.Should().BeTrue();
+        next.CurrentIndex.Should().Be(1);
+        next.DocumentToLoad!.PlainText.Should().Contain("Grace");
+        previous.CurrentIndex.Should().Be(0);
+        previous.DocumentToLoad!.PlainText.Should().Contain("Ada");
+        workflow.Session.Template.Should().BeSameAs(template);
+    }
+
+    [Fact]
+    public void FindRecipient_RefreshesVisiblePreviewWhenARecordIsFound()
+    {
+        var template = DocumentWith($"Hello {MailMerge.FieldOpen}Name{MailMerge.FieldClose}");
+        var workflow = WorkflowWith("Name,City\nAda,London\nGrace,Arlington");
+        workflow.EnsurePreviewing(template);
+
+        var result = workflow.FindRecipient("Arlington");
+
+        result.Success.Should().BeTrue();
+        result.Result!.Value.Index.Should().Be(1);
+        result.DocumentToLoad!.PlainText.Should().Contain("Grace");
+        workflow.Session.CurrentIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void ApplyRecipientFilter_RestoresTemplateAndPreservesFieldMapping()
+    {
+        var template = DocumentWith($"Hello {MailMerge.FieldOpen}FirstName{MailMerge.FieldClose}");
+        var workflow = WorkflowWith("FirstName\nAda\nGrace");
+        var mapping = workflow.Session.Mapping;
+        workflow.EnsurePreviewing(template);
+        var filtered = MergeData.FromCsv("FirstName\nGrace");
+
+        var transition = workflow.ApplyRecipientFilter(filtered);
+
+        transition.DocumentToLoad.Should().BeSameAs(template);
+        workflow.Session.Data.Should().BeSameAs(filtered);
+        workflow.Session.Mapping.Should().BeSameAs(mapping);
+        workflow.Session.IsPreviewing.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ExecuteFinish_ShapesCompositeFieldsRunsRulesAndEndsDocumentPreview()
+    {
+        var skip = MergeRuleEvaluator.BuildSkipRecordIfInstruction(
+            "Skip",
+            MergeConditionOperator.Equal,
+            "Yes");
+        var template = DocumentWith(
+            $"{MailMerge.FieldOpen}{skip}{MailMerge.FieldClose}" +
+            $"{MailMerge.FieldOpen}GreetingLine{MailMerge.FieldClose} " +
+            $"{MailMerge.FieldOpen}AddressBlock{MailMerge.FieldClose}");
+        var workflow = WorkflowWith(
+            "FirstName,LastName,Address1,City,Skip\n" +
+            "Ada,Lovelace,12 St James Square,London,No\n" +
+            "Grace,Hopper,1 Navy Way,Arlington,Yes");
+        workflow.EnsurePreviewing(template);
+        var plan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(2);
+
+        var result = workflow.ExecuteFinish(template, plan);
+
+        result.Success.Should().BeTrue();
+        result.MergedRecordCount.Should().Be(1);
+        result.SkippedRecordCount.Should().Be(1);
+        result.Document!.PlainText.Should().Contain("Dear Ada Lovelace,");
+        result.Document.PlainText.Should().Contain("12 St James Square");
+        result.Document.PlainText.Should().NotContain("Grace");
+        workflow.Session.IsPreviewing.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ExecuteFinish_PrinterPlanPreservesPreviewForReuse()
+    {
+        var template = DocumentWith($"Hello {MailMerge.FieldOpen}Name{MailMerge.FieldClose}");
+        var workflow = WorkflowWith("Name\nAda");
+        workflow.EnsurePreviewing(template);
+        var plan = MailMergeFinishPlanner.Plan(
+            MailMergeFinishDestination.Printer,
+            MailMergeRecipientScope.All,
+            recordCount: 1,
+            currentIndex: 0,
+            fromRecordText: null,
+            toRecordText: null);
+
+        var result = workflow.ExecuteFinish(template, plan);
+
+        result.Success.Should().BeTrue();
+        workflow.Session.IsPreviewing.Should().BeTrue();
+        workflow.Session.Template.Should().BeSameAs(template);
+    }
+
+    [Fact]
+    public void CheckForErrors_ProducesRendererReadyMessagesReportAndCompletionIntent()
+    {
+        var template = DocumentWith($"Hello {MailMerge.FieldOpen}Missing{MailMerge.FieldClose}");
+        var workflow = WorkflowWith("Name\nAda");
+
+        var report = workflow.CheckForErrors(
+            template,
+            MailMergeCheckForErrorsMode.SimulateAndReport);
+        var pause = workflow.CheckForErrors(
+            template,
+            MailMergeCheckForErrorsMode.CompleteAndPause);
+
+        report.Success.Should().BeTrue();
+        report.Messages.Should().BeEmpty();
+        report.ReportDocument!.Properties.Title.Should().Be("Mail Merge Error Report");
+        pause.Result!.ShouldCompleteMerge.Should().BeTrue();
+        pause.Messages.Should().ContainSingle().Which.Should().Contain("Missing");
+    }
+
+    [Fact]
+    public void PromptPlanner_DeduplicatesRequestsAndPopulatesMergeState()
+    {
+        var fill = MailMergeRuleAuthoringPlanner.CreateFillIn("Customer code");
+        var ask = MailMergeRuleAuthoringPlanner.CreateAsk("Region", "Enter region");
+        var template = DocumentWith(fill + ask + fill);
+
+        var requests = MailMergePromptPlanner.GetRequests(template);
+        var state = new MergeState();
+        MailMergePromptPlanner.ApplyResponse(state, requests[0], "A-17");
+        MailMergePromptPlanner.ApplyResponse(state, requests[1], "EMEA");
+
+        requests.Should().HaveCount(2);
+        requests[0].Should().Be(new MailMergePromptRequest(
+            MailMergePromptKind.FillIn,
+            "Customer code",
+            "Customer code"));
+        requests[1].Kind.Should().Be(MailMergePromptKind.Ask);
+        state.FillInAnswers["Customer code"].Should().Be("A-17");
+        state.AskAnswers["Region"].Should().Be("EMEA");
+    }
+
+    [Fact]
+    public void RuleAuthoringPlanner_ProducesPortablePlaceholders()
+    {
+        var result = new MailMergeRuleIfDialogResult(
+            "Balance",
+            MergeConditionOperator.GreaterThan,
+            "100",
+            "Due",
+            "Clear");
+
+        MailMergeRuleAuthoringPlanner.CreateIf(result).Should().Be(
+            $"{MailMerge.FieldOpen}" +
+            MergeRuleEvaluator.BuildIfInstruction(
+                result.FieldName,
+                result.Operator,
+                result.Value,
+                result.TrueText,
+                result.FalseText) +
+            $"{MailMerge.FieldClose}");
+        MailMergeRuleAuthoringPlanner.CreateAsk(" ", "ignored").Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(MailMergeOperation.InsertAddressBlock, "insert an Address Block")]
+    [InlineData(MailMergeOperation.PreviewRecord, "preview a record")]
+    [InlineData(MailMergeOperation.FinishMerge, "Finish & Merge")]
+    public void ValidationPlanner_ReturnsReusableOperationMessage(
+        MailMergeOperation operation,
+        string expectedText)
+    {
+        var validation = MailMergeValidationPlanner.Validate(null, operation);
+
+        validation.IsValid.Should().BeFalse();
+        validation.Message.Should().Contain(expectedText);
+    }
+
+    private static MailMergeSessionWorkflow WorkflowWith(string csv)
+    {
+        var workflow = new MailMergeSessionWorkflow();
+        workflow.LoadRecipients(MergeData.FromCsv(csv));
+        return workflow;
+    }
+
+    private static TextDocument DocumentWith(string text)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph(text));
+        return document;
+    }
+}
