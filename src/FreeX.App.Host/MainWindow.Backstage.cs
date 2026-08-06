@@ -422,12 +422,15 @@ public partial class MainWindow
         if (InfoProtectWorkbookButton is null)
             return;
 
-        var uiText = WorkbookProtectionWorkflow.GetUiText(_workbook);
-        InfoProtectWorkbookButton.Content = uiText.ButtonContent;
-        System.Windows.Automation.AutomationProperties.SetName(InfoProtectWorkbookButton, uiText.ButtonContent);
-        System.Windows.Automation.AutomationProperties.SetHelpText(InfoProtectWorkbookButton, uiText.TooltipDescription);
-        RibbonTooltip.SetTitle(InfoProtectWorkbookButton, uiText.TooltipTitle);
-        RibbonTooltip.SetDescription(InfoProtectWorkbookButton, uiText.TooltipDescription);
+        var plan = ProtectionWorkflowSession.CreateWorkbookChromePlan(_workbook);
+        var buttonContent = UiText.Get(plan.ButtonContentResourceKey);
+        var tooltipTitle = UiText.Get(plan.TooltipTitleResourceKey);
+        var tooltipDescription = UiText.Get(plan.TooltipDescriptionResourceKey);
+        InfoProtectWorkbookButton.Content = buttonContent;
+        System.Windows.Automation.AutomationProperties.SetName(InfoProtectWorkbookButton, buttonContent);
+        System.Windows.Automation.AutomationProperties.SetHelpText(InfoProtectWorkbookButton, tooltipDescription);
+        RibbonTooltip.SetTitle(InfoProtectWorkbookButton, tooltipTitle);
+        RibbonTooltip.SetDescription(InfoProtectWorkbookButton, tooltipDescription);
     }
 
     private void UpdateSsGreeting()

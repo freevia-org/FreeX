@@ -1,6 +1,5 @@
 using FluentAssertions;
 
-using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.Protection;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -74,7 +73,7 @@ public sealed class R17_protection_Tests
     // ── R17-protection-io-2: workbook "Windows only" protection ───────────────
 
     [Fact]
-    public void BuildProtectWorkbookCommand_WithStructureUncheckedAndWindowsChecked_DoesNotProtectOrStorePassword()
+    public void PlanWorkbook_WithStructureUncheckedAndWindowsChecked_DoesNotProtectOrStorePassword()
     {
         var workbook = new Workbook("Book");
         var options = new ProtectWorkbookOptions
@@ -85,10 +84,11 @@ public sealed class R17_protection_Tests
             PasswordConfirmation = "pw",
         };
 
-        var command = ProtectionShellGlue.BuildProtectWorkbookCommand(options);
-        var outcome = command.Apply(new R17ProtectionTestCommandContext(workbook));
+        var plan = ProtectionWorkflowSession.CreateWorkbookCommandPlan(workbook, options);
 
-        outcome.Success.Should().BeTrue();
+        plan.CanExecute.Should().BeFalse();
+        plan.Issue.Should().Be(ProtectionWorkflowIssue.WorkbookStructureRequired);
+        plan.NormalizedPassword.Should().BeNull();
         // Core has no model for window-only protection: structure must stay unprotected, and no
         // stray password may be written for a workbook nothing actually locks.
         workbook.IsStructureProtected.Should().BeFalse();
@@ -96,7 +96,7 @@ public sealed class R17_protection_Tests
     }
 
     [Fact]
-    public void BuildProtectWorkbookCommand_WithStructureCheckedAndPassword_StillProtectsAsBefore()
+    public void PlanWorkbook_WithStructureCheckedAndPassword_StillProtectsAsBefore()
     {
         var workbook = new Workbook("Book");
         var options = new ProtectWorkbookOptions
@@ -107,7 +107,7 @@ public sealed class R17_protection_Tests
             PasswordConfirmation = "pw",
         };
 
-        var command = ProtectionShellGlue.BuildProtectWorkbookCommand(options);
+        var command = ProtectionWorkflowSession.CreateWorkbookCommandPlan(workbook, options).Command!;
         var outcome = command.Apply(new R17ProtectionTestCommandContext(workbook));
 
         outcome.Success.Should().BeTrue();

@@ -1,245 +1,177 @@
 using FluentAssertions;
-
-using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.Protection;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
 
-/// <summary>
-/// Unit tests for the non-UI glue backing the Avalonia Protect Sheet and Protect Workbook dialogs: projecting
-/// the current Core protection state into the portable dialog models, mapping validated dialog options onto the
-/// Core protect/unprotect commands, and the password confirm-match validation that gates the protect action.
-/// The commands are run against a workbook through a minimal command context to assert their effect
-/// (permissions / password / structure). No running UI is required.
-/// </summary>
 public sealed class ProtectionShellGlueTests
 {
-    private static (Workbook Workbook, Sheet Sheet) CreateWorkbook()
-    {
-        var workbook = new Workbook("Book");
-        var sheet = workbook.AddSheet("Sheet1");
-        return (workbook, sheet);
-    }
-
-    private static CommandOutcome Run(Workbook workbook, IWorkbookCommand command) =>
-        command.Apply(new ProtectionTestCommandContext(workbook));
-
-    // ── Project sheet/workbook state ──────────────────────────────────────────
-
     [Fact]
-    public void ProjectSheet_ForUnprotectedSheet_ReturnsDefaultsAndNotProtected()
-    {
-        var (_, sheet) = CreateWorkbook();
-
-        var state = ProtectionShellGlue.ProjectSheet(sheet);
-
-        state.IsProtected.Should().BeFalse();
-        state.HasPassword.Should().BeFalse();
-        state.Options.EnabledPermissions.Should().Equal(SheetProtectionOptions.DefaultEnabledPermissions);
-    }
-
-    [Fact]
-    public void ProjectSheet_ForProtectedSheet_ReflectsStoredPermissionsAndPassword()
+    public void SharedSessionProjectsAndProtectsSheetWithCanonicalPermissions()
     {
         var (workbook, sheet) = CreateWorkbook();
-        Run(workbook, new ProtectSheetCommand(
-            sheet.Id,
-            "secret",
-            [SheetProtectionPermission.FormatCells, SheetProtectionPermission.Sort]));
-
-        var state = ProtectionShellGlue.ProjectSheet(sheet);
-
-        state.IsProtected.Should().BeTrue();
-        state.HasPassword.Should().BeTrue();
-        state.Options.EnabledPermissions.Should().Equal(
-            SheetProtectionPermission.FormatCells,
-            SheetProtectionPermission.Sort);
-    }
-
-    [Fact]
-    public void ProjectWorkbook_ReflectsStructureProtectionState()
-    {
-        var (workbook, _) = CreateWorkbook();
-
-        ProtectionShellGlue.ProjectWorkbook(workbook).IsStructureProtected.Should().BeFalse();
-
-        Run(workbook, new ProtectWorkbookCommand("pw"));
-
-        var state = ProtectionShellGlue.ProjectWorkbook(workbook);
-        state.IsStructureProtected.Should().BeTrue();
-        state.HasPassword.Should().BeTrue();
-    }
-
-    // ── Build protect-sheet command from options ──────────────────────────────
-
-    [Fact]
-    public void BuildProtectSheetCommand_AppliesPermissionsAndPassword()
-    {
-        var (workbook, sheet) = CreateWorkbook();
+        var session = CreateSession(workbook);
         var options = ProtectSheetOptions.FromCorePermissions(
-            [SheetProtectionPermission.SelectLockedCells, SheetProtectionPermission.FormatCells],
+            [SheetProtectionPermission.Sort, SheetProtectionPermission.SelectLockedCells],
             password: "hunter2",
             passwordConfirmation: "hunter2");
 
-        var command = ProtectionShellGlue.BuildProtectSheetCommand(sheet.Id, options);
-        var outcome = Run(workbook, command);
+        session.ProjectSheet(sheet).IsProtected.Should().BeFalse();
+        var outcome = session.ExecuteSheet(sheet, options);
 
         outcome.Success.Should().BeTrue();
+        outcome.SuccessStatusResourceKey.Should().Be("ShellLoc_ProtectedSheet");
         sheet.IsProtected.Should().BeTrue();
-        // N57: the command hashes the typed password at Apply-time rather than storing it raw, so
-        // the stored value must be verified via the helper, not compared to the plaintext directly.
-        sheet.ProtectionPassword.Should().NotBe("hunter2");
-        ProtectionPasswordHelper.VerifyStoredPassword(sheet.ProtectionPassword, "hunter2").Should().BeTrue();
         sheet.ProtectionPermissions.Should().Equal(
             SheetProtectionPermission.SelectLockedCells,
-            SheetProtectionPermission.FormatCells);
+            SheetProtectionPermission.Sort);
+        ProtectionPasswordHelper.VerifyStoredPassword(sheet.ProtectionPassword, "hunter2").Should().BeTrue();
     }
 
     [Fact]
-    public void BuildProtectSheetCommand_WithoutPassword_LeavesStoredPasswordNull()
+    public void SharedSessionReturnsCommandErrorAndKeepsDialogOpenStateForWrongSheetPassword()
     {
         var (workbook, sheet) = CreateWorkbook();
-        var options = ProtectSheetOptions.Default;
+        var session = CreateSession(workbook);
+        session.ExecuteSheet(sheet, "secret").Success.Should().BeTrue();
 
-        Run(workbook, ProtectionShellGlue.BuildProtectSheetCommand(sheet.Id, options));
-
-        sheet.IsProtected.Should().BeTrue();
-        sheet.ProtectionPassword.Should().BeNull();
-        sheet.ProtectionPermissions.Should().Equal(SheetProtectionOptions.DefaultEnabledPermissions);
-    }
-
-    // ── Build unprotect-sheet command ─────────────────────────────────────────
-
-    [Fact]
-    public void BuildUnprotectSheetCommand_WithCorrectPassword_RemovesProtection()
-    {
-        var (workbook, sheet) = CreateWorkbook();
-        Run(workbook, new ProtectSheetCommand(sheet.Id, "secret"));
-
-        var outcome = Run(workbook, ProtectionShellGlue.BuildUnprotectSheetCommand(sheet.Id, "secret"));
-
-        outcome.Success.Should().BeTrue();
-        sheet.IsProtected.Should().BeFalse();
-        sheet.ProtectionPassword.Should().BeNull();
-    }
-
-    [Fact]
-    public void BuildUnprotectSheetCommand_WithWrongPassword_Fails()
-    {
-        var (workbook, sheet) = CreateWorkbook();
-        Run(workbook, new ProtectSheetCommand(sheet.Id, "secret"));
-
-        var outcome = Run(workbook, ProtectionShellGlue.BuildUnprotectSheetCommand(sheet.Id, "nope"));
+        var outcome = session.ExecuteSheet(
+            sheet,
+            ProtectSheetOptions.Default with { Password = "wrong" });
 
         outcome.Success.Should().BeFalse();
+        outcome.Executed.Should().BeTrue();
+        outcome.StateChanged.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("password");
+        outcome.ErrorResourceKey.Should().Be("ShellLoc_CouldNotUnprotectSheet");
         sheet.IsProtected.Should().BeTrue();
     }
 
-    // ── Build protect/unprotect-workbook command ──────────────────────────────
+    [Fact]
+    public void SharedSessionValidatesConfirmationBeforeCommandExecution()
+    {
+        var (workbook, sheet) = CreateWorkbook();
+        var executions = 0;
+        var session = new ProtectionWorkflowSession(
+            workbook,
+            (_, _) =>
+            {
+                executions++;
+                return new ProtectionCommandExecutionResult(true);
+            });
+
+        var outcome = session.ExecuteSheet(
+            sheet,
+            ProtectSheetOptions.Default with
+            {
+                Password = "abc",
+                PasswordConfirmation = "different",
+            });
+
+        outcome.Success.Should().BeFalse();
+        outcome.Executed.Should().BeFalse();
+        outcome.ErrorResourceKey.Should().Be("ShellLoc_PasswordsDoNotMatch");
+        executions.Should().Be(0);
+    }
 
     [Fact]
-    public void BuildProtectWorkbookCommand_ProtectsStructureWithPassword()
+    public void SharedSessionProtectsWorkbookAndAppliesWindowsSelection()
     {
         var (workbook, _) = CreateWorkbook();
-        var options = new ProtectWorkbookOptions
+        var session = CreateSession(workbook);
+        var options = ProtectWorkbookOptions.Default with
         {
-            ProtectStructure = true,
             ProtectWindows = true,
             Password = "pw",
             PasswordConfirmation = "pw",
         };
 
-        var outcome = Run(workbook, ProtectionShellGlue.BuildProtectWorkbookCommand(options));
+        var outcome = session.ExecuteWorkbook(options);
 
         outcome.Success.Should().BeTrue();
         workbook.IsStructureProtected.Should().BeTrue();
-        // N57: the command hashes the typed password at Apply-time rather than storing it raw, so
-        // the stored value must be verified via the helper, not compared to the plaintext directly.
-        workbook.StructureProtectionPassword.Should().NotBe("pw");
         ProtectionPasswordHelper.VerifyStoredPassword(workbook.StructureProtectionPassword, "pw").Should().BeTrue();
+        workbook.ProtectionMetadata!.Get("workbookProtection").Should().Contain("lockWindows=\"1\"");
     }
 
     [Fact]
-    public void BuildUnprotectWorkbookCommand_WithCorrectPassword_RemovesProtection()
+    public void SharedSessionPreservesWindowsOnlyPasswordDroppingSemantics()
     {
         var (workbook, _) = CreateWorkbook();
-        Run(workbook, new ProtectWorkbookCommand("pw"));
-
-        var outcome = Run(workbook, ProtectionShellGlue.BuildUnprotectWorkbookCommand("pw"));
-
-        outcome.Success.Should().BeTrue();
-        workbook.IsStructureProtected.Should().BeFalse();
-        workbook.StructureProtectionPassword.Should().BeNull();
-    }
-
-    [Fact]
-    public void BuildUnprotectWorkbookCommand_WithWrongPassword_Fails()
-    {
-        var (workbook, _) = CreateWorkbook();
-        Run(workbook, new ProtectWorkbookCommand("pw"));
-
-        var outcome = Run(workbook, ProtectionShellGlue.BuildUnprotectWorkbookCommand("wrong"));
-
-        outcome.Success.Should().BeFalse();
-        workbook.IsStructureProtected.Should().BeTrue();
-    }
-
-    // ── Password confirm-match validation ─────────────────────────────────────
-
-    [Fact]
-    public void ValidatePassword_OnSheetOptions_RejectsMismatchedConfirmation()
-    {
-        var options = ProtectSheetOptions.FromCorePermissions(
-            SheetProtectionOptions.DefaultEnabledPermissions,
-            password: "abc",
-            passwordConfirmation: "xyz");
-
-        var validation = options.ValidatePassword();
-
-        validation.IsValid.Should().BeFalse();
-        validation.ConfirmationMismatch.Should().BeTrue();
-    }
-
-    [Fact]
-    public void ValidatePassword_OnSheetOptions_AcceptsMatchingConfirmation()
-    {
-        var options = ProtectSheetOptions.FromCorePermissions(
-            SheetProtectionOptions.DefaultEnabledPermissions,
-            password: "abc",
-            passwordConfirmation: "abc");
-
-        options.ValidatePassword().IsValid.Should().BeTrue();
-    }
-
-    [Fact]
-    public void ValidatePassword_OnWorkbookOptions_RejectsMismatchedConfirmation()
-    {
-        var options = new ProtectWorkbookOptions
+        var executions = 0;
+        var session = new ProtectionWorkflowSession(
+            workbook,
+            (_, _) =>
+            {
+                executions++;
+                return new ProtectionCommandExecutionResult(true);
+            });
+        var options = ProtectWorkbookOptions.Default with
         {
-            Password = "abc",
-            PasswordConfirmation = "different",
+            ProtectStructure = false,
+            ProtectWindows = true,
+            Password = "pw",
+            PasswordConfirmation = "pw",
         };
 
-        options.ValidatePassword().ConfirmationMismatch.Should().BeTrue();
+        var outcome = session.ExecuteWorkbook(options);
+        var plan = ProtectionWorkflowSession.CreateWorkbookCommandPlan(workbook, options);
+
+        outcome.Success.Should().BeFalse();
+        outcome.Executed.Should().BeFalse();
+        outcome.ErrorResourceKey.Should().Be("ShellLoc_SelectStructureOrWindows");
+        plan.NormalizedPassword.Should().BeNull();
+        executions.Should().Be(0);
+        workbook.IsStructureProtected.Should().BeFalse();
+        workbook.StructureProtectionPassword.Should().BeNull();
+        workbook.ProtectionMetadata.Should().BeNull();
     }
 
     [Fact]
-    public void DescribePermission_ReturnsHumanReadableLabels()
+    public void AvaloniaProtectionRendererHasNoLocalBehaviorOwnerOrEnglishPermissionSwitch()
     {
-        ProtectionShellGlue.DescribePermission(SheetProtectionPermission.SelectLockedCells)
-            .Should().Be("Select locked cells");
-        ProtectionShellGlue.DescribePermission(SheetProtectionPermission.UsePivotTableReports)
-            .Should().Be("Use PivotTable and PivotChart reports");
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var source = File.ReadAllText(Path.Combine(root, "src", "FreeX.App.Avalonia", "MainWindow.Protection.cs"));
+        var gluePath = Path.Combine(root, "src", "FreeX.App.Avalonia", "Dialogs", "ProtectionShellGlue.cs");
+
+        source.Should().Contain("ProtectionSession.ExecuteSheet(");
+        source.Should().Contain("ProtectionSession.ExecuteWorkbook(");
+        source.Should().Contain("Content = UiText.Get(option.LabelKey)");
+        source.Should().NotContain("new ProtectSheetCommand");
+        source.Should().NotContain("new UnprotectSheetCommand");
+        source.Should().NotContain("new ProtectWorkbookCommand");
+        source.Should().NotContain("new UnprotectWorkbookCommand");
+        source.Should().NotContain("Select locked cells");
+        source.Should().NotContain("Use PivotTable and PivotChart reports");
+        source.Should().NotContain("ApplyWorkbookLockWindows");
+        source.Should().NotContain("ProtectText(");
+        File.Exists(gluePath).Should().BeFalse();
     }
 
-    /// <summary>A minimal <see cref="ICommandContext"/> for running protection commands against a workbook.</summary>
+    private static (Workbook Workbook, Sheet Sheet) CreateWorkbook()
+    {
+        var workbook = new Workbook("Book");
+        return (workbook, workbook.AddSheet("Sheet1"));
+    }
+
+    private static ProtectionWorkflowSession CreateSession(Workbook workbook) =>
+        new(
+            workbook,
+            (command, _) =>
+            {
+                var result = command.Apply(new ProtectionTestCommandContext(workbook));
+                return new ProtectionCommandExecutionResult(
+                    result.Success,
+                    result.ErrorMessage,
+                    result.IsNoOp);
+            });
+
     private sealed class ProtectionTestCommandContext(Workbook workbook) : ICommandContext
     {
         public Workbook Workbook { get; } = workbook;
 
         public Sheet GetSheet(SheetId sheetId) =>
-            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
+            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException();
     }
 }

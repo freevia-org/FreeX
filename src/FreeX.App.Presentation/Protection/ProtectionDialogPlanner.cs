@@ -1,3 +1,5 @@
+using FreeX.Core.Model;
+
 namespace FreeX.App.Presentation.Protection;
 
 public enum ProtectionDialogMode
@@ -9,7 +11,7 @@ public enum ProtectionDialogMode
 public sealed record ProtectionDialogResult(
     ProtectionDialogMode Mode,
     string? Password,
-    IReadOnlyList<string> SelectedSheetPermissions);
+    IReadOnlyList<SheetProtectionPermission> SelectedSheetPermissions);
 
 public static class ProtectionDialogPlanner
 {
@@ -23,7 +25,7 @@ public static class ProtectionDialogPlanner
     public static ProtectionDialogResult CreateSheetResult(
         bool isProtected,
         string? password,
-        IReadOnlyList<string> selectedSheetPermissions) =>
+        IReadOnlyList<SheetProtectionPermission> selectedSheetPermissions) =>
         isProtected
             ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, password, [])
             : new ProtectionDialogResult(ProtectionDialogMode.Protect, password, selectedSheetPermissions);
@@ -32,7 +34,7 @@ public static class ProtectionDialogPlanner
         bool isProtected,
         string? password,
         string? confirmation,
-        IReadOnlyList<string> defaultSelectedSheetPermissions) =>
+        IReadOnlyList<SheetProtectionPermission> defaultSelectedSheetPermissions) =>
         isProtected || PasswordsMatch(password, confirmation)
             ? CreateSheetResult(isProtected, password, defaultSelectedSheetPermissions)
             : new ProtectionDialogResult(ProtectionDialogMode.Protect, null, defaultSelectedSheetPermissions);

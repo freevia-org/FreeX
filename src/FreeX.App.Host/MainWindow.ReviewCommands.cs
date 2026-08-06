@@ -435,31 +435,31 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
+        var state = ProtectionSession.ProjectSheet(sheet);
         string? unprotectPassword = null;
-        if (sheet.IsProtected && !TryConfirmSheetUnprotectPassword(sheet, out unprotectPassword))
+        if (state.IsProtected && !TryConfirmSheetUnprotectPassword(sheet, out unprotectPassword))
             return;
 
-        var result = ProtectionDialogPlanner.CreateSheetResult(
-            sheet.IsProtected,
-            unprotectPassword,
-            SheetProtectionPermissionLabels.GetDefaultSelectedSheetPermissions());
-        if (!sheet.IsProtected)
+        var options = state.Options with { Password = unprotectPassword };
+        if (!state.IsProtected)
         {
             var dialog = new PasswordProtectionDialog(
                 UiText.Get("MainWindowMessage_ProtectSheetTitle"),
                 UiText.Get("MainWindowMessage_OptionalPasswordLabel")) { Owner = this };
             if (dialog.ShowDialog() != true) return;
-            result = ProtectionDialogPlanner.CreateSheetResult(
-                sheet.IsProtected,
+            options = ProtectSheetOptions.FromCorePermissions(
+                dialog.SelectedSheetPermissions,
                 dialog.Password,
-                dialog.SelectedSheetPermissions);
+                dialog.Password);
         }
 
-        var action = SheetProtectionWorkflow.CreateCommand(sheet, result);
-        if (!TryExecuteCommand(action.Command, action.Title))
+        var outcome = ProtectionSession.ExecuteSheet(sheet, options);
+        if (!outcome.Success)
             return;
 
-        _messageService.ShowInfo(action.SuccessMessage, action.Title);
+        _messageService.ShowInfo(
+            UiText.Get(outcome.SuccessMessageResourceKey),
+            UiText.Get(outcome.TitleResourceKey));
         RefreshSheetTabs();
     }
 
@@ -471,8 +471,9 @@ public partial class MainWindow
 
     private void ProtectWorkbookBtn_Click(object sender, RoutedEventArgs e)
     {
+        var state = ProtectionSession.ProjectWorkbook();
         string? pwd = null;
-        if (!_workbook.IsStructureProtected)
+        if (!state.IsStructureProtected)
         {
             var dialog = new PasswordProtectionDialog(
                 UiText.Get("MainWindowMessage_ProtectWorkbookTitle"),
@@ -485,11 +486,13 @@ public partial class MainWindow
             return;
         }
 
-        var action = WorkbookProtectionWorkflow.CreateCommand(_workbook, pwd);
-        if (!TryExecuteCommand(action.Command, action.Title))
+        var outcome = ProtectionSession.ExecuteWorkbook(pwd);
+        if (!outcome.Success)
             return;
 
-        _messageService.ShowInfo(action.SuccessMessage, action.Title);
+        _messageService.ShowInfo(
+            UiText.Get(outcome.SuccessMessageResourceKey),
+            UiText.Get(outcome.TitleResourceKey));
         RefreshWorkbookProtectionUi();
         RefreshSheetTabs();
     }

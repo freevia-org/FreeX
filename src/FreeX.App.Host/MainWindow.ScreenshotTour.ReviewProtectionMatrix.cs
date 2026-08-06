@@ -52,12 +52,12 @@ public partial class MainWindow
             openDialog = null;
 
             ExecuteReviewProtectionMatrixCommand(
-                SheetProtectionWorkflow.CreateCommand(
+                ProtectionWorkflowSession.CreateSheetCommandPlan(
                     context.Sheet,
-                    ProtectionDialogPlanner.CreateSheetResult(
-                        context.Sheet.IsProtected,
+                    ProtectSheetOptions.FromCorePermissions(
+                        context.SelectedPermissions,
                         context.Password,
-                        context.SelectedPermissionLabels)).Command,
+                        context.Password)).Command!,
                 "Protect Sheet",
                 commandOutcomes);
             RefreshSheetProtectionUi();
@@ -132,12 +132,12 @@ public partial class MainWindow
                 commandOutcomes,
                 refreshOnSuccess: false);
             ExecuteReviewProtectionMatrixCommand(
-                SheetProtectionWorkflow.CreateCommand(
+                ProtectionWorkflowSession.CreateSheetCommandPlan(
                     context.Sheet,
-                    ProtectionDialogPlanner.CreateSheetResult(
-                        context.Sheet.IsProtected,
+                    ProtectSheetOptions.FromCorePermissions(
+                        SheetProtectionOptions.DefaultEnabledPermissions,
                         context.Password,
-                        SheetProtectionPermissionLabels.GetDefaultSelectedSheetPermissions())).Command,
+                        context.Password)).Command!,
                 "Unprotect Sheet",
                 commandOutcomes);
             RefreshSheetProtectionUi();
@@ -151,16 +151,16 @@ public partial class MainWindow
                 "After successful command-path unprotect, Protect Sheet returns to its protect label and Allow Users to Edit Ranges is enabled."));
 
             ExecuteReviewProtectionMatrixCommand(
-                SheetProtectionWorkflow.CreateCommand(
+                ProtectionWorkflowSession.CreateSheetCommandPlan(
                     context.Sheet,
-                    ProtectionDialogPlanner.CreateSheetResult(
-                        context.Sheet.IsProtected,
+                    ProtectSheetOptions.FromCorePermissions(
+                        context.SelectedPermissions,
                         context.Password,
-                        context.SelectedPermissionLabels)).Command,
+                        context.Password)).Command!,
                 "Protect Sheet for persistence",
                 commandOutcomes);
             ExecuteReviewProtectionMatrixCommand(
-                WorkbookProtectionWorkflow.CreateCommand(_workbook, context.Password).Command,
+                ProtectionWorkflowSession.CreateWorkbookCommandPlan(_workbook, context.Password).Command!,
                 "Protect Workbook",
                 commandOutcomes);
             RefreshSheetProtectionUi();
@@ -173,7 +173,7 @@ public partial class MainWindow
                 "Review tab",
                 "Review > Protect Workbook",
                 "freex_review_protection_matrix_protect_workbook_structure",
-                "Workbook structure protection is enabled through WorkbookProtectionWorkflow and the Review Protect Workbook button shows the unprotect state."));
+                "Workbook structure protection is enabled through ProtectionWorkflowSession and the Review Protect Workbook button shows the unprotect state."));
 
             var savedWorkbookPath = Path.Combine(outputDir, ReviewProtectionMatrixTourSavedWorkbookFileName);
             await SaveReviewProtectionMatrixTourWorkbookAsync(savedWorkbookPath);
@@ -281,7 +281,7 @@ public partial class MainWindow
             SheetProtectionPermission.FormatRows
         };
         var selectedLabels = selectedPermissions
-            .Select(SheetProtectionPermissionLabels.FormatSheetPermission)
+            .Select(LocalizeReviewProtectionPermission)
             .ToArray();
 
         SetSelectionRange(new GridRange(lockedCell, lockedCell), lockedCell);
@@ -301,6 +301,7 @@ public partial class MainWindow
             AllowEditCell: allowEditCell,
             AllowEditRange: allowEditRange,
             Password: "matrix-secret",
+            SelectedPermissions: selectedPermissions,
             SelectedPermissionLabels: selectedLabels,
             SavedWorkbookOutputFileName: ReviewProtectionMatrixTourSavedWorkbookFileName,
             SavedWorkbookBytes: 0,
@@ -409,12 +410,19 @@ public partial class MainWindow
             AllowEditCell: new CellAddress(sheet.Id, 4, 2),
             AllowEditRange: Range(sheet.Id, 4, 2, 4, 3),
             Password: "matrix-secret",
+            SelectedPermissions:
+            [
+                SheetProtectionPermission.SelectUnlockedCells,
+                SheetProtectionPermission.Sort,
+                SheetProtectionPermission.UseAutoFilter,
+                SheetProtectionPermission.FormatRows
+            ],
             SelectedPermissionLabels:
             [
-                SheetProtectionPermissionLabels.FormatSheetPermission(SheetProtectionPermission.SelectUnlockedCells),
-                SheetProtectionPermissionLabels.FormatSheetPermission(SheetProtectionPermission.Sort),
-                SheetProtectionPermissionLabels.FormatSheetPermission(SheetProtectionPermission.UseAutoFilter),
-                SheetProtectionPermissionLabels.FormatSheetPermission(SheetProtectionPermission.FormatRows)
+                LocalizeReviewProtectionPermission(SheetProtectionPermission.SelectUnlockedCells),
+                LocalizeReviewProtectionPermission(SheetProtectionPermission.Sort),
+                LocalizeReviewProtectionPermission(SheetProtectionPermission.UseAutoFilter),
+                LocalizeReviewProtectionPermission(SheetProtectionPermission.FormatRows)
             ],
             SavedWorkbookOutputFileName: ReviewProtectionMatrixTourSavedWorkbookFileName,
             SavedWorkbookBytes: 0,
@@ -677,6 +685,9 @@ public partial class MainWindow
         await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.ReviewProtectionMatrixTourManifest);
     }
 
+    private static string LocalizeReviewProtectionPermission(SheetProtectionPermission permission) =>
+        UiText.Get(SheetProtectionOptions.All.Single(option => option.Permission == permission).LabelKey);
+
     private sealed record ReviewProtectionMatrixTourContext(
         string SheetName,
         Sheet Sheet,
@@ -685,6 +696,7 @@ public partial class MainWindow
         CellAddress AllowEditCell,
         GridRange AllowEditRange,
         string Password,
+        IReadOnlyList<SheetProtectionPermission> SelectedPermissions,
         IReadOnlyList<string> SelectedPermissionLabels,
         string SavedWorkbookOutputFileName,
         long SavedWorkbookBytes,

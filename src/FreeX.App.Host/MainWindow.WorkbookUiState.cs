@@ -477,20 +477,20 @@ public partial class MainWindow
         if (FindRenderedRibbonControl("Protect Sheet") is not ButtonBase protectSheet)
             return;
 
-        var uiText = SheetProtectionWorkflow.GetUiText(sheet);
-        SetRibbonCommandButtonLabel(protectSheet, uiText.ButtonContent);
-        RibbonTooltip.SetTitle(protectSheet, uiText.TooltipTitle);
-        RibbonTooltip.SetDescription(protectSheet, uiText.TooltipDescription);
+        var plan = ProtectionWorkflowSession.CreateSheetChromePlan(sheet);
+        SetRibbonCommandButtonLabel(protectSheet, UiText.Get(plan.ButtonContentResourceKey));
+        RibbonTooltip.SetTitle(protectSheet, UiText.Get(plan.TooltipTitleResourceKey));
+        RibbonTooltip.SetDescription(protectSheet, UiText.Get(plan.TooltipDescriptionResourceKey));
     }
 
     private void RefreshWorkbookProtectionUi()
     {
-        var uiText = WorkbookProtectionWorkflow.GetUiText(_workbook);
+        var plan = ProtectionWorkflowSession.CreateWorkbookChromePlan(_workbook);
         if (FindRenderedRibbonControl("Protect Workbook") is ButtonBase protectWorkbook)
         {
-            SetRibbonCommandButtonLabel(protectWorkbook, uiText.ButtonContent);
-            RibbonTooltip.SetTitle(protectWorkbook, uiText.TooltipTitle);
-            RibbonTooltip.SetDescription(protectWorkbook, uiText.TooltipDescription);
+            SetRibbonCommandButtonLabel(protectWorkbook, UiText.Get(plan.ButtonContentResourceKey));
+            RibbonTooltip.SetTitle(protectWorkbook, UiText.Get(plan.TooltipTitleResourceKey));
+            RibbonTooltip.SetDescription(protectWorkbook, UiText.Get(plan.TooltipDescriptionResourceKey));
         }
 
         RefreshBackstageInfoProtectionButton();

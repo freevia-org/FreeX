@@ -1,5 +1,6 @@
+using System.IO;
 using FluentAssertions;
-using FreeX.Core.Commands;
+using FreeX.App.Presentation.Protection;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -7,90 +8,101 @@ namespace FreeX.App.Host.Tests;
 public sealed class SheetProtectionWorkflowTests
 {
     [Fact]
-    public void CreateCommand_ForUnprotectedSheet_ProtectsWithPasswordPromptResult()
+    public void SharedSessionProtectsWithLocalizedOutcomeAndSelectedPermissions()
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-
-        var action = SheetProtectionWorkflow.CreateCommand(sheet, "secret");
-
-        action.Title.Should().Be(UiText.Get("MainWindowMessage_ProtectSheetTitle"));
-        action.SuccessMessage.Should().Contain("protected");
-        action.Command.Should().BeOfType<ProtectSheetCommand>();
-    }
-
-    [Fact]
-    public void CreateCommand_ForUnprotectedSheet_CarriesSelectedDialogPermissions()
-    {
-        var workbook = new Workbook("test");
-        var sheet = workbook.AddSheet("Sheet1");
-        var result = ProtectionDialogPlanner.CreateSheetResult(
-            sheet.IsProtected,
+        var session = CreateSession(workbook);
+        var options = ProtectSheetOptions.FromCorePermissions(
+            [SheetProtectionPermission.SelectUnlockedCells, SheetProtectionPermission.Sort],
             password: "secret",
-            selectedSheetPermissions: ["Select unlocked cells", "Sort"]);
+            passwordConfirmation: "secret");
 
-        var action = SheetProtectionWorkflow.CreateCommand(sheet, result);
+        var outcome = session.ExecuteSheet(sheet, options);
 
-        action.Title.Should().Be(UiText.Get("MainWindowMessage_ProtectSheetTitle"));
-        action.SelectedSheetPermissions.Should().Equal(["Select unlocked cells", "Sort"]);
-        action.Command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+        outcome.Success.Should().BeTrue();
+        UiText.Get(outcome.TitleResourceKey).Should().Be(UiText.Get("MainWindowMessage_ProtectSheetTitle"));
+        UiText.Get(outcome.SuccessMessageResourceKey).Should().Contain("protected");
+        sheet.IsProtected.Should().BeTrue();
         sheet.ProtectionPermissions.Should().Equal(
             SheetProtectionPermission.SelectUnlockedCells,
             SheetProtectionPermission.Sort);
     }
 
     [Fact]
-    public void CreateCommand_ForProtectedSheet_UnprotectsWithoutNewPassword()
+    public void SharedSessionUnprotectsProtectedSheetWithoutReusingPermissionInput()
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
+        var session = CreateSession(workbook);
+        session.ExecuteSheet(sheet, "secret").Success.Should().BeTrue();
+
+        var outcome = session.ExecuteSheet(
+            sheet,
+            ProtectSheetOptions.FromCorePermissions(
+                [SheetProtectionPermission.Sort],
+                password: "secret"));
+
+        outcome.Success.Should().BeTrue();
+        outcome.CommandIntent.Should().Be(ProtectionCommandIntent.UnprotectSheet);
+        UiText.Get(outcome.TitleResourceKey).Should().Be(UiText.Get("Protection_UnprotectSheetTitle"));
+        sheet.IsProtected.Should().BeFalse();
+        sheet.ProtectionPermissions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SharedChromePlanKeepsWpfLocalizedRendering()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        var protect = ProtectionWorkflowSession.CreateSheetChromePlan(sheet);
+        UiText.Get(protect.ButtonContentResourceKey).Should().Be(UiText.Get("MainWindow_Content_ProtectSheet"));
+
         sheet.IsProtected = true;
-        sheet.ProtectionPassword = "secret";
-
-        var action = SheetProtectionWorkflow.CreateCommand(sheet, "new-password-should-be-ignored");
-
-        action.Title.Should().Be(UiText.Get("Protection_UnprotectSheetTitle"));
-        action.SuccessMessage.Should().Contain("unprotected");
-        action.Command.Should().BeOfType<UnprotectSheetCommand>();
+        var unprotect = ProtectionWorkflowSession.CreateSheetChromePlan(sheet);
+        UiText.Get(unprotect.ButtonContentResourceKey).Should().Be(UiText.Get("Protection_UnprotectSheetButton"));
     }
 
     [Fact]
-    public void GetUiText_ForUnprotectedSheet_ShowsProtectSheet()
+    public void WpfSheetProtectionDelegatesBehaviorToSharedSession()
     {
-        var workbook = new Workbook("test");
-        var sheet = workbook.AddSheet("Sheet1");
+        var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
+        var dialogSource = DialogSourceTestSupport.ReadHostSources("ProtectionDialogs.cs");
 
-        var uiText = SheetProtectionWorkflow.GetUiText(sheet);
-
-        uiText.ButtonContent.Should().Be(UiText.Get("MainWindow_Content_ProtectSheet"));
-        uiText.TooltipTitle.Should().Be(UiText.Get("MainWindow_TooltipTitle_ProtectSheet"));
-        uiText.TooltipDescription.Should().Be(UiText.Get("MainWindow_TooltipDescription_SetSheetProtectionForLockedCellsWithAnOptionalPassword"));
+        reviewSource.Should().Contain("ProtectionSession.ProjectSheet(sheet)");
+        reviewSource.Should().Contain("ProtectionSession.ExecuteSheet(sheet, options)");
+        reviewSource.Should().NotContain("new ProtectSheetCommand");
+        reviewSource.Should().NotContain("new UnprotectSheetCommand");
+        dialogSource.Should().Contain("foreach (var option in SheetProtectionOptions.All)");
+        dialogSource.Should().Contain("Content = UiText.Get(option.LabelKey)");
+        var root = WorkspaceFileLocator.FindWorkspaceRoot();
+        File.Exists(Path.Combine(root, "src", "FreeX.App.Host", "SheetProtectionWorkflow.cs"))
+            .Should().BeFalse();
+        File.Exists(Path.Combine(root, "src", "FreeX.App.Host", "SheetProtectionPermissionLabels.cs"))
+            .Should().BeFalse();
     }
 
     [Fact]
-    public void GetUiText_ForProtectedSheet_ShowsUnprotectSheet()
-    {
-        var workbook = new Workbook("test");
-        var sheet = workbook.AddSheet("Sheet1");
-        sheet.IsProtected = true;
-
-        var uiText = SheetProtectionWorkflow.GetUiText(sheet);
-
-        uiText.ButtonContent.Should().Be(UiText.Get("Protection_UnprotectSheetButton"));
-        uiText.TooltipTitle.Should().Be(UiText.Get("Protection_UnprotectSheetTitle"));
-        uiText.TooltipDescription.Should().Be(UiText.Get("Protection_UnprotectSheetDescription"));
-    }
-
-    [Fact]
-    public void ProtectSheetDialogPrompt_UsesPasswordAccessKey()
+    public void ProtectSheetDialogPromptUsesPasswordAccessKey()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
-        UiText.Get("MainWindowMessage_OptionalPasswordLabel")
-            .Should().Contain("_", "the password prompt should expose an access key");
+        UiText.Get("MainWindowMessage_OptionalPasswordLabel").Should().Contain("_");
         source.Should().Contain("new PasswordProtectionDialog(");
         source.Should().Contain("UiText.Get(\"MainWindowMessage_ProtectSheetTitle\"),");
         source.Should().Contain("UiText.Get(\"MainWindowMessage_OptionalPasswordLabel\"))");
     }
 
+    private static ProtectionWorkflowSession CreateSession(Workbook workbook) =>
+        new(
+            workbook,
+            (command, _) =>
+            {
+                var result = command.Apply(new TestCommandContext(workbook));
+                return new ProtectionCommandExecutionResult(
+                    result.Success,
+                    result.ErrorMessage,
+                    result.IsNoOp);
+            });
 }

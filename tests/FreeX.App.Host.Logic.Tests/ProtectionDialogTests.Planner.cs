@@ -22,7 +22,7 @@ public sealed partial class ProtectionDialogTests
         var result = ProtectionDialogPlanner.CreateSheetResult(
             sheet.IsProtected,
             password: "ignored",
-            SheetProtectionPermissionLabels.GetDefaultSelectedSheetPermissions());
+            SheetProtectionOptions.DefaultEnabledPermissions);
 
         result.Mode.Should().Be(ProtectionDialogMode.Unprotect);
         result.Password.Should().Be("ignored");
@@ -37,11 +37,13 @@ public sealed partial class ProtectionDialogTests
         var result = ProtectionDialogPlanner.CreateSheetResult(
             sheet.IsProtected,
             password: "secret",
-            SheetProtectionPermissionLabels.GetDefaultSelectedSheetPermissions());
+            SheetProtectionOptions.DefaultEnabledPermissions);
 
         result.Mode.Should().Be(ProtectionDialogMode.Protect);
         result.Password.Should().Be("secret");
-        result.SelectedSheetPermissions.Should().Equal(["Select locked cells", "Select unlocked cells"]);
+        result.SelectedSheetPermissions.Should().Equal(
+            SheetProtectionPermission.SelectLockedCells,
+            SheetProtectionPermission.SelectUnlockedCells);
     }
 
     [Fact]
@@ -53,11 +55,17 @@ public sealed partial class ProtectionDialogTests
         var result = ProtectionDialogPlanner.CreateSheetResult(
             sheet.IsProtected,
             password: "secret",
-            selectedSheetPermissions: ["Select unlocked cells", "Sort"]);
+            selectedSheetPermissions:
+            [
+                SheetProtectionPermission.SelectUnlockedCells,
+                SheetProtectionPermission.Sort,
+            ]);
 
         result.Mode.Should().Be(ProtectionDialogMode.Protect);
         result.Password.Should().Be("secret");
-        result.SelectedSheetPermissions.Should().Equal(["Select unlocked cells", "Sort"]);
+        result.SelectedSheetPermissions.Should().Equal(
+            SheetProtectionPermission.SelectUnlockedCells,
+            SheetProtectionPermission.Sort);
     }
 
     [Fact]
@@ -70,7 +78,7 @@ public sealed partial class ProtectionDialogTests
             sheet.IsProtected,
             password: "secret",
             confirmation: "Secret",
-            SheetProtectionPermissionLabels.GetDefaultSelectedSheetPermissions());
+            SheetProtectionOptions.DefaultEnabledPermissions);
 
         result.Mode.Should().Be(ProtectionDialogMode.Protect);
         result.Password.Should().BeNull();
@@ -79,7 +87,7 @@ public sealed partial class ProtectionDialogTests
     [Fact]
     public void DefaultSheetPermissions_MatchExcelProtectSheetChecklist()
     {
-        SheetProtectionPermissionLabels.GetDefaultSheetPermissions()
+        SheetProtectionOptions.All.Select(option => UiText.Get(option.LabelKey))
             .Should()
             .Equal([
                 "Select locked cells",
@@ -131,12 +139,11 @@ public sealed partial class ProtectionDialogTests
     public void Host_UsesPortableProtectionPlannersAndOnlyLocalizesPermissionLabels()
     {
         var source = DialogSourceTestSupport.ReadHostSources(
-            "SheetProtectionWorkflow.cs",
             "ProtectionDialogs.cs",
-            "AllowEditRangeDialog.cs",
-            "SheetProtectionPermissionLabels.cs");
+            "MainWindow.ProtectionWorkflowSession.cs",
+            "AllowEditRangeDialog.cs");
 
-        source.Should().Contain("ProtectionDialogPlanner.CreateSheetResult(");
+        source.Should().Contain("ProtectionWorkflowSession");
         source.Should().Contain("AllowEditRangePlanner.TryParseRange(");
         source.Should().Contain("SheetProtectionOptions.All");
         source.Should().NotContain("new ProtectionDialogResult");

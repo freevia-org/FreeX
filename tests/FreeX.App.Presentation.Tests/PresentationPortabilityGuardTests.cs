@@ -260,9 +260,12 @@ public sealed class PresentationPortabilityGuardTests
         File.Exists(Path.Combine(presentationRoot, "Protection", "ProtectionDialogPlanner.cs"))
             .Should()
             .BeTrue("protect/unprotect result creation should be shared by renderers");
+        File.Exists(Path.Combine(presentationRoot, "Protection", "ProtectionWorkflowSession.cs"))
+            .Should()
+            .BeTrue("protect/unprotect commands, outcomes, and state transitions should be shared by renderers");
         File.Exists(Path.Combine(presentationRoot, "Protection", "ProtectionWorkflowPlanner.cs"))
             .Should()
-            .BeTrue("protect/unprotect command intents and message resource keys should be shared by renderers");
+            .BeFalse("the shared protection session supersedes the narrower planner");
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ProtectionInputParser.cs"))
             .Should()
             .BeFalse("WPF host should use the shared protection parser instead of carrying a renderer-local copy");
@@ -272,6 +275,18 @@ public sealed class PresentationPortabilityGuardTests
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AllowEditRangeDialogPlanner.cs"))
             .Should()
             .BeFalse("WPF host should use the shared allow-edit-range planner instead of carrying a renderer-local copy");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "SheetProtectionWorkflow.cs"))
+            .Should()
+            .BeFalse("WPF should execute sheet protection through the shared session");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "WorkbookProtectionWorkflow.cs"))
+            .Should()
+            .BeFalse("WPF should execute workbook protection through the shared session");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "SheetProtectionPermissionLabels.cs"))
+            .Should()
+            .BeFalse("permission identity and label keys should come from shared Presentation options");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "Dialogs", "ProtectionShellGlue.cs"))
+            .Should()
+            .BeFalse("Avalonia should execute protection through the shared session");
         File.ReadAllText(hostProtectionDialogsPath)
             .Should()
             .NotContain("public enum ProtectionDialogMode")

@@ -101,7 +101,8 @@ public sealed partial class ProtectionDialogTests
         source.Should().Contain("ConfirmPasswordDialog");
         source.Should().Contain("UiText.Get(\"Protection_ConfirmPassword\")");
         source.Should().NotContain("_Confirm password:");
-        source.Should().Contain("SheetProtectionPermissionLabels.GetDefaultSheetPermissions()");
+        source.Should().Contain("foreach (var option in SheetProtectionOptions.All)");
+        source.Should().Contain("Content = UiText.Get(option.LabelKey)");
         var protectionOptionsSource = WorkspaceFileLocator.ReadAllText(
             "src",
             "FreeX.App.Presentation",
@@ -118,7 +119,8 @@ public sealed partial class ProtectionDialogTests
     {
         var source = ReadProtectionDialogSources();
 
-        source.Should().Contain("DialogSizing.ApplyContentHeight(this, width: isProtectSheet ? 430 : 380, minHeight: isProtectSheet ? 540 : 280);");
+        source.Should().Contain("width: isProtectSheet ? ProtectionDialogPlanner.ProtectSheetWidth : ProtectionDialogPlanner.ProtectWorkbookCaptureWidth");
+        source.Should().Contain("minHeight: isProtectSheet ? ProtectionDialogPlanner.ProtectSheetHeight : ProtectionDialogPlanner.ProtectWorkbookCaptureHeight");
         source.Should().Contain("DialogSizing.ApplyContentHeight(this, width: 360, minHeight: 180);");
         source.Should().NotContain("Height = isProtectSheet ? 540 : 250;");
         source.Should().NotContain("Height = 170;");
@@ -139,7 +141,7 @@ public sealed partial class ProtectionDialogTests
 
                 dialog.SizeToContent.Should().Be(SizeToContent.Height);
                 dialog.MinWidth.Should().Be(380);
-                dialog.MinHeight.Should().Be(280);
+                dialog.MinHeight.Should().Be(ProtectionDialogPlanner.ProtectWorkbookCaptureHeight);
                 var root = dialog.Content.Should().BeAssignableTo<FrameworkElement>().Subject;
                 var passwordBox = DialogSourceTestSupport.GetPrivateField<PasswordBox>(dialog, "_passwordBox");
                 var buttons = WpfTestTree.FindVisualDescendants<Button>(dialog)
