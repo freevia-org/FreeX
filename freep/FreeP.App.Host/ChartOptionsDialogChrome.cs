@@ -178,7 +178,7 @@ internal sealed class ChartOptionsDialogForm
             {
                 TextBox textBox => new ChartOptionsDialogFieldValue(Text: textBox.Text),
                 ComboBox comboBox => new ChartOptionsDialogFieldValue(SelectedIndex: comboBox.SelectedIndex),
-                CheckBox checkBox => new ChartOptionsDialogFieldValue(IsChecked: checkBox.IsChecked == true),
+                CheckBox checkBox => new ChartOptionsDialogFieldValue(IsChecked: checkBox.IsChecked),
                 _ => throw new InvalidOperationException($"Unsupported chart dialog control: {pair.Value.GetType().Name}."),
             }));
 

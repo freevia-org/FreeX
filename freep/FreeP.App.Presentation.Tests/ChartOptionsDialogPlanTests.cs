@@ -116,6 +116,85 @@ public sealed class ChartOptionsDialogPlanTests
         plan.Height.Should().Be(hasSecondaryFields ? ChartPieOptionsPlanner.DefaultDialogHeight : 250);
     }
 
+    [Fact]
+    public void AxisPlanOwnsSectionsTriStateDefaultsAndAccessibilityMetadata()
+    {
+        var session = new ChartAxisOptionsDialogSession(CreateEditor(new ChartShape()));
+
+        var plan = session.BuildDialogPlan();
+
+        plan.IsScrollable.Should().BeTrue();
+        plan.Groups.Select(group => group.Id).Should().Equal(
+            "axis",
+            "axis-title",
+            "axis-scale",
+            "axis-gridlines",
+            "axis-labels");
+        plan.Field(ChartOptionsDialogFieldId.AxisTitleBold).IsThreeState.Should().BeTrue();
+        plan.Field(ChartOptionsDialogFieldId.AxisTitleBold).IsChecked.Should().BeNull();
+        plan.Fields.Values.Should().OnlyContain(field =>
+            !string.IsNullOrWhiteSpace(field.AccessibleName)
+            && field.AutomationId.StartsWith("FreeP.ChartOptions.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void DisplayPlanOwnsChartSubtypeEnablement()
+    {
+        var session = new ChartDisplayOptionsDialogSession(CreateEditor(new ChartShape
+        {
+            ChartType = ChartType.Waterfall,
+        }));
+
+        var plan = session.BuildDialogPlan();
+
+        plan.Field(ChartOptionsDialogFieldId.WaterfallConnectorLines).IsEnabled.Should().BeTrue();
+        plan.Field(ChartOptionsDialogFieldId.HighLowLines).IsEnabled.Should().BeFalse();
+        plan.Field(ChartOptionsDialogFieldId.UpDownBars).IsEnabled.Should().BeFalse();
+        plan.Groups.Select(group => group.Id).Should().ContainInOrder(
+            "chart-title",
+            "chart-display",
+            "data-label-content",
+            "data-label-style",
+            "plot");
+    }
+
+    [Fact]
+    public void PointSelectionTransitionRebuildsChoicesAndPortableInput()
+    {
+        var session = new ChartPointOptionsDialogSession(CreateEditor(CreateSelectionChart()));
+
+        session.BuildDialogPlan().Field(ChartOptionsDialogFieldId.Point).ChoiceLabels.Should().HaveCount(1);
+        session.SelectSeries(1);
+        var plan = session.BuildDialogPlan();
+        var input = session.BuildInput(ValuesFromPlan(plan));
+
+        plan.Field(ChartOptionsDialogFieldId.Point).ChoiceLabels.Should().HaveCount(3);
+        input.SeriesIndex.Should().Be(1);
+        input.PointIndex.Should().Be(0);
+        input.LabelBold.Should().BeNull();
+    }
+
+    [Fact]
+    public void SeriesPlanAndPortableInputPreserveInheritedTriStateValues()
+    {
+        var chart = CreateSelectionChart();
+        chart.Series[1].InvertIfNegative = null;
+        var session = new ChartSeriesOptionsDialogSession(CreateEditor(chart), initialSeriesIndex: 1);
+
+        var plan = session.BuildDialogPlan();
+        var input = session.BuildInput(ValuesFromPlan(plan));
+
+        plan.Groups.Select(group => group.Id).Should().Equal(
+            "series-selection",
+            "series-appearance",
+            "series-label-content",
+            "series-label-style",
+            "series-error-bars",
+            "series-trendline");
+        plan.Field(ChartOptionsDialogFieldId.InvertIfNegative).IsThreeState.Should().BeTrue();
+        input.InvertIfNegative.Should().BeNull();
+    }
+
     private static ChartShape CreateBubbleChart() => new()
     {
         ChartType = ChartType.Bubble,
@@ -123,6 +202,27 @@ public sealed class ChartOptionsDialogPlanTests
         BubbleSizeRepresents = BubbleSizeRepresentation.Area,
         ShowNegativeBubbles = false,
     };
+
+    private static ChartShape CreateSelectionChart()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(["Q1", "Q2", "Q3"]);
+        var revenue = new ChartSeries { Name = "Revenue" };
+        revenue.Values.Add(10);
+        var margin = new ChartSeries { Name = "Margin" };
+        margin.Values.AddRange([1.0, 2.0, 3.0]);
+        chart.Series.Add(revenue);
+        chart.Series.Add(margin);
+        return chart;
+    }
+
+    private static ChartOptionsDialogValues ValuesFromPlan(ChartOptionsDialogPlan plan) => new(
+        plan.Fields.ToDictionary(
+            pair => pair.Key,
+            pair => new ChartOptionsDialogFieldValue(
+                pair.Value.Text,
+                pair.Value.SelectedIndex,
+                pair.Value.IsChecked)));
 
     private static EditingSession CreateEditor(ChartShape chart)
     {
