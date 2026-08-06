@@ -90,6 +90,51 @@ public sealed class SlideZoomInsertionPlannerTests
     }
 
     [Fact]
+    public void Retargeting_clears_stale_auto_preview_and_undo_restores_it()
+    {
+        var presentation = BuildPresentation();
+        presentation.Slides.Add(new Slide { Id = "slide-3", NumericId = 258, Title = "Slide 3" });
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = session.InsertSlideZoom("slide-2");
+        var oldPreview = new byte[] { 7, 8, 9 };
+
+        session.ResetZoomCoverImage(shape.Id, oldPreview, "image/png").Should().BeTrue();
+        shape.Picture!.Bytes.Should().BeEquivalentTo(oldPreview);
+        shape.PreservedObject!.Parts.Should().ContainSingle();
+
+        session.SetSlideZoomTarget(shape.Id, "slide-3").Should().BeTrue();
+        shape.PreservedObject.Parts.Should().BeEmpty();
+        shape.PreservedObject.SlideRels.Values.Should().NotContain(relation =>
+            relation.RelType.EndsWith("/image", StringComparison.OrdinalIgnoreCase));
+        shape.PreservedObject.RawXml.Should().NotContain("embed=");
+        shape.Picture.Should().BeNull();
+
+        session.Undo();
+        shape.PreservedObject.ZoomTargetSlideNumericId.Should().Be(257);
+        shape.PreservedObject.Parts.Values.Should().ContainSingle().Which.Should().BeEquivalentTo(oldPreview);
+        shape.Picture!.Bytes.Should().BeEquivalentTo(oldPreview);
+        shape.PreservedObject.RawXml.Should().Contain("embed=");
+    }
+
+    [Fact]
+    public void Retargeting_preserves_user_authored_cover_image()
+    {
+        var presentation = BuildPresentation();
+        presentation.Slides.Add(new Slide { Id = "slide-3", NumericId = 258, Title = "Slide 3" });
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = session.InsertSlideZoom("slide-2");
+        var cover = new byte[] { 3, 2, 1 };
+
+        session.SetZoomCoverImage(shape.Id, cover, "image/png").Should().BeTrue();
+        session.SetSlideZoomTarget(shape.Id, "slide-3").Should().BeTrue();
+
+        shape.PreservedObject!.ZoomProperties!.ImageType.Should().Be("cover");
+        shape.PreservedObject.Parts.Values.Should().ContainSingle().Which.Should().BeEquivalentTo(cover);
+        shape.Picture!.Bytes.Should().BeEquivalentTo(cover);
+        shape.PreservedObject.RawXml.Should().Contain("embed=");
+    }
+
+    [Fact]
     public void Rejects_current_slide_as_zoom_target()
     {
         var presentation = BuildPresentation();
