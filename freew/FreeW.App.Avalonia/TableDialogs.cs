@@ -200,6 +200,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
             DefaultButtonBorderBrush = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
         };
 
+    private readonly TablePropertiesDialogSession _session;
     private readonly CheckBox _preferredWidthOn;
     private readonly TextBox _preferredWidth;
     private readonly ComboBox _alignment;
@@ -250,91 +251,89 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         ModelTableContext context,
         TablePropertiesDialogTab initialTab = TablePropertiesDialogTab.Table)
     {
-        ArgumentNullException.ThrowIfNull(context);
-        var state = TablePropertiesDialogPlanner.BuildInitialState(
-            context,
-            CultureInfo.CurrentCulture);
+        _session = new TablePropertiesDialogSession(context, CultureInfo.CurrentCulture);
+        var state = _session.InitialState;
 
-        Title = "Table Properties";
+        Title = TablePropertiesDialogPlanner.Title;
         Width = 440;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
-        AutomationProperties.SetAutomationId(this, "TablePropertiesDialog");
+        AutomationProperties.SetAutomationId(this, TablePropertiesDialogPlanner.AutomationId);
 
-        _preferredWidth = NumberBox(state.PreferredWidthText, "TablePropertiesPreferredWidthBox");
-        _preferredWidthOn = Check("Preferred width (pt):", state.PreferredWidthOn, "TablePropertiesPreferredWidthCheckBox");
-        _alignment = Combo(TablePropertiesDialogPlanner.AlignmentNames, state.AlignmentIndex, "TablePropertiesAlignmentBox");
-        _wrapping = Combo(TablePropertiesDialogPlanner.WrappingNames, state.WrappingIndex, "TablePropertiesWrappingBox");
+        _preferredWidth = NumberBox(state.PreferredWidthText, TablePropertiesDialogPlanner.PreferredWidthAutomationId);
+        _preferredWidthOn = Check(TablePropertiesDialogPlanner.PreferredWidthLabel, state.PreferredWidthOn, TablePropertiesDialogPlanner.PreferredWidthToggleAutomationId);
+        _alignment = Combo(_session.AlignmentNames, state.AlignmentIndex, TablePropertiesDialogPlanner.AlignmentAutomationId);
+        _wrapping = Combo(_session.WrappingNames, state.WrappingIndex, TablePropertiesDialogPlanner.WrappingAutomationId);
         _allowFloatingOverlap = new CheckBox
         {
-            Content = "Allow overlap",
+            Content = TablePropertiesDialogPlanner.AllowOverlapLabel,
             IsThreeState = true,
             IsChecked = state.FloatingTableAllowsOverlap,
             Margin = new Thickness(0, 4, 0, 4),
             IsEnabled = state.WrappingIndex == 1,
         };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_allowFloatingOverlap, DialogChromeStyle);
-        AutomationProperties.SetAutomationId(_allowFloatingOverlap, "TablePropertiesAllowOverlapCheckBox");
+        AutomationProperties.SetAutomationId(_allowFloatingOverlap, TablePropertiesDialogPlanner.AllowOverlapAutomationId);
         _floatingHorizontalAnchor = Combo(
-            TablePropertiesDialogPlanner.FloatingHorizontalAnchorNames,
+            _session.FloatingHorizontalAnchorNames,
             state.FloatingHorizontalAnchorIndex,
-            "TablePropertiesHorizontalAnchorBox");
+            TablePropertiesDialogPlanner.HorizontalAnchorAutomationId);
         _floatingHorizontalMode = Combo(
-            TablePropertiesDialogPlanner.FloatingHorizontalModeNames,
+            _session.FloatingHorizontalModeNames,
             state.FloatingHorizontalModeIndex,
-            "TablePropertiesHorizontalModeBox");
-        _floatingHorizontalOffset = NumberBox(state.FloatingHorizontalOffsetText, "TablePropertiesHorizontalOffsetBox");
+            TablePropertiesDialogPlanner.HorizontalModeAutomationId);
+        _floatingHorizontalOffset = NumberBox(state.FloatingHorizontalOffsetText, TablePropertiesDialogPlanner.HorizontalOffsetAutomationId);
         _floatingVerticalAnchor = Combo(
-            TablePropertiesDialogPlanner.FloatingVerticalAnchorNames,
+            _session.FloatingVerticalAnchorNames,
             state.FloatingVerticalAnchorIndex,
-            "TablePropertiesVerticalAnchorBox");
+            TablePropertiesDialogPlanner.VerticalAnchorAutomationId);
         _floatingVerticalMode = Combo(
-            TablePropertiesDialogPlanner.FloatingVerticalModeNames,
+            _session.FloatingVerticalModeNames,
             state.FloatingVerticalModeIndex,
-            "TablePropertiesVerticalModeBox");
-        _floatingVerticalOffset = NumberBox(state.FloatingVerticalOffsetText, "TablePropertiesVerticalOffsetBox");
-        _floatingDistanceTop = NumberBox(state.FloatingDistanceTopText, "TablePropertiesDistanceTopBox");
-        _floatingDistanceLeft = NumberBox(state.FloatingDistanceLeftText, "TablePropertiesDistanceLeftBox");
-        _floatingDistanceBottom = NumberBox(state.FloatingDistanceBottomText, "TablePropertiesDistanceBottomBox");
-        _floatingDistanceRight = NumberBox(state.FloatingDistanceRightText, "TablePropertiesDistanceRightBox");
+            TablePropertiesDialogPlanner.VerticalModeAutomationId);
+        _floatingVerticalOffset = NumberBox(state.FloatingVerticalOffsetText, TablePropertiesDialogPlanner.VerticalOffsetAutomationId);
+        _floatingDistanceTop = NumberBox(state.FloatingDistanceTopText, TablePropertiesDialogPlanner.DistanceTopAutomationId);
+        _floatingDistanceLeft = NumberBox(state.FloatingDistanceLeftText, TablePropertiesDialogPlanner.DistanceLeftAutomationId);
+        _floatingDistanceBottom = NumberBox(state.FloatingDistanceBottomText, TablePropertiesDialogPlanner.DistanceBottomAutomationId);
+        _floatingDistanceRight = NumberBox(state.FloatingDistanceRightText, TablePropertiesDialogPlanner.DistanceRightAutomationId);
         _wrapping.SelectionChanged += (_, _) => UpdateFloatingPositionControls();
         _floatingHorizontalMode.SelectionChanged += (_, _) => UpdateFloatingPositionControls();
         _floatingVerticalMode.SelectionChanged += (_, _) => UpdateFloatingPositionControls();
-        _indent = NumberBox(state.IndentText, "TablePropertiesIndentBox");
-        _cellMarginTop = NumberBox(state.DefaultCellMarginTopText, "TablePropertiesDefaultMarginTopBox");
-        _cellMarginLeft = NumberBox(state.DefaultCellMarginLeftText, "TablePropertiesDefaultMarginLeftBox");
-        _cellMarginBottom = NumberBox(state.DefaultCellMarginBottomText, "TablePropertiesDefaultMarginBottomBox");
-        _cellMarginRight = NumberBox(state.DefaultCellMarginRightText, "TablePropertiesDefaultMarginRightBox");
-        _cellSpacing = NumberBox(state.CellSpacingText, "TablePropertiesCellSpacingBox");
-        _cellSpacingOn = Check("Allow spacing between cells (pt):", state.CellSpacingOn, "TablePropertiesCellSpacingCheckBox");
+        _indent = NumberBox(state.IndentText, TablePropertiesDialogPlanner.IndentAutomationId);
+        _cellMarginTop = NumberBox(state.DefaultCellMarginTopText, TablePropertiesDialogPlanner.DefaultMarginTopAutomationId);
+        _cellMarginLeft = NumberBox(state.DefaultCellMarginLeftText, TablePropertiesDialogPlanner.DefaultMarginLeftAutomationId);
+        _cellMarginBottom = NumberBox(state.DefaultCellMarginBottomText, TablePropertiesDialogPlanner.DefaultMarginBottomAutomationId);
+        _cellMarginRight = NumberBox(state.DefaultCellMarginRightText, TablePropertiesDialogPlanner.DefaultMarginRightAutomationId);
+        _cellSpacing = NumberBox(state.CellSpacingText, TablePropertiesDialogPlanner.CellSpacingAutomationId);
+        _cellSpacingOn = Check(TablePropertiesDialogPlanner.CellSpacingLabel, state.CellSpacingOn, TablePropertiesDialogPlanner.CellSpacingToggleAutomationId);
 
-        _rowHeight = NumberBox(state.RowHeightText, "TablePropertiesRowHeightBox");
-        _rowHeightOn = Check("Specify height (pt):", state.RowHeightOn, "TablePropertiesRowHeightCheckBox");
-        _rowRule = Combo(TablePropertiesDialogPlanner.RowRuleNames, state.RowRuleIndex, "TablePropertiesRowRuleBox");
-        _allowRowBreak = Check("Allow row to break across pages", state.AllowRowBreak, "TablePropertiesAllowRowBreakCheckBox");
-        _repeatHeader = Check("Repeat as header row at the top of each page", state.RepeatHeaderRow, "TablePropertiesRepeatHeaderCheckBox");
+        _rowHeight = NumberBox(state.RowHeightText, TablePropertiesDialogPlanner.RowHeightAutomationId);
+        _rowHeightOn = Check(TablePropertiesDialogPlanner.SpecifyRowHeightLabel, state.RowHeightOn, TablePropertiesDialogPlanner.RowHeightToggleAutomationId);
+        _rowRule = Combo(_session.RowRuleNames, state.RowRuleIndex, TablePropertiesDialogPlanner.RowRuleAutomationId);
+        _allowRowBreak = Check(TablePropertiesDialogPlanner.AllowRowBreakLabel, state.AllowRowBreak, TablePropertiesDialogPlanner.AllowRowBreakAutomationId);
+        _repeatHeader = Check(TablePropertiesDialogPlanner.RepeatHeaderLabel, state.RepeatHeaderRow, TablePropertiesDialogPlanner.RepeatHeaderAutomationId);
 
-        _columnWidth = NumberBox(state.ColumnWidthText, "TablePropertiesColumnWidthBox");
-        _columnWidthOn = Check("Preferred width (pt):", state.ColumnWidthOn, "TablePropertiesColumnWidthCheckBox");
+        _columnWidth = NumberBox(state.ColumnWidthText, TablePropertiesDialogPlanner.ColumnWidthAutomationId);
+        _columnWidthOn = Check(TablePropertiesDialogPlanner.PreferredWidthLabel, state.ColumnWidthOn, TablePropertiesDialogPlanner.ColumnWidthToggleAutomationId);
 
-        _cellWidth = NumberBox(state.CellWidthText, "TablePropertiesCellWidthBox");
-        _cellWidthOn = Check("Preferred width (pt):", state.CellWidthOn, "TablePropertiesCellWidthCheckBox");
-        _cellVAlign = Combo(TablePropertiesDialogPlanner.CellVerticalAlignmentNames, state.CellVerticalAlignmentIndex, "TablePropertiesCellVerticalAlignmentBox");
-        _cmTop = NumberBox(state.CellMarginTopText, "TablePropertiesCellMarginTopBox");
-        _cmLeft = NumberBox(state.CellMarginLeftText, "TablePropertiesCellMarginLeftBox");
-        _cmBottom = NumberBox(state.CellMarginBottomText, "TablePropertiesCellMarginBottomBox");
-        _cmRight = NumberBox(state.CellMarginRightText, "TablePropertiesCellMarginRightBox");
-        _cellMarginsOn = Check("Same as the whole table", state.CellMarginsSameAsTable, "TablePropertiesSameMarginsCheckBox");
-        _cellWrapText = Check("Wrap text", state.CellWrapText, "TablePropertiesCellWrapTextCheckBox");
-        _cellFitText = Check("Fit text", state.CellFitText, "TablePropertiesCellFitTextCheckBox");
+        _cellWidth = NumberBox(state.CellWidthText, TablePropertiesDialogPlanner.CellWidthAutomationId);
+        _cellWidthOn = Check(TablePropertiesDialogPlanner.PreferredWidthLabel, state.CellWidthOn, TablePropertiesDialogPlanner.CellWidthToggleAutomationId);
+        _cellVAlign = Combo(_session.CellVerticalAlignmentNames, state.CellVerticalAlignmentIndex, TablePropertiesDialogPlanner.CellVerticalAlignmentAutomationId);
+        _cmTop = NumberBox(state.CellMarginTopText, TablePropertiesDialogPlanner.CellMarginTopAutomationId);
+        _cmLeft = NumberBox(state.CellMarginLeftText, TablePropertiesDialogPlanner.CellMarginLeftAutomationId);
+        _cmBottom = NumberBox(state.CellMarginBottomText, TablePropertiesDialogPlanner.CellMarginBottomAutomationId);
+        _cmRight = NumberBox(state.CellMarginRightText, TablePropertiesDialogPlanner.CellMarginRightAutomationId);
+        _cellMarginsOn = Check(TablePropertiesDialogPlanner.SameMarginsLabel, state.CellMarginsSameAsTable, TablePropertiesDialogPlanner.SameMarginsAutomationId);
+        _cellWrapText = Check(TablePropertiesDialogPlanner.WrapTextLabel, state.CellWrapText, TablePropertiesDialogPlanner.CellWrapTextAutomationId);
+        _cellFitText = Check(TablePropertiesDialogPlanner.FitTextLabel, state.CellFitText, TablePropertiesDialogPlanner.CellFitTextAutomationId);
 
         _tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
-        _tabs.Items.Add(TabPage("Table", "TablePropertiesTableTab", BuildTableTab()));
-        _tabs.Items.Add(TabPage("Row", "TablePropertiesRowTab", BuildRowTab()));
-        _tabs.Items.Add(TabPage("Column", "TablePropertiesColumnTab", BuildColumnTab()));
-        _tabs.Items.Add(TabPage("Cell", "TablePropertiesCellTab", BuildCellTab()));
+        _tabs.Items.Add(TabPage(TablePropertiesDialogPlanner.TableTabLabel, TablePropertiesDialogPlanner.TableTabAutomationId, BuildTableTab()));
+        _tabs.Items.Add(TabPage(TablePropertiesDialogPlanner.RowTabLabel, TablePropertiesDialogPlanner.RowTabAutomationId, BuildRowTab()));
+        _tabs.Items.Add(TabPage(TablePropertiesDialogPlanner.ColumnTabLabel, TablePropertiesDialogPlanner.ColumnTabAutomationId, BuildColumnTab()));
+        _tabs.Items.Add(TabPage(TablePropertiesDialogPlanner.CellTabLabel, TablePropertiesDialogPlanner.CellTabAutomationId, BuildCellTab()));
         _tabs.SelectionChanged += (_, _) =>
         {
             if (_tabs.SelectedIndex is >= 0 and < 4)
@@ -343,7 +342,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
                 NormalizeCellComboSurfaces();
         };
         _tabs.SelectedIndex = Math.Clamp((int)initialTab, 0, 3);
-        AutomationProperties.SetAutomationId(_tabs, "TablePropertiesTabs");
+        AutomationProperties.SetAutomationId(_tabs, TablePropertiesDialogPlanner.TabsAutomationId);
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             _tabs,
             DialogChromeStyle,
@@ -354,11 +353,11 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
             _validation,
             DialogChromeStyle,
             new Thickness(14, 6, 14, 0));
-        AutomationProperties.SetAutomationId(_validation, "TablePropertiesValidationText");
+        AutomationProperties.SetAutomationId(_validation, TablePropertiesDialogPlanner.ValidationAutomationId);
 
-        var ok = TableFormulaDialogButton("OK", "TablePropertiesOkButton", isDefault: true);
+        var ok = TableFormulaDialogButton(TablePropertiesDialogPlanner.AcceptButtonLabel, TablePropertiesDialogPlanner.AcceptButtonAutomationId, isDefault: true);
         ok.Click += (_, _) => Accept();
-        var cancel = TableFormulaDialogButton("Cancel", "TablePropertiesCancelButton", isCancel: true);
+        var cancel = TableFormulaDialogButton(TablePropertiesDialogPlanner.CancelButtonLabel, TablePropertiesDialogPlanner.CancelButtonAutomationId, isCancel: true);
         cancel.Click += (_, _) => Close();
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
             [ok, cancel],
@@ -394,21 +393,21 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
     {
         var grid = TwoColumnGrid(4, 137);
         AddRow(grid, 0, _preferredWidthOn, _preferredWidth);
-        AddRow(grid, 1, "Alignment:", _alignment);
-        AddRow(grid, 2, "Text wrapping:", _wrapping);
-        AddRow(grid, 3, "Indent from left (pt):", _indent);
+        AddRow(grid, 1, TablePropertiesDialogPlanner.AlignmentLabel, _alignment);
+        AddRow(grid, 2, TablePropertiesDialogPlanner.TextWrappingLabel, _wrapping);
+        AddRow(grid, 3, TablePropertiesDialogPlanner.IndentFromLeftLabel, _indent);
 
         var margins = TwoColumnGrid(4, 54);
-        AddRow(margins, 0, "Top:", _cellMarginTop);
-        AddRow(margins, 1, "Left:", _cellMarginLeft);
-        AddRow(margins, 2, "Bottom:", _cellMarginBottom);
-        AddRow(margins, 3, "Right:", _cellMarginRight);
+        AddRow(margins, 0, TablePropertiesDialogPlanner.TopLabel, _cellMarginTop);
+        AddRow(margins, 1, TablePropertiesDialogPlanner.LeftLabel, _cellMarginLeft);
+        AddRow(margins, 2, TablePropertiesDialogPlanner.BottomLabel, _cellMarginBottom);
+        AddRow(margins, 3, TablePropertiesDialogPlanner.RightLabel, _cellMarginRight);
         var spacing = TwoColumnGrid(1, 203);
         AddRow(spacing, 0, _cellSpacingOn, _cellSpacing);
 
         return Stack(
             grid,
-            Header("Default cell margins (pt):"),
+            Header(TablePropertiesDialogPlanner.DefaultCellMarginsLabel),
             margins,
             spacing);
     }
@@ -417,25 +416,25 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
     {
         var position = TwoColumnGrid(6, 137);
         position.Margin = new Thickness(0, 0, 4, 0);
-        AddRow(position, 0, "Horizontal relative to:", _floatingHorizontalAnchor);
-        AddRow(position, 1, "Horizontal alignment:", _floatingHorizontalMode);
-        AddRow(position, 2, "Horizontal position (pt):", _floatingHorizontalOffset);
-        AddRow(position, 3, "Vertical relative to:", _floatingVerticalAnchor);
-        AddRow(position, 4, "Vertical alignment:", _floatingVerticalMode);
-        AddRow(position, 5, "Vertical position (pt):", _floatingVerticalOffset);
+        AddRow(position, 0, TablePropertiesDialogPlanner.HorizontalRelativeToLabel, _floatingHorizontalAnchor);
+        AddRow(position, 1, TablePropertiesDialogPlanner.HorizontalAlignmentLabel, _floatingHorizontalMode);
+        AddRow(position, 2, TablePropertiesDialogPlanner.HorizontalPositionLabel, _floatingHorizontalOffset);
+        AddRow(position, 3, TablePropertiesDialogPlanner.VerticalRelativeToLabel, _floatingVerticalAnchor);
+        AddRow(position, 4, TablePropertiesDialogPlanner.VerticalAlignmentLabel, _floatingVerticalMode);
+        AddRow(position, 5, TablePropertiesDialogPlanner.VerticalPositionLabel, _floatingVerticalOffset);
 
         var distances = TwoColumnGrid(4, 54);
-        AddRow(distances, 0, "Top:", _floatingDistanceTop);
-        AddRow(distances, 1, "Left:", _floatingDistanceLeft);
-        AddRow(distances, 2, "Bottom:", _floatingDistanceBottom);
-        AddRow(distances, 3, "Right:", _floatingDistanceRight);
+        AddRow(distances, 0, TablePropertiesDialogPlanner.TopLabel, _floatingDistanceTop);
+        AddRow(distances, 1, TablePropertiesDialogPlanner.LeftLabel, _floatingDistanceLeft);
+        AddRow(distances, 2, TablePropertiesDialogPlanner.BottomLabel, _floatingDistanceBottom);
+        AddRow(distances, 3, TablePropertiesDialogPlanner.RightLabel, _floatingDistanceRight);
 
         var stack = new StackPanel { Margin = new Thickness(8) };
         stack.Children.Add(position);
-        stack.Children.Add(Header("Distance from surrounding text (pt):", top: 8));
+        stack.Children.Add(Header(TablePropertiesDialogPlanner.DistanceFromTextLabel, top: 8));
         stack.Children.Add(distances);
         stack.Children.Add(_allowFloatingOverlap);
-        var expander = new Expander { Header = "Positioning", IsExpanded = true, Content = stack };
+        var expander = new Expander { Header = TablePropertiesDialogPlanner.PositioningLabel, IsExpanded = true, Content = stack };
         AvaloniaCompactDialogChrome.ApplyWpfExpander(expander, DialogChromeStyle);
         UpdateFloatingPositionControls();
         return expander;
@@ -443,18 +442,21 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
 
     private void UpdateFloatingPositionControls()
     {
-        var enabled = _wrapping.SelectedIndex == 1;
-        _allowFloatingOverlap.IsEnabled = enabled;
-        _floatingHorizontalAnchor.IsEnabled = enabled;
-        _floatingHorizontalMode.IsEnabled = enabled;
-        _floatingHorizontalOffset.IsEnabled = enabled && _floatingHorizontalMode.SelectedIndex == 0;
-        _floatingVerticalAnchor.IsEnabled = enabled;
-        _floatingVerticalMode.IsEnabled = enabled;
-        _floatingVerticalOffset.IsEnabled = enabled && _floatingVerticalMode.SelectedIndex == 0;
-        _floatingDistanceTop.IsEnabled = enabled;
-        _floatingDistanceLeft.IsEnabled = enabled;
-        _floatingDistanceBottom.IsEnabled = enabled;
-        _floatingDistanceRight.IsEnabled = enabled;
+        var state = _session.PlanEnabledState(
+            _wrapping.SelectedIndex,
+            _floatingHorizontalMode.SelectedIndex,
+            _floatingVerticalMode.SelectedIndex);
+        _allowFloatingOverlap.IsEnabled = state.FloatingControlsEnabled;
+        _floatingHorizontalAnchor.IsEnabled = state.FloatingControlsEnabled;
+        _floatingHorizontalMode.IsEnabled = state.FloatingControlsEnabled;
+        _floatingHorizontalOffset.IsEnabled = state.HorizontalOffsetEnabled;
+        _floatingVerticalAnchor.IsEnabled = state.FloatingControlsEnabled;
+        _floatingVerticalMode.IsEnabled = state.FloatingControlsEnabled;
+        _floatingVerticalOffset.IsEnabled = state.VerticalOffsetEnabled;
+        _floatingDistanceTop.IsEnabled = state.FloatingControlsEnabled;
+        _floatingDistanceLeft.IsEnabled = state.FloatingControlsEnabled;
+        _floatingDistanceBottom.IsEnabled = state.FloatingControlsEnabled;
+        _floatingDistanceRight.IsEnabled = state.FloatingControlsEnabled;
     }
 
     private void NormalizeCellComboSurfaces()
@@ -476,7 +478,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
     {
         var grid = TwoColumnGrid(2, 131);
         AddRow(grid, 0, _rowHeightOn, _rowHeight);
-        AddRow(grid, 1, "Row height is:", _rowRule);
+        AddRow(grid, 1, TablePropertiesDialogPlanner.RowHeightRuleLabel, _rowRule);
         var checks = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         checks.Children.Add(_allowRowBreak);
         checks.Children.Add(_repeatHeader);
@@ -494,19 +496,19 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
     {
         var grid = TwoColumnGrid(2, 137);
         AddRow(grid, 0, _cellWidthOn, _cellWidth);
-        AddRow(grid, 1, "Vertical alignment:", _cellVAlign);
+        AddRow(grid, 1, TablePropertiesDialogPlanner.VerticalAlignmentLabel, _cellVAlign);
         var margins = TwoColumnGrid(4, 54);
-        AddRow(margins, 0, "Top:", _cmTop);
-        AddRow(margins, 1, "Left:", _cmLeft);
-        AddRow(margins, 2, "Bottom:", _cmBottom);
-        AddRow(margins, 3, "Right:", _cmRight);
+        AddRow(margins, 0, TablePropertiesDialogPlanner.TopLabel, _cmTop);
+        AddRow(margins, 1, TablePropertiesDialogPlanner.LeftLabel, _cmLeft);
+        AddRow(margins, 2, TablePropertiesDialogPlanner.BottomLabel, _cmBottom);
+        AddRow(margins, 3, TablePropertiesDialogPlanner.RightLabel, _cmRight);
         return Stack(
             grid,
             BuildFloatingPositioningPanel(),
             _cellWrapText,
             _cellFitText,
             _cellMarginsOn,
-            Header("Cell margins (pt):"),
+            Header(TablePropertiesDialogPlanner.CellMarginsLabel),
             margins);
     }
 
@@ -555,20 +557,17 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
             _floatingDistanceRight.Text,
             _allowFloatingOverlap.IsChecked);
 
-        if (!TablePropertiesDialogPlanner.TryBuildResult(
-                input,
-                CultureInfo.CurrentCulture,
-                out var result,
-                out var errorMessage))
+        var acceptance = _session.PlanAcceptance(input);
+        if (!acceptance.IsAccepted)
         {
-            _validation.Text = errorMessage ?? TablePropertiesDialogPlanner.ValidationMessage;
+            _validation.Text = acceptance.ValidationMessage!;
             _validation.IsVisible = true;
             FocusInitialField();
             return null;
         }
 
         _validation.IsVisible = false;
-        Result = result;
+        Result = acceptance.Result;
         if (close)
             Close();
         return Result;

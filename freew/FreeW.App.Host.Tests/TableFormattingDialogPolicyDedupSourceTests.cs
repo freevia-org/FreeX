@@ -5,7 +5,7 @@ namespace FreeW.App.Host.Tests;
 public sealed class TableFormattingDialogPolicyDedupSourceTests
 {
     [Theory]
-    [InlineData("TablePropertiesDialog.cs", "TablePropertiesDialogPlanner.TryBuildResult(")]
+    [InlineData("TablePropertiesDialog.cs", "_session.PlanAcceptance(")]
     [InlineData("BordersAndShadingDialog.cs", "_session.PlanAcceptance(")]
     public void Dialogs_RouteResultConstructionThroughPresentationPolicy(string fileName, string policyCall)
     {

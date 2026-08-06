@@ -114,10 +114,146 @@ public sealed record TablePropertiesDialogInput(
     string? FloatingDistanceRightText = null,
     bool? FloatingTableAllowsOverlap = null);
 
+public sealed record TablePropertiesDialogEnabledState(
+    bool FloatingControlsEnabled,
+    bool HorizontalOffsetEnabled,
+    bool VerticalOffsetEnabled);
+
+public sealed record TablePropertiesDialogAcceptance(
+    TablePropertiesValues? Result,
+    string? ValidationMessage)
+{
+    public bool IsAccepted => Result is not null;
+}
+
+public sealed class TablePropertiesDialogSession
+{
+    private readonly CultureInfo _culture;
+
+    public TablePropertiesDialogSession(ModelTableContext context, CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(culture);
+        _culture = culture;
+        InitialState = TablePropertiesDialogPlanner.BuildInitialState(context, culture);
+    }
+
+    public TablePropertiesDialogInitialState InitialState { get; }
+
+    public IReadOnlyList<string> AlignmentNames => TablePropertiesDialogPlanner.AlignmentNames;
+    public IReadOnlyList<string> WrappingNames => TablePropertiesDialogPlanner.WrappingNames;
+    public IReadOnlyList<string> FloatingHorizontalAnchorNames => TablePropertiesDialogPlanner.FloatingHorizontalAnchorNames;
+    public IReadOnlyList<string> FloatingHorizontalModeNames => TablePropertiesDialogPlanner.FloatingHorizontalModeNames;
+    public IReadOnlyList<string> FloatingVerticalAnchorNames => TablePropertiesDialogPlanner.FloatingVerticalAnchorNames;
+    public IReadOnlyList<string> FloatingVerticalModeNames => TablePropertiesDialogPlanner.FloatingVerticalModeNames;
+    public IReadOnlyList<string> RowRuleNames => TablePropertiesDialogPlanner.RowRuleNames;
+    public IReadOnlyList<string> CellVerticalAlignmentNames => TablePropertiesDialogPlanner.CellVerticalAlignmentNames;
+
+    public TablePropertiesDialogEnabledState PlanEnabledState(
+        int wrappingIndex,
+        int horizontalModeIndex,
+        int verticalModeIndex)
+    {
+        var floating = wrappingIndex == 1;
+        return new TablePropertiesDialogEnabledState(
+            FloatingControlsEnabled: floating,
+            HorizontalOffsetEnabled: floating && horizontalModeIndex == 0,
+            VerticalOffsetEnabled: floating && verticalModeIndex == 0);
+    }
+
+    public TablePropertiesDialogAcceptance PlanAcceptance(TablePropertiesDialogInput input) =>
+        TablePropertiesDialogPlanner.TryBuildResult(input, _culture, out var result, out var error)
+            ? new TablePropertiesDialogAcceptance(result, ValidationMessage: null)
+            : new TablePropertiesDialogAcceptance(null, error ?? TablePropertiesDialogPlanner.ValidationMessage);
+}
+
 public static class TablePropertiesDialogPlanner
 {
+    public const string Title = "Table Properties";
+    public const string TableTabLabel = "Table";
+    public const string RowTabLabel = "Row";
+    public const string ColumnTabLabel = "Column";
+    public const string CellTabLabel = "Cell";
+    public const string PreferredWidthLabel = "Preferred width (pt):";
+    public const string AlignmentLabel = "Alignment:";
+    public const string TextWrappingLabel = "Text wrapping:";
+    public const string IndentFromLeftLabel = "Indent from left (pt):";
+    public const string DefaultCellMarginsLabel = "Default cell margins (pt):";
+    public const string TopLabel = "Top:";
+    public const string LeftLabel = "Left:";
+    public const string BottomLabel = "Bottom:";
+    public const string RightLabel = "Right:";
+    public const string CellSpacingLabel = "Allow spacing between cells (pt):";
+    public const string SpecifyRowHeightLabel = "Specify height (pt):";
+    public const string RowHeightRuleLabel = "Row height is:";
+    public const string AllowRowBreakLabel = "Allow row to break across pages";
+    public const string RepeatHeaderLabel = "Repeat as header row at the top of each page";
+    public const string VerticalAlignmentLabel = "Vertical alignment:";
+    public const string SameMarginsLabel = "Same as the whole table";
+    public const string WrapTextLabel = "Wrap text";
+    public const string FitTextLabel = "Fit text";
+    public const string CellMarginsLabel = "Cell margins (pt):";
+    public const string PositioningLabel = "Positioning";
+    public const string AllowOverlapLabel = "Allow overlap";
+    public const string HorizontalRelativeToLabel = "Horizontal relative to:";
+    public const string HorizontalAlignmentLabel = "Horizontal alignment:";
+    public const string HorizontalPositionLabel = "Horizontal position (pt):";
+    public const string VerticalRelativeToLabel = "Vertical relative to:";
+    public const string VerticalPositionLabel = "Vertical position (pt):";
+    public const string DistanceFromTextLabel = "Distance from surrounding text (pt):";
+    public const string AcceptButtonLabel = "OK";
+    public const string CancelButtonLabel = "Cancel";
     public const string ValidationMessage =
         "Enter valid point measurements; sizes and text distances cannot be negative.";
+
+    public const string AutomationId = "TablePropertiesDialog";
+    public const string TabsAutomationId = "TablePropertiesTabs";
+    public const string TableTabAutomationId = "TablePropertiesTableTab";
+    public const string RowTabAutomationId = "TablePropertiesRowTab";
+    public const string ColumnTabAutomationId = "TablePropertiesColumnTab";
+    public const string CellTabAutomationId = "TablePropertiesCellTab";
+    public const string PreferredWidthAutomationId = "TablePropertiesPreferredWidthBox";
+    public const string PreferredWidthToggleAutomationId = "TablePropertiesPreferredWidthCheckBox";
+    public const string AlignmentAutomationId = "TablePropertiesAlignmentBox";
+    public const string WrappingAutomationId = "TablePropertiesWrappingBox";
+    public const string AllowOverlapAutomationId = "TablePropertiesAllowOverlapCheckBox";
+    public const string HorizontalAnchorAutomationId = "TablePropertiesHorizontalAnchorBox";
+    public const string HorizontalModeAutomationId = "TablePropertiesHorizontalModeBox";
+    public const string HorizontalOffsetAutomationId = "TablePropertiesHorizontalOffsetBox";
+    public const string VerticalAnchorAutomationId = "TablePropertiesVerticalAnchorBox";
+    public const string VerticalModeAutomationId = "TablePropertiesVerticalModeBox";
+    public const string VerticalOffsetAutomationId = "TablePropertiesVerticalOffsetBox";
+    public const string DistanceTopAutomationId = "TablePropertiesDistanceTopBox";
+    public const string DistanceLeftAutomationId = "TablePropertiesDistanceLeftBox";
+    public const string DistanceBottomAutomationId = "TablePropertiesDistanceBottomBox";
+    public const string DistanceRightAutomationId = "TablePropertiesDistanceRightBox";
+    public const string IndentAutomationId = "TablePropertiesIndentBox";
+    public const string DefaultMarginTopAutomationId = "TablePropertiesDefaultMarginTopBox";
+    public const string DefaultMarginLeftAutomationId = "TablePropertiesDefaultMarginLeftBox";
+    public const string DefaultMarginBottomAutomationId = "TablePropertiesDefaultMarginBottomBox";
+    public const string DefaultMarginRightAutomationId = "TablePropertiesDefaultMarginRightBox";
+    public const string CellSpacingAutomationId = "TablePropertiesCellSpacingBox";
+    public const string CellSpacingToggleAutomationId = "TablePropertiesCellSpacingCheckBox";
+    public const string RowHeightAutomationId = "TablePropertiesRowHeightBox";
+    public const string RowHeightToggleAutomationId = "TablePropertiesRowHeightCheckBox";
+    public const string RowRuleAutomationId = "TablePropertiesRowRuleBox";
+    public const string AllowRowBreakAutomationId = "TablePropertiesAllowRowBreakCheckBox";
+    public const string RepeatHeaderAutomationId = "TablePropertiesRepeatHeaderCheckBox";
+    public const string ColumnWidthAutomationId = "TablePropertiesColumnWidthBox";
+    public const string ColumnWidthToggleAutomationId = "TablePropertiesColumnWidthCheckBox";
+    public const string CellWidthAutomationId = "TablePropertiesCellWidthBox";
+    public const string CellWidthToggleAutomationId = "TablePropertiesCellWidthCheckBox";
+    public const string CellVerticalAlignmentAutomationId = "TablePropertiesCellVerticalAlignmentBox";
+    public const string CellMarginTopAutomationId = "TablePropertiesCellMarginTopBox";
+    public const string CellMarginLeftAutomationId = "TablePropertiesCellMarginLeftBox";
+    public const string CellMarginBottomAutomationId = "TablePropertiesCellMarginBottomBox";
+    public const string CellMarginRightAutomationId = "TablePropertiesCellMarginRightBox";
+    public const string SameMarginsAutomationId = "TablePropertiesSameMarginsCheckBox";
+    public const string CellWrapTextAutomationId = "TablePropertiesCellWrapTextCheckBox";
+    public const string CellFitTextAutomationId = "TablePropertiesCellFitTextCheckBox";
+    public const string ValidationAutomationId = "TablePropertiesValidationText";
+    public const string AcceptButtonAutomationId = "TablePropertiesOkButton";
+    public const string CancelButtonAutomationId = "TablePropertiesCancelButton";
 
     public static readonly IReadOnlyList<string> AlignmentNames = ["Left", "Center", "Right"];
     public static readonly IReadOnlyList<TableAlignment> AlignmentValues =
