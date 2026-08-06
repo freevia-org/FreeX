@@ -560,11 +560,8 @@ public sealed class SectionsCommentsTests : IDisposable
         pres.Sections.Add(sec1);
         pres.Sections.Add(sec2);
 
-        var bus    = new PresentationCommandBus(pres);
-        var editor = new EditingSession(pres, bus);
-
         // Constructing SlidePane must not throw.
-        var pane = new SlidePane(editor);
+        var pane = SlidePaneTestFactory.Create(pres);
         pane.Should().NotBeNull();
     }
 
@@ -591,10 +588,7 @@ public sealed class SectionsCommentsTests : IDisposable
         pres.Slides.Add(new Slide { Title = "A" });
         pres.Slides.Add(new Slide { Title = "B" });
 
-        var bus    = new PresentationCommandBus(pres);
-        var editor = new EditingSession(pres, bus);
-
-        var pane = new SlidePane(editor);
+        var pane = SlidePaneTestFactory.Create(pres);
         // No exception; pane is valid.
         pane.Should().NotBeNull();
     }

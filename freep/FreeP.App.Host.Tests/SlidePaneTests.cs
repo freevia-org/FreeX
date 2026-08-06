@@ -15,49 +15,15 @@ public sealed class SlidePaneTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Navigates to the StackPanel inside SlidePane.
-    /// SlidePane.Child is a Grid (overlay grid for insert indicator).
-    /// Grid.Children[0] is the ScrollViewer; ScrollViewer.Content is the StackPanel.
-    /// </summary>
-    private static StackPanel GetStack(SlidePane pane)
-    {
-        var overlay = (Grid)pane.Child!;
-        var scroll  = (ScrollViewer)overlay.Children[0];
-        return (StackPanel)scroll.Content!;
-    }
+    private static int CountThumbnailItems(SlidePane pane) => pane.SlidePaneSlideItemCount;
 
-    /// <summary>
-    /// Counts the slide-item Borders in the pane's inner StackPanel.
-    /// The last child of the StackPanel is always the "New Slide" button — excluded.
-    /// </summary>
-    private static int CountThumbnailItems(SlidePane pane)
-    {
-        var stack = GetStack(pane);
-        // Last child is the "New Slide" button.
-        return Math.Max(0, stack.Children.Count - 1);
-    }
+    private static ListBoxItem GetItem(SlidePane pane, int index) =>
+        pane.NativeListForTests.Items[index].Should().BeOfType<ListBoxItem>().Subject;
 
-    /// <summary>
-    /// Returns the slide-item Border at position <paramref name="index"/>.
-    /// </summary>
-    private static Border GetItem(SlidePane pane, int index)
-    {
-        var stack = GetStack(pane);
-        return (Border)stack.Children[index];
-    }
+    private static Border GetChrome(SlidePane pane, int index) =>
+        GetItem(pane, index).Content.Should().BeOfType<Border>().Subject;
 
-    private static Button GetNewSlideButton(SlidePane pane)
-    {
-        var stack = GetStack(pane);
-        return stack.Children[^1].Should().BeOfType<Button>().Subject;
-    }
-
-    private static ScrollViewer GetScrollViewer(SlidePane pane)
-    {
-        var overlay = (Grid)pane.Child!;
-        return (ScrollViewer)overlay.Children[0];
-    }
+    private static Button GetNewSlideButton(SlidePane pane) => pane.NewSlideButtonForTests;
 
     private static Color BrushColor(Brush brush) =>
         brush.Should().BeOfType<SolidColorBrush>().Subject.Color;
@@ -74,10 +40,17 @@ public sealed class SlidePaneTests
             var s = new Slide { Title = $"Slide {i + 1}" };
             presentation.Slides.Add(s);
         }
-        var bus    = new PresentationCommandBus(presentation);
-        var editor = new EditingSession(presentation, bus);
-        var pane   = new SlidePane(editor);
-        return (pane, editor);
+        return MakePane(presentation);
+    }
+
+    private static (SlidePane pane, EditingSession editor) MakePane(Presentation presentation)
+    {
+        var endpoint = new PaneEndpoint();
+        var workarea = new PresentationWorkareaSession(endpoint, presentation);
+        var pane = new SlidePane(workarea);
+        endpoint.Pane = pane;
+        workarea.Initialize();
+        return (pane, workarea.Editor);
     }
 
     // ── Construction ──────────────────────────────────────────────────────────────
@@ -152,13 +125,35 @@ public sealed class SlidePaneTests
         editor.SelectSlide(1);
 
         // After select, item at index 1 should have the accent border thickness (2).
-        var selected = GetItem(pane, 1);
+        var selected = GetChrome(pane, 1);
         selected.BorderThickness.Left.Should().Be(2,
             "selected item must have the accent 2-px border");
 
-        var other = GetItem(pane, 0);
+        var other = GetChrome(pane, 0);
         other.BorderThickness.Left.Should().Be(1,
             "non-selected item must have the normal 1-px border");
+    }
+
+    [StaFact]
+    public void NativeExtendedSelectionFeedsSharedBatchCommands()
+    {
+        var (pane, editor) = MakePaneWithSlides(3);
+        var list = pane.NativeListForTests;
+
+        list.SelectedItems.Add(GetItem(pane, 0));
+        list.SelectedItems.Add(GetItem(pane, 2));
+
+        editor.CurrentSlideIndex.Should().Be(2);
+        GetChrome(pane, 0).BorderThickness.Left
+            .Should().Be(SlidePanePlanner.DefaultSelectedBorderThickness);
+        GetChrome(pane, 2).BorderThickness.Left
+            .Should().Be(SlidePanePlanner.DefaultSelectedBorderThickness);
+
+        pane.TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind.DuplicateCurrentSlide)
+            .Should().BeTrue();
+
+        editor.Presentation.Slides.Should().HaveCount(5);
+        pane.SlidePaneSlideItemCount.Should().Be(5);
     }
 
     [StaFact]
@@ -194,9 +189,7 @@ public sealed class SlidePaneTests
         section.SlideIds.Add("slide2");
         presentation.Sections.Add(section);
 
-        var pane = new SlidePane(new EditingSession(
-            presentation,
-            new PresentationCommandBus(presentation)));
+        var (pane, _) = MakePane(presentation);
 
         pane.SlidePaneSectionHeaderAutomationNamesForTests.Should()
             .ContainSingle().Which.Should().Be("Section Intro  (2), expanded");
@@ -213,13 +206,13 @@ public sealed class SlidePaneTests
         var (pane, editor) = MakePaneWithSlides(2);
         editor.SelectSlide(1);
 
-        var selected = GetItem(pane, 1);
+        var selected = GetChrome(pane, 1);
         BrushColor(selected.Background).Should().Be(ColorFromHex(SlidePanePlanner.DefaultItemSelectedBackgroundHex));
         BrushColor(selected.BorderBrush).Should().Be(ColorFromHex(SlidePanePlanner.DefaultItemSelectedBorderHex));
         selected.BorderThickness.Left.Should().Be(SlidePanePlanner.DefaultSelectedBorderThickness);
         selected.CornerRadius.TopLeft.Should().Be(SlidePanePlanner.DefaultItemCornerRadius);
 
-        var normal = GetItem(pane, 0);
+        var normal = GetChrome(pane, 0);
         BrushColor(normal.Background).Should().Be(ColorFromHex(SlidePanePlanner.DefaultItemNormalBackgroundHex));
         BrushColor(normal.BorderBrush).Should().Be(ColorFromHex(SlidePanePlanner.DefaultItemNormalBorderHex));
         normal.BorderThickness.Left.Should().Be(SlidePanePlanner.DefaultNormalBorderThickness);
@@ -345,8 +338,7 @@ public sealed class SlidePaneTests
         presentation.Sections.Add(intro);
         presentation.Sections.Add(body);
 
-        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
-        var pane = new SlidePane(editor);
+        var (pane, editor) = MakePane(presentation);
 
         pane.SlidePaneSectionHeaderCount.Should().Be(2);
         pane.SlidePaneSlideItemCount.Should().Be(3);
@@ -406,9 +398,9 @@ public sealed class SlidePaneTests
         section.SlideIds.AddRange(new[] { "slide1", "slide2" });
         presentation.Sections.Add(section);
 
-        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
-        var pane = new SlidePane(editor);
-        var header = GetItem(pane, 0);
+        var (pane, _) = MakePane(presentation);
+        var headerItem = GetItem(pane, 0);
+        var header = GetChrome(pane, 0);
         var plan = SlidePanePlanner.BuildSectionHeaderVisualPlan(
             SlidePanePlanner.BuildEntries(presentation.Slides, presentation.Sections)
                 .Single(entry => entry.Kind == SlidePaneEntryKind.SectionHeader));
@@ -417,11 +409,11 @@ public sealed class SlidePaneTests
         header.MinHeight.Should().Be(plan.HeaderHeight);
         header.Padding.Left.Should().Be(plan.HorizontalPadding);
         header.Padding.Top.Should().Be(plan.VerticalPadding);
-        header.Margin.Top.Should().Be(plan.TopMargin);
-        header.Margin.Bottom.Should().Be(plan.BottomMargin);
+        headerItem.Margin.Top.Should().Be(plan.TopMargin);
+        headerItem.Margin.Bottom.Should().Be(plan.BottomMargin);
         header.CornerRadius.TopLeft.Should().Be(plan.CornerRadius);
-        header.ToolTip.Should().Be(plan.ToolTipText);
-        AutomationProperties.GetName(header).Should().Be(plan.AccessibleName);
+        headerItem.ToolTip.Should().Be(plan.ToolTipText);
+        AutomationProperties.GetName(headerItem).Should().Be(plan.AccessibleName);
 
         var row = header.Child.Should().BeOfType<DockPanel>().Subject;
         var disclosure = row.Children[0].Should().BeOfType<TextBlock>().Subject;
@@ -457,6 +449,35 @@ public sealed class SlidePaneTests
         finally
         {
             window.Close();
+        }
+    }
+
+    private sealed class PaneEndpoint : IPresentationWorkareaEndpoint
+    {
+        public SlidePane? Pane { get; set; }
+
+        public bool IsPaneVisible(PresentationWorkareaPane pane) => false;
+
+        public void Apply(
+            PresentationWorkareaOperation operation,
+            PresentationWorkareaContext context)
+        {
+            switch (operation)
+            {
+                case PresentationWorkareaOperation.RefreshSlidePane:
+                    Pane?.RefreshProjection();
+                    break;
+                case PresentationWorkareaOperation.SyncSlidePaneSelection:
+                    Pane?.SyncNativeSelection();
+                    break;
+                case PresentationWorkareaOperation.RefreshSlidePaneChrome:
+                    Pane?.RefreshItemChrome();
+                    break;
+            }
+        }
+
+        public void ExecuteNativeCommand(PresentationWorkareaNativeCommand command)
+        {
         }
     }
 }

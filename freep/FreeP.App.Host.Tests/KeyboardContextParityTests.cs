@@ -87,8 +87,7 @@ public sealed class KeyboardContextParityTests
         var section = new PresentationSection { Name = "Intro" };
         section.SlideIds.Add(presentation.Slides[0].Id);
         presentation.Sections.Add(section);
-        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
-        var pane = new SlidePane(editor);
+        var pane = SlidePaneTestFactory.Create(presentation);
 
         var slideMenu = pane.BuildSlideContextMenuForTests(0);
         AssertMenuMatches(

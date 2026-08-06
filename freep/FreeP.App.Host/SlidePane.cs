@@ -5,450 +5,386 @@ using System.Windows.Input;
 using System.Windows.Media;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Wpf;
-using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
 /// <summary>
-/// Slide thumbnail / sorter pane (Wave 3B).
-///
-/// Displays a vertical, scrollable list of slide thumbnails.  Each item shows a slide-number
-/// label and a small <see cref="SlideCanvas"/> (150 px wide, 16:9 height, display-only).
-/// Clicking an item calls <see cref="EditingSession.SelectSlide"/>.
-///
-/// Wave 11B: when the presentation has sections a section-header row (section name + slide
-/// count) is injected above the first thumbnail belonging to each section.
-///
-/// The pane rebuilds / refreshes when:
-///   - <see cref="EditingSession.Changed"/> fires (slide added/removed/edited/reordered)
-///   - <see cref="EditingSession.CurrentSlideChanged"/> fires (highlight update only)
-///
-/// Drag-to-reorder: drag a thumbnail up/down; a 2 px insertion-indicator line shows the
-/// target position; dropping calls <see cref="EditingSession.MoveSlide"/>.
-///
-/// Context menu on each item:
-///   New Slide (insert after), Duplicate Slide, Delete Slide.
-/// A "New Slide" button is always present at the bottom of the list.
+/// Native WPF realization of the renderer-neutral slide-pane session.
 /// </summary>
 public sealed class SlidePane : Border
 {
-    // ── Colors ────────────────────────────────────────────────────────────────────
-
-    private static readonly Brush BackgroundBrush    = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex);
-    private static readonly Brush ItemNormalBg       = BrushFromHex(SlidePanePlanner.DefaultItemNormalBackgroundHex);
-    private static readonly Brush ItemSelectedBg     = BrushFromHex(SlidePanePlanner.DefaultItemSelectedBackgroundHex);
-    private static readonly Brush ItemHoverBg        = BrushFromHex(SlidePanePlanner.DefaultItemHoverBackgroundHex);
-    private static readonly Brush ItemSelectedBorder = BrushFromHex(SlidePanePlanner.DefaultItemSelectedBorderHex);
-    private static readonly Brush ItemNormalBorder   = BrushFromHex(SlidePanePlanner.DefaultItemNormalBorderHex);
-    private static readonly Brush LabelBrush         = BrushFromHex(SlidePanePlanner.DefaultLabelForegroundHex);
-    private static readonly Brush InsertLineBrush    = BrushFromHex(SlidePanePlanner.DefaultDropIndicatorAccentHex);
-
-    private const double ItemHeight = SlidePanePlanner.DefaultSlideItemHeight;
-
-    // ── Fields ────────────────────────────────────────────────────────────────────
-
-    private readonly EditingSession _editor;
-    private readonly ScrollViewer   _scroll;
-    private readonly StackPanel     _stack;
-    private SlidePaneSessionState _sessionState = SlidePaneSessionState.Empty;
-    private SlidePaneSessionProjection? _sessionProjection;
-
-    // Insertion indicator: a thin horizontal line drawn over the scroll area.
+    private readonly PresentationWorkareaSession _workarea;
+    private readonly ListBox _list;
     private readonly Border _insertIndicator;
+    private readonly Button _newSlideButton;
+    private bool _realizing;
+    private bool _restoreFocusAfterRefresh;
 
-    // Drag state
     private sealed record SectionHeaderTag(string SectionId, int SectionIndex);
 
-    // ── Construction ──────────────────────────────────────────────────────────────
-
-    public SlidePane(EditingSession editor)
+    public SlidePane(PresentationWorkareaSession workarea)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-
-        Background = BackgroundBrush;
+        _workarea = workarea ?? throw new ArgumentNullException(nameof(workarea));
+        Background = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex);
         PresentationPaneAccessibilityAdapter.ApplyPaneMetadata(
             this,
             PresentationPaneAccessibilityPlanner.SlidePaneId,
             isVisible: true);
 
-        _stack = new StackPanel { Orientation = Orientation.Vertical };
-
-        _scroll = new ScrollViewer
+        _list = new ListBox
         {
-            VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content                       = _stack
+            SelectionMode = SelectionMode.Extended,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
         };
+        ScrollViewer.SetHorizontalScrollBarVisibility(_list, ScrollBarVisibility.Disabled);
+        ScrollViewer.SetVerticalScrollBarVisibility(_list, ScrollBarVisibility.Auto);
+        _list.SelectionChanged += OnNativeSelectionChanged;
 
-        // Insertion-indicator line (hidden by default).
         _insertIndicator = new Border
         {
-            Height              = SlidePanePlanner.DefaultDropIndicatorThickness,
-            Background          = InsertLineBrush,
-            Visibility          = Visibility.Collapsed,
-            IsHitTestVisible    = false,
-            VerticalAlignment   = VerticalAlignment.Top,
-            HorizontalAlignment = HorizontalAlignment.Stretch
+            Height = SlidePanePlanner.DefaultDropIndicatorThickness,
+            Background = BrushFromHex(SlidePanePlanner.DefaultDropIndicatorAccentHex),
+            Visibility = Visibility.Collapsed,
+            IsHitTestVisible = false,
+            VerticalAlignment = VerticalAlignment.Top,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
         };
 
-        // Overlay: Grid with ScrollViewer in row 0 (stretch) and the indicator absolutely
-        // positioned via top-margin in the same row.
-        var overlay = new Grid();
-        overlay.Children.Add(_scroll);
-        overlay.Children.Add(_insertIndicator);
+        _newSlideButton = new Button();
+        var content = new DockPanel();
+        DockPanel.SetDock(_newSlideButton, Dock.Bottom);
+        content.Children.Add(_newSlideButton);
+        content.Children.Add(_list);
 
+        var overlay = new Grid();
+        overlay.Children.Add(content);
+        overlay.Children.Add(_insertIndicator);
         Child = overlay;
 
-        // Subscribe to model events.
-        _editor.Changed             += OnChanged;
-        _editor.CurrentSlideChanged += OnCurrentSlideChanged;
-
-        // Initial build.
-        RebuildList();
+        RefreshProjection();
     }
 
-    // ── Event handling ────────────────────────────────────────────────────────────
-
-    private void OnChanged() => RebuildList();
-
-    private void OnCurrentSlideChanged(object? sender, EventArgs e)
+    internal void RefreshProjection()
     {
-        _sessionState = SlidePanePlanner.SetSelectedSlide(_sessionState, _editor.CurrentSlideIndex);
-        UpdateHighlight();
-    }
-
-    // ── List build ────────────────────────────────────────────────────────────────
-
-    /// <summary>Fully rebuilds the item list. Called on structural changes.</summary>
-    private void RebuildList()
-    {
-        _stack.Children.Clear();
-
-        var slides = _editor.Presentation.Slides;
-        _sessionState = SlidePanePlanner.SetSelectedSlide(_sessionState, _editor.CurrentSlideIndex);
-        _sessionProjection = SlidePanePlanner.BuildSessionProjection(
-            slides,
-            _editor.Presentation.Sections,
-            _sessionState);
-
-        var accessibilityOrdinal = 0;
-        foreach (var entry in _sessionProjection.Entries)
+        _restoreFocusAfterRefresh |= _list.IsKeyboardFocusWithin;
+        var projection = _workarea.SlidePaneSession.Projection;
+        _realizing = true;
+        try
         {
-            if (entry.Kind == SlidePaneEntryKind.SectionHeader)
+            _list.Items.Clear();
+            foreach (var item in projection.Items)
             {
-                _stack.Children.Add(BuildSectionHeader(entry, accessibilityOrdinal++));
+                _list.Items.Add(item.SectionHeader is { } header
+                    ? BuildSectionHeader(item, header)
+                    : BuildSlideItem(item, item.Thumbnail!));
+            }
+            ApplyBottomAffordance(projection.BottomAffordance);
+            SyncNativeSelection(scrollActiveIntoView: false);
+        }
+        finally
+        {
+            _realizing = false;
+        }
+
+        if (_restoreFocusAfterRefresh)
+        {
+            _restoreFocusAfterRefresh = false;
+            GetActiveItem()?.Focus();
+        }
+    }
+
+    internal void SyncNativeSelection(bool scrollActiveIntoView = true)
+    {
+        var selection = _workarea.SlidePaneSession.Selection;
+        _realizing = true;
+        try
+        {
+            foreach (var item in _list.Items.OfType<ListBoxItem>())
+            {
+                item.IsSelected = item.Tag is int slideIndex && selection.IsSelected(slideIndex);
+            }
+        }
+        finally
+        {
+            _realizing = false;
+        }
+
+        if (scrollActiveIntoView && GetActiveItem() is { } active)
+            _list.ScrollIntoView(active);
+    }
+
+    internal void RefreshItemChrome()
+    {
+        var projection = _workarea.SlidePaneSession.Projection;
+        foreach (var item in _list.Items.OfType<ListBoxItem>())
+        {
+            if (item.Tag is not int slideIndex || item.Content is not Border chrome)
                 continue;
-            }
 
-            var plan = SlidePanePlanner.BuildThumbnailVisualPlan(
-                entry,
-                slides[entry.SlideIndex],
-                _sessionProjection.SelectedSlideIndex);
-            var item = BuildSlideItem(plan, slides[entry.SlideIndex], accessibilityOrdinal++);
-            _stack.Children.Add(item);
+            var projected = projection.Items.FirstOrDefault(candidate =>
+                candidate.Entry.Kind == SlidePaneEntryKind.Slide &&
+                candidate.Entry.SlideIndex == slideIndex);
+            if (projected?.Thumbnail is not { } plan)
+                continue;
+
+            ApplyThumbnailChrome(chrome, item, projected.AccessibilityOrdinal, plan);
         }
-
-        // "New Slide" affordance at the bottom.
-        _stack.Children.Add(BuildNewSlideButton());
     }
 
-    /// <summary>
-    /// Builds an interactive section-header row showing the section name and slide count.
-    /// Wave 11B.
-    /// </summary>
-    private Border BuildSectionHeader(SlidePaneEntry entry, int accessibilityOrdinal)
+    private ListBoxItem BuildSlideItem(
+        PresentationSlidePaneItemProjection projected,
+        SlidePaneThumbnailVisualPlan plan)
     {
-        var plan = SlidePanePlanner.BuildSectionHeaderVisualPlan(entry);
-        var normalBackground = BrushFromHex(plan.BackgroundHex);
-        var hoverBackground = BrushFromHex(plan.HoverBackgroundHex);
-
-        var disclosure = new TextBlock
-        {
-            Text              = plan.DisclosureText,
-            FontSize          = plan.FontSize,
-            FontWeight        = FontWeights.Bold,
-            Foreground        = BrushFromHex(plan.ForegroundHex),
-            Width             = plan.DisclosureWidth,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
+        var slide = _workarea.Presentation.Slides[plan.SlideIndex];
         var label = new TextBlock
         {
-            Text                = plan.LabelText,
-            FontSize            = plan.FontSize,
-            FontWeight          = FontWeights.SemiBold,
-            Foreground          = BrushFromHex(plan.ForegroundHex),
-            VerticalAlignment   = VerticalAlignment.Center,
-            TextTrimming        = TextTrimming.CharacterEllipsis,
-        };
-
-        var panel = new DockPanel();
-        DockPanel.SetDock(disclosure, Dock.Left);
-        panel.Children.Add(disclosure);
-        panel.Children.Add(label);
-
-        var header = new Border
-        {
-            Background      = normalBackground,
-            Padding         = new Thickness(plan.HorizontalPadding, plan.VerticalPadding, plan.HorizontalPadding, plan.VerticalPadding),
-            Margin          = new Thickness(0, plan.TopMargin, 0, plan.BottomMargin),
-            MinHeight       = plan.HeaderHeight,
-            CornerRadius    = new CornerRadius(plan.CornerRadius),
-            Tag             = new SectionHeaderTag(plan.SectionId, plan.SectionIndex),
-            ContextMenu     = BuildSectionContextMenu(entry),
-            Child           = panel,
-            Cursor          = Cursors.Hand,
-            Focusable       = true,
-            ToolTip         = plan.ToolTipText,
-        };
-        header.MouseEnter += (_, _) => header.Background = hoverBackground;
-        header.MouseLeave += (_, _) => header.Background = normalBackground;
-        header.MouseLeftButtonDown += (_, e) =>
-        {
-            ToggleSection(plan.SectionId);
-            e.Handled = true;
-        };
-        header.KeyDown += (_, e) =>
-        {
-            if (e.Key is Key.Enter or Key.Space)
-            {
-                ToggleSection(plan.SectionId);
-                e.Handled = true;
-            }
-        };
-        AutomationProperties.SetName(header, plan.AccessibleName);
-        PresentationPaneAccessibilityAdapter.ApplyItem(
-            header,
-            PresentationPaneAccessibilityPlanner.SlidePaneId,
-            accessibilityOrdinal,
-            plan.AccessibleName,
-            "Not selected",
-            $"Section{plan.SectionIndex + 1}");
-
-        return header;
-    }
-
-    /// <summary>Updates only the highlight (selected border/background) on existing items.
-    /// Called on selection-only changes — avoids a full rebuild.</summary>
-    private void UpdateHighlight()
-    {
-        int idx = _editor.CurrentSlideIndex;
-        for (int i = 0; i < _stack.Children.Count; i++)
-        {
-            if (_stack.Children[i] is not Border item) continue;
-            if (item.Tag is not int itemIdx) continue;
-            bool selected = itemIdx == idx;
-            item.BorderBrush     = selected ? ItemSelectedBorder : ItemNormalBorder;
-            item.BorderThickness = selected
-                ? new Thickness(SlidePanePlanner.DefaultSelectedBorderThickness)
-                : new Thickness(SlidePanePlanner.DefaultNormalBorderThickness);
-            item.Background      = selected ? ItemSelectedBg      : ItemNormalBg;
-
-            if (_sessionProjection?.Entries.FirstOrDefault(entry =>
-                    entry.Kind == SlidePaneEntryKind.Slide && entry.SlideIndex == itemIdx) is { } entry)
-            {
-                var plan = SlidePanePlanner.BuildThumbnailVisualPlan(
-                    entry,
-                    _editor.Presentation.Slides[itemIdx],
-                    idx);
-                AutomationProperties.SetName(item, plan.AccessibleName);
-                PresentationPaneAccessibilityAdapter.ApplyItem(
-                    item,
-                    PresentationPaneAccessibilityPlanner.SlidePaneId,
-                    GetAccessibilityOrdinalForSlide(itemIdx),
-                    plan.AccessibleName,
-                    selected ? "Selected" : "Not selected",
-                    $"Slide{itemIdx + 1}");
-            }
-        }
-    }
-
-    private int GetAccessibilityOrdinalForSlide(int slideIndex)
-    {
-        if (_sessionProjection is null)
-            return slideIndex;
-
-        for (var ordinal = 0; ordinal < _sessionProjection.Entries.Count; ordinal++)
-        {
-            var entry = _sessionProjection.Entries[ordinal];
-            if (entry.Kind == SlidePaneEntryKind.Slide && entry.SlideIndex == slideIndex)
-                return ordinal;
-        }
-
-        return slideIndex;
-    }
-
-    // ── Item construction ─────────────────────────────────────────────────────────
-
-    private Border BuildSlideItem(
-        SlidePaneThumbnailVisualPlan plan,
-        Slide slide,
-        int accessibilityOrdinal)
-    {
-        // Slide-number label.
-        var label = new TextBlock
-        {
-            Text                = plan.LabelText,
-            FontSize            = plan.LabelFontSize,
-            Foreground          = LabelBrush,
+            Text = plan.LabelText,
+            FontSize = plan.LabelFontSize,
+            Foreground = BrushFromHex(plan.LabelForegroundHex),
             HorizontalAlignment = HorizontalAlignment.Center,
-            Height              = plan.LabelHeight,
-            VerticalAlignment   = VerticalAlignment.Center,
-            Margin              = new Thickness(0, 0, 0, plan.LabelBottomMargin)
+            Height = plan.LabelHeight,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, plan.LabelBottomMargin),
         };
-
-        // Thumbnail canvas (display-only, non-interactive).
-        var thumb = new SlideCanvas
+        var thumbnail = new SlideCanvas
         {
-            Width            = plan.ThumbnailWidth,
-            Height           = plan.ThumbnailHeight,
-            Presentation     = _editor.Presentation,
-            Slide            = slide,
+            Width = plan.ThumbnailWidth,
+            Height = plan.ThumbnailHeight,
+            Presentation = _workarea.Presentation,
+            Slide = slide,
             IsHitTestVisible = false,
-            IsEnabled        = false
+            IsEnabled = false,
         };
-
-        var thumbBorder = new Border
+        var thumbnailBorder = new Border
         {
-            BorderBrush     = BrushFromHex(plan.ThumbnailBorderHex),
+            BorderBrush = BrushFromHex(plan.ThumbnailBorderHex),
             BorderThickness = new Thickness(plan.ThumbnailBorderThickness),
-            Child           = thumb
+            Child = thumbnail,
         };
-
         var panel = new StackPanel
         {
-            Orientation         = Orientation.Vertical,
+            Orientation = Orientation.Vertical,
             HorizontalAlignment = plan.CenterThumbnailContent
                 ? HorizontalAlignment.Center
-                : HorizontalAlignment.Stretch
+                : HorizontalAlignment.Stretch,
         };
         panel.Children.Add(label);
-        panel.Children.Add(thumbBorder);
+        panel.Children.Add(thumbnailBorder);
 
-        var item = new Border
+        var chrome = new Border
         {
-            Tag             = plan.SlideIndex,
-            Background      = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBackgroundHex : plan.ItemNormalBackgroundHex),
-            BorderBrush     = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBorderHex : plan.ItemNormalBorderHex),
-            BorderThickness = new Thickness(plan.IsSelected ? plan.SelectedBorderThickness : plan.NormalBorderThickness),
-            CornerRadius    = new CornerRadius(plan.ItemCornerRadius),
-            Margin          = new Thickness(
+            CornerRadius = new CornerRadius(plan.ItemCornerRadius),
+            Padding = new Thickness(plan.ItemPadding),
+            Child = panel,
+        };
+        var item = new ListBoxItem
+        {
+            Tag = plan.SlideIndex,
+            Content = chrome,
+            Padding = new Thickness(0),
+            Margin = new Thickness(
                 plan.ItemMarginHorizontal,
                 plan.ItemMarginVertical,
                 plan.ItemMarginHorizontal,
                 plan.ItemMarginVertical),
-            Padding         = new Thickness(plan.ItemPadding),
-            Child           = panel,
-            Cursor          = Cursors.Hand,
-            Focusable       = true,
-            ToolTip         = plan.ToolTipText
+            MinHeight = plan.ItemHeight,
+            Cursor = Cursors.Hand,
+            Focusable = true,
+            ToolTip = plan.ToolTipText,
+            ContextMenu = BuildSlideContextMenu(plan.SlideIndex),
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
         };
+        ApplyThumbnailChrome(chrome, item, projected.AccessibilityOrdinal, plan);
+
+        item.MouseEnter += (_, _) =>
+        {
+            if (item.Tag is int index && !_workarea.SlidePaneSession.Selection.IsSelected(index))
+                chrome.Background = BrushFromHex(plan.ItemHoverBackgroundHex);
+        };
+        item.MouseLeave += (_, _) => ApplyThumbnailChrome(
+            chrome,
+            item,
+            projected.AccessibilityOrdinal,
+            ResolveThumbnailPlan(plan.SlideIndex) ?? plan);
+        item.PreviewMouseLeftButtonDown += OnItemMouseLeftButtonDown;
+        item.MouseMove += OnItemMouseMove;
+        item.MouseLeftButtonUp += OnItemMouseLeftButtonUp;
+        item.LostMouseCapture += OnItemLostMouseCapture;
+        item.KeyDown += OnSlideItemKeyDown;
+        return item;
+    }
+
+    private ListBoxItem BuildSectionHeader(
+        PresentationSlidePaneItemProjection projected,
+        SlidePaneSectionHeaderVisualPlan plan)
+    {
+        var normalBackground = BrushFromHex(plan.BackgroundHex);
+        var hoverBackground = BrushFromHex(plan.HoverBackgroundHex);
+        var disclosure = new TextBlock
+        {
+            Text = plan.DisclosureText,
+            FontSize = plan.FontSize,
+            FontWeight = FontWeights.Bold,
+            Foreground = BrushFromHex(plan.ForegroundHex),
+            Width = plan.DisclosureWidth,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var label = new TextBlock
+        {
+            Text = plan.LabelText,
+            FontSize = plan.FontSize,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = BrushFromHex(plan.ForegroundHex),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var row = new DockPanel();
+        DockPanel.SetDock(disclosure, Dock.Left);
+        row.Children.Add(disclosure);
+        row.Children.Add(label);
+        var chrome = new Border
+        {
+            Background = normalBackground,
+            Padding = new Thickness(
+                plan.HorizontalPadding,
+                plan.VerticalPadding,
+                plan.HorizontalPadding,
+                plan.VerticalPadding),
+            MinHeight = plan.HeaderHeight,
+            CornerRadius = new CornerRadius(plan.CornerRadius),
+            Child = row,
+        };
+        var item = new ListBoxItem
+        {
+            Content = chrome,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, plan.TopMargin, 0, plan.BottomMargin),
+            MinHeight = plan.HeaderHeight,
+            Tag = new SectionHeaderTag(plan.SectionId, plan.SectionIndex),
+            ContextMenu = BuildSectionContextMenu(projected.Entry),
+            Cursor = Cursors.Hand,
+            Focusable = true,
+            ToolTip = plan.ToolTipText,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        };
+        item.MouseEnter += (_, _) => chrome.Background = hoverBackground;
+        item.MouseLeave += (_, _) => chrome.Background = normalBackground;
+        item.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            _workarea.ToggleSlidePaneSection(plan.SectionId);
+            e.Handled = true;
+        };
+        item.KeyDown += (_, e) =>
+        {
+            if (e.Key is Key.Enter or Key.Space)
+            {
+                _workarea.ToggleSlidePaneSection(plan.SectionId);
+                e.Handled = true;
+            }
+        };
+        AutomationProperties.SetName(item, plan.AccessibleName);
+        PresentationPaneAccessibilityAdapter.ApplyItem(
+            item,
+            PresentationPaneAccessibilityPlanner.SlidePaneId,
+            projected.AccessibilityOrdinal,
+            plan.AccessibleName,
+            "Not selected",
+            $"Section{plan.SectionIndex + 1}");
+        return item;
+    }
+
+    private void ApplyThumbnailChrome(
+        Border chrome,
+        ListBoxItem item,
+        int accessibilityOrdinal,
+        SlidePaneThumbnailVisualPlan plan)
+    {
+        chrome.Background = BrushFromHex(
+            plan.IsSelected ? plan.ItemSelectedBackgroundHex : plan.ItemNormalBackgroundHex);
+        chrome.BorderBrush = BrushFromHex(
+            plan.IsSelected ? plan.ItemSelectedBorderHex : plan.ItemNormalBorderHex);
+        chrome.BorderThickness = new Thickness(
+            plan.IsSelected ? plan.SelectedBorderThickness : plan.NormalBorderThickness);
         AutomationProperties.SetName(item, plan.AccessibleName);
         PresentationPaneAccessibilityAdapter.ApplyItem(
             item,
             PresentationPaneAccessibilityPlanner.SlidePaneId,
             accessibilityOrdinal,
             plan.AccessibleName,
-            plan.IsSelected ? "Selected" : "Not selected",
+            plan.IsActive ? "Active and selected" : plan.IsSelected ? "Selected" : "Not selected",
             $"Slide{plan.SlideIndex + 1}");
-
-        // Click -> SelectSlide.
-        item.MouseLeftButtonDown += (sender, e) =>
-        {
-            if (sender is Border b && b.Tag is int idx)
-            {
-                _sessionState = _sessionState with { DragSession = SlidePanePlanner.BeginDragSession(idx, e.GetPosition(b).Y) };
-                _editor.SelectSlide(idx);
-                e.Handled = true;
-            }
-        };
-
-        // Hover effect.
-        item.MouseEnter += (sender, e) =>
-        {
-            if (sender is Border b && b.Tag is int idx && idx != _editor.CurrentSlideIndex)
-                b.Background = BrushFromHex(plan.ItemHoverBackgroundHex);
-        };
-        item.MouseLeave += (sender, e) =>
-        {
-            if (sender is Border b && b.Tag is int idx)
-                b.Background = BrushFromHex(idx == _editor.CurrentSlideIndex
-                    ? plan.ItemSelectedBackgroundHex
-                    : plan.ItemNormalBackgroundHex);
-        };
-
-        // Drag-to-reorder.
-        item.MouseMove         += OnItemMouseMove;
-        item.MouseLeftButtonUp += OnItemMouseLeftButtonUp;
-        item.LostMouseCapture  += OnItemLostMouseCapture;
-        item.KeyDown           += OnSlideItemKeyDown;
-
-        // Context menu.
-        item.ContextMenu = BuildContextMenu(plan.SlideIndex);
-
-        return item;
     }
 
-    private Button BuildNewSlideButton()
+    private void ApplyBottomAffordance(SlidePaneBottomAffordancePlan plan)
     {
-        var plan = SlidePanePlanner.BuildBottomNewSlideAffordance(
-            _editor.Presentation.Slides.Count,
-            _editor.CurrentSlideIndex);
-        var btn = new Button
-        {
-            Content             = plan.Text,
-            Margin              = new Thickness(12, 8, 12, 12),
-            Padding             = new Thickness(0, 6, 0, 6),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Background          = Freeze(new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))),
-            Foreground          = Brushes.White,
-            BorderThickness     = new Thickness(0),
-            FontSize            = 12,
-            Cursor              = Cursors.Hand,
-            Visibility          = plan.IsVisible ? Visibility.Visible : Visibility.Collapsed,
-            IsEnabled           = plan.Action.IsEnabled,
-            ToolTip             = plan.ToolTipText,
-        };
-        AutomationProperties.SetName(btn, plan.AccessibleName);
-        btn.Click += (_, _) => SlidePanePlanner.TryApplyBottomNewSlideAffordance(_editor);
-        return btn;
+        _newSlideButton.Content = plan.Text;
+        _newSlideButton.Margin = new Thickness(12, 8, 12, 12);
+        _newSlideButton.Padding = new Thickness(0, 6, 0, 6);
+        _newSlideButton.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _newSlideButton.Background = BrushFromHex(SlidePanePlanner.DefaultItemSelectedBorderHex);
+        _newSlideButton.Foreground = Brushes.White;
+        _newSlideButton.BorderThickness = new Thickness(0);
+        _newSlideButton.FontSize = 12;
+        _newSlideButton.Cursor = Cursors.Hand;
+        _newSlideButton.Visibility = plan.IsVisible ? Visibility.Visible : Visibility.Collapsed;
+        _newSlideButton.IsEnabled = plan.Action.IsEnabled;
+        _newSlideButton.ToolTip = plan.ToolTipText;
+        AutomationProperties.SetName(_newSlideButton, plan.AccessibleName);
+        _newSlideButton.Click -= OnNewSlideClick;
+        _newSlideButton.Click += OnNewSlideClick;
     }
 
-    private ContextMenu BuildContextMenu(int index)
+    private void OnNewSlideClick(object sender, RoutedEventArgs e) =>
+        _workarea.ExecuteSlidePaneAction(
+            SlidePaneActionKind.InsertAfterSlide,
+            _workarea.SlidePaneSession.Selection.ActiveSlideIndex);
+
+    private void OnNativeSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_realizing)
+            return;
+
+        var selected = _list.SelectedItems
+            .OfType<ListBoxItem>()
+            .Where(item => item.Tag is int)
+            .Select(item => (int)item.Tag)
+            .ToArray();
+        var active = e.AddedItems
+            .OfType<ListBoxItem>()
+            .Select(item => item.Tag)
+            .OfType<int>()
+            .LastOrDefault(_workarea.SlidePaneSession.Selection.ActiveSlideIndex);
+        _workarea.ApplySlidePaneNativeSelection(selected, active);
+    }
+
+    private ContextMenu BuildSlideContextMenu(int slideIndex)
     {
         var menu = new ContextMenu();
-
         AddContextMenuEntries(
             menu,
             FreePContextMenuCatalog.BuildSlideMenu(
-                _editor.Presentation.Slides,
-                _editor.Presentation.Sections,
-                index),
-            command => ApplyContextMenuCommand(command, index, sectionIndex: -1));
-
+                _workarea.Presentation.Slides,
+                _workarea.Presentation.Sections,
+                slideIndex),
+            command => ApplyContextCommand(command, slideIndex, sectionIndex: -1));
         return menu;
     }
 
     private ContextMenu BuildSectionContextMenu(SlidePaneEntry entry)
     {
         var menu = new ContextMenu();
-
         AddContextMenuEntries(
             menu,
             FreePContextMenuCatalog.BuildSectionHeaderMenu(
-                _editor.Presentation.Sections,
+                _workarea.Presentation.Sections,
                 entry.SectionIndex,
                 entry.SlideIndex),
-            command => ApplyContextMenuCommand(command, entry.SlideIndex, entry.SectionIndex));
-
+            command => ApplyContextCommand(command, entry.SlideIndex, entry.SectionIndex));
         return menu;
     }
-
-    internal ContextMenu BuildSlideContextMenuForTests(int slideIndex) =>
-        BuildContextMenu(slideIndex);
-
-    internal ContextMenu BuildSectionContextMenuForTests(SlidePaneEntry entry) =>
-        BuildSectionContextMenu(entry);
 
     private static void AddContextMenuEntries(
         ContextMenu menu,
@@ -462,7 +398,6 @@ public sealed class SlidePane : Border
                 menu.Items.Add(new Separator());
                 continue;
             }
-
             var item = new MenuItem
             {
                 Header = entry.Text,
@@ -476,153 +411,31 @@ public sealed class SlidePane : Border
         }
     }
 
-    private void ApplyContextMenuCommand(
+    private void ApplyContextCommand(
         FreePContextMenuCommand command,
         int slideIndex,
         int sectionIndex)
     {
-        var route = SlidePanePlanner.BuildContextCommandRoute(
-            command,
-            _editor.Presentation.Slides,
-            _editor.Presentation.Sections,
-            slideIndex,
-            sectionIndex);
+        var route = _workarea.BuildSlidePaneContextCommandRoute(command, slideIndex, sectionIndex);
         if (route.SlideAction is { } slideAction)
         {
-            SlidePanePlanner.TryApplyAction(_editor, slideAction);
+            _workarea.ExecuteSlidePaneAction(slideAction.Kind, slideIndex, slideAction.TargetSlideIndex);
             return;
         }
-
         if (route.SectionExecution is { } sectionExecution)
             ApplySectionAction(sectionExecution);
-    }
-
-    private void ToggleSection(string sectionId)
-    {
-        if (string.IsNullOrWhiteSpace(sectionId))
-            return;
-
-        _sessionState = SlidePanePlanner.ToggleSection(_sessionState, sectionId);
-
-        RebuildList();
-    }
-
-    internal int SlidePaneSlideItemCount => _stack.Children
-        .OfType<Border>()
-        .Count(child => child.Tag is int);
-
-    internal int SlidePaneSectionHeaderCount => _stack.Children
-        .OfType<Border>()
-        .Count(child => child.Tag is SectionHeaderTag);
-
-    internal IReadOnlyList<string?> SlidePaneThumbnailAutomationNamesForTests => _stack.Children
-        .OfType<Border>()
-        .Where(child => child.Tag is int)
-        .Select(AutomationProperties.GetName)
-        .ToArray();
-
-    internal IReadOnlyList<string?> SlidePaneSectionHeaderAutomationNamesForTests => _stack.Children
-        .OfType<Border>()
-        .Where(child => child.Tag is SectionHeaderTag)
-        .Select(AutomationProperties.GetName)
-        .ToArray();
-
-    internal IReadOnlyList<FrameworkElement> AccessibilityItemsForTests => _stack.Children
-        .OfType<FrameworkElement>()
-        .Where(item => AutomationProperties.GetAutomationId(item)
-            .StartsWith("FreePSlidePaneItem", StringComparison.Ordinal))
-        .ToArray();
-
-    internal bool ToggleSectionForTests(int sectionIndex)
-    {
-        if (sectionIndex < 0 || sectionIndex >= _editor.Presentation.Sections.Count)
-            return false;
-
-        ToggleSection(SlidePanePlanner.GetSectionIdentity(_editor.Presentation.Sections[sectionIndex], sectionIndex));
-        return true;
-    }
-
-    internal bool TryApplySlideSectionActionForTests(
-        SlideSectionActionKind kind,
-        int slideIndex = -1,
-        int sectionIndex = -1,
-        string? promptedName = null)
-    {
-        var action = kind == SlideSectionActionKind.AddSection
-            ? SlideSectionPlanner.BuildSlideContextActions(
-                    _editor.Presentation.Slides,
-                    _editor.Presentation.Sections,
-                    slideIndex)
-                .SingleOrDefault(candidate => candidate.Kind == kind)
-            : SlideSectionPlanner.BuildSectionHeaderActions(
-                    _editor.Presentation.Sections,
-                    sectionIndex,
-                    slideIndex)
-                .SingleOrDefault(candidate => candidate.Kind == kind);
-
-        if (action is null)
-            return false;
-
-        var execution = SlideSectionPlanner.BuildExecutionPlan(action);
-        return SlideSectionPlanner.TryApplyAction(_editor, execution, promptedName);
-    }
-
-    internal bool TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind intent)
-    {
-        var action = SlidePanePlanner.BuildKeyboardAction(
-            _editor.Presentation.Slides.Count,
-            _editor.CurrentSlideIndex,
-            intent);
-
-        return SlidePanePlanner.TryApplyAction(_editor, action);
-    }
-
-    private void OnSlideItemKeyDown(object sender, KeyEventArgs e)
-    {
-        if (!TryMapKeyboardIntent(e, out var intent))
-            return;
-
-        if (TryApplySlidePaneKeyboardAction(intent))
-            e.Handled = true;
-    }
-
-    private static bool TryMapKeyboardIntent(KeyEventArgs e, out SlidePaneKeyboardIntentKind intent)
-    {
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        var modifiers = Keyboard.Modifiers;
-
-        intent = key switch
-        {
-            Key.Insert when modifiers == ModifierKeys.None =>
-                SlidePaneKeyboardIntentKind.InsertAfterCurrentSlide,
-            Key.Delete when modifiers == ModifierKeys.None =>
-                SlidePaneKeyboardIntentKind.DeleteCurrentSlide,
-            Key.D when modifiers == ModifierKeys.Control =>
-                SlidePaneKeyboardIntentKind.DuplicateCurrentSlide,
-            Key.Up when modifiers == ModifierKeys.Alt =>
-                SlidePaneKeyboardIntentKind.MoveCurrentSlideEarlier,
-            Key.Down when modifiers == ModifierKeys.Alt =>
-                SlidePaneKeyboardIntentKind.MoveCurrentSlideLater,
-            _ => default,
-        };
-
-        return intent != SlidePaneKeyboardIntentKind.None;
     }
 
     private void ApplySectionAction(SlideSectionActionExecutionPlan execution)
     {
         if (!execution.IsEnabled)
             return;
-
-        string? promptedName = null;
-        if (execution.RequiresNamePrompt)
-        {
-            promptedName = PromptSectionName(execution.PromptTitle, execution.SuggestedName);
-            if (promptedName is null)
-                return;
-        }
-
-        SlideSectionPlanner.TryApplyAction(_editor, execution, promptedName);
+        var name = execution.RequiresNamePrompt
+            ? PromptSectionName(execution.PromptTitle, execution.SuggestedName)
+            : null;
+        if (execution.RequiresNamePrompt && name is null)
+            return;
+        _workarea.ExecuteSlidePaneSectionAction(execution, name);
     }
 
     private string? PromptSectionName(string title, string initialName)
@@ -633,7 +446,6 @@ public sealed class SlidePane : Border
             MinWidth = 260,
             Margin = new Thickness(0, 0, 0, 12),
         };
-
         var ok = new Button
         {
             Content = "OK",
@@ -647,7 +459,6 @@ public sealed class SlidePane : Border
             Width = 76,
             IsCancel = true,
         };
-
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -655,16 +466,10 @@ public sealed class SlidePane : Border
         };
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
-
         var panel = new StackPanel { Margin = new Thickness(14) };
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Section name:",
-            Margin = new Thickness(0, 0, 0, 4),
-        });
+        panel.Children.Add(new TextBlock { Text = "Section name:", Margin = new Thickness(0, 0, 0, 4) });
         panel.Children.Add(textBox);
         panel.Children.Add(buttons);
-
         var dialog = new Window
         {
             Title = title,
@@ -674,65 +479,76 @@ public sealed class SlidePane : Border
             ResizeMode = ResizeMode.NoResize,
             Owner = Window.GetWindow(this),
         };
-
         ok.Click += (_, _) => dialog.DialogResult = true;
         dialog.Loaded += (_, _) =>
         {
             textBox.Focus();
             textBox.SelectAll();
         };
-
         return dialog.ShowDialog() == true ? textBox.Text : null;
     }
 
-    // ── Drag-to-reorder ───────────────────────────────────────────────────────────
+    private void OnSlideItemKeyDown(object sender, KeyEventArgs e)
+    {
+        if (!TryMapKeyboardIntent(e, out var intent))
+            return;
+        if (_workarea.ExecuteSlidePaneKeyboardAction(intent))
+            e.Handled = true;
+    }
+
+    private static bool TryMapKeyboardIntent(KeyEventArgs e, out SlidePaneKeyboardIntentKind intent)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var modifiers = Keyboard.Modifiers;
+        intent = key switch
+        {
+            Key.Insert when modifiers == ModifierKeys.None => SlidePaneKeyboardIntentKind.InsertAfterCurrentSlide,
+            Key.Delete when modifiers == ModifierKeys.None => SlidePaneKeyboardIntentKind.DeleteCurrentSlide,
+            Key.D when modifiers == ModifierKeys.Control => SlidePaneKeyboardIntentKind.DuplicateCurrentSlide,
+            Key.Up when modifiers == ModifierKeys.Alt => SlidePaneKeyboardIntentKind.MoveCurrentSlideEarlier,
+            Key.Down when modifiers == ModifierKeys.Alt => SlidePaneKeyboardIntentKind.MoveCurrentSlideLater,
+            _ => SlidePaneKeyboardIntentKind.None,
+        };
+        return intent != SlidePaneKeyboardIntentKind.None;
+    }
+
+    private void OnItemMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is ListBoxItem { Tag: int sourceSlideIndex } item)
+            _workarea.BeginSlidePaneDrag(sourceSlideIndex, e.GetPosition(item).Y);
+    }
 
     private void OnItemMouseMove(object sender, MouseEventArgs e)
     {
-        if (e.LeftButton != MouseButtonState.Pressed) return;
-        if (sender is not Border item || !_sessionState.DragSession.IsTracking) return;
-
-        var update = SlidePanePlanner.UpdateDragSession(
-            _sessionState.DragSession,
-            GetPaneItemKinds(),
+        if (e.LeftButton != MouseButtonState.Pressed || sender is not ListBoxItem item)
+            return;
+        var update = _workarea.UpdateSlidePaneDrag(
             e.GetPosition(item).Y,
-            e.GetPosition(_stack).Y,
-            ItemHeight);
-        _sessionState = _sessionState with { DragSession = update.State };
-        if (!_sessionState.DragSession.IsDragging) return;
-
+            e.GetPosition(_list).Y);
+        if (!update.State.IsDragging)
+            return;
         if (update.ShouldCapturePointer)
             item.CaptureMouse();
-
         ShowInsertIndicator(update.DropVisualPlan);
         e.Handled = true;
     }
 
     private void OnItemMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not Border item) return;
-
-        var completion = SlidePanePlanner.CompleteDragSession(
-            _sessionState.DragSession,
-            _editor.Presentation.Slides.Count);
-        _sessionState = _sessionState with { DragSession = completion.State };
-
-        if (completion.ShouldReleaseCapture)
+        if (sender is not ListBoxItem item)
+            return;
+        _workarea.CompleteSlidePaneDrag(out var shouldReleaseCapture);
+        if (shouldReleaseCapture)
         {
             item.ReleaseMouseCapture();
             HideInsertIndicator();
-            SlidePanePlanner.TryApplyAction(_editor, completion.Action);
         }
-
         e.Handled = true;
     }
 
     private void OnItemLostMouseCapture(object sender, MouseEventArgs e)
     {
-        _sessionState = _sessionState with
-        {
-            DragSession = SlidePanePlanner.CancelDragSession(_sessionState.DragSession)
-        };
+        _workarea.CancelSlidePaneDrag();
         HideInsertIndicator();
     }
 
@@ -743,10 +559,9 @@ public sealed class SlidePane : Border
             HideInsertIndicator();
             return;
         }
-
-        _insertIndicator.Height     = plan.IndicatorThickness;
+        _insertIndicator.Height = plan.IndicatorThickness;
         _insertIndicator.Background = BrushFromHex(plan.AccentColorHex);
-        _insertIndicator.Margin     = new Thickness(
+        _insertIndicator.Margin = new Thickness(
             plan.HorizontalInset,
             plan.IndicatorTopMargin,
             plan.HorizontalInset,
@@ -754,22 +569,93 @@ public sealed class SlidePane : Border
         _insertIndicator.Visibility = Visibility.Visible;
     }
 
-    private IReadOnlyList<bool> GetPaneItemKinds()
-    {
-        return _sessionProjection?.PaneItemIsSlide ?? Array.Empty<bool>();
-    }
-
     private void HideInsertIndicator() =>
         _insertIndicator.Visibility = Visibility.Collapsed;
 
-    // ── Static helpers ────────────────────────────────────────────────────────────
+    private ListBoxItem? GetActiveItem() => _list.Items
+        .OfType<ListBoxItem>()
+        .FirstOrDefault(item => item.Tag is int slideIndex &&
+            slideIndex == _workarea.SlidePaneSession.Selection.ActiveSlideIndex);
 
-    private static T Freeze<T>(T freezable) where T : Freezable
+    private SlidePaneThumbnailVisualPlan? ResolveThumbnailPlan(int slideIndex) =>
+        _workarea.SlidePaneSession.Projection.Items
+            .FirstOrDefault(item => item.Entry.Kind == SlidePaneEntryKind.Slide &&
+                item.Entry.SlideIndex == slideIndex)
+            ?.Thumbnail;
+
+    internal ContextMenu BuildSlideContextMenuForTests(int slideIndex) =>
+        BuildSlideContextMenu(slideIndex);
+
+    internal ContextMenu BuildSectionContextMenuForTests(SlidePaneEntry entry) =>
+        BuildSectionContextMenu(entry);
+
+    internal int SlidePaneSlideItemCount => _list.Items
+        .OfType<ListBoxItem>()
+        .Count(item => item.Tag is int);
+
+    internal int SlidePaneSectionHeaderCount => _list.Items
+        .OfType<ListBoxItem>()
+        .Count(item => item.Tag is SectionHeaderTag);
+
+    internal IReadOnlyList<string?> SlidePaneThumbnailAutomationNamesForTests => _list.Items
+        .OfType<ListBoxItem>()
+        .Where(item => item.Tag is int)
+        .Select(AutomationProperties.GetName)
+        .ToArray();
+
+    internal IReadOnlyList<string?> SlidePaneSectionHeaderAutomationNamesForTests => _list.Items
+        .OfType<ListBoxItem>()
+        .Where(item => item.Tag is SectionHeaderTag)
+        .Select(AutomationProperties.GetName)
+        .ToArray();
+
+    internal IReadOnlyList<FrameworkElement> AccessibilityItemsForTests => _list.Items
+        .OfType<FrameworkElement>()
+        .Where(item => AutomationProperties.GetAutomationId(item)
+            .StartsWith("FreePSlidePaneItem", StringComparison.Ordinal))
+        .ToArray();
+
+    internal bool ToggleSectionForTests(int sectionIndex)
     {
-        if (freezable.CanFreeze) freezable.Freeze();
-        return freezable;
+        if (sectionIndex < 0 || sectionIndex >= _workarea.Presentation.Sections.Count)
+            return false;
+        _workarea.ToggleSlidePaneSection(SlidePanePlanner.GetSectionIdentity(
+            _workarea.Presentation.Sections[sectionIndex],
+            sectionIndex));
+        return true;
     }
 
-    private static Brush BrushFromHex(string hex) =>
-        Freeze(new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)!));
+    internal bool TryApplySlideSectionActionForTests(
+        SlideSectionActionKind kind,
+        int slideIndex = -1,
+        int sectionIndex = -1,
+        string? promptedName = null)
+    {
+        var command = kind switch
+        {
+            SlideSectionActionKind.AddSection => FreePContextMenuCommand.AddSection,
+            SlideSectionActionKind.RenameSection => FreePContextMenuCommand.RenameSection,
+            SlideSectionActionKind.RemoveSection => FreePContextMenuCommand.RemoveSection,
+            SlideSectionActionKind.RemoveAllSections => FreePContextMenuCommand.RemoveAllSections,
+            _ => default,
+        };
+        var execution = _workarea.BuildSlidePaneContextCommandRoute(command, slideIndex, sectionIndex)
+            .SectionExecution;
+        return execution is not null && _workarea.ExecuteSlidePaneSectionAction(execution, promptedName);
+    }
+
+    internal bool TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind intent) =>
+        _workarea.ExecuteSlidePaneKeyboardAction(intent);
+
+    internal ListBox NativeListForTests => _list;
+
+    internal Button NewSlideButtonForTests => _newSlideButton;
+
+    private static Brush BrushFromHex(string hex)
+    {
+        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)!);
+        if (brush.CanFreeze)
+            brush.Freeze();
+        return brush;
+    }
 }

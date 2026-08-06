@@ -21,6 +21,7 @@ public sealed partial class MainWindow
             PresentationWorkareaOperation.BindEditor => () => BindWorkareaEditor(context),
             PresentationWorkareaOperation.HideTransientPickers => HideTransientPickers,
             PresentationWorkareaOperation.MarkDirty => _file.MarkDirty,
+            PresentationWorkareaOperation.RefreshSlidePane => RefreshSlidePane,
             PresentationWorkareaOperation.RefreshCanvas => RefreshCanvas,
             PresentationWorkareaOperation.RefreshNotesPane => RefreshNotesPane,
             PresentationWorkareaOperation.RefreshDocumentStatusBeforeReview =>
@@ -36,6 +37,8 @@ public sealed partial class MainWindow
             PresentationWorkareaOperation.ClearReviewSelection =>
                 () => _reviewWorkflowSession.SelectedCommentIndex = null,
             PresentationWorkareaOperation.ClearMediaSelection => _mediaPaneSession.ClearCaptionSelection,
+            PresentationWorkareaOperation.SyncSlidePaneSelection => SyncSlidePaneSelection,
+            PresentationWorkareaOperation.RefreshSlidePaneChrome => RefreshSlidePaneChrome,
             PresentationWorkareaOperation.RefreshReviewPaneBeforePlans => RefreshCommentPane,
             PresentationWorkareaOperation.RefreshVisibleMediaPane => RefreshVisibleMediaCaptionPaneFromFields,
             PresentationWorkareaOperation.RefreshAltTextRequest => RefreshAltTextRequestPlan,
@@ -74,12 +77,16 @@ public sealed partial class MainWindow
         _selectionPane?.SetEditor(context.Snapshot.Editor);
         if (SlideCanvas is not null)
             AttachCanvasEditing();
-        if (context.Transition == PresentationWorkareaTransition.PresentationReplaced &&
-            SlidePaneHost is not null)
-        {
-            SlidePaneHost.Child = new SlidePane(context.Snapshot.Editor);
-        }
     }
+
+    private void RefreshSlidePane() =>
+        (SlidePaneHost?.Child as SlidePane)?.RefreshProjection();
+
+    private void SyncSlidePaneSelection() =>
+        (SlidePaneHost?.Child as SlidePane)?.SyncNativeSelection();
+
+    private void RefreshSlidePaneChrome() =>
+        (SlidePaneHost?.Child as SlidePane)?.RefreshItemChrome();
 
     private void HideTransientPickers()
     {

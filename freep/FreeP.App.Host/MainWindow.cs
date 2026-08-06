@@ -845,7 +845,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             Background = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
         };
         // 3B SEAM: attach the slide-thumbnail pane.
-        SlidePaneHost.Child = new SlidePane(Editor);
+        SlidePaneHost.Child = new SlidePane(_workareaSession);
 
         // CENTRE stage — the canvas proper.
         SlideCanvas = new SlideCanvas
