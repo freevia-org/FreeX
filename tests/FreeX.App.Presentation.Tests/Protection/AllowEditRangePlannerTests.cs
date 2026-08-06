@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Presentation.Protection;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Tests.Protection;
@@ -71,5 +72,116 @@ public sealed class AllowEditRangePlannerTests
             .Be(new AllowEditRangeResult(AllowEditRangeAction.Remove, a));
         AllowEditRangePlanner.CreateClearResult().Should()
             .Be(new AllowEditRangeResult(AllowEditRangeAction.Clear, null));
+    }
+
+    [Fact]
+    public void CreateCommandPlan_AddsRangeAndStoredPasswordAtomically()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
+        var plan = AllowEditRangePlanner.CreateCommandPlan(
+            sheet.Id,
+            AllowEditRangePlanner.CreateAddResult(range),
+            password: "ABCD",
+            passwordChanged: true);
+
+        var outcome = plan!.Command.Apply(new TestCommandContext(workbook));
+
+        outcome.Success.Should().BeTrue();
+        sheet.AllowEditRanges.Should().ContainSingle().Which.Should().Be(range);
+        sheet.AllowEditRangePasswords.Should().ContainKey(range).WhoseValue.Should().Be("ABCD");
+    }
+
+    [Fact]
+    public void CreateCommandPlan_ModifyCarriesPasswordWhenRangeKeyChanges()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var original = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
+        var updated = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 4, 2));
+        var context = new TestCommandContext(workbook);
+        AllowEditRangePlanner.CreateCommandPlan(
+                sheet.Id,
+                AllowEditRangePlanner.CreateAddResult(original),
+                password: "ABCD",
+                passwordChanged: true)!
+            .Command.Apply(context).Success.Should().BeTrue();
+
+        var plan = AllowEditRangePlanner.CreateCommandPlan(
+            sheet.Id,
+            AllowEditRangePlanner.CreateModifyResult(original, updated),
+            password: null,
+            passwordChanged: false,
+            existingPasswords: sheet.AllowEditRangePasswords);
+        var outcome = plan!.Command.Apply(context);
+
+        outcome.Success.Should().BeTrue();
+        sheet.AllowEditRanges.Should().ContainSingle().Which.Should().Be(updated);
+        sheet.AllowEditRangePasswords.Should().NotContainKey(original);
+        sheet.AllowEditRangePasswords.Should().ContainKey(updated).WhoseValue.Should().Be("ABCD");
+    }
+
+    [Fact]
+    public void CreateCommandPlan_RemoveClearsRangeAndPassword()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
+        var context = new TestCommandContext(workbook);
+        AllowEditRangePlanner.CreateCommandPlan(
+                sheet.Id,
+                AllowEditRangePlanner.CreateAddResult(range),
+                password: "ABCD",
+                passwordChanged: true)!
+            .Command.Apply(context).Success.Should().BeTrue();
+
+        var plan = AllowEditRangePlanner.CreateCommandPlan(
+            sheet.Id,
+            AllowEditRangePlanner.CreateRemoveResult(range),
+            password: null,
+            passwordChanged: false,
+            existingPasswords: sheet.AllowEditRangePasswords);
+        var outcome = plan!.Command.Apply(context);
+
+        outcome.Success.Should().BeTrue();
+        sheet.AllowEditRanges.Should().BeEmpty();
+        sheet.AllowEditRangePasswords.Should().BeEmpty();
+    }
+
+    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
+    }
+}
+
+public sealed class AllowEditRangeCommandOwnershipSourceGuardTests
+{
+    [Fact]
+    public void RenderersDelegateAllowEditRangeCommandCompositionToPresentation()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var host = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.ReviewCommands.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.AllowEditRange.cs"));
+
+        host.Should().Contain("AllowEditRangePlanner.CreateCommandPlan(");
+        host.Should().NotContain("new AllowEditRangeCommand(");
+        host.Should().NotContain("new RemoveAllowEditRangeCommand(");
+        host.Should().NotContain("new SetAllowEditRangePasswordCommand(");
+        avalonia.Should().Contain("AllowEditRangePlanner.CreateCommandPlan(");
+        avalonia.Should().NotContain("new AllowEditRangeCommand(");
+        avalonia.Should().NotContain("new RemoveAllowEditRangeCommand(");
+        avalonia.Should().NotContain("new SetAllowEditRangePasswordCommand(");
     }
 }

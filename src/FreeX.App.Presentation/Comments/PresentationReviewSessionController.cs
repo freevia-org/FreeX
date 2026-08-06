@@ -171,6 +171,14 @@ public sealed class PresentationReviewSessionController
         return Apply(_mutationService.PlanDeleteThreadedComment(_adapter.ActiveSheetId));
     }
 
+    public PresentationReviewMutationResult ToggleNoteVisibility(CellAddress address) =>
+        Apply(
+            _mutationService.PlanToggleNoteVisibility(_adapter.ActiveSheetId),
+            new GridRange(address, address));
+
+    public PresentationReviewMutationResult ToggleAllNotesVisibility() =>
+        Apply(_mutationService.PlanToggleAllNotesVisibility(_adapter.ActiveSheetId));
+
     public bool HasNoteAtSelection() => HasNoteAtSelectionCore();
 
     public bool HasThreadedCommentAtSelection() => HasThreadedCommentAtSelectionCore();
@@ -203,10 +211,12 @@ public sealed class PresentationReviewSessionController
             RefreshCommentPanes: mutationApplied,
             SelectionChanged: selectionChanged);
 
-    private PresentationReviewMutationResult Apply(PresentationCommentMutationPlan plan)
+    private PresentationReviewMutationResult Apply(
+        PresentationCommentMutationPlan plan,
+        GridRange? targetRange = null)
     {
         var address = SelectedAddress ?? new CellAddress(_adapter.ActiveSheetId, 1, 1);
-        var fallbackRange = _adapter.SelectedRange ?? new GridRange(address, address);
+        var fallbackRange = targetRange ?? _adapter.SelectedRange ?? new GridRange(address, address);
         var result = _adapter.ApplyMutation(plan, fallbackRange);
         return new(
             result.Success,

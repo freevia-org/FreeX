@@ -71,6 +71,39 @@ public sealed class PresentationReviewSessionControllerTests
         result.RefreshPlan.Should().Be(PresentationReviewRefreshPlan.None);
     }
 
+    [Fact]
+    public void ToggleNoteVisibility_UsesExplicitContextCellAndSharedCommandPlan()
+    {
+        var workbook = CreateWorkbook(out var sheet);
+        var selected = new CellAddress(sheet.Id, 1, 1);
+        var contextCell = new CellAddress(sheet.Id, 5, 3);
+        var adapter = new FakeAdapter(workbook, sheet.Id, new GridRange(selected, selected));
+        var controller = new PresentationReviewSessionController(adapter);
+
+        var result = controller.ToggleNoteVisibility(contextCell);
+
+        result.Success.Should().BeTrue();
+        adapter.LastFallbackRange.Should().Be(new GridRange(contextCell, contextCell));
+        adapter.LastPlan!.CreateCommand(adapter.LastFallbackRange!.Value)
+            .Should().BeOfType<ShowHideCommentCommand>();
+        result.RefreshPlan.Should().Be(new PresentationReviewRefreshPlan(true, true, true, false));
+    }
+
+    [Fact]
+    public void ToggleAllNotesVisibility_UsesSharedCommandPlan()
+    {
+        var workbook = CreateWorkbook(out var sheet);
+        var address = new CellAddress(sheet.Id, 2, 2);
+        var adapter = new FakeAdapter(workbook, sheet.Id, new GridRange(address, address));
+        var controller = new PresentationReviewSessionController(adapter);
+
+        var result = controller.ToggleAllNotesVisibility();
+
+        result.Success.Should().BeTrue();
+        adapter.LastPlan!.CreateCommand(adapter.LastFallbackRange!.Value)
+            .Should().BeOfType<ShowAllNotesCommand>();
+    }
+
     private static Workbook CreateWorkbook(out Sheet sheet)
     {
         var workbook = new Workbook("Review");
@@ -92,12 +125,14 @@ public sealed class PresentationReviewSessionControllerTests
         public GridRange? SelectedRange { get; private set; }
         public string AuthorName => "Reviewer";
         public PresentationCommentMutationPlan? LastPlan { get; private set; }
+        public GridRange? LastFallbackRange { get; private set; }
 
         public PresentationCommentMutationExecutionResult ApplyMutation(
             PresentationCommentMutationPlan plan,
             GridRange fallbackRange)
         {
             LastPlan = plan;
+            LastFallbackRange = fallbackRange;
             return new(true);
         }
 

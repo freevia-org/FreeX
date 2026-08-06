@@ -350,10 +350,11 @@ public partial class MainWindow
         // intentionally left unremembered (and does not clear a previously remembered in-place one).
         if (result.CopyToCell is null)
         {
-            _lastInPlaceAdvancedFilter = new AdvancedFilterReapplyState(
+            _filterWorkflowSession.RememberAdvancedFilter(
                 result.ListRange,
                 result.CriteriaRange,
-                result.UniqueRecordsOnly);
+                filterInPlace: true,
+                uniqueRecordsOnly: result.UniqueRecordsOnly);
         }
 
         if (result.CopyToCell is { } destinationCell)

@@ -169,16 +169,14 @@ public sealed partial class MainWindow
 
             var result = AllowEditRangePlanner.CreateAddResult(range);
             var typedPassword = string.IsNullOrEmpty(rangePasswordBox.Text) ? null : rangePasswordBox.Text;
-            var command = new CompositeWorkbookCommand(
-                "Allow Edit Range",
-                [
-                    new AllowEditRangeCommand(sheetId, result.Range!.Value),
-                    new SetAllowEditRangePasswordCommand(
-                        sheetId,
-                        result.Range!.Value,
-                        typedPassword is null ? null : ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash(typedPassword)),
-                ]);
-            TryExecute(command, UiText.Format("AllowEditRange_Added", result.Range!.Value));
+            var plan = AllowEditRangePlanner.CreateCommandPlan(
+                sheetId,
+                result,
+                typedPassword is null ? null : ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash(typedPassword),
+                passwordChanged: true,
+                existingPasswords: _session.ActiveSheet.AllowEditRangePasswords);
+            if (plan is not null)
+                TryExecute(plan.Command, UiText.Format("AllowEditRange_Added", result.Range!.Value));
             rangeBeingModified = null;
             rangePasswordBox.Text = string.Empty;
         };
@@ -211,30 +209,15 @@ public sealed partial class MainWindow
             }
 
             var result = AllowEditRangePlanner.CreateModifyResult(originalRange, updatedRange);
-            var modifyCommands = new List<IWorkbookCommand>
-            {
-                new RemoveAllowEditRangeCommand(sheetId, result.PreviousRange!.Value),
-                new AllowEditRangeCommand(sheetId, result.Range!.Value),
-            };
-
             var typedPassword = string.IsNullOrEmpty(rangePasswordBox.Text) ? null : rangePasswordBox.Text;
-            if (typedPassword is not null)
-            {
-                modifyCommands.Add(new SetAllowEditRangePasswordCommand(
-                    sheetId,
-                    result.Range!.Value,
-                    ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash(typedPassword)));
-            }
-            else if (!result.Range!.Value.Equals(result.PreviousRange!.Value) &&
-                     _session.ActiveSheet.AllowEditRangePasswords.TryGetValue(result.PreviousRange!.Value, out var carriedPassword))
-            {
-                // The range's key changed (e.g. its bounds were edited) but the password was left
-                // untouched -- carry the existing password over to the new key so it is not lost.
-                modifyCommands.Add(new SetAllowEditRangePasswordCommand(sheetId, result.Range!.Value, carriedPassword));
-            }
-
-            var command = new CompositeWorkbookCommand("Modify Allow Edit Range", modifyCommands);
-            if (TryExecute(command, UiText.Format("AllowEditRange_Modified", result.Range!.Value)))
+            var plan = AllowEditRangePlanner.CreateCommandPlan(
+                sheetId,
+                result,
+                typedPassword is null ? null : ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash(typedPassword),
+                passwordChanged: typedPassword is not null,
+                existingPasswords: _session.ActiveSheet.AllowEditRangePasswords);
+            if (plan is not null &&
+                TryExecute(plan.Command, UiText.Format("AllowEditRange_Modified", result.Range!.Value)))
             {
                 rangeBeingModified = null;
                 rangePasswordBox.Text = string.Empty;
@@ -251,13 +234,14 @@ public sealed partial class MainWindow
             }
 
             var result = AllowEditRangePlanner.CreateRemoveResult(range);
-            var command = new CompositeWorkbookCommand(
-                "Remove Allow Edit Range",
-                [
-                    new RemoveAllowEditRangeCommand(sheetId, result.Range!.Value),
-                    new SetAllowEditRangePasswordCommand(sheetId, result.Range!.Value, null),
-                ]);
-            TryExecute(command, UiText.Format("AllowEditRange_Removed", result.Range!.Value));
+            var plan = AllowEditRangePlanner.CreateCommandPlan(
+                sheetId,
+                result,
+                password: null,
+                passwordChanged: false,
+                existingPasswords: _session.ActiveSheet.AllowEditRangePasswords);
+            if (plan is not null)
+                TryExecute(plan.Command, UiText.Format("AllowEditRange_Removed", result.Range!.Value));
             rangeBeingModified = null;
             rangePasswordBox.Text = string.Empty;
         };

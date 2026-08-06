@@ -83,16 +83,13 @@ public sealed partial class ProtectionDialogTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         source.Should().Contain("new AllowEditRangeDialog(");
-        source.Should().Contain("AllowEditRangeAction.Add");
-        source.Should().Contain("new AllowEditRangeCommand(_currentSheetId, range)");
-        source.Should().Contain("AllowEditRangeAction.Modify");
-        source.Should().Contain("new CompositeWorkbookCommand(");
-        source.Should().Contain("new RemoveAllowEditRangeCommand(_currentSheetId, previousRange)");
+        source.Should().Contain("AllowEditRangePlanner.CreateCommandPlan(");
+        source.Should().Contain("TryExecuteCommand(plan.Command, \"Allow Users to Edit Ranges\")");
         source.Should().Contain("UiText.Format(\"MainWindowMessage_AllowEditRangeModified\", range)");
-        source.Should().Contain("AllowEditRangeAction.Remove");
-        source.Should().Contain("new RemoveAllowEditRangeCommand(_currentSheetId, range)");
-        source.Should().Contain("AllowEditRangeAction.Clear");
-        source.Should().Contain("new ClearAllowEditRangesCommand(_currentSheetId)");
+        source.Should().NotContain("new AllowEditRangeCommand");
+        source.Should().NotContain("new RemoveAllowEditRangeCommand");
+        source.Should().NotContain("new ClearAllowEditRangesCommand");
+        source.Should().NotContain("new SetAllowEditRangePasswordCommand");
     }
 
     [Fact]

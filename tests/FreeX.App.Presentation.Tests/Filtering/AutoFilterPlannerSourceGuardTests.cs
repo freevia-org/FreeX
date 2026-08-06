@@ -68,8 +68,10 @@ public sealed class AutoFilterPlannerSourceGuardTests
         hostResourcesSource.Should().NotContain("AutoFilterDropdownMenuPlanner.");
         hostDataFilterSource.Should().Contain("AutoFilterToggleRangePlanner.Create(sheet, selectedRange)");
         hostDataFilterSource.Should().Contain("AutoFilterDropdownMenuPlanner.HasActiveFilter(sheet, range)");
-        hostDataFilterSource.Should().Contain("FormatFilterPromptPlanError(promptError)");
+        hostDataFilterSource.Should().Contain("_filterWorkflowSession.PlanDialogResult(");
+        hostDataFilterSource.Should().Contain("FormatFilterPromptPlanError(plan.PromptError)");
         hostDataFilterSource.Should().Contain("UiText.Get(\"FilterPrompt_ErrorTopBottomSyntax\")");
+        hostDataFilterSource.Should().NotContain("FilterPromptPlanner.TryPlan(");
         presentationPromptSource.Should().Contain("FilterInputParser.TryParseTopBottom");
         presentationPromptSource.Should().Contain("FilterInputParser.TryParseCriterion");
         presentationPromptSource.Should().NotContain("UiText.Get(");
