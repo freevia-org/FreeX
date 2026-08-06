@@ -104,6 +104,7 @@ public enum SlideShowShapeAnimationEffectKind
     Blink,
     FlashBulb,
     Flicker,
+    ChangeLineColor,
     ColorPulse,
     ColorWave,
     ChangeColor,
@@ -520,7 +521,7 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.ColorWave => SlideShowShapeAnimationEffectKind.ColorWave,
             AnimationPreset.ChangeColor => SlideShowShapeAnimationEffectKind.ChangeColor,
             AnimationPreset.ChangeFontStyle => SlideShowShapeAnimationEffectKind.ChangeFontStyle,
-            AnimationPreset.ChangeLineColor => SlideShowShapeAnimationEffectKind.ChangeColor,
+            AnimationPreset.ChangeLineColor => SlideShowShapeAnimationEffectKind.ChangeLineColor,
             AnimationPreset.ChangeFillColor => SlideShowShapeAnimationEffectKind.ChangeFillColor,
             AnimationPreset.GrowWithColor => SlideShowShapeAnimationEffectKind.GrowWithColor,
             AnimationPreset.Wave => SlideShowShapeAnimationEffectKind.Wave,
@@ -540,6 +541,14 @@ public static class SlideShowPlaybackPlanner
         if (effectKind == SlideShowShapeAnimationEffectKind.ChangeFillColor)
             return ResolveFillColorBehavior(animation, presentation, effectiveClrMap);
 
+        if (effectKind == SlideShowShapeAnimationEffectKind.ChangeLineColor)
+        {
+            return ResolveColorBehaviorXml(
+                animation.PreservedLineBehaviorXml,
+                presentation,
+                effectiveClrMap);
+        }
+
         if (effectKind is not (SlideShowShapeAnimationEffectKind.ColorPulse
             or SlideShowShapeAnimationEffectKind.ColorWave
             or SlideShowShapeAnimationEffectKind.ChangeColor
@@ -550,13 +559,31 @@ public static class SlideShowPlaybackPlanner
             return (null, null);
         }
 
+        return ResolveColorBehaviorXml(
+            animation.PreservedColorBehaviorXml,
+            presentation,
+            effectiveClrMap);
+    }
+
+    private static (string? From, string? To) ResolveColorBehaviorXml(
+        string? behaviorXml,
+        Presentation? presentation,
+        IReadOnlyDictionary<string, string>? effectiveClrMap)
+    {
+        if (string.IsNullOrWhiteSpace(behaviorXml))
+            return (null, null);
+
         try
         {
             XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
             XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
-            var root = XElement.Parse(animation.PreservedColorBehaviorXml, LoadOptions.PreserveWhitespace);
+            var root = XElement.Parse(behaviorXml, LoadOptions.PreserveWhitespace);
             var from = ResolveAnimationColor(root.Element(p + "clrFrom"), presentation, effectiveClrMap, a);
-            var to = ResolveAnimationColor(root.Element(p + "clrTo"), presentation, effectiveClrMap, a);
+            var to = ResolveAnimationColor(
+                root.Element(p + "clrTo") ?? root.Descendants(p + "to").LastOrDefault(),
+                presentation,
+                effectiveClrMap,
+                a);
             return (from, to);
         }
         catch (XmlException)

@@ -515,7 +515,7 @@ public sealed class AnimationPresetRoundTripTests
         animation.PreservedLineBehaviorXml.Should().Contain("accent2");
         animation.PreservedLineBehaviorXml.Should().Contain("spid=\"7\"");
         SlideShowPlaybackPlanner.PlanShapeAnimation(animation, startDelayMs: 0)
-            .EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ChangeColor);
+            .EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ChangeLineColor);
 
         var clonedAnimation = SlideCloner.CloneSlide(reloaded.Slides[0]).Animations.Single();
         clonedAnimation.PreservedLineBehaviorXml.Should().Be(animation.PreservedLineBehaviorXml);

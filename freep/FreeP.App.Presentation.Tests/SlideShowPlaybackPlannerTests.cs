@@ -2019,7 +2019,7 @@ public sealed class SlideShowPlaybackPlannerTests
             [AnimationPreset.ColorPulse] = SlideShowShapeAnimationEffectKind.ColorPulse,
             [AnimationPreset.ColorWave] = SlideShowShapeAnimationEffectKind.ColorWave,
             [AnimationPreset.ChangeColor] = SlideShowShapeAnimationEffectKind.ChangeColor,
-            [AnimationPreset.ChangeLineColor] = SlideShowShapeAnimationEffectKind.ChangeColor,
+            [AnimationPreset.ChangeLineColor] = SlideShowShapeAnimationEffectKind.ChangeLineColor,
             [AnimationPreset.ChangeFontStyle] = SlideShowShapeAnimationEffectKind.ChangeFontStyle,
             [AnimationPreset.GrowWithColor] = SlideShowShapeAnimationEffectKind.GrowWithColor,
             [AnimationPreset.Wave] = SlideShowShapeAnimationEffectKind.Wave,
@@ -2094,6 +2094,34 @@ public sealed class SlideShowPlaybackPlannerTests
 
         plan.ColorFromHex.Should().Be("FF0000");
         plan.ColorToHex.Should().Be("00AAFF");
+    }
+
+    [Fact]
+    public void PlanShapeAnimation_ResolvesNativeStrokeColorBehavior()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 75,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.ChangeLineColor,
+                PreservedLineBehaviorXml = """
+                    <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                                  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                      <p:animClr>
+                        <p:cBhvr><p:attrNameLst><p:attrName>stroke.color</p:attrName></p:attrNameLst></p:cBhvr>
+                        <p:to><a:srgbClr val="00ff00" /></p:to>
+                      </p:animClr>
+                    </p:childTnLst>
+                    """
+            },
+            startDelayMs: 0);
+
+        plan.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ChangeLineColor);
+        plan.ColorFromHex.Should().BeNull();
+        plan.ColorToHex.Should().Be("00FF00");
+        SlideShowPlaybackFramePlanner.PlanFrame(plan, 250, 960, 540)
+            .TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Emphasis);
     }
 
     [Fact]

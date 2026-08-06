@@ -335,6 +335,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.ChangeColor:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.ColorWave:");
         source.Should().Contain("ColorWaveEffect(sb, element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.ChangeLineColor:");
+        source.Should().Contain("LineColorEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.GrowWithColor:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Shimmer:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Bold:");
