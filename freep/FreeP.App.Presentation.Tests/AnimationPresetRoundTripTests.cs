@@ -261,7 +261,7 @@ public sealed class AnimationPresetRoundTripTests
         var slideXml = XDocument.Parse(reader.ReadToEnd());
         XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
         var cTn = slideXml.Descendants(p + "cTn")
-            .Single(element => element.Attribute("presetID")?.Value == "3");
+            .Single(element => element.Attribute("presetID")?.Value == "8");
         cTn.Attribute("presetClass")!.Value.Should().Be("emph");
         cTn.Attribute("presetSubtype")!.Value.Should().Be("twoSpins");
     }
