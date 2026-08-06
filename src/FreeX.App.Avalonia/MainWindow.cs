@@ -19397,29 +19397,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // data-body range (the same rows a structured reference like Table1[#Data] would select),
         // rather than only cell/named-range references. Without this, an existing table's name
         // falls through to TryDefineNameFromCellAddressBox and silently creates a colliding
-        // defined name (matches the WPF host's TryFindStructuredTableDataBodyRange).
-        return TryFindStructuredTableDataBodyRange(text.Trim(), out range);
-    }
-
-    // Matches StructuredReferenceResolver's table-name lookup (name OR display name, both header-row
-    // and totals-row aware) so Name Box navigation lands on exactly the same range a structured
-    // reference to the same table would resolve to.
-    private bool TryFindStructuredTableDataBodyRange(string name, out GridRange range)
-    {
-        foreach (var sheet in _session.Workbook.Sheets)
-        {
-            var table = sheet.StructuredTables.FirstOrDefault(t =>
-                string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(t.DisplayName, name, StringComparison.OrdinalIgnoreCase));
-            if (table is null)
-                continue;
-
-            range = NameBoxDropdownPlanner.GetTableDataBodyRange(table);
-            return true;
-        }
-
-        range = default;
-        return false;
+        // defined name through the same shared policy used by the WPF host.
+        return StructuredTableSelectionPlanner.TryResolveDataBodyRange(
+            _session.Workbook,
+            text,
+            out range);
     }
 
     private void NavigateCellAddressBoxTo(GridRange selectedRange)
@@ -19443,9 +19425,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Excel rejects this outright (a table name and a defined name share one namespace).
         // TryParseCellAddressBoxReferenceRange already resolves table names to a selection before
         // this method runs, so this is a defense-in-depth guard against ever reaching here for one.
-        if (_session.Workbook.Sheets.Any(sheet => sheet.StructuredTables.Any(t =>
-                string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(t.DisplayName, name, StringComparison.OrdinalIgnoreCase))))
+        if (StructuredTableSelectionPlanner.ContainsTableName(_session.Workbook, name))
         {
             return false;
         }
@@ -24714,7 +24694,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         ClearSelectedDrawingObject();
-        var range = SelectionRangeService.GetWholeColumns(_session.SelectedRange);
+        var range = StructuredTableSelectionPlanner.PlanWholeColumns(
+                _session.ActiveSheet,
+                _session.SelectedRange)
+            .Range;
         _session.SelectRange(range);
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
     }
@@ -24732,7 +24715,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         ClearSelectedDrawingObject();
-        var range = SelectionRangeService.GetWholeRows(_session.SelectedRange);
+        var range = StructuredTableSelectionPlanner.PlanWholeRows(
+                _session.ActiveSheet,
+                _session.SelectedRange)
+            .Range;
         _session.SelectRange(range);
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
     }

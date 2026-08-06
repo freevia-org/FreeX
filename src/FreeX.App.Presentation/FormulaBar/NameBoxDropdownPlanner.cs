@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.FormulaBar;
@@ -85,17 +86,7 @@ public static class NameBoxDropdownPlanner
     }
 
     public static GridRange GetTableDataBodyRange(StructuredTableModel table)
-    {
-        var rowCount = checked((int)table.Range.RowCount);
-        var headerRows = (uint)Math.Clamp(table.HeaderRowCount ?? 1, 0, rowCount);
-        var startRow = table.Range.Start.Row + headerRows;
-        var endRow = table.TotalsRowShown ? table.Range.End.Row - 1 : table.Range.End.Row;
-        return startRow > endRow
-            ? table.Range
-            : new GridRange(
-                new CellAddress(table.Range.Start.Sheet, startRow, table.Range.Start.Col),
-                new CellAddress(table.Range.Start.Sheet, endRow, table.Range.End.Col));
-    }
+        => StructuredTableSelectionPlanner.GetDataBodyRangeOrTableRange(table);
 
     private static void AddObjects(List<NameBoxNavigationItem> items, Sheet sheet)
     {

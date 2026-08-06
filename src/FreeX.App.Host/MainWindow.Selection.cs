@@ -1300,20 +1300,10 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is not null && TryGetTableForSelection(sheet, range, out var table))
-        {
-            var tableRowRange = new GridRange(
-                new CellAddress(range.Start.Sheet, range.Start.Row, table.Range.Start.Col),
-                new CellAddress(range.Start.Sheet, range.End.Row, table.Range.End.Col));
-
-            if (range != tableRowRange)
-            {
-                SetSelectionRange(tableRowRange, range.Start);
-                return;
-            }
-        }
-
-        SetSelectionRange(SelectionRangeService.GetWholeRows(range), range.Start);
+        var expanded = sheet is null
+            ? SelectionRangeService.GetWholeRows(range)
+            : StructuredTableSelectionPlanner.PlanWholeRows(sheet, range).Range;
+        SetSelectionRange(expanded, range.Start);
     }
 
     /// <summary>
@@ -1328,59 +1318,10 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is not null && TryGetTableForSelection(sheet, range, out var table))
-        {
-            var tableRowCount = (int)table.Range.RowCount;
-            var headerRows = (uint)Math.Clamp(table.HeaderRowCount.GetValueOrDefault(1), 0, tableRowCount);
-            var totalsRows = (uint)Math.Clamp(table.TotalsRowCount ?? (table.TotalsRowShown ? 1 : 0), 0, tableRowCount);
-            var dataStartRow = table.Range.Start.Row + headerRows;
-            var dataEndRow = table.Range.End.Row - totalsRows;
-
-            if (dataStartRow <= dataEndRow)
-            {
-                var dataRange = new GridRange(
-                    new CellAddress(range.Start.Sheet, dataStartRow, range.Start.Col),
-                    new CellAddress(range.Start.Sheet, dataEndRow, range.End.Col));
-                var fullTableColumnRange = new GridRange(
-                    new CellAddress(range.Start.Sheet, table.Range.Start.Row, range.Start.Col),
-                    new CellAddress(range.Start.Sheet, table.Range.End.Row, range.End.Col));
-
-                if (range == fullTableColumnRange)
-                {
-                    SetSelectionRange(SelectionRangeService.GetWholeColumns(range), range.Start);
-                    return;
-                }
-
-                if (range != dataRange)
-                {
-                    SetSelectionRange(dataRange, range.Start);
-                    return;
-                }
-
-                SetSelectionRange(fullTableColumnRange, range.Start);
-                return;
-            }
-        }
-
-        SetSelectionRange(SelectionRangeService.GetWholeColumns(range), range.Start);
-    }
-
-    /// <summary>Finds the structured Table that fully contains <paramref name="range"/> (both
-    /// corners), if any -- used to scope Ctrl+Space/Shift+Space's first press(es) to the table
-    /// before escalating to the whole sheet column/row.</summary>
-    private static bool TryGetTableForSelection(Sheet sheet, GridRange range, out StructuredTableModel table)
-    {
-        foreach (var candidate in sheet.StructuredTables)
-        {
-            if (candidate.Range.Contains(range.Start) && candidate.Range.Contains(range.End))
-            {
-                table = candidate;
-                return true;
-            }
-        }
-
-        table = null!;
-        return false;
+        var expanded = sheet is null
+            ? SelectionRangeService.GetWholeColumns(range)
+            : StructuredTableSelectionPlanner.PlanWholeColumns(sheet, range).Range;
+        SetSelectionRange(expanded, range.Start);
     }
 
     // R92-commands-merge-edge-5-2: navigating (Name Box / Go To / hyperlink / any other caller of

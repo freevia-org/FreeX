@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.Presentation.FormulaBar;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
@@ -1381,28 +1382,10 @@ public partial class MainWindow
         // data-body range (the same rows a structured reference like Table1[#Data] would select),
         // rather than only cell/named-range references. Without this, an existing table's name
         // falls through to TryDefineNameFromNameBox and silently creates a colliding defined name.
-        return TryFindStructuredTableDataBodyRange(text.Trim(), out range);
-    }
-
-    // Matches StructuredReferenceResolver's table-name lookup (name OR display name, both header-row
-    // and totals-row aware) so Name Box navigation lands on exactly the same range a structured
-    // reference to the same table would resolve to.
-    private bool TryFindStructuredTableDataBodyRange(string name, out GridRange range)
-    {
-        foreach (var sheet in _workbook.Sheets)
-        {
-            var table = sheet.StructuredTables.FirstOrDefault(t =>
-                string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(t.DisplayName, name, StringComparison.OrdinalIgnoreCase));
-            if (table is null)
-                continue;
-
-            range = NameBoxDropdownPlanner.GetTableDataBodyRange(table);
-            return true;
-        }
-
-        range = default;
-        return false;
+        return StructuredTableSelectionPlanner.TryResolveDataBodyRange(
+            _workbook,
+            text,
+            out range);
     }
 
     // Cross-sheet Name Box navigation must refresh the sheet-tab strip (active-tab highlight)
@@ -1431,9 +1414,7 @@ public partial class MainWindow
         // Excel rejects this outright (a table name and a defined name share one namespace).
         // TryParseNameBoxReferenceRange already resolves table names to a selection before this
         // method runs, so this is a defense-in-depth guard against ever reaching here for one.
-        if (_workbook.Sheets.Any(sheet => sheet.StructuredTables.Any(t =>
-                string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(t.DisplayName, name, StringComparison.OrdinalIgnoreCase))))
+        if (StructuredTableSelectionPlanner.ContainsTableName(_workbook, name))
         {
             return false;
         }
