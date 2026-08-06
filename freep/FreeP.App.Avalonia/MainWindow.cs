@@ -250,6 +250,7 @@ public sealed partial class MainWindow : Window
     private readonly PresentationDomainContextMenuSession _domainContextMenuSession;
     private readonly PresentationNotesPaneSession _notesPaneSession;
     private readonly PresentationHyperlinkWorkflowSession _hyperlinkWorkflowSession;
+    private readonly AnimationPaneSession _animationPaneSession;
     private Border _smartArtTextPaneHost = null!;
     private TextBlock _smartArtTextPaneHeading = null!;
     private TextBlock _smartArtTextPaneMessage = null!;
@@ -270,9 +271,6 @@ public sealed partial class MainWindow : Window
     private StackPanel _animationPaneItemsPanel = null!;
     private Button _animationPanePreviewButton = null!;
     private readonly PresentationPaneAccessibilityAdapter _paneAccessibility = new();
-    private int _selectedAnimationIndex = -1;
-    private AnimationPanePlaybackSessionPlan? _animationPanePlaybackSessionPlan;
-    private AnimationPanePlaybackWorkflowEvidencePlan? _animationPanePlaybackWorkflowEvidencePlan;
     private readonly List<string> _animationPaneRenderedRows = new();
     private readonly List<string> _animationPaneRenderedPlaybackControls = new();
     private int _animationPaneEffectOptionControlCount;
@@ -442,11 +440,12 @@ public sealed partial class MainWindow : Window
         _smartArtTextPaneSession.LastDataPartRewriteResult;
     internal SmartArtDrawingCacheRegenerationResult? LastSmartArtDrawingCacheRegenerationResult =>
         _smartArtTextPaneSession.LastDrawingCacheRegenerationResult;
-    internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
-    internal AnimationPaneWorkflowEvidencePlan? LastAnimationPaneWorkflowEvidencePlan { get; private set; }
-    internal AnimationPanePlaybackSessionPlan? LastAnimationPanePlaybackSessionPlan => _animationPanePlaybackSessionPlan;
+    internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan => _animationPaneSession.Timeline;
+    internal AnimationPaneWorkflowEvidencePlan? LastAnimationPaneWorkflowEvidencePlan =>
+        _animationPaneSession.WorkflowEvidence;
+    internal AnimationPanePlaybackSessionPlan? LastAnimationPanePlaybackSessionPlan => _animationPaneSession.Playback;
     internal AnimationPanePlaybackWorkflowEvidencePlan? LastAnimationPanePlaybackWorkflowEvidencePlan =>
-        _animationPanePlaybackWorkflowEvidencePlan;
+        _animationPaneSession.PlaybackWorkflowEvidence;
     internal FindReplaceWorkflowPlan? LastFindReplaceWorkflowPlan { get; private set; }
     internal PresentationDesignCommandPlan? LastCustomSlideSizeRequestPlan { get; private set; }
     internal SlideSizeDialogInitialState? LastCustomSlideSizeInitialState { get; private set; }
@@ -891,6 +890,7 @@ public sealed partial class MainWindow : Window
                 OpenChartOptions: OpenChartDisplayOptionsDialog));
         _notesPaneSession = new(() => Editor);
         _hyperlinkWorkflowSession = new(() => Editor);
+        _animationPaneSession = new(() => Editor);
 
         _applicationFrameSession = new PresentationApplicationFrameSession(
             new PresentationApplicationFrameCallbacks
@@ -908,7 +908,7 @@ public sealed partial class MainWindow : Window
                 IsSmartArtPaneVisible = () => IsSmartArtTextPaneVisible,
                 RefreshSmartArtPane = () => ShowSmartArtTextPane(),
                 RefreshAnimationPaneAfterEditorChanged = () =>
-                    RefreshVisibleAnimationPane(_selectedAnimationIndex),
+                    RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex),
                 RefreshAnimationPaneAfterNavigation = () => RefreshVisibleAnimationPane(),
                 RefreshAnimationPaneAfterSelection = () => RefreshVisibleAnimationPane(),
                 RefreshSelectionPane = () => _selectionPane?.Refresh(),
@@ -922,7 +922,7 @@ public sealed partial class MainWindow : Window
                         Editor.CurrentSlideIndex);
                 },
                 ClearReviewSelection = () => _reviewWorkflowSession.SelectedCommentIndex = null,
-                ResetAnimationSelection = () => _selectedAnimationIndex = -1,
+                ResetAnimationSelection = _animationPaneSession.ResetSelection,
                 ClearMediaSelection = _mediaPaneSession.ClearCaptionSelection,
                 SyncSlidePaneSelection = SyncSlidePaneSelectionFromEditor,
                 RefreshSlidePaneChrome = UpdateSlidePaneItemChrome,
@@ -1501,12 +1501,7 @@ public sealed partial class MainWindow : Window
         var captionPlan = LastMediaCaptionAuthoringPanePlan;
         var smartArtItemCount = _smartArtTextPaneRowsPanel?.Children.Count ?? 0;
         var selectionPlan = _selectionPane.CurrentPlan;
-        var animationPlan = AnimationPanePlanner.BuildTimelinePlan(
-            Editor.CurrentSlide,
-            Editor.SelectedShapeIds,
-            _selectedAnimationIndex,
-            isPlaybackRunning: _animationPanePlaybackSessionPlan?.IsRunning == true);
-        LastAnimationPaneTimelinePlan = animationPlan;
+        var animationPlan = _animationPaneSession.Refresh();
         var selectedSmartArtRow = _smartArtTextPaneRowsPanel?.Children
             .OfType<TextBox>()
             .FirstOrDefault(box =>
@@ -5723,13 +5718,9 @@ public sealed partial class MainWindow : Window
 
     internal AnimationPaneTimelinePlan RefreshAnimationPaneTimelinePlan(int selectedAnimationIndex = -1)
     {
-        LastAnimationPaneTimelinePlan = AnimationPanePlanner.BuildTimelinePlan(
-            Editor.CurrentSlide,
-            Editor.SelectedShapeIds,
-            selectedAnimationIndex,
-            isPlaybackRunning: _animationPanePlaybackSessionPlan?.IsRunning == true);
+        var plan = _animationPaneSession.Refresh(selectedAnimationIndex);
         RefreshPaneAccessibilityMetadata();
-        return LastAnimationPaneTimelinePlan;
+        return plan;
     }
 
     internal AnimationPaneTimelinePlan ShowAnimationPane(int selectedAnimationIndex = -1)
@@ -5761,10 +5752,8 @@ public sealed partial class MainWindow : Window
 
     private void RenderAnimationPane(AnimationPaneTimelinePlan plan)
     {
-        _selectedAnimationIndex = plan.SelectedIndex;
-        LastAnimationPaneWorkflowEvidencePlan =
-            AnimationPanePlanner.BuildWorkflowEvidencePlan(plan, Editor.CurrentSlideIndex);
-        var viewPlan = LastAnimationPaneWorkflowEvidencePlan.View;
+        var viewPlan = (_animationPaneSession.WorkflowEvidence ??
+            AnimationPanePlanner.BuildWorkflowEvidencePlan(plan, Editor.CurrentSlideIndex)).View;
         _animationPaneHeading.Text = "Animation Pane";
         _animationPaneMessage.Text = viewPlan.Message;
         RenderAnimationPanePlaybackControls(plan, viewPlan);
@@ -5848,7 +5837,7 @@ public sealed partial class MainWindow : Window
     internal AnimationPanePlaybackSessionPlan ExecuteAnimationPanePlaybackControlForTests(
         AnimationPanePlaybackControlKind controlKind)
     {
-        var control = RefreshAnimationPaneTimelinePlan(_selectedAnimationIndex)
+        var control = RefreshAnimationPaneTimelinePlan(_animationPaneSession.SelectedAnimationIndex)
             .PlaybackControls
             .First(candidate => candidate.Kind == controlKind);
         return ExecuteAnimationPanePlaybackControl(control, startPreview: false);
@@ -5858,29 +5847,13 @@ public sealed partial class MainWindow : Window
         AnimationPanePlaybackControlDescriptor control,
         bool startPreview)
     {
-        var timeline = LastAnimationPaneTimelinePlan ?? RefreshAnimationPaneTimelinePlan(_selectedAnimationIndex);
-        _animationPanePlaybackSessionPlan = AnimationPanePlanner.BuildPlaybackSessionPlan(timeline, control.Kind);
-        _animationPanePlaybackWorkflowEvidencePlan = AnimationPanePlanner.BuildPlaybackWorkflowEvidencePlan(
-            timeline,
-            _animationPanePlaybackSessionPlan,
-            Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>(),
-            Editor.CurrentSlideIndex);
-        RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        var transition = _animationPaneSession.ExecutePlayback(control.Kind);
+        RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
 
-        if (!control.IsEnabled)
-            return _animationPanePlaybackSessionPlan;
+        if (startPreview && transition.ShouldStartPreview)
+            StartAnimationPanePreview(transition.Playback);
 
-        switch (control.Kind)
-        {
-            case AnimationPanePlaybackControlKind.PreviewCurrentSlide:
-            case AnimationPanePlaybackControlKind.PlayFromSelected:
-            case AnimationPanePlaybackControlKind.PlayCurrentSlide:
-                if (startPreview)
-                    StartAnimationPanePreview(_animationPanePlaybackSessionPlan);
-                break;
-        }
-
-        return _animationPanePlaybackSessionPlan;
+        return transition.Playback;
     }
 
     private void StartAnimationPanePreview(AnimationPanePlaybackSessionPlan session)
@@ -6051,13 +6024,11 @@ public sealed partial class MainWindow : Window
 
         void ApplyRepeat()
         {
-            var plan = AnimationPanePlanner.BuildRepeatMutationPlan(
-                Editor.CurrentSlideAnimations,
+            var plan = _animationPaneSession.ApplyRepeat(
                 item.Index,
                 repeatCombo.SelectedItem as string,
                 autoReverseCheck.IsChecked == true);
-            if (!AnimationPanePlanner.TryApplyRepeatMutation(Editor, plan)
-                && plan.DisabledReason is not null)
+            if (!plan.ShouldApply && plan.DisabledReason is not null)
             {
                 repeatCombo.SelectedItem = AnimationPanePlanner.FormatRepeat(
                     plan.RepeatCount,
@@ -6204,20 +6175,15 @@ public sealed partial class MainWindow : Window
 
     private void ToggleParagraphBuild(uint shapeId)
     {
-        var plan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
-            Editor.CurrentSlide,
-            shapeId);
-        if (AnimationPanePlanner.TryApplyParagraphBuildMutation(Editor, plan))
-            RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        var plan = _animationPaneSession.ToggleParagraphBuild(shapeId);
+        if (plan.ShouldApply)
+            RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
     }
 
     internal AnimationPaneParagraphBuildMutationPlan ToggleParagraphBuildForTests(uint shapeId)
     {
-        var plan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
-            Editor.CurrentSlide,
-            shapeId);
-        AnimationPanePlanner.TryApplyParagraphBuildMutation(Editor, plan);
-        RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        var plan = _animationPaneSession.ToggleParagraphBuild(shapeId);
+        RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
         return plan;
     }
 
@@ -6273,12 +6239,9 @@ public sealed partial class MainWindow : Window
         int animationIndex,
         string optionId)
     {
-        var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
-            Editor.CurrentSlideAnimations,
-            animationIndex,
-            optionId);
-        if (AnimationPanePlanner.TryApplyEffectOptionMutation(Editor, plan))
-            RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        var plan = _animationPaneSession.ApplyEffectOption(animationIndex, optionId);
+        if (plan.ShouldApply)
+            RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
         return plan;
     }
 
@@ -6286,11 +6249,8 @@ public sealed partial class MainWindow : Window
         int animationIndex,
         int selectedTriggerIndex)
     {
-        var plan = AnimationPanePlanner.BuildTriggerMutationPlan(
-            Editor.CurrentSlideAnimations,
-            animationIndex,
-            selectedTriggerIndex);
-        ApplyAnimationPaneTimingMutation(plan);
+        var plan = _animationPaneSession.ApplyTrigger(animationIndex, selectedTriggerIndex);
+        RefreshAnimationPaneAfterTimingMutation(plan);
         return plan;
     }
 
@@ -6298,11 +6258,8 @@ public sealed partial class MainWindow : Window
         int animationIndex,
         string text)
     {
-        var plan = AnimationPanePlanner.BuildDurationMutationPlan(
-            Editor.CurrentSlideAnimations,
-            animationIndex,
-            text);
-        ApplyAnimationPaneTimingMutation(plan);
+        var plan = _animationPaneSession.ApplyDuration(animationIndex, text);
+        RefreshAnimationPaneAfterTimingMutation(plan);
         return plan;
     }
 
@@ -6310,41 +6267,28 @@ public sealed partial class MainWindow : Window
         int animationIndex,
         string text)
     {
-        var plan = AnimationPanePlanner.BuildDelayMutationPlan(
-            Editor.CurrentSlideAnimations,
-            animationIndex,
-            text);
-        ApplyAnimationPaneTimingMutation(plan);
+        var plan = _animationPaneSession.ApplyDelay(animationIndex, text);
+        RefreshAnimationPaneAfterTimingMutation(plan);
         return plan;
     }
 
-    private void ApplyAnimationPaneTimingMutation(AnimationPaneTimingMutationPlan plan)
+    private void RefreshAnimationPaneAfterTimingMutation(AnimationPaneTimingMutationPlan plan)
     {
-        if (AnimationPanePlanner.TryApplyTimingMutation(Editor, plan))
-            RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        if (plan.ShouldApply)
+            RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
     }
 
     private void SelectAnimationPaneItem(int animationIndex)
     {
-        _selectedAnimationIndex = animationIndex;
-        var animations = Editor.CurrentSlideAnimations;
-        if (animationIndex >= 0 && animationIndex < animations.Count)
-            Editor.Select(animations[animationIndex].ShapeId);
-
-        RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        _animationPaneSession.SelectAnimation(animationIndex);
+        RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
     }
 
     private AnimationPaneReorderMutationPlan MoveAnimationPaneItem(int animationIndex, int offset)
     {
-        var plan = AnimationPanePlanner.BuildReorderMutationPlan(
-            Editor.CurrentSlideAnimations,
-            animationIndex,
-            offset);
-        if (!AnimationPanePlanner.TryApplyReorderMutation(Editor, plan))
-            return plan;
-
-        _selectedAnimationIndex = plan.SelectedAnimationIndex;
-        RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        var plan = _animationPaneSession.MoveAnimation(animationIndex, offset);
+        if (plan.ShouldApply)
+            RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
         return plan;
     }
 
@@ -6353,14 +6297,9 @@ public sealed partial class MainWindow : Window
 
     private AnimationPaneRemoveMutationPlan RemoveAnimationPaneItem(int animationIndex)
     {
-        var plan = AnimationPanePlanner.BuildRemoveMutationPlan(
-            Editor.CurrentSlideAnimations,
-            animationIndex);
-        if (AnimationPanePlanner.TryApplyRemoveMutation(Editor, plan))
-        {
-            _selectedAnimationIndex = plan.SelectedAnimationIndex;
-            RefreshVisibleAnimationPane(_selectedAnimationIndex);
-        }
+        var plan = _animationPaneSession.RemoveAnimation(animationIndex);
+        if (plan.ShouldApply)
+            RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
 
         return plan;
     }
@@ -7724,9 +7663,7 @@ public sealed partial class MainWindow : Window
         RebuildEditorAndRewireInteraction();
         // A visible pane is a projection of the active editor. Rebind it after New/Open so
         // rows and playback state cannot remain attached to the previous presentation.
-        _selectedAnimationIndex = -1;
-        _animationPanePlaybackSessionPlan = null;
-        _animationPanePlaybackWorkflowEvidencePlan = null;
+        _animationPaneSession.Reset();
         HideLayoutPicker();
         HideTablePicker();
         RefreshSlidePane();

@@ -52,24 +52,22 @@ public sealed class AnimationPane : Border
     // ── Fields ────────────────────────────────────────────────────────────────────
 
     private readonly EditingSession _editor;
+    private readonly AnimationPaneSession _session;
     private readonly Action<AnimationPanePlaybackSessionPlan>? _onPreview;
     private readonly Action? _onAccessibilityChanged;
     private readonly Action<int>? _onEditMotionPath;
 
     private readonly StackPanel _listPanel;
     private readonly StackPanel _playbackControlsPanel;
-    private int _selectedRowIndex = -1;   // -1 = none
-    private AnimationPanePlaybackSessionPlan? _playbackSessionPlan;
-    private AnimationPanePlaybackWorkflowEvidencePlan? _playbackWorkflowEvidencePlan;
 
     internal AnimationPaneTimelinePlan CurrentTimelinePlanForTest => BuildTimelinePlan();
     internal AnimationPaneEffectOptionMutationPlan ApplyAnimationPaneEffectOptionEditForTest(
         int animationIndex,
         string optionId)
         => ApplyEffectOptionMutation(animationIndex, optionId);
-    internal AnimationPanePlaybackSessionPlan? CurrentPlaybackSessionPlanForTest => _playbackSessionPlan;
+    internal AnimationPanePlaybackSessionPlan? CurrentPlaybackSessionPlanForTest => _session.Playback;
     internal AnimationPanePlaybackWorkflowEvidencePlan? CurrentPlaybackWorkflowEvidencePlanForTest =>
-        _playbackWorkflowEvidencePlan;
+        _session.PlaybackWorkflowEvidence;
     internal IReadOnlyList<AnimationPanePlaybackControlDescriptor> CurrentPlaybackControlsForTest =>
         BuildTimelinePlan().PlaybackControls;
     internal AnimationPaneWorkflowViewPlan CurrentWorkflowViewPlanForTest => BuildWorkflowViewPlan();
@@ -94,6 +92,7 @@ public sealed class AnimationPane : Border
         Action<int>? onEditMotionPath = null)
     {
         _editor    = editor    ?? throw new ArgumentNullException(nameof(editor));
+        _session = new AnimationPaneSession(() => _editor);
         _onPreview = onPreview;
         _onAccessibilityChanged = onAccessibilityChanged;
         _onEditMotionPath = onEditMotionPath;
@@ -196,8 +195,6 @@ public sealed class AnimationPane : Border
             return;
         }
 
-        _selectedRowIndex = plan.SelectedIndex;
-
         foreach (var item in plan.Items)
         {
             var row = BuildRow(item);
@@ -249,29 +246,13 @@ public sealed class AnimationPane : Border
         AnimationPanePlaybackControlDescriptor control,
         bool invokePreview)
     {
-        var timeline = BuildTimelinePlan();
-        _playbackSessionPlan = AnimationPanePlanner.BuildPlaybackSessionPlan(timeline, control.Kind);
-        _playbackWorkflowEvidencePlan = AnimationPanePlanner.BuildPlaybackWorkflowEvidencePlan(
-            timeline,
-            _playbackSessionPlan,
-            Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>(),
-            _editor.CurrentSlideIndex);
+        var transition = _session.ExecutePlayback(control.Kind);
         Rebuild();
 
-        if (!control.IsEnabled)
-            return _playbackSessionPlan;
+        if (invokePreview && transition.ShouldStartPreview)
+            _onPreview?.Invoke(transition.Playback);
 
-        switch (control.Kind)
-        {
-            case AnimationPanePlaybackControlKind.PreviewCurrentSlide:
-            case AnimationPanePlaybackControlKind.PlayFromSelected:
-            case AnimationPanePlaybackControlKind.PlayCurrentSlide:
-                if (invokePreview)
-                    _onPreview?.Invoke(_playbackSessionPlan);
-                break;
-        }
-
-        return _playbackSessionPlan;
+        return transition.Playback;
     }
 
     // ── Row construction ──────────────────────────────────────────────────────────
@@ -431,22 +412,16 @@ public sealed class AnimationPane : Border
 
         triggerCombo.SelectionChanged += (_, _) =>
         {
-            var plan = AnimationPanePlanner.BuildTriggerMutationPlan(
-                _editor.CurrentSlideAnimations,
-                capturedIndex,
-                triggerCombo.SelectedIndex);
-            AnimationPanePlanner.TryApplyTimingMutation(_editor, plan);
+            _session.ApplyTrigger(capturedIndex, triggerCombo.SelectedIndex);
         };
 
         void ApplyRepeat()
         {
-            var plan = AnimationPanePlanner.BuildRepeatMutationPlan(
-                _editor.CurrentSlideAnimations,
+            var plan = _session.ApplyRepeat(
                 capturedIndex,
                 repeatCombo.SelectedItem as string,
                 autoReverseCheck.IsChecked == true);
-            if (!AnimationPanePlanner.TryApplyRepeatMutation(_editor, plan)
-                && plan.DisabledReason is not null)
+            if (!plan.ShouldApply && plan.DisabledReason is not null)
             {
                 repeatCombo.SelectedItem = AnimationPanePlanner.FormatRepeat(
                     plan.RepeatCount,
@@ -472,11 +447,8 @@ public sealed class AnimationPane : Border
         };
         durationBox.LostFocus += (_, _) =>
         {
-            var plan = AnimationPanePlanner.BuildDurationMutationPlan(
-                _editor.CurrentSlideAnimations,
-                capturedIndex,
-                durationBox.Text);
-            if (!AnimationPanePlanner.TryApplyTimingMutation(_editor, plan))
+            var plan = _session.ApplyDuration(capturedIndex, durationBox.Text);
+            if (!plan.ShouldApply)
                 durationBox.Text = plan.DisplayText;
         };
 
@@ -492,11 +464,8 @@ public sealed class AnimationPane : Border
         };
         delayBox.LostFocus += (_, _) =>
         {
-            var plan = AnimationPanePlanner.BuildDelayMutationPlan(
-                _editor.CurrentSlideAnimations,
-                capturedIndex,
-                delayBox.Text);
-            if (!AnimationPanePlanner.TryApplyTimingMutation(_editor, plan))
+            var plan = _session.ApplyDelay(capturedIndex, delayBox.Text);
+            if (!plan.ShouldApply)
                 delayBox.Text = plan.DisplayText;
         };
 
@@ -579,10 +548,8 @@ public sealed class AnimationPane : Border
         };
         paragraphBuildBtn.Click += (_, _) =>
         {
-            var plan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
-                _editor.CurrentSlide,
-                item.ShapeId);
-            if (AnimationPanePlanner.TryApplyParagraphBuildMutation(_editor, plan))
+            var plan = _session.ToggleParagraphBuild(item.ShapeId);
+            if (plan.ShouldApply)
                 Rebuild();
         };
 
@@ -677,12 +644,8 @@ public sealed class AnimationPane : Border
         // Click → select this row and select the shape on the canvas.
         row.MouseLeftButtonDown += (sender, _) =>
         {
-            _selectedRowIndex = capturedIndex;
+            _session.SelectAnimation(capturedIndex);
             UpdateRowHighlights();
-
-            var anims = _editor.CurrentSlideAnimations;
-            if (capturedIndex < anims.Count)
-                _editor.Select(anims[capturedIndex].ShapeId);
         };
 
         return row;
@@ -692,11 +655,8 @@ public sealed class AnimationPane : Border
         int animationIndex,
         string optionId)
     {
-        var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
-            _editor.CurrentSlideAnimations,
-            animationIndex,
-            optionId);
-        if (AnimationPanePlanner.TryApplyEffectOptionMutation(_editor, plan))
+        var plan = _session.ApplyEffectOption(animationIndex, optionId);
+        if (plan.ShouldApply)
             Rebuild();
         return plan;
     }
@@ -709,7 +669,7 @@ public sealed class AnimationPane : Border
         for (int i = 0; i < _listPanel.Children.Count; i++)
         {
             if (_listPanel.Children[i] is Border b && b.Tag is int rowIdx)
-                b.Background = rowIdx == _selectedRowIndex ? RowSelected : RowNormal;
+                b.Background = rowIdx == _session.SelectedAnimationIndex ? RowSelected : RowNormal;
         }
     }
 
@@ -717,14 +677,7 @@ public sealed class AnimationPane : Border
 
     private AnimationPaneReorderMutationPlan ApplyReorderMutation(int animationIndex, int offset)
     {
-        var plan = AnimationPanePlanner.BuildReorderMutationPlan(
-            _editor.CurrentSlideAnimations,
-            animationIndex,
-            offset);
-        if (AnimationPanePlanner.TryApplyReorderMutation(_editor, plan))
-            _selectedRowIndex = plan.SelectedAnimationIndex;
-
-        return plan;
+        return _session.MoveAnimation(animationIndex, offset);
     }
 
     internal AnimationPaneRemoveMutationPlan RemoveAnimationForTest(int animationIndex) =>
@@ -732,12 +685,9 @@ public sealed class AnimationPane : Border
 
     private AnimationPaneRemoveMutationPlan ApplyRemoveMutation(int animationIndex)
     {
-        var plan = AnimationPanePlanner.BuildRemoveMutationPlan(
-            _editor.CurrentSlideAnimations,
-            animationIndex);
-        if (AnimationPanePlanner.TryApplyRemoveMutation(_editor, plan))
+        var plan = _session.RemoveAnimation(animationIndex);
+        if (plan.ShouldApply)
         {
-            _selectedRowIndex = plan.SelectedAnimationIndex;
             Rebuild();
         }
 
@@ -745,17 +695,14 @@ public sealed class AnimationPane : Border
     }
 
     private AnimationPaneTimelinePlan BuildTimelinePlan()
-        => AnimationPanePlanner.BuildTimelinePlan(
-            _editor.CurrentSlide,
-            _editor.SelectedShapeIds,
-            _selectedRowIndex,
-            isPlaybackRunning: _playbackSessionPlan?.IsRunning == true);
+        => _session.Refresh();
 
     private AnimationPaneWorkflowViewPlan BuildWorkflowViewPlan()
         => BuildWorkflowViewPlan(BuildTimelinePlan());
 
     private AnimationPaneWorkflowViewPlan BuildWorkflowViewPlan(AnimationPaneTimelinePlan plan)
-        => AnimationPanePlanner.BuildWorkflowViewPlan(plan, _editor.CurrentSlideIndex);
+        => (_session.WorkflowEvidence ??
+            AnimationPanePlanner.BuildWorkflowEvidencePlan(plan, _editor.CurrentSlideIndex)).View;
 
     // ── Static freeze helper ──────────────────────────────────────────────────────
 
