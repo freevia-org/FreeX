@@ -138,6 +138,7 @@ public sealed class WorkbookSession : IDisposable
     private readonly WorkbookCellEditService _cellEditService;
     private readonly WorkbookSheetSelectionService _sheetSelectionService;
     private readonly IViewportService _viewportService;
+    private readonly FindReplaceWorkflowSession _findReplaceWorkflow;
     private readonly bool _includeObjects;
     private readonly WorkbookSession? _sharedDocumentStateOwner;
     private readonly WorkbookDocumentState _documentState;
@@ -250,13 +251,6 @@ public sealed class WorkbookSession : IDisposable
     /// </summary>
     private readonly Dictionary<SheetId, WorksheetViewMode> _viewModeOverrides = [];
     private ulong _selectionStatsRevision;
-    private string? _lastFindText;
-    private FindOptions? _lastFindOptions;
-    private bool _lastFindMatchCase;
-    private bool _lastFindMatchEntireCell;
-    private FindResult? _lastFindResult;
-    private FindResult? _lastReplaceResult;
-
     internal WorkbookSession(
         StartupWorkbookLoadResult source,
         IReadOnlyList<IFileAdapter> adapters,
@@ -307,6 +301,11 @@ public sealed class WorkbookSession : IDisposable
         SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
         SeedViewSplitAndFrozenOverrides();
         Viewport = BuildViewport();
+        _findReplaceWorkflow = new FindReplaceWorkflowSession(
+            () => Workbook,
+            () => ActiveCell,
+            GoToCell,
+            command => _cellEditService.ExecuteEditCommand(Workbook, command));
     }
 
     /// <summary>
@@ -775,7 +774,7 @@ public sealed class WorkbookSession : IDisposable
     public string SelectionStatsText =>
         WorkbookSelectionStatsFormatter.Format(SelectionStats);
 
-    public string LastFindText => _lastFindText ?? "";
+    public string LastFindText => _findReplaceWorkflow.LastFindText;
 
     public StyleDiff? CreateFormatDiffFromActiveCell() =>
         CreateFormatDiffFromCell(ActiveCell);
@@ -1778,50 +1777,15 @@ public sealed class WorkbookSession : IDisposable
         bool matchCase = false,
         bool matchEntireCell = false)
     {
-        var text = searchText ?? _lastFindText ?? string.Empty;
-        // Excel allows a blank "Find what" as long as a Format criterion narrows the search (Find
-        // All by format only); only reject the empty search when no format criterion was supplied
-        // either (R64-commands-find-replace-6-1).
-        if (string.IsNullOrEmpty(text) && options?.RequiredFormat is null)
-            return WorkbookNavigationResult.Failed("Find text is required.");
+        var result = _findReplaceWorkflow.FindNext(searchText, options, matchCase, matchEntireCell);
+        if (!result.Success || result.SelectedMatch is not { } match || result.SelectedRange is null)
+            return WorkbookNavigationResult.Failed(result.ErrorMessage ?? "Find failed.");
 
-        if (searchText is null && options is null)
-        {
-            options = _lastFindOptions;
-            matchCase = _lastFindMatchCase;
-            matchEntireCell = _lastFindMatchEntireCell;
-        }
-
-        var effectiveOptions = ResolveFindOptions(options, FindLookIn.Formulas);
-
-        var sameSearch =
-            string.Equals(_lastFindText, text, StringComparison.Ordinal) &&
-            _lastFindOptions == effectiveOptions &&
-            _lastFindMatchCase == matchCase &&
-            _lastFindMatchEntireCell == matchEntireCell;
-
-        var results = FindReplaceService.Find(Workbook, text, effectiveOptions, matchCase, matchEntireCell);
-        RememberFindSearch(text, effectiveOptions, matchCase, matchEntireCell);
-
-        if (results.Count == 0)
-        {
-            ClearLastFindTargets();
-            return WorkbookNavigationResult.Failed($"No matches found for \"{text}\".");
-        }
-
-        var index = GetNextFindResultIndex(results, effectiveOptions.SearchOrder, sameSearch);
-        var result = results[index];
-        var navigation = GoToCell(result.Address);
-        if (!navigation.Success)
-            return navigation;
-
-        _lastFindResult = result;
-        _lastReplaceResult = null;
         return WorkbookNavigationResult.Found(
-            navigation.SelectedRange!.Value,
-            result.MatchedText,
-            index + 1,
-            results.Count);
+            result.SelectedRange.Value,
+            match.MatchedText,
+            result.SelectedIndex + 1,
+            result.Matches.Count);
     }
 
     public WorkbookFindAllResult FindAll(
@@ -1830,19 +1794,10 @@ public sealed class WorkbookSession : IDisposable
         bool matchCase = false,
         bool matchEntireCell = false)
     {
-        ArgumentNullException.ThrowIfNull(searchText);
-
-        // See FindNext: a blank search is allowed when a Format criterion narrows the results.
-        if (string.IsNullOrEmpty(searchText) && options?.RequiredFormat is null)
-            return WorkbookFindAllResult.Failed("Find text is required.");
-
-        var effectiveOptions = ResolveFindOptions(options, FindLookIn.Formulas);
-
-        var results = FindReplaceService.Find(Workbook, searchText, effectiveOptions, matchCase, matchEntireCell);
-        RememberFindSearch(searchText, effectiveOptions, matchCase, matchEntireCell);
-        ClearLastFindTargets();
-
-        return WorkbookFindAllResult.Found(results.Select(CreateFindAllMatch).ToList());
+        var result = _findReplaceWorkflow.FindAll(searchText, options, matchCase, matchEntireCell);
+        return result.Success
+            ? WorkbookFindAllResult.Found(result.Matches.Select(CreateFindAllMatch).ToList())
+            : WorkbookFindAllResult.Failed(result.ErrorMessage ?? "Find All failed.");
     }
 
     public WorkbookReplaceResult ReplaceAllValues(
@@ -1860,59 +1815,22 @@ public sealed class WorkbookSession : IDisposable
         bool matchEntireCell = false,
         StyleDiff? replacementFormat = null)
     {
-        ArgumentNullException.ThrowIfNull(searchText);
-        ArgumentNullException.ThrowIfNull(replaceText);
-
-        // See FindNext: a blank search is allowed when a Format criterion narrows the results.
-        if (string.IsNullOrEmpty(searchText) && options?.RequiredFormat is null)
-            return WorkbookReplaceResult.Failed("Find text is required.");
-
-        var effectiveOptions = ResolveFindOptions(options, FindLookIn.Values);
-        RememberFindSearch(searchText, effectiveOptions, matchCase, matchEntireCell);
-        ClearLastFindTargets();
-
-        var matches = FindReplaceService.Find(Workbook, searchText, effectiveOptions, matchCase, matchEntireCell);
-        if (matches.Count == 0)
-            return WorkbookReplaceResult.Replaced(0);
-
-        var commands = new List<IWorkbookCommand>();
-        foreach (var match in matches)
-        {
-            var sheet = Workbook.GetSheet(match.Address.Sheet);
-            if (sheet is null)
-                continue;
-
-            if (FindReplaceService.TryCreateReplacementCommand(
-                    sheet,
-                    match,
-                    searchText,
-                    replaceText,
-                    matchCase,
-                    matchEntireCell,
-                    effectiveOptions.LookIn,
-                    replacementFormat,
-                    out var command,
-                    workbook: Workbook))
-            {
-                commands.Add(command);
-            }
-        }
-
-        var replacedCount = commands.Count;
-        if (commands.Count == 0)
-            return WorkbookReplaceResult.Replaced(0, matchCount: matches.Count);
-
         var selectedRange = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            ToCommand("Replace All", commands));
+        var result = _findReplaceWorkflow.ReplaceAll(
+            searchText,
+            replaceText,
+            options,
+            matchCase,
+            matchEntireCell,
+            replacementFormat);
         if (!result.Success)
             return WorkbookReplaceResult.Failed(result.ErrorMessage ?? "Replace All failed.");
+        if (result.EditResult is { } editResult)
+            ApplySuccessfulRangeEditResult(editResult, selectedRange);
 
-        ApplySuccessfulRangeEditResult(result, selectedRange);
         return WorkbookReplaceResult.Replaced(
-            replacedCount,
-            matchCount: matches.Count);
+            result.ReplacedCount,
+            matchCount: result.MatchCount);
     }
 
     public WorkbookReplaceResult ReplaceNextValue(
@@ -1930,74 +1848,26 @@ public sealed class WorkbookSession : IDisposable
         bool matchEntireCell = false,
         StyleDiff? replacementFormat = null)
     {
-        ArgumentNullException.ThrowIfNull(searchText);
-        ArgumentNullException.ThrowIfNull(replaceText);
-
-        // See FindNext: a blank search is allowed when a Format criterion narrows the results.
-        if (string.IsNullOrEmpty(searchText) && options?.RequiredFormat is null)
-            return WorkbookReplaceResult.Failed("Find text is required.");
-
-        var effectiveOptions = ResolveFindOptions(options, FindLookIn.Values);
-        var sameSearchText =
-            string.Equals(_lastFindText, searchText, StringComparison.Ordinal) &&
-            _lastFindMatchCase == matchCase &&
-            _lastFindMatchEntireCell == matchEntireCell;
-        var sameSearch =
-            sameSearchText &&
-            (_lastFindOptions == effectiveOptions ||
-                HasLastFindTargetAtActiveCell());
-
-        var matches = FindReplaceService.Find(Workbook, searchText, effectiveOptions, matchCase, matchEntireCell);
-        RememberFindSearch(searchText, effectiveOptions, matchCase, matchEntireCell);
-
-        if (matches.Count == 0)
-        {
-            ClearLastFindTargets();
-            return WorkbookReplaceResult.Replaced(0);
-        }
-
-        var index = GetReplaceTargetIndex(matches, effectiveOptions.SearchOrder, sameSearch);
-        var match = matches[index];
-        var navigation = GoToCell(match.Address);
-        if (!navigation.Success)
-            return WorkbookReplaceResult.Failed(navigation.ErrorMessage ?? "Replace failed.");
-
-        var sheet = Workbook.GetSheet(match.Address.Sheet);
-        if (sheet is null ||
-            !FindReplaceService.TryCreateReplacementCommand(
-                sheet,
-                match,
-                searchText,
-                replaceText,
-                matchCase,
-                matchEntireCell,
-                effectiveOptions.LookIn,
-                replacementFormat,
-                out var command,
-                workbook: Workbook))
-        {
-            ClearLastFindTargets();
-            return WorkbookReplaceResult.Replaced(
-                0,
-                navigation.SelectedRange,
-                index + 1,
-                matches.Count);
-        }
-
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            command);
+        var result = _findReplaceWorkflow.ReplaceNext(
+            searchText,
+            replaceText,
+            options,
+            matchCase,
+            matchEntireCell,
+            replacementFormat);
         if (!result.Success)
-        {
-            ClearLastFindTargets();
             return WorkbookReplaceResult.Failed(result.ErrorMessage ?? "Replace failed.");
-        }
+        if (result.EditResult is { } editResult && result.ReplacedMatch is { } replacedMatch)
+            ApplySuccessfulEditResult(editResult, replacedMatch.Address);
 
-        _lastFindResult = null;
-        _lastReplaceResult = match;
-        ApplySuccessfulEditResult(result, match.Address);
-        var replacedRange = new GridRange(match.Address, match.Address);
-        return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);
+        var replacedRange = result.ReplacedMatch is { } match
+            ? new GridRange(match.Address, match.Address)
+            : result.SelectedRange;
+        return WorkbookReplaceResult.Replaced(
+            result.ReplacedCount,
+            replacedRange,
+            result.MatchIndex,
+            result.MatchCount);
     }
 
     public void MoveActiveCell(int rowDelta, int colDelta)
@@ -6653,78 +6523,6 @@ public sealed class WorkbookSession : IDisposable
         return WorkbookNavigationResult.Selected(range);
     }
 
-    private int GetNextFindResultIndex(
-        IReadOnlyList<FindResult> results,
-        FindSearchOrder searchOrder,
-        bool sameSearch)
-    {
-        if (sameSearch && _lastFindResult is { } lastResult)
-        {
-            var lastIndex = FindResultIndex(results, lastResult);
-            if (lastIndex >= 0)
-                return (lastIndex + 1) % results.Count;
-        }
-
-        return FindFirstResultAfterActiveCell(results, searchOrder);
-    }
-
-    private int GetReplaceTargetIndex(
-        IReadOnlyList<FindResult> results,
-        FindSearchOrder searchOrder,
-        bool sameSearch)
-    {
-        if (sameSearch &&
-            _lastFindResult is { } lastFindResult &&
-            ActiveCell.Equals(lastFindResult.Address))
-        {
-            var lastIndex = FindResultIndex(results, lastFindResult);
-            if (lastIndex >= 0)
-                return lastIndex;
-        }
-
-        if (sameSearch &&
-            _lastReplaceResult is { } lastReplaceResult &&
-            ActiveCell.Equals(lastReplaceResult.Address))
-        {
-            var nextSameCellIndex = FindNextResultIndexAtSameAddress(results, lastReplaceResult);
-            if (nextSameCellIndex >= 0)
-                return nextSameCellIndex;
-        }
-
-        return FindFirstResultAfterActiveCell(results, searchOrder);
-    }
-
-    private bool HasLastFindTargetAtActiveCell() =>
-        (_lastFindResult is { } lastFindResult && ActiveCell.Equals(lastFindResult.Address)) ||
-        (_lastReplaceResult is { } lastReplaceResult && ActiveCell.Equals(lastReplaceResult.Address));
-
-    private FindOptions CreateActiveSheetFindOptions(FindLookIn lookIn) =>
-        new(
-            Within: FindWithin.Sheet,
-            CurrentSheetId: ActiveSheet.Id,
-            SearchOrder: FindSearchOrder.ByRows,
-            LookIn: lookIn);
-
-    private FindOptions ResolveFindOptions(FindOptions? options, FindLookIn defaultLookIn)
-    {
-        var effectiveOptions = options ?? CreateActiveSheetFindOptions(defaultLookIn);
-        if (effectiveOptions.Within == FindWithin.Sheet && effectiveOptions.CurrentSheetId is null)
-            effectiveOptions = effectiveOptions with { CurrentSheetId = ActiveSheet.Id };
-        return effectiveOptions;
-    }
-
-    private void RememberFindSearch(
-        string searchText,
-        FindOptions options,
-        bool matchCase,
-        bool matchEntireCell)
-    {
-        _lastFindText = searchText;
-        _lastFindOptions = options;
-        _lastFindMatchCase = matchCase;
-        _lastFindMatchEntireCell = matchEntireCell;
-    }
-
     private WorkbookFindAllMatch CreateFindAllMatch(FindResult result)
     {
         var sheet = Workbook.GetSheet(result.Address.Sheet);
@@ -6760,91 +6558,6 @@ public sealed class WorkbookSession : IDisposable
         }
 
         return bestName ?? "";
-    }
-
-    private int FindFirstResultAfterActiveCell(IReadOnlyList<FindResult> results, FindSearchOrder searchOrder)
-    {
-        for (var index = 0; index < results.Count; index++)
-        {
-            if (CompareFindOrder(results[index].Address, ActiveCell, searchOrder) > 0)
-                return index;
-        }
-
-        return 0;
-    }
-
-    private static int FindResultIndex(IReadOnlyList<FindResult> results, FindResult result)
-    {
-        for (var index = 0; index < results.Count; index++)
-        {
-            if (IsSameFindTarget(results[index], result))
-                return index;
-        }
-
-        return -1;
-    }
-
-    private static int FindNextResultIndexAtSameAddress(IReadOnlyList<FindResult> results, FindResult previous)
-    {
-        var previousIndex = FindResultIndex(results, previous);
-        if (previousIndex >= 0)
-            return (previousIndex + 1) % results.Count;
-
-        for (var index = 0; index < results.Count; index++)
-        {
-            if (results[index].Address.Equals(previous.Address) &&
-                CompareFindTargetOrder(results[index], previous) > 0)
-            {
-                return index;
-            }
-        }
-
-        return -1;
-    }
-
-    private static bool IsSameFindTarget(FindResult left, FindResult right) =>
-        left.Address.Equals(right.Address) &&
-        left.Target == right.Target &&
-        left.ReplyIndex == right.ReplyIndex;
-
-    private static int CompareFindTargetOrder(FindResult left, FindResult right)
-    {
-        var targetComparison = GetFindTargetOrder(left).CompareTo(GetFindTargetOrder(right));
-        return targetComparison != 0
-            ? targetComparison
-            : Nullable.Compare(left.ReplyIndex, right.ReplyIndex);
-    }
-
-    private static int GetFindTargetOrder(FindResult result) =>
-        result.Target switch
-        {
-            FindResultTarget.ThreadedComment => 0,
-            FindResultTarget.ThreadedCommentReply => 1 + Math.Max(0, result.ReplyIndex ?? 0),
-            _ => 0
-        };
-
-    private void ClearLastFindTargets()
-    {
-        _lastFindResult = null;
-        _lastReplaceResult = null;
-    }
-
-    private int CompareFindOrder(CellAddress left, CellAddress right, FindSearchOrder searchOrder)
-    {
-        var leftSheetIndex = FindSheetIndex(left.Sheet);
-        var rightSheetIndex = FindSheetIndex(right.Sheet);
-        var sheetComparison = leftSheetIndex.CompareTo(rightSheetIndex);
-        if (sheetComparison != 0)
-            return sheetComparison;
-
-        if (searchOrder == FindSearchOrder.ByColumns)
-        {
-            var colComparison = left.Col.CompareTo(right.Col);
-            return colComparison != 0 ? colComparison : left.Row.CompareTo(right.Row);
-        }
-
-        var rowComparison = left.Row.CompareTo(right.Row);
-        return rowComparison != 0 ? rowComparison : left.Col.CompareTo(right.Col);
     }
 
     private int FindSheetIndex(SheetId sheetId, int notFoundIndex = int.MaxValue)

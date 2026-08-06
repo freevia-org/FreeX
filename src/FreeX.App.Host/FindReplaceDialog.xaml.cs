@@ -19,20 +19,12 @@ public sealed partial class FindReplaceDialog : Window
 
     private readonly Func<Workbook> _getWorkbook;
     private readonly Func<SheetId?> _getCurrentSheetId;
-    private readonly ICommandBus _commandBus;
     private readonly Action<CellAddress> _navigateTo;
     private readonly Action _onWorkbookChanged;
     private readonly Func<CellAddress?> _getActiveSelectionCell;
+    private readonly FindReplaceWorkflowSession _workflow;
     private IReadOnlyList<FindResult> _results = [];
     private int _currentIndex = -1;
-    private string _lastSearch = string.Empty;
-    // Tracks every option Find Next's "same search" detection needs, not just the search text --
-    // Match Case/Match Entire Cell/Look In/Within/Search Order all change which results are found
-    // and in what order, so any of them changing must be treated exactly like a brand-new search
-    // (R60-commands-find-replace-6-3).
-    private FindOptions? _lastFindOptions;
-    private bool _lastMatchCase;
-    private bool _lastMatchEntireCell;
     private StyleDiff? _findFormatDiff;
     private StyleDiff? _replaceFormatDiff;
     private bool _syncingSearchText;
@@ -49,10 +41,27 @@ public sealed partial class FindReplaceDialog : Window
     {
         _getWorkbook = getWorkbook;
         _getCurrentSheetId = getCurrentSheetId ?? (() => null);
-        _commandBus = commandBus;
         _navigateTo = navigateTo;
         _onWorkbookChanged = onWorkbookChanged ?? (() => { });
         _getActiveSelectionCell = getActiveSelectionCell ?? (() => null);
+        _workflow = new FindReplaceWorkflowSession(
+            getWorkbook,
+            _getActiveSelectionCell,
+            address =>
+            {
+                navigateTo(address);
+                return WorkbookNavigationResult.Selected(new GridRange(address, address));
+            },
+            command =>
+            {
+                var outcome = commandBus.Execute(getWorkbook().Id, command);
+                return new WorkbookCellEditResult(
+                    outcome.Success,
+                    outcome.ErrorMessage,
+                    outcome.AffectedCells ?? [],
+                    RecalcReport: null,
+                    IsNoOp: outcome.IsNoOp);
+            });
         InitializeComponent();
         if (replaceMode)
         {
@@ -179,114 +188,17 @@ public sealed partial class FindReplaceDialog : Window
         var options = CreateFindOptions();
         var matchCase = MatchCaseBox.IsChecked == true;
         var matchEntireCell = MatchEntireBox.IsChecked == true;
-
-        // "Same search" means the text AND every option that affects which results are found/their
-        // order are unchanged since the previous Find Next -- comparing only the text (as before)
-        // let a stale _currentIndex from a differently-filtered/ordered result set silently carry
-        // over whenever an option was toggled without retyping the query (R60-commands-find-replace-6-3).
-        var sameSearch = search == _lastSearch &&
-            options == _lastFindOptions &&
-            matchCase == _lastMatchCase &&
-            matchEntireCell == _lastMatchEntireCell;
-        if (!sameSearch)
-        {
-            _currentIndex = -1;
-            _lastSearch = search;
-            _lastFindOptions = options;
-            _lastMatchCase = matchCase;
-            _lastMatchEntireCell = matchEntireCell;
-        }
-
-        _results = FindReplaceService.Find(
-            _getWorkbook(), search,
-            options,
-            matchCase: matchCase,
-            matchEntireCell: matchEntireCell);
-
+        var result = _workflow.FindNext(search, options, matchCase, matchEntireCell);
+        _results = result.Matches;
+        _currentIndex = result.SelectedIndex;
         UpdateResultsGrid();
-
-        if (_results.Count == 0)
+        if (!result.Success)
         {
             SetStatusText(UiText.Get("FindReplace_NoMatchesFound"));
             _currentIndex = -1;
             return;
         }
-
-        // On a brand-new search (fresh text or a changed option, both reset _currentIndex to -1
-        // above) Excel starts searching forward from the ACTIVE cell, wrapping around -- it never
-        // restarts at the first match in sheet order regardless of where the user currently is
-        // (R60-commands-find-replace-6-1). Continuing an unchanged search just advances to the next
-        // result as before.
-        _currentIndex = _currentIndex < 0
-            ? FindFirstResultIndexAfterActiveCell(_results, options.SearchOrder)
-            : (_currentIndex + 1) % _results.Count;
-        var result = _results[_currentIndex];
         SetStatusText(UiText.Format("FindReplace_MatchStatus", _currentIndex + 1, _results.Count));
-        _navigateTo(result.Address);
-    }
-
-    /// <summary>
-    /// Mirrors the Avalonia shell's WorkbookSession.FindFirstResultAfterActiveCell: the first result
-    /// (in the given search order) that sorts strictly after the active cell, or index 0 (wrap to
-    /// the first sheet-order match) when none do / no active cell is available.
-    /// </summary>
-    private int FindFirstResultIndexAfterActiveCell(IReadOnlyList<FindResult> results, FindSearchOrder searchOrder)
-    {
-        var activeCell = _getActiveSelectionCell();
-        if (activeCell is null)
-            return 0;
-
-        return FindFirstResultIndexAfterAddress(results, activeCell.Value, searchOrder);
-    }
-
-    /// <summary>
-    /// Mirrors the Avalonia shell's WorkbookSession.FindNextResultIndexAtSameAddress /
-    /// GetReplaceTargetIndex fallback: the first result (in the given search order) that sorts
-    /// strictly after <paramref name="address"/>, or index 0 (wrap to the first sheet-order match)
-    /// when none do. Used after a successful single Replace to advance past the just-replaced cell
-    /// instead of unconditionally jumping back to match #1 -- otherwise a replacement whose result
-    /// still matches the search (e.g. "Report" -> "Report_v2") would re-edit the same cell on every
-    /// Replace click instead of advancing to the next distinct match (R71-commands-find-replace-4-2).
-    /// </summary>
-    private int FindFirstResultIndexAfterAddress(IReadOnlyList<FindResult> results, CellAddress address, FindSearchOrder searchOrder)
-    {
-        var workbook = _getWorkbook();
-        for (var index = 0; index < results.Count; index++)
-        {
-            if (CompareFindOrder(workbook, results[index].Address, address, searchOrder) > 0)
-                return index;
-        }
-
-        return 0;
-    }
-
-    private static int CompareFindOrder(Workbook workbook, CellAddress left, CellAddress right, FindSearchOrder searchOrder)
-    {
-        var leftSheetIndex = FindSheetIndex(workbook, left.Sheet);
-        var rightSheetIndex = FindSheetIndex(workbook, right.Sheet);
-        var sheetComparison = leftSheetIndex.CompareTo(rightSheetIndex);
-        if (sheetComparison != 0)
-            return sheetComparison;
-
-        if (searchOrder == FindSearchOrder.ByColumns)
-        {
-            var colComparison = left.Col.CompareTo(right.Col);
-            return colComparison != 0 ? colComparison : left.Row.CompareTo(right.Row);
-        }
-
-        var rowComparison = left.Row.CompareTo(right.Row);
-        return rowComparison != 0 ? rowComparison : left.Col.CompareTo(right.Col);
-    }
-
-    private static int FindSheetIndex(Workbook workbook, SheetId sheetId)
-    {
-        for (var index = 0; index < workbook.Sheets.Count; index++)
-        {
-            if (workbook.Sheets[index].Id.Equals(sheetId))
-                return index;
-        }
-
-        return int.MaxValue;
     }
 
     private void FindAll()
@@ -295,13 +207,13 @@ public sealed partial class FindReplaceDialog : Window
         // See FindNext: a blank search is allowed when a Format criterion narrows the results.
         if (string.IsNullOrEmpty(search) && _findFormatDiff is null && ShowBlankSearchWarning()) return;
 
-        _lastSearch = search;
-        _currentIndex = -1;
-        _results = FindReplaceService.Find(
-            _getWorkbook(), search,
+        var result = _workflow.FindAll(
+            search,
             CreateFindOptions(),
-            matchCase: MatchCaseBox.IsChecked == true,
-            matchEntireCell: MatchEntireBox.IsChecked == true);
+            MatchCaseBox.IsChecked == true,
+            MatchEntireBox.IsChecked == true);
+        _results = result.Matches;
+        _currentIndex = -1;
 
         UpdateResultsGrid();
         SetStatusText(_results.Count == 0
@@ -315,14 +227,15 @@ public sealed partial class FindReplaceDialog : Window
         // See FindNext: a blank search is allowed when a Format criterion narrows the results.
         if (string.IsNullOrEmpty(search) && _findFormatDiff is null && ShowBlankSearchWarning()) return;
 
-        var result = FindReplaceService.TryReplaceAll(
-            _getWorkbook(), _commandBus, search, ReplaceBox.Text,
+        var result = _workflow.ReplaceAll(
+            search,
+            ReplaceBox.Text,
             CreateFindOptions(),
-            matchCase: MatchCaseBox.IsChecked == true,
-            matchEntireCell: MatchEntireBox.IsChecked == true,
+            MatchCaseBox.IsChecked == true,
+            MatchEntireBox.IsChecked == true,
             replacementFormat: _replaceFormatDiff);
 
-        if (ShowReplaceFailureWarning(result.Failure))
+        if (!result.Success && ShowReplaceFailureWarning(result.ErrorMessage))
             return;
 
         if (result.ReplacedCount > 0)
@@ -331,11 +244,7 @@ public sealed partial class FindReplaceDialog : Window
         SetStatusText(result.ReplacedCount == 0
             ? UiText.Get("FindReplace_NoMatchesFound")
             : UiText.Format("FindReplace_ReplacedCellsStatus", result.ReplacedCount));
-        _results = FindReplaceService.Find(
-            _getWorkbook(), search,
-            CreateFindOptions(),
-            matchCase: MatchCaseBox.IsChecked == true,
-            matchEntireCell: MatchEntireBox.IsChecked == true);
+        _results = result.CurrentMatches;
         _currentIndex = -1;
         UpdateResultsGrid();
     }
@@ -345,77 +254,43 @@ public sealed partial class FindReplaceDialog : Window
         var search = SearchText;
         if (string.IsNullOrEmpty(search) && ShowBlankSearchWarning()) return;
 
-        if (_results.Count == 0 || _currentIndex < 0 || search != _lastSearch)
-            FindNext();
-
-        if (_results.Count == 0 || _currentIndex < 0)
-            return;
-
-        var options = CreateFindOptions();
-
-        // A match can be non-replaceable without being a hard failure (e.g. Look-in=Values finds a
-        // formula cell whose displayed result matches, but the formula itself can't be replaced).
-        // Advance through the remaining matches (bounded by _results.Count so an all-non-replaceable
-        // result set still terminates) instead of getting permanently stuck retrying the same match
-        // forever — matching the Avalonia shell's WorkbookSession.ReplaceNextValue, which always
-        // moves the active cell past a skipped match before the next Replace click.
-        for (var attempt = 0; attempt < _results.Count; attempt++)
+        var result = _workflow.ReplaceNext(
+            search,
+            ReplaceBox.Text,
+            CreateFindOptions(),
+            MatchCaseBox.IsChecked == true,
+            MatchEntireBox.IsChecked == true,
+            replacementFormat: _replaceFormatDiff,
+            behavior: FindReplaceNextBehavior.SubmittedDialogStyle);
+        if (!result.Success)
         {
-            var match = _results[_currentIndex];
-            var result = FindReplaceDialogPlanner.TryReplaceSingleMatch(
-                _getWorkbook(),
-                _commandBus,
-                match,
-                search,
-                ReplaceBox.Text,
-                matchCase: MatchCaseBox.IsChecked == true,
-                matchEntireCell: MatchEntireBox.IsChecked == true,
-                lookIn: options.LookIn,
-                replacementFormat: _replaceFormatDiff);
-
-            if (ShowReplaceFailureWarning(result.Failure))
-                return;
-
-            if (result.Replaced)
-            {
-                var replacedAddress = match.Address;
-                SetStatusText(UiText.Get("FindReplace_ReplacedOneCell"));
-                _onWorkbookChanged();
-                _results = FindReplaceService.Find(
-                    _getWorkbook(), search,
-                    options,
-                    matchCase: MatchCaseBox.IsChecked == true,
-                    matchEntireCell: MatchEntireBox.IsChecked == true);
-                _currentIndex = -1;
-                UpdateResultsGrid();
-                if (_results.Count > 0)
-                {
-                    // Advance past the cell we just replaced (which may still match the search,
-                    // e.g. "Report" -> "Report_v2") instead of unconditionally jumping back to
-                    // match #1, which would re-replace the same cell forever
-                    // (R71-commands-find-replace-4-2).
-                    _currentIndex = FindFirstResultIndexAfterAddress(_results, replacedAddress, options.SearchOrder);
-                    _navigateTo(_results[_currentIndex].Address);
-                    SetStatusText(UiText.Format("FindReplace_MatchStatus", _currentIndex + 1, _results.Count));
-                }
-                return;
-            }
-
-            // Not replaceable: advance past this match so the next attempt (or the next Replace
-            // click, if this was the last attempt) tries a different one instead of repeating it.
-            _currentIndex = (_currentIndex + 1) % _results.Count;
-            _navigateTo(_results[_currentIndex].Address);
+            ShowReplaceFailureWarning(result.ErrorMessage);
+            return;
         }
 
-        SetStatusText(UiText.Get("FindReplace_NoReplaceableMatchFound"));
+        _results = result.CurrentMatches;
+        _currentIndex = result.CurrentIndex;
+        UpdateResultsGrid();
+        if (result.ReplacedCount == 0)
+        {
+            SetStatusText(_results.Count == 0
+                ? UiText.Get("FindReplace_NoMatchesFound")
+                : UiText.Get("FindReplace_NoReplaceableMatchFound"));
+            return;
+        }
+
+        SetStatusText(UiText.Get("FindReplace_ReplacedOneCell"));
+        _onWorkbookChanged();
+        if (_currentIndex >= 0)
+            SetStatusText(UiText.Format("FindReplace_MatchStatus", _currentIndex + 1, _results.Count));
     }
 
-    private bool ShowReplaceFailureWarning(CommandOutcome? failure)
+    private bool ShowReplaceFailureWarning(string? errorMessage)
     {
-        if (failure is null)
+        if (string.IsNullOrWhiteSpace(errorMessage))
             return false;
 
-        DialogMessageHelper.ShowWarning(this, failure.ErrorMessage ?? UiText.Get("FindReplace_ReplacementFailed"), Title);
+        DialogMessageHelper.ShowWarning(this, errorMessage, Title);
         FocusSearchBox();
         return true;
     }
