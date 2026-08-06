@@ -835,7 +835,21 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
         var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
         var zoom = session.InsertSlideZoom("slide-2");
-        var reflection = new ZoomFrameBorderReflection(42000, 12700, 44450, 5400000, -75000, 100000);
+        var raw = XElement.Parse(zoom.PreservedObject!.RawXml);
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var shapeProperties = raw.Descendants().Single(element => element.Name.LocalName == "spPr");
+        shapeProperties.Add(new XElement(drawing + "effectLst",
+            new XElement(drawing + "reflection",
+                new XAttribute("stA", 42000),
+                new XAttribute("blurRad", 12700),
+                new XAttribute("dist", 44450),
+                new XAttribute("dir", 5400000),
+                new XAttribute("sy", -75000),
+                new XAttribute("endPos", 37500),
+                new XAttribute("futureAttr", "keep-me")),
+            new XElement(drawing + "glow", new XAttribute("futureRadius", 77))));
+        zoom.PreservedObject.RawXml = raw.ToString(SaveOptions.DisableFormatting);
+        var reflection = new ZoomFrameBorderReflection(42000, 12700, 44450, 5400000, -75000, 25000);
 
         session.SetZoomObjectProperties(
                 zoom.Id,
@@ -850,14 +864,24 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         effect.Attribute("blurRad")!.Value.Should().Be("12700");
         effect.Attribute("dist")!.Value.Should().Be("44450");
         effect.Attribute("sy")!.Value.Should().Be("-75000");
+        effect.Attribute("endPos")!.Value.Should().Be("25000");
+        effect.Attribute("futureAttr")!.Value.Should().Be("keep-me");
+        effect.Parent!.Element(drawing + "glow")!.Attribute("futureRadius")!.Value.Should().Be("77");
 
         session.Undo();
-        zoom.PreservedObject.RawXml.Should().NotContain("reflection");
+        zoom.PreservedObject.RawXml.Should().Contain("endPos=\"37500\"");
+        zoom.PreservedObject.RawXml.Should().Contain("futureAttr=\"keep-me\"");
         session.Redo();
 
         var reopened = PptxPackageReader.Read(WritePptxToMemory(presentation));
         reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
             .PreservedObject!.ZoomProperties!.FrameBorderReflection.Should().Be(reflection);
+        var reopenedRaw = XElement.Parse(reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
+            .PreservedObject!.RawXml);
+        reopenedRaw.Descendants(drawing + "reflection").Single()
+            .Attribute("futureAttr")!.Value.Should().Be("keep-me");
+        reopenedRaw.Descendants(drawing + "glow").Single()
+            .Attribute("futureRadius")!.Value.Should().Be("77");
     }
 
     [Fact]

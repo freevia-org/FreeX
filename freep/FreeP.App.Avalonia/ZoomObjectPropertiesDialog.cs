@@ -40,6 +40,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private readonly TextBox _frameBorderReflectionDistance;
     private readonly TextBox _frameBorderReflectionDirection;
     private readonly TextBox _frameBorderReflectionScale;
+    private readonly TextBox _frameBorderReflectionEndPosition;
     private readonly TextBox _frameBorderWidth;
     private readonly ComboBox _frameBorderDash;
     private readonly TextBox _frameBorderGradientStart;
@@ -312,6 +313,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         _frameBorderReflectionDistance = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(current), MinWidth = 180 };
         _frameBorderReflectionDirection = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(current), MinWidth = 180 };
         _frameBorderReflectionScale = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(current), MinWidth = 180 };
+        _frameBorderReflectionEndPosition = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionEndPosition(current), MinWidth = 180 };
         _frameBorderReflectionEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
         _frameGeometry = new ComboBox
         {
@@ -388,6 +390,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             Row("Reflection distance (pt):", _frameBorderReflectionDistance),
             Row("Reflection direction (deg):", _frameBorderReflectionDirection),
             Row("Reflection scale (%):", _frameBorderReflectionScale),
+            Row("Reflection fade end (%):", _frameBorderReflectionEndPosition),
             Row("Border width (pt):", _frameBorderWidth),
             Row("Border dash:", _frameBorderDash),
             _frameBorderGradientEnabled,
@@ -597,6 +600,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                 _frameBorderReflectionDirection.Text,
                 _frameBorderReflectionScale.Text,
                 _frameBorderReflectionBlur.Text,
+                _frameBorderReflectionEndPosition.Text,
                 _frameBorderReflectionEnabled.IsChecked == true,
                 out var frameBorderReflection))
         {
@@ -729,6 +733,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         _frameBorderReflectionDistance.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(properties);
         _frameBorderReflectionDirection.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(properties);
         _frameBorderReflectionScale.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(properties);
+        _frameBorderReflectionEndPosition.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionEndPosition(properties);
         SyncFrameBorderState();
         _frameGeometry.SelectedItem = ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
             geometry => string.Equals(geometry, properties.FrameGeometry, StringComparison.OrdinalIgnoreCase))
@@ -784,6 +789,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         _frameBorderReflectionDistance.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
         _frameBorderReflectionDirection.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
         _frameBorderReflectionScale.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
+        _frameBorderReflectionEndPosition.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
     }
 
     private static Button MakeButton(string label, bool isDefault, Action action)
