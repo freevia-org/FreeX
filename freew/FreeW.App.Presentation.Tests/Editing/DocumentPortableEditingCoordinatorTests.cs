@@ -1,4 +1,5 @@
 using System.IO;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Editing;
 
 namespace FreeW.App.Presentation.Tests.Editing;
@@ -323,6 +324,28 @@ public sealed class DocumentEditingSessionWorkflowTests
 
 public sealed class DocumentReferenceEditingCoordinatorTests
 {
+    [Fact]
+    public void NoteNumberingOptionsUseOnePortableUndoableCommand()
+    {
+        var document = TextDocument.CreateEmpty();
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.References.ApplyNoteNumberingOptions(new FootnoteEndnoteOptionsDialogResult(
+            NoteNumberFormat.UpperRoman,
+            4,
+            NoteNumberRestart.EachPage,
+            NoteNumberFormat.LowerLetter,
+            9,
+            NoteNumberRestart.EachSection));
+
+        document.FootnoteNumbering.StartAt.Should().Be(4);
+        document.EndnoteNumbering.StartAt.Should().Be(9);
+        session.Commands.Undo().Should().BeTrue();
+        document.FootnoteNumbering.StartAt.Should().Be(1);
+        document.EndnoteNumbering.StartAt.Should().Be(1);
+    }
+
     [Fact]
     public void FieldCodeToggleUsesOnePortableDocumentWideMajorityDecision()
     {
@@ -691,6 +714,7 @@ public sealed class DocumentPortableEditingOwnershipTests
             "new InsertNoteCommand(",
             "new DeleteNoteCommand(",
             "new ReplaceNoteContentCommand(",
+            "new SetNoteNumberingOptionsCommand(",
             "new ApplyCitationStyleCommand(",
             "new ReplaceSourcesCommand(",
             "new SetParagraphBookmarkNameCommand(",
@@ -709,6 +733,7 @@ public sealed class DocumentPortableEditingOwnershipTests
             source.Should().Contain("ReferenceEdits.MarkAllIndexEntries(");
             source.Should().Contain("ReferenceEdits.ToggleFieldCodes()");
             source.Should().Contain("ReferenceEdits.UpdateFields(");
+            source.Should().Contain("ReferenceEdits.ApplyNoteNumberingOptions(result)");
             source.Should().Contain("DocumentReferenceBlockPageResolution BuildReferenceBlockPageResolution()");
             source.Should().NotContain("CrossReferences.ResolveField(");
             source.Should().NotContain("ComplexFieldEngine.Recompute(");
@@ -717,6 +742,12 @@ public sealed class DocumentPortableEditingOwnershipTests
             foreach (var constructor in forbidden)
                 source.Should().NotContain(constructor);
         }
+
+
+        File.Exists(Path.Combine(
+                TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+                "freew", "FreeW.App.Avalonia", "Editing", "ReferenceCommands.cs"))
+            .Should().BeFalse("renderer-neutral reference commands belong in Core or Presentation");
     }
 
     [Fact]

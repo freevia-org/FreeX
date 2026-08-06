@@ -14835,15 +14835,8 @@ public sealed class DocumentView : RichTextBox
 
     public void ApplyFootnoteEndnoteOptions(FootnoteEndnoteOptionsDialogResult result)
     {
-        ArgumentNullException.ThrowIfNull(result);
-
-        _model.FootnoteNumbering.NumberFormat = result.FootnoteFormat;
-        _model.FootnoteNumbering.StartAt = result.FootnoteStartAt;
-        _model.FootnoteNumbering.NumberRestart = result.FootnoteRestart;
-        _model.EndnoteNumbering.NumberFormat = result.EndnoteFormat;
-        _model.EndnoteNumbering.StartAt = result.EndnoteStartAt;
-        _model.EndnoteNumbering.NumberRestart = result.EndnoteRestart;
-        ApplyPageSettings(_ => { });
+        CommitToModel();
+        ReferenceEdits.ApplyNoteNumberingOptions(result);
     }
 
     /// <summary>Moves the caret to the next footnote reference marker in visible document order.</summary>

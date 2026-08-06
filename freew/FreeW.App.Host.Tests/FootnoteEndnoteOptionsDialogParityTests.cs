@@ -73,6 +73,10 @@ public sealed class FootnoteEndnoteOptionsDialogParityTests
         view.Model.EndnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.LowerLetter);
         view.Model.EndnoteNumbering.StartAt.Should().Be(9);
         view.Model.EndnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachSection);
+
+        view.Undo();
+        view.Model.FootnoteNumbering.StartAt.Should().Be(1);
+        view.Model.EndnoteNumbering.StartAt.Should().Be(1);
     }
 
     [Fact]

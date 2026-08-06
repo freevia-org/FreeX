@@ -20725,14 +20725,7 @@ public sealed class DocumentView : Control
 
     public void ApplyFootnoteEndnoteOptions(FootnoteEndnoteOptionsDialogResult result)
     {
-        ArgumentNullException.ThrowIfNull(result);
-        _bus.Execute(new SetNoteNumberingOptionsCommand(
-            result.FootnoteFormat,
-            result.FootnoteStartAt,
-            result.FootnoteRestart,
-            result.EndnoteFormat,
-            result.EndnoteStartAt,
-            result.EndnoteRestart));
+        ReferenceEdits.ApplyNoteNumberingOptions(result);
     }
 
     public bool MoveToNextFootnote() => MoveToAdjacentNote(footnote: true, previous: false);

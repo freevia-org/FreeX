@@ -311,6 +311,18 @@ public sealed class DocumentReferenceEditingCoordinator
         _session.Commands.Execute(new ReplaceNoteContentCommand(id, footnote, paragraphs));
     }
 
+    public void ApplyNoteNumberingOptions(FootnoteEndnoteOptionsDialogResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        _session.Commands.Execute(new SetNoteNumberingOptionsCommand(
+            result.FootnoteFormat,
+            result.FootnoteStartAt,
+            result.FootnoteRestart,
+            result.EndnoteFormat,
+            result.EndnoteStartAt,
+            result.EndnoteRestart));
+    }
+
     public bool ApplyCitationStyle(CitationStyle style)
     {
         if (_session.Document.BibliographyStyle == style)

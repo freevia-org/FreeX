@@ -168,4 +168,48 @@ public sealed class NoteCommandTests
         document.Footnotes.Should().NotContainKey(4);
         cellParagraph.Runs.Should().NotContain(run => run.FootnoteId == 4);
     }
+
+    [Fact]
+    public void SetNoteNumberingOptions_UpdatesBothKinds_AndUndoRedoRestoresExactSettings()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.FootnoteNumbering.NumberFormat = NoteNumberFormat.Decimal;
+        document.FootnoteNumbering.StartAt = 2;
+        document.FootnoteNumbering.NumberRestart = NoteNumberRestart.Continuous;
+        document.EndnoteNumbering.NumberFormat = NoteNumberFormat.UpperLetter;
+        document.EndnoteNumbering.StartAt = 3;
+        document.EndnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+        var bus = new DocumentCommandBus(new Context(document));
+
+        bus.Execute(new SetNoteNumberingOptionsCommand(
+            NoteNumberFormat.UpperRoman,
+            7,
+            NoteNumberRestart.EachPage,
+            NoteNumberFormat.LowerLetter,
+            11,
+            NoteNumberRestart.Continuous));
+
+        (document.FootnoteNumbering.NumberFormat,
+                document.FootnoteNumbering.StartAt,
+                document.FootnoteNumbering.NumberRestart)
+            .Should().Be((NoteNumberFormat.UpperRoman, 7, NoteNumberRestart.EachPage));
+        (document.EndnoteNumbering.NumberFormat,
+                document.EndnoteNumbering.StartAt,
+                document.EndnoteNumbering.NumberRestart)
+            .Should().Be((NoteNumberFormat.LowerLetter, 11, NoteNumberRestart.Continuous));
+
+        bus.Undo().Should().BeTrue();
+        (document.FootnoteNumbering.NumberFormat,
+                document.FootnoteNumbering.StartAt,
+                document.FootnoteNumbering.NumberRestart)
+            .Should().Be((NoteNumberFormat.Decimal, 2, NoteNumberRestart.Continuous));
+        (document.EndnoteNumbering.NumberFormat,
+                document.EndnoteNumbering.StartAt,
+                document.EndnoteNumbering.NumberRestart)
+            .Should().Be((NoteNumberFormat.UpperLetter, 3, NoteNumberRestart.EachSection));
+
+        bus.Redo().Should().BeTrue();
+        document.FootnoteNumbering.StartAt.Should().Be(7);
+        document.EndnoteNumbering.StartAt.Should().Be(11);
+    }
 }
