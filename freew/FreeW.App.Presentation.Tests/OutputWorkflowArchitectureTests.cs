@@ -39,6 +39,7 @@ public sealed class OutputWorkflowArchitectureTests
         avalonia.Should().Contain("FreeWExportWorkflow.CreatePlan(");
         avalonia.Should().Contain("FreeWExportWorkflow.ExecuteAsync(");
         avalonia.Should().Contain("_portablePrintWorkflow.ExecuteAsync(");
+        avalonia.Should().Contain("_portablePrintWorkflow.DiscoverAsync(");
         avalonia.Should().Contain("FreeWPrintMessagePlanner.PlanCapability(");
 
         foreach (var renderer in new[] { wpf, avalonia })
@@ -49,6 +50,7 @@ public sealed class OutputWorkflowArchitectureTests
         }
 
         avalonia.Should().NotContain("_printService.SubmitAsync(");
+        avalonia.Should().NotContain("_printService.DiscoverAsync(");
         avalonia.Should().NotContain("FormatPrintDiscoveryStatus(");
         avalonia.Should().NotContain("FormatPrintSubmissionStatus(");
         avalonia.Should().NotContain("DirectPrintDeferredReason(");

@@ -3420,18 +3420,7 @@ public sealed partial class MainWindow : Window
 
     private async Task RefreshPrinterDiscoveryAsync()
     {
-        try
-        {
-            _latestPrinterDiscovery = await _printService.DiscoverAsync();
-        }
-        catch (Exception ex)
-        {
-            _latestPrinterDiscovery = new PrinterDiscoveryResult(
-                PrinterDiscoveryStatus.Failed,
-                [],
-                null,
-                $"Printer discovery failed: {ex.Message}");
-        }
+        _latestPrinterDiscovery = await _portablePrintWorkflow.DiscoverAsync();
     }
 
     private BackstageDirectPrintCapability DirectPrintCapability =>

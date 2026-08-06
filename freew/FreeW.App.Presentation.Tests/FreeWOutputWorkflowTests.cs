@@ -165,6 +165,19 @@ public sealed class FreeWOutputWorkflowTests : IDisposable
     }
 
     [Fact]
+    public async Task PortablePrintWorkflow_DiscoveryFailureReturnsReusableResult()
+    {
+        var workflow = new FreeWPortablePrintWorkflow(new ThrowingDiscoveryPrintService());
+
+        var discovery = await workflow.DiscoverAsync();
+
+        discovery.Status.Should().Be(PrinterDiscoveryStatus.Failed);
+        discovery.Message.Should().Contain("backend unavailable");
+        FreeWPrintMessagePlanner.FormatDiscovery(discovery)
+            .Should().Contain("Create PDF");
+    }
+
+    [Fact]
     public void PreviewSession_OwnsPageOptionsSummaryAndPrimaryAction()
     {
         var capability = BackstageDirectPrintCapability.Deferred("CUPS unavailable.");
@@ -247,5 +260,20 @@ public sealed class FreeWOutputWorkflowTests : IDisposable
             SubmittedFileExisted = File.Exists(pdfPath);
             return Task.FromResult(Submission);
         }
+    }
+
+    private sealed class ThrowingDiscoveryPrintService : IPlatformPrintService
+    {
+        public bool IsSupported => true;
+
+        public Task<PrinterDiscoveryResult> DiscoverAsync(
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("backend unavailable");
+
+        public Task<PrintSubmissionResult> SubmitAsync(
+            string pdfPath,
+            PrintSelection selection,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

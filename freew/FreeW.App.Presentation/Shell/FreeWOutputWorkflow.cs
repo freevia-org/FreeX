@@ -248,6 +248,31 @@ public sealed class FreeWPortablePrintWorkflow
     public FreeWPortablePrintWorkflow(IPlatformPrintService printService) =>
         _printService = printService ?? throw new ArgumentNullException(nameof(printService));
 
+    public async Task<PrinterDiscoveryResult> DiscoverAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _printService.DiscoverAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return new(
+                PrinterDiscoveryStatus.Cancelled,
+                [],
+                null,
+                FreeWPrintMessagePlanner.Canceled);
+        }
+        catch (Exception ex)
+        {
+            return new(
+                PrinterDiscoveryStatus.Failed,
+                [],
+                null,
+                $"Printer discovery failed: {ex.Message}");
+        }
+    }
+
     public async Task<FreeWPrintExecutionResult> ExecuteAsync(
         Func<PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> selectAsync,
         Func<Stream, CancellationToken, ValueTask> renderPdfAsync,
@@ -260,7 +285,7 @@ public sealed class FreeWPortablePrintWorkflow
         PrinterDiscoveryResult? discovery = null;
         try
         {
-            discovery = await _printService.DiscoverAsync(cancellationToken);
+            discovery = await DiscoverAsync(cancellationToken);
             if (discovery.Status == PrinterDiscoveryStatus.Cancelled)
                 return Canceled(discovery);
             if (!discovery.IsAvailable)
