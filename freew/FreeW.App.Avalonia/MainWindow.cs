@@ -57,7 +57,7 @@ public sealed partial class MainWindow : Window
             ["application/oxps", "application/vnd.ms-xpsdocument"]);
 
     private readonly DocumentPersistenceWorkflow _documentPersistence;
-    private readonly DocumentFileExecutionCoordinator _fileExecution;
+    private readonly FreeWDocumentFileWorkflow _documentFileWorkflow;
     private readonly IPlatformPrintService _printService;
     private readonly Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> _showPrintSelectionDialog;
     private readonly Action<IInputElement?> _restorePrintOwnerFocus;
@@ -178,7 +178,6 @@ public sealed partial class MainWindow : Window
     {
         _optionsStore = optionsStore;
         _documentPersistence = documentPersistence ?? new DocumentPersistenceWorkflow();
-        _fileExecution = new DocumentFileExecutionCoordinator(_documentPersistence);
         _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
         _printService = printService ?? new CupsPrintService();
         _showPrintSelectionDialog = showPrintSelectionDialog ??
@@ -214,6 +213,31 @@ public sealed partial class MainWindow : Window
             promptSaveChangesAsync: promptSaveChangesAsync,
             showFileCommandErrorAsync: showFileCommandErrorAsync,
             restoreOwnerFocus: RestoreOwnerFocus);
+        _documentFileWorkflow = new FreeWDocumentFileWorkflow(
+            _fileWorkflow.Workflow,
+            _documentPersistence,
+            new FreeWDocumentFilePorts(
+                GetDocument: () => _editor.Document,
+                LoadDocumentAsync: (document, _) =>
+                {
+                    LoadDocumentContent(document);
+                    return ValueTask.CompletedTask;
+                },
+                ConfirmSaveCompatibilityAsync: (plan, _) =>
+                    new ValueTask<bool>(SaveCompatibilityWarningDialog.ShowAsync(this, plan)),
+                UpdateFieldsAsync: _ =>
+                {
+                    _suppressEditorDirty = true;
+                    try
+                    {
+                        _editor.UpdateFields();
+                    }
+                    finally
+                    {
+                        _suppressEditorDirty = false;
+                    }
+                    return ValueTask.CompletedTask;
+                }));
         _applicationCommands = new FreeWApplicationCommandRouter(new FreeWApplicationCommandActions(
             NewDocument: NewDocument,
             OpenDocument: () => _ = OpenAsync(),
@@ -3179,6 +3203,12 @@ public sealed partial class MainWindow : Window
             OpenPathAsync);
     }
 
+    private Task<bool> OpenRecentPathAsync(string path) =>
+        _fileWorkflow.OpenAsync(
+            FileText.OpenAction,
+            () => Task.FromResult<string?>(path),
+            OpenPathAsync);
+
     private async Task<string?> PromptOpenPathAsync()
     {
         using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
@@ -3191,35 +3221,7 @@ public sealed partial class MainWindow : Window
 
     private async Task<bool> OpenPathAsync(string path)
     {
-        var execution = await _fileExecution.OpenAsync(new DocumentOpenExecutionRequest(
-            path,
-            SuppressRecentFiles: false,
-            LoadDocumentAsync: (document, _) =>
-            {
-                LoadDocumentContent(document);
-                return ValueTask.CompletedTask;
-            },
-            CompleteOpenAsync: (result, _, _) =>
-            {
-                if (result.SavedPath is null)
-                    _fileWorkflow.MarkSavedWithoutPath();
-                else
-                    MarkDocumentSavedWithPath(result.SavedPath);
-                return ValueTask.CompletedTask;
-            },
-            UpdateFieldsAsync: _ =>
-            {
-                _suppressEditorDirty = true;
-                try
-                {
-                    _editor.UpdateFields();
-                }
-                finally
-                {
-                    _suppressEditorDirty = false;
-                }
-                return ValueTask.CompletedTask;
-            }));
+        var execution = await _documentFileWorkflow.OpenPathAsync(path);
 
         if (execution.Outcome == DocumentFileExecutionOutcome.UnsupportedFormat)
         {
@@ -3261,21 +3263,17 @@ public sealed partial class MainWindow : Window
         return file?.LocalPath;
     }
 
-    private Task<bool> ImportPdfTextPathAsync(string path)
+    private async Task<bool> ImportPdfTextPathAsync(string path)
     {
-        try
+        var result = await _documentFileWorkflow.ImportPdfTextPathAsync(path);
+        if (result.Succeeded)
         {
-            var result = _documentPersistence.ImportPdfText(path);
-            LoadDocumentContent(result.Document);
-            _fileWorkflow.MarkDirtyWithPath(null);
             _status.Text = $"Imported PDF text from {Path.GetFileName(path)}";
-            return Task.FromResult(true);
+            return true;
         }
-        catch (Exception ex)
-        {
-            _status.Text = $"PDF import failed: {ex.Message}";
-            return Task.FromResult(false);
-        }
+
+        _status.Text = $"PDF import failed: {result.Exception?.Message ?? "The import operation was canceled."}";
+        return false;
     }
 
     private Task<bool> SaveAsync() =>
@@ -3284,9 +3282,13 @@ public sealed partial class MainWindow : Window
     internal Task<bool> SaveForTests() => SaveAsync();
 
     private Task<bool> SaveToCurrentPathAsync(string path) =>
-        _documentPersistence.TryResolveCurrentSaveTarget(path, out var target)
-            ? SaveToTargetAsync(target)
-            : SaveAsAsync();
+        SaveToCurrentPathCoreAsync(path);
+
+    private async Task<bool> SaveToCurrentPathCoreAsync(string path)
+    {
+        var result = await _documentFileWorkflow.SaveCurrentPathAsync(path);
+        return result.RequiresSaveAs ? await SaveAsAsync() : HandleSaveResult(result, isCopy: false);
+    }
 
     private async Task<bool> SaveAsAsync()
     {
@@ -3305,54 +3307,49 @@ public sealed partial class MainWindow : Window
         SaveToPathAsync(path, filterIndex: 0);
 
     private Task<bool> SaveToPathAsync(string path, int filterIndex)
+        => SavePathCoreAsync(path, filterIndex, DocumentSaveExecutionKind.Save);
+
+    private async Task<bool> SavePathCoreAsync(
+        string path,
+        int filterIndex,
+        DocumentSaveExecutionKind kind)
     {
-        if (!_documentPersistence.TryResolveSaveTarget(path, filterIndex, out var target))
+        var execution = await _documentFileWorkflow.SavePathAsync(path, filterIndex, kind);
+        if (execution.Outcome == DocumentFileExecutionOutcome.UnsupportedFormat)
         {
             _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
                 FileText,
                 FileText.SaveCommand,
                 Path.GetExtension(path));
-            return Task.FromResult(false);
+            return false;
         }
 
-        return SaveToTargetAsync(target);
+        return HandleSaveResult(execution, kind == DocumentSaveExecutionKind.SaveCopy);
     }
 
-    private async Task<bool> SaveToTargetAsync(DocumentSaveTarget target)
+    private bool HandleSaveResult(DocumentSaveWorkflowResult execution, bool isCopy)
     {
-        var execution = await ExecuteDocumentSaveAsync(target, DocumentSaveExecutionKind.Save);
         if (execution.Succeeded)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatSaved(FileText, Path.GetFileName(target.Path));
+            var saved = SisterAppFileTextPlanner.FormatSaved(
+                FileText,
+                Path.GetFileName(execution.Target!.Path));
+            _status.Text = isCopy ? saved + " (copy)" : saved;
             return true;
         }
 
         if (execution.Outcome == DocumentFileExecutionOutcome.CompatibilityDeclined)
-            _status.Text = "Save canceled.";
+            _status.Text = isCopy ? "Save a Copy canceled." : "Save canceled.";
         else
         {
             _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
                 FileText,
-                FileText.SaveCommand,
+                isCopy ? "Save a Copy" : FileText.SaveCommand,
                 execution.Exception?.Message ?? "The save operation was canceled.");
         }
+
         return false;
     }
-
-    private Task<DocumentSaveExecutionResult> ExecuteDocumentSaveAsync(
-        DocumentSaveTarget target,
-        DocumentSaveExecutionKind kind) =>
-        _fileExecution.SaveAsync(new DocumentSaveExecutionRequest(
-            _editor.Document,
-            target,
-            kind,
-            ConfirmCompatibilityAsync: (plan, _) =>
-                new ValueTask<bool>(SaveCompatibilityWarningDialog.ShowAsync(this, plan)),
-            CompleteSaveAsync: (savedTarget, _) =>
-            {
-                MarkDocumentSavedWithPath(savedTarget.Path);
-                return ValueTask.CompletedTask;
-            }));
 
     /// <summary>
     /// File → Export to PDF (Ctrl+Shift+P). Builds the shared app-agnostic PDF model from the editor
@@ -4029,21 +4026,21 @@ public sealed partial class MainWindow : Window
             ["*.docx", "*.txt"],
             ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]);
 
-    private void ApplyOpenResult(DocumentOpenResult result) =>
-        LoadDocumentAsSaved(result.Document, result.SavedPath);
+    private void ApplyOpenResult(DocumentOpenResult result)
+    {
+        var execution = _documentFileWorkflow.ApplyOpenResultAsync(result).GetAwaiter().GetResult();
+        if (!execution.Succeeded)
+            throw execution.Exception ?? new InvalidOperationException("The startup document could not be opened.");
+    }
 
     private void LoadDocumentAsSaved(TextDocument document, string? path)
     {
         LoadDocumentContent(document);
 
         if (path is null)
-        {
             _fileWorkflow.MarkSavedWithoutPath();
-        }
         else
-        {
-            MarkDocumentSavedWithPath(path);
-        }
+            _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false);
 
         if (document.UpdateFieldsOnOpen)
         {
@@ -4168,11 +4165,6 @@ public sealed partial class MainWindow : Window
         UpdateStatus();
     }
 
-    private void MarkDocumentSavedWithPath(string path)
-    {
-        _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false);
-    }
-
     private void UpdateStatus()
     {
         var stats = _editor.ComputeStatistics();
@@ -4220,18 +4212,7 @@ public sealed partial class MainWindow : Window
             GetIsDirty: () => _fileWorkflow.IsDirty,
 
             NewDocument: () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument),
-            OpenRecent: path =>
-            {
-                // Run the dirty-gate synchronously through the shared Avalonia workflow.
-                if (_fileWorkflow.Open(FileText.OpenAction, () => path, p =>
-                    {
-                        _ = OpenPathAsync(p);
-                        return true;
-                    }))
-                {
-                    // success — OpenPathAsync was already fired
-                }
-            },
+            OpenRecent: path => _ = OpenRecentPathAsync(path),
             OpenFolder: OpenFolderInShell,
             Browse: () => _applicationCommands.Execute(FreeWKeyboardCommand.OpenDocument),
             RecoverUnsaved: () => _ = _autosave.OfferRecoveryAsync(this),
@@ -4278,36 +4259,7 @@ public sealed partial class MainWindow : Window
     }
 
     internal Task<bool> SaveCopyToPathAsync(string path, int filterIndex = 0)
-    {
-        if (!_documentPersistence.TryResolveSaveTarget(path, filterIndex, out var target))
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
-                FileText,
-                FileText.SaveCommand,
-                Path.GetExtension(path));
-            return Task.FromResult(false);
-        }
-
-        return SaveCopyToTargetAsync(target);
-    }
-
-    private async Task<bool> SaveCopyToTargetAsync(DocumentSaveTarget target)
-    {
-        var execution = await ExecuteDocumentSaveAsync(target, DocumentSaveExecutionKind.SaveCopy);
-        if (execution.Succeeded)
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatSaved(FileText, Path.GetFileName(target.Path)) + " (copy)";
-            return true;
-        }
-
-        if (execution.Outcome == DocumentFileExecutionOutcome.CompatibilityDeclined)
-            _status.Text = "Save a Copy canceled.";
-        else
-        {
-            _status.Text = $"Could not save a copy: {execution.Exception?.Message ?? "The save operation was canceled."}";
-        }
-        return false;
-    }
+        => SavePathCoreAsync(path, filterIndex, DocumentSaveExecutionKind.SaveCopy);
 
     private async Task OpenPropertiesAsync()
     {

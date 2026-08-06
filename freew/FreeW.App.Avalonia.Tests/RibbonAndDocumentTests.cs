@@ -216,14 +216,13 @@ public class RibbonAndDocumentTests
         mainWindow.Should().Contain("_fileWorkflow.ConfirmCloseAllowedAsync(");
         mainWindow.Should().Contain("new SisterAvaloniaAsyncWindowCloseCoordinator(");
         mainWindow.Should().Contain("saveAsync: SaveAsync");
-        mainWindow.Should().Contain("DocumentFileExecutionCoordinator _fileExecution");
-        mainWindow.Should().Contain("_fileExecution.OpenAsync(");
-        mainWindow.Should().Contain("_fileExecution.SaveAsync(");
+        mainWindow.Should().Contain("FreeWDocumentFileWorkflow _documentFileWorkflow");
+        mainWindow.Should().Contain("_documentFileWorkflow.OpenPathAsync(");
+        mainWindow.Should().Contain("_documentFileWorkflow.SavePathAsync(");
         mainWindow.Should().Contain("SaveCompatibilityWarningDialog.ShowAsync(this, plan)");
         mainWindow.Should().Contain("_documentPersistence.BuildSavePickerPlan(");
         mainWindow.Should().Contain("_fileWorkflow.MarkDirty();");
-        // suppressRecentFiles was true (stub) and is now false so files register in the store.
-        mainWindow.Should().Contain("_fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles:");
+        mainWindow.Should().Contain("_documentFileWorkflow.ApplyOpenResultAsync(result)");
         sharedShellWorkflow.Should().Contain("new FileCommandWorkflow(");
         sharedShellWorkflow.Should().Contain("WindowTitlePlanner.Compose(");
         sharedShellWorkflow.Should().Contain("AvaloniaSaveChangesDialog.ShowAsync(");
@@ -238,6 +237,8 @@ public class RibbonAndDocumentTests
         mainWindow.Should().NotContain("private string? _currentPath");
         mainWindow.Should().NotContain("DocumentFileFormatResolver.FindSaveAdapter(");
         mainWindow.Should().NotContain("DocumentSaveCompatibilityPlanner.Build(");
+        mainWindow.Should().NotContain("new DocumentOpenExecutionRequest(");
+        mainWindow.Should().NotContain("new DocumentSaveExecutionRequest(");
         mainWindow.Split("_documentPersistence.Open(path)").Should().HaveCount(2,
             "only the review-document loader bypasses the shell open coordinator");
         mainWindow.Should().Contain("return _documentPersistence.Open(path).Document;");
@@ -300,7 +301,8 @@ public class RibbonAndDocumentTests
         var importSource = mainWindow[importStart..saveStart];
         importSource.Should().Contain("_fileWorkflow.OpenAsync(");
         importSource.Should().Contain("_documentPersistence.BuildPdfImportPickerPlan().FileTypes");
-        importSource.Should().Contain("_documentPersistence.ImportPdfText(path)");
+        importSource.Should().Contain("_documentFileWorkflow.ImportPdfTextPathAsync(path)");
+        importSource.Should().NotContain("_documentPersistence.ImportPdfText(path)");
         importSource.Should().NotContain("DocumentFileAdapterCatalog.CreatePdfImportAdapters()");
         importSource.Should().NotContain("File.OpenRead(path)");
     }

@@ -6,6 +6,7 @@ public enum DocumentFileExecutionOutcome
 {
     Succeeded,
     UnsupportedFormat,
+    SaveAsRequired,
     CompatibilityDeclined,
     Canceled,
     Failed

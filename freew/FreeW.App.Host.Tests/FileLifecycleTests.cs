@@ -276,7 +276,7 @@ public sealed class FileLifecycleTests : IDisposable
     }
 
     [Fact]
-    public void WpfFileCommands_DelegateSaveOrderingToSharedExecutionCoordinator()
+    public void WpfFileCommands_DelegateSaveOrderingToSharedDocumentWorkflow()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(
@@ -292,11 +292,12 @@ public sealed class FileLifecycleTests : IDisposable
             "DocumentFileExecutionCoordinator.cs"));
 
         Assert.Contains("private readonly DocumentPersistenceWorkflow _persistence;", source);
-        Assert.Contains("private readonly DocumentFileExecutionCoordinator _execution;", source);
-        Assert.Contains("_execution.SaveAsync(new DocumentSaveExecutionRequest(", source);
-        Assert.Contains("_confirmSaveCompatibility(plan)", source);
+        Assert.Contains("private readonly FreeWDocumentFileWorkflow _documentWorkflow;", source);
+        Assert.Contains("SavePathAsync(path, filterIndex, kind)", source);
+        Assert.Contains("ConfirmSaveCompatibilityAsync:", source);
         Assert.DoesNotContain("DocumentSaveCompatibilityPlanner.Build", source);
         Assert.DoesNotContain("_persistence.Save(_editor.Model, target)", source);
+        Assert.DoesNotContain("new DocumentSaveExecutionRequest(", source);
 
         var confirmationIndex = coordinator.IndexOf("await request.ConfirmCompatibilityAsync", StringComparison.Ordinal);
         var saveIndex = coordinator.IndexOf("_persistence.Save(request.Document, request.Target);", StringComparison.Ordinal);

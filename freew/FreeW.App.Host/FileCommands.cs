@@ -44,8 +44,7 @@ internal sealed class FileCommands
     private readonly FreeWOptions _options;
 
     private readonly DocumentPersistenceWorkflow _persistence;
-    private readonly DocumentFileExecutionCoordinator _execution;
-    private readonly Func<DocumentSaveCompatibilityPlan, bool> _confirmSaveCompatibility;
+    private readonly FreeWDocumentFileWorkflow _documentWorkflow;
     private readonly Func<string?> _promptPdfImportPath;
 
     public FileCommands(
@@ -63,9 +62,6 @@ internal sealed class FileCommands
         _editor = editor;
         _options = options ?? new FreeWOptions();
         _persistence = new DocumentPersistenceWorkflow(adapters);
-        _execution = new DocumentFileExecutionCoordinator(_persistence);
-        _confirmSaveCompatibility = confirmSaveCompatibility ??
-            (plan => SaveCompatibilityWarningDialog.Show(_window, plan));
         _promptPdfImportPath = promptPdfImportPath ?? PromptPdfImportPath;
         _workflow = new SisterWpfFileCommandWorkflow(
             "FreeW",
@@ -74,6 +70,31 @@ internal sealed class FileCommands
             Save,
             loadRecentFilesStore,
             messageService);
+        var confirmCompatibility = confirmSaveCompatibility ??
+            (plan => SaveCompatibilityWarningDialog.Show(_window, plan));
+        _documentWorkflow = new FreeWDocumentFileWorkflow(
+            _workflow.Workflow,
+            _persistence,
+            new FreeWDocumentFilePorts(
+                GetDocument: () => _editor.Model,
+                LoadDocumentAsync: (document, _) =>
+                {
+                    _editor.LoadModel(document);
+                    return ValueTask.CompletedTask;
+                },
+                PrepareDocumentAsync: _ =>
+                {
+                    _editor.CommitToModel();
+                    return ValueTask.CompletedTask;
+                },
+                ConfirmSaveCompatibilityAsync: (plan, _) =>
+                    ValueTask.FromResult(confirmCompatibility(plan)),
+                UpdateFieldsAsync: _ =>
+                {
+                    _editor.UpdateFields();
+                    return ValueTask.CompletedTask;
+                },
+                SetCurrentFileName: fileName => _editor.CurrentFileName = fileName));
     }
 
     public bool IsDirty => _workflow.IsDirty;
@@ -104,20 +125,14 @@ internal sealed class FileCommands
 
     private bool OpenSnapshotCore(string snapshotPath, string? originalPath)
     {
-        try
-        {
-            var result = _persistence.OpenSnapshot(snapshotPath, originalPath);
-            _editor.LoadModel(result.Document);
-            _workflow.MarkDirtyWithPath(
-                result.TargetPath,
-                () => _editor.CurrentFileName = result.TargetPath is null ? null : Path.GetFileName(result.TargetPath));
+        var result = _documentWorkflow.OpenSnapshotAsync(snapshotPath, originalPath).GetAwaiter().GetResult();
+        if (result.Succeeded)
             return true;
-        }
-        catch (Exception ex)
-        {
-            ShowError("Could not recover the document", ex);
-            return false;
-        }
+
+        ShowError(
+            "Could not recover the document",
+            result.Exception ?? new InvalidOperationException("The recovery operation was canceled."));
+        return false;
     }
 
     public void MarkDirty()
@@ -161,24 +176,17 @@ internal sealed class FileCommands
     /// </summary>
     public bool ImportPdfTextPath(string path)
     {
-        try
-        {
-            var result = _persistence.ImportPdfText(path);
-            _editor.LoadModel(result.Document);
-
-            _workflow.MarkDirtyWithPath(null, () => _editor.CurrentFileName = null);
+        var result = _documentWorkflow.ImportPdfTextPathAsync(path).GetAwaiter().GetResult();
+        if (result.Succeeded)
             return true;
-        }
-        catch (InvalidOperationException ex)
-        {
-            ShowError("Unrecognized PDF import file", ex);
-            return false;
-        }
-        catch (Exception ex)
-        {
-            ShowError("Could not import PDF text", ex);
-            return false;
-        }
+
+        var exception = result.Exception ?? new InvalidOperationException("The PDF import was canceled.");
+        ShowError(
+            exception is InvalidOperationException
+                ? "Unrecognized PDF import file"
+                : "Could not import PDF text",
+            exception);
+        return false;
     }
 
     /// <summary>
@@ -189,29 +197,10 @@ internal sealed class FileCommands
 
     private bool OpenPath(string path, bool suppressRecentFiles)
     {
-        var execution = _execution.OpenAsync(new DocumentOpenExecutionRequest(
-            path,
-            suppressRecentFiles,
-            LoadDocumentAsync: (document, _) =>
-            {
-                _editor.LoadModel(document);
-                return ValueTask.CompletedTask;
-            },
-            CompleteOpenAsync: (result, suppressRecent, _) =>
-            {
-                ApplyOpenMetadata(result, suppressRecent);
-                return ValueTask.CompletedTask;
-            },
-            PrepareFieldContextAsync: (savedPath, _) =>
-            {
-                _editor.CurrentFileName = savedPath is null ? null : Path.GetFileName(savedPath);
-                return ValueTask.CompletedTask;
-            },
-            UpdateFieldsAsync: _ =>
-            {
-                _editor.UpdateFields();
-                return ValueTask.CompletedTask;
-            })).GetAwaiter().GetResult();
+        var execution = _documentWorkflow
+            .OpenPathAsync(path, suppressRecentFiles)
+            .GetAwaiter()
+            .GetResult();
 
         if (execution.Outcome == DocumentFileExecutionOutcome.UnsupportedFormat)
         {
@@ -249,8 +238,13 @@ internal sealed class FileCommands
     public bool SaveAs(string? preferredExtension) =>
         SaveAsSuggested(suggestedFileName: null, preferredExtension);
 
-    public bool SaveAsSuggested(string? suggestedFileName, string? preferredExtension) =>
-        TryPromptSaveTarget(preferredExtension, suggestedFileName, out var target) && SaveTo(target);
+    public bool SaveAsSuggested(string? suggestedFileName, string? preferredExtension)
+    {
+        if (!TryPromptSavePath(preferredExtension, suggestedFileName, out var path, out var filterIndex))
+            return false;
+
+        return SavePath(path, filterIndex, DocumentSaveExecutionKind.Save, "Could not save the document");
+    }
 
     /// <summary>
     /// File &gt; Save a Copy. Writes to a chosen path WITHOUT changing the current file or dirty state,
@@ -258,35 +252,18 @@ internal sealed class FileCommands
     /// </summary>
     public bool SaveCopy()
     {
-        if (!TryPromptSaveTarget(preferredExtension: null, suggestedFileName: null, out var target))
+        if (!TryPromptSavePath(
+                preferredExtension: null,
+                suggestedFileName: null,
+                out var path,
+                out var filterIndex))
             return false;
 
-        return SaveCopyTo(target);
+        return SavePath(path, filterIndex, DocumentSaveExecutionKind.SaveCopy, "Could not save a copy");
     }
 
-    internal bool SaveCopyToPath(string path, int filterIndex = 0)
-    {
-        if (!_persistence.TryResolveSaveTarget(path, filterIndex, out var target))
-        {
-            ShowError(
-                "Could not save a copy",
-                new InvalidOperationException($"FreeW has no writer for \u201c{Path.GetExtension(path)}\u201d files."));
-            return false;
-        }
-
-        return SaveCopyTo(target);
-    }
-
-    private bool SaveCopyTo(DocumentSaveTarget target)
-    {
-        var execution = ExecuteSave(target, DocumentSaveExecutionKind.SaveCopy);
-        if (execution.Succeeded)
-            return true;
-
-        if (execution.Outcome != DocumentFileExecutionOutcome.CompatibilityDeclined)
-            ShowError("Could not save a copy", execution.Exception ?? new InvalidOperationException("The save was canceled."));
-        return false;
-    }
+    internal bool SaveCopyToPath(string path, int filterIndex = 0) =>
+        SavePath(path, filterIndex, DocumentSaveExecutionKind.SaveCopy, "Could not save a copy");
 
     /// <summary>
     /// Save-before-close gate, called from the window's Closing handler. Returns true if the window
@@ -301,53 +278,59 @@ internal sealed class FileCommands
     /// </summary>
     private bool SaveToCurrentPath(string path)
     {
-        return _persistence.TryResolveCurrentSaveTarget(path, out var target)
-            ? SaveTo(target)
-            : SaveAs();
+        var result = _documentWorkflow.SaveCurrentPathAsync(path).GetAwaiter().GetResult();
+        return result.RequiresSaveAs ? SaveAs() : HandleSaveResult(result, "Could not save the document");
     }
 
-    private bool SaveTo(DocumentSaveTarget target)
+    private bool SavePath(
+        string path,
+        int filterIndex,
+        DocumentSaveExecutionKind kind,
+        string errorSummary)
     {
-        var execution = ExecuteSave(target, DocumentSaveExecutionKind.Save);
+        var result = _documentWorkflow
+            .SavePathAsync(path, filterIndex, kind)
+            .GetAwaiter()
+            .GetResult();
+        if (result.Outcome == DocumentFileExecutionOutcome.UnsupportedFormat)
+        {
+            ShowError(
+                errorSummary,
+                new InvalidOperationException(
+                    $"FreeW has no writer for \u201c{Path.GetExtension(path)}\u201d files."));
+            return false;
+        }
+
+        return HandleSaveResult(result, errorSummary);
+    }
+
+    private bool HandleSaveResult(DocumentSaveWorkflowResult execution, string errorSummary)
+    {
         if (execution.Succeeded)
             return true;
 
         if (execution.Outcome != DocumentFileExecutionOutcome.CompatibilityDeclined)
-            ShowError("Could not save the document", execution.Exception ?? new InvalidOperationException("The save was canceled."));
+        {
+            ShowError(
+                errorSummary,
+                execution.Exception ?? new InvalidOperationException("The save was canceled."));
+        }
+
         return false;
     }
 
-    private DocumentSaveExecutionResult ExecuteSave(
-        DocumentSaveTarget target,
-        DocumentSaveExecutionKind kind) =>
-        _execution.SaveAsync(new DocumentSaveExecutionRequest(
-            _editor.Model,
-            target,
-            kind,
-            PrepareDocumentAsync: _ =>
-            {
-                _editor.CommitToModel();
-                return ValueTask.CompletedTask;
-            },
-            ConfirmCompatibilityAsync: (plan, _) =>
-                ValueTask.FromResult(!plan.RequiresConfirmation || _confirmSaveCompatibility(plan)),
-            CompleteSaveAsync: (savedTarget, _) =>
-            {
-                SetSaved(savedTarget.Path, suppressRecentFiles: false);
-                return ValueTask.CompletedTask;
-            })).GetAwaiter().GetResult();
-
     /// <summary>
-    /// Shows the Save dialog and resolves the chosen target path + writable adapter. The adapter is derived
-    /// from the CHOSEN filename's extension (not the selected filter row), so a user-typed extension wins.
-    /// Returns false on cancel or when the chosen extension is not a writable format.
+    /// Shows the native Save dialog and returns its path/filter selection. Adapter and target resolution
+    /// remain in <see cref="FreeWDocumentFileWorkflow"/> so a user-typed extension wins consistently.
     /// </summary>
-    private bool TryPromptSaveTarget(
+    private bool TryPromptSavePath(
         string? preferredExtension,
         string? suggestedFileName,
-        out DocumentSaveTarget target)
+        out string path,
+        out int filterIndex)
     {
-        target = null!;
+        path = string.Empty;
+        filterIndex = 0;
 
         var plan = _persistence.BuildSaveDialogPlan(
             _workflow.CurrentPath,
@@ -359,15 +342,8 @@ internal sealed class FileCommands
         if (!result.Chosen)
             return false;
 
-        var chosenExtension = Path.GetExtension(result.FileName!);
-        if (!_persistence.TryResolveSaveTarget(result.FileName!, result.FilterIndex, out target))
-        {
-            ShowError(
-                "Cannot save",
-                new InvalidOperationException($"“{chosenExtension}” is not a writable format."));
-            return false;
-        }
-
+        path = result.FileName!;
+        filterIndex = result.FilterIndex;
         return true;
     }
 
@@ -386,23 +362,6 @@ internal sealed class FileCommands
             plan,
             title: "Import PDF (text only)");
         return result.Chosen ? result.FileName : null;
-    }
-
-    private void ApplyOpenMetadata(DocumentOpenResult result, bool suppressRecentFiles)
-    {
-        if (result.SavedPath is null)
-            _workflow.MarkSavedWithoutPath(() => _editor.CurrentFileName = null);
-        else
-            SetSaved(result.SavedPath, suppressRecentFiles);
-    }
-
-    private void SetSaved(string path, bool suppressRecentFiles)
-    {
-        _workflow.MarkSavedWithPath(path, suppressRecentFiles, () =>
-        {
-            // Surface the file name to the editor so FILENAME field runs resolve to it at render.
-            _editor.CurrentFileName = Path.GetFileName(path);
-        });
     }
 
     // ── Host seams (WPF) ─────────────────────────────────────────────────────
