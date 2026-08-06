@@ -67,6 +67,8 @@ public static class PresentationAnimationCommandPlanner
             new PresentationAnimationCommandPlan("freep.anim.emphasis.grow-shrink", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Grow),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.teeter", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Teeter),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.blink", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Blink),
+            new PresentationAnimationCommandPlan("freep.anim.emphasis.flash-bulb", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.FlashBulb),
+            new PresentationAnimationCommandPlan("freep.anim.emphasis.flicker", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Flicker),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.color-pulse", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ColorPulse),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.change-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ChangeColor),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.change-fill-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ChangeFillColor),

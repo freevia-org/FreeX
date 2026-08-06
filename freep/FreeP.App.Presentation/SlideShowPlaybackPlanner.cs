@@ -510,7 +510,9 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Grow or AnimationPreset.Shrink => SlideShowShapeAnimationEffectKind.GrowShrink,
             AnimationPreset.Spin => SlideShowShapeAnimationEffectKind.Spin,
             AnimationPreset.Teeter => SlideShowShapeAnimationEffectKind.Teeter,
-            AnimationPreset.Blink => SlideShowShapeAnimationEffectKind.Blink,
+            AnimationPreset.Blink
+                or AnimationPreset.FlashBulb
+                or AnimationPreset.Flicker => SlideShowShapeAnimationEffectKind.Blink,
             AnimationPreset.ColorPulse => SlideShowShapeAnimationEffectKind.ColorPulse,
             AnimationPreset.ChangeColor => SlideShowShapeAnimationEffectKind.ChangeColor,
             AnimationPreset.ChangeFontStyle => SlideShowShapeAnimationEffectKind.ChangeFontStyle,

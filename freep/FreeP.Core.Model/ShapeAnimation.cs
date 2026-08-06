@@ -188,6 +188,8 @@ public enum AnimationPreset
     ColorPulse,
     Teeter,
     Blink,
+    FlashBulb,
+    Flicker,
     Bold,
     Wave,
     Underline,

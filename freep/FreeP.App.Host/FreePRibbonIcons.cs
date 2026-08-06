@@ -208,6 +208,8 @@ internal static class FreePRibbonIcons
             ["freep.anim.emphasis.grow-shrink"] = RibbonCommandIconKind.Scale,
             ["freep.anim.emphasis.teeter"]       = RibbonCommandIconKind.Rotate,
             ["freep.anim.emphasis.blink"]        = RibbonCommandIconKind.Flash,
+            ["freep.anim.emphasis.flash-bulb"]    = RibbonCommandIconKind.Flash,
+            ["freep.anim.emphasis.flicker"]       = RibbonCommandIconKind.Flash,
             ["freep.anim.emphasis.color-pulse"]  = RibbonCommandIconKind.Color,
             ["freep.anim.emphasis.change-color"] = RibbonCommandIconKind.Color,
             ["freep.anim.emphasis.change-fill-color"] = RibbonCommandIconKind.Color,

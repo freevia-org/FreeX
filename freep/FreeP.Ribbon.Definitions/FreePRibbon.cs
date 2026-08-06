@@ -1230,6 +1230,8 @@ public static class FreePRibbon
             group.Medium("freep.anim.emphasis.grow-shrink", FreePRibbonText.AnimationEmphasisGrowShrinkCommand.Label, RibbonCommandIconKind.Scale, FreePRibbonText.AnimationEmphasisGrowShrinkCommand.KeyTip);
             group.Medium("freep.anim.emphasis.teeter", FreePRibbonText.AnimationEmphasisTeeterCommand.Label, RibbonCommandIconKind.Rotate, FreePRibbonText.AnimationEmphasisTeeterCommand.KeyTip);
             group.Medium("freep.anim.emphasis.blink", FreePRibbonText.AnimationEmphasisBlinkCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.AnimationEmphasisBlinkCommand.KeyTip);
+            group.Medium("freep.anim.emphasis.flash-bulb", FreePRibbonText.AnimationEmphasisFlashBulbCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.AnimationEmphasisFlashBulbCommand.KeyTip);
+            group.Medium("freep.anim.emphasis.flicker", FreePRibbonText.AnimationEmphasisFlickerCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.AnimationEmphasisFlickerCommand.KeyTip);
             group.Medium("freep.anim.emphasis.color-pulse", FreePRibbonText.AnimationEmphasisColorPulseCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.AnimationEmphasisColorPulseCommand.KeyTip);
             group.Medium("freep.anim.emphasis.change-color", FreePRibbonText.AnimationEmphasisChangeColorCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.AnimationEmphasisChangeColorCommand.KeyTip);
             group.Medium("freep.anim.emphasis.change-fill-color", FreePRibbonText.AnimationEmphasisChangeFillColorCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.AnimationEmphasisChangeFillColorCommand.KeyTip);

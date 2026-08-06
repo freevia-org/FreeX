@@ -11,6 +11,8 @@ public sealed class AnimationPresetRoundTripTests
     [Theory]
     [InlineData(AnimationPreset.Bold, 15)]
     [InlineData(AnimationPreset.Underline, 18)]
+    [InlineData(AnimationPreset.FlashBulb, 26)]
+    [InlineData(AnimationPreset.Flicker, 27)]
     public void GenericFontEmphasisMappingUsesPowerPointNativePresetIds(
         AnimationPreset preset,
         int expectedPresetId)
@@ -249,9 +251,9 @@ public sealed class AnimationPresetRoundTripTests
     }
 
     [Theory]
-    [InlineData(26)] // PowerPoint FlashBulb
-    [InlineData(27)] // PowerPoint Flicker
-    public void ImportedFlashBulbAndFlickerRetainNativeIdsAndUseBlinkPlayback(int presetId)
+    [InlineData(26, AnimationPreset.FlashBulb)] // PowerPoint FlashBulb
+    [InlineData(27, AnimationPreset.Flicker)] // PowerPoint Flicker
+    public void ImportedFlashBulbAndFlickerRetainNativeIdsAndUseBlinkPlayback(int presetId, AnimationPreset expectedPreset)
     {
         var presentation = Presentation.CreateEmpty();
         presentation.Slides[0].Shapes.Add(new SlideShape
@@ -279,7 +281,7 @@ public sealed class AnimationPresetRoundTripTests
         var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
         var animation = reloaded.Slides[0].Animations.Single();
 
-        animation.Preset.Should().Be(AnimationPreset.Blink);
+        animation.Preset.Should().Be(expectedPreset);
         animation.RawPresetClass.Should().Be("emph");
         animation.RawPresetId.Should().Be(presetId);
         animation.RawPresetSubtype.Should().Be("0");

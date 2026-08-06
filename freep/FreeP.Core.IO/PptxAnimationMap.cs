@@ -62,6 +62,8 @@ namespace FreeP.Core.IO;
 /// ColorPulse      | emph        | 6
 /// Teeter          | emph        | 32
 /// Blink           | emph        | 15
+/// FlashBulb       | emph        | 26 (PowerPoint native emphasis identity)
+/// Flicker         | emph        | 27 (PowerPoint native emphasis identity)
 /// Bold            | emph        | 15 (native fontWeight behavior)
 /// Wave            | emph        | 34
 /// Underline       | emph        | 18 (native textDecorationUnderline behavior)
@@ -286,6 +288,8 @@ internal static class PptxAnimationMap
                 AnimationPreset.Wave           => 34,
                 AnimationPreset.Pulse          => 14,
                 AnimationPreset.Blink          => 15,
+                AnimationPreset.FlashBulb       => 26,
+                AnimationPreset.Flicker         => 27,
                 _                              => 14  // default to pulse
             };
             return (pc, emphId);
@@ -362,11 +366,10 @@ internal static class PptxAnimationMap
                 12 => AnimationPreset.GrowWithColor,
                 34 => AnimationPreset.Wave,
                 14 => AnimationPreset.Pulse,
-                // PowerPoint FlashBulb and Flicker are not modeled as separate
-                // authoring presets yet; keep their raw IDs for package fidelity
-                // while using the closest existing visibility playback contract.
-                26 => AnimationPreset.Blink,
-                27 => AnimationPreset.Blink,
+                // PowerPoint's native FlashBulb/Flicker identities are distinct
+                // even though playback currently shares the Blink fallback.
+                26 => AnimationPreset.FlashBulb,
+                27 => AnimationPreset.Flicker,
                 // PowerPoint ColorWave is not modeled as a separate authoring
                 // preset; retain its raw ID while using the existing color pulse
                 // playback contract until wave-specific color timing is modeled.

@@ -2014,6 +2014,8 @@ public sealed class SlideShowPlaybackPlannerTests
         {
             [AnimationPreset.Teeter] = SlideShowShapeAnimationEffectKind.Teeter,
             [AnimationPreset.Blink] = SlideShowShapeAnimationEffectKind.Blink,
+            [AnimationPreset.FlashBulb] = SlideShowShapeAnimationEffectKind.Blink,
+            [AnimationPreset.Flicker] = SlideShowShapeAnimationEffectKind.Blink,
             [AnimationPreset.ColorPulse] = SlideShowShapeAnimationEffectKind.ColorPulse,
             [AnimationPreset.ChangeColor] = SlideShowShapeAnimationEffectKind.ChangeColor,
             [AnimationPreset.ChangeLineColor] = SlideShowShapeAnimationEffectKind.ChangeColor,
