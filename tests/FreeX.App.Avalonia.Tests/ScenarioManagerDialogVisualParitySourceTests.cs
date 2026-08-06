@@ -104,14 +104,17 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
         var expectedMethods = captureSources
             .SelectMany(file => FindCaptureMethodNames(file.Source))
             .ToHashSet(StringComparer.Ordinal);
-        var captureFilters = new[]
-            {
-                "FreeX.App.Avalonia.CaptureTests.csproj",
-                "FreeX.App.Avalonia.CaptureTests.Batch2.csproj",
-            }
-            .SelectMany(file => ReadFilterTerms(RepoFile(
-                "tests", "FreeX.App.Avalonia.CaptureTests", file), "FullyQualifiedName~", '|'))
+        var captureProjectDirectory = Path.GetDirectoryName(RepoFile(
+            "tests", "FreeX.App.Avalonia.CaptureTests", "CaptureTests.Shared.props"))!;
+        var captureFilterBatches = Directory.GetFiles(
+                captureProjectDirectory,
+                "FreeX.App.Avalonia.CaptureTests*.csproj")
+            .Select(file => ReadFilterTerms(file, "FullyQualifiedName~", '|'))
             .ToArray();
+        captureFilterBatches.Should().HaveCountGreaterThan(1)
+            .And.OnlyContain(batch => batch.Length > 0 && batch.Length <= 6);
+
+        var captureFilters = captureFilterBatches.SelectMany(batch => batch).ToArray();
         captureFilters.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(expectedMethods);
 
         var mainFilter = ReadFilterTerms(RepoFile(
