@@ -5,20 +5,23 @@ namespace FreeW.App.Host.Tests;
 public sealed class TableFormulaDialogPolicySourceGuardTests
 {
     [Fact]
-    public void TableFormulaDialog_DelegatesCatalogsAndResultPolicyToPresentationPlanner()
+    public void TableFormulaDialog_DelegatesCatalogsAndResultPolicyToPresentationSession()
     {
         var source = ReadHostSource("TableFormulaDialog.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain("TableFormulaDialogPlanner.NumberFormats");
-        source.Should().Contain("TableFormulaDialogPlanner.Functions");
+        source.Should().Contain("TableFormulaDialogSession");
+        source.Should().Contain("_session.NumberFormats");
+        source.Should().Contain("_session.Functions");
         source.Should().Contain("Title = TableFormulaDialogPlanner.Title;");
         source.Should().Contain("TableFormulaDialogPlanner.FormulaLabel");
         source.Should().Contain("TableFormulaDialogPlanner.NumberFormatLabel");
         source.Should().Contain("TableFormulaDialogPlanner.PasteFunctionLabel");
-        source.Should().Contain("TableFormulaDialogPlanner.PasteFunction(");
+        source.Should().Contain("_session.PasteFunction(");
         source.Should().Contain("new TableFormulaDialogInput(");
-        source.Should().Contain("TableFormulaDialogPlanner.TryBuildResult(");
+        source.Should().Contain("_session.PlanAcceptance(");
+        source.Should().NotContain("TableFormulaDialogPlanner.PasteFunction(");
+        source.Should().NotContain("TableFormulaDialogPlanner.TryBuildResult(");
         source.Should().NotContain("Title = \"Formula\"");
         source.Should().NotContain("Text = \"Formula:\"");
         source.Should().NotContain("Text = \"Number format:\"");

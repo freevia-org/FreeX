@@ -18,6 +18,7 @@ internal sealed class TableFormulaDialog : FreeWDialogWindow
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle;
 
+    private readonly TableFormulaDialogSession _session;
     private readonly TextBox _formula;
     private readonly ComboBox _format;
     private readonly ComboBox _function;
@@ -28,7 +29,7 @@ internal sealed class TableFormulaDialog : FreeWDialogWindow
 
     public TableFormulaDialog(TableFormulaDialogInitialState initialState)
     {
-        ArgumentNullException.ThrowIfNull(initialState);
+        _session = new TableFormulaDialogSession(initialState);
 
         Title = TableFormulaDialogPlanner.Title;
         Width = 360;
@@ -36,30 +37,30 @@ internal sealed class TableFormulaDialog : FreeWDialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
-        AutomationProperties.SetAutomationId(this, "TableFormulaDialog");
+        AutomationProperties.SetAutomationId(this, TableFormulaDialogPlanner.AutomationId);
 
-        _formula = new TextBox { Text = initialState.FormulaText };
+        _formula = new TextBox { Text = _session.InitialState.FormulaText };
         _format = new ComboBox { IsEditable = true };
-        foreach (var format in TableFormulaDialogPlanner.NumberFormats)
+        foreach (var format in _session.NumberFormats)
             _format.Items.Add(format);
         _format.SelectedIndex = Math.Clamp(
-            initialState.NumberFormatIndex,
+            _session.InitialState.NumberFormatIndex,
             0,
             _format.ItemCount - 1);
 
         _function = new ComboBox();
-        foreach (var function in TableFormulaDialogPlanner.Functions)
+        foreach (var function in _session.Functions)
             _function.Items.Add(function);
         _function.SelectionChanged += (_, _) => PasteSelectedFunction();
 
         ApplyInputChrome(_formula, FocusPlan.InitialFocusTargetAutomationId);
-        ApplyComboChrome(_format, "TableFormulaNumberFormatBox");
-        ApplyComboChrome(_function, "TableFormulaPasteFunctionBox");
+        ApplyComboChrome(_format, TableFormulaDialogPlanner.NumberFormatAutomationId);
+        ApplyComboChrome(_function, TableFormulaDialogPlanner.PasteFunctionAutomationId);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(
             _validation,
             DialogChromeStyle,
             new Thickness(0, 6, 0, 0));
-        AutomationProperties.SetAutomationId(_validation, "TableFormulaValidationText");
+        AutomationProperties.SetAutomationId(_validation, TableFormulaDialogPlanner.ValidationAutomationId);
 
         var body = new StackPanel { Margin = new Thickness(14), Spacing = 4 };
         body.Children.Add(Label(TableFormulaDialogPlanner.FormulaLabel));
@@ -70,9 +71,15 @@ internal sealed class TableFormulaDialog : FreeWDialogWindow
         body.Children.Add(_function);
         body.Children.Add(_validation);
 
-        var ok = Button("OK", "TableFormulaOkButton", isDefault: true);
+        var ok = Button(
+            TableFormulaDialogPlanner.AcceptButtonLabel,
+            TableFormulaDialogPlanner.AcceptButtonAutomationId,
+            isDefault: true);
         ok.Click += (_, _) => Accept();
-        var cancel = Button("Cancel", "TableFormulaCancelButton", isCancel: true);
+        var cancel = Button(
+            TableFormulaDialogPlanner.CancelButtonLabel,
+            TableFormulaDialogPlanner.CancelButtonAutomationId,
+            isCancel: true);
         cancel.Click += (_, _) => Close();
         body.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
             [ok, cancel],
@@ -105,19 +112,18 @@ internal sealed class TableFormulaDialog : FreeWDialogWindow
 
     private void TryAccept(bool close)
     {
-        if (!TableFormulaDialogPlanner.TryBuildResult(
-                new TableFormulaDialogInput(_formula.Text, _format.Text),
-                out var result,
-                out var errorMessage))
+        var acceptance = _session.PlanAcceptance(
+            new TableFormulaDialogInput(_formula.Text, _format.Text));
+        if (!acceptance.IsAccepted)
         {
-            _validation.Text = errorMessage ?? TableFormulaDialogPlanner.ValidationMessage;
+            _validation.Text = acceptance.ValidationMessage!;
             _validation.IsVisible = true;
             FocusFormula();
             return;
         }
 
         _validation.IsVisible = false;
-        Result = result;
+        Result = acceptance.Result;
         if (close)
             Close();
     }
@@ -127,7 +133,7 @@ internal sealed class TableFormulaDialog : FreeWDialogWindow
         if (_function.SelectedItem is not string functionName)
             return;
 
-        var pasted = TableFormulaDialogPlanner.PasteFunction(_formula.Text, functionName);
+        var pasted = _session.PasteFunction(_formula.Text, functionName);
         _formula.Text = pasted.Text;
         _formula.CaretIndex = pasted.CaretIndex;
         _formula.Focus();

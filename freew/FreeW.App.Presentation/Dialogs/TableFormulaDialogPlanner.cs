@@ -14,6 +14,36 @@ public sealed record TableFormulaPasteResult(
     string Text,
     int CaretIndex);
 
+public sealed record TableFormulaDialogAcceptance(
+    TableFormulaField? Result,
+    string? ValidationMessage)
+{
+    public bool IsAccepted => Result is not null;
+}
+
+public sealed class TableFormulaDialogSession
+{
+    public TableFormulaDialogSession(TableFormulaDialogInitialState initialState)
+    {
+        ArgumentNullException.ThrowIfNull(initialState);
+        InitialState = initialState;
+    }
+
+    public TableFormulaDialogInitialState InitialState { get; }
+
+    public IReadOnlyList<string> NumberFormats => TableFormulaDialogPlanner.NumberFormats;
+
+    public IReadOnlyList<string> Functions => TableFormulaDialogPlanner.Functions;
+
+    public TableFormulaPasteResult PasteFunction(string? formulaText, string functionName) =>
+        TableFormulaDialogPlanner.PasteFunction(formulaText, functionName);
+
+    public TableFormulaDialogAcceptance PlanAcceptance(TableFormulaDialogInput input) =>
+        TableFormulaDialogPlanner.TryBuildResult(input, out var result, out var error)
+            ? new TableFormulaDialogAcceptance(result, ValidationMessage: null)
+            : new TableFormulaDialogAcceptance(null, error ?? TableFormulaDialogPlanner.ValidationMessage);
+}
+
 public static class TableFormulaDialogPlanner
 {
     public const string Title = "Formula";
@@ -23,6 +53,14 @@ public static class TableFormulaDialogPlanner
     public const string ValidationMessage = "Please enter a formula.";
     public const string SumAboveFormula = "=SUM(ABOVE)";
     public const string SumLeftFormula = "=SUM(LEFT)";
+    public const string AcceptButtonLabel = "OK";
+    public const string CancelButtonLabel = "Cancel";
+    public const string AutomationId = "TableFormulaDialog";
+    public const string NumberFormatAutomationId = "TableFormulaNumberFormatBox";
+    public const string PasteFunctionAutomationId = "TableFormulaPasteFunctionBox";
+    public const string ValidationAutomationId = "TableFormulaValidationText";
+    public const string AcceptButtonAutomationId = "TableFormulaOkButton";
+    public const string CancelButtonAutomationId = "TableFormulaCancelButton";
 
     public static readonly IReadOnlyList<string> Functions =
         ["SUM", "AVERAGE", "COUNT", "PRODUCT", "MIN", "MAX"];
