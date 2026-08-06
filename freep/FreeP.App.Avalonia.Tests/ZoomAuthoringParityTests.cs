@@ -40,8 +40,13 @@ public sealed class ZoomAuthoringParityTests
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
+        var workflow = File.ReadAllText(RepoFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "Ribbon",
+            "FreePRibbonCommandWorkflow.cs"));
 
-        source.Should().Contain("ZoomObjectPropertiesPlanner.CommandId");
+        workflow.Should().Contain("ZoomObjectPropertiesPlanner.CommandId");
         source.Should().Contain("Editor.SetSelectedZoomObjectProperties(dialog.Properties)");
         source.Should().Contain("dialog.ApplySummaryPropertiesToAllTiles");
     }

@@ -320,9 +320,9 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
-    public void FreePRibbonCommands_source_routes_transitions_through_shared_planner()
+    public void FreePRibbonCommandWorkflow_source_routes_transitions_through_shared_planner()
     {
-        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs"));
+        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs"));
 
         Assert.Contains("PresentationTransitionCommandPlanner.BuiltInPlans", source);
         Assert.Contains("PresentationTransitionCommandPlanner.TryApply", source);
@@ -331,9 +331,9 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
-    public void FreePRibbonCommands_source_routes_animations_through_shared_planner()
+    public void FreePRibbonCommandWorkflow_source_routes_animations_through_shared_planner()
     {
-        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs"));
+        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs"));
 
         Assert.Contains("PresentationAnimationCommandPlanner.BuiltInPlans", source);
         Assert.Contains("PresentationAnimationCommandPlanner.TryApply", source);

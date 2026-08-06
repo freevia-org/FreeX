@@ -16,6 +16,7 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
     <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
