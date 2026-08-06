@@ -53,21 +53,7 @@ namespace FreeW.App.Avalonia.Ribbon;
 internal static class FreeWAvaloniaRibbonCommands
 {
     private static IRibbonCommand HostCommand(Action? action) =>
-        action is null ? UnavailableRibbonCommand.Instance : new ActionRibbonCommand(action);
-
-    private sealed class UnavailableRibbonCommand : IRibbonStatefulCommand
-    {
-        public static readonly UnavailableRibbonCommand Instance = new();
-
-        private UnavailableRibbonCommand()
-        {
-        }
-
-        public RibbonCommandState GetState() => new(IsEnabled: false);
-
-        public void Execute(RibbonCommandContext context) =>
-            throw new InvalidOperationException("An unavailable ribbon command cannot be executed.");
-    }
+        action is null ? FreeWRibbonExecutionProfile.UnavailableCommand : new ActionRibbonCommand(action);
 
     /// <summary>
     /// Build and return the complete command registry for the Avalonia ribbon.
@@ -92,7 +78,11 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── File ─────────────────────────────────────────────────────────────
 
         // ── Clipboard ────────────────────────────────────────────────────────
-        r.Bind(FreeWRibbonCommandAction.FormatPainter, new FormatPainterCommand(editor));
+        r.Bind(FreeWRibbonCommandAction.FormatPainter, new FreeWRibbonFormatPainterCommand(locked =>
+        {
+            editor.ArmFormatPainter(locked);
+            editor.Focus();
+        }));
 
         // ── Font ─────────────────────────────────────────────────────────────
         r.Bind(FreeWRibbonCommandAction.FontFamily, new FontFamilyCommand(editor));
@@ -181,7 +171,10 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.Sort, new ActionRibbonCommand(() => ExecuteSortCommand(editor, callbacks)));
         // Line-spacing commands — value = multiplier for Multiple. The fixed ids are compatibility
         // aliases for older Avalonia controls and are no longer used by the Home ribbon profile.
-        r.Bind(FreeWRibbonCommandAction.LineSpacing, new LineSpacingCommand(editor));
+        r.Bind(FreeWRibbonCommandAction.LineSpacing, new FreeWRibbonNumericValueCommand(
+            spacing => editor.SetLineSpacing(LineSpacingRule.Multiple, spacing),
+            () => editor.GetCaretFormatting().Paragraph.LineSpacing,
+            minimumExclusive: 0));
         r.Register("freew.line-spacing-1",    new ActionRibbonCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.0)));
         r.Register("freew.line-spacing-115",  new ActionRibbonCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.15)));
         r.Register("freew.line-spacing-15",   new ActionRibbonCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.5)));
@@ -290,7 +283,7 @@ internal static class FreeWAvaloniaRibbonCommands
         }));
         IRibbonCommand tablePropertiesCommand = callbacks.OpenTablePropertiesDialog is { } openTableProperties
             ? new TablePropertiesCommand(editor, openTableProperties)
-            : UnavailableRibbonCommand.Instance;
+            : FreeWRibbonExecutionProfile.UnavailableCommand;
         r.Bind(FreeWRibbonCommandAction.TableProperties, tablePropertiesCommand);
         r.Bind(FreeWRibbonCommandAction.TableSelectTable, new ActionRibbonCommand(() =>
         {
@@ -363,7 +356,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.TableRepeatHeader, new ActionRibbonCommand(editor.ToggleTableRepeatHeaderRow));
         r.Bind(FreeWRibbonCommandAction.TableFormula, callbacks.OpenTableFormulaDialog is { } openTableFormula
             ? new TableFormulaCommand(editor, openTableFormula)
-            : UnavailableRibbonCommand.Instance);
+            : FreeWRibbonExecutionProfile.UnavailableCommand);
         r.Bind(FreeWRibbonCommandAction.TableToText, new TableToTextCommand(editor, callbacks));
 
         // ── Layout / Page Setup (AV-PAGE) ────────────────────────────────────
@@ -427,13 +420,13 @@ internal static class FreeWAvaloniaRibbonCommands
                 ReadMode: new ViewRibbonReadModeBindings(
                     Toggle: callbacks.ToggleReadMode is { } toggle && callbacks.IsReadModeActive is { } isActive
                         ? new ViewRibbonToggleBinding(toggle, isActive)
-                        : new ViewRibbonToggleBinding(FallbackCommand: UnavailableRibbonCommand.Instance),
+                        : new ViewRibbonToggleBinding(FallbackCommand: FreeWRibbonExecutionProfile.UnavailableCommand),
                     ColumnWidth: new ViewRibbonChoiceBinding(
                         callbacks.ApplyReadModeColumnWidth,
-                        UnavailableRibbonCommand.Instance),
+                        FreeWRibbonExecutionProfile.UnavailableCommand),
                     PageColor: new ViewRibbonChoiceBinding(
                         callbacks.ApplyReadModePageColor,
-                        UnavailableRibbonCommand.Instance)),
+                        FreeWRibbonExecutionProfile.UnavailableCommand)),
                 Modes: new ViewRibbonModeBindings(
                     PrintLayout: new ViewRibbonToggleBinding(
                         callbacks.SetPrintLayout,
@@ -581,13 +574,6 @@ internal static class FreeWAvaloniaRibbonCommands
             editor.IncreaseIndent();
         else
             editor.DecreaseIndent();
-    }
-
-    private static void SetLineSpacing(DocumentView editor, string? value)
-    {
-        if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var spacing)
-            && spacing > 0)
-            editor.SetLineSpacing(LineSpacingRule.Multiple, spacing);
     }
 
     private static void ToggleSpaceBefore(DocumentView editor)
@@ -767,15 +753,6 @@ internal static class FreeWAvaloniaRibbonCommands
                 .ToString("0.##", CultureInfo.InvariantCulture));
     }
 
-    private sealed class LineSpacingCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) => SetLineSpacing(editor, context.SelectedValue);
-
-        public RibbonCommandState GetState() =>
-            new(Value: editor.GetCaretFormatting().Paragraph.LineSpacing
-                .ToString("0.##", CultureInfo.InvariantCulture));
-    }
-
     private sealed class ParagraphValueCommand(
         DocumentView editor,
         Action<double> apply,
@@ -874,17 +851,6 @@ internal static class FreeWAvaloniaRibbonCommands
             }
 
             callbacks.SetProofingLanguage?.Invoke();
-        }
-    }
-
-    private sealed class FormatPainterCommand(DocumentView editor) : IRibbonCommand
-    {
-        private readonly FormatPainterActivationSession _activation = new();
-
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.ArmFormatPainter(locked: _activation.Activate());
-            editor.Focus();
         }
     }
 
@@ -1309,7 +1275,9 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.Citation, citation);
         r.Register("freew.insert-citation", citation);
         r.Bind(FreeWRibbonCommandAction.ManageSources, new ActionRibbonCommand(callbacks.OpenManageSourcesDialog ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.CitationStyle, new CitationStyleCommand(editor));
+        r.Bind(FreeWRibbonCommandAction.CitationStyle, new FreeWRibbonChoiceCommand(
+            value => editor.ApplyCitationStyle(Citations.ParseStyle(value, editor.Document.BibliographyStyle)),
+            () => Citations.StyleName(editor.Document.BibliographyStyle)));
         r.Bind(FreeWRibbonCommandAction.Bibliography, new ActionRibbonCommand(editor.InsertBibliography));
 
         r.Bind(FreeWRibbonCommandAction.Tof, new ActionRibbonCommand(() => editor.InsertTableOfFigures()));
@@ -1337,20 +1305,6 @@ internal static class FreeWAvaloniaRibbonCommands
                     editor.InsertTableOfAuthorities(commit.Options!);
             })));
         r.Bind(FreeWRibbonCommandAction.TableOfAuthoritiesRefresh, new ActionRibbonCommand(editor.RefreshTableOfAuthorities));
-    }
-
-    private sealed class CitationStyleCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (context.SelectedValue is not { Length: > 0 } value)
-                return;
-
-            editor.ApplyCitationStyle(Citations.ParseStyle(value, editor.Document.BibliographyStyle));
-        }
-
-        public RibbonCommandState GetState() =>
-            new(Value: Citations.StyleName(editor.Document.BibliographyStyle));
     }
 
     /// <summary>
@@ -1428,7 +1382,10 @@ internal static class FreeWAvaloniaRibbonCommands
             var captured = preset;
             r.Register(
                 $"freew.image-style-{captured.Id}",
-                new ImageStylePresetCommand(editor, captured));
+                new FreeWRibbonStatefulPortCommand(
+                    _ => editor.ApplySelectedImageStyle(captured),
+                    () => new RibbonCommandState(
+                        IsEnabled: editor.SelectedFloatingImage() is not null)));
         }
         r.Bind(FreeWRibbonCommandAction.ImageAlignLeft, new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Left));
         r.Bind(FreeWRibbonCommandAction.ImageAlignCenter, new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Center));
@@ -1737,20 +1694,6 @@ internal static class FreeWAvaloniaRibbonCommands
         {
             if (GetState().IsEnabled)
                 editor.ResetSelectedImage();
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.SelectedFloatingImage() is not null);
-    }
-
-    private sealed class ImageStylePresetCommand(
-        DocumentView editor,
-        PictureStylePreset preset) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (GetState().IsEnabled)
-                editor.ApplySelectedImageStyle(preset);
         }
 
         public RibbonCommandState GetState() =>
@@ -2261,7 +2204,10 @@ internal static class FreeWAvaloniaRibbonCommands
             var captured = layout;
             r.Register(
                 $"freew.chart-quick-layout-{captured.Id}",
-                new ChartQuickLayoutRibbonCommand(editor, captured));
+                new FreeWRibbonStatefulPortCommand(
+                    _ => editor.SetChartQuickLayout(captured),
+                    () => new RibbonCommandState(
+                        IsEnabled: editor.GetSelectedChartInfo() is not null)));
         }
 
         // Change Colors — dropdown opener + one command per catalog colour scheme.
@@ -2314,7 +2260,14 @@ internal static class FreeWAvaloniaRibbonCommands
         RegisterSmartArtStructureCommand(r, editor, FreeWRibbonCommandAction.SmartartMoveUp, SmartArtStructureOperation.MoveUp);
         RegisterSmartArtStructureCommand(r, editor, FreeWRibbonCommandAction.SmartartMoveDown, SmartArtStructureOperation.MoveDown);
         r.Bind(FreeWRibbonCommandAction.SmartartEditText, new SmartArtEditTextRibbonCommand(editor, callbacks.OpenSmartArtEditDialog));
-        r.Bind(FreeWRibbonCommandAction.SmartartChangeStyle, new SmartArtStyleRibbonCommand(editor));
+        r.Bind(FreeWRibbonCommandAction.SmartartChangeStyle, new FreeWRibbonStatefulPortCommand(
+            context =>
+            {
+                if (SmartArtCommandPlanner.ResolveStyle(context.SelectedValue) is { } style)
+                    editor.SetSmartArtStyle(style);
+            },
+            () => new RibbonCommandState(
+                IsEnabled: SmartArtCommandPlanner.CanEdit(editor.SelectedFloatingSmartArt()))));
     }
 
     private static void RegisterSmartArtStructureCommand(
@@ -2322,22 +2275,12 @@ internal static class FreeWAvaloniaRibbonCommands
         DocumentView editor,
         FreeWRibbonCommandAction action,
         SmartArtStructureOperation operation) =>
-        registry.Bind(action,
-            new SmartArtStructureRibbonCommand(editor, operation));
-
-    private sealed class SmartArtStructureRibbonCommand(
-        DocumentView editor,
-        SmartArtStructureOperation operation) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (GetState().IsEnabled)
-                editor.MutateSelectedSmartArt(operation);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: SmartArtCommandPlanner.IsEnabled(editor.SelectedFloatingSmartArt(), operation));
-    }
+        registry.Bind(action, new FreeWRibbonStatefulPortCommand(
+            _ => editor.MutateSelectedSmartArt(operation),
+            () => new RibbonCommandState(
+                IsEnabled: SmartArtCommandPlanner.IsEnabled(
+                    editor.SelectedFloatingSmartArt(),
+                    operation))));
 
     private sealed class SmartArtEditTextRibbonCommand(
         DocumentView editor,
@@ -2361,33 +2304,6 @@ internal static class FreeWAvaloniaRibbonCommands
 
         public RibbonCommandState GetState() =>
             new(IsEnabled: SmartArtCommandPlanner.CanEdit(editor.SelectedFloatingSmartArt()));
-    }
-
-    private sealed class SmartArtStyleRibbonCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!GetState().IsEnabled || SmartArtCommandPlanner.ResolveStyle(context.SelectedValue) is not { } style)
-                return;
-            editor.SetSmartArtStyle(style);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: SmartArtCommandPlanner.CanEdit(editor.SelectedFloatingSmartArt()));
-    }
-
-    private sealed class ChartQuickLayoutRibbonCommand(
-        DocumentView editor,
-        ChartQuickLayout layout) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (GetState().IsEnabled)
-                editor.SetChartQuickLayout(layout);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.GetSelectedChartInfo() is not null);
     }
 
     private static bool TryBuildChartDataPreset(string? value, out Chart chart)

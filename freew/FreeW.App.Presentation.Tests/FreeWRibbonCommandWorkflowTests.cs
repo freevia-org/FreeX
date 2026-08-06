@@ -283,6 +283,34 @@ public sealed class FreeWRibbonCommandWorkflowTests
             "FreeWRibbonHostExecutionProfile.Register(r, callbacks, registerFileAdapterCommands: true);");
         avalonia.Should().NotContain("new ActionRibbonCommand(callbacks.OpenFindReplaceDialog)");
         avalonia.Should().NotContain("HostCommand(callbacks.OpenAbout)");
+        avalonia.Should().NotContain("class UnavailableRibbonCommand");
+
+        foreach (var portableCommand in new[]
+                 {
+                     "FreeWRibbonFormatPainterCommand",
+                     "FreeWRibbonNumericValueCommand",
+                     "FreeWRibbonChoiceCommand",
+                     "FreeWRibbonStatefulPortCommand",
+                 })
+        {
+            wpf.Should().Contain(portableCommand);
+            avalonia.Should().Contain(portableCommand);
+        }
+
+        foreach (var rendererCommand in new[]
+                 {
+                     "class FormatPainterCommand",
+                     "class LineSpacingCommand",
+                     "class CitationStyleCommand",
+                     "class ImageStylePresetCommand",
+                     "class ChartQuickLayoutRibbonCommand",
+                     "class SmartArtStructureRibbonCommand",
+                     "class SmartArtStyleRibbonCommand",
+                 })
+        {
+            wpf.Should().NotContain(rendererCommand);
+            avalonia.Should().NotContain(rendererCommand);
+        }
 
         RibbonActions(wpf).Should().HaveCountLessThan(399);
         RibbonActions(wpf + hostProfile)

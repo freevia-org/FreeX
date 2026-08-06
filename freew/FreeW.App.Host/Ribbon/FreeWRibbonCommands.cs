@@ -321,7 +321,11 @@ internal static class FreeWRibbonCommands
 
         // Home > Clipboard > Format Painter: arm the painter from the current selection's run +
         // paragraph formatting; the editor stamps it onto the user's next mouse selection and disarms.
-        registry.Bind(FreeWRibbonCommandAction.FormatPainter, new FormatPainterCommand(editor));
+        registry.Bind(FreeWRibbonCommandAction.FormatPainter, new FreeWRibbonFormatPainterCommand(locked =>
+        {
+            editor.Focus();
+            editor.ArmFormatPainter(locked);
+        }));
 
         var fontFamily = new SelectionValueCommand(editor,
             (selection, value) => selection.ApplyPropertyValue(TextElement.FontFamilyProperty, new FontFamily(value)),
@@ -565,7 +569,10 @@ internal static class FreeWRibbonCommands
         foreach (var preset in PictureStyleCatalog.Catalog)
         {
             var p = preset;
-            registry.Register($"freew.image-style-{p.Id}", new ImageStylePresetCommand(editor, p));
+            registry.Register($"freew.image-style-{p.Id}", new FreeWRibbonStatefulPortCommand(
+                _ => editor.ApplySelectedImageStyle(p),
+                () => new RibbonCommandState(IsEnabled: editor.SelectedImage() is not null),
+                () => { editor.Focus(); }));
         }
         // Picture Format tab — Arrange > Z-order (floating images only).
         foreach (var command in ObjectFormatCommandPlanner.ZOrderCommands(ObjectFormatTarget.Picture))
@@ -710,7 +717,10 @@ internal static class FreeWRibbonCommands
             var l = layout;
             registry.Register(
                 $"freew.chart-quick-layout-{l.Id}",
-                new ChartQuickLayoutRibbonCommand(editor, l));
+                new FreeWRibbonStatefulPortCommand(
+                    _ => editor.ApplySelectedChartQuickLayout(l),
+                    () => new RibbonCommandState(IsEnabled: editor.SelectedChart() is not null),
+                    () => { editor.Focus(); }));
         }
         foreach (var style in ChartStyle.Catalog)
         {
@@ -1147,17 +1157,17 @@ internal static class FreeWRibbonCommands
             editor.InsertSmartArt(result);
         }));
         // SmartArt Design contextual tab — node mutation commands.
-        registry.Bind(FreeWRibbonCommandAction.SmartartAddShape, new SmartArtStructureRibbonCommand(
+        registry.Bind(FreeWRibbonCommandAction.SmartartAddShape, BuildSmartArtStructureCommand(
             editor, SmartArtStructureOperation.AddShape, editor.SmartArtAddShape));
-        registry.Bind(FreeWRibbonCommandAction.SmartartRemoveShape, new SmartArtStructureRibbonCommand(
+        registry.Bind(FreeWRibbonCommandAction.SmartartRemoveShape, BuildSmartArtStructureCommand(
             editor, SmartArtStructureOperation.RemoveShape, editor.SmartArtRemoveShape));
-        registry.Bind(FreeWRibbonCommandAction.SmartartPromote, new SmartArtStructureRibbonCommand(
+        registry.Bind(FreeWRibbonCommandAction.SmartartPromote, BuildSmartArtStructureCommand(
             editor, SmartArtStructureOperation.Promote, editor.SmartArtPromote));
-        registry.Bind(FreeWRibbonCommandAction.SmartartDemote, new SmartArtStructureRibbonCommand(
+        registry.Bind(FreeWRibbonCommandAction.SmartartDemote, BuildSmartArtStructureCommand(
             editor, SmartArtStructureOperation.Demote, editor.SmartArtDemote));
-        registry.Bind(FreeWRibbonCommandAction.SmartartMoveUp, new SmartArtStructureRibbonCommand(
+        registry.Bind(FreeWRibbonCommandAction.SmartartMoveUp, BuildSmartArtStructureCommand(
             editor, SmartArtStructureOperation.MoveUp, editor.SmartArtMoveUp));
-        registry.Bind(FreeWRibbonCommandAction.SmartartMoveDown, new SmartArtStructureRibbonCommand(
+        registry.Bind(FreeWRibbonCommandAction.SmartartMoveDown, BuildSmartArtStructureCommand(
             editor, SmartArtStructureOperation.MoveDown, editor.SmartArtMoveDown));
         registry.Bind(FreeWRibbonCommandAction.SmartartEditText, new SmartArtEditTextRibbonCommand(editor));
         // SmartArt Design contextual tab — gallery placeholder commands (no-ops; galleries are injected
@@ -1165,7 +1175,17 @@ internal static class FreeWRibbonCommands
         // renderer does not log "unknown command" warnings for the stub buttons).
         registry.Register("freew.smartart-change-layout", EmptyRibbonCommand.Instance);
         registry.Register("freew.smartart-change-colors", EmptyRibbonCommand.Instance);
-        registry.Bind(FreeWRibbonCommandAction.SmartartChangeStyle, new SmartArtStyleRibbonCommand(editor));
+        registry.Bind(FreeWRibbonCommandAction.SmartartChangeStyle, new FreeWRibbonStatefulPortCommand(
+            context =>
+            {
+                if (SmartArtCommandPlanner.ResolveStyle(context.SelectedValue) is { } style)
+                {
+                    editor.Focus();
+                    editor.ApplySmartArtStyle(style);
+                }
+            },
+            () => new RibbonCommandState(
+                IsEnabled: SmartArtCommandPlanner.CanEdit(editor.SelectedSmartArt()))));
         registry.Bind(FreeWRibbonCommandAction.Object, new ActionRibbonCommand(() =>
         {
             editor.Focus();
@@ -1218,7 +1238,10 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.Bibliography, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertBibliography(); }));
         // Insert tab — References: select the active citation/bibliography style (APA / MLA / Chicago) used
         // by the citation + bibliography commands. The combo box delivers its label as SelectedValue.
-        var citationStyle = new CitationStyleCommand(editor, stateStore);
+        var citationStyle = new FreeWRibbonChoiceCommand(
+            value => editor.ApplyCitationStyle(Citations.ParseStyle(value, editor.ActiveCitationStyle)),
+            () => Citations.StyleName(editor.ActiveCitationStyle),
+            state => stateStore.SetState("freew.citation-style", state));
         registry.Bind(FreeWRibbonCommandAction.CitationStyle, citationStyle);
         stateful.Add(("freew.citation-style", citationStyle));
         stateStore.SetState("freew.citation-style", citationStyle.GetState());
@@ -1587,7 +1610,13 @@ internal static class FreeWRibbonCommands
 
         // Home > Paragraph: set line spacing (a multiplier on the default font size) over the selection,
         // and toggle Add/Remove Space Before/After. All route through the view's undo/redo bus.
-        var lineSpacing = new LineSpacingCommand(editor);
+        var lineSpacing = new FreeWRibbonNumericValueCommand(
+            editor.SetLineSpacing,
+            () => editor.CurrentParagraphFormatting.LineSpacing,
+            minimumExclusive: 0,
+            numberStyles: System.Globalization.NumberStyles.Float |
+                System.Globalization.NumberStyles.AllowThousands,
+            prepareExecution: () => { editor.Focus(); });
         registry.Bind(FreeWRibbonCommandAction.LineSpacing, lineSpacing);
         stateful.Add(("freew.line-spacing", lineSpacing));
         stateStore.SetState("freew.line-spacing", lineSpacing.GetState());
@@ -2017,20 +2046,6 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Home > Clipboard > Format Painter: single-click arms for one-shot (stamps the next selection, then
-    // disarms); double-click arms for persistent lock mode (re-applies on every subsequent selection until
-    // Escape or another click cancels it). The timestamp of the last Execute call detects a double-click.
-    private sealed class FormatPainterCommand(DocumentView editor) : IRibbonCommand
-    {
-        private readonly FormatPainterActivationSession _activation = new();
-
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            editor.ArmFormatPainter(locked: _activation.Activate());
-        }
-    }
-
     // Home > Font > Change Case: show a small menu of the five cases and recase the current selection's
     // text through the editor (pure ChangeCase + undoable selection replacement). A no-op with an empty
     // selection — the user is told to select text first.
@@ -2107,26 +2122,6 @@ internal static class FreeWRibbonCommands
         return context.Parameters.TryGetValue("value", out var legacyRaw)
             ? legacyRaw as string
             : null;
-    }
-
-    // Home > Paragraph > Line Spacing: parse the chosen multiplier (e.g. "1.5") and apply it to every
-    // paragraph spanned by the selection. The view routes the change through its undo/redo bus.
-    private sealed class LineSpacingCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (ComboValue(context) is not { } value)
-                return;
-            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var multiplier) && multiplier > 0)
-            {
-                editor.Focus();
-                editor.SetLineSpacing(multiplier);
-            }
-        }
-
-        public RibbonCommandState GetState() =>
-            new(Value: editor.CurrentParagraphFormatting.LineSpacing.ToString(
-                "0.##", System.Globalization.CultureInfo.InvariantCulture));
     }
 
     // Layout > Paragraph > Indent Left / Indent Right: numeric combo boxes (points) that display the
@@ -3998,56 +3993,14 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Picture Format > Picture Styles: apply a bundled border + effect style preset.
-    private sealed class ImageStylePresetCommand(DocumentView editor, PictureStylePreset preset) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!GetState().IsEnabled)
-                return;
-
-            editor.Focus();
-            editor.ApplySelectedImageStyle(preset);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.SelectedImage() is not null);
-    }
-
-    // Drawing Format / Picture Format > Arrange > Group: group ≥2 selected floating objects.
-    private sealed class ChartQuickLayoutRibbonCommand(
-        DocumentView editor,
-        ChartQuickLayout layout) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!GetState().IsEnabled)
-                return;
-
-            editor.Focus();
-            editor.ApplySelectedChartQuickLayout(layout);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.SelectedChart() is not null);
-    }
-
-    private sealed class SmartArtStructureRibbonCommand(
+    private static IRibbonCommand BuildSmartArtStructureCommand(
         DocumentView editor,
         SmartArtStructureOperation operation,
-        Action execute) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!GetState().IsEnabled)
-                return;
-            editor.Focus();
-            execute();
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: SmartArtCommandPlanner.IsEnabled(editor.SelectedSmartArt(), operation));
-    }
+        Action execute) => new FreeWRibbonStatefulPortCommand(
+            _ => execute(),
+            () => new RibbonCommandState(
+                IsEnabled: SmartArtCommandPlanner.IsEnabled(editor.SelectedSmartArt(), operation)),
+            () => { editor.Focus(); });
 
     private sealed class SmartArtEditTextRibbonCommand(DocumentView editor) : IRibbonStatefulCommand
     {
@@ -4071,20 +4024,6 @@ internal static class FreeWRibbonCommands
                 return;
             editor.Focus();
             editor.ReplaceSelectedSmartArt(replacement);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: SmartArtCommandPlanner.CanEdit(editor.SelectedSmartArt()));
-    }
-
-    private sealed class SmartArtStyleRibbonCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!GetState().IsEnabled || SmartArtCommandPlanner.ResolveStyle(context.SelectedValue) is not { } style)
-                return;
-            editor.Focus();
-            editor.ApplySmartArtStyle(style);
         }
 
         public RibbonCommandState GetState() =>
@@ -8912,33 +8851,6 @@ internal static class FreeWRibbonCommands
             box.Focus();
             return dialog.ShowDialog() == true ? result : null;
         }
-    }
-
-    // References > Citation Style: set the editor's active citation style from the combo box label
-    // ("APA"/"MLA"/"Chicago"/"IEEE"). The style is stored on the document (TextDocument.BibliographyStyle via
-    // DocumentView.ActiveCitationStyle) so it persists and atomically refreshes existing native citations,
-    // an existing generated bibliography, and subsequently inserted references. Unrecognised labels leave
-    // the current style unchanged.
-    private sealed class CitationStyleCommand(DocumentView editor, RibbonStateStore stateStore) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            var value = context.SelectedValue;
-            if (value is null
-                && context.Parameters.TryGetValue("value", out var legacyRaw))
-            {
-                value = legacyRaw as string;
-            }
-
-            if (string.IsNullOrWhiteSpace(value))
-                return;
-
-            editor.ApplyCitationStyle(Citations.ParseStyle(value, editor.ActiveCitationStyle));
-            stateStore.SetState("freew.citation-style", GetState());
-        }
-
-        public RibbonCommandState GetState() =>
-            new(Value: Citations.StyleName(editor.ActiveCitationStyle));
     }
 
     private sealed class SelectionValueCommand(
