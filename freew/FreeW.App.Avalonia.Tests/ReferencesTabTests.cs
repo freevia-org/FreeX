@@ -455,6 +455,29 @@ public sealed class ReferencesTabTests
             .Should().BeFalse("one undo reverts both the anchor command and field insertion");
     }
 
+    [Fact]
+    public void InsertCrossReference_footnote_anchors_only_the_physical_marker()
+    {
+        var marker = new Paragraph();
+        marker.Runs.Add(new Run("Body"));
+        marker.Runs.Add(Run.FootnoteReference(1));
+        var view = ViewWith(marker, new Paragraph("See "));
+        view.Document.Footnotes[1] = new Footnote(1, "note");
+
+        var target = CrossReferences.Targets(view.Document, CrossRefType.Footnote).Single();
+        view.InsertCrossReference(CrossRefType.Footnote, target, CrossRefInsertAs.Text, hyperlink: true);
+
+        marker.BookmarkNames.Should().Contain("_Ref1");
+        marker.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.Start, 1, "_Ref1"));
+        marker.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.End, 2));
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.CrossReference is not null)
+            .CrossReference!.Target.Should().Be("_Ref1");
+    }
+
     // ── Citation / Bibliography ─────────────────────────────────────────────────────
 
     [Fact]
