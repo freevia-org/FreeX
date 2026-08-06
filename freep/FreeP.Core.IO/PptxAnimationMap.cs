@@ -62,9 +62,9 @@ namespace FreeP.Core.IO;
 /// ColorPulse      | emph        | 6
 /// Teeter          | emph        | 32
 /// Blink           | emph        | 15
-/// Bold            | emph        | 1
+/// Bold            | emph        | 15 (native fontWeight behavior)
 /// Wave            | emph        | 34
-/// Underline       | emph        | 2
+/// Underline       | emph        | 18 (native textDecorationUnderline behavior)
 /// GrowWithColor   | emph        | 12
 /// ChangeColor     | emph        | 7
 /// Shimmer         | emph        | 36
@@ -270,8 +270,8 @@ internal static class PptxAnimationMap
         {
             int emphId = preset switch
             {
-                AnimationPreset.Bold          => 1,
-                AnimationPreset.Underline      => 2,
+                AnimationPreset.Bold          => 15,
+                AnimationPreset.Underline      => 18,
                 AnimationPreset.Spin           => 8,
                 AnimationPreset.Teeter         => 32,
                 AnimationPreset.Grow           => 5,
@@ -339,8 +339,12 @@ internal static class PptxAnimationMap
         {
             var emphPreset = presetId switch
             {
+                // Legacy FreeP aliases remain readable; the reader promotes
+                // a native fill-color payload before this fallback is used.
                 1  => AnimationPreset.Bold,
                 2  => AnimationPreset.Underline,
+                15 => AnimationPreset.Blink,
+                18 => AnimationPreset.Underline,
                 8  => AnimationPreset.Spin,
                 32 => AnimationPreset.Teeter,
                 5  => AnimationPreset.Grow,
@@ -358,7 +362,6 @@ internal static class PptxAnimationMap
                 12 => AnimationPreset.GrowWithColor,
                 34 => AnimationPreset.Wave,
                 14 => AnimationPreset.Pulse,
-                15 => AnimationPreset.Blink,
                 // PowerPoint FlashBulb and Flicker are not modeled as separate
                 // authoring presets yet; keep their raw IDs for package fidelity
                 // while using the closest existing visibility playback contract.

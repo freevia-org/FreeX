@@ -8,6 +8,19 @@ namespace FreeP.App.Compositor.Tests;
 
 public sealed class AnimationPresetRoundTripTests
 {
+    [Theory]
+    [InlineData(AnimationPreset.Bold, 15)]
+    [InlineData(AnimationPreset.Underline, 18)]
+    public void GenericFontEmphasisMappingUsesPowerPointNativePresetIds(
+        AnimationPreset preset,
+        int expectedPresetId)
+    {
+        var mapped = PptxAnimationMap.AnimationPresetToOoxml(preset, AnimationKind.Emphasis);
+
+        mapped.presetClass.Should().Be("emph");
+        mapped.presetId.Should().Be(expectedPresetId);
+    }
+
     [Fact]
     public void PowerPointTeeterPreset32SurvivesReadAndWriteAsTeeter()
     {
