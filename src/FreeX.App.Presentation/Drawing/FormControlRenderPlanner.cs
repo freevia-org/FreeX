@@ -8,6 +8,29 @@ public readonly record struct FormControlInteractionPlan(
     FormControlGesture Gesture,
     int ListItemIndex);
 
+public enum FormControlTriangleDirection
+{
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+public readonly record struct FormControlButtonPairLayout(
+    LayoutRect FirstButton,
+    LayoutRect SecondButton,
+    FormControlTriangleDirection FirstDirection,
+    FormControlTriangleDirection SecondDirection);
+
+public readonly record struct FormControlGroupBoxLayout(
+    LayoutRect Frame,
+    LayoutRect Caption);
+
+public readonly record struct FormControlTriangleLayout(
+    LayoutPoint First,
+    LayoutPoint Second,
+    LayoutPoint Third);
+
 /// <summary>
 /// Pure, framework-free layout/state helpers for rendering legacy Excel form controls
 /// (<see cref="FormControlModel"/>) as static chrome on the desktop hosts' drawing surfaces. Maps a
@@ -120,6 +143,88 @@ public static class FormControlRenderPlanner
         return new LayoutRect(rect.Left, rect.Top, width, rect.Height);
     }
 
+    public static LayoutRect GetGlyphRect(LayoutRect rect, double maximumSize)
+    {
+        var size = Math.Min(maximumSize, Math.Min(rect.Width, rect.Height));
+        var top = rect.Top + Math.Max(0, (rect.Height - size) / 2);
+        return new LayoutRect(rect.Left + 1, top, size, size);
+    }
+
+    public static FormControlButtonPairLayout GetSpinnerButtonLayout(
+        LayoutRect rect,
+        double maximumButtonWidth)
+    {
+        var width = Math.Max(8, Math.Min(rect.Width, maximumButtonWidth));
+        var half = rect.Height / 2;
+        return new FormControlButtonPairLayout(
+            new LayoutRect(rect.Left, rect.Top, width, half),
+            new LayoutRect(rect.Left, rect.Top + half, width, rect.Height - half),
+            FormControlTriangleDirection.Up,
+            FormControlTriangleDirection.Down);
+    }
+
+    public static FormControlButtonPairLayout GetScrollBarButtonLayout(LayoutRect rect)
+    {
+        if (rect.Width >= rect.Height)
+        {
+            var size = Math.Min(rect.Height, rect.Width / 2);
+            return new FormControlButtonPairLayout(
+                new LayoutRect(rect.Left, rect.Top, size, rect.Height),
+                new LayoutRect(rect.Right - size, rect.Top, size, rect.Height),
+                FormControlTriangleDirection.Left,
+                FormControlTriangleDirection.Right);
+        }
+
+        var verticalSize = Math.Min(rect.Width, rect.Height / 2);
+        return new FormControlButtonPairLayout(
+            new LayoutRect(rect.Left, rect.Top, rect.Width, verticalSize),
+            new LayoutRect(rect.Left, rect.Bottom - verticalSize, rect.Width, verticalSize),
+            FormControlTriangleDirection.Up,
+            FormControlTriangleDirection.Down);
+    }
+
+    public static FormControlGroupBoxLayout GetGroupBoxLayout(LayoutRect rect, double captionHeight) =>
+        new(
+            new LayoutRect(rect.Left + 1, rect.Top + 7, Math.Max(1, rect.Width - 2), Math.Max(1, rect.Height - 8)),
+            new LayoutRect(rect.Left, rect.Top, rect.Width, captionHeight));
+
+    public static IReadOnlyList<double> GetListRowSeparatorYCoordinates(LayoutRect rect)
+    {
+        var separators = new List<double>();
+        for (var y = rect.Top + ListItemRowHeight; y < rect.Bottom - 1; y += ListItemRowHeight)
+            separators.Add(y);
+        return separators;
+    }
+
+    public static FormControlTriangleLayout GetTriangleLayout(
+        LayoutRect rect,
+        FormControlTriangleDirection direction)
+    {
+        var centerX = rect.Left + rect.Width / 2;
+        var centerY = rect.Top + rect.Height / 2;
+        var size = Math.Max(2, Math.Min(rect.Width, rect.Height) * 0.3);
+
+        return direction switch
+        {
+            FormControlTriangleDirection.Left => new(
+                new LayoutPoint(centerX - size, centerY),
+                new LayoutPoint(centerX + size, centerY - size),
+                new LayoutPoint(centerX + size, centerY + size)),
+            FormControlTriangleDirection.Right => new(
+                new LayoutPoint(centerX + size, centerY),
+                new LayoutPoint(centerX - size, centerY - size),
+                new LayoutPoint(centerX - size, centerY + size)),
+            FormControlTriangleDirection.Up => new(
+                new LayoutPoint(centerX, centerY - size),
+                new LayoutPoint(centerX - size, centerY + size),
+                new LayoutPoint(centerX + size, centerY + size)),
+            _ => new(
+                new LayoutPoint(centerX, centerY + size),
+                new LayoutPoint(centerX - size, centerY - size),
+                new LayoutPoint(centerX + size, centerY - size)),
+        };
+    }
+
     /// <summary>
     /// The selected-item text drawn inside a list-style control's field: the host-resolved
     /// <see cref="FormControlModel.SelectedText"/> (the <see cref="FormControlModel.SelectedIndex"/>-th
@@ -156,16 +261,8 @@ public static class FormControlRenderPlanner
 
     private static FormControlGesture PlanScrollBarGesture(LayoutRect rect, LayoutPoint position)
     {
-        if (rect.Width >= rect.Height)
-        {
-            var size = Math.Min(rect.Height, rect.Width / 2);
-            return Contains(new LayoutRect(rect.Left, rect.Top, size, rect.Height), position)
-                ? FormControlGesture.StepUp
-                : FormControlGesture.StepDown;
-        }
-
-        var verticalSize = Math.Min(rect.Width, rect.Height / 2);
-        return Contains(new LayoutRect(rect.Left, rect.Top, rect.Width, verticalSize), position)
+        var layout = GetScrollBarButtonLayout(rect);
+        return Contains(layout.FirstButton, position)
             ? FormControlGesture.StepUp
             : FormControlGesture.StepDown;
     }

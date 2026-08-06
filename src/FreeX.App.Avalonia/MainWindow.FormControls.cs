@@ -35,7 +35,7 @@ public sealed partial class MainWindow
 
         foreach (var control in sheet.FormControls)
         {
-            if (!FormControlVisual.IsRenderable(control.Kind))
+            if (!FormControlRenderPlanner.IsRenderable(control.Kind))
                 continue;
             if (!FormControlRenderPlanner.TryCreateAnchorRange(control, out var anchor) || anchor is null)
                 continue;
@@ -126,13 +126,6 @@ internal sealed class FormControlVisual : Control
         }
     }
 
-    // The subset of FormControlRenderPlanner.IsRenderable that this Avalonia renderer actually draws.
-    public static bool IsRenderable(FormControlKind kind) =>
-        kind is FormControlKind.CheckBox or FormControlKind.OptionButton or FormControlKind.Spinner
-            or FormControlKind.ScrollBar or FormControlKind.Label or FormControlKind.GroupBox
-            or FormControlKind.DropDown or FormControlKind.ListBox or FormControlKind.Button;
-
-    private double GlyphSize => Math.Min(13 * _zoom, Math.Min(Bounds.Width, Bounds.Height));
     private IPen BoxBorderPen => new Pen(ShadowBrush, 1);
     private IPen GlyphPen => new Pen(GlyphBrush, 1.6 * _zoom);
 
@@ -165,7 +158,7 @@ internal sealed class FormControlVisual : Control
 
         var interaction = FormControlRenderPlanner.PlanInteraction(
             _control,
-            new LayoutRect(rect.X, rect.Y, rect.Width, rect.Height),
+            ToLayoutRect(rect),
             new LayoutPoint(point.X, point.Y),
             rect.Width);
         _clickCallback(_control, interaction);
@@ -175,16 +168,9 @@ internal sealed class FormControlVisual : Control
 
     // ── Drawing helpers ──────────────────────────────────────────────────────
 
-    private Rect GlyphRect(Rect rect)
-    {
-        var size = Math.Min(GlyphSize, Math.Min(rect.Width, rect.Height));
-        var top = rect.Top + Math.Max(0, (rect.Height - size) / 2);
-        return new Rect(rect.Left + 1, top, size, size);
-    }
-
     private void DrawCheckBox(DrawingContext context, Rect rect)
     {
-        var box = GlyphRect(rect);
+        var box = ToAvaloniaRect(FormControlRenderPlanner.GetGlyphRect(ToLayoutRect(rect), 13 * _zoom));
         context.DrawRectangle(BoxFill, BoxBorderPen, box);
         context.DrawLine(new Pen(ShadowBrush, 1), box.TopLeft, box.TopRight);
         context.DrawLine(new Pen(ShadowBrush, 1), box.TopLeft, box.BottomLeft);
@@ -202,7 +188,7 @@ internal sealed class FormControlVisual : Control
 
     private void DrawOptionButton(DrawingContext context, Rect rect)
     {
-        var box = GlyphRect(rect);
+        var box = ToAvaloniaRect(FormControlRenderPlanner.GetGlyphRect(ToLayoutRect(rect), 13 * _zoom));
         var center = new Point(box.Left + box.Width / 2, box.Top + box.Height / 2);
         var radius = box.Width / 2;
         context.DrawEllipse(BoxFill, BoxBorderPen, center, radius, radius);
@@ -217,55 +203,41 @@ internal sealed class FormControlVisual : Control
 
     private void DrawSpinner(DrawingContext context, Rect rect)
     {
-        var width = Math.Max(8, Math.Min(rect.Width, 17 * _zoom));
-        var half = rect.Height / 2;
-        var up = new Rect(rect.Left, rect.Top, width, half);
-        var down = new Rect(rect.Left, rect.Top + half, width, rect.Height - half);
+        var layout = FormControlRenderPlanner.GetSpinnerButtonLayout(ToLayoutRect(rect), 17 * _zoom);
+        var up = ToAvaloniaRect(layout.FirstButton);
+        var down = ToAvaloniaRect(layout.SecondButton);
         DrawRaisedButton(context, up);
         DrawRaisedButton(context, down);
-        DrawTriangle(context, up, TriangleDirection.Up);
-        DrawTriangle(context, down, TriangleDirection.Down);
+        DrawTriangle(context, up, layout.FirstDirection);
+        DrawTriangle(context, down, layout.SecondDirection);
     }
 
     private void DrawScrollBar(DrawingContext context, Rect rect)
     {
         context.DrawRectangle(ChromeFill, BoxBorderPen, rect);
-        if (rect.Width >= rect.Height)
-        {
-            var size = Math.Min(rect.Height, rect.Width / 2);
-            var left = new Rect(rect.Left, rect.Top, size, rect.Height);
-            var right = new Rect(rect.Right - size, rect.Top, size, rect.Height);
-            DrawRaisedButton(context, left);
-            DrawRaisedButton(context, right);
-            DrawTriangle(context, left, TriangleDirection.Left);
-            DrawTriangle(context, right, TriangleDirection.Right);
-        }
-        else
-        {
-            var size = Math.Min(rect.Width, rect.Height / 2);
-            var top = new Rect(rect.Left, rect.Top, rect.Width, size);
-            var bottom = new Rect(rect.Left, rect.Bottom - size, rect.Width, size);
-            DrawRaisedButton(context, top);
-            DrawRaisedButton(context, bottom);
-            DrawTriangle(context, top, TriangleDirection.Up);
-            DrawTriangle(context, bottom, TriangleDirection.Down);
-        }
+        var layout = FormControlRenderPlanner.GetScrollBarButtonLayout(ToLayoutRect(rect));
+        var firstButton = ToAvaloniaRect(layout.FirstButton);
+        var secondButton = ToAvaloniaRect(layout.SecondButton);
+        DrawRaisedButton(context, firstButton);
+        DrawRaisedButton(context, secondButton);
+        DrawTriangle(context, firstButton, layout.FirstDirection);
+        DrawTriangle(context, secondButton, layout.SecondDirection);
     }
 
     private void DrawDropDown(DrawingContext context, Rect rect)
     {
         context.DrawRectangle(BoxFill, BoxBorderPen, rect);
-        var buttonLayout = FormControlRenderPlanner.GetDropDownButtonRect(new LayoutRect(rect.X, rect.Y, rect.Width, rect.Height));
-        var button = new Rect(buttonLayout.X, buttonLayout.Y, buttonLayout.Width, buttonLayout.Height);
+        var buttonLayout = FormControlRenderPlanner.GetDropDownButtonRect(ToLayoutRect(rect));
+        var button = ToAvaloniaRect(buttonLayout);
         DrawRaisedButton(context, button);
-        DrawTriangle(context, button, TriangleDirection.Down);
+        DrawTriangle(context, button, FormControlTriangleDirection.Down);
 
         var text = FormControlRenderPlanner.GetSelectedText(_control);
         if (!string.IsNullOrEmpty(text))
         {
             var textLayout = FormControlRenderPlanner.GetDropDownTextRect(
-                new LayoutRect(rect.X, rect.Y, rect.Width, rect.Height), buttonLayout);
-            var textRect = new Rect(textLayout.X, textLayout.Y, textLayout.Width, textLayout.Height);
+                ToLayoutRect(rect), buttonLayout);
+            var textRect = ToAvaloniaRect(textLayout);
             DrawCaption(context, textRect, textRect.Left + 3);
         }
     }
@@ -275,9 +247,8 @@ internal sealed class FormControlVisual : Control
         var borderPen = new Pen(ShadowBrush, 1);
         context.DrawRectangle(BoxFill, borderPen, rect);
 
-        const double rowHeight = 15;
         var rowPen = new Pen(new SolidColorBrush(Color.FromRgb(224, 224, 224)), 1);
-        for (var y = rect.Top + rowHeight; y < rect.Bottom - 1; y += rowHeight)
+        foreach (var y in FormControlRenderPlanner.GetListRowSeparatorYCoordinates(ToLayoutRect(rect)))
             context.DrawLine(rowPen, new Point(rect.Left + 1, y), new Point(rect.Right - 1, y));
     }
 
@@ -303,9 +274,9 @@ internal sealed class FormControlVisual : Control
 
     private void DrawGroupBox(DrawingContext context, Rect rect)
     {
-        var frame = new Rect(rect.Left + 1, rect.Top + 7, Math.Max(1, rect.Width - 2), Math.Max(1, rect.Height - 8));
-        context.DrawRectangle(null, BoxBorderPen, frame);
-        DrawCaption(context, new Rect(rect.Left, rect.Top, rect.Width, 14 * _zoom), rect.Left + 8);
+        var layout = FormControlRenderPlanner.GetGroupBoxLayout(ToLayoutRect(rect), 14 * _zoom);
+        context.DrawRectangle(null, BoxBorderPen, ToAvaloniaRect(layout.Frame));
+        DrawCaption(context, ToAvaloniaRect(layout.Caption), rect.Left + 8);
     }
 
     private void DrawRaisedButton(DrawingContext context, Rect rect)
@@ -317,29 +288,19 @@ internal sealed class FormControlVisual : Control
         context.DrawLine(new Pen(DarkShadowBrush, 1), rect.TopRight, rect.BottomRight);
     }
 
-    private enum TriangleDirection { Up, Down, Left, Right }
-
-    private void DrawTriangle(DrawingContext context, Rect rect, TriangleDirection direction)
+    private void DrawTriangle(DrawingContext context, Rect rect, FormControlTriangleDirection direction)
     {
-        var cx = rect.Left + rect.Width / 2;
-        var cy = rect.Top + rect.Height / 2;
-        var size = Math.Max(2, Math.Min(rect.Width, rect.Height) * 0.3);
-
-        Point a, b, c;
-        switch (direction)
-        {
-            case TriangleDirection.Left: a = new(cx - size, cy); b = new(cx + size, cy - size); c = new(cx + size, cy + size); break;
-            case TriangleDirection.Right: a = new(cx + size, cy); b = new(cx - size, cy - size); c = new(cx - size, cy + size); break;
-            case TriangleDirection.Up: a = new(cx, cy - size); b = new(cx - size, cy + size); c = new(cx + size, cy + size); break;
-            default: a = new(cx, cy + size); b = new(cx - size, cy - size); c = new(cx + size, cy - size); break;
-        }
+        var layout = FormControlRenderPlanner.GetTriangleLayout(ToLayoutRect(rect), direction);
+        var first = new Point(layout.First.X, layout.First.Y);
+        var second = new Point(layout.Second.X, layout.Second.Y);
+        var third = new Point(layout.Third.X, layout.Third.Y);
 
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())
         {
-            ctx.BeginFigure(a, isFilled: true);
-            ctx.LineTo(b);
-            ctx.LineTo(c);
+            ctx.BeginFigure(first, isFilled: true);
+            ctx.LineTo(second);
+            ctx.LineTo(third);
             ctx.EndFigure(isClosed: true);
         }
 
@@ -369,4 +330,8 @@ internal sealed class FormControlVisual : Control
         using (context.PushClip(new Rect(textLeft, rect.Top, textWidth, rect.Height)))
             context.DrawText(formatted, new Point(textLeft, textTop));
     }
+
+    private static LayoutRect ToLayoutRect(Rect rect) => new(rect.X, rect.Y, rect.Width, rect.Height);
+
+    private static Rect ToAvaloniaRect(LayoutRect rect) => new(rect.X, rect.Y, rect.Width, rect.Height);
 }

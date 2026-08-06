@@ -92,7 +92,8 @@ public partial class GridView
                 control,
                 ToLayoutRect(rect),
                 ToLayoutPoint(pos),
-                Math.Max(8, Math.Min(rect.Width, 17)));
+                FormControlRenderPlanner.GetSpinnerButtonLayout(ToLayoutRect(rect), maximumButtonWidth: 17)
+                    .FirstButton.Width);
             return (control, interaction);
         }
 

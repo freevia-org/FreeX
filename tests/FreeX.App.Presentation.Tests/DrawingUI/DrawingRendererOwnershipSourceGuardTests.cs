@@ -28,6 +28,7 @@ public sealed class DrawingRendererOwnershipSourceGuardTests
     {
         var sourceRoot = RepositoryFileLocator.FindDirectory("src");
         var wpfInput = Read(sourceRoot, "FreeX.App.UI", "GridView.FormControls.Input.cs");
+        var wpfForm = Read(sourceRoot, "FreeX.App.UI", "GridView.FormControls.cs");
         var avaloniaForm = Read(sourceRoot, "FreeX.App.Avalonia", "MainWindow.FormControls.cs");
         var wpfClipboard = Read(sourceRoot, "FreeX.App.Host", "MainWindow.ClipboardCommands.cs");
         var avaloniaClipboard = Read(sourceRoot, "FreeX.App.Avalonia", "MainWindow.DrawingObjectClipboard.cs");
@@ -35,6 +36,19 @@ public sealed class DrawingRendererOwnershipSourceGuardTests
 
         wpfInput.Should().Contain("FormControlRenderPlanner.PlanInteraction(");
         avaloniaForm.Should().Contain("FormControlRenderPlanner.PlanInteraction(");
+        foreach (var geometryMethod in new[]
+                 {
+                     "GetGlyphRect(",
+                     "GetSpinnerButtonLayout(",
+                     "GetScrollBarButtonLayout(",
+                     "GetGroupBoxLayout(",
+                     "GetListRowSeparatorYCoordinates(",
+                     "GetTriangleLayout(",
+                 })
+        {
+            wpfForm.Should().Contain($"FormControlRenderPlanner.{geometryMethod}");
+            avaloniaForm.Should().Contain($"FormControlRenderPlanner.{geometryMethod}");
+        }
         wpfClipboard.Should().Contain("CreatePasteSelectionPlan(");
         avaloniaClipboard.Should().Contain("CreatePasteSelectionPlan(");
         avaloniaFormat.Should().Contain("ColorInputParser.TryParseRgbColorText(");
