@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.Calculation;
 using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Services;
@@ -552,27 +553,18 @@ public partial class MainWindow
 
     private void CalcNowBtn_Click(object sender, RoutedEventArgs e)
     {
-        // Ribbon "Calculate Now" and plain F9 share Excel's cheapest recalc scope: only dirty
-        // (volatile + affected) cells via the existing dependency graph. See
-        // RecalculateDirtyCells for why this must not rebuild the graph or evaluate every
-        // formula cell -- that full-workbook scope is reserved for Ctrl+Alt+F9 (CalcFullBtn_Click).
-        RecalculateDirtyCells();
-        UpdateViewport();
+        ExecuteCalculationAction(CalculationCommandPolicy.PlanAction(
+            CalculationCommandAction.CalculateNow));
     }
     private void CalcFullBtn_Click(object sender, RoutedEventArgs e)
     {
-        RecalculateWorkbook();
-        UpdateViewport();
+        ExecuteCalculationAction(CalculationCommandPolicy.PlanAction(
+            CalculationCommandAction.CalculateFull));
     }
     private void CalcSheetBtn_Click(object sender, RoutedEventArgs e)
     {
-        // R119-app-host-except-data-tables-recalc: Shift+F9 ("Calculate Sheet") is one of the
-        // three explicit triggers that always force this sheet's Data Tables fresh, regardless
-        // of calc mode -- see RefreshDataTablesOnSheetBeforeForcedRecalc's doc comment (mirrors
-        // FreeX.App.Services.WorkbookCellEditService.RecalculateSheet).
-        _session.RecalculateActiveSheet();
-        InvalidateNavigationCaches();
-        UpdateViewport();
+        ExecuteCalculationAction(CalculationCommandPolicy.PlanAction(
+            CalculationCommandAction.CalculateActiveSheet));
     }
     private void CalcOptionsBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -590,33 +582,72 @@ public partial class MainWindow
             item.IsChecked = item.Name switch
             {
                 _ when string.Equals(item.Header?.ToString(), UiText.Get("MainWindow_Header_Manual"), StringComparison.Ordinal) =>
-                    _workbook.CalculationMode == WorkbookCalculationMode.Manual,
+                    CalculationCommandPolicy.IsSelected(_workbook.CalculationMode, WorkbookCalculationMode.Manual),
                 _ when string.Equals(item.Header?.ToString(), UiText.Get("MainWindow_Header_AutomaticExceptDataTables"), StringComparison.Ordinal) =>
-                    _workbook.CalculationMode == WorkbookCalculationMode.AutomaticExceptDataTables,
-                _ => _workbook.CalculationMode == WorkbookCalculationMode.Automatic
+                    CalculationCommandPolicy.IsSelected(_workbook.CalculationMode, WorkbookCalculationMode.AutomaticExceptDataTables),
+                _ => CalculationCommandPolicy.IsSelected(_workbook.CalculationMode, WorkbookCalculationMode.Automatic)
             };
         }
     }
 
-    private void CalcAutoMenuItem_Click(object sender, RoutedEventArgs e)
+    private void CalcAutoMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyCalculationModeChange(WorkbookCalculationMode.Automatic);
+
+    private void CalcAutoExceptDataTablesMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyCalculationModeChange(WorkbookCalculationMode.AutomaticExceptDataTables);
+
+    private void CalcManualMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyCalculationModeChange(WorkbookCalculationMode.Manual);
+
+    private void ApplyCalculationModeChange(WorkbookCalculationMode requestedMode)
     {
-        if (!TryExecuteCommand(new SetCalculationModeCommand(WorkbookCalculationMode.Automatic), "Calculation Options"))
+        var plan = CalculationCommandPolicy.PlanModeChange(_workbook.CalculationMode, requestedMode);
+        if (plan.IsNoOp)
+        {
+            ApplyCalculationRefresh(plan.RefreshPolicy);
             return;
-        RecalculateWorkbook();
-        UpdateViewport();
+        }
+
+        if (!TryExecuteCommand(plan.Command!, CalculationCommandPolicy.CommandLabel))
+            return;
+
+        ApplyCalculationRecalculation(plan.RecalculationScope);
+        ApplyCalculationRefresh(plan.RefreshPolicy);
     }
 
-    private void CalcAutoExceptDataTablesMenuItem_Click(object sender, RoutedEventArgs e)
+    private void ExecuteCalculationAction(CalculationCommandActionPlan plan)
     {
-        if (!TryExecuteCommand(new SetCalculationModeCommand(WorkbookCalculationMode.AutomaticExceptDataTables), "Calculation Options"))
-            return;
-        RecalculateWorkbook();
-        UpdateViewport();
+        ApplyCalculationRecalculation(plan.RecalculationScope);
+        ApplyCalculationRefresh(plan.RefreshPolicy);
     }
 
-    private void CalcManualMenuItem_Click(object sender, RoutedEventArgs e)
+    private void ApplyCalculationRecalculation(CalculationRecalculationScope scope)
     {
-        TryExecuteCommand(new SetCalculationModeCommand(WorkbookCalculationMode.Manual), "Calculation Options");
+        switch (scope)
+        {
+            case CalculationRecalculationScope.None:
+                return;
+            case CalculationRecalculationScope.DirtyWorkbook:
+                RecalculateDirtyCells();
+                return;
+            case CalculationRecalculationScope.FullWorkbook:
+                RecalculateWorkbook();
+                return;
+            case CalculationRecalculationScope.ActiveSheet:
+                _session.RecalculateActiveSheet();
+                InvalidateNavigationCaches();
+                return;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(scope), scope, null);
+        }
+    }
+
+    private void ApplyCalculationRefresh(CalculationStateRefreshPolicy policy)
+    {
+        if (policy.HasFlag(CalculationStateRefreshPolicy.CommandSurface))
+            RefreshToolbar();
+        if (policy.HasFlag(CalculationStateRefreshPolicy.FormulaResults))
+            UpdateViewport();
     }
 
     private void FormulaLogicalBtn_Click(object sender, RoutedEventArgs e)

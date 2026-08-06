@@ -380,9 +380,9 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("new ManageConditionalFormatsDialog(");
         source.Should().Contain("applyRules: ApplyManagedConditionalFormatRules)");
         source.Should().Contain("private void ApplyManagedConditionalFormatRules(IReadOnlyList<ConditionalFormat> newRules)");
-        source.Should().Contain("new ReplaceAllConditionalFormatsCommand(sheetId, remapped)");
-        source.Should().Contain("GroupedSheetRangePlanner.CloneConditionalFormatForSheet(r, sheetId)");
-        CountOccurrences(source, "new ReplaceAllConditionalFormatsCommand(sheetId, remapped)").Should().Be(1);
+        source.Should().Contain("ConditionalFormatCommandPlanner.PlanReplaceAll(");
+        source.Should().NotContain("new ReplaceAllConditionalFormatsCommand(");
+        CountOccurrences(source, "ConditionalFormatCommandPlanner.PlanReplaceAll(").Should().Be(1);
     }
 
     [Fact]

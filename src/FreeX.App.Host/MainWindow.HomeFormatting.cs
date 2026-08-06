@@ -1044,12 +1044,17 @@ public partial class MainWindow
     private void CfClearRulesMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
-                "Clear Conditional Formatting",
-                range,
-                (sheetId, currentRange) => new ClearConditionalFormatsCommand(sheetId, currentRange)))
+        IWorkbookCommand CreateCommand() =>
+            ConditionalFormatCommandPlanner.PlanClear(
+                CurrentGroupedEditSheetIds(),
+                GetCurrentSelectionRanges(range)).Command;
+
+        if (!TryExecuteRepeatableCommand(
+                CreateCommand,
+                ConditionalFormatCommandPlanner.ClearRulesCommandLabel,
+                out _))
             return;
-        UpdateViewport();
+        ApplyConditionalFormatRefresh(ConditionalFormatStateRefreshPolicy.WorksheetVisualState);
     }
     private void CfManageRulesMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -1080,17 +1085,13 @@ public partial class MainWindow
 
     private void ApplyManagedConditionalFormatRules(IReadOnlyList<ConditionalFormat> newRules)
     {
-        if (!TryExecuteGroupedSheetCommand(
-                "Manage Conditional Formatting Rules",
-                sheetId =>
-                {
-                    var remapped = newRules
-                        .Select(r => GroupedSheetRangePlanner.CloneConditionalFormatForSheet(r, sheetId))
-                        .ToList();
-                    return new ReplaceAllConditionalFormatsCommand(sheetId, remapped);
-                }))
+        var plan = ConditionalFormatCommandPlanner.PlanReplaceAll(
+            CurrentGroupedEditSheetIds(),
+            _currentSheetId,
+            newRules);
+        if (!TryExecuteCommand(plan.Command, plan.CommandLabel))
             return;
-        UpdateViewport();
+        ApplyConditionalFormatRefresh(plan.RefreshPolicy);
     }
 
     private void ShowCfDialog(string ruleType)
@@ -1144,23 +1145,23 @@ public partial class MainWindow
         if (ranges.Count == 0)
             return;
 
-        var command = SelectionStyleCommandPlanner.CreateRangeCommand(
+        var plan = ConditionalFormatCommandPlanner.PlanApplyRule(
             CurrentGroupedEditSheetIds(),
             ranges,
-            (sheetId, currentRange) =>
-            {
-                var sheetRule = GroupedSheetRangePlanner.CloneConditionalFormatForSheet(rule, sheetId);
-                sheetRule.AppliesTo = currentRange;
-                return new ApplyConditionalFormatCommand(sheetId, sheetRule);
-            },
-            "Conditional Formatting");
+            rule);
         if (!TryExecuteCommand(
-                command,
-                "Conditional Formatting",
+                plan.Command,
+                plan.CommandLabel,
                 out _))
             return;
 
-        UpdateViewport();
+        ApplyConditionalFormatRefresh(plan.RefreshPolicy);
+    }
+
+    private void ApplyConditionalFormatRefresh(ConditionalFormatStateRefreshPolicy policy)
+    {
+        if (policy == ConditionalFormatStateRefreshPolicy.WorksheetVisualState)
+            UpdateViewport();
     }
 
     private void PopulateConditionalFormatDataBarGallery(MenuItem menuItem)

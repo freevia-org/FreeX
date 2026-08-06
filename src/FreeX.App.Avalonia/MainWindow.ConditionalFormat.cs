@@ -179,10 +179,10 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        var command = ConditionalFormatPresetFactory.BuildApplyCommand(preset, _session.ActiveSheet.Id, range);
-        RunConditionalFormatCommand(
-            command,
-            UiText.Format("InsertLoc_CfAppliedPreset", ConditionalFormatPresetFactory.DisplayName(preset), FormatRangeReference(range)));
+        RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanApplyPreset(
+            [_session.ActiveSheet.Id],
+            [range],
+            preset));
     }
 
     /// <summary>Applies an icon-set conditional format of the given catalog style to the selection.</summary>
@@ -192,9 +192,10 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        var command = ConditionalFormatPresetFactory.BuildIconSetApplyCommand(
-            iconSetStyle, _session.ActiveSheet.Id, range);
-        RunConditionalFormatCommand(command, UiText.Format("InsertLoc_CfAppliedIconSet", FormatRangeReference(range)));
+        RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanApplyIconSet(
+            [_session.ActiveSheet.Id],
+            [range],
+            iconSetStyle));
     }
 
     /// <summary>Prompts for a threshold and applies the Highlight &gt; Greater Than preset.</summary>
@@ -211,12 +212,10 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        var command = ConditionalFormatPresetFactory.BuildApplyCommand(
-            ConditionalFormatPreset.HighlightGreaterThan,
-            _session.ActiveSheet.Id,
-            range,
-            value);
-        RunConditionalFormatCommand(command, UiText.Format("InsertLoc_CfAppliedHighlight", FormatRangeReference(range)));
+        RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanApplyHighlightGreaterThan(
+            [_session.ActiveSheet.Id],
+            [range],
+            value));
     }
 
     /// <summary>Clears every conditional-format rule overlapping the current selection (one undo step).</summary>
@@ -226,23 +225,36 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        RunConditionalFormatCommand(
-            new ClearConditionalFormatsCommand(_session.ActiveSheet.Id, range),
-            UiText.Format("InsertLoc_CfCleared", FormatRangeReference(range)));
+        RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanClear(
+            [_session.ActiveSheet.Id],
+            [range]));
     }
 
     /// <summary>Runs a conditional-format command through the shared session command path and refreshes.</summary>
-    private void RunConditionalFormatCommand(IWorkbookCommand command, string successStatus)
+    private void RunConditionalFormatCommand(ConditionalFormatCommandExecutionPlan plan)
     {
-        var result = _session.ExecuteReviewCommand(command);
+        var result = _session.ExecuteReviewCommand(plan.Command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("InsertLoc_CfFailed"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get(plan.FailureResourceKey));
             return;
         }
 
-        RefreshShell(successStatus);
+        ApplyConditionalFormatRefresh(plan.RefreshPolicy, ResolveConditionalFormatStatus(plan.SuccessStatus));
     }
+
+    private void ApplyConditionalFormatRefresh(
+        ConditionalFormatStateRefreshPolicy policy,
+        string successStatus)
+    {
+        if (policy == ConditionalFormatStateRefreshPolicy.WorksheetVisualState)
+            RefreshShell(successStatus);
+    }
+
+    private static string ResolveConditionalFormatStatus(ConditionalFormatStatusPlan status) =>
+        status.Arguments.Count == 0
+            ? UiText.Get(status.ResourceKey)
+            : UiText.Format(status.ResourceKey, status.Arguments.Cast<object?>().ToArray());
 
     /// <summary>Shows the rule editor for a new rule and applies the built Core rule to the selection.</summary>
     private Task ShowConditionalFormatNewRuleDialogAsync() =>
@@ -262,9 +274,10 @@ public sealed partial class MainWindow
             return;
 
         var range = built.AppliesTo;
-        RunConditionalFormatCommand(
-            ConditionalFormatRuleBuilder.ToApplyCommand(_session.ActiveSheet.Id, built),
-            UiText.Format("InsertLoc_CfAppliedRule", FormatRangeReference(range)));
+        RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanApplyRule(
+            [_session.ActiveSheet.Id],
+            [range],
+            built));
     }
 
     private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(ConditionalFormat? existingRule) =>
@@ -543,14 +556,6 @@ public sealed partial class MainWindow
 
             var preset = ConditionalFormatPresetChoices[presetBox.SelectedIndex].Preset;
             var presetInput = ConditionalFormatPresetFactory.BuildInput(preset);
-
-            // BuildInput returns an identical AboveAverage CfRuleInput for both the AboveAverage
-            // and BelowAverage presets (the model has no dedicated field for the direction; it
-            // reuses IsTop/AboveAverage instead), so the Below Average choice must flip IsTop here
-            // the same way ConditionalFormatPresetFactory.BuildRule does for the ribbon's one-click
-            // apply path. Without this, picking "Below Average" silently seeds an Above Average rule.
-            if (preset == ConditionalFormatPreset.BelowAverage)
-                presetInput = presetInput with { IsTop = false };
 
             ApplyConditionalFormatPresetToEditor(
                 presetInput,
@@ -946,7 +951,7 @@ public sealed partial class MainWindow
     }
 
     private static string FormatRgb(RgbColor color) =>
-        $"{color.R},{color.G},{color.B}";
+        ConditionalFormatInputParser.FormatRgb(color);
 
     // ── Chrome helpers ────────────────────────────────────────────────────────
 
@@ -1303,11 +1308,11 @@ public sealed partial class MainWindow
             if (listBox.SelectedItem is not ManageConditionalFormatRuleProjection item)
                 return;
 
-            var reference = appliesToBox.Text;
+            var reference = ManageConditionalFormatsPlanner.NormalizeAppliesToText(appliesToBox.Text);
             if (string.IsNullOrWhiteSpace(reference)
                 || !_session.TryResolveReferenceRange(reference, out var range))
             {
-                ShowEditIssue(UiText.Get("InsertLoc_CfAppliesToInvalid"));
+                ShowEditIssue(UiText.Get(ConditionalFormatCommandPlanner.InvalidAppliesToResourceKey));
                 return;
             }
 
@@ -1321,9 +1326,9 @@ public sealed partial class MainWindow
         {
             // A single atomic replace-all: one undo step for every New/Edit/Delete/Duplicate/Move/
             // AppliesTo/Stop-If-True edit made in this dialog session.
-            RunConditionalFormatCommand(
-                manageSession.CreateApplyCommand(_session.ActiveSheet.Id),
-                UiText.Get("InsertLoc_CfManageRulesApplied"));
+            RunConditionalFormatCommand(manageSession.CreateApplyPlan(
+                [_session.ActiveSheet.Id],
+                _session.ActiveSheet.Id));
         }
 
         closeButton.Click += (_, _) =>

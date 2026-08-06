@@ -227,9 +227,10 @@ public sealed partial class MainWindow
         if (built is null)
             return;
 
-        RunConditionalFormatCommand(
-            ConditionalFormatRuleBuilder.ToApplyCommand(_session.ActiveSheet.Id, built),
-            UiText.Format("InsertLoc_CfAppliedRule", FormatRangeReference(built.AppliesTo)));
+        RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanApplyRule(
+            [_session.ActiveSheet.Id],
+            [built.AppliesTo],
+            built));
     }
 
     private Task ExecuteQuickAnalysisTotalAsync(QuickAnalysisHostOperation operation)

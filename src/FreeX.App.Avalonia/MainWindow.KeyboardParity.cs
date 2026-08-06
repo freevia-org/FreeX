@@ -285,7 +285,7 @@ public sealed partial class MainWindow
                 WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
                 break;
             case AvaloniaHostShortcut.RebuildDependenciesAndCalculate:
-                CalculateNow();
+                CalculateFull();
                 break;
             case AvaloniaHostShortcut.OpenErrorChecking:
                 await CheckFormulaErrorsAsync();

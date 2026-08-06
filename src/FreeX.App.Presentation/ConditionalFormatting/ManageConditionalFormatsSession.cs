@@ -170,6 +170,15 @@ public sealed class ManageConditionalFormatsSession
         IReadOnlyList<ConditionalFormat>? currentSheetRules = null) =>
         new(sheetId, BuildResultRules(currentSheetRules));
 
+    public ConditionalFormatCommandExecutionPlan CreateApplyPlan(
+        IReadOnlyList<SheetId> targetSheetIds,
+        SheetId primarySheetId,
+        IReadOnlyList<ConditionalFormat>? currentSheetRules = null) =>
+        ConditionalFormatCommandPlanner.PlanReplaceAll(
+            targetSheetIds,
+            primarySheetId,
+            BuildResultRules(currentSheetRules));
+
     private List<ConditionalFormat> CreateWorkingCopy()
     {
         var source = WorkingCopyPolicy == ManageConditionalFormatsWorkingCopyPolicy.FullSheet

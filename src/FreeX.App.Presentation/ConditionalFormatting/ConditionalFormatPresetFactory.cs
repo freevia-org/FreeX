@@ -163,6 +163,7 @@ public static class ConditionalFormatPresetFactory
             ConditionalFormatPreset.BelowAverage => new CfRuleInput
             {
                 RuleType = CfRuleType.AboveAverage,
+                IsTop = false,
             },
             _ => new CfRuleInput { RuleType = CfRuleType.CellValue },
         };
@@ -172,16 +173,7 @@ public static class ConditionalFormatPresetFactory
         ConditionalFormatPreset preset,
         GridRange range,
         string? value = null)
-    {
-        var rule = ConditionalFormatRuleBuilder.Build(BuildInput(preset, value), range);
-
-        // The rule builder has no AboveAverage input field (the model reuses the AboveAverage bool for
-        // direction), so set the Below-Average direction here. Above-Average is the model default.
-        if (preset == ConditionalFormatPreset.BelowAverage)
-            rule.AboveAverage = false;
-
-        return rule;
-    }
+        => ConditionalFormatRuleBuilder.Build(BuildInput(preset, value), range);
 
     /// <summary>Builds the add command the preset applies through the session command path.</summary>
     public static ApplyConditionalFormatCommand BuildApplyCommand(

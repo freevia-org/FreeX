@@ -126,14 +126,8 @@ public sealed partial class MainWindow
     }
 
     // ── Formulas ▸ Calculation ▸ Calculate Sheet ─────────────────────────────────
-    // The shared session exposes only a whole-workbook recalc (no per-sheet engine entry point), so
-    // Calculate Sheet recalculates the workbook — functionally a superset of recalculating the active
-    // sheet. Reported honestly via the status text.
-    private void CalculateSheet()
-    {
-        _session.RecalculateWorkbook();
-        RefreshShell(UiText.Get("RibbonWire_CalculateSheetDone"));
-    }
+    // Keep the native ribbon alias on the same shared action path as Shift+F9.
+    private void CalculateSheet() => CalculateActiveSheet();
 
     // ── Formulas ▸ Formula Auditing ▸ Remove Arrows submenu ──────────────────────
     private void RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind kind)
