@@ -1723,36 +1723,17 @@ public partial class MainWindow
             return false;
 
         var affectedCells = outcome.AffectedCells ?? fallbackAffectedCells;
-        if (text.StartsWith("="))
-        {
-            // For now, we manually register dependencies because we haven't automated this in the command yet.
-            try
-            {
-                foreach (var affected in affectedCells)
-                {
-                    var formulaA1 = _options.UseR1C1ReferenceStyle
-                        ? FormulaReferenceStyleService.ToA1(text.Substring(1), affected)
-                        : text.Substring(1);
-                    var lexer = new Lexer("=" + formulaA1);
-                    var parser = new Parser(lexer.Tokenize());
-                    var ast = parser.Parse();
-                    _recalcEngine.RegisterFormulaDependencies(affected, ast, affected.Sheet, _workbook);
-                }
-            }
-            catch
-            {
-                // Formula syntax is invalid; clear stale dependencies so this cell
-                // does not incorrectly depend on previously-referenced cells.
-                foreach (var affected in affectedCells)
-                    _recalcEngine.ClearFormulaDependencies(affected);
-            }
-        }
-        else
-        {
-            foreach (var affected in affectedCells)
-                _recalcEngine.ClearFormulaDependencies(affected);
-        }
 
+        // R121-app-host-manual-mode-vacated-dependency: dependency-graph maintenance for
+        // affectedCells now happens unconditionally inside RecalculateIfAutomatic
+        // (MainWindow.WorkbookUiState.cs), mirroring
+        // FreeX.App.Services.WorkbookCellEditService's UpdateFormulaDependencies, which reads each
+        // cell's own already-committed FormulaText directly. This replaces the ad-hoc re-parse of
+        // the raw formula-bar `text` this method used to hand-roll -- see RecalculateIfAutomatic's
+        // remarks for why doing it there instead (rather than only here) closes a Manual-mode gap
+        // this method's old version could not: every OTHER edit path (Paste, Fill, Sort, Undo/Redo,
+        // Find &amp; Replace, Goal Seek, ...) never had any dependency-graph maintenance of its own at
+        // all, since this was the only call site that hand-rolled it.
         RecalculateIfAutomatic(affectedCells);
         UpdateViewport();
         RefreshStatusBar();

@@ -195,6 +195,12 @@ public static class WorksheetContextMenuPlanner
         new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
         new("Copy", WorksheetContextMenuAction.Copy, AccessHeader: "_Copy"),
         new("Paste", WorksheetContextMenuAction.Paste, AccessHeader: "_Paste"),
+        // R121-model-drawing-delete-1: the picture's own analogue of Delete Row(s)/Delete Comment --
+        // before this, the ONLY way to remove a picture was Cut (which leaves it on the clipboard)
+        // or the Delete key (see MainWindow.ClipboardCommands.cs's ExecuteClearSelection); a
+        // right-click "Delete" entry gives it the same reachability every other deletable worksheet
+        // object already has.
+        new("Delete", WorksheetContextMenuAction.DeleteObject, AccessHeader: "_Delete"),
         WorksheetContextMenuCommand.Separator,
         new("Format Picture...", WorksheetContextMenuAction.FormatPicture, AccessHeader: "_Format Picture..."),
         new("Crop...", WorksheetContextMenuAction.CropPicture, AccessHeader: "_Crop..."),
@@ -209,6 +215,8 @@ public static class WorksheetContextMenuPlanner
         new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
         new("Copy", WorksheetContextMenuAction.Copy, AccessHeader: "_Copy"),
         new("Paste", WorksheetContextMenuAction.Paste, AccessHeader: "_Paste"),
+        // R121-model-drawing-delete-1: see BuildPictureCommands' identical addition above.
+        new("Delete", WorksheetContextMenuAction.DeleteObject, AccessHeader: "_Delete"),
         WorksheetContextMenuCommand.Separator,
         new("Format Chart Area...", WorksheetContextMenuAction.FormatChartArea, AccessHeader: "_Format Chart Area..."),
         new("Select Data...", WorksheetContextMenuAction.SelectChartData, AccessHeader: "Select _Data..."),
@@ -303,6 +311,9 @@ public static class WorksheetContextMenuPlanner
             new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
             new("Copy", WorksheetContextMenuAction.Copy, AccessHeader: "_Copy"),
             new("Paste", WorksheetContextMenuAction.Paste, AccessHeader: "_Paste"),
+            // R121-model-drawing-delete-1: shared by both shapes and text boxes -- see BuildPictureCommands'
+            // identical addition.
+            new("Delete", WorksheetContextMenuAction.DeleteObject, AccessHeader: "_Delete"),
             WorksheetContextMenuCommand.Separator,
             new(formatHeader, WorksheetContextMenuAction.FormatDrawingObject, AccessHeader: $"_Format {formatHeader["Format ".Length..]}"),
             new("Size and Properties...", WorksheetContextMenuAction.ResizeDrawingObject, AccessHeader: "_Size and Properties..."),
@@ -459,7 +470,8 @@ public enum WorksheetContextMenuAction
     BringForward,
     SendBackward,
     EditAltText,
-    SelectionPane
+    SelectionPane,
+    DeleteObject
 }
 
 public enum WorksheetContextMenuTargetKind

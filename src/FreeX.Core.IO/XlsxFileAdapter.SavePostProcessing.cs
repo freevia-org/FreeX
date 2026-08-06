@@ -2174,7 +2174,17 @@ public sealed partial class XlsxFileAdapter
             HasWorksheetElementMetadata |= XlsxWorksheetPostProcessingMetadataBatchWriter.HasWorksheetElementMetadata(sheet);
             if (!HasSupportedCharts)
                 HasSupportedCharts = HasSupportedXlsxCharts(sheet);
-            HasSupportedDrawingObjects |= XlsxWorksheetDrawingObjectWriter.HasSupportedObjects(sheet);
+            // R121-io-drawing-delete-1: a sheet where every remaining picture/text box/shape is still
+            // IsSourceLoaded (untouched) but that HAS a tombstoned deletion still needs
+            // XlsxWorksheetDrawingObjectWriter.Save to run for it -- otherwise the writer's own
+            // per-sheet early-exit (nothing "supported" left to emit) leaves that sheet's drawing part
+            // untouched by the writer, and XlsxPackageMetadataMerger.CopyUnknownPackageParts (which
+            // only copies a source part when the TARGET doesn't already have an entry at that path)
+            // blindly copies the stale, unfiltered source drawing part back in wholesale -- resurrecting
+            // the deleted object even though XlsxWorksheetDrawingPartMerger's own supersededSourceNames
+            // check would otherwise have kept it out.
+            HasSupportedDrawingObjects |= XlsxWorksheetDrawingObjectWriter.HasSupportedObjects(sheet) ||
+                sheet.DeletedSourceDrawingObjectNames.Count > 0;
             HasLiveAutoFilter |= !string.IsNullOrWhiteSpace(
                 XlsxWorksheetAutoFilterXmlMapper.GetEffectiveReference(sheet.AutoFilter));
             HasSourceLoadedDrawingObjects |= XlsxSourceDrawingGeometryRewriter.HasSourceLoadedDrawingObjects(sheet);
