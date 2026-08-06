@@ -151,46 +151,33 @@ internal static class FreePRibbonCommands
             onResetZoomCoverImage,
             onCustomShows,
             onSlideShowSettings);
-        var host = new FreePRibbonCommandHostAdapter
+        var profile = new FreePRibbonHostProfile
         {
-            ExecuteAction = action => FreePRibbonHostActionDispatcher.Dispatch(action, actionEndpoints),
-            QueryState = query => query.Kind switch
+            ActionEndpoints = actionEndpoints,
+            QueryEndpoints = new FreePRibbonHostQueryEndpoints
             {
-                FreePRibbonHostQueryKind.BeginFormatPainter =>
-                    getSlideCanvas?.Invoke()?.BeginFormatPainter() == true,
-                FreePRibbonHostQueryKind.EditPointsEnabled =>
+                BeginFormatPainter = () => getSlideCanvas?.Invoke()?.BeginFormatPainter() == true,
+                EditPointsEnabled = () =>
                     getEditPointsEnabled?.Invoke() ?? getSlideCanvas?.Invoke()?.EditPointsEnabled,
-                FreePRibbonHostQueryKind.ViewShowState => getViewShowState?.Invoke(),
-                FreePRibbonHostQueryKind.ViewZoomState => getViewZoomState?.Invoke(),
-                _ => null,
+                ViewShowState = () => getViewShowState?.Invoke(),
+                ViewZoomState = () => getViewZoomState?.Invoke(),
             },
             TryHandleTextAction = action => TryHandleTextAction(action, getSlideCanvas?.Invoke()),
+            OleCommands = new FreePRibbonOleCommandEndpoints
+            {
+                InsertEmbeddedObject = onInsertEmbeddedObject,
+                TryOpenInlineEmbeddedObject = tryOpenInlineEmbeddedObject,
+                TryOpenSelectedEmbeddedObject = onOpenEmbeddedObject is null
+                    ? null
+                    : ole =>
+                    {
+                        onOpenEmbeddedObject(ole);
+                        return true;
+                    },
+            },
         };
 
-        var registry = FreePRibbonCommandWorkflow.Build(editor, stateStore, host).Registry;
-
-        // OLE activation remains native and outside the portable ribbon workflow.
-        registry.Register(
-            OleInsertionPlanner.InsertEmbeddedObjectCommandId,
-            new ActionRibbonCommand(() => onInsertEmbeddedObject?.Invoke()));
-        registry.Register(
-            OleActivationPlanner.OpenEmbeddedObjectCommandId,
-            new ActionRibbonCommand(() =>
-                OleActivationPlanner.TryOpenInlineFirst(
-                    tryOpenInlineEmbeddedObject,
-                    () =>
-                    {
-                        if (editor.SelectedOleObject is not { } ole)
-                            return false;
-
-                        if (onOpenEmbeddedObject is { } open)
-                            open(ole);
-                        else
-                            OleActivationService.TryActivate(ole);
-                        return true;
-                    })));
-
-        return registry;
+        return FreePRibbonHostRegistryComposer.Build(editor, stateStore, profile).Registry;
     }
 
     private static FreePRibbonHostActionEndpoints BuildHostActionEndpoints(
