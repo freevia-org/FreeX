@@ -14,6 +14,7 @@ public sealed class MailMergeFinishPlannerSourceTests
         source.Should().Contain("workflow.BuildFinish(template, finishPlan, mergeState)");
         source.Should().Contain("finishPlan.Destination == MailMergeFinishDestination.Printer");
         source.Should().Contain("printDocument!(execution.Document)");
+        source.Should().Contain("MailMergeInteractivePromptPlanner.Plan(template)");
         source.Should().NotContain("var augmentedRows = data.Rows.Select(r => session.AugmentRow(r)).ToList();");
         source.Should().NotContain("MailMerge.MergeAllWithRules(");
     }

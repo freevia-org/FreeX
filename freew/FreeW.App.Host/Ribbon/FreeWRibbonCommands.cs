@@ -6853,11 +6853,11 @@ internal static class FreeWRibbonCommands
         // prompt the user once per unique prompt/bookmark before the merge run.
         private static void CollectFillInAndAskAnswers(TextDocument template, MergeState state, Window? owner)
         {
-            foreach (var request in MailMergePromptPlanner.GetRequests(template))
+            foreach (var prompt in MailMergeInteractivePromptPlanner.Plan(template))
             {
-                var title = request.Kind == MailMergePromptKind.FillIn ? "Fill-in" : "Ask";
-                var answer = MergeRulePromptDialog.AskPrompt(owner, title, request.Prompt);
-                MailMergePromptPlanner.ApplyResponse(state, request, answer);
+                var title = prompt.Kind == MailMergeInteractivePromptKind.FillIn ? "Fill-in" : "Ask";
+                var answer = MergeRulePromptDialog.AskPrompt(owner, title, prompt.Prompt);
+                MailMergeInteractivePromptPlanner.ApplyResponse(state, prompt, answer);
             }
         }
     }

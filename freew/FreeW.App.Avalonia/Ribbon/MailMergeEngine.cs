@@ -461,8 +461,8 @@ internal sealed class MailMergeEngine
             execution.SkippedRecordCount);
     }
 
-    public IReadOnlyList<MailMergePromptRequest> GetFinishPromptRequests() =>
-        MailMergePromptPlanner.GetRequests(Session.Template ?? _editor.Document);
+    public IReadOnlyList<MailMergeInteractivePrompt> GetInteractiveFinishPrompts() =>
+        MailMergeInteractivePromptPlanner.Plan(Session.Template ?? _editor.Document);
 
     /// <summary>
     /// Simulate every selected recipient against the current merge template. Complete modes load the

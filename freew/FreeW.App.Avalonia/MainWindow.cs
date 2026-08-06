@@ -2238,7 +2238,9 @@ public sealed partial class MainWindow : Window
         if (_mailMerge is null || !plan.Success)
             return;
 
-        var mergeState = await CollectMailMergePromptAnswersAsync(_mailMerge);
+        var mergeState = await CollectInteractiveMergeAnswersAsync();
+        if (mergeState is null)
+            return;
 
         if (plan.Destination == MailMergeFinishDestination.NewDocument)
         {
@@ -2251,17 +2253,20 @@ public sealed partial class MainWindow : Window
             await PrintAsync(result.Document);
     }
 
-    private async Task<MergeState> CollectMailMergePromptAnswersAsync(MailMergeEngine mailMerge)
+    private async Task<MergeState?> CollectInteractiveMergeAnswersAsync()
     {
+        if (_mailMerge is null)
+            return null;
+
         var state = new MergeState();
-        foreach (var request in mailMerge.GetFinishPromptRequests())
+        foreach (var prompt in _mailMerge.GetInteractiveFinishPrompts())
         {
-            var title = request.Kind == MailMergePromptKind.FillIn ? "Fill-in" : "Ask";
-            var answer = await MailMergeDialogs.AskMergeRulePromptAsync(
-                this,
-                title,
-                request.Prompt);
-            MailMergePromptPlanner.ApplyResponse(state, request, answer);
+            var title = prompt.Kind == MailMergeInteractivePromptKind.FillIn ? "Fill-in" : "Ask";
+            var answer = await MailMergeDialogs.AskMergeRulePromptAsync(this, title, prompt.Prompt);
+            if (answer is null)
+                return null;
+
+            MailMergeInteractivePromptPlanner.ApplyResponse(state, prompt, answer);
         }
 
         return state;

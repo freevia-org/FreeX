@@ -197,17 +197,17 @@ public sealed class MailMergeSessionWorkflowTests
         var ask = MailMergeRuleAuthoringPlanner.CreateAsk("Region", "Enter region");
         var template = DocumentWith(fill + ask + fill);
 
-        var requests = MailMergePromptPlanner.GetRequests(template);
+        var requests = MailMergeInteractivePromptPlanner.Plan(template);
         var state = new MergeState();
-        MailMergePromptPlanner.ApplyResponse(state, requests[0], "A-17");
-        MailMergePromptPlanner.ApplyResponse(state, requests[1], "EMEA");
+        MailMergeInteractivePromptPlanner.ApplyResponse(state, requests[0], "A-17");
+        MailMergeInteractivePromptPlanner.ApplyResponse(state, requests[1], "EMEA");
 
         requests.Should().HaveCount(2);
-        requests[0].Should().Be(new MailMergePromptRequest(
-            MailMergePromptKind.FillIn,
+        requests[0].Should().Be(new MailMergeInteractivePrompt(
+            MailMergeInteractivePromptKind.FillIn,
             "Customer code",
             "Customer code"));
-        requests[1].Kind.Should().Be(MailMergePromptKind.Ask);
+        requests[1].Kind.Should().Be(MailMergeInteractivePromptKind.Ask);
         state.FillInAnswers["Customer code"].Should().Be("A-17");
         state.AskAnswers["Region"].Should().Be("EMEA");
     }
