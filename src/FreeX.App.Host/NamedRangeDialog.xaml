@@ -47,7 +47,7 @@
                         <GridViewColumn Header="{local:Loc Key=NamedRange_RefersTo}" Width="210"
                                         DisplayMemberBinding="{Binding RefersTo}"/>
                         <GridViewColumn Header="{local:Loc Key=NamedRange_Scope}" Width="100"
-                                        DisplayMemberBinding="{Binding Scope}"/>
+                                        DisplayMemberBinding="{Binding ScopeLabel}"/>
                         <GridViewColumn Header="{local:Loc Key=NamedRange_Comment}" Width="120"
                                         DisplayMemberBinding="{Binding Comment}"/>
                     </GridView>

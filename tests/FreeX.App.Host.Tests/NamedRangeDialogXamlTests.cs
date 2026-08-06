@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
+using FreeX.App.Presentation.DefinedNames;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -70,10 +71,10 @@ public sealed class NamedRangeDialogXamlTests
             .Single(element => element.Attribute(x + "Name")?.Value == "NamesList")
             .Attribute("MouseDoubleClick")?.Value.Should().Be("NamesList_MouseDoubleClick");
         source.Should().Contain("private void NamesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
-        source.Should().Contain("if (NamesList.SelectedItem is not NamedRangeViewModel)");
+        source.Should().Contain("if (NamesList.SelectedItem is not DefinedNameRow)");
         source.Should().Contain("EditButton_Click(sender, e);");
         source.Should().Contain("e.Handled = true;");
-        source.IndexOf("if (NamesList.SelectedItem is not NamedRangeViewModel)", StringComparison.Ordinal)
+        source.IndexOf("if (NamesList.SelectedItem is not DefinedNameRow)", StringComparison.Ordinal)
             .Should()
             .BeLessThan(source.IndexOf("EditButton_Click(sender, e);", StringComparison.Ordinal));
         source.IndexOf("EditButton_Click(sender, e);", StringComparison.Ordinal)
@@ -190,7 +191,8 @@ public sealed class NamedRangeDialogXamlTests
         source.Should().Contain("RefersToBox.SelectAll()");
         source.Should().NotContain("IsEnabled = false");
         source.Should().Contain("GetScopeOptions");
-        source.Should().Contain("NamedRangeMetadata");
+        source.Should().Contain("_definedNames.ScopeChoices");
+        source.Should().Contain("_definedNames.BuildDeleteCommand(vm)");
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("_nameBox.Focus();");
         source.Should().Contain("_nameBox.SelectAll();");
@@ -215,8 +217,8 @@ public sealed class NamedRangeDialogXamlTests
 
         source.Should().Contain("Func<string, bool>? isValidRange");
         source.Should().Contain("Func<string, string?>? validateName");
-        source.Should().Contain("isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _)");
-        source.Should().Contain("validateName: _workbook.ValidateNamedRangeName");
+        source.Should().Contain("isValidRange: rangeText => _definedNames.ValidateRefersTo(rangeText).IsValid");
+        source.Should().Contain("validateName: ValidateNameForNativeDialog");
         source.Should().Contain("ValidateNameInput(name, _validateName)");
         source.Should().Contain("FocusNameInput();");
         source.Should().Contain("FocusRefersToInput();");
@@ -293,7 +295,7 @@ public sealed class NamedRangeDialogXamlTests
         var source = ReadNamedRangeDialogSource();
 
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"NamedRange_SelectEditMessage\")");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"NamedRange_NameRequiredMessage\")");
+        source.Should().Contain("DescribeNameError(plan.Validation.Name.Error)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get(\"NamedRange_DefineFailedMessage\")");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"NamedRange_SelectDeleteMessage\")");
@@ -301,25 +303,27 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     [Fact]
-    public void NameManager_UsesSharedPresentationPlannerAndParser()
+    public void NameManager_UsesSharedDefinedNamesSession()
     {
         var hostSource = ReadNamedRangeDialogSource();
-        var plannerSource = DialogSourceTestSupport.ReadPresentationSources("NamedRanges", "NamedRangeDialogPlanner.cs");
-        var parserSource = DialogSourceTestSupport.ReadPresentationSources("NamedRanges", "NamedRangeInputParser.cs");
+        var sessionSource = DialogSourceTestSupport.ReadPresentationSources("DefinedNames", "DefinedNamesSession.cs");
 
-        hostSource.Should().Contain("using FreeX.App.Presentation.NamedRanges;");
-        hostSource.Should().Contain("NamedRangeDialogPlanner.FilterItems(_items, selected)");
-        hostSource.Should().Contain("NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _)");
-        plannerSource.Should().Contain("public static class NamedRangeDialogPlanner");
-        parserSource.Should().Contain("public static class NamedRangeInputParser");
+        hostSource.Should().Contain("private readonly DefinedNamesSession _definedNames;");
+        hostSource.Should().Contain("_definedNames.ProjectRows(_items, selected)");
+        hostSource.Should().Contain("_definedNames.PlanSave(draft, original)");
+        sessionSource.Should().Contain("public sealed class DefinedNamesSession");
     }
 
     [Fact]
     public void Planner_FiltersWorkbookAndWorksheetScopedNames()
     {
-        var workbookName = new NamedRangeViewModel("Sales", "Sheet1!A1:A2", "Sheet1!A1:A2", "Workbook", "");
-        var sheetName = new NamedRangeViewModel(
-            "Local", "Sheet2!B1:B2", "Sheet2!B1:B2", "Sheet2", "", scopeSheetId: new SheetId(Guid.NewGuid()));
+        var workbookName = DefinedNameListProjector.CreateRow(
+            "Sales", DefinedNameScope.Workbook, "Sheet1!A1:A2", "Sheet1!A1:A2");
+        var sheetName = DefinedNameListProjector.CreateRow(
+            "Local",
+            DefinedNameScope.ForSheet(new SheetId(Guid.NewGuid()), "Sheet2"),
+            "Sheet2!B1:B2",
+            "Sheet2!B1:B2");
 
         NamedRangeDialogPlanner.FilterItems([workbookName, sheetName], NamedRangeFilterOption.All)
             .Should().Equal(workbookName, sheetName);
@@ -332,9 +336,12 @@ public sealed class NamedRangeDialogXamlTests
     [Fact]
     public void Planner_FiltersNamesWithAndWithoutFormulaErrors()
     {
-        var validName = new NamedRangeViewModel("Sales", "Sheet1!A1:A2", "Sheet1!A1:A2", "Workbook", "");
-        var errorValueName = new NamedRangeViewModel("BadValue", "#REF!", "Sheet1!A1:A2", "Workbook", "");
-        var errorRefersToName = new NamedRangeViewModel("BadRef", "Sheet1!A1:A2", "#NAME?", "Workbook", "");
+        var validName = DefinedNameListProjector.CreateRow(
+            "Sales", DefinedNameScope.Workbook, "Sheet1!A1:A2", "Sheet1!A1:A2");
+        var errorValueName = DefinedNameListProjector.CreateRow(
+            "BadValue", DefinedNameScope.Workbook, "Sheet1!A1:A2", "#REF!");
+        var errorRefersToName = DefinedNameListProjector.CreateRow(
+            "BadRef", DefinedNameScope.Workbook, "#NAME?", "Sheet1!A1:A2");
 
         NamedRangeDialogPlanner.FilterItems(
                 [validName, errorValueName, errorRefersToName],

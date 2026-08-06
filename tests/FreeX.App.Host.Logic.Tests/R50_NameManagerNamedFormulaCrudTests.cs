@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Windows.Controls;
 using FluentAssertions;
 using FreeX.App.Host;
+using FreeX.App.Presentation.DefinedNames;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -140,10 +141,10 @@ public sealed class R50_NameManagerNamedFormulaCrudTests
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
-    private static List<NamedRangeViewModel> GetListedNames(NamedRangeDialog dialog) =>
+    private static List<DefinedNameRow> GetListedNames(NamedRangeDialog dialog) =>
         DialogSourceTestSupport.GetPrivateField<ListView>(dialog, "NamesList")
             .ItemsSource!
-            .Cast<NamedRangeViewModel>()
+            .Cast<DefinedNameRow>()
             .ToList();
 
     private static void InvokeDefineOrUpdateName(

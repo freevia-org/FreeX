@@ -5,7 +5,7 @@ namespace FreeX.App.Avalonia.Tests;
 /// <summary>
 /// Round-82 regression test for finding R82-app-dialog-parity-5-1 (HIGH): the Avalonia Name
 /// Manager's Define Name editor, when used to rename an existing name (Edit -> change the Name
-/// field -> OK), removed the old entry via <c>DefinedNamesShellGlue.BuildDeleteCommand</c> BEFORE
+/// field -> OK), removed the old entry before
 /// defining the new one. The instant that delete commits, every formula referencing the old name
 /// by its literal text (FreeX resolves names in formulas by literal text, not by a stable identity
 /// that survives a rename) recalculates to #NAME? — nothing rewrites referencing formulas
@@ -53,12 +53,12 @@ public sealed class R82_NameManagerRenamePreservesOldNameTests
         var handlerSource = ExtractOkHandlerSource(ReadDefinedNamesSource());
 
         // This is the exact regression: before the fix, the rename branch called
-        // DefinedNamesShellGlue.BuildDeleteCommand for the seed's OLD name before ever defining the
+        // a delete command for the seed's OLD name before ever defining the
         // new one, which — since RemoveNamedRangeCommand actually removes the name and reports the
         // referencing formula cells as affected — recalculates any live formula referencing the old
         // name to #NAME? the instant the rename commits.
         handlerSource.Should().NotContain(
-            "DefinedNamesShellGlue.BuildDeleteCommand",
+            "definedNames.BuildDeleteCommand(",
             "renaming a defined name must not delete the old entry first — FreeX resolves names in " +
             "formulas by literal text, so removing the old entry before the new one is defined turns " +
             "every formula still referencing the old name into #NAME? the instant the rename commits");
@@ -72,8 +72,7 @@ public sealed class R82_NameManagerRenamePreservesOldNameTests
         // named formula/constant) through the shared session command path either way.
         var handlerSource = ExtractOkHandlerSource(ReadDefinedNamesSource());
 
-        handlerSource.Should().Contain("DefinedNamesShellGlue.BuildDefineCommand(draft, range)");
-        handlerSource.Should().Contain("DefinedNamesShellGlue.BuildDefineFormulaCommand(draft)");
-        handlerSource.Should().Contain("_session.ExecuteReviewCommand(");
+        handlerSource.Should().Contain("definedNames.PlanSave(draft, seed?.Identity)");
+        handlerSource.Should().Contain("_session.ExecuteReviewCommand(plan.Command!)");
     }
 }

@@ -5,7 +5,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 
 using Free.Shared.Shell.Avalonia;
-using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Services;
 using FreeX.Core.Model;
@@ -19,9 +18,8 @@ namespace FreeX.App.Avalonia;
 /// Defined Names dialogs for the Avalonia/macOS shell (Formulas menu): Name Manager (a filtered list of the
 /// workbook's defined names with New / Edit / Delete), the Define Name editor (name / scope / refers-to /
 /// comment with live validation), and Create Names from Selection. The portable list projection, validation,
-/// and create-from-selection planning come from <see cref="FreeX.App.Presentation.DefinedNames"/>; the
-/// non-UI mapping onto Core named-range commands lives in <see cref="DefinedNamesShellGlue"/>; commands run
-/// through the shared session command path.
+/// and create-from-selection planning come from <see cref="DefinedNamesSession"/>; commands run through the
+/// shared session command path.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -36,7 +34,7 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// The Name Manager dialog: a list of the workbook's defined names (Name | Scope | Refers To | Value)
-    /// projected by <see cref="DefinedNamesShellGlue.ProjectRows"/>, a scope/error filter dropdown, and New /
+    /// projected by <see cref="DefinedNamesSession"/>, a scope/error filter dropdown, and New /
     /// Edit / Delete buttons. New and Edit open the Define Name editor (Edit seeded from the selected row);
     /// Delete runs the Core remove-name command through the shared session command path. The list refreshes
     /// after each change.
@@ -45,6 +43,8 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
+
+        var definedNames = new DefinedNamesSession(_session.Workbook, _session.ActiveSheet.Id);
 
         var dialog = new Window
         {
@@ -117,7 +117,7 @@ public sealed partial class MainWindow
         {
             var filter = NameManagerFilterChoices[Math.Max(0, filterBox.SelectedIndex)].Filter;
             rows.Clear();
-            rows.AddRange(DefinedNamesShellGlue.ProjectRows(_session.Workbook, filter));
+            rows.AddRange(definedNames.ProjectRows(filter));
             namesList.ItemsSource = rows.Select(FormatNameManagerRow).ToList();
             editButton.IsEnabled = false;
             deleteButton.IsEnabled = false;
@@ -163,8 +163,7 @@ public sealed partial class MainWindow
 
             var row = rows[namesList.SelectedIndex];
             var name = row.Name;
-            var scopeSheetId = DefinedNamesShellGlue.ResolveScopeSheetId(_session.Workbook, row.ScopeLabel);
-            var command = DefinedNamesShellGlue.BuildDeleteCommand(name, scopeSheetId);
+            var command = definedNames.BuildDeleteCommand(row);
             var result = _session.ExecuteReviewCommand(command);
             if (!result.Success)
             {
@@ -254,11 +253,9 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// The Define Name editor: Name, Scope (Workbook or any sheet), Refers To (a sheet-qualified A1 reference),
-    /// and Comment. The name and refers-to are validated live through <see cref="DefinedNameValidator"/> and
-    /// <see cref="DefinedNameDraft.ValidateRefersTo()"/>; OK additionally resolves the refers-to to a
-    /// <see cref="GridRange"/> and runs the Core define-name command (add or replace) through the shared
-    /// session command path. When <paramref name="seed"/> is supplied the editor is in Edit mode (its name is
-    /// excluded from the duplicate check).
+    /// and Comment. <see cref="DefinedNamesSession"/> validates the draft, resolves range versus formula
+    /// definitions, and constructs the Core command. When <paramref name="seed"/> is supplied the editor is in
+    /// Edit mode and its exact name/scope identity is excluded from the duplicate check.
     /// </summary>
     private async Task ShowDefineNameDialogAsync(DefinedNameRow? seed)
     {
@@ -266,6 +263,7 @@ public sealed partial class MainWindow
             return;
 
         var isEdit = seed is not null;
+        var definedNames = new DefinedNamesSession(_session.Workbook, _session.ActiveSheet.Id);
         var dialog = new Window
         {
             Title = isEdit ? UiText.Get("InsertLoc_EditNameTitle") : UiText.Get("InsertLoc_NewNameTitle"),
@@ -276,7 +274,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "DefineNameDialog");
 
-        var scopeChoices = DefinedNamesShellGlue.BuildScopeChoices(_session.Workbook);
+        var scopeChoices = definedNames.ScopeChoices;
 
         var nameBox = new TextBox { Text = seed?.Name ?? string.Empty, MinWidth = 240 };
         ApplyNamesTextBoxChrome(nameBox);
@@ -284,8 +282,8 @@ public sealed partial class MainWindow
 
         var scopeBox = new ComboBox
         {
-            ItemsSource = scopeChoices.Select(c => c.Label).ToList(),
-            SelectedIndex = FindScopeIndex(scopeChoices, seed?.ScopeLabel),
+            ItemsSource = scopeChoices.Select(scope => scope.Label).ToList(),
+            SelectedIndex = definedNames.FindScopeIndex(seed?.Scope),
             MinWidth = 200,
         };
         ApplyNamesComboBoxChrome(scopeBox);
@@ -293,7 +291,7 @@ public sealed partial class MainWindow
 
         var refersToBox = new TextBox
         {
-            Text = seed?.RefersTo ?? FormatRangeReferenceQualified(_session.SelectedRange),
+            Text = seed?.RefersTo ?? definedNames.FormatRefersTo(_session.SelectedRange),
             MinWidth = 240,
         };
         ApplyNamesTextBoxChrome(refersToBox);
@@ -346,20 +344,23 @@ public sealed partial class MainWindow
         void ValidateLive(object? _, EventArgs __)
         {
             var name = nameBox.Text?.Trim() ?? string.Empty;
-            var liveScope = scopeChoices[Math.Max(0, scopeBox.SelectedIndex)].Scope;
-            var existing = ExistingDefinedNames(_session.Workbook, liveScope);
-            var nameResult = DefinedNameValidator.Validate(name, existing, OriginalNameForDuplicateCheck(seed, liveScope));
-            if (!nameResult.IsValid)
+            var liveScope = scopeChoices[Math.Max(0, scopeBox.SelectedIndex)];
+            var draft = new DefinedNameDraft(
+                name,
+                liveScope,
+                refersToBox.Text ?? string.Empty,
+                commentBox.Text ?? string.Empty);
+            var validation = definedNames.ValidateDraft(draft, seed?.Identity);
+            if (!validation.Name.IsValid)
             {
-                ShowWarning(DescribeNameError(nameResult.Error));
+                ShowWarning(DescribeNameError(validation.Name.Error));
                 okButton.IsEnabled = false;
                 return;
             }
 
-            var refersToResult = DefinedNameDraft.ValidateRefersTo(refersToBox.Text);
-            if (!refersToResult.IsValid)
+            if (!validation.RefersTo.IsValid)
             {
-                ShowWarning(DescribeRefersToError(refersToResult.Error));
+                ShowWarning(DescribeRefersToError(validation.RefersTo.Error));
                 okButton.IsEnabled = false;
                 return;
             }
@@ -376,30 +377,29 @@ public sealed partial class MainWindow
         okButton.Click += (_, _) =>
         {
             var name = nameBox.Text?.Trim() ?? string.Empty;
-            var scope = scopeChoices[Math.Max(0, scopeBox.SelectedIndex)].Scope;
-            var existing = ExistingDefinedNames(_session.Workbook, scope);
-            var nameResult = DefinedNameValidator.Validate(name, existing, OriginalNameForDuplicateCheck(seed, scope));
-            if (!nameResult.IsValid)
+            var scope = scopeChoices[Math.Max(0, scopeBox.SelectedIndex)];
+            var draft = new DefinedNameDraft(
+                name,
+                scope,
+                refersToBox.Text?.Trim() ?? string.Empty,
+                commentBox.Text?.Trim() ?? string.Empty);
+            var plan = definedNames.PlanSave(draft, seed?.Identity);
+            if (!plan.Validation.Name.IsValid)
             {
-                ShowWarning(DescribeNameError(nameResult.Error));
+                ShowWarning(DescribeNameError(plan.Validation.Name.Error));
                 return;
             }
 
-            var refersToText = refersToBox.Text?.Trim() ?? string.Empty;
-            if (!DefinedNameDraft.ValidateRefersTo(refersToText).IsValid)
+            if (!plan.Validation.RefersTo.IsValid)
             {
-                ShowWarning(UiText.Get("InsertLoc_EnterValidRefersTo"));
+                ShowWarning(DescribeRefersToError(plan.Validation.RefersTo.Error));
                 return;
             }
-
-            var draft = new DefinedNameDraft(name, scope, refersToText, commentBox.Text?.Trim() ?? string.Empty);
 
             // The refers-to text is first tried as a range/cell/existing-name reference (the common case);
             // when it does not resolve to one but does parse as a formula expression (checked above), it is a
             // named formula/constant (e.g. "=1.05" or "=SUM(Sheet1!A:A)") and is defined as such instead of
             // being rejected — Excel's Define Name dialog accepts both equally.
-            var isRange = TryParseDefinedNameRange(refersToText, out var range);
-
             // NOTE: renaming an existing name intentionally does NOT remove the old entry first
             // (this used to call BuildDeleteCommand for the seed's old name before defining the new
             // one). FreeX resolves names in formulas by literal text (e.g. =SUM(Revenue)), and
@@ -411,9 +411,7 @@ public sealed partial class MainWindow
             // host's NamedRangeDialog.DefineOrUpdateName, which deliberately makes the same choice
             // (see its comment for the full rationale).
 
-            var result = isRange
-                ? _session.ExecuteReviewCommand(DefinedNamesShellGlue.BuildDefineCommand(draft, range))
-                : _session.ExecuteReviewCommand(DefinedNamesShellGlue.BuildDefineFormulaCommand(draft));
+            var result = _session.ExecuteReviewCommand(plan.Command!);
             if (!result.Success)
             {
                 ShowWarning(result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotDefineName"));
@@ -476,6 +474,8 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
 
+        var definedNames = new DefinedNamesSession(_session.Workbook, _session.ActiveSheet.Id);
+
         var dialog = new Window
         {
             Title = UiText.Get("InsertLoc_CreateNamesTitle"),
@@ -533,11 +533,10 @@ public sealed partial class MainWindow
             }
 
             var sheet = _session.ActiveSheet;
-            var planned = CreateNamesFromSelectionPlanner.Plan(
+            var planned = definedNames.PlanCreateNamesFromSelection(
                 _session.SelectedRange,
                 options,
-                address => DefinedNameLabelText(sheet.GetValue(address)),
-                _session.Workbook.NamedRanges.Keys);
+                address => DefinedNameLabelText(sheet.GetValue(address)));
 
             if (planned.Count == 0)
             {
@@ -547,7 +546,7 @@ public sealed partial class MainWindow
             }
 
             var created = 0;
-            foreach (var command in DefinedNamesShellGlue.BuildCreateCommands(planned))
+            foreach (var command in definedNames.BuildCreateCommands(planned))
             {
                 var result = _session.ExecuteReviewCommand(command);
                 if (!result.Success)
@@ -616,66 +615,6 @@ public sealed partial class MainWindow
     private static string FormatNameManagerRow(DefinedNameRow row) =>
         $"{row.Name}    [{row.ScopeLabel}]    {row.RefersTo}    {row.Value}";
 
-    /// <summary>
-    /// Every name already defined within <paramref name="scope"/> — the workbook scope, or a single
-    /// worksheet's scope — for the Define Name dialog's duplicate check. A formula/constant name (<see
-    /// cref="Workbook.NamedFormulas"/>/<see cref="Workbook.ScopedNamedFormulas"/>) occupies the same name
-    /// namespace as a range name, so both kinds must be considered or a new name could silently collide with
-    /// one of the other kind. Scoped separately from workbook-global names: Excel allows a workbook-scoped name
-    /// and a sheet-scoped name with identical text to coexist (resolved by scope precedence), so only names
-    /// already occupying the SAME scope as the one being defined count as duplicates here — otherwise a
-    /// sheet-scoped name could never be told apart from an unrelated same-text sheet-scoped name on another
-    /// sheet, or from a workbook-global name it is meant to coexist with.
-    /// </summary>
-    private static IEnumerable<string> ExistingDefinedNames(Workbook workbook, DefinedNameScope scope)
-    {
-        if (scope.IsWorkbook)
-            return workbook.NamedRanges.Keys.Concat(workbook.NamedFormulas.Keys);
-
-        var sheetId = scope.Sheet!.Value;
-        return workbook.ScopedNamedRanges.Keys
-            .Where(key => key.Sheet.Equals(sheetId))
-            .Select(key => key.Name)
-            .Concat(workbook.ScopedNamedFormulas.Keys
-                .Where(key => key.Sheet.Equals(sheetId))
-                .Select(key => key.Name));
-    }
-
-    /// <summary>
-    /// R88-app-name-manager-ui-5-1: the seed's own name is only excluded from the duplicate check
-    /// (i.e. treated as "the entry being edited, not a collision") when <paramref name="candidateScope"/>
-    /// is the SAME scope the seed already occupies. Editing a name's Scope dropdown to a scope that
-    /// already holds an unrelated same-text name must NOT be waved through as "the entry being
-    /// edited" -- Excel's New Name dialog rejects that with "A name with that text already exists in
-    /// this scope" instead of silently overwriting the pre-existing entry (mirrors the WPF host's
-    /// NamedRangeDialog.DefineOrUpdateName, which computes its isSameEntry gate from BOTH the
-    /// original name AND the original scope).
-    /// </summary>
-    private static string? OriginalNameForDuplicateCheck(DefinedNameRow? seed, DefinedNameScope candidateScope) =>
-        seed is not null && string.Equals(seed.ScopeLabel, candidateScope.Label, StringComparison.OrdinalIgnoreCase)
-            ? seed.Name
-            : null;
-
-    /// <summary>Test-only forwarder for <see cref="OriginalNameForDuplicateCheck"/>.</summary>
-    internal static string? OriginalNameForDuplicateCheckForTest(DefinedNameRow? seed, DefinedNameScope candidateScope) =>
-        OriginalNameForDuplicateCheck(seed, candidateScope);
-
-    private static int FindScopeIndex(
-        IReadOnlyList<DefinedNamesShellGlue.ScopeChoice> choices,
-        string? scopeLabel)
-    {
-        if (string.IsNullOrWhiteSpace(scopeLabel) || DefinedNameScope.IsWorkbookLabel(scopeLabel))
-            return 0;
-
-        for (var i = 0; i < choices.Count; i++)
-        {
-            if (string.Equals(choices[i].Label, scopeLabel, StringComparison.OrdinalIgnoreCase))
-                return i;
-        }
-
-        return 0;
-    }
-
     private static string DescribeNameError(DefinedNameError error) => error switch
     {
         DefinedNameError.Blank => UiText.Get("InsertLoc_NameErrorBlank"),
@@ -703,28 +642,11 @@ public sealed partial class MainWindow
         _ => "",
     };
 
-    /// <summary>Formats a range as sheet-qualified A1 refers-to text for the Define Name editor.</summary>
     private string FormatRangeReferenceQualified(GridRange range) =>
-        DefinedNamesShellGlue.FormatRefersTo(range, _session.Workbook);
+        new DefinedNamesSession(_session.Workbook, _session.ActiveSheet.Id).FormatRefersTo(range);
 
-    /// <summary>
-    /// Parses a Define Name "Refers to" expression (a cell, an <c>A1:B5</c> range, a sheet-qualified
-    /// <c>Sheet!A1:B5</c> range, or an existing defined name) into a <see cref="GridRange"/>, resolving sheet
-    /// names against the workbook and defaulting to the active sheet.
-    /// </summary>
-    private bool TryParseDefinedNameRange(string text, out GridRange range)
-    {
-        var trimmed = text.Trim();
-        if (trimmed.StartsWith('='))
-            trimmed = trimmed[1..].Trim();
-
-        return WorkbookReferenceNavigator.TryParseReferenceRange(
-            trimmed,
-            _session.ActiveSheet.Id,
-            name => _session.Workbook.GetSheet(name)?.Id,
-            _session.Workbook.NamedRanges,
-            out range);
-    }
+    private bool TryParseDefinedNameRange(string text, out GridRange range) =>
+        new DefinedNamesSession(_session.Workbook, _session.ActiveSheet.Id).TryParseRange(text, out range);
 
     private static void AddDefineNameRow(AvaloniaGrid grid, int row, string label, Control field)
     {

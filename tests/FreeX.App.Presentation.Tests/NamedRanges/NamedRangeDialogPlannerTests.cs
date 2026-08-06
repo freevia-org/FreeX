@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Presentation.NamedRanges;
 using FreeX.Core.Model;
 
@@ -9,9 +10,8 @@ public sealed class NamedRangeDialogPlannerTests
     [Fact]
     public void FilterItems_SplitsWorkbookAndWorksheetScopedNames()
     {
-        var workbookName = new NamedRangeViewModel("Sales", "Sheet1!A1:A2", "Sheet1!A1:A2", "Workbook", "");
-        var sheetName = new NamedRangeViewModel(
-            "Local", "Sheet2!B1:B2", "Sheet2!B1:B2", "Sheet2", "", scopeSheetId: new SheetId(Guid.NewGuid()));
+        var workbookName = Row("Sales");
+        var sheetName = Row("Local", DefinedNameScope.ForSheet(SheetId.New(), "Sheet2"));
 
         NamedRangeDialogPlanner.FilterItems([workbookName, sheetName], NamedRangeFilterOption.All)
             .Should().Equal(workbookName, sheetName);
@@ -24,9 +24,9 @@ public sealed class NamedRangeDialogPlannerTests
     [Fact]
     public void FilterItems_DetectsFormulaErrorsInValueOrReference()
     {
-        var validName = new NamedRangeViewModel("Sales", "Sheet1!A1:A2", "Sheet1!A1:A2", "Workbook", "");
-        var errorValueName = new NamedRangeViewModel("BadValue", "#REF!", "Sheet1!A1:A2", "Workbook", "");
-        var errorRefersToName = new NamedRangeViewModel("BadRef", "Sheet1!A1:A2", "#NAME?", "Workbook", "");
+        var validName = Row("Sales");
+        var errorValueName = Row("BadValue", value: "#REF!");
+        var errorRefersToName = Row("BadRef", refersTo: "#NAME?");
 
         NamedRangeDialogPlanner.FilterItems(
                 [validName, errorValueName, errorRefersToName],
@@ -38,4 +38,11 @@ public sealed class NamedRangeDialogPlannerTests
                 NamedRangeFilterOption.NoErrors)
             .Should().Equal(validName);
     }
+
+    private static DefinedNameRow Row(
+        string name,
+        DefinedNameScope? scope = null,
+        string refersTo = "Sheet1!A1:A2",
+        string value = "Sheet1!A1:A2") =>
+        DefinedNameListProjector.CreateRow(name, scope ?? DefinedNameScope.Workbook, refersTo, value);
 }

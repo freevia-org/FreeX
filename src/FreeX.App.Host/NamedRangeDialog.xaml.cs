@@ -1,11 +1,8 @@
-using System.Collections.ObjectModel;
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using FreeX.App.Presentation.NamedRanges;
+using FreeX.App.Presentation.DefinedNames;
 using FreeX.Core.Commands;
-using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -18,8 +15,9 @@ public sealed partial class NamedRangeDialog : Window
 {
     private readonly Workbook _workbook;
     private readonly ICommandBus _commandBus;
+    private readonly DefinedNamesSession _definedNames;
     private readonly Action<NamedRangeSelectionRequest>? _requestRangeSelection;
-    private readonly ObservableCollection<NamedRangeViewModel> _items = [];
+    private readonly List<DefinedNameRow> _items = [];
     private readonly string _initialRefersTo;
     private NameDefinitionDialog? _activeDefinitionDialog;
 
@@ -39,12 +37,13 @@ public sealed partial class NamedRangeDialog : Window
     {
         _workbook = workbook;
         _commandBus = commandBus;
+        _definedNames = new DefinedNamesSession(workbook, initialRange?.Start.Sheet);
         _requestRangeSelection = requestRangeSelection;
         InitializeComponent();
         RefreshList();
         UpdateSelectionCommands();
 
-        _initialRefersTo = initialRange.HasValue ? FormatRange(initialRange.Value, workbook) : "";
+        _initialRefersTo = initialRange.HasValue ? _definedNames.FormatRefersTo(initialRange.Value) : "";
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -53,161 +52,16 @@ public sealed partial class NamedRangeDialog : Window
     private void RefreshList()
     {
         _items.Clear();
-        foreach (var (name, range) in _workbook.NamedRanges)
-        {
-            var metadata = _workbook.TryGetNamedRangeMetadata(name, out var savedMetadata)
-                ? savedMetadata
-                : NamedRangeMetadata.WorkbookScope;
-            _items.Add(new NamedRangeViewModel(
-                name,
-                FormatValue(range, _workbook),
-                FormatRange(range, _workbook),
-                metadata.Scope,
-                metadata.Comment,
-                scopeSheetId: null));
-        }
-
-        // Sheet-scoped names (Excel "localSheetId") are stored separately from the workbook-global
-        // NamedRanges dictionary and must also be listed, or they're invisible and unreachable
-        // through the Name Manager's Edit/Delete actions.
-        foreach (var ((name, scopeSheetId), range) in _workbook.ScopedNamedRanges)
-        {
-            _workbook.TryGetScopedNamedRangeMetadata(name, scopeSheetId, out var metadata);
-            var scopeLabel = _workbook.GetSheet(scopeSheetId)?.Name ?? metadata.Scope;
-            _items.Add(new NamedRangeViewModel(
-                name,
-                FormatValue(range, _workbook),
-                FormatRange(range, _workbook),
-                scopeLabel,
-                metadata.Comment,
-                scopeSheetId));
-        }
-
-        // Named formulas/constants (Excel names whose "Refers To" is a formula expression, e.g.
-        // "=1.05" or "=SUM(Sheet1!A:A)", rather than a plain cell range) live in a separate
-        // dictionary from NamedRanges and must also be listed, or a whole class of commonly-used
-        // Excel defined names is invisible in the Name Manager and unreachable for Edit/Delete.
-        foreach (var (name, formulaText) in _workbook.NamedFormulas)
-        {
-            var metadata = _workbook.TryGetNamedRangeMetadata(name, out var savedMetadata)
-                ? savedMetadata
-                : NamedRangeMetadata.WorkbookScope;
-            _items.Add(new NamedRangeViewModel(
-                name, FormatNamedFormulaValue(_workbook, formulaText, scopeSheetId: null), formulaText, metadata.Scope, metadata.Comment,
-                scopeSheetId: null));
-        }
-
-        foreach (var ((name, scopeSheetId), formulaText) in _workbook.ScopedNamedFormulas)
-        {
-            _workbook.TryGetScopedNamedRangeMetadata(name, scopeSheetId, out var metadata);
-            var scopeLabel = _workbook.GetSheet(scopeSheetId)?.Name ?? metadata.Scope;
-            _items.Add(new NamedRangeViewModel(
-                name, FormatNamedFormulaValue(_workbook, formulaText, scopeSheetId), formulaText, scopeLabel, metadata.Comment,
-                scopeSheetId));
-        }
+        _items.AddRange(_definedNames.BuildRows());
 
         ApplyFilter();
-    }
-
-    private static string FormatRange(GridRange range, Workbook wb)
-    {
-        var sheet = wb.GetSheet(range.Start.Sheet);
-        var sheetName = sheet?.Name ?? "Sheet1";
-        var start = range.Start.ToA1();
-        var end = range.End.ToA1();
-        return $"{sheetName}!{start}:{end}";
-    }
-
-    /// <summary>
-    /// R88-app-name-manager-ui-5-2: the Name Manager's Value column must show the name's actual
-    /// live computed value/preview (real Excel: e.g. "1.05" for a named constant, "{100;200}" for a
-    /// range name), not just repeat the Refers To text -- <see cref="FormatRange"/> above only
-    /// formats the RANGE REFERENCE, never any cell content. A single-cell name shows that cell's own
-    /// computed value; a multi-cell name shows a small array-literal preview (row-major, columns
-    /// comma-separated, rows semicolon-separated, capped like Excel's own Name Manager bounds how
-    /// much of a huge range's content it tries to render) and falls back to the plain range
-    /// reference beyond that cap.
-    /// </summary>
-    private static string FormatValue(GridRange range, Workbook wb)
-    {
-        if (wb.GetSheet(range.Start.Sheet) is not { } sheet)
-            return FormatRange(range, wb);
-
-        var rowCount = checked((int)(range.End.Row - range.Start.Row + 1));
-        var colCount = checked((int)(range.End.Col - range.Start.Col + 1));
-
-        if (rowCount == 1 && colCount == 1)
-            return FormatScalarValuePreview(sheet.GetCell(range.Start)?.Value);
-
-        const int maxPreviewCells = 25;
-        if ((long)rowCount * colCount > maxPreviewCells)
-            return FormatRange(range, wb);
-
-        var rowTexts = new List<string>(rowCount);
-        for (var row = range.Start.Row; row <= range.End.Row; row++)
-        {
-            var cellTexts = new List<string>(colCount);
-            for (var col = range.Start.Col; col <= range.End.Col; col++)
-                cellTexts.Add(FormatScalarValuePreview(sheet.GetCell(row, col)?.Value));
-            rowTexts.Add(string.Join(",", cellTexts));
-        }
-
-        return "{" + string.Join(";", rowTexts) + "}";
-    }
-
-    /// <summary>
-    /// R88-app-name-manager-ui-5-2: evaluates a named FORMULA/constant's own text (e.g. "1.05" for
-    /// TaxRate, no leading "=" -- matching how Workbook.NamedFormulas/ScopedNamedFormulas store it,
-    /// see <see cref="DefineOrUpdateNamedFormula"/>) so the Value column shows its live computed
-    /// result rather than the formula source text again. Uses a fresh, throwaway
-    /// <see cref="FormulaEvaluator"/> (the same one-off pattern used elsewhere for ad-hoc,
-    /// non-cell-anchored evaluation, e.g. DataValidationService), evaluated against the name's own
-    /// scope sheet when it has one, or the workbook's first sheet for a workbook-scoped name (a
-    /// constant like "=1.05" has no sheet dependency, but FormulaEvaluator still needs a sheet
-    /// context to resolve any unqualified references the formula text might contain).
-    /// </summary>
-    private static string FormatNamedFormulaValue(Workbook wb, string formulaText, SheetId? scopeSheetId)
-    {
-        var sheet = (scopeSheetId is { } sheetId ? wb.GetSheet(sheetId) : null) ?? wb.Sheets.FirstOrDefault();
-        if (sheet is null)
-            return formulaText;
-
-        var result = new FormulaEvaluator().Evaluate(formulaText, sheet, wb);
-        return FormatScalarValuePreview(result);
-    }
-
-    private static string FormatScalarValuePreview(ScalarValue? value) =>
-        value switch
-        {
-            null or BlankValue => "",
-            TextValue text => text.Value,
-            NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
-            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-            DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.InvariantCulture),
-            ErrorValue error => error.Code,
-            RangeValue rangeValue => FormatRangeValuePreview(rangeValue),
-            _ => value.ToString() ?? ""
-        };
-
-    private static string FormatRangeValuePreview(RangeValue range)
-    {
-        var rowTexts = new List<string>(range.RowCount);
-        for (var row = 1; row <= range.RowCount; row++)
-        {
-            var cellTexts = new List<string>(range.ColCount);
-            for (var col = 1; col <= range.ColCount; col++)
-                cellTexts.Add(FormatScalarValuePreview(range.At(row, col)));
-            rowTexts.Add(string.Join(",", cellTexts));
-        }
-
-        return "{" + string.Join(";", rowTexts) + "}";
     }
 
     // ── Event handlers ────────────────────────────────────────────────────────
 
     private void NamesList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        if (NamesList.SelectedItem is NamedRangeViewModel vm)
+        if (NamesList.SelectedItem is DefinedNameRow vm)
         {
             RefersToBox.Text = vm.RefersTo;
         }
@@ -217,7 +71,7 @@ public sealed partial class NamedRangeDialog : Window
 
     private void NamesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (NamesList.SelectedItem is not NamedRangeViewModel)
+        if (NamesList.SelectedItem is not DefinedNameRow)
             return;
 
         EditButton_Click(sender, e);
@@ -233,15 +87,15 @@ public sealed partial class NamedRangeDialog : Window
 
         var selected = FilterBox.SelectedIndex switch
         {
-            1 => NamedRangeFilterOption.Workbook,
-            2 => NamedRangeFilterOption.Worksheet,
-            3 => NamedRangeFilterOption.Errors,
-            4 => NamedRangeFilterOption.NoErrors,
-            _ => NamedRangeFilterOption.All
+            1 => DefinedNameFilter.Workbook,
+            2 => DefinedNameFilter.Worksheet,
+            3 => DefinedNameFilter.Errors,
+            4 => DefinedNameFilter.NoErrors,
+            _ => DefinedNameFilter.All
         };
 
-        NamesList.ItemsSource = NamedRangeDialogPlanner.FilterItems(_items, selected).ToList();
-        if (NamesList.SelectedItem is not NamedRangeViewModel)
+        NamesList.ItemsSource = _definedNames.ProjectRows(_items, selected).ToList();
+        if (NamesList.SelectedItem is not DefinedNameRow)
         {
             RefersToBox.Clear();
             UpdateSelectionCommands();
@@ -250,7 +104,7 @@ public sealed partial class NamedRangeDialog : Window
 
     private void UpdateSelectionCommands()
     {
-        var hasSelection = NamesList.SelectedItem is NamedRangeViewModel;
+        var hasSelection = NamesList.SelectedItem is DefinedNameRow;
         EditButton.IsEnabled = hasSelection;
         DeleteButton.IsEnabled = hasSelection;
         RefersToPickerButton.IsEnabled = hasSelection;
@@ -273,14 +127,14 @@ public sealed partial class NamedRangeDialog : Window
             new NameDefinitionDialogResult("", "Workbook", "", _initialRefersTo),
             GetScopeOptions(),
             RequestRangeSelection,
-            isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _) || IsPossibleNamedFormulaText(rangeText),
-            validateName: _workbook.ValidateNamedRangeName) { Owner = this };
+            isValidRange: rangeText => _definedNames.ValidateRefersTo(rangeText).IsValid,
+            validateName: ValidateNameForNativeDialog) { Owner = this };
         ShowNameDefinitionDialog(dialog, originalName: null, originalScope: null, originalScopeSheetId: null);
     }
 
     private void EditButton_Click(object sender, RoutedEventArgs e)
     {
-        if (NamesList.SelectedItem is not NamedRangeViewModel vm)
+        if (NamesList.SelectedItem is not DefinedNameRow vm)
         {
             DialogMessageHelper.ShowWarning(this, UiText.Get("NamedRange_SelectEditMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
             FocusNamesListOrNewButton();
@@ -288,16 +142,20 @@ public sealed partial class NamedRangeDialog : Window
         }
 
         var dialog = new NameDefinitionDialog(
-            new NameDefinitionDialogResult(vm.Name, vm.Scope, vm.Comment, vm.RefersTo, vm.ScopeSheetId),
+            new NameDefinitionDialogResult(vm.Name, vm.ScopeLabel, vm.Comment, vm.RefersTo, vm.Scope.SheetId),
             GetScopeOptions(),
             RequestRangeSelection,
-            isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _) || IsPossibleNamedFormulaText(rangeText),
-            validateName: _workbook.ValidateNamedRangeName)
+            isValidRange: rangeText => _definedNames.ValidateRefersTo(rangeText).IsValid,
+            validateName: ValidateNameForNativeDialog)
         {
             Owner = this
         };
 
-        ShowNameDefinitionDialog(dialog, originalName: vm.Name, originalScope: vm.Scope, originalScopeSheetId: vm.ScopeSheetId);
+        ShowNameDefinitionDialog(
+            dialog,
+            originalName: vm.Name,
+            originalScope: vm.ScopeLabel,
+            originalScopeSheetId: vm.Scope.SheetId);
     }
 
     private void ShowNameDefinitionDialog(
@@ -329,7 +187,7 @@ public sealed partial class NamedRangeDialog : Window
     /// name of the same text) for any name actually scoped to that sheet. There is deliberately no
     /// "ResolveScopeSheetId(string)" helper here any more: every caller that needs a scope identity
     /// already has the real one in hand (from the dialog result or from a row's own
-    /// <see cref="NamedRangeViewModel.ScopeSheetId"/>) and must use that directly.
+    /// <see cref="DefinedNameRow.Scope"/>) and must use that directly.
     /// </summary>
     private void DefineOrUpdateName(
         NameDefinitionDialogResult definition,
@@ -337,39 +195,37 @@ public sealed partial class NamedRangeDialog : Window
         string? originalScope,
         SheetId? originalScopeSheetId)
     {
-        var name = definition.Name.Trim();
-        var rangeText = definition.RefersTo.Trim();
-        var scope = definition.Scope.Trim();
-        var scopeSheetId = definition.ScopeSheetId;
-
-        if (string.IsNullOrWhiteSpace(name))
+        var scope = _definedNames.GetScope(definition.ScopeSheetId);
+        var draft = new DefinedNameDraft(
+            definition.Name,
+            scope,
+            definition.RefersTo,
+            definition.Comment);
+        DefinedNameIdentity? original = originalName is null
+            ? null
+            : new DefinedNameIdentity(originalName, _definedNames.GetScope(originalScopeSheetId));
+        var plan = _definedNames.PlanSave(draft, original);
+        if (!plan.Validation.Name.IsValid)
         {
-            DialogMessageHelper.ShowWarning(this, UiText.Get("NamedRange_NameRequiredMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
+            DialogMessageHelper.ShowWarning(
+                this,
+                DescribeNameError(plan.Validation.Name.Error),
+                UiText.Get("NamedRange_NamedRangeTitle"));
             FocusNamesListOrNewButton();
             return;
         }
 
-        // Editing the exact same (name, scope) pair replaces that entry; anything else — a brand
-        // new name, or an edit that changed the name and/or scope — must not silently clobber an
-        // unrelated existing name already occupying that scope (Excel's New Name dialog rejects
-        // this with "already exists"; cross-scope same-text names are fine and simply coexist).
-        // Scope sameness is compared by actual identity (SheetId?), not by display label, so a
-        // worksheet literally named "Workbook" can't be confused with the global scope sentinel here.
-        var isEditingExisting = originalName is not null && originalScope is not null;
-        var isSameEntry =
-            isEditingExisting &&
-            string.Equals(originalName, name, StringComparison.OrdinalIgnoreCase) &&
-            Nullable.Equals(originalScopeSheetId, scopeSheetId);
-
-        if (!NamedRangeInputParser.TryParseRange(_workbook, rangeText, out var range))
+        if (!plan.Validation.RefersTo.IsValid)
         {
-            // Not a parseable cell range — Excel's Name Manager also supports named
-            // FORMULAS/constants (Refers To can be any formula expression, e.g. "=1.05" or
-            // "=SUM(Sheet1!A:A)", not just a range), so fall back to the formula counterpart of
-            // DefineNamedRangeCommand below instead of rejecting outright.
-            DefineOrUpdateNamedFormula(name, rangeText, scopeSheetId, isSameEntry);
+            DialogMessageHelper.ShowWarning(
+                this,
+                DescribeRefersToError(plan.Validation.RefersTo.Error),
+                UiText.Get("NamedRange_NamedRangeTitle"));
+            FocusRefersToSummary();
             return;
         }
+
+        _ = originalScope;
 
         // NOTE: renaming an existing name (or moving it to a different scope) intentionally does
         // NOT remove the old entry first. FreeX resolves names in formulas by literal text (e.g.
@@ -382,13 +238,7 @@ public sealed partial class NamedRangeDialog : Window
         // formula via a FormulaRewriter (the same way a sheet rename does); that is deferred pending
         // that plumbing.
 
-        var cmd = new DefineNamedRangeCommand(
-            name,
-            range,
-            new NamedRangeMetadata(scope, definition.Comment.Trim()),
-            scopeSheetId,
-            allowRedefine: isSameEntry);
-        var outcome = _commandBus.Execute(_workbook.Id, cmd);
+        var outcome = _commandBus.Execute(_workbook.Id, plan.Command!);
         if (!outcome.Success)
         {
             DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get("NamedRange_DefineFailedMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
@@ -397,80 +247,17 @@ public sealed partial class NamedRangeDialog : Window
         }
 
         RefreshList();
-        if (FindItemByName(name) is { } updated)
+        if (FindItem(plan.Draft.Name, plan.Draft.Scope) is { } updated)
         {
             ApplyFilter();
             NamesList.SelectedItem = updated;
             RefersToBox.Text = updated.RefersTo;
         }
     }
-
-    /// <summary>
-    /// Defines or updates a named FORMULA/constant (Refers To text that isn't a parseable cell
-    /// range) via <see cref="DefineNamedFormulaCommand"/> — the formula counterpart of
-    /// <see cref="DefineNamedRangeCommand"/> used by <see cref="DefineOrUpdateName"/> for ranges.
-    /// Unlike DefineNamedRangeCommand, DefineNamedFormulaCommand always overwrites any existing
-    /// formula of the same name/scope (it has no allowRedefine guard), so New/Edit's own-scope
-    /// duplicate rejection is performed here first, mirroring the range branch's behavior. Takes the
-    /// already-resolved <paramref name="scopeSheetId"/> identity directly (see
-    /// <see cref="DefineOrUpdateName"/>'s doc comment for why no scope-label lookup happens here).
-    /// </summary>
-    private void DefineOrUpdateNamedFormula(string name, string rangeText, SheetId? scopeSheetId, bool isSameEntry)
-    {
-        var formulaText = rangeText.StartsWith('=') ? rangeText[1..].Trim() : rangeText;
-        if (string.IsNullOrWhiteSpace(formulaText))
-        {
-            DialogMessageHelper.ShowWarning(this, UiText.Get("NamedRange_InvalidRangeFormatMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
-            FocusRefersToSummary();
-            return;
-        }
-
-        if (!isSameEntry && NameAlreadyExistsInScope(name, scopeSheetId))
-        {
-            DialogMessageHelper.ShowWarning(this, $"The name '{name}' already exists in this scope.", UiText.Get("NamedRange_NamedRangeTitle"));
-            FocusNamesListOrNewButton();
-            return;
-        }
-
-        var cmd = new DefineNamedFormulaCommand(name, formulaText, scopeSheetId);
-        var outcome = _commandBus.Execute(_workbook.Id, cmd);
-        if (!outcome.Success)
-        {
-            DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get("NamedRange_DefineFailedMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
-            FocusNamesListOrNewButton();
-            return;
-        }
-
-        RefreshList();
-        if (FindItemByName(name) is { } updated)
-        {
-            ApplyFilter();
-            NamesList.SelectedItem = updated;
-            RefersToBox.Text = updated.RefersTo;
-        }
-    }
-
-    /// <summary>
-    /// Whether <paramref name="name"/> is already defined (as either a range or a formula) in the
-    /// exact target scope — used to reject a brand-new named-formula create/rename that would
-    /// otherwise silently overwrite an unrelated existing definition, since
-    /// <see cref="DefineNamedFormulaCommand"/> itself has no such guard.
-    /// </summary>
-    private bool NameAlreadyExistsInScope(string name, SheetId? scopeSheetId) =>
-        scopeSheetId is { } sheetId
-            ? _workbook.ScopedNamedRanges.ContainsKey((name, sheetId)) || _workbook.ScopedNamedFormulas.ContainsKey((name, sheetId))
-            : _workbook.NamedRanges.ContainsKey(name) || _workbook.NamedFormulas.ContainsKey(name);
-
-    /// <summary>
-    /// Accepts any non-blank Refers To text as a potential named formula/constant (Excel's New
-    /// Name dialog allows any formula expression there, not just ranges); actual validity is
-    /// resolved on demand by the formula engine, matching Excel's own lazy behavior.
-    /// </summary>
-    private static bool IsPossibleNamedFormulaText(string rangeText) => !string.IsNullOrWhiteSpace(rangeText);
 
     private void DeleteButton_Click(object sender, RoutedEventArgs e)
     {
-        if (NamesList.SelectedItem is not NamedRangeViewModel vm)
+        if (NamesList.SelectedItem is not DefinedNameRow vm)
         {
             DialogMessageHelper.ShowWarning(this, UiText.Get("NamedRange_SelectDeleteMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
             FocusNamesListOrNewButton();
@@ -482,12 +269,7 @@ public sealed partial class NamedRangeDialog : Window
             return;
         }
 
-        // Uses the row's own tracked scope identity directly (not a re-resolution of vm.Scope's
-        // display label) -- see the R114-app-name-manager-workbook-sentinel-3-2 doc comment on
-        // DefineOrUpdateName for why: a worksheet can legally be named exactly "Workbook", which
-        // would otherwise make Delete indistinguishable from the workbook-global scope and either
-        // fail outright or silently remove an unrelated pre-existing global name of the same text.
-        var cmd = new RemoveNamedRangeCommand(vm.Name, vm.ScopeSheetId);
+        var cmd = _definedNames.BuildDeleteCommand(vm);
         var outcome = _commandBus.Execute(_workbook.Id, cmd);
         if (!outcome.Success)
         {
@@ -498,11 +280,12 @@ public sealed partial class NamedRangeDialog : Window
             RefreshList();
     }
 
-    private NamedRangeViewModel? FindItemByName(string name)
+    private DefinedNameRow? FindItem(string name, DefinedNameScope scope)
     {
         foreach (var item in _items)
         {
-            if (string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase)
+                && item.Scope.HasSameIdentity(scope))
                 return item;
         }
 
@@ -547,11 +330,34 @@ public sealed partial class NamedRangeDialog : Window
     /// on <see cref="DefineOrUpdateName"/>).
     /// </summary>
     private IReadOnlyList<NamedRangeScopeOption> GetScopeOptions()
+        => _definedNames.ScopeChoices
+            .Select(scope => new NamedRangeScopeOption(scope.Label, scope.SheetId))
+            .ToList();
+
+    private string? ValidateNameForNativeDialog(string name)
     {
-        var options = new List<NamedRangeScopeOption> { new("Workbook", null) };
-        options.AddRange(_workbook.Sheets.Select(sheet => new NamedRangeScopeOption(sheet.Name, sheet.Id)));
-        return options;
+        var result = _definedNames.ValidateNameStructure(name);
+        return result.IsValid ? null : DescribeNameError(result.Error);
     }
+
+    private static string DescribeNameError(DefinedNameError error) => error switch
+    {
+        DefinedNameError.Blank => UiText.Get("NamedRange_NameRequiredMessage"),
+        DefinedNameError.TooLong => UiText.Get("InsertLoc_NameErrorTooLong"),
+        DefinedNameError.InvalidFirstCharacter => UiText.Get("InsertLoc_NameErrorInvalidFirstChar"),
+        DefinedNameError.InvalidCharacter => UiText.Get("InsertLoc_NameErrorInvalidChar"),
+        DefinedNameError.LooksLikeReference => UiText.Get("InsertLoc_NameErrorLooksLikeReference"),
+        DefinedNameError.Reserved => UiText.Get("InsertLoc_NameErrorReserved"),
+        DefinedNameError.Duplicate => UiText.Get("InsertLoc_NameErrorDuplicate"),
+        _ => UiText.Get("InsertLoc_NameErrorGeneric"),
+    };
+
+    private static string DescribeRefersToError(RefersToError error) => error switch
+    {
+        RefersToError.Blank => UiText.Get("InsertLoc_RefersToErrorBlank"),
+        RefersToError.NotAFormula => UiText.Get("InsertLoc_RefersToErrorNotAFormula"),
+        _ => UiText.Get("NamedRange_InvalidRangeFormatMessage"),
+    };
 
     public static NamedRangeSelectionRequest CreateRangeSelectionRequest(
         NamedRangeSelectionTarget target,

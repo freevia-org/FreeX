@@ -24,6 +24,9 @@ public readonly record struct DefinedNameScope
     /// <summary>The owning sheet for a worksheet-scoped name; null for the workbook scope.</summary>
     public SheetId? Sheet { get; }
 
+    /// <summary>The stable scope identity used by named-range commands (null means workbook-global).</summary>
+    public SheetId? SheetId => Sheet;
+
     /// <summary>
     /// The display/storage label for this scope: <see cref="WorkbookLabel"/> for the workbook scope, or the
     /// worksheet's name for a sheet scope.
@@ -37,6 +40,13 @@ public readonly record struct DefinedNameScope
     /// <summary>Build a worksheet scope from a sheet id and its display name.</summary>
     public static DefinedNameScope ForSheet(SheetId sheet, string sheetName) =>
         new(isWorkbook: false, sheet: sheet, label: sheetName);
+
+    /// <summary>
+    /// Compares scope identity without consulting display text. This deliberately distinguishes the workbook
+    /// sentinel from a worksheet whose display name is also <c>Workbook</c>.
+    /// </summary>
+    public bool HasSameIdentity(DefinedNameScope other) =>
+        IsWorkbook == other.IsWorkbook && Nullable.Equals(Sheet, other.Sheet);
 
     /// <summary>True when <paramref name="label"/> denotes the workbook scope (case-insensitively).</summary>
     public static bool IsWorkbookLabel(string? label) =>
