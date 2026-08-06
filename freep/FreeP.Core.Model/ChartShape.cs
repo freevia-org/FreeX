@@ -804,6 +804,13 @@ public sealed class ChartShape
     /// </summary>
     public bool ChartExTitleEditRequested { get; set; }
 
+    /// <summary>
+    /// True when an authoring command explicitly changed or removed the native
+    /// ChartEx chart-area shape properties. A false value preserves the native
+    /// <c>cx:chartSpace/cx:spPr</c> payload when the model has not materialized it.
+    /// </summary>
+    public bool ChartExChartAreaEditRequested { get; set; }
+
 
     /// <summary>
     /// Default chart text properties from <c>c:chartSpace/c:txPr</c>. These apply to
@@ -850,6 +857,13 @@ public sealed class ChartShape
     /// ChartEx legend. A false value preserves an untouched native legend node.
     /// </summary>
     public bool ChartExLegendEditRequested { get; set; }
+
+    /// <summary>
+    /// True when an authoring command explicitly changed or removed the native
+    /// ChartEx plot-surface shape properties. A false value preserves the native
+    /// <c>cx:chart/cx:plotArea/cx:plotAreaRegion/cx:plotSurface/cx:spPr</c> payload.
+    /// </summary>
+    public bool ChartExPlotAreaEditRequested { get; set; }
 
 
     /// <summary>True when OOXML <c>c:varyColors</c> asks chart points to use independent fallback colors.</summary>

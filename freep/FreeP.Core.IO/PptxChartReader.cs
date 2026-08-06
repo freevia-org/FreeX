@@ -280,6 +280,20 @@ internal static class PptxChartReader
             },
             TitleStyle = ReadChartTextStyle(chartExTitle?.Element(Cx + "txPr"), scheme),
         };
+        var chartSpaceSpPr = chartSpace.Element(Cx + "spPr");
+        shape.ChartAreaFill = chartSpaceSpPr is null
+            ? null
+            : PptxColorReader.TryReadFill(chartSpaceSpPr, scheme);
+        shape.ChartAreaOutline = chartSpaceSpPr is null
+            ? null
+            : PptxColorReader.TryReadOutline(chartSpaceSpPr.Element(A + "ln"), scheme);
+        var plotSurfaceSpPr = region.Element(Cx + "plotSurface")?.Element(Cx + "spPr");
+        shape.PlotAreaFill = plotSurfaceSpPr is null
+            ? null
+            : PptxColorReader.TryReadFill(plotSurfaceSpPr, scheme);
+        shape.PlotAreaOutline = plotSurfaceSpPr is null
+            ? null
+            : PptxColorReader.TryReadOutline(plotSurfaceSpPr.Element(A + "ln"), scheme);
         var legend = chart.Element(Cx + "legend");
         if (legend is not null)
         {
