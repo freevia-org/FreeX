@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
@@ -2964,12 +2963,12 @@ public sealed class MainWindow : Window
         var execution = FreeWExportWorkflow.ExecuteAsync(
             plan,
             path,
-            (temporaryPath, _) =>
+            (stream, _) =>
             {
                 var paginator = PrintLayout.BuildPaginator(_editor);
                 paginator.ComputePageCount();
                 var bytes = PdfExport.RenderToBytes(paginator, _file.DisplayName);
-                File.WriteAllBytes(temporaryPath, bytes);
+                stream.Write(bytes);
                 return ValueTask.FromResult(new FreeWExportArtifact(paginator.PageCount, "WPF"));
             }).GetAwaiter().GetResult();
         if (execution.Succeeded)
@@ -3012,11 +3011,11 @@ public sealed class MainWindow : Window
         var execution = FreeWExportWorkflow.ExecuteAsync(
             plan,
             path,
-            (temporaryPath, _) =>
+            (stream, _) =>
             {
                 var paginator = PrintLayout.BuildPaginator(_editor);
                 var bytes = XpsExport.RenderToBytes(paginator);
-                File.WriteAllBytes(temporaryPath, bytes);
+                stream.Write(bytes);
                 return ValueTask.FromResult(new FreeWExportArtifact());
             }).GetAwaiter().GetResult();
         if (execution.Succeeded)

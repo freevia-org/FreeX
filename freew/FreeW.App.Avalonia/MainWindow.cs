@@ -51,7 +51,7 @@ public sealed partial class MainWindow : Window
     private readonly FreeWPortablePrintWorkflow _portablePrintWorkflow;
     private readonly Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> _showPrintSelectionDialog;
     private readonly Action<IInputElement?> _restorePrintOwnerFocus;
-    private readonly Action<DocumentView, string> _savePrintPdf;
+    private readonly Action<DocumentView, Stream> _savePrintPdf;
     private readonly Func<IStorageProvider, AvaloniaFilePickerSaveRequest, Task<(bool Canceled, string? LocalPath)>> _pickExportPath;
     private readonly Func<Task<string?>> _pickPdfImportPathAsync;
     private readonly Func<bool, string, Task<string?>>? _askHeaderFooterText;
@@ -162,7 +162,7 @@ public sealed partial class MainWindow : Window
         Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
         Func<string, Exception, Task>? showFileCommandErrorAsync = null,
         Func<bool, string, Task<string?>>? askHeaderFooterText = null,
-        Action<DocumentView, string>? savePrintPdf = null,
+        Action<DocumentView, Stream>? savePrintPdf = null,
         DocumentPersistenceWorkflow? documentPersistence = null,
         Func<Task<string?>>? pickPdfImportPathAsync = null)
     {
@@ -175,7 +175,7 @@ public sealed partial class MainWindow : Window
             ((owner, discovery, cancellationToken) =>
                 CupsPrintDialog.ShowAsync(owner, discovery, cancellationToken: cancellationToken));
         _restorePrintOwnerFocus = restorePrintOwnerFocus ?? RestorePrintOwnerFocus;
-        _savePrintPdf = savePrintPdf ?? ((view, path) => FreeWAvaloniaPdfExport.Save(view, path));
+        _savePrintPdf = savePrintPdf ?? ((view, stream) => FreeWAvaloniaPdfExport.Save(view, stream));
         _pickExportPath = pickExportPath ?? PickExportPathAsync;
         _pickPdfImportPathAsync = pickPdfImportPathAsync ?? PromptPdfImportPathAsync;
         _askHeaderFooterText = askHeaderFooterText;
@@ -3372,9 +3372,9 @@ public sealed partial class MainWindow : Window
         var execution = await FreeWExportWorkflow.ExecuteAsync(
             plan,
             path,
-            (temporaryPath, _) =>
+            (stream, _) =>
             {
-                var result = FreeWAvaloniaPdfExport.Save(_editor, temporaryPath);
+                var result = FreeWAvaloniaPdfExport.Save(_editor, stream);
                 return ValueTask.FromResult(new FreeWExportArtifact(result.PageCount, result.Backend.ToString()));
             });
         _status.Text = execution.Message;
@@ -3391,7 +3391,7 @@ public sealed partial class MainWindow : Window
         {
             var execution = await _portablePrintWorkflow.ExecuteAsync(
                 (discovery, token) => _showPrintSelectionDialog(this, discovery, token),
-                (temporaryPath, _) =>
+                (stream, _) =>
                 {
                     var printView = _editor;
                     if (document is not null)
@@ -3400,7 +3400,7 @@ public sealed partial class MainWindow : Window
                         printView.LoadDocument(document);
                     }
 
-                    _savePrintPdf(printView, temporaryPath);
+                    _savePrintPdf(printView, stream);
                     return ValueTask.CompletedTask;
                 },
                 cancellation.Token);
@@ -3449,9 +3449,8 @@ public sealed partial class MainWindow : Window
         var execution = await FreeWExportWorkflow.ExecuteAsync(
             plan,
             path,
-            (temporaryPath, _) =>
+            (stream, _) =>
             {
-                using var stream = File.Create(temporaryPath);
                 FreeWAvaloniaXpsExport.Save(_editor, stream);
                 return ValueTask.FromResult(new FreeWExportArtifact());
             });

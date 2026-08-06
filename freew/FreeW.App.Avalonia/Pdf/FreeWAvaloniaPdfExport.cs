@@ -38,19 +38,6 @@ public static class FreeWAvaloniaPdfExport
         return Write(document, stream);
     }
 
-    public static FreeWAvaloniaPdfExportResult Save(DocumentView view, string path)
-    {
-        ArgumentNullException.ThrowIfNull(view);
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-
-        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
-        if (!string.IsNullOrWhiteSpace(directory))
-            Directory.CreateDirectory(directory);
-
-        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-        return Save(view, stream);
-    }
-
     private static FreeWAvaloniaPdfExportResult Write(PdfContentDocument document, Stream stream)
     {
         // Skia shapes (HarfBuzz) and automatically embeds/subsets the fonts it draws, so non-WinAnsi

@@ -44,15 +44,4 @@ public static class FreeWAvaloniaXpsExport
         stream.Write(bytes);
     }
 
-    public static void Save(DocumentView view, string path, XpsWriterOptions? options = null)
-    {
-        ArgumentNullException.ThrowIfNull(view);
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-
-        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
-        if (!string.IsNullOrWhiteSpace(directory))
-            Directory.CreateDirectory(directory);
-        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-        Save(view, stream, options);
-    }
 }

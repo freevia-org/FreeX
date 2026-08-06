@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -32,7 +33,7 @@ public sealed class PdfExportTests
     }
 
     [StaFact]
-    public void Save_SampleDocument_WritesNonEmptyFile()
+    public void SharedWorkflow_SampleDocument_WritesNonEmptyFile()
     {
         var view = BuildSampleView();
         var paginator = PrintLayout.BuildPaginator(view);
@@ -40,8 +41,18 @@ public sealed class PdfExportTests
 
         try
         {
-            PdfExport.Save(paginator, path, "Sample");
+            var plan = FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Pdf, "Sample");
+            var execution = FreeWExportWorkflow.ExecuteAsync(
+                plan,
+                path,
+                (stream, _) =>
+                {
+                    var bytes = PdfExport.RenderToBytes(paginator, "Sample");
+                    stream.Write(bytes);
+                    return ValueTask.FromResult(new FreeWExportArtifact(paginator.PageCount, "WPF"));
+                }).GetAwaiter().GetResult();
 
+            Assert.True(execution.Succeeded, execution.Message);
             Assert.True(File.Exists(path));
             Assert.True(new FileInfo(path).Length > 0, "Exported PDF file should not be empty.");
             var header = new byte[5];
@@ -78,8 +89,18 @@ public sealed class PdfExportTests
             view.LoadModel(loaded);
             var paginator = PrintLayout.BuildPaginator(view);
 
-            PdfExport.Save(paginator, pdfPath, "Quarterly Report");
+            var plan = FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Pdf, "Quarterly Report");
+            var execution = FreeWExportWorkflow.ExecuteAsync(
+                plan,
+                pdfPath,
+                (stream, _) =>
+                {
+                    var bytes = PdfExport.RenderToBytes(paginator, "Quarterly Report");
+                    stream.Write(bytes);
+                    return ValueTask.FromResult(new FreeWExportArtifact(paginator.PageCount, "WPF"));
+                }).GetAwaiter().GetResult();
 
+            Assert.True(execution.Succeeded, execution.Message);
             Assert.True(File.Exists(pdfPath));
             var bytes = File.ReadAllBytes(pdfPath);
             Assert.True(bytes.Length > 0);

@@ -76,7 +76,7 @@ public static class FreeWExportWorkflow
     public static async Task<FreeWExportExecutionResult> ExecuteAsync(
         FreeWExportRequestPlan plan,
         string path,
-        Func<string, CancellationToken, ValueTask<FreeWExportArtifact>> renderAsync,
+        Func<Stream, CancellationToken, ValueTask<FreeWExportArtifact>> renderAsync,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
@@ -92,7 +92,18 @@ public static class FreeWExportWorkflow
                 Directory.CreateDirectory(directory);
 
             temporaryPath = ExportAtomicWriter.CreateTempPath(path);
-            var artifact = await renderAsync(temporaryPath, cancellationToken);
+            FreeWExportArtifact artifact;
+            await using (var stream = new FileStream(
+                temporaryPath,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 81920,
+                useAsync: true))
+            {
+                artifact = await renderAsync(stream, cancellationToken);
+                await stream.FlushAsync(cancellationToken);
+            }
             cancellationToken.ThrowIfCancellationRequested();
             ExportAtomicWriter.ReplaceTarget(temporaryPath, path);
             temporaryPath = null;
@@ -239,7 +250,7 @@ public sealed class FreeWPortablePrintWorkflow
 
     public async Task<FreeWPrintExecutionResult> ExecuteAsync(
         Func<PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> selectAsync,
-        Func<string, CancellationToken, ValueTask> renderPdfAsync,
+        Func<Stream, CancellationToken, ValueTask> renderPdfAsync,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(selectAsync);
@@ -268,7 +279,17 @@ public sealed class FreeWPortablePrintWorkflow
             temporaryPath = Path.Combine(
                 Path.GetTempPath(),
                 $"FreeW-print-{Guid.NewGuid():N}.pdf");
-            await renderPdfAsync(temporaryPath, cancellationToken);
+            await using (var stream = new FileStream(
+                temporaryPath,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 81920,
+                useAsync: true))
+            {
+                await renderPdfAsync(stream, cancellationToken);
+                await stream.FlushAsync(cancellationToken);
+            }
             cancellationToken.ThrowIfCancellationRequested();
             var submission = await _printService.SubmitAsync(
                 temporaryPath,

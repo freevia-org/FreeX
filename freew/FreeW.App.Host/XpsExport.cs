@@ -29,8 +29,7 @@ namespace FreeW.App.Host;
 /// return the bytes so the caller can flush them atomically off-thread via
 /// <see cref="Free.Shared.Shell.ExportAtomicWriter"/>. Rendering into a fresh in-memory package side-steps
 /// dotnet/wpf #9418 (the <c>IOException</c> seen when <see cref="XpsDocument"/> reopens an existing file in
-/// update mode); the <see cref="Save"/> helper likewise writes to a fresh path with
-/// <see cref="FileMode.Create"/>.
+/// update mode).
 /// </para>
 /// </summary>
 internal static class XpsExport
@@ -61,16 +60,6 @@ internal static class XpsExport
         }
 
         return ms.ToArray();
-    }
-
-    /// <summary>Renders the paginator to XPS and writes it atomically to <paramref name="path"/>.</summary>
-    public static void Save(DocumentPaginator paginator, string path)
-    {
-        ArgumentNullException.ThrowIfNull(paginator);
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-
-        var bytes = RenderToBytes(paginator);
-        Free.Shared.Shell.ExportAtomicWriter.WriteAllBytes(path, bytes);
     }
 
     private static void EnsurePrintable(DocumentPaginator paginator)

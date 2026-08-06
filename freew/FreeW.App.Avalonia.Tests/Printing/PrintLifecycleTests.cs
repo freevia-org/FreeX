@@ -143,7 +143,6 @@ public sealed class PrintLifecycleTests
     public async Task FinishMergePrinter_prints_selected_record_without_replacing_preview_or_session()
     {
         string? exportedText = null;
-        string? temporaryPdfPath = null;
         var printService = new FakePrintService(isSupported: true);
 
         await Session.Dispatch(async () =>
@@ -152,11 +151,10 @@ public sealed class PrintLifecycleTests
                 printService,
                 showPrintSelectionDialog: (_, _, _) =>
                     Task.FromResult<PrintSelection?>(new PrintSelection("Office")),
-                savePrintPdf: (view, path) =>
+                savePrintPdf: (view, stream) =>
                 {
                     exportedText = view.Document.PlainText;
-                    temporaryPdfPath = path;
-                    File.WriteAllText(path, "%PDF-1.4 test");
+                    stream.Write(System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 test"));
                 });
             var template = TextDocument.CreateEmpty();
             template.Blocks.Clear();
@@ -193,16 +191,15 @@ public sealed class PrintLifecycleTests
         }, CancellationToken.None);
 
         printService.SubmittedFileExisted.Should().BeTrue();
-        printService.SubmittedPdfPath.Should().Be(temporaryPdfPath);
-        temporaryPdfPath.Should().NotBeNull();
-        File.Exists(temporaryPdfPath!).Should().BeFalse("PrintAsync cleans its temporary merged PDF");
+        printService.SubmittedPdfPath.Should().NotBeNull();
+        File.Exists(printService.SubmittedPdfPath!).Should().BeFalse("PrintAsync cleans its temporary merged PDF");
     }
 
     private static MainWindow CreateWindow(
         IPlatformPrintService printService,
         Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>>? showPrintSelectionDialog = null,
         Action<IInputElement?>? restorePrintOwnerFocus = null,
-        Action<DocumentView, string>? savePrintPdf = null)
+        Action<DocumentView, Stream>? savePrintPdf = null)
     {
         var settingsPath = Path.Combine(
             Path.GetTempPath(),

@@ -41,23 +41,24 @@ public sealed class FreeWOutputWorkflowTests : IDisposable
         var target = Path.Combine(_tempDirectory, "Document.pdf");
         await File.WriteAllTextAsync(target, "old");
         var plan = FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Pdf, "Document");
-        string? renderPath = null;
+        Stream? renderStream = null;
 
         var result = await FreeWExportWorkflow.ExecuteAsync(
             plan,
             target,
-            async (path, _) =>
+            async (stream, token) =>
             {
-                renderPath = path;
-                await File.WriteAllTextAsync(path, "new");
+                renderStream = stream;
+                await stream.WriteAsync(System.Text.Encoding.UTF8.GetBytes("new"), token);
                 return new FreeWExportArtifact(2, "Skia");
             });
 
         result.Succeeded.Should().BeTrue();
         result.Message.Should().Contain("2 pages").And.Contain("Skia").And.Contain("Document.pdf");
         (await File.ReadAllTextAsync(target)).Should().Be("new");
-        renderPath.Should().NotBe(target);
-        File.Exists(renderPath).Should().BeFalse();
+        renderStream.Should().NotBeNull();
+        renderStream!.CanWrite.Should().BeFalse();
+        Directory.GetFiles(_tempDirectory).Should().Equal(target);
     }
 
     [Fact]
@@ -66,22 +67,24 @@ public sealed class FreeWOutputWorkflowTests : IDisposable
         var target = Path.Combine(_tempDirectory, "Document.xps");
         await File.WriteAllTextAsync(target, "old");
         var plan = FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Xps, "Document");
-        string? renderPath = null;
+        Stream? renderStream = null;
 
         var result = await FreeWExportWorkflow.ExecuteAsync(
             plan,
             target,
-            async (path, _) =>
+            async (stream, token) =>
             {
-                renderPath = path;
-                await File.WriteAllTextAsync(path, "partial");
+                renderStream = stream;
+                await stream.WriteAsync(System.Text.Encoding.UTF8.GetBytes("partial"), token);
                 throw new InvalidOperationException("render failed");
             });
 
         result.Outcome.Should().Be(FreeWExportExecutionOutcome.Failed);
         result.Message.Should().Contain("render failed");
         (await File.ReadAllTextAsync(target)).Should().Be("old");
-        File.Exists(renderPath).Should().BeFalse();
+        renderStream.Should().NotBeNull();
+        renderStream!.CanWrite.Should().BeFalse();
+        Directory.GetFiles(_tempDirectory).Should().Equal(target);
     }
 
     [Fact]
@@ -110,21 +113,23 @@ public sealed class FreeWOutputWorkflowTests : IDisposable
             Submission = new PrintSubmissionResult(PrintSubmissionStatus.Submitted, "Office"),
         };
         var workflow = new FreeWPortablePrintWorkflow(service);
-        string? renderedPath = null;
+        Stream? renderedStream = null;
 
         var result = await workflow.ExecuteAsync(
             (discovery, _) => Task.FromResult<PrintSelection?>(new("Office", Copies: 2)),
-            async (path, _) =>
+            async (stream, token) =>
             {
-                renderedPath = path;
-                await File.WriteAllTextAsync(path, "pdf");
+                renderedStream = stream;
+                await stream.WriteAsync(System.Text.Encoding.UTF8.GetBytes("pdf"), token);
             });
 
         result.Succeeded.Should().BeTrue();
         result.Message.Should().Be("Sent to printer Office.");
-        service.SubmittedPath.Should().Be(renderedPath);
+        renderedStream.Should().NotBeNull();
+        renderedStream!.CanWrite.Should().BeFalse();
+        service.SubmittedPath.Should().NotBeNull();
         service.SubmittedFileExisted.Should().BeTrue();
-        File.Exists(renderedPath).Should().BeFalse();
+        File.Exists(service.SubmittedPath!).Should().BeFalse();
     }
 
     [Fact]

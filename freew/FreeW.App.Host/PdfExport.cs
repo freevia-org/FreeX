@@ -46,14 +46,6 @@ internal static class PdfExport
         return WpfRasterPdfWriter.WriteToBytes(BuildDocument(paginator, title));
     }
 
-    /// <summary>Renders the paginator to PDF and writes it directly to <paramref name="path"/>.</summary>
-    public static void Save(DocumentPaginator paginator, string path, string? title = null)
-    {
-        ArgumentNullException.ThrowIfNull(paginator);
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        WpfRasterPdfWriter.Save(BuildDocument(paginator, title), path);
-    }
-
     private static PdfRasterDocument BuildDocument(DocumentPaginator paginator, string? title)
     {
         // Force a valid page count so GetPage covers the whole document.
