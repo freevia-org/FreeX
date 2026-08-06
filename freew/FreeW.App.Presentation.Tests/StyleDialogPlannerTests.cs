@@ -18,6 +18,47 @@ public sealed class StyleDialogPlannerTests
     }
 
     [Fact]
+    public void Surface_OrdersDefinitionAndManageControlsForEitherRenderer()
+    {
+        var surface = StyleDialogPlanner.Surface;
+
+        surface.ActionButtonWidth.Should().Be(72);
+        surface.Fields.Select(field => field.Kind).Should().Equal(Enum.GetValues<StyleDialogFieldKind>());
+        surface.Effects.Select(effect => effect.Kind).Should().Equal(Enum.GetValues<StyleDialogEffectKind>());
+        surface.Fields.Select(field => field.AutomationId).Should().OnlyHaveUniqueItems();
+        surface.Effects.Select(effect => effect.AutomationId).Should().OnlyHaveUniqueItems();
+        surface.Field(StyleDialogFieldKind.Name).MinWidth.Should().Be(280);
+
+        surface.Manage.Title.Should().Be(StyleDialogPlanner.Text.ManageTitle);
+        surface.Manage.Field(ManageStyleFieldKind.Styles).MinHeight.Should().Be(220);
+        surface.Manage.Actions.Select(action => action.Kind).Should().Equal(Enum.GetValues<ManageStyleCommandKind>());
+        surface.Manage.Actions.Select(action => action.AutomationId).Should().OnlyHaveUniqueItems();
+        surface.Manage.Action(ManageStyleCommandKind.Apply).IsDefault.Should().BeTrue();
+        surface.Manage.Action(ManageStyleCommandKind.Close).IsCancel.Should().BeTrue();
+        surface.Manage.Action(ManageStyleCommandKind.Delete).ActionKind.Should().Be(ManageStyleActionKind.Delete);
+        surface.Manage.Action(ManageStyleCommandKind.Close).ActionKind.Should().BeNull();
+    }
+
+    [Fact]
+    public void CaptureControlState_MapsTypedFormattingEffects()
+    {
+        var state = StyleDialogPlanner.CaptureControlState(
+            "Callout",
+            basedOnIndex: 1,
+            nextStyleIndex: 2,
+            fontSizeIndex: 3,
+            colorIndex: 4,
+            alignmentIndex: 1,
+            kind => kind is StyleDialogEffectKind.Bold or StyleDialogEffectKind.Underline);
+
+        state.Name.Should().Be("Callout");
+        state.Bold.Should().BeTrue();
+        state.Italic.Should().BeFalse();
+        state.Underline.Should().BeTrue();
+        state.AlignmentIndex.Should().Be(1);
+    }
+
+    [Fact]
     public void TryBuildDefinition_TrimsName_AndMapsFormattingChoices()
     {
         var input = new StyleDialogInput(
@@ -210,6 +251,7 @@ public sealed class StyleDialogPlannerTests
         session.State.SelectedRow!.Id.Should().Be(custom.Id);
         session.State.SortIndex.Should().Be(0);
         session.State.Buttons.Should().Be(new ManageStyleButtonState(true, true, true));
+        session.State.Buttons.IsEnabled(ManageStyleCommandKind.Close).Should().BeTrue();
 
         var sorted = session.PlanSort(1);
 

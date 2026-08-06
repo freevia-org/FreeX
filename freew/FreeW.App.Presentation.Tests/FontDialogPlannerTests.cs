@@ -41,6 +41,59 @@ public sealed class FontDialogPlannerTests
     }
 
     [Fact]
+    public void Surface_GroupsFieldsAndEffectsForEitherRenderer()
+    {
+        var surface = FontDialogPlanner.Surface;
+
+        surface.Title.Should().Be(FontDialogPlanner.Text.Title);
+        surface.WindowWidth.Should().Be(460);
+        surface.ActionButtonWidth.Should().Be(72);
+        surface.Tabs.Select(tab => tab.Kind)
+            .Should().Equal(FontDialogTabKind.Font, FontDialogTabKind.Advanced);
+        surface.Tabs[0].Fields.Should().Equal(
+            FontDialogFieldKind.FontFamily,
+            FontDialogFieldKind.FontSize,
+            FontDialogFieldKind.Color);
+        surface.Tabs[1].Fields.Should().HaveCount(7);
+        surface.Fields.Select(field => field.AutomationId).Should().OnlyHaveUniqueItems();
+        surface.Effects.Select(effect => effect.Kind).Should().Equal(Enum.GetValues<FontDialogEffectKind>());
+        surface.Effects.Select(effect => effect.AutomationId).Should().OnlyHaveUniqueItems();
+        surface.Effect(FontDialogEffectKind.Hidden).IsThreeState.Should().BeTrue();
+        surface.Effect(FontDialogEffectKind.SmallCaps).IsThreeState.Should().BeFalse();
+        surface.Field(FontDialogFieldKind.StylisticSet).ToolTip
+            .Should().Be(FontDialogPlanner.StylisticSetToolTip);
+    }
+
+    [Fact]
+    public void CaptureControlState_MapsTypedEffectsToAcceptanceState()
+    {
+        var state = FontDialogPlanner.CaptureControlState(
+            "Aptos",
+            "11",
+            colorIndex: 2,
+            characterSpacingText: "1",
+            kerningMinSizeText: "8",
+            positionText: "-2",
+            ligatureIndex: 3,
+            stylisticSetText: "4",
+            numberFormIndex: 1,
+            numberSpacingIndex: 2,
+            kind => kind switch
+            {
+                FontDialogEffectKind.Bold or FontDialogEffectKind.Hidden => true,
+                FontDialogEffectKind.Italic => null,
+                _ => false,
+            });
+
+        state.FontFamilyText.Should().Be("Aptos");
+        state.Bold.Should().BeTrue();
+        state.Italic.Should().BeNull();
+        state.Hidden.Should().BeTrue();
+        state.SmallCaps.Should().BeFalse();
+        state.NumberSpacingIndex.Should().Be(2);
+    }
+
+    [Fact]
     public void BuildInitialState_ProjectsCurrentRunFormattingToDialogState()
     {
         var current = new RunFormatting

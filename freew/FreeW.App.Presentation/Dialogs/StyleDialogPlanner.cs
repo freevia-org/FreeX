@@ -35,6 +35,98 @@ public sealed record StyleDialogTextCatalog(
     string DeleteLabel,
     string CloseLabel);
 
+public enum StyleDialogFieldKind
+{
+    Name,
+    BasedOn,
+    NextStyle,
+    Formatting,
+    FontSize,
+    TextColor,
+    Alignment,
+}
+
+public enum StyleDialogEffectKind
+{
+    Bold,
+    Italic,
+    Underline,
+}
+
+public enum ManageStyleFieldKind
+{
+    Sort,
+    Styles,
+}
+
+public enum ManageStyleCommandKind
+{
+    Apply,
+    Modify,
+    Delete,
+    Close,
+}
+
+public sealed record StyleDialogFieldSpec(
+    StyleDialogFieldKind Kind,
+    string Label,
+    double MinWidth,
+    string AutomationId);
+
+public sealed record StyleDialogEffectSpec(
+    StyleDialogEffectKind Kind,
+    string Label,
+    string AutomationId);
+
+public sealed record ManageStyleFieldSpec(
+    ManageStyleFieldKind Kind,
+    string Label,
+    double MinWidth,
+    double MinHeight,
+    string AutomationId);
+
+public sealed record ManageStyleActionSpec(
+    ManageStyleCommandKind Kind,
+    string Label,
+    string AutomationId,
+    bool IsDefault = false,
+    bool IsCancel = false)
+{
+    public ManageStyleActionKind? ActionKind => Kind switch
+    {
+        ManageStyleCommandKind.Apply => ManageStyleActionKind.Apply,
+        ManageStyleCommandKind.Modify => ManageStyleActionKind.Modify,
+        ManageStyleCommandKind.Delete => ManageStyleActionKind.Delete,
+        _ => null,
+    };
+}
+
+public sealed record ManageStyleSurfaceSpec(
+    string Title,
+    double ActionButtonWidth,
+    IReadOnlyList<ManageStyleFieldSpec> Fields,
+    IReadOnlyList<ManageStyleActionSpec> Actions)
+{
+    public ManageStyleFieldSpec Field(ManageStyleFieldKind kind) =>
+        Fields.First(field => field.Kind == kind);
+
+    public ManageStyleActionSpec Action(ManageStyleCommandKind kind) =>
+        Actions.First(action => action.Kind == kind);
+}
+
+public sealed record StyleDialogSurfaceSpec(
+    double ActionButtonWidth,
+    IReadOnlyList<StyleDialogFieldSpec> Fields,
+    IReadOnlyList<StyleDialogEffectSpec> Effects,
+    ManageStyleSurfaceSpec Manage)
+{
+    public StyleDialogFieldSpec Field(StyleDialogFieldKind kind) =>
+        Fields.First(field => field.Kind == kind);
+
+    public StyleDialogEffectSpec Effect(StyleDialogEffectKind kind) =>
+        Effects.First(effect => effect.Kind == kind);
+}
+
 public enum StyleDialogFocusTarget
 {
     Name,
@@ -80,7 +172,16 @@ public sealed record StyleDialogInitialState(
     int FontSizeIndex,
     int ColorIndex,
     int AlignmentIndex,
-    StyleDialogFocusTarget InitialFocus);
+    StyleDialogFocusTarget InitialFocus)
+{
+    public bool EffectValue(StyleDialogEffectKind kind) => kind switch
+    {
+        StyleDialogEffectKind.Bold => Bold,
+        StyleDialogEffectKind.Italic => Italic,
+        StyleDialogEffectKind.Underline => Underline,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+}
 
 public sealed record StyleDialogControlState(
     string? Name,
@@ -91,7 +192,16 @@ public sealed record StyleDialogControlState(
     bool Underline,
     int FontSizeIndex,
     int ColorIndex,
-    int AlignmentIndex);
+    int AlignmentIndex)
+{
+    public bool EffectValue(StyleDialogEffectKind kind) => kind switch
+    {
+        StyleDialogEffectKind.Bold => Bold,
+        StyleDialogEffectKind.Italic => Italic,
+        StyleDialogEffectKind.Underline => Underline,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+}
 
 public sealed record StyleDialogAcceptance(
     StyleDefinitionResult? Result,
@@ -227,7 +337,17 @@ public enum ManageStyleActionKind
     Delete,
 }
 
-public sealed record ManageStyleButtonState(bool ApplyEnabled, bool ModifyEnabled, bool DeleteEnabled);
+public sealed record ManageStyleButtonState(bool ApplyEnabled, bool ModifyEnabled, bool DeleteEnabled)
+{
+    public bool IsEnabled(ManageStyleCommandKind kind) => kind switch
+    {
+        ManageStyleCommandKind.Apply => ApplyEnabled,
+        ManageStyleCommandKind.Modify => ModifyEnabled,
+        ManageStyleCommandKind.Delete => DeleteEnabled,
+        ManageStyleCommandKind.Close => true,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+}
 
 public sealed record ManageStylesDialogState(
     StyleDialogSortOrder SortOrder,
@@ -343,6 +463,40 @@ public static class StyleDialogPlanner
         DeleteLabel: "Delete",
         CloseLabel: "Close");
 
+    public static StyleDialogSurfaceSpec Surface { get; } = new(
+        ActionButtonWidth: 72,
+        Fields:
+        [
+            new(StyleDialogFieldKind.Name, Text.NameLabel, 280, "StyleDialogNameTextBox"),
+            new(StyleDialogFieldKind.BasedOn, Text.BasedOnLabel, 280, "StyleDialogBasedOnComboBox"),
+            new(StyleDialogFieldKind.NextStyle, Text.NextStyleLabel, 280, "StyleDialogNextStyleComboBox"),
+            new(StyleDialogFieldKind.Formatting, Text.FormattingLabel, 0, "StyleDialogFormattingPanel"),
+            new(StyleDialogFieldKind.FontSize, Text.FontSizeLabel, 100, "StyleDialogFontSizeComboBox"),
+            new(StyleDialogFieldKind.TextColor, Text.TextColorLabel, 160, "StyleDialogTextColorComboBox"),
+            new(StyleDialogFieldKind.Alignment, Text.AlignmentLabel, 160, "StyleDialogAlignmentComboBox"),
+        ],
+        Effects:
+        [
+            new(StyleDialogEffectKind.Bold, "Bold", "StyleDialogBoldCheckBox"),
+            new(StyleDialogEffectKind.Italic, "Italic", "StyleDialogItalicCheckBox"),
+            new(StyleDialogEffectKind.Underline, "Underline", "StyleDialogUnderlineCheckBox"),
+        ],
+        Manage: new ManageStyleSurfaceSpec(
+            Text.ManageTitle,
+            ActionButtonWidth: 80,
+            Fields:
+            [
+                new(ManageStyleFieldKind.Sort, Text.SortLabel, 160, 0, "ManageStylesSortComboBox"),
+                new(ManageStyleFieldKind.Styles, string.Empty, 320, 220, "ManageStylesListBox"),
+            ],
+            Actions:
+            [
+                new(ManageStyleCommandKind.Apply, Text.ApplyLabel, "ManageStylesApplyButton", IsDefault: true),
+                new(ManageStyleCommandKind.Modify, Text.ModifyLabel, "ManageStylesModifyButton"),
+                new(ManageStyleCommandKind.Delete, Text.DeleteLabel, "ManageStylesDeleteButton"),
+                new(ManageStyleCommandKind.Close, Text.CloseLabel, "ManageStylesCloseButton", IsCancel: true),
+            ]));
+
     public static readonly IReadOnlyList<StyleDialogFontSizeChoice> FontSizes =
     [
         new("(default)", null),
@@ -420,6 +574,28 @@ public static class StyleDialogPlanner
             existing.Run,
             existing.Paragraph,
             existing.NextStyleId);
+    }
+
+    public static StyleDialogControlState CaptureControlState(
+        string? name,
+        int basedOnIndex,
+        int nextStyleIndex,
+        int fontSizeIndex,
+        int colorIndex,
+        int alignmentIndex,
+        Func<StyleDialogEffectKind, bool> effectValue)
+    {
+        ArgumentNullException.ThrowIfNull(effectValue);
+        return new StyleDialogControlState(
+            name,
+            basedOnIndex,
+            nextStyleIndex,
+            effectValue(StyleDialogEffectKind.Bold),
+            effectValue(StyleDialogEffectKind.Italic),
+            effectValue(StyleDialogEffectKind.Underline),
+            fontSizeIndex,
+            colorIndex,
+            alignmentIndex);
     }
 
     public static IReadOnlyDictionary<string, string> BuildStyleNamesById(TextDocument document)

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -26,12 +27,12 @@ internal static class FontDialog
         RunFormatting? result = null;
         var session = FontDialogPlanner.CreateSession(current, CultureInfo.CurrentCulture);
         var state = session.InitialState;
-        var text = FontDialogPlanner.Text;
+        var surface = FontDialogPlanner.Surface;
 
         var dialog = new Window
         {
-            Title = text.Title,
-            Width = 460,
+            Title = surface.Title,
+            Width = surface.WindowWidth,
             SizeToContent = SizeToContent.Height,
             ResizeMode = ResizeMode.NoResize,
             WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
@@ -42,25 +43,28 @@ internal static class FontDialog
         var familyBox = new TextBox
         {
             Text = state.FontFamilyText,
-            MinWidth = 200,
+            MinWidth = surface.Field(FontDialogFieldKind.FontFamily).MinWidth,
             Margin = new Thickness(0, 0, 0, 8),
         };
 
-        var sizeBox = new ComboBox { MinWidth = 80, IsEditable = true, Margin = new Thickness(0, 0, 0, 8) };
+        var sizeBox = new ComboBox { MinWidth = surface.Field(FontDialogFieldKind.FontSize).MinWidth, IsEditable = true, Margin = new Thickness(0, 0, 0, 8) };
         foreach (var size in FontDialogPlanner.SizeChoices)
             sizeBox.Items.Add(size.Label);
         sizeBox.Text = state.FontSizeText;
 
-        var boldCheck      = new CheckBox { Content = text.BoldLabel,             IsChecked = state.Bold,          Margin = new Thickness(0, 0, 12, 4) };
-        var italicCheck    = new CheckBox { Content = text.ItalicLabel,           IsChecked = state.Italic,        Margin = new Thickness(0, 0, 12, 4) };
-        var underlineCheck = new CheckBox { Content = text.UnderlineLabel,        IsChecked = state.Underline,     Margin = new Thickness(0, 0, 12, 4) };
-        var strikeCheck    = new CheckBox { Content = text.StrikethroughLabel,    IsChecked = state.Strikethrough, Margin = new Thickness(0, 0, 12, 4) };
-        var doubleStrikeCheck = new CheckBox { Content = text.DoubleStrikethroughLabel, IsChecked = state.DoubleStrikethrough, Margin = new Thickness(0, 0, 12, 4) };
-        var hiddenCheck    = new CheckBox { Content = text.HiddenLabel,           IsChecked = state.Hidden,        Margin = new Thickness(0, 0, 12, 4) };
-        var smallCapsCheck = new CheckBox { Content = text.SmallCapsLabel,        IsChecked = state.SmallCaps,     Margin = new Thickness(0, 0, 12, 4) };
-        var allCapsCheck   = new CheckBox { Content = text.AllCapsLabel,          IsChecked = state.AllCaps,       Margin = new Thickness(0, 0, 12, 4) };
-        var superCheck     = new CheckBox { Content = text.SuperscriptLabel,      IsChecked = state.Superscript,   Margin = new Thickness(0, 0, 12, 4) };
-        var subCheck       = new CheckBox { Content = text.SubscriptLabel,        IsChecked = state.Subscript,     Margin = new Thickness(0, 0, 0, 4) };
+        var effects = surface.Effects.ToDictionary(
+            spec => spec.Kind,
+            spec => new CheckBox
+            {
+                Content = spec.Label,
+                IsChecked = state.EffectValue(spec.Kind),
+                IsThreeState = spec.IsThreeState,
+                Margin = new Thickness(0, 0, spec.Kind == FontDialogEffectKind.Subscript ? 0 : 12, 4),
+            });
+        foreach (var spec in surface.Effects)
+            AutomationProperties.SetAutomationId(effects[spec.Kind], spec.AutomationId);
+        var superCheck = effects[FontDialogEffectKind.Superscript];
+        var subCheck = effects[FontDialogEffectKind.Subscript];
 
         superCheck.Checked += (_, _) =>
         {
@@ -83,31 +87,36 @@ internal static class FontDialog
             subCheck.IsChecked = alignment.Subscript;
         };
 
-        var colorBox = new ComboBox { MinWidth = 180, Margin = new Thickness(0, 0, 0, 8) };
+        var colorBox = new ComboBox { MinWidth = surface.Field(FontDialogFieldKind.Color).MinWidth, Margin = new Thickness(0, 0, 0, 8) };
         foreach (var color in FontDialogPlanner.ColorChoices)
             colorBox.Items.Add(color.Label);
         colorBox.SelectedIndex = state.ColorIndex;
 
         var fontPanel = new StackPanel { Margin = new Thickness(10) };
-        FontRow(fontPanel, text.FontFamilyLabel, familyBox);
-        FontRow(fontPanel, text.FontSizeLabel, sizeBox);
-        FontRow(fontPanel, text.ColorLabel, colorBox);
-        fontPanel.Children.Add(new TextBlock { Text = text.StyleLabel, Margin = new Thickness(0, 4, 0, 2) });
+        var fields = new Dictionary<FontDialogFieldKind, UIElement>
+        {
+            [FontDialogFieldKind.FontFamily] = familyBox,
+            [FontDialogFieldKind.FontSize] = sizeBox,
+            [FontDialogFieldKind.Color] = colorBox,
+        };
+        foreach (var kind in surface.Tabs[0].Fields)
+            FontRow(fontPanel, surface.Field(kind).Label, fields[kind]);
+        fontPanel.Children.Add(new TextBlock { Text = surface.EffectsSectionLabel, Margin = new Thickness(0, 4, 0, 2) });
         var effectsWrap = new WrapPanel();
-        foreach (var cb in new[] { boldCheck, italicCheck, underlineCheck, strikeCheck, doubleStrikeCheck, hiddenCheck, smallCapsCheck, allCapsCheck, superCheck, subCheck })
-            effectsWrap.Children.Add(cb);
+        foreach (var spec in surface.Effects)
+            effectsWrap.Children.Add(effects[spec.Kind]);
         fontPanel.Children.Add(effectsWrap);
 
         var spacingBox = NumberTextBox(state.CharacterSpacingText ?? string.Empty);
         var kerningBox = new TextBox
         {
             Text = state.KerningMinSizeText,
-            MinWidth = 100,
+            MinWidth = surface.Field(FontDialogFieldKind.Kerning).MinWidth,
             Margin = new Thickness(0, 0, 0, 8),
         };
         var positionBox = NumberTextBox(state.PositionText ?? string.Empty);
 
-        var ligatureBox = new ComboBox { MinWidth = 180, Margin = new Thickness(0, 0, 0, 8) };
+        var ligatureBox = new ComboBox { MinWidth = surface.Field(FontDialogFieldKind.Ligatures).MinWidth, Margin = new Thickness(0, 0, 0, 8) };
         foreach (var ligature in FontDialogPlanner.LigatureChoices)
             ligatureBox.Items.Add(ligature.Label);
         ligatureBox.SelectedIndex = state.LigatureIndex;
@@ -115,48 +124,49 @@ internal static class FontDialog
         var stylisticBox = new TextBox
         {
             Text = state.StylisticSetText,
-            MinWidth = 100,
+            MinWidth = surface.Field(FontDialogFieldKind.StylisticSet).MinWidth,
             Margin = new Thickness(0, 0, 0, 8),
-            ToolTip = FontDialogPlanner.StylisticSetToolTip,
+            ToolTip = surface.Field(FontDialogFieldKind.StylisticSet).ToolTip,
         };
 
-        var numberFormBox = new ComboBox { MinWidth = 160, Margin = new Thickness(0, 0, 0, 8) };
+        var numberFormBox = new ComboBox { MinWidth = surface.Field(FontDialogFieldKind.NumberForm).MinWidth, Margin = new Thickness(0, 0, 0, 8) };
         foreach (var numberForm in FontDialogPlanner.NumberFormChoices)
             numberFormBox.Items.Add(numberForm.Label);
         numberFormBox.SelectedIndex = state.NumberFormIndex;
 
-        var numberSpacingBox = new ComboBox { MinWidth = 160, Margin = new Thickness(0, 0, 0, 8) };
+        var numberSpacingBox = new ComboBox { MinWidth = surface.Field(FontDialogFieldKind.NumberSpacing).MinWidth, Margin = new Thickness(0, 0, 0, 8) };
         foreach (var numberSpacing in FontDialogPlanner.NumberSpacingChoices)
             numberSpacingBox.Items.Add(numberSpacing.Label);
         numberSpacingBox.SelectedIndex = state.NumberSpacingIndex;
 
         var advPanel = new StackPanel { Margin = new Thickness(10) };
-        FontRow(advPanel, text.CharacterSpacingLabel, spacingBox);
-        FontRow(advPanel, text.KerningLabel, kerningBox);
-        FontRow(advPanel, text.PositionLabel, positionBox);
-        FontRow(advPanel, text.LigaturesLabel, ligatureBox);
-        FontRow(advPanel, text.StylisticSetLabel, stylisticBox);
-        FontRow(advPanel, text.NumberFormLabel, numberFormBox);
-        FontRow(advPanel, text.NumberSpacingLabel, numberSpacingBox);
+        fields[FontDialogFieldKind.CharacterSpacing] = spacingBox;
+        fields[FontDialogFieldKind.Kerning] = kerningBox;
+        fields[FontDialogFieldKind.Position] = positionBox;
+        fields[FontDialogFieldKind.Ligatures] = ligatureBox;
+        fields[FontDialogFieldKind.StylisticSet] = stylisticBox;
+        fields[FontDialogFieldKind.NumberForm] = numberFormBox;
+        fields[FontDialogFieldKind.NumberSpacing] = numberSpacingBox;
+        foreach (var spec in surface.Fields)
+            AutomationProperties.SetAutomationId(fields[spec.Kind], spec.AutomationId);
+        foreach (var kind in surface.Tabs[1].Fields)
+            FontRow(advPanel, surface.Field(kind).Label, fields[kind]);
 
         var tabs = new TabControl { Margin = new Thickness(0) };
-        tabs.Items.Add(new TabItem { Header = text.FontTab, Content = new ScrollViewer { Content = fontPanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
-        tabs.Items.Add(new TabItem { Header = text.AdvancedTab, Content = new ScrollViewer { Content = advPanel,  VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
+        var panels = new[] { fontPanel, advPanel };
+        for (var index = 0; index < surface.Tabs.Count; index++)
+        {
+            var tab = new TabItem { Header = surface.Tabs[index].Header, Content = new ScrollViewer { Content = panels[index], VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
+            AutomationProperties.SetAutomationId(tab, surface.Tabs[index].AutomationId);
+            tabs.Items.Add(tab);
+        }
 
         void Accept()
         {
-            var acceptance = session.PlanAcceptance(new FontDialogControlState(
+            var acceptance = session.PlanAcceptance(FontDialogPlanner.CaptureControlState(
                 familyBox.Text,
                 sizeBox.Text,
                 colorBox.SelectedIndex,
-                boldCheck.IsChecked,
-                italicCheck.IsChecked,
-                underlineCheck.IsChecked,
-                strikeCheck.IsChecked,
-                smallCapsCheck.IsChecked == true,
-                allCapsCheck.IsChecked == true,
-                superCheck.IsChecked == true,
-                subCheck.IsChecked == true,
                 spacingBox.Text,
                 kerningBox.Text,
                 positionBox.Text,
@@ -164,8 +174,7 @@ internal static class FontDialog
                 stylisticBox.Text,
                 numberFormBox.SelectedIndex,
                 numberSpacingBox.SelectedIndex,
-                doubleStrikeCheck.IsChecked,
-                hiddenCheck.IsChecked));
+                kind => effects[kind].IsChecked));
 
             if (!acceptance.IsAccepted)
             {
@@ -179,7 +188,7 @@ internal static class FontDialog
             dialog.DialogResult = true;
         }
 
-        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 10, 0, 0));
+        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: surface.ActionButtonWidth, rowMargin: new Thickness(0, 10, 0, 0));
 
         var root = new StackPanel { Margin = new Thickness(12) };
         root.Children.Add(tabs);

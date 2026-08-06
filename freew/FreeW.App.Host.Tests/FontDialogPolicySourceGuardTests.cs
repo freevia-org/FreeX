@@ -12,18 +12,18 @@ public sealed class FontDialogPolicySourceGuardTests
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
         source.Should().Contain("FontDialogPlanner.CreateSession(");
         source.Should().Contain("session.InitialState");
-        source.Should().Contain("session.PlanAcceptance(new FontDialogControlState(");
+        source.Should().Contain("session.PlanAcceptance(FontDialogPlanner.CaptureControlState(");
         source.Should().Contain("session.PlanVerticalAlignmentToggle(");
         source.Should().Contain("FontDialogPlanner.SizeChoices");
         source.Should().Contain("FontDialogPlanner.ColorChoices");
         source.Should().Contain("FontDialogPlanner.LigatureChoices");
         source.Should().Contain("FontDialogPlanner.NumberFormChoices");
         source.Should().Contain("FontDialogPlanner.NumberSpacingChoices");
-        source.Should().Contain("var text = FontDialogPlanner.Text;");
-        source.Should().Contain("Content = text.DoubleStrikethroughLabel");
-        source.Should().Contain("state.DoubleStrikethrough");
-        source.Should().Contain("Content = text.HiddenLabel");
-        source.Should().Contain("state.Hidden");
+        source.Should().Contain("var surface = FontDialogPlanner.Surface;");
+        source.Should().Contain("foreach (var spec in surface.Effects)");
+        source.Should().Contain("state.EffectValue(spec.Kind)");
+        source.Should().Contain("foreach (var kind in surface.Tabs[0].Fields)");
+        source.Should().Contain("AutomationProperties.SetAutomationId(fields[spec.Kind], spec.AutomationId)");
     }
 
     [Fact]
@@ -45,6 +45,7 @@ public sealed class FontDialogPolicySourceGuardTests
         source.Should().NotContain("int.TryParse(");
         source.Should().NotContain("NumberStyles.");
         source.Should().NotContain("new FontDialogInput(");
+        source.Should().NotContain("new FontDialogControlState(");
         source.Should().NotContain("FontDialogPlanner.TryBuildResult(");
         source.Should().NotContain("current with");
         source.Should().NotContain("FontSizePt   =");

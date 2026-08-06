@@ -39,6 +39,76 @@ public sealed record FontDialogTextCatalog(
     string NumberFormLabel,
     string NumberSpacingLabel);
 
+public enum FontDialogTabKind
+{
+    Font,
+    Advanced,
+}
+
+public enum FontDialogFieldKind
+{
+    FontFamily,
+    FontSize,
+    Color,
+    CharacterSpacing,
+    Kerning,
+    Position,
+    Ligatures,
+    StylisticSet,
+    NumberForm,
+    NumberSpacing,
+}
+
+public enum FontDialogEffectKind
+{
+    Bold,
+    Italic,
+    Underline,
+    Strikethrough,
+    DoubleStrikethrough,
+    Hidden,
+    SmallCaps,
+    AllCaps,
+    Superscript,
+    Subscript,
+}
+
+public sealed record FontDialogFieldSpec(
+    FontDialogFieldKind Kind,
+    string Label,
+    double MinWidth,
+    string AutomationId,
+    bool IsEditable = false,
+    string? ToolTip = null);
+
+public sealed record FontDialogEffectSpec(
+    FontDialogEffectKind Kind,
+    string Label,
+    string AutomationId,
+    bool IsThreeState = false);
+
+public sealed record FontDialogTabSpec(
+    FontDialogTabKind Kind,
+    string Header,
+    string AutomationId,
+    IReadOnlyList<FontDialogFieldKind> Fields);
+
+public sealed record FontDialogSurfaceSpec(
+    string Title,
+    double WindowWidth,
+    double ActionButtonWidth,
+    string EffectsSectionLabel,
+    IReadOnlyList<FontDialogTabSpec> Tabs,
+    IReadOnlyList<FontDialogFieldSpec> Fields,
+    IReadOnlyList<FontDialogEffectSpec> Effects)
+{
+    public FontDialogFieldSpec Field(FontDialogFieldKind kind) =>
+        Fields.First(field => field.Kind == kind);
+
+    public FontDialogEffectSpec Effect(FontDialogEffectKind kind) =>
+        Effects.First(effect => effect.Kind == kind);
+}
+
 public sealed record FontDialogInitialState(
     string FontFamilyText,
     string FontSizeText,
@@ -114,7 +184,23 @@ public sealed record FontDialogControlState(
     int NumberFormIndex,
     int NumberSpacingIndex,
     bool? DoubleStrikethrough = false,
-    bool? Hidden = false);
+    bool? Hidden = false)
+{
+    public bool? EffectValue(FontDialogEffectKind kind) => kind switch
+    {
+        FontDialogEffectKind.Bold => Bold,
+        FontDialogEffectKind.Italic => Italic,
+        FontDialogEffectKind.Underline => Underline,
+        FontDialogEffectKind.Strikethrough => Strikethrough,
+        FontDialogEffectKind.DoubleStrikethrough => DoubleStrikethrough,
+        FontDialogEffectKind.Hidden => Hidden,
+        FontDialogEffectKind.SmallCaps => SmallCaps,
+        FontDialogEffectKind.AllCaps => AllCaps,
+        FontDialogEffectKind.Superscript => Superscript,
+        FontDialogEffectKind.Subscript => Subscript,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+}
 
 public sealed record FontDialogWorkflowResult(
     RunFormatting Formatting,
@@ -490,6 +576,59 @@ public static class FontDialogPlanner
         NumberFormLabel: "Number form:",
         NumberSpacingLabel: "Number spacing:");
 
+    public static FontDialogSurfaceSpec Surface { get; } = new(
+        Title: Text.Title,
+        WindowWidth: 460,
+        ActionButtonWidth: 72,
+        EffectsSectionLabel: Text.StyleLabel,
+        Tabs:
+        [
+            new(
+                FontDialogTabKind.Font,
+                Text.FontTab,
+                "FontDialogFontTab",
+                [FontDialogFieldKind.FontFamily, FontDialogFieldKind.FontSize, FontDialogFieldKind.Color]),
+            new(
+                FontDialogTabKind.Advanced,
+                Text.AdvancedTab,
+                "FontDialogAdvancedTab",
+                [
+                    FontDialogFieldKind.CharacterSpacing,
+                    FontDialogFieldKind.Kerning,
+                    FontDialogFieldKind.Position,
+                    FontDialogFieldKind.Ligatures,
+                    FontDialogFieldKind.StylisticSet,
+                    FontDialogFieldKind.NumberForm,
+                    FontDialogFieldKind.NumberSpacing,
+                ]),
+        ],
+        Fields:
+        [
+            new(FontDialogFieldKind.FontFamily, Text.FontFamilyLabel, 200, "FontDialogFamilyTextBox"),
+            new(FontDialogFieldKind.FontSize, Text.FontSizeLabel, 80, "FontDialogSizeComboBox", IsEditable: true),
+            new(FontDialogFieldKind.Color, Text.ColorLabel, 180, "FontDialogColorComboBox"),
+            new(FontDialogFieldKind.CharacterSpacing, Text.CharacterSpacingLabel, 100, "FontDialogCharacterSpacingTextBox"),
+            new(FontDialogFieldKind.Kerning, Text.KerningLabel, 100, "FontDialogKerningTextBox"),
+            new(FontDialogFieldKind.Position, Text.PositionLabel, 100, "FontDialogPositionTextBox"),
+            new(FontDialogFieldKind.Ligatures, Text.LigaturesLabel, 180, "FontDialogLigaturesComboBox"),
+            new(FontDialogFieldKind.StylisticSet, Text.StylisticSetLabel, 100, "FontDialogStylisticSetTextBox", ToolTip: StylisticSetToolTip),
+            new(FontDialogFieldKind.NumberForm, Text.NumberFormLabel, 160, "FontDialogNumberFormComboBox"),
+            new(FontDialogFieldKind.NumberSpacing, Text.NumberSpacingLabel, 160, "FontDialogNumberSpacingComboBox"),
+        ],
+        Effects:
+        [
+            new(FontDialogEffectKind.Bold, Text.BoldLabel, "FontDialogBoldCheckBox", IsThreeState: true),
+            new(FontDialogEffectKind.Italic, Text.ItalicLabel, "FontDialogItalicCheckBox", IsThreeState: true),
+            new(FontDialogEffectKind.Underline, Text.UnderlineLabel, "FontDialogUnderlineCheckBox", IsThreeState: true),
+            new(FontDialogEffectKind.Strikethrough, Text.StrikethroughLabel, "FontDialogStrikethroughCheckBox", IsThreeState: true),
+            new(FontDialogEffectKind.DoubleStrikethrough, Text.DoubleStrikethroughLabel, "FontDialogDoubleStrikethroughCheckBox", IsThreeState: true),
+            new(FontDialogEffectKind.Hidden, Text.HiddenLabel, "FontDialogHiddenCheckBox", IsThreeState: true),
+            new(FontDialogEffectKind.SmallCaps, Text.SmallCapsLabel, "FontDialogSmallCapsCheckBox"),
+            new(FontDialogEffectKind.AllCaps, Text.AllCapsLabel, "FontDialogAllCapsCheckBox"),
+            new(FontDialogEffectKind.Superscript, Text.SuperscriptLabel, "FontDialogSuperscriptCheckBox"),
+            new(FontDialogEffectKind.Subscript, Text.SubscriptLabel, "FontDialogSubscriptCheckBox"),
+        ]);
+
     public static readonly IReadOnlyList<FontDialogColorChoice> ColorChoices =
     [
         new("Automatic", null),
@@ -551,6 +690,43 @@ public static class FontDialogPlanner
 
     public static FontDialogSession CreateSession(FontDialogSelectionState selection, CultureInfo culture) =>
         new(selection, culture);
+
+    public static FontDialogControlState CaptureControlState(
+        string? fontFamilyText,
+        string? fontSizeText,
+        int colorIndex,
+        string? characterSpacingText,
+        string? kerningMinSizeText,
+        string? positionText,
+        int ligatureIndex,
+        string? stylisticSetText,
+        int numberFormIndex,
+        int numberSpacingIndex,
+        Func<FontDialogEffectKind, bool?> effectValue)
+    {
+        ArgumentNullException.ThrowIfNull(effectValue);
+        return new FontDialogControlState(
+            fontFamilyText,
+            fontSizeText,
+            colorIndex,
+            effectValue(FontDialogEffectKind.Bold),
+            effectValue(FontDialogEffectKind.Italic),
+            effectValue(FontDialogEffectKind.Underline),
+            effectValue(FontDialogEffectKind.Strikethrough),
+            effectValue(FontDialogEffectKind.SmallCaps) == true,
+            effectValue(FontDialogEffectKind.AllCaps) == true,
+            effectValue(FontDialogEffectKind.Superscript) == true,
+            effectValue(FontDialogEffectKind.Subscript) == true,
+            characterSpacingText,
+            kerningMinSizeText,
+            positionText,
+            ligatureIndex,
+            stylisticSetText,
+            numberFormIndex,
+            numberSpacingIndex,
+            effectValue(FontDialogEffectKind.DoubleStrikethrough),
+            effectValue(FontDialogEffectKind.Hidden));
+    }
 
     public static FontDialogInitialState BuildInitialState(RunFormatting current, CultureInfo culture)
     {
