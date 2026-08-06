@@ -2020,6 +2020,8 @@ public class MailMergeTests
         paragraph.Runs.Add(Run.ComplexFieldRun(" FILLIN \"Department\" \\o ", "cached department"));
         paragraph.Runs.Add(new Run(" | "));
         paragraph.Runs.Add(Run.ComplexFieldRun(" ASK Manager \"Who is the manager?\" \\o ", "cached manager"));
+        paragraph.Runs.Add(new Run(" | "));
+        paragraph.Runs.Add(Run.ComplexFieldRun(" REF Manager ", "cached reference"));
         paragraph.Runs.Add(new Run($" | {MailMerge.FieldOpen}Name{MailMerge.FieldClose}"));
         template.Blocks.Add(paragraph);
         var data = new MergeData(["Name"], [["Ada"], ["Grace"]]);
@@ -2030,8 +2032,8 @@ public class MailMergeTests
         var merged = MailMerge.MergeAllWithRules(template, data, state);
 
         merged.Select(document => document.PlainText).Should().Equal(
-            "Engineering | Margaret | Ada",
-            "Engineering | Margaret | Grace");
+            "Engineering |  | Margaret | Ada",
+            "Engineering |  | Margaret | Grace");
         merged.SelectMany(document => document.Blocks.OfType<Paragraph>())
             .SelectMany(resultParagraph => resultParagraph.Runs)
             .Should().AllSatisfy(run => run.ComplexField.Should().BeNull());
@@ -2048,7 +2050,9 @@ public class MailMergeTests
             {
                 Run.ComplexFieldRun(" FILLIN \"Department\" \\d \"Engineering\" \\o ", "cached"),
                 new Run(" | "),
-                Run.ComplexFieldRun(" ASK Manager \"Who is the manager?\" \\d \"Margaret\" \\o ", "cached")
+                Run.ComplexFieldRun(" ASK Manager \"Who is the manager?\" \\d \"Margaret\" \\o ", "cached"),
+                new Run(" | "),
+                Run.ComplexFieldRun(" REF Manager ", "cached reference")
             }
         });
         var state = new MergeState();
@@ -2058,8 +2062,26 @@ public class MailMergeTests
             new MergeData(["Name"], [["Ada"]]),
             state);
 
-        merged.Should().ContainSingle().Which.PlainText.Should().Be("Engineering | Margaret");
+        merged.Should().ContainSingle().Which.PlainText.Should().Be("Engineering |  | Margaret");
         state.Bookmarks["Manager"].Should().Be("Margaret");
+    }
+
+    [Fact]
+    public void MergeAllWithRules_NativeRefWithoutMergeOwnedBookmark_RemainsAField()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" REF ExistingBookmark ", "cached reference") }
+        });
+
+        var merged = MailMerge.MergeAllWithRules(
+            template,
+            new MergeData(["Name"], [["Ada"]]),
+            new MergeState());
+
+        merged.Should().ContainSingle().Which.PlainText.Should().Be("cached reference");
+        merged[0].Paragraphs.Single().Runs.Single().ComplexField.Should().NotBeNull();
     }
 
     [Fact]
