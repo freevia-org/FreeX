@@ -8232,26 +8232,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         if (drag.Kind == HeaderResizeKind.Column)
         {
-            var result = _session.ExecuteReviewCommand(
-                new SetColumnWidthCommand(
-                    _session.ActiveSheet.Id,
-                    drag.StartIndex,
-                    drag.EndIndex,
-                    ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize)),
-                _session.ActiveCell);
+            var result = _session.SetColumnsWidthPixels(
+                drag.StartIndex,
+                drag.EndIndex,
+                clampedSize);
             RefreshShell(result.Success
                 ? UiText.Format("RowColumn_ColumnWidthApplied", FormatDimension(ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize)))
                 : result.ErrorMessage ?? UiText.Get("RowColumn_ColumnWidthFailed"));
         }
         else
         {
-            var result = _session.ExecuteReviewCommand(
-                new SetRowHeightCommand(
-                    _session.ActiveSheet.Id,
-                    drag.StartIndex,
-                    drag.EndIndex,
-                    clampedSize),
-                _session.ActiveCell);
+            var result = _session.SetRowsHeightPixels(
+                drag.StartIndex,
+                drag.EndIndex,
+                clampedSize);
             RefreshShell(result.Success
                 ? UiText.Format("RowColumn_RowHeightApplied", FormatDimension(clampedSize))
                 : result.ErrorMessage ?? UiText.Get("RowColumn_RowHeightFailed"));

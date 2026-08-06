@@ -229,17 +229,16 @@ public partial class MainWindow
 
     private void ApplySplitPaneDividerTarget(SplitPanePointerDividerDragTarget target)
     {
-        var sheet = _session.ActiveSheet;
-        var nextRow = target.Row ?? sheet.SplitRow;
-        var nextColumn = target.Column ?? sheet.SplitColumn;
-        if (nextRow == sheet.SplitRow && nextColumn == sheet.SplitColumn)
+        var currentRow = _session.GetEffectiveSplitRow();
+        var currentColumn = _session.GetEffectiveSplitCol();
+        var nextRow = target.Row ?? currentRow;
+        var nextColumn = target.Column ?? currentColumn;
+        if (nextRow == currentRow && nextColumn == currentColumn)
             return;
 
-        var result = _session.ExecuteReviewCommand(
-            new SetSplitPanesCommand(sheet.Id, nextRow, nextColumn));
+        var result = _session.SetSplitPanes(nextRow, nextColumn);
         if (result.Success)
         {
-            _session.ResetSplitPaneOffsets();
             RefreshShell(UiText.Get("MainLoc_Ready"));
         }
         else

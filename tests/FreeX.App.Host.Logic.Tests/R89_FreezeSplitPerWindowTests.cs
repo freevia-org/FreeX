@@ -1,5 +1,6 @@
 using System.Reflection;
 using FluentAssertions;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -24,8 +25,8 @@ namespace FreeX.App.Host.Tests;
 /// These tests simulate two "New Window" siblings viewing the very same <see cref="Workbook"/>/
 /// <see cref="Sheet"/> object graph, the same way R87_PerWindowViewOptionsTests does: construct two
 /// independent <see cref="MainWindow"/> instances via <see cref="R49MainWindowTestHarness"/> and
-/// re-point the second window's private <c>_workbook</c>/<c>_currentSheetId</c> fields at the
-/// first window's actual (post-Loaded) workbook/sheet.
+/// replace the second window's authoritative <c>WorkbookSession</c> with one over the first
+/// window's actual (post-Loaded) workbook/sheet.
 /// </summary>
 public sealed class R89_FreezeSplitPerWindowTests
 {
@@ -217,8 +218,12 @@ public sealed class R89_FreezeSplitPerWindowTests
 
     private static void AdoptSameDocument(MainWindow window, Workbook workbook, SheetId sheetId)
     {
-        typeof(MainWindow).GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .SetValue(window, workbook);
+        R49MainWindowTestHarness.Invoke(
+            window,
+            "ReplaceWorkbookSession",
+            new StartupWorkbookLoadResult(workbook, "Book.fxl", "Opened .fxl.", IsFallback: false));
+        window.Session.SelectSheet(sheetId);
+        window.Session.ActiveSheet.Id.Should().Be(sheetId);
         typeof(MainWindow).GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)!
             .SetValue(window, sheetId);
     }

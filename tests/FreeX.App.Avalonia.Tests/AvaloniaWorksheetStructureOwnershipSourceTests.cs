@@ -27,6 +27,38 @@ public sealed class AvaloniaWorksheetStructureOwnershipSourceTests
         sources.Should().Contain(source => source.Contains("ApplyWorksheetStructureResult("));
     }
 
+    [Fact]
+    public void LayoutOutlineAndPaneAdapters_DelegatePortableOwnershipToWorkbookSession()
+    {
+        var sizing = ReadAppSource("MainWindow.RowColumnVisibility.cs") +
+            ReadAppSource("MainWindow.cs");
+        sizing.Should().NotContain("new SetRowsHiddenCommand");
+        sizing.Should().NotContain("new SetColumnsHiddenCommand");
+        sizing.Should().NotContain("new SetRowHeightCommand");
+        sizing.Should().NotContain("new SetColumnWidthCommand");
+        sizing.Should().Contain("_session.SetSelectedRowsHidden(");
+        sizing.Should().Contain("_session.SetRowsHeightPixels(");
+
+        var outline = ReadAppSource("MainWindow.Outline.cs") +
+            ReadAppSource("MainWindow.OutlineGrid.cs") +
+            ReadAppSource("MainWindow.RibbonMenuWires.cs");
+        outline.Should().NotContain("new GroupRowsCommand");
+        outline.Should().NotContain("new GroupColumnsCommand");
+        outline.Should().NotContain("new ClearWorksheetOutlineCommand");
+        outline.Should().NotContain("new CollapseRowGroupCommand");
+        outline.Should().NotContain("new ExpandRowGroupCommand");
+        outline.Should().NotContain("new SetRowOutlineGroupCollapsedCommand");
+        outline.Should().NotContain("new SetColumnOutlineGroupCollapsedCommand");
+        outline.Should().Contain("_session.GroupSelectedOutline(");
+        outline.Should().Contain("_session.SetOutlineGroupCollapsed(");
+
+        var panes = ReadAppSource("MainWindow.ParityWires.cs") +
+            ReadAppSource("MainWindow.SplitPanePointer.cs");
+        panes.Should().NotContain("new SetSplitPanesCommand");
+        panes.Should().Contain("_session.ToggleSplitPanesAtActiveCell(");
+        panes.Should().Contain("_session.SetSplitPanes(");
+    }
+
     private static string ReadAppSource(string fileName) =>
         File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", fileName));
 

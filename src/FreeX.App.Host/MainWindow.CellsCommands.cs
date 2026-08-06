@@ -139,87 +139,45 @@ public partial class MainWindow
 
     private void FormatRowHeightMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var dialog = new RowHeightDialog(RowColumnSizingPlanner.GetRowHeightDialogValue(sheet, range)) { Owner = this };
+        if (SheetGrid.SelectedRange is null) return;
+        SynchronizeWorkbookSessionSelection();
+        var dialog = new RowHeightDialog(_session.GetSelectedRowHeight()) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Row Height",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    return RowColumnSizingPlanner.CreateRowHeightCommand(sheetId, currentRange, dialog.Result.Height);
-                }))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.SetSelectedRowsHeight(dialog.Result.Height),
+                "Row Height"))
             return;
         UpdateViewport();
     }
 
     private void FormatAutoRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Auto Row Height", sheetId => CreateAutoFitRowHeightCommand(sheetId, range)))
+        if (SheetGrid.SelectedRange is null) return;
+        if (!TryExecuteWorksheetLayout(_session.AutoFitSelectedRowHeight, "Auto Row Height"))
             return;
         UpdateViewport();
     }
     private void FormatColWidthMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var dialog = new ColumnWidthDialog(RowColumnSizingPlanner.GetColumnWidthDialogValue(sheet, range)) { Owner = this };
+        if (SheetGrid.SelectedRange is null) return;
+        SynchronizeWorkbookSessionSelection();
+        var dialog = new ColumnWidthDialog(_session.GetSelectedColumnWidth()) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Column Width",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    return RowColumnSizingPlanner.CreateColumnWidthCommand(sheetId, currentRange, dialog.Result.Width);
-                }))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.SetSelectedColumnsWidth(dialog.Result.Width),
+                "Column Width"))
             return;
         UpdateViewport();
     }
 
     private void FormatAutoColMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Auto Column Width", sheetId => CreateAutoFitColumnWidthCommand(sheetId, range)))
+        if (SheetGrid.SelectedRange is null) return;
+        if (!TryExecuteWorksheetLayout(_session.AutoFitSelectedColumnWidth, "Auto Column Width"))
             return;
         UpdateViewport();
-    }
-
-    private IWorkbookCommand CreateAutoFitRowHeightCommand(SheetId sheetId, GridRange range)
-    {
-        var sheet = _workbook.GetSheet(sheetId);
-        if (sheet is null)
-            return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_SheetNotFound"));
-
-        var plans = RowColumnSizingPlanner.PlanAutoFitRowHeights(
-            sheet,
-            range,
-            sheet.GetUsedRange(),
-            (row, col) => GetAutoFitCellText(sheet, row, col),
-            sheet.DefaultRowHeight);
-
-        return RowColumnSizingPlanner.CreateAutoFitRowHeightCommand(sheetId, plans)
-            ?? new CompositeWorkbookCommand("Auto Row Height", []);
-    }
-
-    private IWorkbookCommand CreateAutoFitColumnWidthCommand(SheetId sheetId, GridRange range)
-    {
-        var sheet = _workbook.GetSheet(sheetId);
-        if (sheet is null)
-            return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_SheetNotFound"));
-
-        var plans = RowColumnSizingPlanner.PlanAutoFitColumnWidths(
-            sheet,
-            range,
-            sheet.GetUsedRange(),
-            (row, col) => GetAutoFitCellText(sheet, row, col),
-            sheet.DefaultColumnWidth);
-
-        return RowColumnSizingPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)
-            ?? new CompositeWorkbookCommand("Auto Column Width", []);
     }
 
     private AutoFitCellText? GetAutoFitCellText(Sheet sheet, uint row, uint col)
@@ -572,14 +530,10 @@ public partial class MainWindow
 
     private void ExecuteRowsHidden(bool hidden)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
-                hidden ? "Hide Row" : "Unhide Row",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    return RowColumnSizingPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden);
-                }))
+        if (SheetGrid.SelectedRange is null) return;
+        if (!TryExecuteWorksheetLayout(
+                () => _session.SetSelectedRowsHidden(hidden),
+                hidden ? "Hide Row" : "Unhide Row"))
             return;
 
         UpdateViewport();
@@ -587,14 +541,10 @@ public partial class MainWindow
 
     private void ExecuteColumnsHidden(bool hidden)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
-                hidden ? "Hide Column" : "Unhide Column",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    return RowColumnSizingPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden);
-                }))
+        if (SheetGrid.SelectedRange is null) return;
+        if (!TryExecuteWorksheetLayout(
+                () => _session.SetSelectedColumnsHidden(hidden),
+                hidden ? "Hide Column" : "Unhide Column"))
             return;
 
         UpdateViewport();

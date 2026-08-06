@@ -262,12 +262,7 @@ public sealed partial class MainWindow
     // undo-aware session command path.
     private void ShowOutlineDetail()
     {
-        var range = _session.SelectedRange;
-        var axis = OutlineGroupingService.GetGroupingAxis(range);
-        var result = axis == OutlineGroupingAxis.Columns
-            ? _session.ExecuteReviewCommand(new ExpandColGroupCommand(
-                _session.ActiveSheet.Id, 1, range.Start.Col, range.End.Col))
-            : _session.ExecuteReviewCommand(new ExpandRowGroupCommand(_session.ActiveSheet.Id, 1, range.Start.Row, range.End.Row));
+        var result = _session.SetSelectedOutlineGroupsCollapsed(collapse: false);
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_ShownDetail")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_ShowDetailFailed"));
@@ -275,12 +270,7 @@ public sealed partial class MainWindow
 
     private void HideOutlineDetail()
     {
-        var range = _session.SelectedRange;
-        var axis = OutlineGroupingService.GetGroupingAxis(range);
-        var result = axis == OutlineGroupingAxis.Columns
-            ? _session.ExecuteReviewCommand(new CollapseColGroupCommand(
-                _session.ActiveSheet.Id, 1, range.Start.Col, range.End.Col))
-            : _session.ExecuteReviewCommand(new CollapseRowGroupCommand(_session.ActiveSheet.Id, 1, range.Start.Row, range.End.Row));
+        var result = _session.SetSelectedOutlineGroupsCollapsed(collapse: true);
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_HidDetail")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_HideDetailFailed"));

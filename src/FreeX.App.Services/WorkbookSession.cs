@@ -1,3 +1,4 @@
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.QuickAnalysis;
@@ -2399,15 +2400,61 @@ public sealed class WorkbookSession : IDisposable
     public double GetSelectedColumnWidth() =>
         Ribbon.RowColumnSizingPlanner.GetColumnWidthDialogValue(ActiveSheet, SelectedRange);
 
-    /// <summary>Applies an explicit height (points) to every row in the selection, undoably.</summary>
+    /// <summary>Applies an explicit height (points) to every selected row on every grouped sheet.</summary>
     public WorkbookCellEditResult SetSelectedRowsHeight(double height) =>
-        ExecuteSizingCommand(
-            Ribbon.RowColumnSizingPlanner.CreateRowHeightCommand(ActiveSheet.Id, SelectedRange, height));
+        ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                "Row Height",
+                sheetId => Ribbon.RowColumnSizingPlanner.CreateRowHeightCommand(
+                    sheetId,
+                    RemapRangeToSheet(SelectedRange, sheetId),
+                    height)));
 
-    /// <summary>Applies an explicit width (characters) to every column in the selection, undoably.</summary>
+    /// <summary>Applies an explicit width (characters) to every selected column on every grouped sheet.</summary>
     public WorkbookCellEditResult SetSelectedColumnsWidth(double width) =>
-        ExecuteSizingCommand(
-            Ribbon.RowColumnSizingPlanner.CreateColumnWidthCommand(ActiveSheet.Id, SelectedRange, width));
+        ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                "Column Width",
+                sheetId => Ribbon.RowColumnSizingPlanner.CreateColumnWidthCommand(
+                    sheetId,
+                    RemapRangeToSheet(SelectedRange, sheetId),
+                    width)));
+
+    /// <summary>Commits a native row-header drag, whose measured size is already in model pixels.</summary>
+    public WorkbookCellEditResult SetRowsHeightPixels(uint startRow, uint endRow, double heightPixels) =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                "Row Height",
+                sheetId => new SetRowHeightCommand(sheetId, startRow, endRow, heightPixels)));
+
+    /// <summary>Commits a native column-header drag after converting renderer pixels to model width.</summary>
+    public WorkbookCellEditResult SetColumnsWidthPixels(uint startColumn, uint endColumn, double widthPixels) =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                "Column Width",
+                sheetId => new SetColumnWidthCommand(
+                    sheetId,
+                    startColumn,
+                    endColumn,
+                    ColumnWidthPixelMapper.PixelsToColumnWidth(widthPixels))));
+
+    public WorkbookCellEditResult SetSelectedRowsHidden(bool hidden) =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                hidden ? "Hide Row" : "Unhide Row",
+                sheetId => Ribbon.RowColumnSizingPlanner.CreateRowsHiddenCommand(
+                    sheetId,
+                    RemapRangeToSheet(SelectedRange, sheetId),
+                    hidden)));
+
+    public WorkbookCellEditResult SetSelectedColumnsHidden(bool hidden) =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                hidden ? "Hide Column" : "Unhide Column",
+                sheetId => Ribbon.RowColumnSizingPlanner.CreateColumnsHiddenCommand(
+                    sheetId,
+                    RemapRangeToSheet(SelectedRange, sheetId),
+                    hidden)));
 
     /// <summary>
     /// Sizes each selected row's height to its tallest cell content (content-based estimate via the
@@ -2416,14 +2463,12 @@ public sealed class WorkbookSession : IDisposable
     /// </summary>
     public WorkbookCellEditResult AutoFitSelectedRowHeight()
     {
-        var plans = Ribbon.RowColumnSizingPlanner.PlanAutoFitRowHeights(
-            ActiveSheet,
-            SelectedRange,
-            ActiveSheet.GetUsedRange(),
-            GetAutoFitDisplayText,
-            ActiveSheet.DefaultRowHeight);
-        var command = Ribbon.RowColumnSizingPlanner.CreateAutoFitRowHeightCommand(ActiveSheet.Id, plans);
-        return command is null ? SucceededWithoutEdit() : ExecuteSizingCommand(command);
+        return ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                "Auto Row Height",
+                sheetId => CreateAutoFitRowHeightCommand(
+                    sheetId,
+                    RemapRangeToSheet(SelectedRange, sheetId))));
     }
 
     /// <summary>
@@ -2432,15 +2477,33 @@ public sealed class WorkbookSession : IDisposable
     /// </summary>
     public WorkbookCellEditResult AutoFitSelectedColumnWidth()
     {
-        var plans = Ribbon.RowColumnSizingPlanner.PlanAutoFitColumnWidths(
-            ActiveSheet,
-            SelectedRange,
-            ActiveSheet.GetUsedRange(),
-            GetAutoFitDisplayText,
-            ActiveSheet.DefaultColumnWidth);
-        var command = Ribbon.RowColumnSizingPlanner.CreateAutoFitColumnWidthCommand(ActiveSheet.Id, plans);
-        return command is null ? SucceededWithoutEdit() : ExecuteSizingCommand(command);
+        return ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                "Auto Column Width",
+                sheetId => CreateAutoFitColumnWidthCommand(
+                    sheetId,
+                    RemapRangeToSheet(SelectedRange, sheetId))));
     }
+
+    public WorkbookCellEditResult AutoFitRows(uint startRow, uint endRow) =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                "Auto Row Height",
+                sheetId => CreateAutoFitRowHeightCommand(
+                    sheetId,
+                    new GridRange(
+                        new CellAddress(sheetId, startRow, 1),
+                        new CellAddress(sheetId, endRow, CellAddress.MaxCol)))));
+
+    public WorkbookCellEditResult AutoFitColumns(uint startColumn, uint endColumn) =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                "Auto Column Width",
+                sheetId => CreateAutoFitColumnWidthCommand(
+                    sheetId,
+                    new GridRange(
+                        new CellAddress(sheetId, 1, startColumn),
+                        new CellAddress(sheetId, CellAddress.MaxRow, endColumn)))));
 
     /// <summary>
     /// Runs a row/column sizing command and restores the selection afterwards. The shared command
@@ -2448,19 +2511,44 @@ public sealed class WorkbookSession : IDisposable
     /// but a dimension change must leave the resized rows/columns selected (Excel parity) so a
     /// follow-up resize targets the same span.
     /// </summary>
-    private WorkbookCellEditResult ExecuteSizingCommand(IWorkbookCommand command)
-    {
-        var preservedRange = SelectedRange;
-        var result = ExecuteReviewCommand(command);
-        if (result.Success)
-            SelectRange(preservedRange);
+    private WorkbookCellEditResult ExecuteRepeatableStructureCommand(Func<IWorkbookCommand> commandFactory) =>
+        ExecuteRepeatableCommandPreservingSelection(commandFactory);
 
-        return result;
+    private IWorkbookCommand CreateAutoFitRowHeightCommand(SheetId sheetId, GridRange range)
+    {
+        var sheet = Workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return new CompositeWorkbookCommand("Auto Row Height", []);
+
+        var plans = Ribbon.RowColumnSizingPlanner.PlanAutoFitRowHeights(
+            sheet,
+            range,
+            sheet.GetUsedRange(),
+            (row, col) => GetAutoFitDisplayText(sheet, row, col),
+            sheet.DefaultRowHeight);
+        return Ribbon.RowColumnSizingPlanner.CreateAutoFitRowHeightCommand(sheetId, plans)
+            ?? new CompositeWorkbookCommand("Auto Row Height", []);
     }
 
-    private AutoFitCellText? GetAutoFitDisplayText(uint row, uint col)
+    private IWorkbookCommand CreateAutoFitColumnWidthCommand(SheetId sheetId, GridRange range)
     {
-        if (ActiveSheet.GetCell(row, col) is not { } cell)
+        var sheet = Workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return new CompositeWorkbookCommand("Auto Column Width", []);
+
+        var plans = Ribbon.RowColumnSizingPlanner.PlanAutoFitColumnWidths(
+            sheet,
+            range,
+            sheet.GetUsedRange(),
+            (row, col) => GetAutoFitDisplayText(sheet, row, col),
+            sheet.DefaultColumnWidth);
+        return Ribbon.RowColumnSizingPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)
+            ?? new CompositeWorkbookCommand("Auto Column Width", []);
+    }
+
+    private AutoFitCellText? GetAutoFitDisplayText(Sheet sheet, uint row, uint col)
+    {
+        if (sheet.GetCell(row, col) is not { } cell)
             return null;
 
         var style = Workbook.GetStyle(cell.StyleId);
@@ -2472,8 +2560,64 @@ public sealed class WorkbookSession : IDisposable
         return new AutoFitCellText(text, style.WrapText, TextRotation: style.TextRotation, FontSize: style.FontSize);
     }
 
-    private static WorkbookCellEditResult SucceededWithoutEdit() =>
-        new(true, null, [], RecalcReport: null);
+    public WorkbookCellEditResult GroupSelectedOutline() =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                "Group",
+                sheetId => CreateOutlineCommand(
+                    sheetId,
+                    sheet => WorksheetStructureCommandPlanner.CreateGroupCommand(
+                        sheet,
+                        RemapRangeToSheet(SelectedRange, sheetId)))));
+
+    public WorkbookCellEditResult UngroupSelectedOutline() =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                "Ungroup",
+                sheetId => CreateOutlineCommand(
+                    sheetId,
+                    sheet => WorksheetStructureCommandPlanner.CreateUngroupCommand(
+                        sheet,
+                        RemapRangeToSheet(SelectedRange, sheetId)))));
+
+    public WorkbookCellEditResult ClearActiveWorksheetOutline() =>
+        ExecuteCommandPreservingSelection(
+            CreateGroupedSheetCommand(
+                "Clear Outline",
+                sheetId => new ClearWorksheetOutlineCommand(sheetId)));
+
+    public WorkbookCellEditResult SetSelectedOutlineGroupsCollapsed(bool collapse) =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                collapse ? "Collapse Group" : "Expand Group",
+                sheetId => CreateOutlineCommand(
+                    sheetId,
+                    sheet => WorksheetStructureCommandPlanner.CreateSelectedOutlineVisibilityCommand(
+                        sheet,
+                        RemapRangeToSheet(SelectedRange, sheetId),
+                        collapse))));
+
+    public WorkbookCellEditResult SetOutlineGroupCollapsed(
+        OutlineGroupingAxis axis,
+        uint start,
+        uint end,
+        int level,
+        bool collapse) =>
+        ExecuteRepeatableStructureCommand(() =>
+            WorksheetStructureCommandPlanner.CreateOutlineGroupToggleCommand(
+                ActiveSheet.Id,
+                axis,
+                start,
+                end,
+                level,
+                collapse));
+
+    private IWorkbookCommand CreateOutlineCommand(
+        SheetId sheetId,
+        Func<Sheet, IWorkbookCommand> createCommand) =>
+        Workbook.GetSheet(sheetId) is { } sheet
+            ? createCommand(sheet)
+            : new CompositeWorkbookCommand("Worksheet Outline", []);
 
     public WorkbookCellEditResult SetShowFormulas(bool showFormulas)
     {
@@ -2621,6 +2765,43 @@ public sealed class WorkbookSession : IDisposable
 
     public WorkbookCellEditResult UnfreezePanes() =>
         SetFreezePanes(frozenRows: 0, frozenCols: 0);
+
+    public WorkbookCellEditResult ToggleSplitPanesAtActiveCell(
+        IReadOnlyList<RowMetric>? viewportRows = null,
+        IReadOnlyList<ColMetric>? viewportColumns = null)
+    {
+        var wasSplit = GetEffectiveSplitRow() is not null || GetEffectiveSplitCol() is not null;
+        var rows = viewportRows ?? Viewport.RowMetrics;
+        var columns = viewportColumns ?? Viewport.ColMetrics;
+        var (splitRow, splitColumn) = WorksheetStructureCommandPlanner.ResolveSplitTarget(
+            ActiveCell.Row,
+            ActiveCell.Col,
+            wasSplit,
+            rows,
+            columns);
+        return SetSplitPanes(splitRow, splitColumn);
+    }
+
+    public WorkbookCellEditResult SetSplitPanes(uint? splitRow, uint? splitColumn)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var result = ExecuteCommandPreservingSelection(
+            CreateGroupedSheetCommand(
+                "Split",
+                sheetId => new SetSplitPanesCommand(sheetId, splitRow, splitColumn)));
+        if (!result.Success || result.IsNoOp)
+            return result;
+
+        foreach (var sheetId in targetSheetIds)
+        {
+            _viewSplitRowOverrides[sheetId] = splitRow;
+            _viewSplitColOverrides[sheetId] = splitColumn;
+        }
+
+        ResetSplitPaneOffsets();
+        RefreshViewport();
+        return result;
+    }
 
     public WorkbookCellEditResult HideActiveSheet()
     {
@@ -3058,7 +3239,7 @@ public sealed class WorkbookSession : IDisposable
             sheet,
             singleCellRange,
             usedRange: singleCellRange,
-            GetAutoFitDisplayText,
+            (row, col) => GetAutoFitDisplayText(sheet, row, col),
             sheet.DefaultRowHeight);
 
         if (plans.Count != 1)
@@ -4674,7 +4855,7 @@ public sealed class WorkbookSession : IDisposable
 
     private AutoFitCellText? GetAutoFitDisplayTextForPendingWrap(uint row, uint col, GridRange pendingWrapRange)
     {
-        if (GetAutoFitDisplayText(row, col) is not { } cellText)
+        if (GetAutoFitDisplayText(ActiveSheet, row, col) is not { } cellText)
             return null;
 
         return pendingWrapRange.Contains(new CellAddress(ActiveSheet.Id, row, col))
@@ -6681,7 +6862,7 @@ public sealed class WorkbookSession : IDisposable
             ? GoToCell(target)
             : WorkbookNavigationResult.Failed(plan.ErrorMessage ?? "Review target was not found.");
 
-    private WorkbookCellEditResult SetFreezePanes(uint frozenRows, uint frozenCols)
+    public WorkbookCellEditResult SetFreezePanes(uint frozenRows, uint frozenCols)
     {
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
