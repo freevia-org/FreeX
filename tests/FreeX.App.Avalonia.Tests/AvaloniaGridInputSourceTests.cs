@@ -46,6 +46,20 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("AutoFitRowFromHeader(row);");
         source.Should().Contain("AutoFitSelectedColumnWidth();");
         source.Should().Contain("AutoFitSelectedRowHeight();");
+
+        var columnHandle = source[
+            source.IndexOf("private Control AddColumnResizeHandle(", StringComparison.Ordinal)..
+            source.IndexOf("private Control AddRowResizeHandle(", StringComparison.Ordinal)];
+        columnHandle.Should().Contain("if (args.ClickCount >= 2)");
+        columnHandle.IndexOf("if (args.ClickCount >= 2)", StringComparison.Ordinal)
+            .Should().BeLessThan(columnHandle.IndexOf("BeginHeaderResize(", StringComparison.Ordinal));
+
+        var rowHandle = source[
+            source.IndexOf("private Control AddRowResizeHandle(", StringComparison.Ordinal)..
+            source.IndexOf("private static Border CreateHeaderResizeHandle", StringComparison.Ordinal)];
+        rowHandle.Should().Contain("if (args.ClickCount >= 2)");
+        rowHandle.IndexOf("if (args.ClickCount >= 2)", StringComparison.Ordinal)
+            .Should().BeLessThan(rowHandle.IndexOf("BeginHeaderResize(", StringComparison.Ordinal));
     }
 
     [Fact]

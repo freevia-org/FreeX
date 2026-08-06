@@ -1955,10 +1955,9 @@ public enum CitationCategory
 /// A marked legal citation for a Table of Authorities (Word's References &gt; Mark Citation). It carries
 /// the citation's <see cref="Category"/> plus its <see cref="LongCitation"/> (the full form listed in the
 /// table) and an optional <see cref="ShortCitation"/> (the abbreviated form). Modelled as a model
-/// side-store on <see cref="TextDocument.Citations"/>, mirroring <see cref="IndexEntry"/>: the generated
-/// Table of Authorities is ordinary styled paragraphs that already round-trip, and the marks themselves
-/// serialise as hidden <c>TA</c> fields (see <c>DocxWriter</c>/<c>DocxReader</c>) so they survive a
-/// save/open exactly like Word's.
+/// side-store on <see cref="TextDocument.Citations"/>, mirroring <see cref="IndexEntry"/>. Generated
+/// Table-of-Authorities results retain native <c>TOA</c> ownership, while the marks themselves serialize
+/// as hidden <c>TA</c> fields so both sources and generated results survive save/open like Word's.
 /// </summary>
 public sealed class Citation
 {

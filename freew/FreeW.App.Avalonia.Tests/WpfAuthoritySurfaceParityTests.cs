@@ -325,7 +325,32 @@ public sealed class WpfAuthoritySurfaceParityTests
             ok.BorderBrush.Should().BeOfType<SolidColorBrush>();
             ((SolidColorBrush)ok.BorderBrush!).Color.Should().Be(Color.FromRgb(200, 200, 200));
             dialog.GetLogicalDescendants().OfType<CheckBox>()
-                .Should().OnlyContain(check => check.Margin.Left == 4);
+                .Should().OnlyContain(check => check.Margin.Left == 0);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Table_properties_cell_tab_keeps_Wpf_checkbox_geometry()
+    {
+        await Session.Dispatch(() =>
+        {
+            var (_, table) = CreateTableEditor();
+            var dialog = new TablePropertiesDialog(
+                new ModelTableContext(table, table.Rows[0], table.Rows[0].Cells[0]),
+                TablePropertiesDialogTab.Cell);
+
+            var cellTab = dialog.TabsForTest.Items.OfType<TabItem>().Single(tab =>
+                AutomationProperties.GetAutomationId(tab) == "TablePropertiesCellTab");
+            var cellChecks = cellTab.GetLogicalDescendants().OfType<CheckBox>().ToArray();
+
+            cellChecks.Should().HaveCount(5);
+            cellChecks.Should().OnlyContain(check => check.Margin.Left == 0);
+            cellChecks.Single(check =>
+                    AutomationProperties.GetAutomationId(check) == "TablePropertiesCellWrapTextCheckBox")
+                .Margin.Should().Be(new Thickness(0, 4, 8, 4));
+            cellChecks.Single(check =>
+                    AutomationProperties.GetAutomationId(check) == "TablePropertiesCellFitTextCheckBox")
+                .Margin.Should().Be(new Thickness(0, 4, 8, 4));
         }, CancellationToken.None);
     }
 

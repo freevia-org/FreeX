@@ -21756,11 +21756,16 @@ public sealed class DocumentView : Control
         ApplyGeneratedReferencePlan(plan, "Insert Table of Authorities", adjustCaretForInsert: true);
     }
 
-    public void RefreshTableOfAuthorities() => RefreshTableOfAuthorities(ToaOptions.Default);
+    public void RefreshTableOfAuthorities() => RefreshTableOfAuthoritiesCore(options: null);
 
     public void RefreshTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        RefreshTableOfAuthoritiesCore(options);
+    }
+
+    private void RefreshTableOfAuthoritiesCore(ToaOptions? options)
+    {
         var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
             _doc,
             options,

@@ -420,7 +420,11 @@ public partial class MainWindow
 
     private void OnColumnAutoFitRequested(uint col)
     {
-        var (startCol, endCol) = GetSelectedColRange(col);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        var (startCol, endCol) = GetColumnResizeRange(sheet, col);
         if (!TryExecuteWorksheetLayout(
                 () => _session.AutoFitColumns(startCol, endCol),
                 "Auto Column Width"))
@@ -445,7 +449,11 @@ public partial class MainWindow
 
     private void OnRowAutoFitRequested(uint row)
     {
-        var (startRow, endRow) = GetSelectedRowRange(row);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        var (startRow, endRow) = GetRowResizeRange(sheet, row);
         if (!TryExecuteWorksheetLayout(
                 () => _session.AutoFitRows(startRow, endRow),
                 "Auto Row Height"))

@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
+    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "grid-autofit", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -1240,6 +1240,8 @@ try {
             "grid-selection-border-move-physical",
             "grid-selection-border-copy-physical"
         )
+    } elseif ($PhysicalProbeSelector -eq "grid-autofit") {
+        @("grid-header-double-click-autofit-column-physical")
     } elseif ($PhysicalProbeSelector -eq "split-pane-pointer") {
         @(
             "split-pane-divider-drag-physical",
@@ -1367,6 +1369,8 @@ try {
             "grid-selection-border-move-physical",
             "grid-selection-border-copy-physical"
         )
+    } elseif ($PhysicalProbeSelector -eq "grid-autofit") {
+        @("grid-header-double-click-autofit-column-physical")
     } elseif ($PhysicalProbeSelector -eq "split-pane-pointer") {
         @(
             "split-pane-divider-drag-physical",

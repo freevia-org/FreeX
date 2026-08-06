@@ -6,6 +6,72 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class OleActivationServiceTests
 {
     [Fact]
+    public void Planner_ResolvesPayloadAndSafeFilenameForPackagedObject()
+    {
+        var plan = OleActivationPlanner.TryBuild(new OleObjectInfo
+        {
+            EmbeddedBytes = [1, 2, 3],
+            FileName = "..\\outside\\Budget.xlsx",
+            EmbeddedExtension = "xlsx",
+        });
+
+        plan.Should().NotBeNull();
+        plan!.Payload.Should().Equal(1, 2, 3);
+        plan.FileName.Should().Be("Budget.xlsx");
+        plan.Extension.Should().Be("xlsx");
+    }
+
+    [Fact]
+    public async Task TryActivate_UsesInjectedTempAndLauncher_AndCommitsOnExit()
+    {
+        var temp = new FakeTempStore();
+        var launcher = new FakeLauncher();
+        var ole = new OleObjectInfo
+        {
+            EmbeddedBytes = [1, 2, 3],
+            FileName = "Budget.xlsx",
+            EmbeddedExtension = "xlsx",
+        };
+
+        OleActivationService.TryActivate(
+                OleActivationPlanner.TryBuild(ole),
+                bytes => ole.EmbeddedBytes = bytes,
+                temp,
+                launcher)
+            .Should().BeTrue();
+
+        temp.Plan!.FileName.Should().Be("Budget.xlsx");
+        File.ReadAllBytes(launcher.Path).Should().Equal(1, 2, 3);
+        File.WriteAllBytes(launcher.Path, [9, 8]);
+        launcher.Process.Complete();
+        await temp.DisposedTask;
+
+        ole.EmbeddedBytes.Should().Equal(9, 8);
+        temp.Disposed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task TryActivate_DetachedLauncherCleansUpWithoutEditBack()
+    {
+        var temp = new FakeTempStore();
+        var launcher = new FakeLauncher();
+        launcher.Process.SupportsEditBack = false;
+        var ole = new OleObjectInfo { EmbeddedBytes = [1, 2, 3], EmbeddedExtension = "xlsx" };
+
+        OleActivationService.TryActivate(
+                OleActivationPlanner.TryBuild(ole),
+                bytes => ole.EmbeddedBytes = bytes,
+                temp,
+                launcher)
+            .Should().BeTrue();
+        File.WriteAllBytes(launcher.Path, [9, 8]);
+        launcher.Process.Complete();
+        await temp.DisposedTask;
+
+        ole.EmbeddedBytes.Should().Equal(1, 2, 3);
+    }
+
+    [Fact]
     public void OpenEmbeddedCommand_PrefersActiveInlineObject()
     {
         bool inlineOpened = false;
@@ -47,6 +113,25 @@ public sealed class OleActivationServiceTests
     public void TryActivate_EmptyPayload_ReturnsFalse()
     {
         OleActivationService.TryActivate(new OleObjectInfo()).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("payload.exe")]
+    [InlineData("payload.ps1")]
+    [InlineData("payload.sh")]
+    public void TryActivate_RejectsExecutableAndScriptExtensions(string fileName)
+    {
+        var temp = new FakeTempStore();
+        var launcher = new FakeLauncher();
+
+        OleActivationService.TryActivate(
+                new OleActivationPlan([1, 2, 3], fileName),
+                _ => { },
+                temp,
+                launcher)
+            .Should().BeFalse();
+        temp.MaterializeCalls.Should().Be(0);
+        launcher.LaunchCalls.Should().Be(0);
     }
 
     [Theory]
@@ -157,5 +242,58 @@ public sealed class OleActivationServiceTests
         {
             try { File.Delete(path); } catch { }
         }
+    }
+
+    private sealed class FakeTempStore : IOleActivationTempFileStore
+    {
+        public OleActivationPlan? Plan { get; private set; }
+        public bool Disposed { get; private set; }
+        public int MaterializeCalls { get; private set; }
+        public Task DisposedTask => _disposed.Task;
+        private readonly TaskCompletionSource _disposed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public IOleActivationTempFile Materialize(OleActivationPlan plan)
+        {
+            Plan = plan;
+            MaterializeCalls++;
+            var path = Path.Combine(Path.GetTempPath(), $"freep-ole-fake-{Guid.NewGuid():N}", plan.FileName);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, plan.Payload);
+            return new FakeTempFile(path, () =>
+            {
+                Disposed = true;
+                _disposed.TrySetResult();
+            });
+        }
+    }
+
+    private sealed class FakeTempFile : IOleActivationTempFile
+    {
+        private readonly Action _onDispose;
+        public FakeTempFile(string path, Action onDispose) { Path = path; _onDispose = onDispose; }
+        public string Path { get; }
+        public byte[] ReadAllBytes() => File.ReadAllBytes(Path);
+        public void Dispose()
+        {
+            _onDispose();
+            try { Directory.Delete(System.IO.Path.GetDirectoryName(Path)!, true); } catch { }
+        }
+    }
+
+    private sealed class FakeLauncher : IOleActivationLauncher
+    {
+        public FakeProcess Process { get; } = new();
+        public string Path { get; private set; } = string.Empty;
+        public int LaunchCalls { get; private set; }
+        public IOleActivationProcess Launch(string path) { Path = path; LaunchCalls++; return Process; }
+    }
+
+    private sealed class FakeProcess : IOleActivationProcess
+    {
+        private readonly TaskCompletionSource _exit = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task ExitTask => _exit.Task;
+        public bool SupportsEditBack { get; set; } = true;
+        public void Complete() => _exit.TrySetResult();
+        public void Dispose() { }
     }
 }
