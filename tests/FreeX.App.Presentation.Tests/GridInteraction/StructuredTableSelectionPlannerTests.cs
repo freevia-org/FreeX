@@ -83,6 +83,18 @@ public sealed class StructuredTableSelectionPlannerTests
         StructuredTableSelectionPlanner.PlanWholeRows(sheet, outside).Kind
             .Should().Be(StructuredTableSelectionExpansionKind.WorksheetRows);
         StructuredTableSelectionPlanner.Describe(sheet, outside).Should().BeNull();
+        StructuredTableSelectionPlanner.OverlapsAnyTable(sheet, outside).Should().BeFalse();
+    }
+
+    [Fact]
+    public void OverlapsAnyTable_IncludesPartialOverlapWithoutTreatingItAsContainedSelection()
+    {
+        var (_, sheet, table) = CreateTable();
+        var selection = Range(sheet.Id, 5, 2, 12, 4);
+
+        StructuredTableSelectionPlanner.OverlapsAnyTable(sheet, selection).Should().BeTrue();
+        StructuredTableSelectionPlanner.Describe(sheet, selection).Should().BeNull();
+        table.Range.Contains(selection).Should().BeFalse();
     }
 
     private static (Workbook Workbook, Sheet Sheet, StructuredTableModel Table) CreateTable()

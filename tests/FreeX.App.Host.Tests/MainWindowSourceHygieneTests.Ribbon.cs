@@ -1095,6 +1095,7 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
         var requestPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellRequestPlanner.cs");
+        var selectionInterpreter = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisSelectionInterpreter.cs");
         var openPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellOpenPlanner.cs");
         var planner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisPlanner.cs");
         var shellPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellPlanner.cs");
@@ -1115,7 +1116,8 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().NotContain("Header = group.TitleFallback");
         source.Should().Contain("foreach (var group in shellPlan.Groups)");
         source.Should().NotContain("foreach (var group in displayModel.Groups)");
-        requestPlanner.Should().Contain("QuickAnalysisSelectionReader.Describe(sheet, range)");
+        requestPlanner.Should().Contain("QuickAnalysisSelectionInterpreter.Interpret(sheet, range)");
+        selectionInterpreter.Should().Contain("QuickAnalysisSelectionReader.Describe(sheet, selection)");
         requestPlanner.Should().Contain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
         requestPlanner.Should().Contain("QuickAnalysisShellPlanner.BuildMenuPlan(displayModel, capabilities, range)");
         openPlanner.Should().Contain("new QuickAnalysisShellOpenIssuePlan(");

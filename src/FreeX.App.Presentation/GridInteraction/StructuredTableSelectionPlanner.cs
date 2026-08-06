@@ -153,6 +153,12 @@ public static class StructuredTableSelectionPlanner
         return FindByName(workbook, tableName) is not null;
     }
 
+    public static bool OverlapsAnyTable(Sheet sheet, GridRange selection)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        return sheet.StructuredTables.Any(table => table.Range.Overlaps(selection));
+    }
+
     public static GridRange GetDataBodyRangeOrTableRange(StructuredTableModel table)
     {
         ArgumentNullException.ThrowIfNull(table);

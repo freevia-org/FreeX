@@ -349,6 +349,19 @@ public sealed class QuickAnalysisPlannerTests
             new GridRange(new CellAddress(sheetId, 2, 6), new CellAddress(sheetId, 6, 6)));
     }
 
+    [Fact]
+    public void BuildHoverPreview_StaysInsideSheetAtLastColumn()
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(
+            new CellAddress(sheetId, 2, CellAddress.MaxCol),
+            new CellAddress(sheetId, 6, CellAddress.MaxCol));
+        var sum = QuickAnalysisPlanner.BuildOptions(selection)
+            .Single(option => option.Command == QuickAnalysisCommand.Sum);
+
+        QuickAnalysisPlanner.BuildHoverPreview(selection, sum).Range.Should().Be(selection);
+    }
+
     [Theory]
     [InlineData(QuickAnalysisCommand.DataBar, QuickAnalysisPreviewVisualKind.DataBars)]
     [InlineData(QuickAnalysisCommand.Sum, QuickAnalysisPreviewVisualKind.TotalFormula)]

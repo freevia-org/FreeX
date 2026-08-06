@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.QuickAnalysis;
@@ -19,31 +20,46 @@ public static class QuickAnalysisSelectionReader
     {
         ArgumentNullException.ThrowIfNull(sheet);
 
-        var hasHeaderRow = DetectHeaderRow(sheet, range);
-
-        // The header row is labels, not data, so classify columns from the data rows only when one exists.
-        var firstDataRow = hasHeaderRow && range.RowCount > 1 ? range.Start.Row + 1 : range.Start.Row;
+        var tableContext = StructuredTableSelectionPlanner.Describe(sheet, range);
+        var hasHeaderRow = tableContext?.IncludesHeader ?? DetectHeaderRow(sheet, range);
+        var dataRange = ResolveDataRange(range, hasHeaderRow, tableContext);
+        var contentRange = TryGetContentRange(sheet, dataRange);
 
         var columnKinds = new QuickAnalysisColumnKind[range.ColCount];
         for (var i = 0u; i < range.ColCount; i++)
-            columnKinds[i] = ClassifyColumn(sheet, range, firstDataRow, range.Start.Col + i);
+        {
+            columnKinds[i] = ClassifyColumn(
+                sheet,
+                contentRange,
+                range.Start.Col + i);
+        }
 
-        return new QuickAnalysisSelectionDescription(range, hasHeaderRow, columnKinds);
+        return new QuickAnalysisSelectionDescription(range, hasHeaderRow, columnKinds)
+        {
+            StructuredTableContext = tableContext,
+            OverlapsStructuredTable = StructuredTableSelectionPlanner.OverlapsAnyTable(sheet, range),
+            DataRowCountOverride = tableContext is null
+                ? null
+                : dataRange?.RowCount ?? 0
+        };
     }
 
     /// <summary>
-    /// Classifies a single column over the data rows [<paramref name="firstDataRow"/>, range end]. The kind
-    /// is the first non-blank value's kind, so a numeric column with trailing blanks is still Numeric; a
+    /// Classifies a single column over the bounded content range. A numeric column with trailing blanks is
+    /// still Numeric; a
     /// fully blank column is Empty. Numbers win ties when a column mixes kinds, matching the desktop hosts'
     /// bias toward offering number-driven suggestions.
     /// </summary>
-    private static QuickAnalysisColumnKind ClassifyColumn(Sheet sheet, GridRange range, uint firstDataRow, uint col)
+    private static QuickAnalysisColumnKind ClassifyColumn(Sheet sheet, GridRange? contentRange, uint col)
     {
+        if (contentRange is not { } range || col < range.Start.Col || col > range.End.Col)
+            return QuickAnalysisColumnKind.Empty;
+
         var sawNumeric = false;
         var sawDate = false;
         var sawText = false;
 
-        for (var row = firstDataRow; row <= range.End.Row; row++)
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
         {
             switch (sheet.GetValue(row, col))
             {
@@ -85,17 +101,22 @@ public static class QuickAnalysisSelectionReader
         if (range.RowCount < 2)
             return false;
 
+        var contentRange = TryGetContentRange(sheet, range);
+        if (contentRange is null)
+            return false;
+
         var headerRow = range.Start.Row;
         var sawLabelOverValueColumn = false;
 
-        for (var col = range.Start.Col; col <= range.End.Col; col++)
+        for (var col = contentRange.Value.Start.Col; col <= contentRange.Value.End.Col; col++)
         {
             var headerIsText = sheet.GetValue(headerRow, col) is TextValue { Value.Length: > 0 };
 
             var belowHasNumericOrDate = false;
             var belowHasNonText = false;
             var belowHasAnyValue = false;
-            for (var row = headerRow + 1; row <= range.End.Row; row++)
+            var firstContentRow = Math.Max(headerRow + 1, contentRange.Value.Start.Row);
+            for (var row = firstContentRow; row <= contentRange.Value.End.Row; row++)
             {
                 var value = sheet.GetValue(row, col);
                 if (value is BlankValue)
@@ -126,5 +147,40 @@ public static class QuickAnalysisSelectionReader
         }
 
         return sawLabelOverValueColumn;
+    }
+
+    private static GridRange? ResolveDataRange(
+        GridRange selection,
+        bool hasHeaderRow,
+        StructuredTableSelectionContext? tableContext)
+    {
+        if (tableContext is not null)
+        {
+            return tableContext.DataBodyRange is { } body &&
+                   GridRange.TryIntersect(selection, body, out var selectedBody)
+                ? selectedBody
+                : null;
+        }
+
+        var firstDataRow = hasHeaderRow && selection.RowCount > 1
+            ? selection.Start.Row + 1
+            : selection.Start.Row;
+        return firstDataRow <= selection.End.Row
+            ? new GridRange(
+                new CellAddress(selection.Start.Sheet, firstDataRow, selection.Start.Col),
+                selection.End)
+            : null;
+    }
+
+    private static GridRange? TryGetContentRange(Sheet sheet, GridRange? range)
+    {
+        if (range is not { } candidate ||
+            sheet.GetUsedRange() is not { } usedRange ||
+            !GridRange.TryIntersect(candidate, usedRange, out var intersection))
+        {
+            return null;
+        }
+
+        return intersection;
     }
 }

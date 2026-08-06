@@ -42,6 +42,26 @@ public sealed class QuickAnalysisSourceGuardTests
             "FreeX.App.Presentation",
             "QuickAnalysis",
             "QuickAnalysisShellPlanner.cs");
+        var requestPlannerSource = ReadSource(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisShellRequestPlanner.cs");
+        var selectionInterpreterSource = ReadSource(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisSelectionInterpreter.cs");
+        var selectionReaderSource = ReadSource(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisSelectionReader.cs");
+        var modelBuilderSource = ReadSource(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisModelBuilder.cs");
         var shellSources = string.Join(Environment.NewLine, hostSource, avaloniaSource);
         var iconFactorySources = string.Join(Environment.NewLine, hostIconFactorySource, avaloniaIconFactorySource);
 
@@ -78,6 +98,8 @@ public sealed class QuickAnalysisSourceGuardTests
         shellSources.Should().NotContain("new EditCellsCommand(");
         shellSources.Should().NotContain("QuickAnalysisShellRequestPlanner.Build(");
         shellSources.Should().NotContain("QuickAnalysisShellOpenPlanner.Plan(request)");
+        shellSources.Should().NotContain("StructuredTables");
+        shellSources.Should().NotContain("MaximumAnalyzedCellCount");
 
         sessionSource.Should().Contain("QuickAnalysisShellRequestPlanner.Build(sheet, selection, capabilities)");
         sessionSource.Should().Contain("QuickAnalysisShellOpenPlanner.Plan(request)");
@@ -86,6 +108,13 @@ public sealed class QuickAnalysisSourceGuardTests
         sessionSource.Should().Contain("var preview = item.HoverPreview");
         shellPlannerSource.Should().Contain("QuickAnalysisPreviewIconPlan PreviewIcon");
         shellPlannerSource.Should().NotContain("QuickAnalysisDisplayItem DisplayItem");
+        requestPlannerSource.Should().Contain("QuickAnalysisSelectionInterpreter.Interpret(sheet, range)");
+        requestPlannerSource.Should().NotContain("range.CellCount");
+        selectionInterpreterSource.Should().Contain("MaximumAnalyzedCellCount");
+        selectionInterpreterSource.Should().Contain("QuickAnalysisSelectionReader.Describe(sheet, selection)");
+        selectionReaderSource.Should().Contain("StructuredTableSelectionPlanner.Describe(sheet, range)");
+        modelBuilderSource.Should().Contain("selection.OverlapsStructuredTable");
+        modelBuilderSource.Should().Contain("selection.CanWriteAdjacentColumn");
 
         hostSource.Should().Contain("QuickAnalysisMenuPlacementPlanner.BuildAnchor(");
         hostSource.Should().NotContain("FindLastVisibleRowInSelection");
