@@ -24,7 +24,10 @@ internal static class MailMergeDialogs
     /// already has merge fields, <paramref name="seedHeader"/> pre-fills the header line as a hint. Returns
     /// the entered CSV text, or <c>null</c> if cancelled / empty.
     /// </summary>
-    public static async Task<string?> AskRecipientCsvAsync(Window owner, string seedHeader)
+    public static async Task<string?> AskRecipientCsvAsync(
+        Window owner,
+        string seedHeader,
+        string? initialCsv = null)
     {
         var dialog = new Window
         {
@@ -49,7 +52,8 @@ internal static class MailMergeDialogs
             TextWrapping = TextWrapping.NoWrap,
             FontFamily = new FontFamily("Consolas, Courier New, monospace"),
             Margin = new Thickness(16, 0, 16, 0),
-            Text = string.IsNullOrWhiteSpace(seedHeader) ? string.Empty : seedHeader + "\n",
+            Text = initialCsv ??
+                (string.IsNullOrWhiteSpace(seedHeader) ? string.Empty : seedHeader + "\n"),
             PlaceholderText ="FirstName,LastName,City…",
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(editor, DialogChromeStyle, fixedHeight: false);

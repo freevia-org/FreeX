@@ -6030,10 +6030,39 @@ internal static class FreeWRibbonCommands
 
     }
 
-    private static void RestoreEditableTemplate(DocumentView editor, MailMergeSession session)
+    private static TextDocument CurrentMailMergeDocument(
+        DocumentView editor,
+        MailMergeSession session)
     {
-        if (session.EndPreview() is { } template)
-            editor.LoadModel(template);
+        if (!session.IsPreviewing)
+            editor.CommitToModel();
+        return session.Template ?? editor.Model;
+    }
+
+    private static void Realize(
+        DocumentView editor,
+        MailMergeSessionTransition transition)
+    {
+        if (transition.DocumentToLoad is { } document)
+            editor.LoadModel(document);
+    }
+
+    private static bool Realize(
+        DocumentView editor,
+        MailMergePreviewExecution execution,
+        Action<Window?, string>? showInfo = null)
+    {
+        if (execution.DocumentToLoad is { } document)
+            editor.LoadModel(document);
+        if (!execution.Success)
+        {
+            (showInfo ?? ((owner, message) =>
+                DialogMessageHelper.ShowInfo(owner, message, "Mail Merge")))(
+                Window.GetWindow(editor),
+                execution.Message);
+        }
+
+        return execution.Success;
     }
 
     private sealed class SetMergeModeCommand(
@@ -6043,8 +6072,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            RestoreEditableTemplate(editor, session);
-            session.SetMode(mode);
+            Realize(editor, new MailMergeSessionWorkflow(session).SetMode(mode));
         }
     }
 
@@ -6052,8 +6080,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            RestoreEditableTemplate(editor, session);
-            session.Clear();
+            Realize(editor, new MailMergeSessionWorkflow(session).Clear());
         }
     }
 
@@ -6084,11 +6111,13 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (session.Data is null)
+            var validation = new MailMergeSessionWorkflow(session)
+                .Validate(MailMergeOperation.InsertAddressBlock);
+            if (!validation.IsValid)
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
-                    "Select recipients first (Mailings > Select Recipients), then insert an Address Block.",
+                    validation.Message,
                     "Mail Merge");
                 return;
             }
@@ -6106,11 +6135,13 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (session.Data is null)
+            var validation = new MailMergeSessionWorkflow(session)
+                .Validate(MailMergeOperation.InsertGreetingLine);
+            if (!validation.IsValid)
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
-                    "Select recipients first (Mailings > Select Recipients), then insert a Greeting Line.",
+                    validation.Message,
                     "Mail Merge");
                 return;
             }
@@ -6129,22 +6160,22 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (session.Data is not { } data)
+            var workflow = new MailMergeSessionWorkflow(session);
+            var validation = workflow.Validate(MailMergeOperation.MatchFields);
+            if (!validation.IsValid)
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
-                    "Select recipients first (Mailings > Select Recipients), then match fields.",
+                    validation.Message,
                     "Mail Merge");
                 return;
             }
 
+            var data = session.Data!;
             var current = session.Mapping ?? MailMerge.AutoMatchFields(data.Header);
             var result = MatchFieldsDialog.Ask(Window.GetWindow(editor), data.Header, current);
             if (result is not null)
-            {
-                session.Mapping = result;
-                RestoreEditableTemplate(editor, session);
-            }
+                Realize(editor, workflow.ApplyFieldMapping(result));
 
             editor.Focus();
         }
@@ -6180,10 +6211,8 @@ internal static class FreeWRibbonCommands
             var header = session.Data?.Header ?? [];
             var result = MergeRuleIfDialog.Ask(Window.GetWindow(editor), header);
             if (result is null) return;
-            var instruction = MergeRuleEvaluator.BuildIfInstruction(
-                result.FieldName, result.Operator, result.Value, result.TrueText, result.FalseText);
             editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+            editor.InsertText(MailMergeRuleAuthoringPlanner.CreateIf(result));
         }
     }
 
@@ -6199,11 +6228,10 @@ internal static class FreeWRibbonCommands
             var label = kind == RuleCondKind.SkipRecordIf ? "Skip Record If" : "Next Record If";
             var result = MergeRuleCondDialog.Ask(Window.GetWindow(editor), header, label);
             if (result is null) return;
-            var instruction = kind == RuleCondKind.SkipRecordIf
-                ? MergeRuleEvaluator.BuildSkipRecordIfInstruction(result.FieldName, result.Operator, result.Value)
-                : MergeRuleEvaluator.BuildNextRecordIfInstruction(result.FieldName, result.Operator, result.Value);
             editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+            editor.InsertText(MailMergeRuleAuthoringPlanner.CreateCondition(
+                result,
+                skipRecord: kind == RuleCondKind.SkipRecordIf));
         }
     }
 
@@ -6216,9 +6244,8 @@ internal static class FreeWRibbonCommands
         {
             var prompt = MergeRulePromptDialog.AskPrompt(Window.GetWindow(editor), "Fill-in", "Enter the prompt text for this Fill-in field:");
             if (prompt is null) return;
-            var instruction = MergeRuleEvaluator.BuildFillInInstruction(prompt);
             editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+            editor.InsertText(MailMergeRuleAuthoringPlanner.CreateFillIn(prompt));
         }
     }
 
@@ -6229,9 +6256,12 @@ internal static class FreeWRibbonCommands
         {
             var result = MergeRuleAskSetDialog.AskAsk(Window.GetWindow(editor));
             if (result is null) return;
-            var instruction = MergeRuleEvaluator.BuildAskInstruction(result.Value.Name, result.Value.Value);
             editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+            var placeholder = MailMergeRuleAuthoringPlanner.CreateAsk(
+                result.Value.Name,
+                result.Value.Value);
+            if (placeholder.Length > 0)
+                editor.InsertText(placeholder);
         }
     }
 
@@ -6242,9 +6272,12 @@ internal static class FreeWRibbonCommands
         {
             var result = MergeRuleAskSetDialog.AskSet(Window.GetWindow(editor));
             if (result is null) return;
-            var instruction = MergeRuleEvaluator.BuildSetInstruction(result.Value.Name, result.Value.Value);
             editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+            var placeholder = MailMergeRuleAuthoringPlanner.CreateSet(
+                result.Value.Name,
+                result.Value.Value);
+            if (placeholder.Length > 0)
+                editor.InsertText(placeholder);
         }
     }
 
@@ -6256,9 +6289,10 @@ internal static class FreeWRibbonCommands
             var name = MergeRulePromptDialog.AskPrompt(Window.GetWindow(editor), "Ref Bookmark",
                 "Enter the bookmark name to reference:");
             if (name is null) return;
-            var instruction = MergeRuleEvaluator.BuildRefInstruction(name);
             editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+            var placeholder = MailMergeRuleAuthoringPlanner.CreateRef(name);
+            if (placeholder.Length > 0)
+                editor.InsertText(placeholder);
         }
     }
 
@@ -6518,51 +6552,27 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            TextDocument template;
-            if (session.Template is { } previewTemplate)
-            {
-                template = previewTemplate;
-            }
-            else
-            {
-                editor.CommitToModel();
-                template = editor.Model;
-            }
-
+            var template = CurrentMailMergeDocument(editor, session);
             var fields = MailMerge.FieldNames(template);
-            var seed = session.Data is { } data ? DescribeAsCsv(data) : SeedFromFields(fields);
+            var dialogPlan = MailMergeRecipientDialogPlanner.CreatePlan(fields, session.Data);
 
-            var csv = MergeDataDialog.Ask(Window.GetWindow(editor), fields, seed);
+            var csv = MergeDataDialog.Ask(
+                Window.GetWindow(editor),
+                fields,
+                dialogPlan.InitialCsv);
             if (csv is null)
                 return; // cancelled
 
-            RestoreEditableTemplate(editor, session);
-            var parsed = session.Load(MergeData.FromCsv(csv));
+            var transition = new MailMergeSessionWorkflow(session)
+                .LoadRecipients(MergeData.FromCsv(csv));
+            Realize(editor, transition);
 
             DialogMessageHelper.ShowInfo(
                 Window.GetWindow(editor),
-                $"Loaded {parsed.Count} record(s) with {parsed.Header.Count} field(s).",
+                transition.Message,
                 "Mail Merge");
             editor.Focus();
         }
-
-        // Suggest a header line from the document's discovered fields so the user can fill rows in.
-        private static string SeedFromFields(IReadOnlyList<string> fields) =>
-            fields.Count == 0 ? string.Empty : string.Join(",", fields);
-
-        // Render the current data back to CSV so re-opening the dialog shows what was entered.
-        private static string DescribeAsCsv(MergeData data)
-        {
-            var lines = new List<string> { string.Join(",", data.Header.Select(CsvCell)) };
-            foreach (var row in data.Rows)
-                lines.Add(string.Join(",", data.Header.Select(h => CsvCell(row.TryGetValue(h, out var v) ? v : string.Empty))));
-            return string.Join(Environment.NewLine, lines);
-        }
-
-        private static string CsvCell(string value) =>
-            value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r')
-                ? "\"" + value.Replace("\"", "\"\"") + "\""
-                : value;
     }
 
     // Mailings > Preview Results: load MergeRecord(template, currentRow) into the editor so the user sees
@@ -6573,26 +6583,23 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!EnsurePreviewing(editor, session, out var data, out var template))
-            {
+            var workflow = new MailMergeSessionWorkflow(session);
+            var preview = workflow.EnsurePreviewing(
+                CurrentMailMergeDocument(editor, session));
+            if (!Realize(editor, preview))
                 return;
-            }
 
-            var index = Math.Clamp(session.CurrentIndex, 0, data.Count - 1);
-            session.CurrentIndex = index;
-            editor.LoadModel(MailMerge.MergeRecord(template, session.AugmentRow(data.Rows[index])));
-
-            var action = PreviewNavigationDialog.Ask(Window.GetWindow(editor), index, data.Count);
+            var action = PreviewNavigationDialog.Ask(
+                Window.GetWindow(editor),
+                preview.CurrentIndex,
+                session.Data!.Count);
             switch (action.Kind)
             {
                 case PreviewAction.Move:
-                    index = Math.Clamp(action.TargetIndex, 0, data.Count - 1);
-                    session.CurrentIndex = index;
-                    editor.LoadModel(MailMerge.MergeRecord(template, session.AugmentRow(data.Rows[index])));
+                    Realize(editor, workflow.MovePreviewTo(editor.Model, action.TargetIndex));
                     break;
                 case PreviewAction.Done:
-                    // Restore the editable template so the user can keep editing fields.
-                    RestoreEditableTemplate(editor, session);
+                    Realize(editor, workflow.TogglePreview(editor.Model));
                     break;
                 case PreviewAction.Cancel:
                     // Leave whatever is currently shown; do not change the session.
@@ -6610,12 +6617,12 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!EnsurePreviewing(editor, session, out var data, out var template))
-                return;
-
-            var index = MailMergePreviewNavigationPlanner.TargetIndex(action, session.CurrentIndex, data.Count);
-            session.CurrentIndex = index;
-            editor.LoadModel(MailMerge.MergeRecord(template, session.AugmentRow(data.Rows[index])));
+            var workflow = new MailMergeSessionWorkflow(session);
+            Realize(
+                editor,
+                workflow.NavigatePreview(
+                    CurrentMailMergeDocument(editor, session),
+                    action));
             editor.Focus();
         }
     }
@@ -6634,9 +6641,11 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             var owner = Window.GetWindow(editor);
-            if (session.Data is not { Count: > 0 } data)
+            var workflow = new MailMergeSessionWorkflow(session);
+            var validation = workflow.Validate(MailMergeOperation.FindRecipient);
+            if (!validation.IsValid)
             {
-                _showInfo(owner, "Select recipients first (Mailings > Select Recipients), then find a recipient.");
+                _showInfo(owner, validation.Message);
                 return;
             }
 
@@ -6644,9 +6653,10 @@ internal static class FreeWRibbonCommands
             if (query is null)
                 return;
 
-            var result = MailMergeFindRecipientPlanner.Find(data, query, session.CurrentIndex);
-            session.CurrentIndex = result.Index;
-            _showInfo(owner, result.Message);
+            var execution = workflow.FindRecipient(query);
+            if (execution.DocumentToLoad is { } document)
+                editor.LoadModel(document);
+            _showInfo(owner, execution.Message);
             editor.Focus();
         }
     }
@@ -6672,35 +6682,36 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             var owner = Window.GetWindow(editor);
-            if (session.Data is not { Count: > 0 })
+            var workflow = new MailMergeSessionWorkflow(session);
+            var validation = workflow.Validate(MailMergeOperation.CheckForErrors);
+            if (!validation.IsValid)
             {
-                _showInfo(owner, "Select recipients first (Mailings > Select Recipients), then check for errors.");
+                _showInfo(owner, validation.Message);
                 return;
             }
 
             if (_ask(owner) is not { } selected)
                 return;
 
-            if (!session.IsPreviewing)
-                editor.CommitToModel();
-            var template = session.IsPreviewing ? session.Template! : editor.Model;
-            var rows = session.Data.Rows.Select(row => session.AugmentRow(row)).ToList();
-            var result = MailMergeCheckForErrorsPlanner.Check(template, rows, selected);
-            if (result.ShouldPauseForErrors)
+            var execution = workflow.CheckForErrors(
+                CurrentMailMergeDocument(editor, session),
+                selected);
+            if (!execution.Success || execution.Result is not { } result)
             {
-                foreach (var issue in result.Issues)
-                    _showInfo(owner, issue.Message);
+                _showInfo(owner, execution.Message);
+                return;
             }
-            else if (!result.ShouldOpenReportDocument || openReportDocument is null)
-            {
-                _showInfo(owner, result.Message);
-            }
+
+            foreach (var message in execution.Messages)
+                _showInfo(owner, message);
+            if (execution.ReportDocument is not null && openReportDocument is null)
+                _showInfo(owner, execution.Message);
 
             if (result.ShouldCompleteMerge)
                 _completeMerge(context);
 
-            if (result.ShouldOpenReportDocument && openReportDocument is not null)
-                openReportDocument(MailMergeCheckForErrorsPlanner.BuildReportDocument(result));
+            if (execution.ReportDocument is { } report)
+                openReportDocument?.Invoke(report);
             editor.Focus();
         }
     }
@@ -6772,36 +6783,6 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    private static bool EnsurePreviewing(
-        DocumentView editor,
-        MailMergeSession session,
-        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out MergeData? data,
-        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TextDocument? template)
-    {
-        data = session.Data;
-        template = session.Template;
-        if (data is not { Count: > 0 })
-        {
-            DialogMessageHelper.ShowInfo(
-                Window.GetWindow(editor),
-                "Select recipients first (Mailings > Select Recipients), then preview a record.",
-                "Mail Merge");
-            return false;
-        }
-
-        // On first preview, capture the editable template and immediately show record 0; subsequent
-        // previews reuse the template and resume at the last viewed record.
-        if (!session.IsPreviewing)
-        {
-            editor.CommitToModel();
-            session.Template = editor.Model;
-            session.CurrentIndex = 0;
-        }
-
-        template = session.Template!;
-        return true;
-    }
-
     // Mailings > Finish & Merge: produce the merged documents and load the concatenation of every record
     // into the editor as a single document (records separated by a page break), so the result is visible
     // and saveable. This replaces the editor's content; the template is no longer needed afterwards.
@@ -6822,12 +6803,15 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             var owner = Window.GetWindow(editor);
-            if (session.Data is not { Count: > 0 } data)
+            var workflow = new MailMergeSessionWorkflow(session);
+            var validation = workflow.Validate(MailMergeOperation.FinishMerge);
+            if (!validation.IsValid)
             {
-                _showInfo(owner, "Select recipients first (Mailings > Select Recipients), then Finish & Merge.");
+                _showInfo(owner, validation.Message);
                 return;
             }
 
+            var data = session.Data!;
             var finishPlan = _ask(owner, data.Count, session.CurrentIndex);
             if (finishPlan is not { Success: true })
                 return;
@@ -6838,43 +6822,30 @@ internal static class FreeWRibbonCommands
             }
 
             // Use the stashed template if previewing; otherwise the current editor content is the template.
-            TextDocument template;
-            if (session.IsPreviewing)
-            {
-                template = session.Template!;
-            }
-            else
-            {
-                editor.CommitToModel();
-                template = editor.Model;
-            }
+            var template = CurrentMailMergeDocument(editor, session);
 
             // Collect Fill-in and Ask prompts from the template body so we can ask the user once
             // before the merge run starts (matching Word's behaviour).
             var mergeState = new MergeState();
             CollectFillInAndAskAnswers(template, mergeState, owner);
 
-            var augmentedData = session.BuildAugmentedData(finishPlan.RowIndexes);
-
-            // Use the rules-aware merge path. Records flagged by «Skip Record If» are excluded.
-            var merged = MailMerge.MergeAllWithRules(template, augmentedData, mergeState);
-            var skipped = mergeState.SkippedIndices.Count;
-            var combined = MailMerge.CombineMergedRecords(merged, session.Mode);
+            var execution = workflow.BuildFinish(template, finishPlan, mergeState);
+            if (!execution.Success || execution.Document is null)
+            {
+                _showInfo(owner, execution.Message);
+                return;
+            }
 
             if (finishPlan.Destination == MailMergeFinishDestination.Printer)
             {
-                printDocument!(combined);
+                printDocument!(execution.Document);
                 editor.Focus();
                 return;
             }
 
-            editor.LoadModel(combined);
-            session.EndPreview();
-
-            var msg = skipped > 0
-                ? $"Merged {merged.Count} record(s) into a single document ({skipped} skipped)."
-                : $"Merged {merged.Count} record(s) into a single document.";
-            _showInfo(owner, msg);
+            editor.LoadModel(execution.Document);
+            workflow.CompleteFinish(execution);
+            _showInfo(owner, execution.Message);
             editor.Focus();
         }
 
@@ -6882,54 +6853,11 @@ internal static class FreeWRibbonCommands
         // prompt the user once per unique prompt/bookmark before the merge run.
         private static void CollectFillInAndAskAnswers(TextDocument template, MergeState state, Window? owner)
         {
-            var allText = string.Join(" ", template.Blocks.OfType<FreeW.Core.Model.Paragraph>()
-                .SelectMany(p => p.Runs)
-                .Select(r => r.Text));
-
-            // Extract field instructions.
-            var i = 0;
-            while (i < allText.Length)
+            foreach (var request in MailMergePromptPlanner.GetRequests(template))
             {
-                var open = allText.IndexOf(MailMerge.FieldOpen, i);
-                if (open < 0) break;
-                var close = allText.IndexOf(MailMerge.FieldClose, open + 1);
-                if (close < 0) break;
-                var instruction = allText.Substring(open + 1, close - open - 1).Trim();
-                i = close + 1;
-
-                const string fillInPrefix = "Fill-in ";
-                const string askPrefix = "Ask ";
-
-                if (instruction.StartsWith(fillInPrefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    var promptRaw = instruction.Substring(fillInPrefix.Length).Trim();
-                    var prompt = promptRaw.Length >= 2 && promptRaw[0] == '"'
-                        ? promptRaw.Substring(1, promptRaw.Length - 2).Replace("\"\"", "\"")
-                        : promptRaw;
-                    if (!state.FillInAnswers.ContainsKey(prompt))
-                    {
-                        var answer = MergeRulePromptDialog.AskPrompt(owner, "Fill-in", $"{prompt}");
-                        state.FillInAnswers[prompt] = answer ?? string.Empty;
-                    }
-                }
-                else if (instruction.StartsWith(askPrefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    var rest = instruction.Substring(askPrefix.Length).TrimStart();
-                    var spaceIdx = rest.IndexOf(' ');
-                    if (spaceIdx > 0)
-                    {
-                        var bmName = rest.Substring(0, spaceIdx);
-                        if (!state.AskAnswers.ContainsKey(bmName))
-                        {
-                            var promptRaw = rest.Substring(spaceIdx + 1).Trim();
-                            var prompt = promptRaw.Length >= 2 && promptRaw[0] == '"'
-                                ? promptRaw.Substring(1, promptRaw.Length - 2).Replace("\"\"", "\"")
-                                : promptRaw;
-                            var answer = MergeRulePromptDialog.AskPrompt(owner, "Ask", $"{prompt}");
-                            state.AskAnswers[bmName] = answer ?? string.Empty;
-                        }
-                    }
-                }
+                var title = request.Kind == MailMergePromptKind.FillIn ? "Fill-in" : "Ask";
+                var answer = MergeRulePromptDialog.AskPrompt(owner, title, request.Prompt);
+                MailMergePromptPlanner.ApplyResponse(state, request, answer);
             }
         }
     }
@@ -7090,22 +7018,25 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (session.Data is not { Count: > 0 } data)
+            var workflow = new MailMergeSessionWorkflow(session);
+            var validation = workflow.Validate(MailMergeOperation.SendEmail);
+            if (!validation.IsValid)
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
-                    "Select recipients first (Mailings > Select Recipients), then Send E-mail Messages.",
+                    validation.Message,
                     "Mail Merge");
                 return;
             }
 
+            var data = session.Data!;
             var owner = Window.GetWindow(editor);
             var intent = EmailMergeDialog.Ask(owner, data, session.CurrentIndex, []);
             if (intent is null)
                 return;
 
-            var plan = MailMerge.CreateEmailDeliveryPlan(data, intent);
-            DialogMessageHelper.ShowInfo(owner, MailMergeEmailDeliveryPlanner.FormatStatus(plan), "Mail Merge");
+            var execution = workflow.PlanEmail(intent);
+            DialogMessageHelper.ShowInfo(owner, execution.Message, "Mail Merge");
             editor.Focus();
         }
     }
@@ -7257,25 +7188,28 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (session.Data is not { Count: > 0 } data)
+            var workflow = new MailMergeSessionWorkflow(session);
+            var validation = workflow.Validate(MailMergeOperation.FilterSortRecipients);
+            if (!validation.IsValid)
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
-                    "Select recipients first (Mailings > Select Recipients), then filter and sort.",
+                    validation.Message,
                     "Mail Merge");
                 return;
             }
 
+            var data = session.Data!;
             var updatedData = FilterSortRecipientsDialog.Ask(Window.GetWindow(editor), data);
             if (updatedData is null)
                 return; // cancelled
 
-            RestoreEditableTemplate(editor, session);
-            session.Data = updatedData;
+            var transition = workflow.ApplyRecipientFilter(updatedData);
+            Realize(editor, transition);
 
             DialogMessageHelper.ShowInfo(
                 Window.GetWindow(editor),
-                $"Recipient list updated: {session.Data.Count} record(s) after filtering/sorting.",
+                transition.Message,
                 "Mail Merge");
             editor.Focus();
         }

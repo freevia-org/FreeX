@@ -60,6 +60,19 @@ public sealed class MailMergeSessionWorkflowTests
     }
 
     [Fact]
+    public void MovePreviewTo_ClampsDialogTargetAndRendersFromTemplate()
+    {
+        var template = DocumentWith($"Hello {MailMerge.FieldOpen}Name{MailMerge.FieldClose}");
+        var workflow = WorkflowWith("Name\nAda\nGrace");
+
+        var result = workflow.MovePreviewTo(template, 99);
+
+        result.CurrentIndex.Should().Be(1);
+        result.DocumentToLoad!.PlainText.Should().Contain("Grace");
+        workflow.Session.Template.Should().BeSameAs(template);
+    }
+
+    [Fact]
     public void ApplyRecipientFilter_RestoresTemplateAndPreservesFieldMapping()
     {
         var template = DocumentWith($"Hello {MailMerge.FieldOpen}FirstName{MailMerge.FieldClose}");
@@ -124,6 +137,37 @@ public sealed class MailMergeSessionWorkflowTests
         result.Success.Should().BeTrue();
         workflow.Session.IsPreviewing.Should().BeTrue();
         workflow.Session.Template.Should().BeSameAs(template);
+    }
+
+    [Fact]
+    public void BuildFinish_NewDocumentRemainsReusableUntilRendererCompletesIt()
+    {
+        var template = DocumentWith($"Hello {MailMerge.FieldOpen}Name{MailMerge.FieldClose}");
+        var workflow = WorkflowWith("Name\nAda");
+        workflow.EnsurePreviewing(template);
+        var plan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(1);
+
+        var result = workflow.BuildFinish(template, plan);
+
+        workflow.Session.IsPreviewing.Should().BeTrue();
+        workflow.CompleteFinish(result);
+        workflow.Session.IsPreviewing.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanEmail_UsesSharedValidationAndStatusPlan()
+    {
+        var empty = new MailMergeSessionWorkflow();
+        var workflow = WorkflowWith("Name,Email\nAda,ada@example.test");
+
+        var missing = empty.PlanEmail();
+        var result = workflow.PlanEmail();
+
+        missing.Success.Should().BeFalse();
+        missing.Message.Should().Contain("Select recipients first");
+        result.Success.Should().BeTrue();
+        result.Plan.Should().NotBeNull();
+        result.Message.Should().Be(MailMergeEmailDeliveryPlanner.FormatStatus(result.Plan!));
     }
 
     [Fact]

@@ -51,11 +51,11 @@ public sealed class MailMergeDialogSurfaceTests
 
         source.Should().Contain("OpenFindRecipientAsync");
         source.Should().Contain("MailMergeDialogs.AskFindRecipientAsync(this)");
-        source.Should().Contain("MailMergeFindRecipientPlanner.Find(data, query");
+        source.Should().Contain("_mailMerge.FindRecipient(query)");
         source.Should().Contain("if (query is null)");
         source.Should().Contain("OpenCheckForErrorsAsync");
         source.Should().Contain("MailMergeDialogs.AskCheckForErrorsAsync(this)");
-        source.Should().Contain("_mailMerge.CheckForErrors(selected, completeMerge: false)");
+        source.Should().Contain("_mailMerge.CheckForErrorsPlan(selected)");
         source.Should().Contain("FreeWInfoDialog.ShowAsync(this, result.Message)");
     }
 
@@ -65,8 +65,9 @@ public sealed class MailMergeDialogSurfaceTests
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
-        source.Should().Contain("if (!_mailMerge.EnsurePreviewingForNavigation())");
+        source.Should().Contain("_mailMerge.EnsurePreviewingForNavigation()");
         source.Should().Contain("_mailMerge.ApplyFieldMapping(mapping);");
+        source.Should().Contain("_mailMerge.ApplyRecipientFilter(filtered);");
         source.Should().Contain(
             "Select recipients first (Mailings > Select Recipients), then match fields.");
         source.Should().Contain(

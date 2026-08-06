@@ -50,6 +50,11 @@ public sealed record MailMergeFinishExecution(
     int SkippedRecordCount,
     string Message);
 
+public sealed record MailMergeEmailExecution(
+    bool Success,
+    MailMergeEmailDeliveryPlan? Plan,
+    string Message);
+
 /// <summary>
 /// Coordinates renderer-neutral mail-merge state, document production, validation, and feedback.
 /// Native hosts commit the current editor model before calling and realize returned documents,
@@ -166,6 +171,23 @@ public sealed class MailMergeSessionWorkflow
         return RenderCurrentPreview();
     }
 
+    public MailMergePreviewExecution MovePreviewTo(
+        TextDocument currentDocument,
+        int targetIndex)
+    {
+        ArgumentNullException.ThrowIfNull(currentDocument);
+
+        var validation = Validate(MailMergeOperation.StepRecords);
+        if (!validation.IsValid)
+            return PreviewFailure(validation.Message);
+
+        if (!Session.IsPreviewing)
+            Session.Template = currentDocument;
+
+        Session.CurrentIndex = Math.Clamp(targetIndex, 0, Session.Data!.Count - 1);
+        return RenderCurrentPreview();
+    }
+
     public MailMergeFindExecution FindRecipient(string? query)
     {
         var validation = Validate(MailMergeOperation.FindRecipient);
@@ -209,6 +231,16 @@ public sealed class MailMergeSessionWorkflow
         MailMergeFinishPlan finishPlan,
         MergeState? mergeState = null)
     {
+        var execution = BuildFinish(currentDocument, finishPlan, mergeState);
+        CompleteFinish(execution);
+        return execution;
+    }
+
+    public MailMergeFinishExecution BuildFinish(
+        TextDocument currentDocument,
+        MailMergeFinishPlan finishPlan,
+        MergeState? mergeState = null)
+    {
         ArgumentNullException.ThrowIfNull(currentDocument);
         ArgumentNullException.ThrowIfNull(finishPlan);
 
@@ -234,10 +266,30 @@ public sealed class MailMergeSessionWorkflow
             ? $"Merged {merged.Count} record(s) into a single document ({skipped} skipped)."
             : $"Merged {merged.Count} record(s) into a single document.";
 
-        if (finishPlan.Destination == MailMergeFinishDestination.NewDocument)
-            Session.EndPreview();
-
         return new(true, finishPlan, combined, merged.Count, skipped, message);
+    }
+
+    public void CompleteFinish(MailMergeFinishExecution execution)
+    {
+        ArgumentNullException.ThrowIfNull(execution);
+
+        if (execution.Success &&
+            execution.Plan.Destination == MailMergeFinishDestination.NewDocument)
+        {
+            Session.EndPreview();
+        }
+    }
+
+    public MailMergeEmailExecution PlanEmail(MailMergeEmailDeliveryIntent? intent = null)
+    {
+        var validation = Validate(MailMergeOperation.SendEmail);
+        if (!validation.IsValid)
+            return new(false, null, validation.Message);
+
+        var data = Session.Data!;
+        intent ??= MailMergeEmailDeliveryPlanner.CreateDefaultIntent(data, Session.CurrentIndex);
+        var plan = MailMerge.CreateEmailDeliveryPlan(data, intent);
+        return new(true, plan, MailMergeEmailDeliveryPlanner.FormatStatus(plan));
     }
 
     private MailMergePreviewExecution RenderCurrentPreview()

@@ -2035,14 +2035,17 @@ public sealed partial class MainWindow : Window
         if (_mailMerge is null)
             return;
         var fields = FreeW.Core.Model.MailMerge.FieldNames(_editor.Document);
-        var seed = fields.Count > 0 ? string.Join(",", fields) : string.Empty;
-        var csv = await MailMergeDialogs.AskRecipientCsvAsync(this, seed);
+        var dialogPlan = MailMergeRecipientDialogPlanner.CreatePlan(
+            fields,
+            _mailMerge.Session.Data);
+        var csv = await MailMergeDialogs.AskRecipientCsvAsync(
+            this,
+            dialogPlan.SeedHeader,
+            dialogPlan.InitialCsv);
         if (string.IsNullOrWhiteSpace(csv))
             return;
-        var data = _mailMerge.LoadRecipientsCsv(csv);
-        _status.Text = data.Count > 0
-            ? $"Loaded {data.Count} recipient(s): {string.Join(", ", data.Header)}"
-            : "Recipient list is empty.";
+        var transition = _mailMerge.LoadRecipientsCsvWithTransition(csv);
+        _status.Text = transition.Message;
         _editor.Focus();
     }
 
@@ -2114,11 +2117,7 @@ public sealed partial class MainWindow : Window
         }
         var filtered = await MailMergeDialogs.AskFilterSortRecipientsAsync(this, data);
         if (filtered is not null)
-        {
-            _mailMerge.Session.Data = filtered;
-            _mailMerge.Session.Template = null;
-            _mailMerge.Session.CurrentIndex = 0;
-        }
+            _mailMerge.ApplyRecipientFilter(filtered);
         _editor.Focus();
     }
 
@@ -2164,8 +2163,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var result = MailMergeFindRecipientPlanner.Find(data, query, _mailMerge.Session.CurrentIndex);
-        _mailMerge.Session.CurrentIndex = result.Index;
+        var result = _mailMerge.FindRecipient(query);
         await FreeWInfoDialog.ShowAsync(this, result.Message);
         _editor.Focus();
     }
@@ -2183,24 +2181,21 @@ public sealed partial class MainWindow : Window
         if (mode is not { } selected)
             return;
 
-        var result = _mailMerge.CheckForErrors(selected, completeMerge: false);
-        if (result is not null)
+        var execution = _mailMerge.CheckForErrorsPlan(selected);
+        if (execution.Success && execution.Result is { } result)
         {
-            if (result.ShouldPauseForErrors)
-            {
-                foreach (var issue in result.Issues)
-                    await FreeWInfoDialog.ShowAsync(this, issue.Message);
-            }
-            else if (!result.ShouldOpenReportDocument)
-            {
-                await FreeWInfoDialog.ShowAsync(this, result.Message);
-            }
+            foreach (var message in execution.Messages)
+                await FreeWInfoDialog.ShowAsync(this, message);
 
             if (result.ShouldCompleteMerge)
-                _mailMerge.FinishMerge();
+            {
+                var plan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(
+                    _mailMerge.Session.Data!.Count);
+                await ExecuteFinishMergePlanAsync(plan);
+            }
 
-            if (result.ShouldOpenReportDocument)
-                OpenMailMergeErrorReport(MailMergeCheckForErrorsPlanner.BuildReportDocument(result));
+            if (execution.ReportDocument is { } report)
+                OpenMailMergeErrorReport(report);
         }
         _editor.Focus();
     }
@@ -2228,15 +2223,33 @@ public sealed partial class MainWindow : Window
         if (_mailMerge is null || !plan.Success)
             return;
 
+        var mergeState = await CollectMailMergePromptAnswersAsync(_mailMerge);
+
         if (plan.Destination == MailMergeFinishDestination.NewDocument)
         {
-            _mailMerge.FinishMerge(plan);
+            _mailMerge.FinishMerge(plan, mergeState);
             return;
         }
 
         if (plan.Destination == MailMergeFinishDestination.Printer &&
-            _mailMerge.BuildFinishedMerge(plan) is { } result)
+            _mailMerge.BuildFinishedMerge(plan, mergeState) is { } result)
             await PrintAsync(result.Document);
+    }
+
+    private async Task<MergeState> CollectMailMergePromptAnswersAsync(MailMergeEngine mailMerge)
+    {
+        var state = new MergeState();
+        foreach (var request in mailMerge.GetFinishPromptRequests())
+        {
+            var title = request.Kind == MailMergePromptKind.FillIn ? "Fill-in" : "Ask";
+            var answer = await MailMergeDialogs.AskMergeRulePromptAsync(
+                this,
+                title,
+                request.Prompt);
+            MailMergePromptPlanner.ApplyResponse(state, request, answer);
+        }
+
+        return state;
     }
 
     // AV-MAIL: Mailings > Insert Merge Field. Pick / type a field name (seeded with the loaded recipient

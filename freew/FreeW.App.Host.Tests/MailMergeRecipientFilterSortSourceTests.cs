@@ -28,8 +28,11 @@ public sealed class MailMergeRecipientFilterSortSourceTests
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("var fields = MailMerge.FieldNames(template);");
-        source.Should().Contain("RestoreEditableTemplate(editor, session);");
-        source.Should().Contain("session.EndPreview()");
+        source.Should().Contain("workflow.ApplyRecipientFilter(updatedData)");
+        source.Should().Contain("MailMergeSessionWorkflow(session).SetMode(mode)");
+        source.Should().Contain("MailMergeSessionWorkflow(session).Clear()");
+        source.Should().NotContain("session.Data = updatedData");
+        source.Should().NotContain("RestoreEditableTemplate(editor, session)");
         source.Should().Contain("new SetMergeModeCommand(editor, mergeSession");
         source.Should().Contain("new ClearMergeSessionCommand(editor, mergeSession)");
     }

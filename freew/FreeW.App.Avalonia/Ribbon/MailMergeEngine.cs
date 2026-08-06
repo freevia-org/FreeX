@@ -30,6 +30,7 @@ internal sealed class MailMergeEngine
 {
     private readonly DocumentView _editor;
     private readonly RibbonHostCallbacks _callbacks;
+    private readonly MailMergeSessionWorkflow _workflow = new();
 
     public MailMergeEngine(DocumentView editor, RibbonHostCallbacks callbacks)
     {
@@ -38,7 +39,7 @@ internal sealed class MailMergeEngine
     }
 
     /// <summary>The shared session (recipient data + mapping + preview state). Exposed for tests.</summary>
-    public MailMergeSession Session { get; } = new();
+    public MailMergeSession Session => _workflow.Session;
 
     /// <summary>The most recent plan produced by Send E-mail Messages. Exposed for tests/status only.</summary>
     public MailMergeEmailDeliveryPlan? LastEmailPlan { get; private set; }
@@ -76,38 +77,49 @@ internal sealed class MailMergeEngine
     /// </summary>
     public MergeData LoadRecipientsCsv(string csv)
     {
+        var (data, _) = LoadRecipientsCsvCore(csv);
+        return data;
+    }
+
+    public MailMergeSessionTransition LoadRecipientsCsvWithTransition(string csv) =>
+        LoadRecipientsCsvCore(csv).Transition;
+
+    private (MergeData Data, MailMergeSessionTransition Transition) LoadRecipientsCsvCore(string csv)
+    {
         ArgumentNullException.ThrowIfNull(csv);
-        RestoreEditableTemplateIfPreviewing();
-        return Session.Load(MergeData.FromCsv(csv));
+        var data = MergeData.FromCsv(csv);
+        var transition = _workflow.LoadRecipients(data);
+        Realize(transition);
+        return (data, transition);
     }
 
     /// <summary>The field names available from the loaded recipient list (empty when none loaded).</summary>
     public IReadOnlyList<string> AvailableFieldNames =>
-        Session.Data?.Header ?? [];
+        _workflow.AvailableFieldNames;
 
     public void StartMailMergeLetters() =>
-        SetMergeMode(MailMergeOutputMode.Letters, "Mail merge output set to Letters.");
+        SetMergeMode(MailMergeOutputMode.Letters);
 
     public void StartMailMergeDirectory() =>
-        SetMergeMode(MailMergeOutputMode.Directory, "Mail merge output set to Directory.");
+        SetMergeMode(MailMergeOutputMode.Directory);
 
     public void ClearMergeSession()
     {
-        RestoreEditableTemplateIfPreviewing();
-        Session.Clear();
-        ShowInfo("Mail merge reset to a normal document.");
+        var transition = _workflow.Clear();
+        Realize(transition);
+        ShowInfo(transition.Message);
     }
 
-    private void SetMergeMode(MailMergeOutputMode mode, string message)
+    private void SetMergeMode(MailMergeOutputMode mode)
     {
-        RestoreEditableTemplateIfPreviewing();
-        Session.SetMode(mode);
-        ShowInfo(message);
+        var transition = _workflow.SetMode(mode);
+        Realize(transition);
+        ShowInfo(transition.Message);
     }
 
     public void MatchFields()
     {
-        if (!RequireRecipients("Select recipients first (Mailings > Select Recipients), then match fields."))
+        if (!Validate(MailMergeOperation.MatchFields))
             return;
 
         ApplyFieldMapping(MailMerge.AutoMatchFields(Session.Data!.Header));
@@ -121,15 +133,7 @@ internal sealed class MailMergeEngine
     public void ApplyFieldMapping(FieldMapping mapping)
     {
         ArgumentNullException.ThrowIfNull(mapping);
-        Session.Mapping = mapping;
-
-        RestoreEditableTemplateIfPreviewing();
-    }
-
-    private void RestoreEditableTemplateIfPreviewing()
-    {
-        if (Session.EndPreview() is { } template)
-            _editor.LoadDocument(template);
+        Realize(_workflow.ApplyFieldMapping(mapping));
     }
 
     /// <summary>
@@ -138,28 +142,39 @@ internal sealed class MailMergeEngine
     /// </summary>
     public bool EnsurePreviewingForNavigation()
     {
-        if (!Session.IsPreviewing)
-            TogglePreview();
-
-        return Session.IsPreviewing;
+        return Realize(_workflow.EnsurePreviewing(_editor.Document));
     }
 
     public void FilterSortRecipients()
     {
-        if (!RequireRecipients("Select recipients first (Mailings > Select Recipients), then filter and sort."))
+        if (!Validate(MailMergeOperation.FilterSortRecipients))
             return;
 
         var data = Session.Data!;
-        RestoreEditableTemplateIfPreviewing();
         var sortColumn = data.Header.FirstOrDefault();
-        Session.Data = MailMergeRecipientFilterSortPlanner.Apply(
+        var filtered = MailMergeRecipientFilterSortPlanner.Apply(
             data,
             Enumerable.Range(0, data.Count),
             sortColumn,
             ascending: true);
+        ApplyRecipientFilter(filtered);
         ShowInfo(sortColumn is null
             ? "Recipient list kept in document order."
             : $"Recipient list sorted by {sortColumn}.");
+    }
+
+    public void ApplyRecipientFilter(MergeData data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        Realize(_workflow.ApplyRecipientFilter(data));
+    }
+
+    public MailMergeFindExecution FindRecipient(string? query)
+    {
+        var execution = _workflow.FindRecipient(query);
+        if (execution.DocumentToLoad is { } document)
+            _editor.LoadDocument(document);
+        return execution;
     }
 
     // ── Rules ──────────────────────────────────────────────────────────────────────
@@ -177,13 +192,7 @@ internal sealed class MailMergeEngine
 
     public void InsertIfRule(MailMergeRuleIfDialogResult result)
     {
-        var instruction = MergeRuleEvaluator.BuildIfInstruction(
-            result.FieldName,
-            result.Operator,
-            result.Value,
-            result.TrueText,
-            result.FalseText);
-        InsertRuleInstruction(instruction);
+        InsertRulePlaceholder(MailMergeRuleAuthoringPlanner.CreateIf(result));
     }
 
     public void InsertSkipRecordIfRule()
@@ -198,10 +207,7 @@ internal sealed class MailMergeEngine
 
     public void InsertSkipRecordIfRule(MailMergeRuleConditionDialogResult result)
     {
-        InsertRuleInstruction(MergeRuleEvaluator.BuildSkipRecordIfInstruction(
-            result.FieldName,
-            result.Operator,
-            result.Value));
+        InsertRulePlaceholder(MailMergeRuleAuthoringPlanner.CreateCondition(result, skipRecord: true));
     }
 
     public void InsertNextRecordIfRule()
@@ -216,10 +222,7 @@ internal sealed class MailMergeEngine
 
     public void InsertNextRecordIfRule(MailMergeRuleConditionDialogResult result)
     {
-        InsertRuleInstruction(MergeRuleEvaluator.BuildNextRecordIfInstruction(
-            result.FieldName,
-            result.Operator,
-            result.Value));
+        InsertRulePlaceholder(MailMergeRuleAuthoringPlanner.CreateCondition(result, skipRecord: false));
     }
 
     public void InsertNextRecordField() =>
@@ -243,7 +246,7 @@ internal sealed class MailMergeEngine
 
     public void InsertFillInRule(string prompt)
     {
-        InsertRuleInstruction(MergeRuleEvaluator.BuildFillInInstruction(prompt));
+        InsertRulePlaceholder(MailMergeRuleAuthoringPlanner.CreateFillIn(prompt));
     }
 
     public void InsertAskRule()
@@ -258,9 +261,7 @@ internal sealed class MailMergeEngine
 
     public void InsertAskRule(string bookmarkName, string prompt)
     {
-        if (string.IsNullOrWhiteSpace(bookmarkName))
-            return;
-        InsertRuleInstruction(MergeRuleEvaluator.BuildAskInstruction(bookmarkName.Trim(), prompt));
+        InsertRulePlaceholder(MailMergeRuleAuthoringPlanner.CreateAsk(bookmarkName, prompt));
     }
 
     public void InsertSetRule()
@@ -275,9 +276,7 @@ internal sealed class MailMergeEngine
 
     public void InsertSetRule(string bookmarkName, string value)
     {
-        if (string.IsNullOrWhiteSpace(bookmarkName))
-            return;
-        InsertRuleInstruction(MergeRuleEvaluator.BuildSetInstruction(bookmarkName.Trim(), value));
+        InsertRulePlaceholder(MailMergeRuleAuthoringPlanner.CreateSet(bookmarkName, value));
     }
 
     public void InsertRefRule()
@@ -292,14 +291,13 @@ internal sealed class MailMergeEngine
 
     public void InsertRefRule(string bookmarkName)
     {
-        if (string.IsNullOrWhiteSpace(bookmarkName))
-            return;
-        InsertRuleInstruction(MergeRuleEvaluator.BuildRefInstruction(bookmarkName.Trim()));
+        InsertRulePlaceholder(MailMergeRuleAuthoringPlanner.CreateRef(bookmarkName));
     }
 
-    private void InsertRuleInstruction(string instruction)
+    private void InsertRulePlaceholder(string placeholder)
     {
-        _editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+        if (placeholder.Length > 0)
+            _editor.InsertText(placeholder);
     }
 
     private void InsertNativeSpecialField(string fieldName)
@@ -352,7 +350,7 @@ internal sealed class MailMergeEngine
     /// </summary>
     public void InsertAddressBlock()
     {
-        if (!RequireRecipients("Select recipients first (Mailings > Select Recipients), then insert an Address Block."))
+        if (!Validate(MailMergeOperation.InsertAddressBlock))
             return;
         _editor.InsertComplexField(
             MailMerge.AddressBlockInstruction,
@@ -365,7 +363,7 @@ internal sealed class MailMergeEngine
     /// </summary>
     public void InsertGreetingLine()
     {
-        if (!RequireRecipients("Select recipients first (Mailings > Select Recipients), then insert a Greeting Line."))
+        if (!Validate(MailMergeOperation.InsertGreetingLine))
             return;
         _editor.InsertComplexField(
             MailMerge.GreetingLineInstruction,
@@ -381,33 +379,20 @@ internal sealed class MailMergeEngine
     /// </summary>
     public void TogglePreview()
     {
-        if (Session.IsPreviewing)
-        {
-            // Leave preview — restore the editable template.
-            RestoreEditableTemplateIfPreviewing();
-            return;
-        }
-
-        if (!RequirePreviewableData("Select recipients first (Mailings > Select Recipients), then preview a record."))
-            return;
-
-        // Enter preview: stash the current document as the template and show record 0.
-        Session.Template = _editor.Document;
-        Session.CurrentIndex = 0;
-        RenderPreviewRecord();
+        Realize(_workflow.TogglePreview(_editor.Document));
     }
 
     /// <summary>
     /// Mailings &gt; Next Record. Advances the preview to the next record (clamped to the last record),
     /// auto-entering preview first if not already previewing. No-ops when no recipients are loaded.
     /// </summary>
-    public void NextRecord() => StepRecord(+1);
+    public void NextRecord() => NavigateRecord(MailMergePreviewNavigationAction.Next);
 
     /// <summary>
     /// Mailings &gt; Previous Record. Steps the preview to the previous record (clamped at record 0),
     /// auto-entering preview first if not already previewing. No-ops when no recipients are loaded.
     /// </summary>
-    public void PreviousRecord() => StepRecord(-1);
+    public void PreviousRecord() => NavigateRecord(MailMergePreviewNavigationAction.Previous);
 
     /// <summary>Mailings &gt; First Record. Enters preview if needed and shows the first recipient.</summary>
     public void FirstRecord() => NavigateRecord(MailMergePreviewNavigationAction.First);
@@ -415,46 +400,9 @@ internal sealed class MailMergeEngine
     /// <summary>Mailings &gt; Last Record. Enters preview if needed and shows the last recipient.</summary>
     public void LastRecord() => NavigateRecord(MailMergePreviewNavigationAction.Last);
 
-    private void StepRecord(int delta)
-    {
-        if (!RequirePreviewableData("Select recipients first (Mailings > Select Recipients), then step records."))
-            return;
-
-        // Auto-enter preview so the Next/Previous buttons work without first clicking Preview Results.
-        if (!Session.IsPreviewing)
-        {
-            Session.Template = _editor.Document;
-            Session.CurrentIndex = 0;
-            RenderPreviewRecord();
-            if (delta == 0)
-                return;
-        }
-
-        var count = Session.Data!.Count;
-        Session.CurrentIndex = Math.Clamp(Session.CurrentIndex + delta, 0, count - 1);
-        RenderPreviewRecord();
-    }
-
     private void NavigateRecord(MailMergePreviewNavigationAction action)
     {
-        if (!RequirePreviewableData("Select recipients first (Mailings > Select Recipients), then step records."))
-            return;
-
-        if (!Session.IsPreviewing)
-            Session.Template = _editor.Document;
-
-        var count = Session.Data!.Count;
-        Session.CurrentIndex = MailMergePreviewNavigationPlanner.TargetIndex(action, Session.CurrentIndex, count);
-        RenderPreviewRecord();
-    }
-
-    private void RenderPreviewRecord()
-    {
-        var data = Session.Data!;
-        var template = Session.Template!;
-        var index = Math.Clamp(Session.CurrentIndex, 0, data.Count - 1);
-        Session.CurrentIndex = index;
-        _editor.LoadDocument(MailMerge.MergeRecord(template, Session.AugmentRow(data.Rows[index])));
+        Realize(_workflow.NavigatePreview(_editor.Document, action));
     }
 
     // ── Finish & Merge ──────────────────────────────────────────────────────────────
@@ -470,44 +418,28 @@ internal sealed class MailMergeEngine
     /// </summary>
     public TextDocument? FinishMerge()
     {
-        if (Session.Data is not { Count: > 0 } data)
-        {
-            ShowInfo("Select recipients first (Mailings > Select Recipients), then Finish & Merge.");
-            return null;
-        }
-
-        var finishPlan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(data.Count);
+        var finishPlan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(Session.Data?.Count ?? 0);
         return FinishMerge(finishPlan);
     }
 
-    public TextDocument? FinishMerge(MailMergeFinishPlan finishPlan)
+    public TextDocument? FinishMerge(
+        MailMergeFinishPlan finishPlan,
+        MergeState? mergeState = null)
     {
-        if (Session.Data is not { Count: > 0 })
-        {
-            ShowInfo("Select recipients first (Mailings > Select Recipients), then Finish & Merge.");
-            return null;
-        }
-
-        if (!finishPlan.Success)
-        {
-            ShowInfo($"Finish & Merge cannot continue: {finishPlan.Issue}.");
-            return null;
-        }
-
         if (finishPlan.Destination != MailMergeFinishDestination.NewDocument)
             return null;
 
-        var result = BuildFinishedMerge(finishPlan);
-        if (result is null)
+        var execution = _workflow.BuildFinish(_editor.Document, finishPlan, mergeState);
+        if (!execution.Success || execution.Document is null)
+        {
+            ShowInfo(execution.Message);
             return null;
+        }
 
-        _editor.LoadDocument(result.Document);
-        Session.EndPreview();
-
-        ShowInfo(result.SkippedRecordCount > 0
-            ? $"Merged {result.MergedRecordCount} record(s) into a single document ({result.SkippedRecordCount} skipped)."
-            : $"Merged {result.MergedRecordCount} record(s) into a single document.");
-        return result.Document;
+        _editor.LoadDocument(execution.Document);
+        _workflow.CompleteFinish(execution);
+        ShowInfo(execution.Message);
+        return execution.Document;
     }
 
     /// <summary>
@@ -515,25 +447,22 @@ internal sealed class MailMergeEngine
     /// state. Print Documents uses this path so cancelling or completing printer submission leaves the merge
     /// template open and reusable.
     /// </summary>
-    public MailMergeFinishBuildResult? BuildFinishedMerge(MailMergeFinishPlan finishPlan)
+    public MailMergeFinishBuildResult? BuildFinishedMerge(
+        MailMergeFinishPlan finishPlan,
+        MergeState? mergeState = null)
     {
-        if (!finishPlan.Success ||
-            Session.Data is not { Count: > 0 } data ||
-            finishPlan.RowIndexes.Any(index => index < 0 || index >= data.Count))
+        var execution = _workflow.BuildFinish(_editor.Document, finishPlan, mergeState);
+        if (!execution.Success || execution.Document is null)
             return null;
 
-        var template = Session.IsPreviewing ? Session.Template! : _editor.Document;
-
-        // Augment every row with the composed «AddressBlock» / «GreetingLine» values so those composite
-        // placeholders resolve across every record, then run the rules-aware merge (records flagged by a
-        // «Skip Record If» rule are excluded).
-        var augmentedData = Session.BuildAugmentedData(finishPlan.RowIndexes);
-        var state = new MergeState();
-        var merged = MailMerge.MergeAllWithRules(template, augmentedData, state);
-        var combined = MailMerge.CombineMergedRecords(merged, Session.Mode);
-
-        return new MailMergeFinishBuildResult(combined, merged.Count, state.SkippedIndices.Count);
+        return new MailMergeFinishBuildResult(
+            execution.Document,
+            execution.MergedRecordCount,
+            execution.SkippedRecordCount);
     }
+
+    public IReadOnlyList<MailMergePromptRequest> GetFinishPromptRequests() =>
+        MailMergePromptPlanner.GetRequests(Session.Template ?? _editor.Document);
 
     /// <summary>
     /// Simulate every selected recipient against the current merge template. Complete modes load the
@@ -543,19 +472,20 @@ internal sealed class MailMergeEngine
         MailMergeCheckForErrorsMode mode,
         bool completeMerge = true)
     {
-        if (Session.Data is not { Count: > 0 } data)
+        var execution = CheckForErrorsPlan(mode);
+        if (!execution.Success || execution.Result is null)
         {
-            ShowInfo("Select recipients first (Mailings > Select Recipients), then check for errors.");
+            ShowInfo(execution.Message);
             return null;
         }
 
-        var template = Session.IsPreviewing ? Session.Template! : _editor.Document;
-        var rows = data.Rows.Select(row => Session.AugmentRow(row)).ToList();
-        var result = MailMergeCheckForErrorsPlanner.Check(template, rows, mode);
-        if (completeMerge && result.ShouldCompleteMerge)
+        if (completeMerge && execution.Result.ShouldCompleteMerge)
             FinishMerge();
-        return result;
+        return execution.Result;
     }
+
+    public MailMergeCheckExecution CheckForErrorsPlan(MailMergeCheckForErrorsMode mode) =>
+        _workflow.CheckForErrors(_editor.Document, mode);
 
     /// <summary>
     /// Mailings &gt; Send E-mail Messages. Builds and validates an e-mail merge delivery plan only; no
@@ -563,17 +493,10 @@ internal sealed class MailMergeEngine
     /// </summary>
     public MailMergeEmailDeliveryPlan? PlanEmailMerge(MailMergeEmailDeliveryIntent? intent = null)
     {
-        if (Session.Data is not { Count: > 0 } data)
-        {
-            ShowInfo("Select recipients first (Mailings > Select Recipients), then Send E-mail Messages.");
-            return null;
-        }
-
-        intent ??= MailMergeEmailDeliveryPlanner.CreateDefaultIntent(data, Session.CurrentIndex);
-        var plan = MailMerge.CreateEmailDeliveryPlan(data, intent);
-        LastEmailPlan = plan;
-        ShowInfo(MailMergeEmailDeliveryPlanner.FormatStatus(plan));
-        return plan;
+        var execution = _workflow.PlanEmail(intent);
+        LastEmailPlan = execution.Plan;
+        ShowInfo(execution.Message);
+        return execution.Plan;
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────────
@@ -657,20 +580,29 @@ internal sealed class MailMergeEngine
         ShowInfo($"Inserted a {rows} x {columns} label grid.");
     }
 
-    private bool RequireRecipients(string message)
+    private bool Validate(MailMergeOperation operation)
     {
-        if (Session.Data is not null)
+        var validation = _workflow.Validate(operation);
+        if (validation.IsValid)
             return true;
-        ShowInfo(message);
+
+        ShowInfo(validation.Message);
         return false;
     }
 
-    private bool RequirePreviewableData(string message)
+    private void Realize(MailMergeSessionTransition transition)
     {
-        if (Session.Data is { Count: > 0 })
-            return true;
-        ShowInfo(message);
-        return false;
+        if (transition.DocumentToLoad is { } document)
+            _editor.LoadDocument(document);
+    }
+
+    private bool Realize(MailMergePreviewExecution execution)
+    {
+        if (execution.DocumentToLoad is { } document)
+            _editor.LoadDocument(document);
+        if (!execution.Success)
+            ShowInfo(execution.Message);
+        return execution.Success;
     }
 
     private void ShowInfo(string message) => _callbacks.ShowMailMergeInfo?.Invoke(message);

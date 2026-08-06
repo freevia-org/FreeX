@@ -105,6 +105,12 @@ public sealed class MailMergeSessionTests
             "FreeW.App.Presentation",
             "Ribbon",
             "MailMergeSession.cs"));
+        var workflow = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Presentation",
+            "Ribbon",
+            "MailMergeSessionWorkflow.cs"));
         var wpf = File.ReadAllText(Path.Combine(
             root,
             "freew",
@@ -124,8 +130,12 @@ public sealed class MailMergeSessionTests
         presentation.Should().Contain("public TextDocument? EndPreview()");
         wpf.Should().NotContain("class MailMergeSession");
         avalonia.Should().NotContain("class MailMergeSession");
-        wpf.Should().Contain("session.BuildAugmentedData(finishPlan.RowIndexes)");
-        avalonia.Should().Contain("Session.BuildAugmentedData(finishPlan.RowIndexes)");
+        workflow.Should().Contain("Session.BuildAugmentedData(finishPlan.RowIndexes)");
+        workflow.Should().Contain("MailMerge.MergeAllWithRules(template, augmentedData, state)");
+        wpf.Should().Contain("workflow.BuildFinish(template, finishPlan, mergeState)");
+        avalonia.Should().Contain("_workflow.BuildFinish(_editor.Document, finishPlan, mergeState)");
+        wpf.Should().NotContain("MailMerge.MergeAllWithRules(");
+        avalonia.Should().NotContain("MailMerge.MergeAllWithRules(");
         wpf.Should().Contain("session.BuildLabelCellContents(template, rows * columns)");
         avalonia.Should().Contain("Session.BuildLabelCellContents(template, rows * columns)");
         wpf.Should().Contain("MailMergeFieldAuthoringPlanner.TryCreate(name, out var plan)");

@@ -11,10 +11,11 @@ public sealed class MailMergeFinishPlannerSourceTests
             Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
 
         source.Should().Contain("MailMergeFinishPlanner.Plan(");
-        source.Should().Contain("finishPlan.RowIndexes");
+        source.Should().Contain("workflow.BuildFinish(template, finishPlan, mergeState)");
         source.Should().Contain("finishPlan.Destination == MailMergeFinishDestination.Printer");
-        source.Should().Contain("printDocument!(combined)");
+        source.Should().Contain("printDocument!(execution.Document)");
         source.Should().NotContain("var augmentedRows = data.Rows.Select(r => session.AugmentRow(r)).ToList();");
+        source.Should().NotContain("MailMerge.MergeAllWithRules(");
     }
 
 }
