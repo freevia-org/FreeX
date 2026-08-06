@@ -6,6 +6,7 @@ using Avalonia.Headless;
 
 using FluentAssertions;
 
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -117,6 +118,36 @@ public sealed class R163_HeaderDoubleClickAutoFitTests
                     new GridRange(
                         new CellAddress(sheet.Id, 2, 1),
                         new CellAddress(sheet.Id, 3, CellAddress.MaxCol)));
+            }
+            finally
+            {
+                window.Close();
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task VisibleRowResizeHandle_MapsFollowingHiddenRunThroughSharedPlanner()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var sheet = window.Session.Workbook.AddSheet("HiddenBoundaryHandleFixture");
+                window.Session.SelectSheet(sheet.Id);
+                sheet.HiddenRows.Add(4);
+                sheet.HiddenRows.Add(5);
+
+                var target = (uint)typeof(MainWindow)
+                    .GetMethod("ResolveRowResizeHandleTarget", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(window, [3u])!;
+
+                target.Should().Be(4u);
+                GridResizePreviewPlanner.GetRowResizeRange(sheet, selectedRange: null, target)
+                    .Should().Be((4u, 5u));
             }
             finally
             {
