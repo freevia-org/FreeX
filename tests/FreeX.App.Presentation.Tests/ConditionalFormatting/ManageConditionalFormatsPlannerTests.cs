@@ -7,6 +7,20 @@ namespace FreeX.App.Presentation.Tests.ConditionalFormatting;
 public sealed class ManageConditionalFormatsPlannerTests
 {
     [Fact]
+    public void SourceOwnership_UsesSharedStructuredTableOverlapPolicy()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            RepositoryFileLocator.FindDirectory(
+                "src",
+                "FreeX.App.Presentation",
+                "ConditionalFormatting"),
+            "ManageConditionalFormatsPlanner.cs"));
+
+        source.Should().Contain("StructuredTableSelectionPlanner.FindOverlappingTableRange(sheet, selectionRange)");
+        source.Should().NotContain("foreach (var table in sheet.StructuredTables)");
+    }
+
+    [Fact]
     public void CreateDialogPlan_DefaultsToSelectionAndIncludesIntersectingTableScope()
     {
         var sheet = new Workbook("Book").AddSheet("Sheet1");

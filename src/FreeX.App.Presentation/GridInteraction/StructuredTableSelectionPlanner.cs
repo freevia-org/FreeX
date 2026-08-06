@@ -156,7 +156,20 @@ public static class StructuredTableSelectionPlanner
     public static bool OverlapsAnyTable(Sheet sheet, GridRange selection)
     {
         ArgumentNullException.ThrowIfNull(sheet);
-        return sheet.StructuredTables.Any(table => table.Range.Overlaps(selection));
+        return FindOverlappingTableRange(sheet, selection) is not null;
+    }
+
+    public static GridRange? FindOverlappingTableRange(Sheet sheet, GridRange selection)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (table.Range.Overlaps(selection))
+                return table.Range;
+        }
+
+        return null;
     }
 
     public static GridRange GetDataBodyRangeOrTableRange(StructuredTableModel table)

@@ -93,6 +93,7 @@ public sealed class StructuredTableSelectionPlannerTests
         var selection = Range(sheet.Id, 5, 2, 12, 4);
 
         StructuredTableSelectionPlanner.OverlapsAnyTable(sheet, selection).Should().BeTrue();
+        StructuredTableSelectionPlanner.FindOverlappingTableRange(sheet, selection).Should().Be(table.Range);
         StructuredTableSelectionPlanner.Describe(sheet, selection).Should().BeNull();
         table.Range.Contains(selection).Should().BeFalse();
     }

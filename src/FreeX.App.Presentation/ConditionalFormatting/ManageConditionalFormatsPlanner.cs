@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.ConditionalFormatting;
@@ -154,13 +155,7 @@ public static class ManageConditionalFormatsPlanner
         if (selection is not { } selectionRange)
             return null;
 
-        foreach (var table in sheet.StructuredTables)
-        {
-            if (RangesOverlap(table.Range, selectionRange))
-                return table.Range;
-        }
-
-        return null;
+        return StructuredTableSelectionPlanner.FindOverlappingTableRange(sheet, selectionRange);
     }
 
     public static ConditionalFormatAppliesToRangeSelectionRequest CreateAppliesToRangeSelectionRequest(
