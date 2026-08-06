@@ -1767,6 +1767,55 @@ public class MailMergeTests
     // ── MergeRuleEvaluator — unrecognised instruction ────────────────────────────────────────────
 
     [Fact]
+    public void InteractivePromptPlanner_PreservesOrderDeduplicatesAndTraversesDocumentStories()
+    {
+        var document = new TextDocument();
+        var splitFillIn = new Paragraph();
+        splitFillIn.Runs.Add(new Run($"{MailMerge.FieldOpen}Fill-in \"Depart"));
+        splitFillIn.Runs.Add(new Run($"ment\"{MailMerge.FieldClose}"));
+        document.Blocks.Add(splitFillIn);
+
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Add(new Paragraph(
+            $"{MailMerge.FieldOpen}fill-IN \"department\"{MailMerge.FieldClose}"));
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        document.Blocks.Add(table);
+
+        var shapeParagraph = new Paragraph();
+        shapeParagraph.Runs.Add(Run.FromShape(Shape.TextBoxWith(
+            $"{MailMerge.FieldOpen}Ask Manager \"Who is the manager?\"{MailMerge.FieldClose}",
+            120,
+            40)));
+        document.Blocks.Add(shapeParagraph);
+        document.FinalSectionHeadersFooters.Header = new HeaderFooter(
+            $"{MailMerge.FieldOpen}Ask Approver \"Who approves?\"{MailMerge.FieldClose}");
+
+        var prompts = MailMergeInteractivePromptPlanner.Plan(document);
+
+        prompts.Should().Equal(
+            new MailMergeInteractivePrompt(MailMergeInteractivePromptKind.FillIn, "Department", "Department"),
+            new MailMergeInteractivePrompt(MailMergeInteractivePromptKind.Ask, "Manager", "Who is the manager?"),
+            new MailMergeInteractivePrompt(MailMergeInteractivePromptKind.Ask, "Approver", "Who approves?"));
+    }
+
+    [Fact]
+    public void TryParseInteractivePrompt_UnescapesQuotedPromptText()
+    {
+        var instruction = MergeRuleEvaluator.BuildFillInInstruction("Manager said \"now\"");
+
+        var parsed = MergeRuleEvaluator.TryParseInteractivePrompt(instruction, out var prompt);
+
+        parsed.Should().BeTrue();
+        prompt.Should().Be(new MailMergeInteractivePrompt(
+            MailMergeInteractivePromptKind.FillIn,
+            "Manager said \"now\"",
+            "Manager said \"now\""));
+    }
+
+    [Fact]
     public void MergeRuleEvaluator_UnrecognisedInstruction_ReturnsNull()
     {
         var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Name"] = "Ada" };

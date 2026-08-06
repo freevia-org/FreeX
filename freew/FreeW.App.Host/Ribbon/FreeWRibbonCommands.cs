@@ -7248,53 +7248,17 @@ internal static class FreeWRibbonCommands
         // prompt the user once per unique prompt/bookmark before the merge run.
         private static void CollectFillInAndAskAnswers(TextDocument template, MergeState state, Window? owner)
         {
-            var allText = string.Join(" ", template.Blocks.OfType<FreeW.Core.Model.Paragraph>()
-                .SelectMany(p => p.Runs)
-                .Select(r => r.Text));
-
-            // Extract field instructions.
-            var i = 0;
-            while (i < allText.Length)
+            foreach (var prompt in MailMergeInteractivePromptPlanner.Plan(template))
             {
-                var open = allText.IndexOf(MailMerge.FieldOpen, i);
-                if (open < 0) break;
-                var close = allText.IndexOf(MailMerge.FieldClose, open + 1);
-                if (close < 0) break;
-                var instruction = allText.Substring(open + 1, close - open - 1).Trim();
-                i = close + 1;
-
-                const string fillInPrefix = "Fill-in ";
-                const string askPrefix = "Ask ";
-
-                if (instruction.StartsWith(fillInPrefix, StringComparison.OrdinalIgnoreCase))
+                if (prompt.Kind == MailMergeInteractivePromptKind.FillIn)
                 {
-                    var promptRaw = instruction.Substring(fillInPrefix.Length).Trim();
-                    var prompt = promptRaw.Length >= 2 && promptRaw[0] == '"'
-                        ? promptRaw.Substring(1, promptRaw.Length - 2).Replace("\"\"", "\"")
-                        : promptRaw;
-                    if (!state.FillInAnswers.ContainsKey(prompt))
-                    {
-                        var answer = MergeRulePromptDialog.AskPrompt(owner, "Fill-in", $"{prompt}");
-                        state.FillInAnswers[prompt] = answer ?? string.Empty;
-                    }
+                    var answer = MergeRulePromptDialog.AskPrompt(owner, "Fill-in", prompt.Prompt);
+                    state.FillInAnswers[prompt.Key] = answer ?? string.Empty;
                 }
-                else if (instruction.StartsWith(askPrefix, StringComparison.OrdinalIgnoreCase))
+                else
                 {
-                    var rest = instruction.Substring(askPrefix.Length).TrimStart();
-                    var spaceIdx = rest.IndexOf(' ');
-                    if (spaceIdx > 0)
-                    {
-                        var bmName = rest.Substring(0, spaceIdx);
-                        if (!state.AskAnswers.ContainsKey(bmName))
-                        {
-                            var promptRaw = rest.Substring(spaceIdx + 1).Trim();
-                            var prompt = promptRaw.Length >= 2 && promptRaw[0] == '"'
-                                ? promptRaw.Substring(1, promptRaw.Length - 2).Replace("\"\"", "\"")
-                                : promptRaw;
-                            var answer = MergeRulePromptDialog.AskPrompt(owner, "Ask", $"{prompt}");
-                            state.AskAnswers[bmName] = answer ?? string.Empty;
-                        }
-                    }
+                    var answer = MergeRulePromptDialog.AskPrompt(owner, "Ask", prompt.Prompt);
+                    state.AskAnswers[prompt.Key] = answer ?? string.Empty;
                 }
             }
         }
