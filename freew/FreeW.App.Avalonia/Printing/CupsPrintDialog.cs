@@ -11,6 +11,9 @@ namespace FreeW.App.Avalonia.Printing;
 
 internal sealed class CupsPrintDialog : FreeWDialogWindow
 {
+    private static readonly PrintDialogText DialogText = PrintDialogText.DefaultEnglish;
+
+    private readonly PrintDialogSession _session;
     private readonly ComboBox _printer;
     private readonly TextBox _copies;
     private readonly ComboBox _range;
@@ -20,8 +23,10 @@ internal sealed class CupsPrintDialog : FreeWDialogWindow
     private readonly TextBlock _status;
     private readonly Button _ok;
 
-    private CupsPrintDialog(PrintDialogPlan plan)
+    private CupsPrintDialog(PrintDialogSession session)
     {
+        _session = session;
+        var state = session.State;
         Title = "Print";
         Width = 480;
         SizeToContent = SizeToContent.Height;
@@ -29,27 +34,20 @@ internal sealed class CupsPrintDialog : FreeWDialogWindow
         CanResize = false;
         ShowInTaskbar = false;
 
-        _printer = Choice(plan.Printers.Select(printer => printer.Name),
-            Math.Max(0, plan.Printers.Select(printer => printer.Name)
-                .ToList().FindIndex(name => string.Equals(name, plan.SelectedPrinter, StringComparison.OrdinalIgnoreCase))));
-        _copies = Text(plan.Copies.ToString());
-        _range = Choice(["All pages", "Single page", "Page range"], plan.PageRange.Kind switch
-        {
-            PrintPageRangeKind.Single => 1,
-            PrintPageRangeKind.Range => 2,
-            _ => 0,
-        });
-        _firstPage = Text((plan.PageRange.FirstPage ?? 1).ToString());
-        _lastPage = Text((plan.PageRange.LastPage ?? 1).ToString());
-        _orientation = Choice(["Document", "Portrait", "Landscape"], (int)plan.Orientation);
+        _printer = Choice(state.PrinterNames, state.SelectedPrinterIndex);
+        _copies = Text(state.CopiesText);
+        _range = Choice(["All pages", "Single page", "Page range"], state.PageRangeIndex);
+        _firstPage = Text(state.FirstPageText);
+        _lastPage = Text(state.LastPageText);
+        _orientation = Choice(["Document", "Portrait", "Landscape"], state.OrientationIndex);
         _status = new TextBlock { TextWrapping = TextWrapping.Wrap };
-        _ok = new Button { Content = "Print", IsDefault = true, IsEnabled = plan.CanSubmit };
+        _ok = new Button { Content = "Print", IsDefault = true, IsEnabled = state.CanSubmit };
 
         _range.SelectionChanged += (_, _) => UpdateRangeVisibility();
         _ok.Click += (_, _) => Accept();
         var cancel = new Button { Content = "Cancel", IsCancel = true };
         cancel.Click += (_, _) => Close();
-        _status.Text = plan.Message ?? (plan.CanSubmit ? "Choose the printer and print settings." : "Printing is unavailable on this host.");
+        _status.Text = state.StatusMessage(DialogText);
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(16) };
         AddRow(content, "Printer:", _printer);
@@ -97,8 +95,7 @@ internal sealed class CupsPrintDialog : FreeWDialogWindow
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(discovery);
 
-        var plan = PrintSelectionPlanner.Build(discovery, requested);
-        var dialog = new CupsPrintDialog(plan);
+        var dialog = new CupsPrintDialog(PrintDialogSession.Start(discovery, requested));
         using var cancellationRegistration = cancellationToken.Register(() =>
             Dispatcher.UIThread.Post(dialog.Close));
         await dialog.ShowDialog(owner);
@@ -110,46 +107,47 @@ internal sealed class CupsPrintDialog : FreeWDialogWindow
 
     private void Accept()
     {
-        if (!int.TryParse(_copies.Text, out var copies) || copies is < 1 or > 999)
-        {
-            _status.Text = "Copies must be between 1 and 999.";
-            _copies.Focus();
-            return;
-        }
-
-        PrintPageRange pageRange;
-        if (_range.SelectedIndex == 0)
-            pageRange = PrintPageRange.All;
-        else if (!int.TryParse(_firstPage.Text, out var first) || first < 1)
-        {
-            _status.Text = "Enter a positive first page number.";
-            _firstPage.Focus();
-            return;
-        }
-        else if (_range.SelectedIndex == 1)
-            pageRange = PrintPageRange.Single(first);
-        else if (!int.TryParse(_lastPage.Text, out var last) || last < first)
-        {
-            _status.Text = "The last page must be at least the first page.";
-            _lastPage.Focus();
-            return;
-        }
-        else
-            pageRange = PrintPageRange.Between(first, last);
-
-        Result = new PrintSelection(
+        var submission = _session.Submit(
             _printer.SelectedItem as string,
-            copies,
-            pageRange,
-            (PrintOrientation)Math.Clamp(_orientation.SelectedIndex, 0, 2));
+            _copies.Text,
+            _range.SelectedIndex,
+            _firstPage.Text,
+            _lastPage.Text,
+            _orientation.SelectedIndex,
+            collate: true);
+
+        if (!submission.Succeeded)
+        {
+            _status.Text = DialogText.ValidationMessage(submission.ValidationIssue);
+            FocusInvalidField(submission.ValidationIssue);
+            return;
+        }
+
+        Result = submission.Selection;
         Close();
+    }
+
+    private void FocusInvalidField(PrintDialogValidationIssue issue)
+    {
+        switch (issue)
+        {
+            case PrintDialogValidationIssue.CopiesOutOfRange:
+                _copies.Focus();
+                break;
+            case PrintDialogValidationIssue.FirstPageInvalid:
+                _firstPage.Focus();
+                break;
+            case PrintDialogValidationIssue.LastPageBeforeFirstPage:
+                _lastPage.Focus();
+                break;
+        }
     }
 
     private void UpdateRangeVisibility()
     {
-        var visible = _range.SelectedIndex != 0;
-        _firstPage.IsVisible = visible;
-        _lastPage.IsVisible = _range.SelectedIndex == 2;
+        var visibility = PrintDialogSession.RangeVisibility(_range.SelectedIndex);
+        _firstPage.IsVisible = visibility.ShowFirstPage;
+        _lastPage.IsVisible = visibility.ShowLastPage;
     }
 
     private static ComboBox Choice(IEnumerable<string> items, int selectedIndex)
