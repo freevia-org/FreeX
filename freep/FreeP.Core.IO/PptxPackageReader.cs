@@ -6837,6 +6837,11 @@ public static class PptxPackageReader
         var presetSubtype = cTn.Attribute("presetSubtype")?.Value;
         var scaleBehavior = ReadScaleBehavior(
             buildPar.Descendants(P + "animScale").FirstOrDefault());
+        var preservedNumericBehaviorXml = presetClass == "emph" && presetId == 4
+            ? buildPar.Descendants(P + "anim")
+                .FirstOrDefault(element => element.Attribute("valueType")?.Value == "num")
+                ?.ToString(SaveOptions.DisableFormatting)
+            : null;
         var preservedColorBehaviorXml = buildPar.Descendants(P + "animClr")
             .FirstOrDefault()
             ?.ToString(SaveOptions.DisableFormatting);
@@ -6851,6 +6856,17 @@ public static class PptxPackageReader
         if (!uint.TryParse(spTgt.Attribute("spid")?.Value, out var shapeId)) return null;
 
         var (kind, preset) = PptxAnimationMap.OoxmlToAnimationPreset(presetClass, presetId);
+        if (presetClass == "emph" && presetId == 4 && scaleBehavior is null)
+        {
+            var numericTo = buildPar.Descendants(P + "anim")
+                .FirstOrDefault(element => element.Attribute("valueType")?.Value == "num")
+                ?.Attribute("to")?.Value;
+            if (double.TryParse(numericTo, NumberStyles.Float, CultureInfo.InvariantCulture, out var scale)
+                && scale >= 0)
+            {
+                scaleBehavior = AnimationScaleBehavior.FromTo(scale);
+            }
+        }
         bool knownPreset = PptxAnimationMap.IsKnownOoxmlPreset(presetClass, presetId);
         if (preset == AnimationPreset.Grow)
             preset = AnimationAmountSemantics.ResolvePreset(preset, scaleBehavior);
@@ -6886,6 +6902,7 @@ public static class PptxPackageReader
             EffectSubtype  = authoredEffectSubtype,
             ScaleBehavior = scaleBehavior,
             PreservedColorBehaviorXml = preservedColorBehaviorXml,
+            PreservedNumericBehaviorXml = preservedNumericBehaviorXml,
             TriggerShapeId = triggerShapeId,
             RawPresetClass = knownPreset ? null : presetClass,
             RawPresetId = knownPreset ? null : presetId,

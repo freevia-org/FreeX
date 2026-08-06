@@ -2418,8 +2418,12 @@ public static class PptxPackageWriter
         var childTimingItems = new List<object>();
         if (animEffectEl is not null)
             childTimingItems.Add(animEffectEl);
-        if (AnimationAmountSemantics.IsGrowShrink(anim.Preset))
+        if (AnimationAmountSemantics.IsGrowShrink(anim.Preset)
+            && !HasPreservedNativeNumericBehavior(anim))
             childTimingItems.Add(BuildScaleBehaviorEl(anim, ref nodeId));
+        var numericBehavior = BuildPreservedNumericBehaviorEl(anim, ref nodeId);
+        if (numericBehavior is not null)
+            childTimingItems.Add(numericBehavior);
         if (anim.Preset is AnimationPreset.ColorPulse
             or AnimationPreset.ChangeColor
             or AnimationPreset.GrowWithColor
@@ -2466,6 +2470,29 @@ public static class PptxPackageWriter
             foreach (var timingNode in colorBehavior.Descendants(P + "cTn"))
                 timingNode.SetAttributeValue("id", nodeId++);
             return colorBehavior;
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+    }
+
+    private static bool HasPreservedNativeNumericBehavior(ShapeAnimation anim) =>
+        !string.IsNullOrWhiteSpace(anim.PreservedNumericBehaviorXml)
+        && string.Equals(anim.RawPresetClass, "emph", StringComparison.Ordinal)
+        && anim.RawPresetId == 4;
+
+    private static XElement? BuildPreservedNumericBehaviorEl(ShapeAnimation anim, ref uint nodeId)
+    {
+        if (!HasPreservedNativeNumericBehavior(anim))
+            return null;
+
+        try
+        {
+            var numericBehavior = XElement.Parse(anim.PreservedNumericBehaviorXml!, LoadOptions.PreserveWhitespace);
+            foreach (var timingNode in numericBehavior.Descendants(P + "cTn"))
+                timingNode.SetAttributeValue("id", nodeId++);
+            return numericBehavior;
         }
         catch (XmlException)
         {

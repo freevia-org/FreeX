@@ -370,6 +370,8 @@ public static class PresentationAnimationCommandPlanner
             WheelSpokeCount = animation.WheelSpokeCount,
             EffectSubtype = animation.EffectSubtype,
             ScaleBehavior = animation.ScaleBehavior?.Clone(),
+            PreservedColorBehaviorXml = animation.PreservedColorBehaviorXml,
+            PreservedNumericBehaviorXml = animation.PreservedNumericBehaviorXml,
             RawPresetClass = animation.RawPresetClass,
             RawPresetId = animation.RawPresetId,
             RawPresetSubtype = animation.RawPresetSubtype,
