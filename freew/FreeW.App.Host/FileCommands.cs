@@ -126,13 +126,7 @@ internal sealed class FileCommands
     private bool OpenSnapshotCore(string snapshotPath, string? originalPath)
     {
         var result = _documentWorkflow.OpenSnapshotAsync(snapshotPath, originalPath).GetAwaiter().GetResult();
-        if (result.Succeeded)
-            return true;
-
-        ShowError(
-            "Could not recover the document",
-            result.Exception ?? new InvalidOperationException("The recovery operation was canceled."));
-        return false;
+        return ApplyFeedback(FreeWDocumentFileFeedbackPlanner.PlanSnapshot(result));
     }
 
     public void MarkDirty()
@@ -168,7 +162,10 @@ internal sealed class FileCommands
     /// read-only text import, so the result becomes an untitled dirty document that must be saved elsewhere.
     /// </summary>
     public bool ImportPdfText() =>
-        _workflow.Open("importing a PDF", _promptPdfImportPath, ImportPdfTextPath);
+        _workflow.Open(
+            FreeWDocumentFileFeedbackPlanner.ImportPdfAction,
+            _promptPdfImportPath,
+            ImportPdfTextPath);
 
     /// <summary>
     /// Dialog-free PDF text import for tests and host integrations. The PDF path is never associated with the
@@ -177,16 +174,7 @@ internal sealed class FileCommands
     public bool ImportPdfTextPath(string path)
     {
         var result = _documentWorkflow.ImportPdfTextPathAsync(path).GetAwaiter().GetResult();
-        if (result.Succeeded)
-            return true;
-
-        var exception = result.Exception ?? new InvalidOperationException("The PDF import was canceled.");
-        ShowError(
-            exception is InvalidOperationException
-                ? "Unrecognized PDF import file"
-                : "Could not import PDF text",
-            exception);
-        return false;
+        return ApplyFeedback(FreeWDocumentFileFeedbackPlanner.PlanImport(result, path));
     }
 
     /// <summary>
@@ -202,24 +190,7 @@ internal sealed class FileCommands
             .GetAwaiter()
             .GetResult();
 
-        if (execution.Outcome == DocumentFileExecutionOutcome.UnsupportedFormat)
-        {
-            var extension = Path.GetExtension(path);
-            ShowError(
-                "Unrecognized file type",
-                new InvalidOperationException($"FreeW has no reader for “{extension}” files."));
-            return false;
-        }
-
-        if (!execution.Succeeded)
-        {
-            ShowError(
-                "Could not open the document",
-                execution.Exception ?? new InvalidOperationException("The open operation was canceled."));
-            return false;
-        }
-
-        return true;
+        return ApplyFeedback(FreeWDocumentFileFeedbackPlanner.PlanOpen(execution, path));
     }
 
     /// <summary>Recent files (most recent first) from the shared store; never throws.</summary>
@@ -243,7 +214,7 @@ internal sealed class FileCommands
         if (!TryPromptSavePath(preferredExtension, suggestedFileName, out var path, out var filterIndex))
             return false;
 
-        return SavePath(path, filterIndex, DocumentSaveExecutionKind.Save, "Could not save the document");
+        return SavePath(path, filterIndex, DocumentSaveExecutionKind.Save);
     }
 
     /// <summary>
@@ -259,11 +230,11 @@ internal sealed class FileCommands
                 out var filterIndex))
             return false;
 
-        return SavePath(path, filterIndex, DocumentSaveExecutionKind.SaveCopy, "Could not save a copy");
+        return SavePath(path, filterIndex, DocumentSaveExecutionKind.SaveCopy);
     }
 
     internal bool SaveCopyToPath(string path, int filterIndex = 0) =>
-        SavePath(path, filterIndex, DocumentSaveExecutionKind.SaveCopy, "Could not save a copy");
+        SavePath(path, filterIndex, DocumentSaveExecutionKind.SaveCopy);
 
     /// <summary>
     /// Save-before-close gate, called from the window's Closing handler. Returns true if the window
@@ -279,44 +250,30 @@ internal sealed class FileCommands
     private bool SaveToCurrentPath(string path)
     {
         var result = _documentWorkflow.SaveCurrentPathAsync(path).GetAwaiter().GetResult();
-        return result.RequiresSaveAs ? SaveAs() : HandleSaveResult(result, "Could not save the document");
+        var feedback = FreeWDocumentFileFeedbackPlanner.PlanSave(
+            result,
+            DocumentSaveExecutionKind.Save,
+            path);
+        return feedback.RequiresSaveAs ? SaveAs() : ApplyFeedback(feedback);
     }
 
     private bool SavePath(
         string path,
         int filterIndex,
-        DocumentSaveExecutionKind kind,
-        string errorSummary)
+        DocumentSaveExecutionKind kind)
     {
         var result = _documentWorkflow
             .SavePathAsync(path, filterIndex, kind)
             .GetAwaiter()
             .GetResult();
-        if (result.Outcome == DocumentFileExecutionOutcome.UnsupportedFormat)
-        {
-            ShowError(
-                errorSummary,
-                new InvalidOperationException(
-                    $"FreeW has no writer for \u201c{Path.GetExtension(path)}\u201d files."));
-            return false;
-        }
-
-        return HandleSaveResult(result, errorSummary);
+        return ApplyFeedback(FreeWDocumentFileFeedbackPlanner.PlanSave(result, kind, path));
     }
 
-    private bool HandleSaveResult(DocumentSaveWorkflowResult execution, string errorSummary)
+    private bool ApplyFeedback(FreeWDocumentFileFeedback feedback)
     {
-        if (execution.Succeeded)
-            return true;
-
-        if (execution.Outcome != DocumentFileExecutionOutcome.CompatibilityDeclined)
-        {
-            ShowError(
-                errorSummary,
-                execution.Exception ?? new InvalidOperationException("The save was canceled."));
-        }
-
-        return false;
+        if (feedback.ShouldShowError)
+            ShowError(feedback.ErrorSummary!, feedback.Exception!);
+        return feedback.Succeeded;
     }
 
     /// <summary>
@@ -360,7 +317,7 @@ internal sealed class FileCommands
         var result = WpfFileDialogService.ShowOpenDialog(
             _window,
             plan,
-            title: "Import PDF (text only)");
+            title: FreeWDocumentFileFeedbackPlanner.ImportPdfPickerTitle);
         return result.Chosen ? result.FileName : null;
     }
 

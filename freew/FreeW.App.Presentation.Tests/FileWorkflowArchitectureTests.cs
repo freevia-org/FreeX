@@ -25,6 +25,26 @@ public sealed class FileWorkflowArchitectureTests
     }
 
     [Fact]
+    public void SharedFeedbackPlannerOwnsFileOutcomeMessagesAndErrorDecisions()
+    {
+        var source = ReadSource(
+            "freew",
+            "FreeW.App.Presentation",
+            "Shell",
+            "FreeWDocumentFileFeedbackPlanner.cs");
+
+        source.Should().Contain("public static class FreeWDocumentFileFeedbackPlanner");
+        source.Should().Contain("PlanOpen(");
+        source.Should().Contain("PlanImport(");
+        source.Should().Contain("PlanSave(");
+        source.Should().Contain("PlanSnapshot(");
+        source.Should().Contain("SisterAppFileTextPlanner.FormatUnsupportedFileType(");
+        source.Should().Contain("SisterAppFileTextPlanner.FormatCommandFailed(");
+        source.Should().NotContain("System.Windows");
+        source.Should().NotContain("Avalonia");
+    }
+
+    [Fact]
     public void RenderersDelegateFileResultAndTargetHandling()
     {
         var wpf = ReadSource("freew", "FreeW.App.Host", "FileCommands.cs");
@@ -38,6 +58,12 @@ public sealed class FileWorkflowArchitectureTests
         avalonia.Should().Contain("_documentFileWorkflow.ImportPdfTextPathAsync(");
         avalonia.Should().Contain("_documentFileWorkflow.SaveCurrentPathAsync(");
         avalonia.Should().Contain("_documentFileWorkflow.SavePathAsync(");
+        wpf.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanOpen(");
+        wpf.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanImport(");
+        wpf.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanSave(");
+        avalonia.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanOpen(");
+        avalonia.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanImport(");
+        avalonia.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanSave(");
 
         foreach (var renderer in new[] { wpf, avalonia })
         {
@@ -47,6 +73,8 @@ public sealed class FileWorkflowArchitectureTests
             renderer.Should().NotContain("_documentPersistence.Save(");
             renderer.Should().NotContain("DocumentFileFormatResolver.FindSaveAdapter(");
             renderer.Should().NotContain("RecentFilesStore.Load(");
+            renderer.Should().NotContain("execution.Outcome == DocumentFileExecutionOutcome.UnsupportedFormat");
+            renderer.Should().NotContain("HandleSaveResult(");
         }
     }
 

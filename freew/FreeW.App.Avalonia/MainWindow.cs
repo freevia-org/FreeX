@@ -3218,33 +3218,14 @@ public sealed partial class MainWindow : Window
     private async Task<bool> OpenPathAsync(string path)
     {
         var execution = await _documentFileWorkflow.OpenPathAsync(path);
-
-        if (execution.Outcome == DocumentFileExecutionOutcome.UnsupportedFormat)
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
-                FileText,
-                FileText.OpenCommand,
-                Path.GetExtension(path));
-            return false;
-        }
-
-        if (!execution.Succeeded)
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FileText,
-                FileText.OpenCommand,
-                execution.Exception?.Message ?? "The open operation was canceled.");
-            return false;
-        }
-
-        return true;
+        return ApplyFileFeedback(FreeWDocumentFileFeedbackPlanner.PlanOpen(execution, path));
     }
 
     internal Task<bool> ImportPdfTextAsyncForTests() => ImportPdfTextAsync();
 
     private Task<bool> ImportPdfTextAsync() =>
         _fileWorkflow.OpenAsync(
-            "importing a PDF",
+            FreeWDocumentFileFeedbackPlanner.ImportPdfAction,
             _pickPdfImportPathAsync,
             ImportPdfTextPathAsync);
 
@@ -3253,7 +3234,7 @@ public sealed partial class MainWindow : Window
         using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
             StorageProvider,
             AvaloniaFilePickerOpenRequest.FromFileTypes(
-                "Import PDF (text only)",
+                FreeWDocumentFileFeedbackPlanner.ImportPdfPickerTitle,
                 AvaloniaFilePickerTypeAdapter.ToFileTypes(
                     _documentPersistence.BuildPdfImportPickerPlan().FileTypes)));
         return file?.LocalPath;
@@ -3262,14 +3243,7 @@ public sealed partial class MainWindow : Window
     private async Task<bool> ImportPdfTextPathAsync(string path)
     {
         var result = await _documentFileWorkflow.ImportPdfTextPathAsync(path);
-        if (result.Succeeded)
-        {
-            _status.Text = $"Imported PDF text from {Path.GetFileName(path)}";
-            return true;
-        }
-
-        _status.Text = $"PDF import failed: {result.Exception?.Message ?? "The import operation was canceled."}";
-        return false;
+        return ApplyFileFeedback(FreeWDocumentFileFeedbackPlanner.PlanImport(result, path));
     }
 
     private Task<bool> SaveAsync() =>
@@ -3283,7 +3257,11 @@ public sealed partial class MainWindow : Window
     private async Task<bool> SaveToCurrentPathCoreAsync(string path)
     {
         var result = await _documentFileWorkflow.SaveCurrentPathAsync(path);
-        return result.RequiresSaveAs ? await SaveAsAsync() : HandleSaveResult(result, isCopy: false);
+        var feedback = FreeWDocumentFileFeedbackPlanner.PlanSave(
+            result,
+            DocumentSaveExecutionKind.Save,
+            path);
+        return feedback.RequiresSaveAs ? await SaveAsAsync() : ApplyFileFeedback(feedback);
     }
 
     private async Task<bool> SaveAsAsync()
@@ -3311,40 +3289,13 @@ public sealed partial class MainWindow : Window
         DocumentSaveExecutionKind kind)
     {
         var execution = await _documentFileWorkflow.SavePathAsync(path, filterIndex, kind);
-        if (execution.Outcome == DocumentFileExecutionOutcome.UnsupportedFormat)
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
-                FileText,
-                FileText.SaveCommand,
-                Path.GetExtension(path));
-            return false;
-        }
-
-        return HandleSaveResult(execution, kind == DocumentSaveExecutionKind.SaveCopy);
+        return ApplyFileFeedback(FreeWDocumentFileFeedbackPlanner.PlanSave(execution, kind, path));
     }
 
-    private bool HandleSaveResult(DocumentSaveWorkflowResult execution, bool isCopy)
+    private bool ApplyFileFeedback(FreeWDocumentFileFeedback feedback)
     {
-        if (execution.Succeeded)
-        {
-            var saved = SisterAppFileTextPlanner.FormatSaved(
-                FileText,
-                Path.GetFileName(execution.Target!.Path));
-            _status.Text = isCopy ? saved + " (copy)" : saved;
-            return true;
-        }
-
-        if (execution.Outcome == DocumentFileExecutionOutcome.CompatibilityDeclined)
-            _status.Text = isCopy ? "Save a Copy canceled." : "Save canceled.";
-        else
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FileText,
-                isCopy ? "Save a Copy" : FileText.SaveCommand,
-                execution.Exception?.Message ?? "The save operation was canceled.");
-        }
-
-        return false;
+        _status.Text = feedback.Message;
+        return feedback.Succeeded;
     }
 
     /// <summary>
@@ -4150,7 +4101,9 @@ public sealed partial class MainWindow : Window
             FileText.FallbackDisplayName);
         using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
             StorageProvider,
-            AvaloniaFilePickerSaveRequest.FromSavePlan("Save a Copy", savePlan));
+            AvaloniaFilePickerSaveRequest.FromSavePlan(
+                FreeWDocumentFileFeedbackPlanner.SaveCopyCommand,
+                savePlan));
         var path = file?.LocalPath;
         if (path is null)
             return;
