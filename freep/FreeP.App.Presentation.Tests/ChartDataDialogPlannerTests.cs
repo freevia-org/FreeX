@@ -479,6 +479,26 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void ChartDisplayOptionsPlanner_ReadsNativeChartExSeriesLabels()
+    {
+        var chart = MakeChart();
+        chart.IsChartEx = true;
+        chart.DataLabels = null;
+        chart.Series[0].DataLabels = new ChartDataLabels
+        {
+            ShowValue = true,
+            Position = DataLabelPosition.Above,
+            NumberFormat = "0.0",
+        };
+
+        var planner = ChartDisplayOptionsPlanner.FromChart(chart);
+
+        planner.ShowValueLabels.Should().BeTrue();
+        planner.LabelPosition.Should().Be(DataLabelPosition.Above);
+        planner.LabelNumberFormat.Should().Be("0.0");
+    }
+
+    [Fact]
     public void ChartDisplayOptionsPlanner_WaterfallConnectorLinesAreScopedToWaterfallCharts()
     {
         var waterfall = MakeChart();

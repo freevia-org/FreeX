@@ -77,6 +77,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
     private ChartExTitleAlignment? _oldChartExTitleAlignment;
     private bool _oldChartExTitleEditRequested;
     private bool _oldChartExLegendEditRequested;
+    private List<ChartDataLabels?>? _oldChartExSeriesDataLabels;
 
     public SetChartDisplayOptionsCommand(
         int slideIndex,
@@ -123,6 +124,9 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         _oldChartExTitleAlignment = chart.ChartExTitleAlignment;
         _oldChartExTitleEditRequested = chart.ChartExTitleEditRequested;
         _oldChartExLegendEditRequested = chart.ChartExLegendEditRequested;
+        _oldChartExSeriesDataLabels = chart.IsChartEx
+            ? chart.Series.Select(series => CloneDataLabels(series.DataLabels)).ToList()
+            : null;
 
         chart.Title = string.IsNullOrWhiteSpace(_newOptions.Title) ? null : _newOptions.Title;
         chart.ChartExTitleEditRequested = true;
@@ -203,6 +207,16 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
             };
         }
 
+        // Classic charts own labels at chart level. Native ChartEx stores them below
+        // each cx:series, so mirror the shared chart-options edit to that physical
+        // owner before the ChartEx writer serializes the preserved payload.
+        if (chart.IsChartEx && ShouldApplyChartExSeriesLabels(chart, _newOptions))
+        {
+            var seriesLabels = BuildDataLabels(_newOptions);
+            foreach (var series in chart.Series)
+                series.DataLabels = CloneDataLabels(seriesLabels);
+        }
+
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -232,6 +246,15 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         chart.ChartExTitleAlignment = _oldChartExTitleAlignment;
         chart.ChartExTitleEditRequested = _oldChartExTitleEditRequested;
         chart.ChartExLegendEditRequested = _oldChartExLegendEditRequested;
+        if (chart.IsChartEx && _oldChartExSeriesDataLabels is not null)
+        {
+            for (var index = 0;
+                 index < chart.Series.Count && index < _oldChartExSeriesDataLabels.Count;
+                 index++)
+            {
+                chart.Series[index].DataLabels = CloneDataLabels(_oldChartExSeriesDataLabels[index]);
+            }
+        }
         if (chart.ChartType == ChartType.Stock && _oldHighLowLines.HasValue)
             chart.HasHighLowLines = _oldHighLowLines.Value;
         if (chart.ChartType == ChartType.Waterfall && _oldWaterfallConnectorLines.HasValue)
@@ -271,6 +294,36 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
                     FontFamily = source.TextStyle.FontFamily,
                 },
         };
+
+    private static bool ShouldApplyChartExSeriesLabels(
+        ChartShape chart,
+        ChartDisplayOptions options) =>
+        chart.Series.Any(series => series.DataLabels is not null)
+        || options.ShowValueLabels
+        || options.ShowPercentLabels
+        || options.ShowCategoryLabels
+        || options.ShowSeriesLabels
+        || options.ShowLegendKeys
+        || options.ShowBubbleSize
+        || options.ShowLeaderLines.HasValue
+        || !string.IsNullOrWhiteSpace(options.LabelNumberFormat)
+        || !string.IsNullOrEmpty(options.LabelSeparator)
+        || options.LabelTextStyle is not null;
+
+    private static ChartDataLabels BuildDataLabels(ChartDisplayOptions options) => new()
+    {
+        ShowValue = options.ShowValueLabels,
+        ShowPercent = options.ShowPercentLabels,
+        ShowCategoryName = options.ShowCategoryLabels,
+        ShowSeriesName = options.ShowSeriesLabels,
+        ShowLegendKey = options.ShowLegendKeys,
+        ShowBubbleSize = options.ShowBubbleSize,
+        ShowLeaderLines = options.ShowLeaderLines,
+        Position = options.LabelPosition,
+        NumberFormat = options.LabelNumberFormat,
+        Separator = options.LabelSeparator,
+        TextStyle = CloneTextStyle(options.LabelTextStyle),
+    };
 
     private static int? Normalize(int? value, int minimum, int maximum) =>
         value is null ? null : Math.Clamp(value.Value, minimum, maximum);

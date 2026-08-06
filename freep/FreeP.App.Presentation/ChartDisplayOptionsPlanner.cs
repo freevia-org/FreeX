@@ -209,21 +209,25 @@ public sealed class ChartDisplayOptionsPlanner
         _styleId = chart.StyleId;
         _availableStyleOptions = StyleOptionsFor(chart.StyleId);
         _legend = chart.Legend;
-        _showValueLabels = chart.DataLabels?.ShowValue == true;
-        _showPercentLabels = chart.DataLabels?.ShowPercent == true;
-        _showCategoryLabels = chart.DataLabels?.ShowCategoryName == true;
-        _showSeriesLabels = chart.DataLabels?.ShowSeriesName == true;
-        _showLegendKeys = chart.DataLabels?.ShowLegendKey == true;
-        _showBubbleSize = chart.DataLabels?.ShowBubbleSize == true;
-        _showLeaderLines = chart.DataLabels?.ShowLeaderLines;
-        _labelPosition = chart.DataLabels?.Position ?? DataLabelPosition.OutsideEnd;
-        _labelNumberFormat = chart.DataLabels?.NumberFormat ?? string.Empty;
-        _labelSeparator = chart.DataLabels?.Separator ?? string.Empty;
-        _labelFontFamily = chart.DataLabels?.TextStyle?.FontFamily ?? string.Empty;
-        _labelFontSizePt = chart.DataLabels?.TextStyle?.FontSizePt;
-        _labelBold = chart.DataLabels?.TextStyle?.Bold;
-        _labelItalic = chart.DataLabels?.TextStyle?.Italic;
-        _labelColor = chart.DataLabels?.TextStyle?.Color;
+        var labels = chart.DataLabels ??
+            (chart.IsChartEx
+                ? chart.Series.Select(series => series.DataLabels).FirstOrDefault(value => value is not null)
+                : null);
+        _showValueLabels = labels?.ShowValue == true;
+        _showPercentLabels = labels?.ShowPercent == true;
+        _showCategoryLabels = labels?.ShowCategoryName == true;
+        _showSeriesLabels = labels?.ShowSeriesName == true;
+        _showLegendKeys = labels?.ShowLegendKey == true;
+        _showBubbleSize = labels?.ShowBubbleSize == true;
+        _showLeaderLines = labels?.ShowLeaderLines;
+        _labelPosition = labels?.Position ?? DataLabelPosition.OutsideEnd;
+        _labelNumberFormat = labels?.NumberFormat ?? string.Empty;
+        _labelSeparator = labels?.Separator ?? string.Empty;
+        _labelFontFamily = labels?.TextStyle?.FontFamily ?? string.Empty;
+        _labelFontSizePt = labels?.TextStyle?.FontSizePt;
+        _labelBold = labels?.TextStyle?.Bold;
+        _labelItalic = labels?.TextStyle?.Italic;
+        _labelColor = labels?.TextStyle?.Color;
         _categoryGridlines = chart.CategoryAxis.HasMajorGridlines;
         _valueGridlines = chart.ValueAxis.HasMajorGridlines;
         _barGapWidthPercent = chart.BarGapWidthPercent;
