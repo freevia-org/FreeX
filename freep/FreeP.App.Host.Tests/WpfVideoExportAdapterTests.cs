@@ -189,6 +189,83 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
         runner.Arguments.Should().Contain("-an");
     }
 
+    [Fact]
+    public async Task WindowsNativeExport_ForwardsPersistedCaptionsToTheTimedTextFallback()
+    {
+        var output = Path.Combine(_tempDirectory, "captioned-native.mp4");
+        var fallback = new CaptionFallback();
+        var adapter = new WindowsNativeVideoExportAdapter(
+            new LinuxVideoEncoderCapability(
+                CanEncodeMp4: true,
+                ExecutablePath: WindowsNativeVideoExportAdapter.ExecutablePath,
+                EncoderName: "Windows MediaComposition",
+                CanCaptureNarration: false,
+                Reason: "test"),
+            captionFallback: fallback,
+            captionFallbackFactory: static () => null);
+        var captionBytes = Encoding.UTF8.GetBytes(
+            "WEBVTT\n\n00:00:00.000 --> 00:00:00.500\nHello\n");
+        var artifact = new PresentationRecordingMediaArtifact(
+            PresentationRecordingMediaArtifactKind.NarrationCaption,
+            SlideIndex: 0,
+            SuggestedFileName: "slide-1-narration-captions.vtt",
+            ContentType: "text/vtt",
+            PackagePath: "ppt/media/recording-captions/slide-1-narration-captions.vtt",
+            ContentLengthBytes: captionBytes.Length,
+            ContentSha256: "caption-sha",
+            DurationMs: 500,
+            CapturedByHost: "test",
+            StatusText: "captured",
+            PayloadBytes: captionBytes);
+
+        var result = await adapter.ExportAsync(
+            BuildPackage(includeNarration: true),
+            output,
+            CancellationToken.None,
+            [artifact]);
+
+        result.Succeeded.Should().BeTrue(result.FailureReason);
+        result.MuxedCaptionTrackCount.Should().Be(1);
+        fallback.Artifacts.Should().ContainSingle().Which.Kind
+            .Should().Be(PresentationRecordingMediaArtifactKind.NarrationCaption);
+    }
+
+    [Fact]
+    public async Task WindowsNativeExport_ReportsCaptionCapabilityBoundaryInsteadOfDroppingTracks()
+    {
+        var adapter = new WindowsNativeVideoExportAdapter(
+            new LinuxVideoEncoderCapability(
+                CanEncodeMp4: true,
+                ExecutablePath: WindowsNativeVideoExportAdapter.ExecutablePath,
+                EncoderName: "Windows MediaComposition",
+                CanCaptureNarration: false,
+                Reason: "test"),
+            captionFallbackFactory: static () => null);
+        var captionBytes = Encoding.UTF8.GetBytes(
+            "WEBVTT\n\n00:00:00.000 --> 00:00:00.500\nHello\n");
+        var artifact = new PresentationRecordingMediaArtifact(
+            PresentationRecordingMediaArtifactKind.NarrationCaption,
+            SlideIndex: 0,
+            SuggestedFileName: "slide-1-narration-captions.vtt",
+            ContentType: "text/vtt",
+            PackagePath: "ppt/media/recording-captions/slide-1-narration-captions.vtt",
+            ContentLengthBytes: captionBytes.Length,
+            ContentSha256: "caption-sha",
+            DurationMs: 500,
+            CapturedByHost: "test",
+            StatusText: "captured",
+            PayloadBytes: captionBytes);
+
+        var result = await adapter.ExportAsync(
+            BuildPackage(includeNarration: true),
+            Path.Combine(_tempDirectory, "captioned-unsupported.mp4"),
+            CancellationToken.None,
+            [artifact]);
+
+        result.Succeeded.Should().BeFalse();
+        result.FailureReason.Should().Contain("cannot mux timed caption tracks");
+    }
+
     private static PresentationVideoFramePackage BuildPackage(bool includeNarration = false) =>
         BuildPackage(Presentation.CreateEmpty(), includeNarration);
 
@@ -230,6 +307,29 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
         {
             File.WriteAllText(outputPath, "not an mp4");
             return Task.FromResult(new WpfVideoProcessResult(0, string.Empty, string.Empty, false));
+        }
+    }
+
+    private sealed class CaptionFallback : ILinuxVideoExportAdapter
+    {
+        public LinuxVideoEncoderCapability Capability =>
+            new(true, "ffmpeg.exe", "mpeg4", false, "test caption fallback");
+
+        public List<PresentationRecordingMediaArtifact> Artifacts { get; } = [];
+
+        public Task<LinuxVideoExportResult> ExportAsync(
+            PresentationVideoFramePackage package,
+            string outputPath,
+            CancellationToken cancellationToken = default,
+            IReadOnlyList<PresentationRecordingMediaArtifact>? mediaArtifacts = null)
+        {
+            Artifacts.AddRange(mediaArtifacts ?? []);
+            File.WriteAllBytes(outputPath, Encoding.ASCII.GetBytes("0000ftyp0000moov0000mdat"));
+            return Task.FromResult(LinuxVideoExportResult.Success(
+                outputPath,
+                "mpeg4",
+                new FileInfo(outputPath).Length,
+                muxedCaptionTrackCount: Artifacts.Count));
         }
     }
 
