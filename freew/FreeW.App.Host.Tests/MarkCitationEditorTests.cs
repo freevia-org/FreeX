@@ -66,17 +66,28 @@ public sealed class MarkCitationEditorTests
         view.InsertTableOfAuthorities();
         view.CommitToModel();
 
-        var toa = view.Model.Blocks
+        var toaParagraphs = view.Model.Blocks
             .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
             .OfType<Paragraph>()
-            .Select(p => p.PlainText)
             .ToList();
+        var toa = toaParagraphs.Select(p => p.PlainText).ToList();
 
         toa.Should().Contain(TableOfAuthorities.HeadingText);
         toa.Should().Contain("Cases");
         toa.Should().Contain("Roe v. Wade\t1");
         toa.Should().Contain("Statutes");
         toa.Should().Contain("42 U.S.C. § 1983\t1");
+        toaParagraphs[0].SpanningFieldOwner.Should().BeNull();
+        toaParagraphs.Skip(1).Select(paragraph => paragraph.SpanningFieldOwner!.Instruction)
+            .Should().Equal(
+                " TOA \\h \\c \"1\" \\f ",
+                " TOA \\h \\c \"1\" \\f ",
+                " TOA \\h \\c \"2\" \\f ",
+                " TOA \\h \\c \"2\" \\f ");
+        toaParagraphs[1].SpanningFieldStart.Should().NotBeNull();
+        toaParagraphs[2].EndsSpanningField.Should().BeTrue();
+        toaParagraphs[3].SpanningFieldStart.Should().NotBeNull();
+        toaParagraphs[^1].EndsSpanningField.Should().BeTrue();
     }
 
     [StaFact]

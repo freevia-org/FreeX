@@ -16487,12 +16487,17 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void RefreshTableOfAuthorities()
     {
-        RefreshTableOfAuthorities(ToaOptions.Default);
+        RefreshTableOfAuthoritiesCore(options: null);
     }
 
     public void RefreshTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        RefreshTableOfAuthoritiesCore(options);
+    }
+
+    private void RefreshTableOfAuthoritiesCore(ToaOptions? options)
+    {
         CommitToModel();
         ApplyTableOfAuthoritiesPlan(
             TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(

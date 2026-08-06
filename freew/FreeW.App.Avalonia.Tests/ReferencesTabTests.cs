@@ -1328,6 +1328,15 @@ public sealed class ReferencesTabTests
             .Count(paragraph => paragraph.StyleId == TableOfAuthorities.HeadingStyleId)
             .Should()
             .Be(1);
+        var toa = view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .ToList();
+        toa[0].SpanningFieldOwner.Should().BeNull();
+        toa.Skip(1).Should().OnlyContain(paragraph =>
+            paragraph.SpanningFieldOwner != null
+            && paragraph.SpanningFieldOwner.Instruction == " TOA \\h \\c \"1\" \\f ");
+        toa[1].SpanningFieldStart.Should().NotBeNull();
+        toa[^1].EndsSpanningField.Should().BeTrue();
     }
 
     [Fact]

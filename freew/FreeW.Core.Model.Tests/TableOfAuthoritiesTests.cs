@@ -86,6 +86,60 @@ public class TableOfAuthoritiesTests
     }
 
     [Fact]
+    public void Build_AuthorsOneNativeToaOwnerAroundCategoryAndEntryResults()
+    {
+        var table = TableOfAuthorities.Build(
+            new[] { new Citation("Some Case", CitationCategory.Cases) });
+
+        table[0].SpanningFieldOwner.Should().BeNull();
+        table.Skip(1).Should().OnlyContain(paragraph =>
+            paragraph.SpanningFieldOwner != null
+            && paragraph.SpanningFieldOwner.Instruction == " TOA \\h \\c \"1\" \\f ");
+        table[1].SpanningFieldStart!.Instruction.Should().Be(" TOA \\h \\c \"1\" \\f ");
+        table[^1].EndsSpanningField.Should().BeTrue();
+    }
+
+    [Fact]
+    public void NativeFieldInstructionAndExistingOptions_MapWordSwitchSemantics()
+    {
+        var options = new ToaOptions
+        {
+            CategoryFilter = CitationCategory.Statutes,
+            UsePassim = true,
+            KeepOriginalFormatting = true,
+            TabLeader = ToaTabLeader.Dashes
+        };
+        TableOfAuthorities.NativeFieldInstructionFor(options, CitationCategory.Statutes)
+            .Should().Be(" TOA \\h \\c \"2\" \\p ");
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Statute A\t1")
+        {
+            StyleId = TableOfAuthorities.EntryStyleId,
+            SpanningFieldOwner = new ComplexField(" TOA \\h \\c \"2\" \\p "),
+            Formatting = ParagraphFormatting.Default with
+            {
+                TabStops = [new TabStop(468, TabStopAlignment.Right, TabLeader.Dashes)]
+            }
+        });
+
+        var imported = TableOfAuthorities.ExistingOptions(document);
+        imported.Should().NotBeNull();
+        imported!.CategoryFilter.Should().Be(CitationCategory.Statutes);
+        imported.UsePassim.Should().BeTrue();
+        imported.KeepOriginalFormatting.Should().BeTrue();
+        imported.TabLeader.Should().Be(ToaTabLeader.Dashes);
+
+        document.Blocks.Add(new Paragraph("Case A\t1")
+        {
+            SpanningFieldOwner = new ComplexField(" TOA \\h \\c \"1\" \\p ")
+        });
+        TableOfAuthorities.ExistingOptions(document)!.CategoryFilter.Should().BeNull(
+            "Word represents an all-category insertion as one native field per used category");
+    }
+
+    [Fact]
     public void Build_FromDocument_CollectsBodyCitationMarksAndSideStore()
     {
         var doc = new TextDocument();
@@ -139,6 +193,11 @@ public class TableOfAuthoritiesTests
             new Paragraph("x") { StyleId = TableOfAuthorities.EntryStyleId }).Should().BeTrue();
         TableOfAuthorities.IsTableOfAuthoritiesParagraph(
             new Paragraph("x") { StyleId = "Heading1" }).Should().BeFalse();
+        TableOfAuthorities.IsTableOfAuthoritiesParagraph(new Paragraph("x")
+        {
+            StyleId = "Normal",
+            SpanningFieldOwner = new ComplexField(" TOA \\h \\c \"1\" ")
+        }).Should().BeTrue();
         TableOfAuthorities.IsTableOfAuthoritiesParagraph(Table.Create(1, 1)).Should().BeFalse();
     }
 
