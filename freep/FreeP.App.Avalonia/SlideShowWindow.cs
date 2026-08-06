@@ -1934,35 +1934,36 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         SlideShowTransitionPlaybackPlan plan)
     {
         var source = _slideCanvas.Slide;
-        if (source is null)
-        {
-            PlayFadeTransition(slide, plan.DurationMs);
-            return;
-        }
-
-        var morphPlan = SlideShowMorphPlanner.Plan(transition, source, slide);
-        if (!morphPlan.HasObjectMatches)
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        var rendererPlan = SlideShowMorphPlanner.BuildRendererPlan(
+            transition,
+            source,
+            slide,
+            w,
+            h,
+            _slideDipW,
+            _slideDipH);
+        if (!rendererPlan.CanRender)
         {
             PlayFadeTransition(slide, plan.DurationMs);
             return;
         }
 
         var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var transform = SlideTransformCore.Compute(w, h, _slideDipW, _slideDipH);
         var prepared = new List<(Image Image, MatrixTransform Transform, double ScaleX, double ScaleY, double TranslateX, double TranslateY, uint ShapeId)>();
 
-        void AddMorphOverlay(RenderTargetBitmap? bitmap, Rect sourceRect, Rect targetRect, uint shapeId)
+        void AddMorphOverlay(
+            RenderTargetBitmap? bitmap,
+            SlideShowMorphOverlayRendererPlan overlay)
         {
-            if (bitmap is null || sourceRect.Width < 0.5 || sourceRect.Height < 0.5
-                || targetRect.Width < 0.5 || targetRect.Height < 0.5)
+            if (bitmap is null)
                 return;
 
-            var scaleX = sourceRect.Width / targetRect.Width;
-            var scaleY = sourceRect.Height / targetRect.Height;
-            var translateX = sourceRect.Left + sourceRect.Width / 2 - (targetRect.Left + targetRect.Width / 2);
-            var translateY = sourceRect.Top + sourceRect.Height / 2 - (targetRect.Top + targetRect.Height / 2);
+            var scaleX = overlay.InitialScaleX;
+            var scaleY = overlay.InitialScaleY;
+            var translateX = overlay.InitialTranslateX;
+            var translateY = overlay.InitialTranslateY;
             var matrix = new MatrixTransform(Matrix.CreateScale(scaleX, scaleY)
                 * Matrix.CreateTranslation(translateX, translateY));
             var image = new Image
@@ -1974,60 +1975,27 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 Opacity = 0,
                 IsHitTestVisible = false,
                 RenderTransformOrigin = new RelativePoint(
-                    (targetRect.Left + targetRect.Width / 2) / w,
-                    (targetRect.Top + targetRect.Height / 2) / h,
+                    overlay.TargetBounds.CenterX / w,
+                    overlay.TargetBounds.CenterY / h,
                     RelativeUnit.Relative),
                 RenderTransform = matrix
             };
             Canvas.SetLeft(image, 0);
             Canvas.SetTop(image, 0);
             _animOverlay.Children.Add(image);
-            _slideCanvas.SuppressedShapeIds.Add(shapeId);
-            prepared.Add((image, matrix, scaleX, scaleY, translateX, translateY, shapeId));
+            _slideCanvas.SuppressedShapeIds.Add(overlay.ShapeId);
+            prepared.Add((image, matrix, scaleX, scaleY, translateX, translateY, overlay.ShapeId));
         }
 
-        foreach (var match in morphPlan.Matches)
+        foreach (var overlay in rendererPlan.Overlays)
         {
-            if (match.Source.ExtentCxEmu <= 0 || match.Source.ExtentCyEmu <= 0
-                || match.Target.ExtentCxEmu <= 0 || match.Target.ExtentCyEmu <= 0)
-                continue;
-
-            var sourceRect = MorphShapeScreenRect(match.Source, transform);
-            var targetRect = MorphShapeScreenRect(match.Target, transform);
-            bool tokenMorph = morphPlan.Option is "byWord" or "byChar" &&
-                match.Tokens.Count > 0 &&
-                !string.IsNullOrWhiteSpace(match.Source.PlainText) &&
-                !string.IsNullOrWhiteSpace(match.Target.PlainText);
-            if (!tokenMorph)
-            {
-                AddMorphOverlay(RenderShapeToOverlayBitmap(slide, match.Target, w, h), sourceRect, targetRect, match.Target.Id);
-                continue;
-            }
-
-            var background = SlideCloner.CloneShape(match.Target);
-            background.TextBody = null;
-            AddMorphOverlay(RenderShapeToOverlayBitmap(slide, background, w, h), sourceRect, targetRect, match.Target.Id);
-            foreach (var token in match.Tokens)
-            {
-                var tokenShape = SlideShowMorphPlanner.CreateTokenShape(
-                    match.Target,
-                    token.TargetStart,
-                    token.TargetLength);
-                AddMorphOverlay(
-                    RenderShapeToOverlayBitmap(slide, tokenShape, w, h),
-                    MorphTokenScreenRect(match.Source, token, source: true, transform),
-                    MorphTokenScreenRect(match.Target, token, source: false, transform),
-                    match.Target.Id);
-            }
+            AddMorphOverlay(
+                RenderShapeToOverlayBitmap(slide, overlay.RenderShape, w, h),
+                overlay);
         }
 
         if (prepared.Count == 0)
         {
-            foreach (var item in prepared)
-            {
-                _animOverlay.Children.Remove(item.Image);
-                _slideCanvas.SuppressedShapeIds.Remove(item.ShapeId);
-            }
             PlayFadeTransition(slide, plan.DurationMs);
             return;
         }
@@ -2090,44 +2058,6 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             }
         };
         timer.Start();
-    }
-
-    private static Rect MorphShapeScreenRect(SlideShape shape, SlideTransformCore transform)
-    {
-        var topLeft = transform.SlideToScreen(
-            SlideTransformCore.EmuToDip(shape.OffsetXEmu),
-            SlideTransformCore.EmuToDip(shape.OffsetYEmu));
-        return new Rect(
-            topLeft.X,
-            topLeft.Y,
-            transform.ScaleDipToScreen(SlideTransformCore.EmuToDip(shape.ExtentCxEmu)),
-            transform.ScaleDipToScreen(SlideTransformCore.EmuToDip(shape.ExtentCyEmu)));
-    }
-
-    private static Rect MorphTokenScreenRect(
-        SlideShape shape,
-        SlideShowMorphTokenMatch token,
-        bool source,
-        SlideTransformCore transform)
-    {
-        string text = shape.PlainText;
-        int start = source ? token.SourceStart : token.TargetStart;
-        int length = source ? token.SourceLength : token.TargetLength;
-        int lineStart = text.LastIndexOf('\n', Math.Clamp(start - 1, 0, text.Length - 1)) + 1;
-        int lineEnd = text.IndexOf('\n', start);
-        if (lineEnd < 0) lineEnd = text.Length;
-        int lineLength = Math.Max(1, lineEnd - lineStart);
-        int lineIndex = text[..Math.Clamp(start, 0, text.Length)].Count(ch => ch == '\n');
-        int lineCount = Math.Max(1, text.Count(ch => ch == '\n') + 1);
-        var shapeRect = MorphShapeScreenRect(shape, transform);
-        const double horizontalInset = 0.06;
-        double textWidth = shapeRect.Width * (1 - horizontalInset * 2);
-        double x = shapeRect.Left + shapeRect.Width * horizontalInset +
-            textWidth * (start - lineStart) / lineLength;
-        double y = shapeRect.Top + shapeRect.Height * lineIndex / lineCount;
-        double width = Math.Max(1, textWidth * Math.Max(1, length) / lineLength);
-        double height = Math.Max(1, shapeRect.Height / lineCount);
-        return new Rect(x, y, width, height);
     }
 
     private void PlayFlipTransition(

@@ -1129,6 +1129,50 @@ public sealed class RendererNeutralDedupPlannerTests
         }
     }
 
+    [Fact]
+    public void SlideShowRenderers_KeepMorphPlanningPortableAndNativeFilesBounded()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Host", "SlideShowWindow.cs");
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "SlideShowWindow.cs");
+        var morphPlanner = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowMorphPlanner.cs");
+        var animationSession = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowAnimationRendererSession.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("SlideShowMorphPlanner.BuildRendererPlan(");
+            source.Should().NotContain("SlideShowMorphPlanner.Plan(transition");
+            source.Should().NotContain("SlideShowMorphPlanner.CreateTokenShape(");
+            source.Should().NotContain("MorphShapeScreenRect(");
+            source.Should().NotContain("MorphTokenScreenRect(");
+            source.Should().NotContain("SlideCloner.CloneShape(");
+            source.Should().NotContain("const double horizontalInset = 0.06");
+        }
+
+        CountLines(wpf).Should().BeLessThanOrEqualTo(5650);
+        CountLines(avalonia).Should().BeLessThanOrEqualTo(5535);
+        (CountLines(wpf) + CountLines(avalonia)).Should().BeLessThanOrEqualTo(11200);
+
+        foreach (var source in new[] { morphPlanner, animationSession })
+        {
+            source.Should().NotContain("System.Windows");
+            source.Should().NotContain("Avalonia.");
+        }
+
+        wpf.Should().Contain("Storyboard");
+        wpf.Should().Contain("RenderTargetBitmap");
+        avalonia.Should().Contain("DispatcherTimer");
+        avalonia.Should().Contain("RenderTargetBitmap");
+    }
+
+    private static int CountLines(string source) =>
+        source.Count(character => character == '\n') + 1;
+
     private static string ReadWorkspaceFile(params string[] relativeParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

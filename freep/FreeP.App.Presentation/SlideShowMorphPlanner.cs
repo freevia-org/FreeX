@@ -39,6 +39,54 @@ public sealed record SlideShowMorphPlan(
     public bool HasObjectMatches => Matches.Count > 0;
 }
 
+public enum SlideShowMorphFallbackReason
+{
+    None,
+    MissingSourceSlide,
+    NoObjectMatches,
+    NoRenderableGeometry
+}
+
+public enum SlideShowMorphOverlayKind
+{
+    Shape,
+    TextBackground,
+    TextToken
+}
+
+public sealed record SlideShowMorphRect(
+    double X,
+    double Y,
+    double Width,
+    double Height)
+{
+    public double CenterX => X + Width / 2;
+
+    public double CenterY => Y + Height / 2;
+
+    public bool IsRenderable => Width >= 0.5 && Height >= 0.5;
+}
+
+public sealed record SlideShowMorphOverlayRendererPlan(
+    SlideShowMorphOverlayKind Kind,
+    uint ShapeId,
+    SlideShape RenderShape,
+    SlideShowMorphRect SourceBounds,
+    SlideShowMorphRect TargetBounds,
+    double InitialScaleX,
+    double InitialScaleY,
+    double InitialTranslateX,
+    double InitialTranslateY);
+
+public sealed record SlideShowMorphRendererPlan(
+    SlideShowMorphPlan MatchPlan,
+    IReadOnlyList<SlideShowMorphOverlayRendererPlan> Overlays,
+    SlideShowMorphFallbackReason FallbackReason)
+{
+    public bool CanRender =>
+        FallbackReason == SlideShowMorphFallbackReason.None && Overlays.Count > 0;
+}
+
 /// <summary>
 /// Builds the object correspondence used by Morph. Stable shape ids and unique
 /// authored names are preferred for every option; byWord and byChar can then
@@ -47,6 +95,114 @@ public sealed record SlideShowMorphPlan(
 /// </summary>
 public static class SlideShowMorphPlanner
 {
+    public static SlideShowMorphRendererPlan BuildRendererPlan(
+        SlideTransition transition,
+        Slide? source,
+        Slide target,
+        double renderWidth,
+        double renderHeight,
+        double slideWidthDip,
+        double slideHeightDip)
+    {
+        ArgumentNullException.ThrowIfNull(transition);
+        ArgumentNullException.ThrowIfNull(target);
+
+        var matchPlan = Plan(transition, source, target);
+        if (source is null)
+        {
+            return new SlideShowMorphRendererPlan(
+                matchPlan,
+                Array.Empty<SlideShowMorphOverlayRendererPlan>(),
+                SlideShowMorphFallbackReason.MissingSourceSlide);
+        }
+        if (!matchPlan.HasObjectMatches)
+        {
+            return new SlideShowMorphRendererPlan(
+                matchPlan,
+                Array.Empty<SlideShowMorphOverlayRendererPlan>(),
+                SlideShowMorphFallbackReason.NoObjectMatches);
+        }
+
+        var transform = SlideTransformCore.Compute(
+            renderWidth,
+            renderHeight,
+            slideWidthDip,
+            slideHeightDip);
+        var overlays = new List<SlideShowMorphOverlayRendererPlan>();
+        foreach (var match in matchPlan.Matches)
+        {
+            if (match.Source.ExtentCxEmu <= 0 || match.Source.ExtentCyEmu <= 0
+                || match.Target.ExtentCxEmu <= 0 || match.Target.ExtentCyEmu <= 0)
+            {
+                continue;
+            }
+
+            var sourceBounds = ShapeScreenRect(match.Source, transform);
+            var targetBounds = ShapeScreenRect(match.Target, transform);
+            var tokenMorph = matchPlan.Option is "byWord" or "byChar"
+                && match.Tokens.Count > 0
+                && !string.IsNullOrWhiteSpace(match.Source.PlainText)
+                && !string.IsNullOrWhiteSpace(match.Target.PlainText);
+            if (!tokenMorph)
+            {
+                AddOverlay(
+                    SlideShowMorphOverlayKind.Shape,
+                    match.Target,
+                    sourceBounds,
+                    targetBounds,
+                    match.Target.Id);
+                continue;
+            }
+
+            var background = SlideCloner.CloneShape(match.Target);
+            background.TextBody = null;
+            AddOverlay(
+                SlideShowMorphOverlayKind.TextBackground,
+                background,
+                sourceBounds,
+                targetBounds,
+                match.Target.Id);
+            foreach (var token in match.Tokens)
+            {
+                AddOverlay(
+                    SlideShowMorphOverlayKind.TextToken,
+                    CreateTokenShape(match.Target, token.TargetStart, token.TargetLength),
+                    TokenScreenRect(match.Source, token, sourceToken: true, transform),
+                    TokenScreenRect(match.Target, token, sourceToken: false, transform),
+                    match.Target.Id);
+            }
+        }
+
+        return new SlideShowMorphRendererPlan(
+            matchPlan,
+            overlays,
+            overlays.Count > 0
+                ? SlideShowMorphFallbackReason.None
+                : SlideShowMorphFallbackReason.NoRenderableGeometry);
+
+        void AddOverlay(
+            SlideShowMorphOverlayKind kind,
+            SlideShape renderShape,
+            SlideShowMorphRect sourceBounds,
+            SlideShowMorphRect targetBounds,
+            uint shapeId)
+        {
+            if (!sourceBounds.IsRenderable || !targetBounds.IsRenderable)
+                return;
+
+            overlays.Add(new SlideShowMorphOverlayRendererPlan(
+                kind,
+                shapeId,
+                renderShape,
+                sourceBounds,
+                targetBounds,
+                sourceBounds.Width / targetBounds.Width,
+                sourceBounds.Height / targetBounds.Height,
+                sourceBounds.CenterX - targetBounds.CenterX,
+                sourceBounds.CenterY - targetBounds.CenterY));
+        }
+    }
+
     public static SlideShowMorphPlan Plan(
         SlideTransition transition,
         Slide? source,
@@ -181,6 +337,51 @@ public static class SlideShowMorphPlanner
         for (int index = copy.TextBody.Paragraphs.Count - 1; index > 0; index--)
             copy.TextBody.Paragraphs.RemoveAt(index);
         return copy;
+    }
+
+    private static SlideShowMorphRect ShapeScreenRect(
+        SlideShape shape,
+        SlideTransformCore transform)
+    {
+        var topLeft = transform.SlideToScreen(
+            SlideTransformCore.EmuToDip(shape.OffsetXEmu),
+            SlideTransformCore.EmuToDip(shape.OffsetYEmu));
+        return new SlideShowMorphRect(
+            topLeft.X,
+            topLeft.Y,
+            transform.ScaleDipToScreen(SlideTransformCore.EmuToDip(shape.ExtentCxEmu)),
+            transform.ScaleDipToScreen(SlideTransformCore.EmuToDip(shape.ExtentCyEmu)));
+    }
+
+    private static SlideShowMorphRect TokenScreenRect(
+        SlideShape shape,
+        SlideShowMorphTokenMatch token,
+        bool sourceToken,
+        SlideTransformCore transform)
+    {
+        var text = shape.PlainText;
+        var start = Math.Clamp(
+            sourceToken ? token.SourceStart : token.TargetStart,
+            0,
+            text.Length);
+        var length = sourceToken ? token.SourceLength : token.TargetLength;
+        var lineStart = start == 0 ? 0 : text.LastIndexOf('\n', start - 1) + 1;
+        var lineEnd = text.IndexOf('\n', start);
+        if (lineEnd < 0)
+            lineEnd = text.Length;
+
+        var lineLength = Math.Max(1, lineEnd - lineStart);
+        var lineIndex = text[..start].Count(character => character == '\n');
+        var lineCount = Math.Max(1, text.Count(character => character == '\n') + 1);
+        var shapeBounds = ShapeScreenRect(shape, transform);
+        const double horizontalInset = 0.06;
+        var textWidth = shapeBounds.Width * (1 - horizontalInset * 2);
+        var x = shapeBounds.X + shapeBounds.Width * horizontalInset
+            + textWidth * (start - lineStart) / lineLength;
+        var y = shapeBounds.Y + shapeBounds.Height * lineIndex / lineCount;
+        var width = Math.Max(1, textWidth * Math.Max(1, length) / lineLength);
+        var height = Math.Max(1, shapeBounds.Height / lineCount);
+        return new SlideShowMorphRect(x, y, width, height);
     }
 
     private static string NormalizeOption(string? option) =>
