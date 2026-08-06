@@ -193,7 +193,7 @@ public sealed class MarkCitationEditorTests
     }
 
     [StaFact]
-    public void RefreshTableOfAuthorities_ConsumesSharedRenderPlanInWpfHost()
+    public void RefreshTableOfAuthorities_UsesDistinctPagesForPassimInWpfHost()
     {
         var model = TextDocument.CreateEmpty();
         model.Blocks.Clear();
@@ -222,7 +222,7 @@ public sealed class MarkCitationEditorTests
         view.Model.Blocks.OfType<Paragraph>()
             .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Table of Authorities", "Cases", "Roe v. Wade\tpassim");
+            .Should().Equal("Table of Authorities", "Cases", "Roe v. Wade\t1");
         view.Model.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
             .Should().NotContain("Old Case")
             .And.EndWith("After");
@@ -231,7 +231,10 @@ public sealed class MarkCitationEditorTests
             .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
         entry.Formatting.TabStops.Should().Equal(
             new TabStop(530, TabStopAlignment.Right, TabLeader.Dashes));
-        entry.Runs.Select(run => run.Text).Should().Equal("Roe v. Wade", "\t", "passim");
+        entry.Runs.Select(run => run.Text).Should().Equal("Roe v. Wade", "\t", "1");
+        view.Model.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.CategoryStyleId)
+            .SpanningFieldStart!.Instruction.Should().Be(" TOA \\h \\c \"1\" \\p ");
         var entryFormatting = entry.Runs[0].Formatting;
         entryFormatting.Bold.Should().BeTrue();
         entryFormatting.Underline.Should().BeTrue();

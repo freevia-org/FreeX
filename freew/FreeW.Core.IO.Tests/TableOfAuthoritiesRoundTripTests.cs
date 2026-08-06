@@ -228,6 +228,36 @@ public class TableOfAuthoritiesRoundTripTests
     }
 
     [Fact]
+    public void EmptyFilteredTableOfAuthorities_RoundTripsNativeEmptyResult()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var generated = TableOfAuthorities.Build(
+            doc,
+            new ToaOptions { CategoryFilter = CitationCategory.Statutes });
+        doc.Blocks.AddRange(generated);
+
+        var docx = WriteDocx(doc);
+        var generatedXml = EntryXml(docx, "word/document.xml")
+            .Descendants(W + "p")
+            .Take(generated.Count)
+            .ToArray();
+        generatedXml[0].Descendants(W + "fldChar").Should().BeEmpty();
+        generatedXml[1].Descendants(W + "instrText").Should().ContainSingle()
+            .Which.Value.Should().Be(" TOA \\h \\c \"2\" \\f ");
+        generatedXml[1].Descendants(W + "fldChar")
+            .Select(field => field.Attribute(W + "fldCharType")!.Value)
+            .Should().Equal("begin", "separate", "end");
+
+        var reopened = ReadDocx(docx);
+        var result = reopened.Blocks.OfType<Paragraph>().Last();
+        result.PlainText.Should().Be(TableOfAuthorities.EmptyResultText);
+        result.Runs.Should().ContainSingle();
+        result.Runs[0].ComplexField!.Instruction.Should().Be(" TOA \\h \\c \"2\" \\f ");
+        TableOfAuthorities.IsTableOfAuthoritiesParagraph(result).Should().BeTrue();
+    }
+
+    [Fact]
     public void ReferencesHeavyFieldsFixture_RetainsSourcesFieldsAndToaPageNumbersThroughDocx()
     {
         var doc = ReferencesHeavyFieldsDocument();

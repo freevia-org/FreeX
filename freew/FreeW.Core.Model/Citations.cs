@@ -71,12 +71,11 @@ public enum CitationStyle
 /// Each segment is omitted when its field is empty.</item>
 /// </list>
 /// <para>
-/// <see cref="BuildBibliography(TextDocument, CitationStyle)"/> produces ordinary styled
-/// <see cref="Paragraph"/>s — a heading (<c>References</c> for APA, <c>Works Cited</c> for MLA,
-/// <c>Bibliography</c> for Chicago) followed by one paragraph per source, sorted by author — using
-/// dedicated bibliography style ids so they render with distinct formatting, round-trip through docx as
-/// normal styled paragraphs (no I/O changes needed), and can be located again for a refresh via
-/// <see cref="IsBibliographyParagraph(Block)"/>. Deterministic and side-effect free.
+/// <see cref="BuildBibliography(TextDocument, CitationStyle)"/> produces styled <see cref="Paragraph"/>s
+/// inside Word's native multi-paragraph <c>BIBLIOGRAPHY</c> field ownership boundary. The heading remains
+/// outside the field, matching Word's built-in bibliography region, while the entries stay updateable in
+/// Word and can be located again for a refresh via <see cref="IsBibliographyParagraph(Block)"/>.
+/// Deterministic and side-effect free.
 /// </para>
 /// </summary>
 public static class Citations
@@ -93,6 +92,12 @@ public static class Citations
 
     /// <summary>Style id of each bibliography entry paragraph.</summary>
     public const string EntryStyleId = "BibliographyEntry";
+
+    /// <summary>Native Word field instruction for an English-language bibliography result.</summary>
+    public const string NativeFieldInstruction = " BIBLIOGRAPHY \\l 1033 ";
+
+    /// <summary>Word's cached result when the current document has no bibliography sources.</summary>
+    public const string EmptyResultText = "There are no sources in the current document.";
 
     /// <summary>
     /// The bibliography heading text for <paramref name="style"/>:
@@ -1215,8 +1220,9 @@ public static class Citations
     /// <c>Bibliography</c>), followed by one paragraph per source (<see cref="EntryStyleId"/>) formatted in
     /// <paramref name="style"/>. Numeric styles keep source-list order and prefix entries with the assigned
     /// reference number; other styles sort by author (case-insensitive, ordinal), then by title and tag as
-    /// stable tie-breakers. A document with no sources yields just the heading paragraph. Deterministic and
-    /// side-effect free — it never mutates <paramref name="document"/>.
+    /// stable tie-breakers. The entry paragraphs are owned by a native multi-paragraph
+    /// <c>BIBLIOGRAPHY \l 1033</c> field; a document with no sources yields Word's native empty result after
+    /// the heading. Deterministic and side-effect free — it never mutates <paramref name="document"/>.
     /// </summary>
     public static IReadOnlyList<Paragraph> BuildBibliography(TextDocument document, CitationStyle style)
     {
@@ -1238,7 +1244,7 @@ public static class Citations
                     });
             }
 
-            return paragraphs;
+            return AttachNativeBibliographyField(paragraphs);
         }
 
         var ordered = document.Sources
@@ -1249,6 +1255,24 @@ public static class Citations
         foreach (var source in ordered)
             paragraphs.Add(new Paragraph(FormatBibliographyEntry(source, style)) { StyleId = EntryStyleId });
 
+        return AttachNativeBibliographyField(paragraphs);
+    }
+
+    private static IReadOnlyList<Paragraph> AttachNativeBibliographyField(List<Paragraph> paragraphs)
+    {
+        if (paragraphs.Count == 1)
+        {
+            var empty = new Paragraph { StyleId = EntryStyleId };
+            empty.Runs.Add(Run.ComplexFieldRun(NativeFieldInstruction, EmptyResultText));
+            paragraphs.Add(empty);
+            return paragraphs;
+        }
+
+        var field = new ComplexField(NativeFieldInstruction);
+        for (var index = 1; index < paragraphs.Count; index++)
+            paragraphs[index].SpanningFieldOwner = field;
+        paragraphs[1].SpanningFieldStart = field;
+        paragraphs[^1].EndsSpanningField = true;
         return paragraphs;
     }
 

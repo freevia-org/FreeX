@@ -1358,6 +1358,9 @@
   <data name="DrawingInteract_Resized" xml:space="preserve">
     <value>Resized drawing object.</value>
   </data>
+  <data name="DrawingInteract_Deleted" xml:space="preserve">
+    <value>Deleted drawing object.</value>
+  </data>
   <data name="DrawingInteract_PickListNoList" xml:space="preserve">
     <value>The active cell has no drop-down list to pick from.</value>
   </data>

@@ -37,10 +37,9 @@ public enum ToaTabLeader
 public sealed class ToaOptions
 {
     /// <summary>
-    /// When true, a citation that appears five or more times is listed as <c>passim</c> in the table
-    /// instead of individual page numbers. When the document builder can derive an explicit-break-based
-    /// page-reference segment, <c>passim</c> is emitted in that segment; otherwise the legacy text suffix is
-    /// kept so no caller receives invented page numbers. Default: <c>false</c>.
+    /// When true, a citation with five or more distinct page references is listed as <c>passim</c> instead
+    /// of individual page numbers. Without page evidence the legacy occurrence fallback is retained so
+    /// no caller receives invented page numbers. Default: <c>false</c>.
     /// </summary>
     public bool UsePassim { get; init; }
 
@@ -103,6 +102,9 @@ public delegate ToaCitationPageReference? ToaCitationPageResolver(
 /// </summary>
 public static class TableOfAuthorities
 {
+    /// <summary>Word's cached result when a specific TOA category has no marked entries.</summary>
+    public const string EmptyResultText = "No table of authorities entries found.";
+
     /// <summary>
     /// Default right-tab position for generated entries when the caller only supplies an enumerable of
     /// citations. It matches the writable width of Word's default letter page (8.5in page, 1in margins).
@@ -189,9 +191,9 @@ public static class TableOfAuthorities
     /// <paramref name="options"/>: a "Table of Authorities" heading (<see cref="HeadingStyleId"/>) followed,
     /// per non-empty category (limited by <see cref="ToaOptions.CategoryFilter"/> when set) in Word's display
     /// order, by a category heading (<see cref="CategoryStyleId"/>) and the distinct long-form citations of
-    /// that category sorted alphabetically with duplicates collapsed. When <see cref="ToaOptions.UsePassim"/>
-    /// is true, a citation that appears five or more times in <paramref name="document"/> is annotated with
-    /// " passim". Deterministic and side-effect free — it never mutates <paramref name="document"/>.
+    /// that category sorted alphabetically with duplicates collapsed. When page-reference evidence is
+    /// available, <see cref="ToaOptions.UsePassim"/> emits <c>passim</c> only for five or more distinct pages.
+    /// Deterministic and side-effect free — it never mutates <paramref name="document"/>.
     /// </summary>
     public static IReadOnlyList<Paragraph> Build(TextDocument document, ToaOptions options)
     {
@@ -365,7 +367,7 @@ public static class TableOfAuthorities
                     && pageReferences.TryGetValue(key, out var pages)
                     && pages.Count > 0)
                 {
-                    pageReferenceText = FormatPageReference(entry, category, pages, options, occurrenceCounts);
+                    pageReferenceText = FormatPageReference(pages, options);
                 }
                 else if (options.UsePassim && IsPassimEntry(entry, category, occurrenceCounts))
                 {
@@ -383,6 +385,21 @@ public static class TableOfAuthorities
                 paragraphs[index].SpanningFieldOwner = field;
             paragraphs[categoryStart].SpanningFieldStart = field;
             paragraphs[^1].EndsSpanningField = true;
+        }
+
+        if (paragraphs.Count == 1 && options.CategoryFilter is { } emptyCategory)
+        {
+            var empty = CreateEntryParagraph(
+                EmptyResultText,
+                pageReferenceText: null,
+                options,
+                entryRightTabStopPt,
+                sourceFormatting: null);
+            empty.Runs.Clear();
+            empty.Runs.Add(Run.ComplexFieldRun(
+                NativeFieldInstructionFor(options, emptyCategory),
+                EmptyResultText));
+            paragraphs.Add(empty);
         }
 
         return paragraphs;
@@ -517,13 +534,10 @@ public static class TableOfAuthorities
     }
 
     private static string FormatPageReference(
-        string entry,
-        CitationCategory category,
         IReadOnlyList<ToaCitationPageReference> pages,
-        ToaOptions options,
-        Dictionary<ToaEntryKey, int>? occurrenceCounts)
+        ToaOptions options)
     {
-        if (options.UsePassim && IsPassimEntry(entry, category, occurrenceCounts))
+        if (options.UsePassim && pages.Count >= PassimOccurrenceThreshold)
             return "passim";
 
         return string.Join(", ", pages.Select(page => page.DisplayText));

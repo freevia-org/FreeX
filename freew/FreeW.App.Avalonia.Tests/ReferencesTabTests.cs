@@ -300,7 +300,7 @@ public sealed class ReferencesTabTests
     });
 
     [Fact]
-    public Task RefreshTableOfAuthorities_preserves_passim_formatting_and_tab_leader_options() => RunOnUiThread(() =>
+    public Task RefreshTableOfAuthorities_uses_distinct_pages_for_passim_and_preserves_options() => RunOnUiThread(() =>
     {
         var blocks = new List<Block> { new Paragraph("Before") };
         for (var i = 0; i < 5; i++)
@@ -330,7 +330,7 @@ public sealed class ReferencesTabTests
         view.Document.Blocks.OfType<Paragraph>()
             .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Table of Authorities", "Cases", "Roe v. Wade\tpassim");
+            .Should().Equal("Table of Authorities", "Cases", "Roe v. Wade\t1");
         view.Document.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
             .Should().NotContain("Old Case")
             .And.EndWith("After");
@@ -339,7 +339,10 @@ public sealed class ReferencesTabTests
             .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
         entry.Formatting.TabStops.Should().Equal(
             new TabStop(530, TabStopAlignment.Right, TabLeader.Dashes));
-        entry.Runs.Select(run => run.Text).Should().Equal("Roe v. Wade", "\t", "passim");
+        entry.Runs.Select(run => run.Text).Should().Equal("Roe v. Wade", "\t", "1");
+        view.Document.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.CategoryStyleId)
+            .SpanningFieldStart!.Instruction.Should().Be(" TOA \\h \\c \"1\" \\p ");
         entry.Runs[0].Formatting.Should().Be(new RunFormatting
         {
             Bold = true,
@@ -590,6 +593,15 @@ public sealed class ReferencesTabTests
         view.InsertBibliography();
 
         view.Document.Blocks.Count.Should().BeGreaterThan(before, "bibliography paragraphs are inserted");
+        var bibliography = view.Document.Blocks.OfType<Paragraph>()
+            .Where(Citations.IsBibliographyParagraph)
+            .ToArray();
+        bibliography.Select(paragraph => paragraph.PlainText).Should().Equal(
+            "References",
+            "Smith. (2024). A Work.");
+        bibliography[0].SpanningFieldOwner.Should().BeNull();
+        bibliography[1].SpanningFieldStart!.Instruction.Should().Be(Citations.NativeFieldInstruction);
+        bibliography[1].EndsSpanningField.Should().BeTrue();
 
         view.Undo();
         view.Document.Blocks.Count.Should().Be(before, "undo removes the whole bibliography block");

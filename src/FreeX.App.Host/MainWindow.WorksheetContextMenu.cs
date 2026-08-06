@@ -342,6 +342,12 @@ public partial class MainWindow
             case WorksheetContextMenuAction.ClearContents:
                 ExecuteClearSelection();
                 break;
+            case WorksheetContextMenuAction.DeleteObject:
+                // R121-model-drawing-delete-1: the picture/shape/text box/chart context menu's own
+                // "Delete" entry -- the right-click already selected the object (SheetGrid.SelectedObjectId
+                // /-Kind), same precondition FormatPicture/ResizeDrawingObject/etc. below rely on.
+                TryDeleteSelectedDrawingObject();
+                break;
             case WorksheetContextMenuAction.FormatPicture:
                 PictureSizeBtn_Click(this, new RoutedEventArgs());
                 break;
