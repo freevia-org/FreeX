@@ -157,6 +157,13 @@ public sealed partial class MainWindowFormulaBarSyncTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "SelectAll");
         }
 
+        /// <summary>
+        /// The underlying <see cref="MainWindow"/> instance, for tests that need to invoke a
+        /// private method directly by reflection (e.g. a validation helper that is not otherwise
+        /// exposed through this harness).
+        /// </summary>
+        public MainWindow Window => _window;
+
         public string FormulaBarText => ((TextBox)_window.FindName("FormulaBar")).Text;
 
         public bool FormulaRangeEntryMode => (bool)_formulaRangeEntryModeField.GetValue(_window)!;

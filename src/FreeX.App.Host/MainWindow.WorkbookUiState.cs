@@ -6,6 +6,7 @@ using System.Windows.Controls.Primitives;
 using FreeX.App.Presentation;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
 using CellVAlign = FreeX.Core.Model.VerticalAlignment;
@@ -176,8 +177,61 @@ public partial class MainWindow
             DataTableAutoRefreshEffects.RefreshAllTables(new WorkbookCommandContext(_workbook), sheet);
     }
 
+    /// <summary>
+    /// Registers (or clears) each of <paramref name="affectedCells"/>' dependency-graph entry from
+    /// its OWN current, already-committed <see cref="Cell.FormulaText"/>, mirroring
+    /// <see cref="FreeX.App.Services.WorkbookCellEditService"/>'s private
+    /// <c>UpdateFormulaDependencies</c> (called unconditionally, before that service's own recalc
+    /// branch, for every command outcome regardless of <see cref="WorkbookCalculationMode"/>).
+    /// </summary>
+    /// <remarks>
+    /// R121-app-host-manual-mode-vacated-dependency: <see cref="RecalcEngine.Recalculate"/> already
+    /// registers/clears dependencies internally for whatever address list it is actually given (see
+    /// its EnsureChangedFormulaDependenciesRegistered/ClearVacatedFormulaDependencies), so in
+    /// Automatic/AutomaticExceptDataTables mode -- where the switch below always calls Recalculate
+    /// with the FULL affectedCells list -- this step is mostly a harmless re-derivation (SetDependencies
+    /// always replaces rather than merges, so re-registering an already-correct entry is a no-op).
+    /// But in Manual mode, RecalculateFreshlyEnteredFormulasOnce only recalculates the SUBSET of
+    /// changedCells that currently hold a formula: an edit that CLEARS a formula cell's content
+    /// (Delete key / Clear Contents / paste-over with a plain value, none of which route through the
+    /// one call site -- CommitPreparedEdits -- that used to hand-roll this step) drops that address
+    /// from the subset entirely, so RecalcEngine.Recalculate is never invoked for it and its stale
+    /// {old-precedents} dependency-graph edge is never cleared -- a phantom edge that would otherwise
+    /// persist until the workbook's next full recalculation (F9/Ctrl+Alt+F9/switching back to
+    /// Automatic). Running this step unconditionally, before the mode switch, for every one of this
+    /// method's ~40 call sites is what actually closes that gap, matching the shared service exactly
+    /// -- including every path that previously had NO dependency-graph maintenance of its own at
+    /// all (Paste, Fill, Sort, Undo/Redo, Find &amp; Replace, Goal Seek, ...), since the one call site
+    /// that used to hand-roll this (CommitPreparedEdits, the formula-bar/cell-editor commit path)
+    /// was the ONLY one that did.
+    /// </remarks>
+    private void UpdateFormulaDependencies(IReadOnlyList<CellAddress> affectedCells)
+    {
+        foreach (var affected in affectedCells)
+        {
+            var cell = _workbook.GetSheet(affected.Sheet)?.GetCell(affected);
+            if (cell?.FormulaText is null)
+            {
+                _recalcEngine.ClearFormulaDependencies(affected);
+                continue;
+            }
+
+            try
+            {
+                var ast = FormulaEvaluator.ParseFormula(cell.FormulaText);
+                _recalcEngine.RegisterFormulaDependencies(affected, ast, affected.Sheet, _workbook);
+            }
+            catch (FormulaParseException)
+            {
+                _recalcEngine.ClearFormulaDependencies(affected);
+            }
+        }
+    }
+
     private void RecalculateIfAutomatic(IReadOnlyList<CellAddress> changedCells)
     {
+        UpdateFormulaDependencies(changedCells);
+
         // R119-app-host-except-data-tables-recalc: r118 added the skipDataTableBodyCells gate to
         // RecalcEngine.Recalculate and threaded it through
         // FreeX.App.Services.WorkbookCellEditService.RecalculateIfAutomatic, but this WPF host's

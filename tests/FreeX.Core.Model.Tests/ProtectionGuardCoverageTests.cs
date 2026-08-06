@@ -512,6 +512,23 @@ public class ProtectionGuardCoverageTests
                     transpose: false);
             },
 
+            // R121-model-drawing-delete-1: DeleteDrawingObjectCommand deletes an EXISTING picture --
+            // the object must already be on the sheet before Apply runs (unlike PastePicturesCommand,
+            // which only carries the picture model in as a parameter). Direct list mutation, not a
+            // protected command, so this is safe to do while sheet.IsProtected is already true.
+            ["DeleteDrawingObjectCommand"] = (wb, sheet) =>
+            {
+                var picture = new PictureModel
+                {
+                    Anchor = new CellAddress(sheet.Id, 1, 1),
+                    Kind = PictureKind.Image,
+                    ImageBytes = [1, 2, 3],
+                    ContentType = "image/png"
+                };
+                sheet.Pictures.Add(picture);
+                return new DeleteDrawingObjectCommand(sheet.Id, SelectionPaneObjectKind.Picture, picture.Id);
+            },
+
             // R92: chart analogue of PastePicturesCommand. ChartCommandGuards.RejectIfEditObjectsBlocked
             // runs on the destination sheet before any source lookup or chart math, so an empty
             // carried-chart list still exercises the guard.

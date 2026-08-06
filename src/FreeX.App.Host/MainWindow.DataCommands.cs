@@ -896,6 +896,12 @@ public partial class MainWindow
         var changingCell = dlg.ChangingCell!.Value;
         var targetValue = dlg.TargetValue;
 
+        if (!TryValidateGoalSeekCells(setCell, changingCell, out var validationError))
+        {
+            _messageService.ShowWarning(validationError!, "Microsoft Excel");
+            return;
+        }
+
         var result = GoalSeekService.Seek(_workbook, _recalcEngine, setCell, targetValue, changingCell);
 
         var statusDialog = new GoalSeekStatusDialog(result, targetValue) { Owner = this };
@@ -922,6 +928,38 @@ public partial class MainWindow
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// R121-app-host-goalseek-validation-gap: mirrors
+    /// <see cref="FreeX.App.Services.WorkbookCellEditService"/>'s private
+    /// <c>TryValidateGoalSeekRequest</c> content guards (R90-app-goalseek-whatif-5-1/5-2). The
+    /// dialog's own <c>GoalSeekInputParser</c>/<c>GoalSeekRequestParser</c> only validates
+    /// cell-reference SYNTAX and that Set/Changing differ -- it never checks what the two cells
+    /// actually CONTAIN. Without this, <see cref="GoalSeekCommand"/>.Apply (which only rejects a
+    /// protected sheet and a non-finite result) unconditionally overwrites the changing cell with a
+    /// plain <see cref="NumberValue"/> no matter what it held before, silently destroying a formula
+    /// the user pointed the By-changing-cell box at (by mistake, or because Set/Changing were
+    /// swapped), instead of refusing the operation the way Excel and the shared service both do.
+    /// Extracted as its own method (rather than inlined in <see cref="GoalSeekBtn_Click"/>) so it is
+    /// directly testable without driving the two modal dialogs that method also shows.
+    /// </summary>
+    private bool TryValidateGoalSeekCells(CellAddress setCell, CellAddress changingCell, out string? errorMessage)
+    {
+        if (string.IsNullOrEmpty(_workbook.GetSheet(setCell.Sheet)?.GetCell(setCell)?.FormulaText))
+        {
+            errorMessage = "The cell reference in the Set cell edit box must refer to a cell that contains a formula.";
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(_workbook.GetSheet(changingCell.Sheet)?.GetCell(changingCell)?.FormulaText))
+        {
+            errorMessage = "The cell reference in the By changing cell edit box must refer to a cell that does not contain a formula.";
+            return false;
+        }
+
+        errorMessage = null;
+        return true;
     }
 
     private void ApplyGoalSeekRangeSelection(

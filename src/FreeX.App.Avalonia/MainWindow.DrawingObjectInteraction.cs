@@ -167,7 +167,40 @@ public sealed partial class MainWindow
             case WorksheetContextMenuAction.ChartSizeAndProperties:
                 RunGuarded(ResizeSelectedChartObjectAsync);
                 break;
+
+            // --- Shared Picture/Shape/TextBox/Chart ---
+            case WorksheetContextMenuAction.DeleteObject:
+                TryDeleteSelectedDrawingObject();
+                break;
         }
+    }
+
+    /// <summary>
+    /// R121-model-drawing-delete-1: Delete-key/context-menu entry point for removing the currently
+    /// selected picture/text box/shape/chart outright. Mirrors the WPF host's identically-named
+    /// MainWindow.Drawing.cs method. Deliberately does NOT fall back to "whatever object the active
+    /// cell happens to be anchored under" -- only a GENUINELY selected object
+    /// (<see cref="_selectedDrawingObjectKind"/>/<see cref="_selectedDrawingObjectId"/>) is deletable,
+    /// so a plain cell selection with no object picked returns false and the caller falls through to
+    /// its ordinary Clear Contents behavior.
+    /// </summary>
+    private bool TryDeleteSelectedDrawingObject()
+    {
+        if (_selectedDrawingObjectKind is not { } kind || _selectedDrawingObjectId is not { } objectId)
+            return false;
+
+        var command = DrawingObjectCommandPlanner.BuildDeleteCommand(_session.ActiveSheet.Id, kind, objectId);
+        var result = _session.ExecuteReviewCommand(command);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? UiText.Format(
+                "InsertLoc_DrawingCommandFailed", DrawingObjectActionPlanner.DeleteObjectCommandTitle));
+            return true;
+        }
+
+        ClearSelectedDrawingObject();
+        RefreshShell(UiText.Get("DrawingInteract_Deleted"));
+        return true;
     }
 
     private async Task ResizeSelectedChartObjectAsync()

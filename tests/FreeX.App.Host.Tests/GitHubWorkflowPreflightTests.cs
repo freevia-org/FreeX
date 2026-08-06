@@ -47,6 +47,31 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
+    public void R121_FreeWWorkflow_RunsAutomaticallyOnPushAndPullRequestToMain()
+    {
+        // R121: freew-ci.yml was made workflow_dispatch-only on 2026-06-25 (to unblock a
+        // failing merge push) and nothing ever re-enabled an automatic trigger or flagged
+        // the gap -- FreeW.slnx silently stopped being built/tested by anything automated
+        // for six weeks. This asserts the automatic push/pull_request gate is present, the
+        // same contract CiWorkflow_RunsPreflightBuildAndTestsWithReadOnlyPermissions enforces
+        // for the primary FreeX lane, so this specific regression can't recur unnoticed.
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "freew-ci.yml");
+
+        workflow.Should().Contain("push:");
+        workflow.Should().Contain("pull_request:");
+        workflow.Should().Contain("branches:");
+        workflow.Should().Contain("- main");
+        workflow.Should().Contain("workflow_dispatch:");
+        workflow.Should().Contain("permissions:");
+        workflow.Should().Contain("contents: read");
+        workflow.Should().NotContain("contents: write");
+        workflow.Should().NotContain("pull_request_target");
+        workflow.Should().Contain("runs-on: windows-latest");
+        workflow.Should().Contain("dotnet build FreeW.slnx --configuration Release");
+        workflow.Should().Contain("dotnet test FreeW.slnx --configuration Release --no-build");
+    }
+
+    [Fact]
     public void GlobalJson_PinsDotNetSdkBandWithFeatureRollForward()
     {
         var globalJson = WorkspaceFileLocator.ReadAllText("global.json");

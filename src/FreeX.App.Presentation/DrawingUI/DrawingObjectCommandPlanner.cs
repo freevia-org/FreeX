@@ -184,6 +184,16 @@ public static class DrawingObjectCommandPlanner
         CellColor? outlineColor) =>
         BuildOutlineColorCommand(sheetId, RequireDrawingObjectTargetKind(kind), objectId, outlineColor);
 
+    // R121-model-drawing-delete-1: the delete key / context-menu / Selection Pane "Delete" entry
+    // point, shared by both shells (MainWindow.cs on WPF, MainWindow on Avalonia). Takes
+    // SelectionPaneObjectKind directly (not DrawingObjectTargetKind, which has no Chart case) since
+    // a chart is just as deletable as a picture/shape/text box.
+    public static IWorkbookCommand BuildDeleteCommand(
+        SheetId sheetId,
+        SelectionPaneObjectKind kind,
+        Guid objectId) =>
+        new DeleteDrawingObjectCommand(sheetId, kind, objectId);
+
     public static SelectionPaneObjectKind ToSelectionPaneObjectKind(DrawingObjectTargetKind kind) =>
         DrawingObjectKindMapper.ToSelectionPaneObjectKind(kind);
 

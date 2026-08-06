@@ -1592,6 +1592,12 @@ public partial class MainWindow
 
     private void ExecuteClearSelection()
     {
+        // R121-model-drawing-delete-1: Delete on a currently-selected picture/text box/shape/chart
+        // removes the OBJECT (matching Excel), not the contents of whatever cell range happens to be
+        // selected underneath it.
+        if (TryDeleteSelectedDrawingObject())
+            return;
+
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Clear Contents",
