@@ -32,15 +32,13 @@ public sealed partial class SelectionPanePlannerTests
 
         source.Should().Contain("_list.KeyDown += List_KeyDown;");
         source.Should().Contain("private void List_KeyDown(object sender, KeyEventArgs e)");
-        source.Should().Contain("SelectionPanePlanner.PlanKeyboardAction(");
+        source.Should().Contain("_session.HandleKeyboard(");
         source.Should().Contain("ToSelectionPaneKeyboardKey(e.Key)");
         source.Should().Contain("ModifierKeys.Control");
-        source.Should().Contain("AcceptMove(SelectionPaneDialogAction.MoveUp)");
-        source.Should().Contain("AcceptMove(SelectionPaneDialogAction.MoveDown)");
-        source.Should().Contain("SelectionPaneKeyboardAction.FocusRename");
-        source.Should().Contain("FocusRenameBox();");
-        source.Should().Contain("SelectionPaneKeyboardAction.ToggleVisibility");
-        source.Should().Contain("ToggleSelectedVisibility();");
+        source.Should().Contain("outcome.FocusRename");
+        source.Should().Contain("outcome.StateChanged");
+        source.Should().Contain("e.Handled = outcome.IsHandled");
+        source.Should().NotContain("SelectionPanePlanner.PlanKeyboardAction(");
         source.Should().NotContain("TryHandleListReorderShortcut");
         source.Should().NotContain("if (e.Key == Key.F2)");
         source.Should().NotContain("if (e.Key == Key.Space)");
@@ -54,13 +52,14 @@ public sealed partial class SelectionPanePlannerTests
         var source = ReadSelectionPaneDialogSources();
         var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
-        source.Should().Contain("private readonly List<SelectionPaneMoveChange> _moveChanges = [];");
-        source.Should().Contain("SelectionPanePlanner.PlanMove");
-        source.Should().Contain("_moveChanges.AddRange(plan.MoveChanges)");
+        source.Should().Contain("private readonly SelectionPaneSession _session;");
+        source.Should().Contain("_session.MoveSelected(");
         source.Should().Contain("ApplySearchAndFilter(selected.Source.Id)");
+        source.Should().NotContain("private readonly List<SelectionPaneMoveChange> _moveChanges");
+        source.Should().NotContain("SelectionPanePlanner.PlanMove");
         var acceptMoveBody = source.Substring(
             source.IndexOf("private void AcceptMove", StringComparison.Ordinal),
-            source.IndexOf("private IReadOnlyList<SelectionPaneVisibilityChange>", StringComparison.Ordinal) -
+            source.IndexOf("private void List_PreviewMouseLeftButtonDown", StringComparison.Ordinal) -
             source.IndexOf("private void AcceptMove", StringComparison.Ordinal));
         acceptMoveBody.Should().NotContain("DialogResult = true");
         hostSource.Should().Contain("SelectionPaneGroupedCommandPlanner.CreateCommand");
@@ -78,11 +77,14 @@ public sealed partial class SelectionPanePlannerTests
         source.Should().Contain("_list.DragOver");
         source.Should().Contain("_list.Drop");
         source.Should().Contain("DragDrop.DoDragDrop");
-        source.Should().Contain("SelectionPanePlanner.PlanDragReorder");
+        source.Should().Contain("_session.BeginDrag(");
+        source.Should().Contain("_session.UpdateDrag(");
+        source.Should().Contain("_session.Drop(");
         source.Should().Contain("GetDropPlacement");
         source.Should().Contain("SelectionPaneDropPlacement.After");
         source.Should().Contain("CreateDragMoveChanges");
-        source.Should().Contain("PlanDropVisual");
+        source.Should().Contain("_session.ClearDropVisual(");
+        source.Should().Contain("_session.CancelDrag(");
         source.Should().Contain("IsDropBefore");
         source.Should().Contain("IsDropAfter");
         source.Should().Contain("List_DragLeave");
@@ -97,10 +99,10 @@ public sealed partial class SelectionPanePlannerTests
             source.IndexOf("private void List_MouseMove", StringComparison.Ordinal)..
             source.IndexOf("private void List_DragOver", StringComparison.Ordinal)];
 
-        mouseMove.Should().Contain("if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed)");
-        mouseMove.Should().Contain("_dragStartPoint = null;");
-        mouseMove.Should().Contain("_dragItem = null;");
-        mouseMove.IndexOf("_dragStartPoint = null;", StringComparison.Ordinal)
+        mouseMove.Should().Contain("if (e.LeftButton != MouseButtonState.Pressed)");
+        mouseMove.Should().Contain("ClearNativeDragState();");
+        mouseMove.Should().Contain("_session.CancelDrag();");
+        mouseMove.IndexOf("ClearNativeDragState();", StringComparison.Ordinal)
             .Should()
             .BeLessThan(mouseMove.IndexOf("if (_dragStartPoint is not { } start", StringComparison.Ordinal));
     }

@@ -32,7 +32,7 @@ namespace FreeX.App.Avalonia;
 /// sheet (charts, pictures, shapes, text boxes) and lets the user select one, toggle its visibility, rename it,
 /// reorder its z-order (bring forward / send backward via per-row up/down), and Show All / Hide All. All of the
 /// object-list building, the can-move-up/down reasoning, the reorder math and the change-to-Core-command
-/// translation come from the portable <see cref="SelectionPanePlanner"/> so this behaves identically to the
+/// translation come from the portable <see cref="SelectionPaneSession"/> so this behaves identically to the
 /// WPF host's Selection Pane and is reusable on macOS. Reached from the Picture/Shape Format contextual tabs'
 /// "Selection Pane" buttons (pictureFormat.selectionPane / shapeFormat.selectionPane).
 /// </summary>
@@ -40,45 +40,61 @@ public sealed partial class MainWindow
 {
     private static AvaloniaCompactDialogChromeStyle SelectionPaneDialogChromeStyle => new(FormulaBarFontFamily);
 
-    /// <summary>A mutable working row for the Selection Pane dialog (visibility + name edited in place).</summary>
-    private sealed class SelectionPaneRow(SelectionPaneItem item) : INotifyPropertyChanged
+    /// <summary>A native binding adapter over the portable Selection Pane session item.</summary>
+    private sealed class SelectionPaneRow(
+        SelectionPaneSession session,
+        SelectionPaneSessionItem item) : INotifyPropertyChanged
     {
-        public SelectionPaneItem Item { get; set; } = item;
+        public SelectionPaneItem Item => item.Source;
         public Guid Id => Item.Id;
         public SelectionPaneObjectKind Kind => Item.Kind;
-        public bool IsVisible { get; set; } = item.IsVisible;
-        public string Name { get; set; } = item.Name;
+        public bool IsVisible
+        {
+            get => item.IsVisible;
+            set
+            {
+                if (item.IsVisible == value)
+                    return;
 
-        private bool _isDropBefore;
-        private bool _isDropAfter;
+                session.SetVisibility(Id, value);
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsVisible)));
+            }
+        }
+
+        public string Name
+        {
+            get => item.Name;
+            set
+            {
+                if (string.Equals(item.Name, value, System.StringComparison.Ordinal))
+                    return;
+
+                session.SetName(Id, value);
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Name)));
+            }
+        }
 
         public bool IsDropBefore
         {
-            get => _isDropBefore;
-            set
-            {
-                if (_isDropBefore == value)
-                    return;
-
-                _isDropBefore = value;
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDropBefore)));
-            }
+            get => session.DropVisual is { IsAllowed: true, Placement: SelectionPaneDropPlacement.Before } plan &&
+                plan.TargetId == Id;
         }
 
         public bool IsDropAfter
         {
-            get => _isDropAfter;
-            set
-            {
-                if (_isDropAfter == value)
-                    return;
-
-                _isDropAfter = value;
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDropAfter)));
-            }
+            get => session.DropVisual is { IsAllowed: true, Placement: SelectionPaneDropPlacement.After } plan &&
+                plan.TargetId == Id;
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
+
+        public void NotifySessionStateChanged()
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Name)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsVisible)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDropBefore)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDropAfter)));
+        }
     }
 
     private System.Threading.Tasks.Task OpenSelectionPaneDialogAsync() =>
@@ -90,16 +106,16 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving)
             return;
 
-        var sheet = _session.ActiveSheet;
-        var planned = captureItems ?? SelectionPanePlanner.BuildItems(sheet, SelectionPaneText());
-        if (planned.Count == 0)
+        var session = captureItems is null
+            ? SelectionPaneSession.Create(_session.ActiveSheet, SelectionPaneText())
+            : new SelectionPaneSession(captureItems);
+        if (session.Items.Count == 0)
         {
             RefreshShell(UiText.Get("SelectionPane_NoObjects"));
             return;
         }
 
-        var originals = planned;
-        var rows = planned.Select(item => new SelectionPaneRow(item)).ToList();
+        var rows = session.Items.Select(item => new SelectionPaneRow(session, item)).ToList();
         var listBox = new ListBox
         {
             MinHeight = 140,
@@ -146,36 +162,44 @@ public sealed partial class MainWindow
         ApplySelectionPaneButtonChrome(hideAllButton, 82);
         AutomationProperties.SetAutomationId(hideAllButton, "SelectionPaneHideAllButton");
 
+        var isRebinding = false;
+
+        void NotifyRows() => rows.ForEach(row => row.NotifySessionStateChanged());
+
         void Rebind(Guid? preferredSelection)
         {
-            var selected = preferredSelection ?? (listBox.SelectedItem as SelectionPaneRow)?.Id;
-            var filteredIds = SelectionPanePlanner.FilterItems(
-                    ToItemStates(rows),
-                    searchBox.Text?.Trim() ?? string.Empty,
-                    filterBox.SelectedIndex switch
-                    {
-                        1 => SelectionPaneFilterValues.Visible,
-                        2 => SelectionPaneFilterValues.Hidden,
-                        3 => SelectionPaneFilterValues.Charts,
-                        4 => SelectionPaneFilterValues.Pictures,
-                        5 => SelectionPaneFilterValues.Shapes,
-                        6 => SelectionPaneFilterValues.TextBoxes,
-                        _ => SelectionPaneFilterValues.All,
-                    })
-                .Select(item => item.Id)
-                .ToHashSet();
-            var filtered = rows.Where(row => filteredIds.Contains(row.Id)).ToList();
-            listBox.ItemsSource = null;
-            listBox.ItemsSource = filtered;
-            if (selected is { } id)
+            session.SetView(
+                searchBox.Text,
+                filterBox.SelectedIndex switch
+                {
+                    1 => SelectionPaneFilterValues.Visible,
+                    2 => SelectionPaneFilterValues.Hidden,
+                    3 => SelectionPaneFilterValues.Charts,
+                    4 => SelectionPaneFilterValues.Pictures,
+                    5 => SelectionPaneFilterValues.Shapes,
+                    6 => SelectionPaneFilterValues.TextBoxes,
+                    _ => SelectionPaneFilterValues.All,
+                },
+                preferredSelection);
+
+            var rowsById = rows.ToDictionary(row => row.Id);
+            rows = session.Items.Select(item => rowsById[item.Id]).ToList();
+            var filtered = session.FilteredItems.Select(item => rowsById[item.Id]).ToList();
+            isRebinding = true;
+            try
             {
-                var match = filtered.FirstOrDefault(r => r.Id == id);
-                listBox.SelectedItem = match ?? filtered.FirstOrDefault();
+                listBox.ItemsSource = null;
+                listBox.ItemsSource = filtered;
+                listBox.SelectedItem = session.SelectedId is { } selectedId
+                    ? filtered.FirstOrDefault(row => row.Id == selectedId)
+                    : null;
             }
-            else
+            finally
             {
-                listBox.SelectedItem = filtered.FirstOrDefault();
+                isRebinding = false;
             }
+
+            NotifyRows();
         }
 
         void UpdateMoveButtons()
@@ -190,40 +214,26 @@ public sealed partial class MainWindow
                 return;
             }
 
-            var currentStates = ToItemStates(rows);
-            var currentIndex = rows.FindIndex(row => row.Id == selected.Id);
-            moveUpButton.IsEnabled = SelectionPanePlanner.FindMoveTargetIndex(currentStates, currentIndex, forward: true) >= 0;
-            moveDownButton.IsEnabled = SelectionPanePlanner.FindMoveTargetIndex(currentStates, currentIndex, forward: false) >= 0;
+            session.Select(selected.Id);
+            moveUpButton.IsEnabled = session.CanMoveUp;
+            moveDownButton.IsEnabled = session.CanMoveDown;
             if (!string.Equals(renameBox.Text, selected.Name, System.StringComparison.Ordinal))
                 renameBox.Text = selected.Name;
-            renameButton.IsEnabled = true;
-            toggleVisibilityButton.IsEnabled = true;
+            renameButton.IsEnabled = session.CanRename;
+            toggleVisibilityButton.IsEnabled = session.CanToggleVisibility;
         }
-
-        // Pending move changes accumulate across button presses (z-order is applied as a sequence of one-step
-        // moves so it round-trips through the existing MoveSelectionPaneObjectCommand and undo/redo).
-        var moveChanges = new List<SelectionPaneMoveChange>();
 
         void Move(bool forward)
         {
             if (listBox.SelectedItem is not SelectionPaneRow selected)
                 return;
 
-            var plan = SelectionPanePlanner.PlanMove(ToItemStates(rows), selected.Id, forward);
-            if (plan is null)
-                return;
-
-            moveChanges.AddRange(plan.MoveChanges);
-            var byId = rows.ToDictionary(r => r.Id);
-            rows.Clear();
-            foreach (var id in plan.OrderedIds)
+            session.Select(selected.Id);
+            if (session.MoveSelected(forward).StateChanged)
             {
-                if (byId.TryGetValue(id, out var row))
-                    rows.Add(row);
+                Rebind(selected.Id);
+                UpdateMoveButtons();
             }
-
-            Rebind(selected.Id);
-            UpdateMoveButtons();
         }
 
         void ToggleSelectedVisibility()
@@ -231,8 +241,9 @@ public sealed partial class MainWindow
             if (listBox.SelectedItem is not SelectionPaneRow selected)
                 return;
 
-            selected.IsVisible = !selected.IsVisible;
-            Rebind(selected.Id);
+            session.Select(selected.Id);
+            if (session.ToggleSelectedVisibility().StateChanged)
+                Rebind(selected.Id);
         }
 
         void FocusRenameBox()
@@ -248,20 +259,19 @@ public sealed partial class MainWindow
             if (listBox.SelectedItem is not SelectionPaneRow selected)
                 return;
 
-            selected.Name = renameBox.Text ?? string.Empty;
-            Rebind(selected.Id);
+            session.Select(selected.Id);
+            if (session.RenameSelected(renameBox.Text).StateChanged)
+                Rebind(selected.Id);
         };
         toggleVisibilityButton.Click += (_, _) => ToggleSelectedVisibility();
         showAllButton.Click += (_, _) =>
         {
-            foreach (var row in rows)
-                row.IsVisible = true;
+            session.SetAllVisibility(isVisible: true);
             Rebind(null);
         };
         hideAllButton.Click += (_, _) =>
         {
-            foreach (var row in rows)
-                row.IsVisible = false;
+            session.SetAllVisibility(isVisible: false);
             Rebind(null);
         };
         searchBox.TextChanged += (_, _) => Rebind(null);
@@ -274,28 +284,15 @@ public sealed partial class MainWindow
             if (e.Source is TextBox or CheckBox)
                 return;
 
-            var action = SelectionPanePlanner.PlanKeyboardAction(
+            var outcome = session.HandleKeyboard(
                 ToSelectionPaneKeyboardKey(e.Key),
                 e.KeyModifiers.HasFlag(KeyModifiers.Control));
-            switch (action)
-            {
-                case SelectionPaneKeyboardAction.MoveUp:
-                    Move(forward: true);
-                    e.Handled = true;
-                    break;
-                case SelectionPaneKeyboardAction.MoveDown:
-                    Move(forward: false);
-                    e.Handled = true;
-                    break;
-                case SelectionPaneKeyboardAction.FocusRename:
-                    FocusRenameBox();
-                    e.Handled = true;
-                    break;
-                case SelectionPaneKeyboardAction.ToggleVisibility:
-                    ToggleSelectedVisibility();
-                    e.Handled = true;
-                    break;
-            }
+            if (outcome.StateChanged)
+                Rebind(session.SelectedId);
+            if (outcome.FocusRename)
+                FocusRenameBox();
+
+            e.Handled = outcome.IsHandled;
         };
 
         SelectionPaneRow? dragRow = null;
@@ -337,29 +334,19 @@ public sealed partial class MainWindow
             return null;
         }
 
-        void ApplyDropVisual(SelectionPaneDropVisualPlan? plan)
-        {
-            foreach (var row in rows)
-            {
-                var isTarget = plan?.IsAllowed == true && row.Id == plan.TargetId;
-                row.IsDropBefore = isTarget && plan!.Placement == SelectionPaneDropPlacement.Before;
-                row.IsDropAfter = isTarget && plan!.Placement == SelectionPaneDropPlacement.After;
-            }
-        }
-
         void UpdateDropVisual(Point position)
         {
             if (dragRow is null || FindDropTarget(position) is not { } target)
             {
-                ApplyDropVisual(null);
+                session.ClearDropVisual();
+                NotifyRows();
                 return;
             }
 
-            ApplyDropVisual(SelectionPanePlanner.PlanDropVisual(
-                ToItemStates(rows),
-                dragRow.Id,
+            session.UpdateDrag(
                 target.Row.Id,
-                target.Placement));
+                target.Placement);
+            NotifyRows();
         }
 
         void ClearDragState(bool releasePointer)
@@ -368,7 +355,8 @@ public sealed partial class MainWindow
             dragPointer = null;
             dragRow = null;
             isDragging = false;
-            ApplyDropVisual(null);
+            session.CancelDrag();
+            NotifyRows();
             if (releasePointer)
                 pointer?.Capture(null);
         }
@@ -386,6 +374,7 @@ public sealed partial class MainWindow
                 dragPointer = e.Pointer;
                 dragStart = e.GetPosition(listBox);
                 isDragging = false;
+                session.BeginDrag(row.Id);
                 e.Pointer.Capture(listBox);
             },
             RoutingStrategies.Tunnel,
@@ -421,30 +410,32 @@ public sealed partial class MainWindow
             var dragged = dragRow;
             var wasDragging = isDragging;
             var target = wasDragging ? FindDropTarget(e.GetPosition(listBox)) : null;
-            ClearDragState(releasePointer: true);
+            var pointer = dragPointer;
+            dragPointer = null;
+            dragRow = null;
+            isDragging = false;
+            pointer?.Capture(null);
             if (!wasDragging || target is not { } dropTarget)
-                return;
-
-            var plan = SelectionPanePlanner.PlanDragReorder(
-                ToItemStates(rows),
-                dragged.Id,
-                dropTarget.Row.Id,
-                dropTarget.Placement);
-            if (plan is null)
-                return;
-
-            moveChanges.AddRange(plan.MoveChanges);
-            var byId = rows.ToDictionary(row => row.Id);
-            rows.Clear();
-            foreach (var id in plan.OrderedIds)
             {
-                if (byId.TryGetValue(id, out var row))
-                    rows.Add(row);
+                session.CancelDrag();
+                NotifyRows();
+                return;
             }
 
-            Rebind(dragged.Id);
-            UpdateMoveButtons();
-            e.Handled = true;
+            var outcome = session.Drop(
+                dropTarget.Row.Id,
+                dropTarget.Placement);
+            if (outcome.StateChanged)
+            {
+                Rebind(dragged.Id);
+                UpdateMoveButtons();
+            }
+            else
+            {
+                NotifyRows();
+            }
+
+            e.Handled = outcome.IsHandled;
         };
         listBox.PointerCaptureLost += (_, _) => ClearDragState(releasePointer: false);
 
@@ -545,7 +536,12 @@ public sealed partial class MainWindow
             return rowSurface;
         });
 
-        listBox.SelectionChanged += (_, _) => UpdateMoveButtons();
+        listBox.SelectionChanged += (_, _) =>
+        {
+            if (!isRebinding)
+                session.Select((listBox.SelectedItem as SelectionPaneRow)?.Id);
+            UpdateMoveButtons();
+        };
 
         var dialog = new Window
         {
@@ -623,7 +619,7 @@ public sealed partial class MainWindow
         if (!confirmed)
             return;
 
-        ApplySelectionPaneChanges(originals, rows, moveChanges);
+        ApplySelectionPaneChanges(session);
     }
 
     private static void AddGridChild(Grid grid, Control child, int index, bool isRow = false)
@@ -730,19 +726,9 @@ public sealed partial class MainWindow
         };
     }
 
-    private void ApplySelectionPaneChanges(
-        IReadOnlyList<SelectionPaneItem> originals,
-        IReadOnlyList<SelectionPaneRow> rows,
-        IReadOnlyList<SelectionPaneMoveChange> moveChanges)
+    private void ApplySelectionPaneChanges(SelectionPaneSession session)
     {
-        var current = ToItemStates(rows);
-        var visibilityChanges = SelectionPanePlanner.CreateVisibilityChanges(originals, current);
-        var renameChanges = SelectionPanePlanner.CreateRenameChanges(originals, current);
-        var command = SelectionPanePlanner.CreateCommand(
-            _session.ActiveSheet.Id,
-            visibilityChanges,
-            renameChanges,
-            moveChanges);
+        var command = session.CreateCommand(_session.ActiveSheet.Id);
         if (command is null)
         {
             RefreshShell(UiText.Get("SelectionPane_NoChanges"));
@@ -758,11 +744,6 @@ public sealed partial class MainWindow
 
         RefreshShell(UiText.Get("SelectionPane_Applied"));
     }
-
-    private static IReadOnlyList<SelectionPaneItemState> ToItemStates(IReadOnlyList<SelectionPaneRow> rows) =>
-        rows
-            .Select(row => new SelectionPaneItemState(row.Kind, row.Id, row.Name, row.IsVisible))
-            .ToList();
 
     private static SelectionPanePlannerText SelectionPaneText() =>
         new(

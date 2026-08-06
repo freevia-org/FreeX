@@ -193,7 +193,8 @@ public sealed partial class SelectionPanePlannerTests
             CanMoveUp: true,
             CanMoveDown: true);
 
-        var dialogItem = new SelectionPaneDialogItem(item);
+        var session = new SelectionPaneSession([item]);
+        var dialogItem = new SelectionPaneDialogItem(session, session.Items.Single());
 
         dialogItem.AutomationId.Should().Be("SelectionPaneItemPicture01890def56ab4cde92340123456789ab");
         dialogItem.VisibilityAutomationId.Should().Be("SelectionPaneItemPicture01890def56ab4cde92340123456789abVisibilityBox");
