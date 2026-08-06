@@ -1854,10 +1854,10 @@ internal static class FreeWRibbonCommands
         // navigation commands move through real recipient rows; "Finish & Merge" combines every merged
         // record according to the selected output mode.
         var mergeSession = new MailMergeSession();
-        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StartMailMerge, new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Letters));
-        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StartMailMergeLetters, new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Letters));
-        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StartMailMergeDirectory, new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Directory));
-        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StartMailMergeNormal, new ClearMergeSessionCommand(mergeSession));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StartMailMerge, new SetMergeModeCommand(editor, mergeSession, MailMergeOutputMode.Letters));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StartMailMergeLetters, new SetMergeModeCommand(editor, mergeSession, MailMergeOutputMode.Letters));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StartMailMergeDirectory, new SetMergeModeCommand(editor, mergeSession, MailMergeOutputMode.Directory));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StartMailMergeNormal, new ClearMergeSessionCommand(editor, mergeSession));
         FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeData, new SetMergeDataCommand(editor, mergeSession));
         FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeEditRecipients, new SetMergeDataCommand(editor, mergeSession));
         FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeField, new InsertMergeFieldCommand(editor));
@@ -6104,19 +6104,35 @@ internal static class FreeWRibbonCommands
 
     }
 
-    private sealed class SetMergeModeCommand(MailMergeSession session, MailMergeOutputMode mode) : IRibbonCommand
+    private static void RestoreEditableTemplate(DocumentView editor, MailMergeSession session)
     {
-        public void Execute(RibbonCommandContext context) => session.SetMode(mode);
+        if (session.EndPreview() is { } template)
+            editor.LoadModel(template);
     }
 
-    private sealed class ClearMergeSessionCommand(MailMergeSession session) : IRibbonCommand
+    private sealed class SetMergeModeCommand(
+        DocumentView editor,
+        MailMergeSession session,
+        MailMergeOutputMode mode) : IRibbonCommand
     {
-        public void Execute(RibbonCommandContext context) => session.Clear();
+        public void Execute(RibbonCommandContext context)
+        {
+            RestoreEditableTemplate(editor, session);
+            session.SetMode(mode);
+        }
     }
 
-    // Mailings > Insert Merge Field: prompt for a field name and insert the placeholder «Name» at the
-    // caret as ordinary text (through the editor's normal edit/undo path, so it is reversible). The
-    // guillemets are added automatically; a name the user already wrapped in « » is accepted as-is.
+    private sealed class ClearMergeSessionCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            RestoreEditableTemplate(editor, session);
+            session.Clear();
+        }
+    }
+
+    // Mailings > Insert Merge Field: prompt for a field name and insert the shared native field plan
+    // through the editor's normal undo path.
     private sealed class InsertMergeFieldCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -6126,12 +6142,11 @@ internal static class FreeWRibbonCommands
             if (string.IsNullOrWhiteSpace(name))
                 return; // cancelled or blank — nothing to insert
 
-            var trimmed = name.Trim().Trim(MailMerge.FieldOpen, MailMerge.FieldClose).Trim();
-            if (trimmed.Length == 0)
+            if (!MailMergeFieldAuthoringPlanner.TryCreate(name, out var plan))
                 return;
 
             editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}{trimmed}{MailMerge.FieldClose}");
+            editor.InsertComplexField(plan.Instruction, plan.CachedLabel);
         }
     }
 
@@ -6198,13 +6213,7 @@ internal static class FreeWRibbonCommands
             if (result is not null)
             {
                 session.Mapping = result;
-                // Invalidate any in-progress preview since the mapping changed.
-                if (session.IsPreviewing)
-                {
-                    editor.LoadModel(session.Template!);
-                    session.Template = null;
-                    session.CurrentIndex = 0;
-                }
+                RestoreEditableTemplate(editor, session);
             }
 
             editor.Focus();
@@ -6579,14 +6588,25 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            editor.CommitToModel();
-            var fields = MailMerge.FieldNames(editor.Model);
+            TextDocument template;
+            if (session.Template is { } previewTemplate)
+            {
+                template = previewTemplate;
+            }
+            else
+            {
+                editor.CommitToModel();
+                template = editor.Model;
+            }
+
+            var fields = MailMerge.FieldNames(template);
             var seed = session.Data is { } data ? DescribeAsCsv(data) : SeedFromFields(fields);
 
             var csv = MergeDataDialog.Ask(Window.GetWindow(editor), fields, seed);
             if (csv is null)
                 return; // cancelled
 
+            RestoreEditableTemplate(editor, session);
             var parsed = session.Load(MergeData.FromCsv(csv));
 
             DialogMessageHelper.ShowInfo(
@@ -6642,8 +6662,7 @@ internal static class FreeWRibbonCommands
                     break;
                 case PreviewAction.Done:
                     // Restore the editable template so the user can keep editing fields.
-                    editor.LoadModel(template);
-                    session.Template = null;
+                    RestoreEditableTemplate(editor, session);
                     break;
                 case PreviewAction.Cancel:
                     // Leave whatever is currently shown; do not change the session.
@@ -6920,8 +6939,7 @@ internal static class FreeWRibbonCommands
             }
 
             editor.LoadModel(combined);
-            session.Template = null;
-            session.CurrentIndex = 0;
+            session.EndPreview();
 
             var msg = skipped > 0
                 ? $"Merged {merged.Count} record(s) into a single document ({skipped} skipped)."
@@ -7322,10 +7340,8 @@ internal static class FreeWRibbonCommands
             if (updatedData is null)
                 return; // cancelled
 
+            RestoreEditableTemplate(editor, session);
             session.Data = updatedData;
-            // Invalidate any in-progress preview so it re-reads the new filtered data.
-            session.Template = null;
-            session.CurrentIndex = 0;
 
             DialogMessageHelper.ShowInfo(
                 Window.GetWindow(editor),

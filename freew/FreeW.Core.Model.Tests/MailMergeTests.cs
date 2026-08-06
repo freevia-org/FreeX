@@ -2,6 +2,15 @@ namespace FreeW.Core.Model.Tests;
 
 public class MailMergeTests
 {
+    [Theory]
+    [InlineData("FirstName", " MERGEFIELD FirstName \\* MERGEFORMAT ")]
+    [InlineData("Postal Code", " MERGEFIELD \"Postal Code\" \\* MERGEFORMAT ")]
+    [InlineData("«City»", " MERGEFIELD City \\* MERGEFORMAT ")]
+    public void BuildMergeFieldInstruction_UsesNativeWordSyntax(string name, string expected)
+    {
+        MailMerge.BuildMergeFieldInstruction(name).Should().Be(expected);
+    }
+
     [Fact]
     public void FieldNames_FromText_AreDistinctInFirstAppearanceOrder()
     {
@@ -43,6 +52,35 @@ public class MailMergeTests
         doc.Blocks.Add(table);
 
         MailMerge.FieldNames(doc).Should().Equal("Name", "Company", "Item");
+    }
+
+    [Fact]
+    public void FieldNames_FromDocument_CombinesNativeAndLegacyMergeFields()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(" MERGEFIELD FirstName \\* MERGEFORMAT ", "«FirstName»"),
+                new Run(" «City» "),
+                Run.ComplexFieldRun(" MERGEFIELD \"Postal Code\" ", "«Postal Code»")
+            }
+        });
+
+        MailMerge.FieldNames(doc).Should().Equal("FirstName", "City", "Postal Code");
+    }
+
+    [Fact]
+    public void FieldNames_NativeInstructionOverridesStaleCachedLabel()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" MERGEFIELD FirstName ", "«OldName»") }
+        });
+
+        MailMerge.FieldNames(doc).Should().Equal("FirstName");
     }
 
     [Fact]
@@ -141,6 +179,67 @@ public class MailMergeTests
         firstRun.Formatting.Bold.Should().BeTrue();
         // Template is untouched.
         template.PlainText.Should().Be("Dear «First» «Last»");
+    }
+
+    [Fact]
+    public void MergeRecord_ResolvesNativeMergeFieldToPlainResult()
+    {
+        var native = Run.ComplexFieldRun(
+            " MERGEFIELD \"First Name\" \\* MERGEFORMAT ",
+            "«First Name»");
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph { Runs = { new Run("Dear "), native } });
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string> { ["First Name"] = "Ada" });
+
+        var mergedRun = ((Paragraph)merged.Blocks[0]).Runs[1];
+        merged.PlainText.Should().Be("Dear Ada");
+        mergedRun.ComplexField.Should().BeNull("Finish & Merge materializes recipient values as text");
+        native.ComplexField.Should().NotBeNull("the editable template remains a native MERGEFIELD");
+    }
+
+    [Fact]
+    public void MergeRecord_DoesNotInterpretGuillemetsInsideNativeRecipientValue()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" MERGEFIELD Note ", "«Note»") }
+        });
+        var row = new Dictionary<string, string>
+        {
+            ["Note"] = "Use «City»",
+            ["City"] = "London"
+        };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be("Use «City»");
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be("Use «City»");
+    }
+
+    [Fact]
+    public void MergeRecordWithRules_ResolvesNativeMergeFieldAlongsideRules()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(" MERGEFIELD City \\* MERGEFORMAT ", "«City»"),
+                new Run(" / «If City = \"London\" Then \"UK\" Else \"Other\"»")
+            }
+        });
+
+        var merged = MailMerge.MergeRecordWithRules(
+            template,
+            new Dictionary<string, string> { ["City"] = "London" },
+            new MergeState(),
+            recordIndex: 1);
+
+        merged.PlainText.Should().Be("London / UK");
+        ((Paragraph)merged.Blocks[0]).Runs[0].ComplexField.Should().BeNull();
     }
 
     [Fact]

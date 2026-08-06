@@ -25,6 +25,34 @@ public sealed class MailMergeSessionTests
     }
 
     [Fact]
+    public void EndPreview_ReturnsEditableTemplateAndResetsCursor()
+    {
+        var template = TextDocument.CreateEmpty();
+        var session = new MailMergeSession
+        {
+            Template = template,
+            CurrentIndex = 4,
+        };
+
+        session.EndPreview().Should().BeSameAs(template);
+        session.Template.Should().BeNull();
+        session.CurrentIndex.Should().Be(0);
+        session.EndPreview().Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("FirstName", " MERGEFIELD FirstName \\* MERGEFORMAT ", "«FirstName»")]
+    [InlineData("«Postal Code»", " MERGEFIELD \"Postal Code\" \\* MERGEFORMAT ", "«Postal Code»")]
+    public void FieldAuthoringPlan_ProducesNativeInstructionAndCachedLabel(
+        string input,
+        string instruction,
+        string cachedLabel)
+    {
+        MailMergeFieldAuthoringPlanner.TryCreate(input, out var plan).Should().BeTrue();
+        plan.Should().Be(new MailMergeFieldAuthoringPlan(instruction, cachedLabel));
+    }
+
+    [Fact]
     public void BuildAugmentedData_PreservesSyntheticCompositeColumns()
     {
         var session = new MailMergeSession();
@@ -93,11 +121,16 @@ public sealed class MailMergeSessionTests
         presentation.Should().Contain("public sealed class MailMergeSession");
         presentation.Should().Contain("BuildAugmentedData");
         presentation.Should().Contain("BuildLabelCellContents");
+        presentation.Should().Contain("public TextDocument? EndPreview()");
         wpf.Should().NotContain("class MailMergeSession");
         avalonia.Should().NotContain("class MailMergeSession");
         wpf.Should().Contain("session.BuildAugmentedData(finishPlan.RowIndexes)");
         avalonia.Should().Contain("Session.BuildAugmentedData(finishPlan.RowIndexes)");
         wpf.Should().Contain("session.BuildLabelCellContents(template, rows * columns)");
         avalonia.Should().Contain("Session.BuildLabelCellContents(template, rows * columns)");
+        wpf.Should().Contain("MailMergeFieldAuthoringPlanner.TryCreate(name, out var plan)");
+        avalonia.Should().Contain("MailMergeFieldAuthoringPlanner.TryCreate(name, out var plan)");
+        wpf.Should().NotContain("MailMerge.BuildMergeFieldInstruction(trimmed)");
+        avalonia.Should().NotContain("MailMerge.BuildMergeFieldInstruction(trimmed)");
     }
 }

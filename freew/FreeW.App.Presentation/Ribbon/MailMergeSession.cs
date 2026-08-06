@@ -20,6 +20,14 @@ public sealed class MailMergeSession
 
     public bool IsPreviewing => Template is not null;
 
+    public TextDocument? EndPreview()
+    {
+        var template = Template;
+        Template = null;
+        CurrentIndex = 0;
+        return template;
+    }
+
     public MergeData Load(MergeData data)
     {
         ArgumentNullException.ThrowIfNull(data);

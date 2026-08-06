@@ -59,6 +59,21 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void InsertComplexField_MergeField_PreservesNativeInstructionAndCachedLabel()
+    {
+        var view = ViewWithBody();
+
+        view.InsertComplexField(
+            MailMerge.BuildMergeFieldInstruction("First Name"),
+            "«First Name»");
+        view.CommitToModel();
+
+        var run = FieldRun(view)!;
+        run.ComplexField!.Instruction.Should().Be(" MERGEFIELD \"First Name\" \\* MERGEFORMAT ");
+        run.Text.Should().Be("«First Name»");
+    }
+
+    [StaFact]
     public void ToggleFieldCodes_FlipsShowCodeAcrossFields()
     {
         var view = ViewWithBody();

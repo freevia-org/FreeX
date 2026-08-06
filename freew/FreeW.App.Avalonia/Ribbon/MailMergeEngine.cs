@@ -77,6 +77,7 @@ internal sealed class MailMergeEngine
     public MergeData LoadRecipientsCsv(string csv)
     {
         ArgumentNullException.ThrowIfNull(csv);
+        RestoreEditableTemplateIfPreviewing();
         return Session.Load(MergeData.FromCsv(csv));
     }
 
@@ -92,12 +93,14 @@ internal sealed class MailMergeEngine
 
     public void ClearMergeSession()
     {
+        RestoreEditableTemplateIfPreviewing();
         Session.Clear();
         ShowInfo("Mail merge reset to a normal document.");
     }
 
     private void SetMergeMode(MailMergeOutputMode mode, string message)
     {
+        RestoreEditableTemplateIfPreviewing();
         Session.SetMode(mode);
         ShowInfo(message);
     }
@@ -120,13 +123,13 @@ internal sealed class MailMergeEngine
         ArgumentNullException.ThrowIfNull(mapping);
         Session.Mapping = mapping;
 
-        if (!Session.IsPreviewing)
-            return;
+        RestoreEditableTemplateIfPreviewing();
+    }
 
-        var template = Session.Template!;
-        _editor.LoadDocument(template);
-        Session.Template = null;
-        Session.CurrentIndex = 0;
+    private void RestoreEditableTemplateIfPreviewing()
+    {
+        if (Session.EndPreview() is { } template)
+            _editor.LoadDocument(template);
     }
 
     /// <summary>
@@ -147,14 +150,13 @@ internal sealed class MailMergeEngine
             return;
 
         var data = Session.Data!;
+        RestoreEditableTemplateIfPreviewing();
         var sortColumn = data.Header.FirstOrDefault();
         Session.Data = MailMergeRecipientFilterSortPlanner.Apply(
             data,
             Enumerable.Range(0, data.Count),
             sortColumn,
             ascending: true);
-        Session.Template = null;
-        Session.CurrentIndex = 0;
         ShowInfo(sortColumn is null
             ? "Recipient list kept in document order."
             : $"Recipient list sorted by {sortColumn}.");
@@ -329,17 +331,16 @@ internal sealed class MailMergeEngine
     }
 
     /// <summary>
-    /// Insert a «Field» merge-field placeholder for <paramref name="name"/> at the caret (undoable). Any
-    /// guillemets the caller already wrapped around the name are stripped so the placeholder is well-formed.
-    /// A blank name is ignored.
+    /// Insert a native Word MERGEFIELD for <paramref name="name"/> at the caret through the shared
+    /// authoring plan. A blank name is ignored.
     /// </summary>
     public void InsertMergeFieldNamed(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
-        var trimmed = name.Trim().Trim(MailMerge.FieldOpen, MailMerge.FieldClose).Trim();
-        if (trimmed.Length == 0)
+        if (!MailMergeFieldAuthoringPlanner.TryCreate(name, out var plan))
             return;
-        _editor.InsertText($"{MailMerge.FieldOpen}{trimmed}{MailMerge.FieldClose}");
+
+        _editor.InsertComplexField(plan.Instruction, plan.CachedLabel);
     }
 
     // ── Address Block / Greeting Line ───────────────────────────────────────────────
@@ -379,9 +380,7 @@ internal sealed class MailMergeEngine
         if (Session.IsPreviewing)
         {
             // Leave preview — restore the editable template.
-            var template = Session.Template!;
-            Session.Template = null;
-            _editor.LoadDocument(template);
+            RestoreEditableTemplateIfPreviewing();
             return;
         }
 
@@ -499,8 +498,7 @@ internal sealed class MailMergeEngine
             return null;
 
         _editor.LoadDocument(result.Document);
-        Session.Template = null;
-        Session.CurrentIndex = 0;
+        Session.EndPreview();
 
         ShowInfo(result.SkippedRecordCount > 0
             ? $"Merged {result.MergedRecordCount} record(s) into a single document ({result.SkippedRecordCount} skipped)."
