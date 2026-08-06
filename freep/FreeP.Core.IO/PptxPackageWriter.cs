@@ -2152,7 +2152,9 @@ public static class PptxPackageWriter
                 && (shape.Media?.PlaybackStartMode == MediaPlaybackStartMode.Automatically
                     || shape.Media?.Loop == true
                     || shape.Media?.VolumePercent != 80
-                    || shape.Media?.ShowWhenStopped == false))
+                    || shape.Media?.ShowWhenStopped == false
+                    || shape.Media?.RewindAfterPlaying == true
+                    || shape.Media?.StopAfterSlides > 1))
             .ToList();
         if (animations.Count == 0 && timedMedia.Count == 0 && string.IsNullOrWhiteSpace(slide.AnimationBuildListXml))
             return null;
@@ -2269,6 +2271,8 @@ public static class PptxPackageWriter
         };
         if (shape.Media?.ShowWhenStopped == false)
             mediaNodeAttributes.Add(new XAttribute("showWhenStopped", "0"));
+        if (shape.Media?.StopAfterSlides > 1)
+            mediaNodeAttributes.Add(new XAttribute("numSld", Math.Max(1, shape.Media.StopAfterSlides).ToString(CultureInfo.InvariantCulture)));
         var condition = automatic
             ? new XElement(P + "cond",
                 new XAttribute("evt", "onBegin"),
@@ -2288,6 +2292,8 @@ public static class PptxPackageWriter
         };
         if (shape.Media?.Loop == true)
             cTnAttributes.Add(new XAttribute("repeatCount", "indefinite"));
+        if (shape.Media?.RewindAfterPlaying == true)
+            cTnAttributes.Add(new XAttribute("autoRev", "1"));
 
         return new XElement(mediaElementName,
             new XElement(P + "cMediaNode",
@@ -3232,8 +3238,11 @@ public static class PptxPackageWriter
         mediaFileRelId ??= "rIdVid1";
 
         bool isVideo = shape.Media?.IsVideo ?? true;
+        var mediaFileAttributes = new List<object>();
+        if (isVideo && shape.Media?.PlayFullScreen == true)
+            mediaFileAttributes.Add(new XAttribute("fullScrn", "1"));
         var mediaFileEl = isVideo
-            ? new XElement(A + "videoFile", new XAttribute(R + "link", mediaFileRelId))
+            ? new XElement(A + "videoFile", mediaFileAttributes.Concat(new object[] { new XAttribute(R + "link", mediaFileRelId) }))
             : new XElement(A + "audioFile", new XAttribute(R + "link", mediaFileRelId));
 
         // KK1: a:blipFill is REQUIRED by CT_Picture (minOccurs=1). When no poster image

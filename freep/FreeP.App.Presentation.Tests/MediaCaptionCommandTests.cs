@@ -230,24 +230,48 @@ public sealed class MediaCaptionCommandTests
                 PlaybackStartMode = MediaPlaybackStartMode.InClickSequence,
                 Loop = false,
                 ShowWhenStopped = true,
+                RewindAfterPlaying = false,
+                PlayFullScreen = false,
+                StopAfterSlides = 1,
             }
         };
         presentation.Slides[0].Shapes.Add(mediaShape);
         var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
         editor.Select(mediaShape.Id);
 
-        editor.SetSelectedMediaPlaybackOptions(MediaPlaybackStartMode.Automatically, true, false).Should().BeTrue();
+        editor.SetSelectedMediaPlaybackOptions(MediaPlaybackStartMode.Automatically, true, false, true, true, 3).Should().BeTrue();
         mediaShape.Media.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
         mediaShape.Media.Loop.Should().BeTrue();
         mediaShape.Media.ShowWhenStopped.Should().BeFalse();
+        mediaShape.Media.RewindAfterPlaying.Should().BeTrue();
+        mediaShape.Media.PlayFullScreen.Should().BeTrue();
+        mediaShape.Media.StopAfterSlides.Should().Be(3);
         editor.Undo();
         mediaShape.Media.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.InClickSequence);
         mediaShape.Media.Loop.Should().BeFalse();
         mediaShape.Media.ShowWhenStopped.Should().BeTrue();
+        mediaShape.Media.RewindAfterPlaying.Should().BeFalse();
+        mediaShape.Media.PlayFullScreen.Should().BeFalse();
+        mediaShape.Media.StopAfterSlides.Should().Be(1);
         editor.Redo();
         mediaShape.Media.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
         mediaShape.Media.Loop.Should().BeTrue();
         mediaShape.Media.ShowWhenStopped.Should().BeFalse();
+        mediaShape.Media.RewindAfterPlaying.Should().BeTrue();
+        mediaShape.Media.PlayFullScreen.Should().BeTrue();
+        mediaShape.Media.StopAfterSlides.Should().Be(3);
+
+        var audioShape = new SlideShape
+        {
+            Id = 54,
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo { IsVideo = false }
+        };
+        presentation.Slides[0].Shapes.Add(audioShape);
+        editor.Select(audioShape.Id);
+        editor.SetSelectedMediaPlaybackOptions(
+            MediaPlaybackStartMode.Automatically, false, true, false, true).Should().BeTrue();
+        audioShape.Media.PlayFullScreen.Should().BeFalse();
     }
 
     [Fact]

@@ -34,6 +34,9 @@ public sealed class PresentationMediaPaneSessionTests
         media.PlaybackStartMode = MediaPlaybackStartMode.Automatically;
         media.Loop = true;
         media.ShowWhenStopped = false;
+        media.RewindAfterPlaying = true;
+        media.PlayFullScreen = true;
+        media.StopAfterSlides = 3;
         media.TrimStartMilliseconds = 125;
         media.Bookmarks.Add(new MediaBookmarkInfo { Name = "Intro", TimeMilliseconds = 400 });
         media.Bookmarks.Add(new MediaBookmarkInfo { Name = "Demo", TimeMilliseconds = 900 });
@@ -47,6 +50,11 @@ public sealed class PresentationMediaPaneSessionTests
         plan.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
         plan.Loop.Should().BeTrue();
         plan.ShowWhenStopped.Should().BeFalse();
+        plan.RewindAfterPlaying.Should().BeTrue();
+        plan.PlayFullScreen.Should().BeTrue();
+        plan.StopAfterSlides.Should().Be(3);
+        plan.CanPlayFullScreen.Should().BeTrue();
+        plan.CanStopAfterSlides.Should().BeFalse();
         plan.Timing.TrimStartText.Should().Be(PresentationMediaPaneSession.FormatTiming(125));
         plan.Bookmarks.Select(bookmark => bookmark.DisplayText)
             .Should().Equal("1. Intro", "2. Demo");
@@ -114,7 +122,10 @@ public sealed class PresentationMediaPaneSessionTests
         session.ApplyPlayback(
             MediaPlaybackStartMode.Automatically,
             loop: true,
-            showWhenStopped: false).Should().BeTrue();
+            showWhenStopped: false,
+            rewindAfterPlaying: true,
+            playFullScreen: true,
+            stopAfterSlides: 3).Should().BeTrue();
         session.ApplyTiming("125", "250", "500", "750").Should().BeTrue();
         session.ApplyBookmark(
             PresentationMediaBookmarkMutationIntentKind.Create,
@@ -125,6 +136,9 @@ public sealed class PresentationMediaPaneSessionTests
         media.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
         media.Loop.Should().BeTrue();
         media.ShowWhenStopped.Should().BeFalse();
+        media.RewindAfterPlaying.Should().BeTrue();
+        media.PlayFullScreen.Should().BeTrue();
+        media.StopAfterSlides.Should().Be(3);
         media.TrimStartMilliseconds.Should().Be(125);
         media.TrimEndMilliseconds.Should().Be(250);
         media.FadeInMilliseconds.Should().Be(500);
@@ -134,6 +148,18 @@ public sealed class PresentationMediaPaneSessionTests
         session.SelectedBookmarkIndex.Should().Be(0);
         callbackCount.Should().Be(16);
         editor.CanUndo.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Projection_ExposesAudioOnlyAcrossSlideCapability()
+    {
+        var (editor, media) = CreateSelectedMediaEditor();
+        media.IsVideo = false;
+
+        var plan = CreateSession(editor).BuildProjection();
+
+        plan.CanPlayFullScreen.Should().BeFalse();
+        plan.CanStopAfterSlides.Should().BeTrue();
     }
 
     [Fact]

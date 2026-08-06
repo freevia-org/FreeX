@@ -1,9 +1,20 @@
 name: FreeW CI
 
 # Dedicated build + test gate for the FreeW word processor (freew/, FreeW*.slnx).
-# Runs manually on demand only (workflow_dispatch); trigger it from the Actions tab
-# when you want to validate FreeW without waiting for a full push/PR cycle.
+# Runs automatically on every push/PR to main (mirroring ci.yml's default-tests lane),
+# plus on demand via the Actions tab (workflow_dispatch) for ad-hoc validation.
+#
+# R121: this was manual-only (workflow_dispatch-only) from 2026-06-25 to 2026-08-06 --
+# disabled during a merge push and never re-enabled, so FreeW.slnx silently stopped being
+# built or tested by anything automated for six weeks. Restored to an automatic gate so a
+# FreeW-breaking change on main is caught the same push/PR cycle it lands in.
 on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 concurrency:
@@ -17,7 +28,7 @@ jobs:
   freew-tests:
     name: FreeW test lane
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"

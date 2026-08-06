@@ -1981,7 +1981,11 @@ public sealed class ChartTests : IDisposable
                                         new XAttribute("formatCode", "0.0")),
                                     new XElement(cxNs + "visibility",
                                         new XAttribute("value", "true"),
-                                        new XAttribute("categoryName", "false")),
+                                        new XAttribute("categoryName", "false"),
+                                        new XAttribute("percent", "true"),
+                                        new XAttribute("legendKey", "true"),
+                                        new XAttribute("bubbleSize", "true"),
+                                        new XAttribute("leaderLines", "false")),
                                     new XElement(cxNs + "separator", " | "),
                                     new XElement(cxNs + "dataLabelHidden",
                                         new XAttribute("idx", 1))),
@@ -2003,6 +2007,10 @@ public sealed class ChartTests : IDisposable
             .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
         imported.Series[0].DataLabels.Should().NotBeNull();
         imported.Series[0].DataLabels!.ShowValue.Should().BeTrue();
+        imported.Series[0].DataLabels!.ShowPercent.Should().BeTrue();
+        imported.Series[0].DataLabels!.ShowLegendKey.Should().BeTrue();
+        imported.Series[0].DataLabels!.ShowBubbleSize.Should().BeTrue();
+        imported.Series[0].DataLabels!.ShowLeaderLines.Should().BeFalse();
         imported.Series[0].DataLabels!.Position.Should().Be(DataLabelPosition.OutsideEnd);
         imported.Series[0].DataLabels!.NumberFormat.Should().Be("0.0");
         imported.Series[0].DataLabels!.Separator.Should().Be(" | ");
@@ -2018,6 +2026,10 @@ public sealed class ChartTests : IDisposable
         labels.Attribute("pos")!.Value.Should().Be("outEnd");
         labels.Element(cxNs + "visibility")!.Attribute("categoryName")!.Value.Should().Be("true");
         labels.Element(cxNs + "visibility")!.Attribute("value").Should().BeNull();
+        labels.Element(cxNs + "visibility")!.Attribute("percent")!.Value.Should().Be("true");
+        labels.Element(cxNs + "visibility")!.Attribute("legendKey")!.Value.Should().Be("true");
+        labels.Element(cxNs + "visibility")!.Attribute("bubbleSize")!.Value.Should().Be("true");
+        labels.Element(cxNs + "visibility")!.Attribute("leaderLines")!.Value.Should().Be("false");
         labels.Element(cxNs + "dataLabelHidden")!.Attribute("idx")!.Value.Should().Be("1");
         edited.Descendants(cxNs + "series").Single().Attribute("layoutId")!.Value.Should().Be("histogram");
     }

@@ -45,6 +45,11 @@ public sealed record PresentationMediaPaneProjection(
     MediaPlaybackStartMode PlaybackStartMode,
     bool Loop,
     bool ShowWhenStopped,
+    bool RewindAfterPlaying,
+    bool PlayFullScreen,
+    int StopAfterSlides,
+    bool CanPlayFullScreen,
+    bool CanStopAfterSlides,
     PresentationMediaTimingInputPlan Timing,
     IReadOnlyList<PresentationMediaBookmarkPaneItemPlan> Bookmarks,
     int? SelectedBookmarkIndex,
@@ -166,9 +171,18 @@ public sealed class PresentationMediaPaneSession
     public bool ApplyPlayback(
         MediaPlaybackStartMode startMode,
         bool loop,
-        bool showWhenStopped = true)
+        bool showWhenStopped = true,
+        bool rewindAfterPlaying = false,
+        bool playFullScreen = false,
+        int stopAfterSlides = 1)
     {
-        var changed = _getEditor().SetSelectedMediaPlaybackOptions(startMode, loop, showWhenStopped);
+        var changed = _getEditor().SetSelectedMediaPlaybackOptions(
+            startMode,
+            loop,
+            showWhenStopped,
+            rewindAfterPlaying,
+            playFullScreen,
+            stopAfterSlides);
         if (changed)
             CompleteMutation();
         return changed;
@@ -242,6 +256,11 @@ public sealed class PresentationMediaPaneSession
             media?.PlaybackStartMode ?? MediaPlaybackStartMode.InClickSequence,
             media?.Loop ?? false,
             media?.ShowWhenStopped ?? true,
+            media?.RewindAfterPlaying ?? false,
+            media?.PlayFullScreen ?? false,
+            Math.Max(1, media?.StopAfterSlides ?? 1),
+            media is { IsVideo: true },
+            media is { IsVideo: false },
             BuildTimingInputPlan(
                 media?.TrimStartMilliseconds ?? 0,
                 media?.TrimEndMilliseconds ?? 0,

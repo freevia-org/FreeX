@@ -1707,13 +1707,21 @@ public sealed class ChartDataCommandTests
                 DataLabelPosition.OutsideEnd,
                 false,
                 false,
+                ShowPercentLabels: true,
+                ShowLegendKeys: true,
                 LabelNumberFormat: "0.0",
-                LabelSeparator: " | ")));
+                LabelSeparator: " | ",
+                ShowBubbleSize: true,
+                ShowLeaderLines: false)));
 
         chart.DataLabels.Should().NotBeNull();
         chart.Series.Should().ContainSingle(series =>
             series.DataLabels != null
             && series.DataLabels.ShowValue
+            && series.DataLabels.ShowPercent
+            && series.DataLabels.ShowLegendKey
+            && series.DataLabels.ShowBubbleSize
+            && series.DataLabels.ShowLeaderLines == false
             && series.DataLabels.NumberFormat == "0.0"
             && series.DataLabels.Separator == " | ");
 
@@ -1725,6 +1733,10 @@ public sealed class ChartDataCommandTests
         reopened.Series.Should().ContainSingle(series =>
             series.DataLabels != null
             && series.DataLabels.ShowValue
+            && series.DataLabels.ShowPercent
+            && series.DataLabels.ShowLegendKey
+            && series.DataLabels.ShowBubbleSize
+            && series.DataLabels.ShowLeaderLines == false
             && series.DataLabels.NumberFormat == "0.0"
             && series.DataLabels.Separator == " | ");
 

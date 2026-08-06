@@ -65,4 +65,46 @@ public sealed class FieldDisplayParityTests
         simpleTime.Text.Should().MatchRegex(@"^\d{1,2}:\d{2} (AM|PM)$");
         simpleDate.Text.Should().MatchRegex(@"^\d{1,2}/\d{1,2}/\d{4}$");
     }
+
+    [Fact]
+    public void UpdateFields_SeqUsesAuthoredResultPicture()
+    {
+        var field = Run.ComplexFieldRun(" SEQ Figure \\r 27 \\* alphabetic ", "stale");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph { Runs = { field } });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.UpdateFields();
+
+        field.Text.Should().Be("aa");
+    }
+
+    [Fact]
+    public void UpdateFields_SeqCountsTableFieldsAndClearsHiddenResult()
+    {
+        var first = Run.ComplexFieldRun(" SEQ Figure ", "stale");
+        var hidden = Run.ComplexFieldRun(" SEQ Figure \\h ", "stale");
+        var last = Run.ComplexFieldRun(" SEQ Figure ", "stale");
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Add(new Paragraph { Runs = { hidden } });
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph { Runs = { first } });
+        document.Blocks.Add(table);
+        document.Blocks.Add(new Paragraph { Runs = { last } });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.UpdateFields();
+
+        first.Text.Should().Be("1");
+        hidden.Text.Should().BeEmpty();
+        last.Text.Should().Be("3");
+    }
 }

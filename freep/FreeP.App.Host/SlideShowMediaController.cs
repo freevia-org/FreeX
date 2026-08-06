@@ -138,6 +138,7 @@ public sealed class SlideShowMediaController
     private double _canvasW;
     private double _canvasH;
     private Slide? _activeSlide;
+    private int? _activeSlideIndex;
     private bool _showMediaControls = true;
     private bool _showNarration = true;
 
@@ -149,11 +150,15 @@ public sealed class SlideShowMediaController
         MediaElement? Element,
         string? TempPath,
         bool ShowWhenStopped,
+        MediaShapeRect AuthoredRect,
+        bool PlayFullScreen,
         MediaInfo? Media = null,
         int BaseVolumePercent = 100,
         PresentationMediaTranscriptTrackDescriptor? CaptionTrack = null,
         Border? CaptionHost = null,
-        TextBlock? CaptionText = null);
+        TextBlock? CaptionText = null,
+        int RemainingSlides = 1,
+        TimeSpan? PendingSeekPosition = null);
     private readonly List<MediaSlot> _slots = new();
     private readonly DispatcherTimer _captionTimer;
 
@@ -221,16 +226,23 @@ public sealed class SlideShowMediaController
                            int? captionSlideIndex = null,
                            int? preferredCaptionSlideIndex = null,
                            bool showMediaControls = true,
-                           bool showNarration = true)
+                           bool showNarration = true,
+                           int? presentationSlideIndex = null)
     {
-        // Teardown any previous slide's media first (guard against double-call).
-        Teardown();
+        var continues = _activeSlideIndex is int previous
+            && presentationSlideIndex is int current
+            && current == previous + 1;
+        if (continues)
+            RetainAcrossSlide();
+        else
+            Teardown();
 
         _slideDipW = slideDipW;
         _slideDipH = slideDipH;
         _canvasW = canvasW;
         _canvasH = canvasH;
         _activeSlide = slide;
+        _activeSlideIndex = presentationSlideIndex;
         _showMediaControls = showMediaControls;
         _showNarration = showNarration;
 
@@ -295,7 +307,9 @@ public sealed class SlideShowMediaController
 
             var r = ComputeMediaRect(shape, _slideDipW, _slideDipH, canvasW, canvasH);
             if (slot.Element is not null)
-                ApplyRect(slot.Element, r);
+                ApplyRect(slot.Element, slot.PlayFullScreen && slot.Element.Tag is true
+                    ? FullScreenRect()
+                    : r);
 
             if (slot.CaptionHost is not null && slot.CaptionText is not null)
             {
@@ -304,7 +318,9 @@ public sealed class SlideShowMediaController
                     : PresentationMediaTranscriptPlanner.FindActiveCue(
                         slot.CaptionTrack,
                         slot.Element.Position);
-                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, r, cue);
+                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText,
+                    slot.PlayFullScreen && slot.Element?.Tag is true ? FullScreenRect() : r,
+                    cue);
             }
         }
     }
@@ -316,26 +332,54 @@ public sealed class SlideShowMediaController
     public void Teardown()
     {
         foreach (var slot in _slots)
+            DisposeSlot(slot);
+        _slots.Clear();
+        _activeSlide = null;
+        _activeSlideIndex = null;
+        _captionTimer.Stop();
+    }
+
+    private void RetainAcrossSlide()
+    {
+        for (var i = _slots.Count - 1; i >= 0; i--)
         {
-            if (slot.Element is not null)
+            var slot = _slots[i];
+            if (slot.Media?.IsVideo != false || slot.RemainingSlides <= 1)
             {
-                try
-                {
-                    slot.Element.Stop();
-                    _overlay.Children.Remove(slot.Element);
-                }
-                catch { /* ignore */ }
+                DisposeSlot(slot);
+                _slots.RemoveAt(i);
+                continue;
             }
 
             if (slot.CaptionHost is not null)
                 _overlay.Children.Remove(slot.CaptionHost);
-
-            if (slot.TempPath is not null)
-                _fileWriter.Delete(slot.TempPath);
+            _slots[i] = slot with
+            {
+                RemainingSlides = slot.RemainingSlides - 1,
+                CaptionTrack = null,
+                CaptionHost = null,
+                CaptionText = null,
+            };
         }
-        _slots.Clear();
-        _activeSlide = null;
-        _captionTimer.Stop();
+    }
+
+    private void DisposeSlot(MediaSlot slot)
+    {
+        if (slot.Element is not null)
+        {
+            try
+            {
+                slot.Element.Stop();
+                _overlay.Children.Remove(slot.Element);
+            }
+            catch { /* ignore */ }
+        }
+
+        if (slot.CaptionHost is not null)
+            _overlay.Children.Remove(slot.CaptionHost);
+
+        if (slot.TempPath is not null)
+            _fileWriter.Delete(slot.TempPath);
     }
 
     /// <summary>
@@ -447,6 +491,8 @@ public sealed class SlideShowMediaController
                 && SlideShapeTraversal.FindById(activeSlide, slot.ShapeId) is { Media: not null } shape)
             {
                 var bounds = ComputeMediaRect(shape, _slideDipW, _slideDipH, _canvasW, _canvasH);
+                if (slot.PlayFullScreen && slot.Element?.Tag is true)
+                    bounds = FullScreenRect();
                 ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue);
             }
             slot.CaptionHost.Visibility = cue is null
@@ -474,14 +520,24 @@ public sealed class SlideShowMediaController
 
         foreach (var span in cue.Spans)
         {
-            text.Inlines.Add(new System.Windows.Documents.Run(span.Text)
+            var run = new System.Windows.Documents.Run(span.Text)
             {
                 FontWeight = span.Bold ? FontWeights.Bold : FontWeights.Normal,
                 FontStyle = span.Italic ? FontStyles.Italic : FontStyles.Normal,
                 TextDecorations = span.Underline ? TextDecorations.Underline : null,
                 Foreground = CaptionBrush(span.ForegroundColorHex),
                 Background = CaptionBrush(span.BackgroundColorHex)
-            });
+            };
+            if (!string.IsNullOrWhiteSpace(span.FontFamily))
+            {
+                try { run.FontFamily = new System.Windows.Media.FontFamily(span.FontFamily); }
+                catch (ArgumentException) { /* fall back to the inherited caption font */ }
+            }
+            if (span.FontSizePx is { } fontSizePx)
+            {
+                run.FontSize = fontSizePx;
+            }
+            text.Inlines.Add(run);
         }
     }
 
@@ -515,7 +571,9 @@ public sealed class SlideShowMediaController
         if (source is null)
         {
             // Still record the tempPath for cleanup (written but URI was unparseable).
-            return new MediaSlot(shapeId, null, tempPath, media.ShowWhenStopped, media, baseVolumePercent);
+            return new MediaSlot(shapeId, null, tempPath, media.ShowWhenStopped, rect,
+                media.PlayFullScreen, media, baseVolumePercent,
+                RemainingSlides: Math.Max(1, media.StopAfterSlides));
         }
 
         MediaElement? element = null;
@@ -525,6 +583,9 @@ public sealed class SlideShowMediaController
             {
                 LoadedBehavior   = MediaState.Manual,
                 UnloadedBehavior = MediaState.Stop,
+                // PowerPoint lets a bookmark seek land while media is paused. WPF
+                // otherwise ignores Position assignments made before playback starts.
+                ScrubbingEnabled = true,
                 Source           = source,
                 Volume           = baseVolumePercent / 100d,
                 // For audio: collapse the visual (no video frame to show).
@@ -534,7 +595,10 @@ public sealed class SlideShowMediaController
                 IsHitTestVisible = false,   // we do our own hit-testing
             };
 
-            ApplyRect(element, rect);
+            ApplyRect(element, media.PlayFullScreen &&
+                media.PlaybackStartMode == MediaPlaybackStartMode.Automatically
+                ? FullScreenRect()
+                : rect);
 
             // Handle media failure gracefully — just hide the element.
             element.MediaFailed += (_, _) =>
@@ -544,29 +608,62 @@ public sealed class SlideShowMediaController
 
             element.MediaOpened += (_, _) =>
             {
-                SeekToTrimStart(element, media);
-                ApplyFade(element, media, baseVolumePercent);
+                var pendingIndex = _slots.FindIndex(candidate => candidate.ShapeId == shapeId);
+                var pending = pendingIndex >= 0 ? _slots[pendingIndex].PendingSeekPosition : null;
+                if (pending is TimeSpan pendingPosition)
+                {
+                    if (pendingIndex >= 0)
+                        _slots[pendingIndex] = _slots[pendingIndex] with { PendingSeekPosition = null };
+
+                    ApplySeekPosition(element, media, pendingPosition, baseVolumePercent);
+                }
+                else
+                {
+                    SeekToTrimStart(element, media);
+                    ApplyFade(element, media, baseVolumePercent);
+                }
             };
 
             element.MediaEnded += (_, _) =>
             {
-                if (!media.Loop)
+                switch (SlideShowMediaInteractionPlanner.ResolveEndAction(media))
                 {
-                    if (!media.ShowWhenStopped && isVideo)
-                        element.Visibility = Visibility.Collapsed;
-                    return;
-                }
-
-                try
-                {
-                    SeekToTrimStart(element, media);
-                    ApplyFade(element, media, baseVolumePercent);
-                    element.Play();
-                    element.Tag = true;
-                }
-                catch (InvalidOperationException)
-                {
-                    element.Tag = false;
+                    case SlideShowMediaEndAction.Rewind:
+                        try
+                        {
+                            SeekToTrimStart(element, media);
+                            ApplyFade(element, media, baseVolumePercent);
+                            element.Pause();
+                            element.Tag = false;
+                            ApplyRect(element, rect);
+                            element.Visibility = isVideo && media.ShowWhenStopped
+                                ? Visibility.Visible
+                                : Visibility.Collapsed;
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            element.Tag = false;
+                        }
+                        return;
+                    case SlideShowMediaEndAction.Stop:
+                        if (!media.ShowWhenStopped && isVideo)
+                            element.Visibility = Visibility.Collapsed;
+                        element.Tag = false;
+                        ApplyRect(element, rect);
+                        return;
+                    case SlideShowMediaEndAction.Loop:
+                        try
+                        {
+                            SeekToTrimStart(element, media);
+                            ApplyFade(element, media, baseVolumePercent);
+                            element.Play();
+                            element.Tag = true;
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            element.Tag = false;
+                        }
+                        return;
                 }
             };
 
@@ -587,7 +684,9 @@ public sealed class SlideShowMediaController
             element = null;
         }
 
-        return new MediaSlot(shapeId, element, tempPath, media.ShowWhenStopped, media, baseVolumePercent);
+        return new MediaSlot(shapeId, element, tempPath, media.ShowWhenStopped, rect,
+            media.PlayFullScreen, media, baseVolumePercent,
+            RemainingSlides: Math.Max(1, media.StopAfterSlides));
     }
 
     private Uri? ResolveSource(MediaInfo media, out string? tempPath)
@@ -626,29 +725,18 @@ public sealed class SlideShowMediaController
         if (position < TimeSpan.Zero)
             return false;
 
-        var slot = _slots.FirstOrDefault(candidate => candidate.ShapeId == shapeId);
-        if (slot?.Element is not { } element)
+        var slotIndex = _slots.FindIndex(candidate => candidate.ShapeId == shapeId);
+        if (slotIndex < 0 || _slots[slotIndex].Element is not { } element)
             return false;
 
         try
         {
-            var media = slot.Media;
-            if (media is null)
-            {
-                element.Position = position;
-            }
-            else
-            {
-                var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
-                    media,
-                    element.NaturalDuration.HasTimeSpan
-                        ? element.NaturalDuration.TimeSpan
-                        : TimeSpan.Zero);
-                element.Position = window.End != TimeSpan.MaxValue && position > window.End
-                    ? window.End
-                    : SlideShowMediaInteractionPlanner.ClampToTrimStart(media, position);
-            }
-            ApplyFade(element, media, slot.BaseVolumePercent);
+            var slot = _slots[slotIndex];
+            ApplySeekPosition(element, slot.Media, position, slot.BaseVolumePercent);
+            if (slot.Media is not null && !element.NaturalDuration.HasTimeSpan)
+                _slots[slotIndex] = slot with { PendingSeekPosition = position };
+            else if (slot.PendingSeekPosition is not null)
+                _slots[slotIndex] = slot with { PendingSeekPosition = null };
             return true;
         }
         catch (InvalidOperationException)
@@ -674,6 +762,31 @@ public sealed class SlideShowMediaController
         // Reuse the established WPF seek path so unopened MediaElement instances
         // receive the same dispatcher/trim handling as ordinary scrubbing.
         return TrySeek(shapeId, position);
+    }
+
+    private static void ApplySeekPosition(
+        MediaElement element,
+        MediaInfo? media,
+        TimeSpan position,
+        int baseVolumePercent)
+    {
+        if (media is null)
+        {
+            element.Position = position;
+        }
+        else
+        {
+            var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
+                media,
+                element.NaturalDuration.HasTimeSpan
+                    ? element.NaturalDuration.TimeSpan
+                    : TimeSpan.Zero);
+            element.Position = window.End != TimeSpan.MaxValue && position > window.End
+                ? window.End
+                : SlideShowMediaInteractionPlanner.ClampToTrimStart(media, position);
+        }
+
+        ApplyFade(element, media, baseVolumePercent);
     }
 
     /// <summary>Sets the active media volume using the shared 0-100 volume convention.</summary>
@@ -704,7 +817,7 @@ public sealed class SlideShowMediaController
         Canvas.SetTop(el, r.Y);
     }
 
-    private static void TogglePlayPause(MediaSlot slot)
+    private void TogglePlayPause(MediaSlot slot)
     {
         var el = slot.Element;
         if (el is null) return;
@@ -724,6 +837,8 @@ public sealed class SlideShowMediaController
             }
             else
             {
+                if (slot.PlayFullScreen)
+                    ApplyRect(el, FullScreenRect());
                 SeekToTrimStart(el, slot.Media);
                 ApplyFade(el, slot.Media, slot.BaseVolumePercent);
                 el.Play();
@@ -753,18 +868,30 @@ public sealed class SlideShowMediaController
                     media, element.Position, duration))
                 continue;
 
-            if (media.Loop)
+            switch (SlideShowMediaInteractionPlanner.ResolveEndAction(media))
             {
-                SeekToTrimStart(element, media);
-                ApplyFade(element, media, slot.BaseVolumePercent);
-                element.Play();
-            }
-            else
-            {
-                element.Pause();
-                element.Tag = false;
-                if (!slot.ShowWhenStopped)
-                    element.Visibility = Visibility.Collapsed;
+                case SlideShowMediaEndAction.Loop:
+                    SeekToTrimStart(element, media);
+                    ApplyFade(element, media, slot.BaseVolumePercent);
+                    element.Play();
+                    break;
+                case SlideShowMediaEndAction.Rewind:
+                    SeekToTrimStart(element, media);
+                    ApplyFade(element, media, slot.BaseVolumePercent);
+                    element.Pause();
+                    element.Tag = false;
+                    ApplyRect(element, slot.AuthoredRect);
+                    element.Visibility = media.IsVideo && slot.ShowWhenStopped
+                        ? Visibility.Visible
+                        : Visibility.Collapsed;
+                    break;
+                default:
+                    element.Pause();
+                    element.Tag = false;
+                    ApplyRect(element, slot.AuthoredRect);
+                    if (!slot.ShowWhenStopped)
+                        element.Visibility = Visibility.Collapsed;
+                    break;
             }
         }
     }
@@ -792,6 +919,9 @@ public sealed class SlideShowMediaController
             element.Position,
             duration) / 100d;
     }
+
+    private MediaShapeRect FullScreenRect() =>
+        new(0, 0, Math.Max(1, _canvasW), Math.Max(1, _canvasH));
 
     private static void SeekToTrimStart(MediaElement element, MediaInfo? media)
     {

@@ -172,6 +172,9 @@ public partial class MainWindow
 
         switch (action)
         {
+            case WorksheetContextMenuAction.DeleteObject:
+                TryDeleteSelectedDrawingObject();
+                break;
             case WorksheetContextMenuAction.FormatPicture:
                 PictureSizeBtn_Click(this, new RoutedEventArgs());
                 break;

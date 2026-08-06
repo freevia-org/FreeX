@@ -876,7 +876,14 @@ public partial class MainWindow
         var changingCell = dlg.ChangingCell!.Value;
         var targetValue = dlg.TargetValue;
 
-        var result = _session.FindGoalSeekSolution(new GoalSeekRequest(setCell, targetValue, changingCell));
+        var proposal = _session.FindGoalSeekProposal(new GoalSeekRequest(setCell, targetValue, changingCell));
+        if (!proposal.Success)
+        {
+            _messageService.ShowWarning(proposal.ErrorMessage!, "Microsoft Excel");
+            return;
+        }
+
+        var result = proposal.SeekResult!;
 
         var statusDialog = new GoalSeekStatusDialog(result, targetValue) { Owner = this };
         if (statusDialog.ShowDialog() == true && statusDialog.ApplyResult)

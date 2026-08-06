@@ -2858,6 +2858,22 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void BasicRelationship_TwoNodes_UsesTheSameOverlappingEllipseGrammar()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "For", "Against");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/relationship1";
+        data.IsLiveLayoutSupported = true;
+
+        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Should().NotBeNull("the imported two-node relationship1 cache uses the existing shared planner");
+        result!.Should().HaveCount(2);
+        result.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse);
+        result.Select(shape => shape.PlainText).Should().Equal("For", "Against");
+        result[1].OffsetXEmu.Should().BeLessThan(result[0].OffsetXEmu + result[0].ExtentCxEmu);
+    }
+
+    [Fact]
     public void BasicRelationship_UnsupportedImportedCacheUsesFallback()
     {
         var data = MakeData(SmartArtFamily.Relationship, "A", "B", "C");

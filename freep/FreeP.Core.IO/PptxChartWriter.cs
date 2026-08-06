@@ -761,7 +761,13 @@ internal static class PptxChartWriter
         if (textProperties is not null)
             element.Add(new XElement(cx + "txPr", textProperties.Nodes()));
 
-        if (labels.ShowSeriesName || labels.ShowCategoryName || labels.ShowValue)
+        if (labels.ShowSeriesName
+            || labels.ShowCategoryName
+            || labels.ShowValue
+            || labels.ShowPercent
+            || labels.ShowLegendKey
+            || labels.ShowBubbleSize
+            || labels.ShowLeaderLines.HasValue)
         {
             var visibility = new XElement(cx + "visibility");
             if (labels.ShowSeriesName)
@@ -770,6 +776,14 @@ internal static class PptxChartWriter
                 visibility.SetAttributeValue("categoryName", "true");
             if (labels.ShowValue)
                 visibility.SetAttributeValue("value", "true");
+            if (labels.ShowPercent)
+                visibility.SetAttributeValue("percent", "true");
+            if (labels.ShowLegendKey)
+                visibility.SetAttributeValue("legendKey", "true");
+            if (labels.ShowBubbleSize)
+                visibility.SetAttributeValue("bubbleSize", "true");
+            if (labels.ShowLeaderLines is { } leaderLines)
+                visibility.SetAttributeValue("leaderLines", leaderLines ? "true" : "false");
             element.Add(visibility);
         }
 

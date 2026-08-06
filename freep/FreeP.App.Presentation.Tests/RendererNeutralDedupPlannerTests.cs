@@ -200,6 +200,17 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void SlideShowMediaInteractionPlanner_ResolvesRewindBeforeStopAndLoop()
+    {
+        SlideShowMediaInteractionPlanner.ResolveEndAction(new MediaInfo()).Should()
+            .Be(SlideShowMediaEndAction.Stop);
+        SlideShowMediaInteractionPlanner.ResolveEndAction(new MediaInfo { RewindAfterPlaying = true }).Should()
+            .Be(SlideShowMediaEndAction.Rewind);
+        SlideShowMediaInteractionPlanner.ResolveEndAction(new MediaInfo { Loop = true, RewindAfterPlaying = true }).Should()
+            .Be(SlideShowMediaEndAction.Loop);
+    }
+
+    [Fact]
     public void SlideShowMediaInteractionPlanner_ResolvesTrimFromStartAndEndAgainstDuration()
     {
         var media = new MediaInfo

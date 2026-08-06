@@ -1512,6 +1512,10 @@ public sealed class WorkbookSession : IDisposable
     public GoalSeekResult FindGoalSeekSolution(GoalSeekRequest request) =>
         _cellEditService.FindGoalSeekSolution(Workbook, request);
 
+    /// <summary>Validates and calculates a Goal Seek proposal without applying it.</summary>
+    public WorkbookGoalSeekProposal FindGoalSeekProposal(GoalSeekRequest request) =>
+        _cellEditService.FindGoalSeekProposal(Workbook, request);
+
     public WorkbookCellEditResult ExecuteDataTablePlan(DataTablePlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);

@@ -18,7 +18,8 @@ namespace FreeW.Core.Model;
 /// map (the model has no pagination of its own); falls back to "1" when no page is known.</item>
 /// <item><c>SEQ name</c> — the running counter for that sequence name (the basis of captions like
 /// "Figure 1"/"Table 2"), counting how many earlier SEQ fields of the same name precede this one, with
-/// support for the <c>\c</c> (repeat current), <c>\r N</c> (reset to N) and <c>\n</c>/<c>\h</c> switches.</item>
+/// support for the <c>\c</c> (repeat current), <c>\r N</c> (reset to N), <c>\s N</c> (restart after
+/// a heading), <c>\n</c> (next number), <c>\h</c> (hide) and numeric result-picture switches.</item>
 /// <item><c>STYLEREF 1</c> / <c>STYLEREF "Heading 1"</c> — the nearest preceding body paragraph using the
 /// requested heading style.</item>
 /// </list>
@@ -76,6 +77,24 @@ public static class ComplexFieldEngine
             return string.Empty;
 
         var run = paragraph.Runs[runIndex];
+        return Recompute(document, blockIndex, run, pageOf, pageTextOf);
+    }
+
+    /// <summary>
+    /// Recomputes the complex field carried by <paramref name="run"/>. The owning top-level
+    /// <paramref name="blockIndex"/> can identify either a body paragraph or a table containing the run;
+    /// this lets Update Fields cover Word's complete main-document story without inventing synthetic
+    /// run indexes for table-cell paragraphs.
+    /// </summary>
+    public static string Recompute(
+        TextDocument document,
+        int blockIndex,
+        Run run,
+        Func<int, int?>? pageOf = null,
+        Func<int, string?>? pageTextOf = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(run);
         if (run.ComplexField is not { } field)
             return run.Text;
 
@@ -83,7 +102,7 @@ public static class ComplexFieldEngine
         {
             "REF" => ResolveRef(document, field, run.Text),
             "PAGEREF" => ResolvePageRef(document, field, run.Text, pageOf, pageTextOf),
-            "SEQ" => ResolveSeq(document, field, blockIndex, runIndex),
+            "SEQ" => ResolveSeq(document, field, run),
             "CITATION" => Citations.ResolveCitationField(document, field, run.Text),
             "STYLEREF" => ResolveStyleRef(document, field, blockIndex, run.Text),
             _ => run.Text
@@ -238,30 +257,40 @@ public static class ComplexFieldEngine
         return cached;
     }
 
-    // SEQ: the running counter for this sequence name. The number is one more than the count of earlier
-    // SEQ fields of the same name in document order, honouring \r N (reset the running value to N at this
-    // field) and \c (repeat the current value rather than advancing). The \n/\h switches hide the result.
-    private static string ResolveSeq(TextDocument document, ComplexField field, int blockIndex, int runIndex)
+    // SEQ: the running counter for this sequence name across the complete main-document story, including
+    // table-cell paragraphs. \r N resets at the current field; \c repeats; \n explicitly advances; and
+    // \s N resets the first matching sequence after a heading at level N or higher. Word consumes a
+    // pending heading when it encounters that sequence name even if the field's own \s level does not match.
+    private static string ResolveSeq(TextDocument document, ComplexField field, Run targetRun)
     {
         var name = Argument(field.Instruction);
         if (name.Length == 0)
-            return string.Empty;
-        // \h (hidden) and \n (no number) suppress the printed value but still advance the counter for
-        // following fields; the value at this position is empty.
-        var hidden = HasSwitch(field.Instruction, 'h') || HasSwitch(field.Instruction, 'n');
+            return targetRun.Text;
+        // Word ignores \h when a recognized numeric result picture is present, but MERGEFORMAT alone does
+        // not make the hidden result visible.
+        var hidden = HasSwitch(field.Instruction, 'h') && SequencePicture(field.Instruction) is null;
 
         var value = 0;
-        var blocks = document.Blocks;
-        for (var b = 0; b < blocks.Count; b++)
+        int? pendingHeadingLevel = null;
+        foreach (var (_, paragraph) in EnumerateBodyParagraphs(document))
         {
-            if (blocks[b] is not Paragraph paragraph)
-                continue;
+            if (HeadingLevel(document, paragraph) is { } headingLevel)
+                pendingHeadingLevel = Math.Min(pendingHeadingLevel ?? headingLevel, headingLevel);
+
             for (var r = 0; r < paragraph.Runs.Count; r++)
             {
                 if (paragraph.Runs[r].ComplexField is not { } cf
                     || cf.Keyword != "SEQ"
                     || !string.Equals(Argument(cf.Instruction), name, StringComparison.Ordinal))
                     continue;
+
+                var restartLevel = SeqRestartLevel(cf.Instruction);
+                if (restartLevel is { } level
+                    && pendingHeadingLevel is { } precedingLevel
+                    && precedingLevel <= level)
+                {
+                    value = 0;
+                }
 
                 var resetTo = SeqReset(cf.Instruction);
                 var repeat = HasSwitch(cf.Instruction, 'c');
@@ -270,13 +299,78 @@ public static class ComplexFieldEngine
                 else if (!repeat)
                     value++;                   // ordinary SEQ advances; \c repeats the current value
 
-                if (b == blockIndex && r == runIndex)
-                    return hidden ? string.Empty : value.ToString(CultureInfo.InvariantCulture);
+                pendingHeadingLevel = null;
+                if (ReferenceEquals(paragraph.Runs[r], targetRun))
+                    return hidden ? string.Empty : FormatSequenceValue(value, field.Instruction);
             }
         }
         // The target field was not found among the document's SEQ fields (shouldn't happen for an in-doc
         // field): fall back to a bare first ordinal.
-        return hidden ? string.Empty : "1";
+        return hidden ? string.Empty : FormatSequenceValue(1, field.Instruction);
+    }
+
+    private static string FormatSequenceValue(int value, string instruction) => SequencePicture(instruction) switch
+    {
+        "ROMAN" => ToRoman(value),
+        "roman" => ToRoman(value).ToLowerInvariant(),
+        "ALPHABETIC" => ToAlphabetic(value, lower: false),
+        "alphabetic" => ToAlphabetic(value, lower: true),
+        _ => value.ToString(CultureInfo.InvariantCulture)
+    };
+
+    private static string? SequencePicture(string instruction)
+    {
+        string? picture = null;
+        var tokens = Tokenize(instruction).ToList();
+        for (var i = 0; i + 1 < tokens.Count; i++)
+        {
+            if (tokens[i] != "\\*" || tokens[i + 1].StartsWith('\\'))
+                continue;
+
+            if (tokens[i + 1] is "Arabic" or "ARABIC" or "ROMAN" or "roman" or "ALPHABETIC" or "alphabetic")
+                picture = tokens[i + 1];
+        }
+        return picture;
+    }
+
+    private static string ToRoman(int value)
+    {
+        if (value is <= 0 or > 3999)
+            return value.ToString(CultureInfo.InvariantCulture);
+
+        (int Value, string Symbol)[] map =
+        [
+            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+            (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+            (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")
+        ];
+        var remaining = value;
+        var result = new System.Text.StringBuilder();
+        foreach (var (number, symbol) in map)
+        {
+            while (remaining >= number)
+            {
+                result.Append(symbol);
+                remaining -= number;
+            }
+        }
+        return result.ToString();
+    }
+
+    private static string ToAlphabetic(int value, bool lower)
+    {
+        if (value <= 0)
+            return value.ToString(CultureInfo.InvariantCulture);
+
+        var chars = new List<char>();
+        var current = value;
+        while (current > 0)
+        {
+            current--;
+            chars.Insert(0, (char)((lower ? 'a' : 'A') + current % 26));
+            current /= 26;
+        }
+        return new string(chars.ToArray());
     }
 
     // The integer reset value of a SEQ \r switch (e.g. "\r 5" → 5), or null when absent/unparseable.
@@ -285,6 +379,60 @@ public static class ComplexFieldEngine
         && int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
             ? n
             : (int?)null;
+
+    private static int? SeqRestartLevel(string instruction) =>
+        SwitchValue(instruction, 's') is { } raw
+        && int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
+        && n is >= 1 and <= 9
+            ? n
+            : (int?)null;
+
+    private static int? HeadingLevel(TextDocument document, Paragraph paragraph)
+    {
+        if (paragraph.StyleId is not { Length: > 0 } styleId)
+            return null;
+
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (visited.Add(styleId))
+        {
+            if (styleId.StartsWith("Heading", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(styleId[7..], NumberStyles.None, CultureInfo.InvariantCulture, out var level)
+                && level is >= 1 and <= 9)
+            {
+                return level;
+            }
+
+            if (!document.Styles.TryGetValue(styleId, out var style))
+                return null;
+            if (style.OutlineLevel is >= 0 and <= 8)
+                return style.OutlineLevel.Value + 1;
+            if (style.BasedOnStyleId is not { Length: > 0 } basedOnStyleId)
+                return null;
+
+            styleId = basedOnStyleId;
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<(int BlockIndex, Paragraph Paragraph)> EnumerateBodyParagraphs(TextDocument document)
+    {
+        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        {
+            switch (document.Blocks[blockIndex])
+            {
+                case Paragraph paragraph:
+                    yield return (blockIndex, paragraph);
+                    break;
+                case Table table:
+                    foreach (var row in table.Rows)
+                        foreach (var cell in row.Cells)
+                            foreach (var cellParagraph in cell.Paragraphs)
+                                yield return (blockIndex, cellParagraph);
+                    break;
+            }
+        }
+    }
 
     // STYLEREF: nearest preceding body paragraph matching the requested style. This bounded slice covers
     // Word's common heading-reference form; page-aware/header-footer behavior and switches remain cached.

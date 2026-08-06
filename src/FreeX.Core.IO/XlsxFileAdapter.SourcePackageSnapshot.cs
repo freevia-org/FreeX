@@ -3249,6 +3249,18 @@ public sealed partial class XlsxFileAdapter
 
         private static bool SheetHasPatchUnsafeDrawingObjects(Sheet sheet)
         {
+            // R121-io-drawing-delete-1: an outright-deleted drawing object (DeleteDrawingObjectCommand)
+            // is invisible to every check below -- they all walk the LIVE Pictures/TextBoxes/DrawingShapes
+            // collections, and a deleted object is, by definition, gone from all of them. The cell-patch
+            // path never touches the worksheet's drawing part at all, so without this check a deleted
+            // source-loaded object's original anchor (and, for a picture, its image relationship) would
+            // survive completely untouched in the saved package -- the patch path would silently
+            // reintroduce the exact resurrection bug the full-rebuild merger fix (see
+            // XlsxWorksheetDrawingObjectWriter.GetRewrittenSourceObjectNames) exists to prevent. Forcing
+            // the full-save path here is what lets that merger fix actually run.
+            if (sheet.DeletedSourceDrawingObjectNames.Count > 0)
+                return true;
+
             if (sheet.TextBoxes.Any(textBox => !IsPatchSafeSourceTextBox(textBox)) ||
                 sheet.DrawingShapes.Any(shape => !IsPatchSafeSourceDrawingShape(shape)))
             {

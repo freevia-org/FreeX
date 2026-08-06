@@ -68,6 +68,10 @@ public sealed class BibliographyRegionPlannerTests
         plan.Paragraphs.Should().HaveCount(2);
         plan.Paragraphs.Should().OnlyContain(paragraph =>
             ReferenceEquals(paragraph.BlockContentControl, plan.BlockContentControl));
+        plan.Paragraphs[0].SpanningFieldOwner.Should().BeNull();
+        plan.Paragraphs[1].SpanningFieldStart!.Instruction.Should().Be(Citations.NativeFieldInstruction);
+        plan.Paragraphs[1].SpanningFieldOwner.Should().BeSameAs(plan.Paragraphs[1].SpanningFieldStart);
+        plan.Paragraphs[1].EndsSpanningField.Should().BeTrue();
     }
 
     [Fact]
@@ -82,7 +86,7 @@ public sealed class BibliographyRegionPlannerTests
 
         var plan = BibliographyRegionPlanner.BuildRefreshPlan(document);
 
-        plan.DeleteIndicesDescending.Should().Equal(1);
+        plan.DeleteIndicesDescending.Should().Equal(2, 1);
         plan.InsertIndex.Should().Be(1);
         plan.Paragraphs.Select(paragraph => paragraph.PlainText)
             .Should().Equal("References", "Doe. (2024). New Work.");

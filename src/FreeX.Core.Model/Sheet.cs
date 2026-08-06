@@ -579,6 +579,27 @@ public sealed partial class Sheet
     /// <summary>Back-to-front z-order for supported drawing objects: shapes, pictures, and text boxes.</summary>
     public List<DrawingObjectZOrderEntry> DrawingObjectZOrder { get; } = [];
 
+    /// <summary>
+    /// R121-model-drawing-delete-1: cNvPr@name of every drawing object (picture, text box, shape, or
+    /// chart) that DeleteDrawingObjectCommand removed from <see cref="Pictures"/>/<see cref="TextBoxes"/>/
+    /// <see cref="DrawingShapes"/>/<see cref="Charts"/> this session -- a tombstone list, NOT a live
+    /// collection. A deleted object that traces back to the opened .xlsx (its name may still exist as an
+    /// ORIGINAL anchor in the true source package, whether or not <c>IsSourceLoaded</c> was still set at
+    /// the moment of deletion -- an edited-then-deleted object's stale original anchor is just as stale as
+    /// a never-edited one's) simply vanishes from the in-memory model; nothing else records that it must
+    /// NOT be merged back in from the source package on the next save.
+    /// <c>FreeX.Core.IO</c>'s <c>XlsxWorksheetDrawingObjectWriter.GetRewrittenSourceObjectNames</c>
+    /// unions this list into the superseded-name set it hands <c>XlsxWorksheetDrawingPartMerger</c>, so a
+    /// deleted object's original anchor is skipped exactly like an edited one's already is.
+    /// <para>
+    /// A <c>List</c>, not a <c>HashSet</c>: Excel's default per-sheet naming ("Picture 1", "Shape 1", ...)
+    /// can be reused by two distinct objects, and <c>DeleteDrawingObjectCommand</c>'s undo removes only
+    /// ONE matching entry (<see cref="List{T}.Remove(T)"/>) so deleting two same-named objects and
+    /// undoing just one leaves the other's tombstone intact.
+    /// </para>
+    /// </summary>
+    public List<string> DeletedSourceDrawingObjectNames { get; } = [];
+
     /// <summary>Sparklines embedded in cells on this sheet.</summary>
     public List<SparklineModel> Sparklines { get; } = [];
 

@@ -228,10 +228,11 @@ public sealed class WorkbookCellEditService
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(request);
 
-        if (TryValidateGoalSeekRequest(workbook, request, out var errorMessage))
-            return WorkbookGoalSeekResult.Invalid(request, errorMessage);
+        var proposal = FindGoalSeekProposal(workbook, request);
+        if (!proposal.Success)
+            return WorkbookGoalSeekResult.Invalid(request, proposal.ErrorMessage!);
 
-        var seekResult = FindGoalSeekSolution(workbook, request);
+        var seekResult = proposal.SeekResult!;
 
         if (!seekResult.Converged)
             return WorkbookGoalSeekResult.NotConverged(request, seekResult);
@@ -262,11 +263,21 @@ public sealed class WorkbookCellEditService
     /// <summary>Calculates a Goal Seek proposal without applying it to the workbook.</summary>
     public GoalSeekResult FindGoalSeekSolution(Workbook workbook, GoalSeekRequest request)
     {
+        var proposal = FindGoalSeekProposal(workbook, request);
+        if (!proposal.Success)
+            throw new ArgumentException(proposal.ErrorMessage, nameof(request));
+
+        return proposal.SeekResult!;
+    }
+
+    /// <summary>Validates and calculates a Goal Seek proposal without applying it.</summary>
+    public WorkbookGoalSeekProposal FindGoalSeekProposal(Workbook workbook, GoalSeekRequest request)
+    {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(request);
 
         if (TryValidateGoalSeekRequest(workbook, request, out var errorMessage))
-            throw new ArgumentException(errorMessage, nameof(request));
+            return WorkbookGoalSeekProposal.Invalid(request, errorMessage);
 
         var maxIterations = workbook.MaxCalculationIterations is int configuredIterations && configuredIterations > 0
             ? configuredIterations
@@ -275,14 +286,16 @@ public sealed class WorkbookCellEditService
             ? configuredChange
             : 1e-6;
 
-        return GoalSeekService.Seek(
-            workbook,
-            _recalcEngine,
-            request.SetCell,
-            request.TargetValue,
-            request.ChangingCell,
-            maxIterations,
-            tolerance);
+        return WorkbookGoalSeekProposal.Ready(
+            request,
+            GoalSeekService.Seek(
+                workbook,
+                _recalcEngine,
+                request.SetCell,
+                request.TargetValue,
+                request.ChangingCell,
+                maxIterations,
+                tolerance));
     }
 
     public WorkbookCellEditResult CommitCellText(

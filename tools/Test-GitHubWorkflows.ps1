@@ -267,13 +267,13 @@ foreach ($workflow in $workflows) {
         $errors.Add("$($workflow.Name): workflow must not use the privileged pull_request_target event.")
     }
 
-    if ($workflow.Name -eq "ci.yml") {
+    if ($workflow.Name -in @("ci.yml", "freew-ci.yml")) {
         $pushBlock = Get-IndentedYamlBlock `
             -Lines $lines `
             -Pattern "^(?<indent>\s*)push\s*:\s*(?:#.*)?$"
         if ([string]::IsNullOrWhiteSpace($pushBlock) -or
             $pushBlock -notmatch "(?m)^\s*-\s+main\s*(?:#.*)?$") {
-            $errors.Add("ci.yml: primary CI must run on direct pushes to main.")
+            $errors.Add("$($workflow.Name): primary CI must run on direct pushes to main.")
         }
     }
 

@@ -55,6 +55,11 @@ public sealed record PresentationMediaTranscriptCueSpan(
     public string? ForegroundColorHex { get; init; }
 
     public string? BackgroundColorHex { get; init; }
+
+    public string? FontFamily { get; init; }
+
+    /// <summary>Absolute CSS caption size normalized to device-independent pixels.</summary>
+    public double? FontSizePx { get; init; }
 }
 
 public sealed record PresentationMediaTranscriptCueDescriptor(
@@ -251,7 +256,9 @@ public static class PresentationMediaTranscriptPlanner
         string? BackgroundColorHex,
         bool Bold,
         bool Italic,
-        bool Underline);
+        bool Underline,
+        string? FontFamily,
+        double? FontSizePx);
 
     private static readonly Regex TagPattern = new("<[^>]+>", RegexOptions.Compiled);
     private static readonly Regex WhitespacePattern = new(@"\s+", RegexOptions.Compiled);
@@ -1382,7 +1389,7 @@ public static class PresentationMediaTranscriptPlanner
                      @"::cue\(\.(?<class>[A-Za-z0-9_-]+)\)\s*\{(?<body>[^}]*)\}",
                      RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
         {
-            var style = new WebVttCueStyle(null, null, false, false, false);
+            var style = new WebVttCueStyle(null, null, false, false, false, null, null);
             foreach (var declaration in rule.Groups["body"].Value.Split(';'))
             {
                 var separator = declaration.IndexOf(':');
@@ -1397,6 +1404,10 @@ public static class PresentationMediaTranscriptPlanner
                 {
                     "color" => style with { ForegroundColorHex = NormalizeWebVttColor(value) ?? style.ForegroundColorHex },
                     "background-color" => style with { BackgroundColorHex = NormalizeWebVttColor(value) ?? style.BackgroundColorHex },
+                    "font-family" => style with { FontFamily = NormalizeWebVttFontFamily(value) ?? style.FontFamily },
+                    "font-size" => ParseWebVttFontSizePx(value) is { } size
+                        ? style with { FontSizePx = size }
+                        : style,
                     "font-weight" when value.Equals("bold", StringComparison.OrdinalIgnoreCase)
                         || int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var weight) && weight >= 600
                         => style with { Bold = true },
@@ -1447,6 +1458,33 @@ public static class PresentationMediaTranscriptPlanner
         }
 
         return $"{red:X2}{green:X2}{blue:X2}";
+    }
+
+    private static string? NormalizeWebVttFontFamily(string value)
+    {
+        var family = value
+            .Split(',', 2, StringSplitOptions.TrimEntries)[0]
+            .Trim()
+            .Trim('"', '\'');
+        return family.Length == 0 ? null : family;
+    }
+
+    private static double? ParseWebVttFontSizePx(string value)
+    {
+        var match = Regex.Match(
+            value.Trim(),
+            @"^(?<size>[0-9]+(?:\.[0-9]+)?)(?<unit>px|pt)$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!match.Success
+            || !double.TryParse(match.Groups["size"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var size)
+            || size <= 0)
+        {
+            return null;
+        }
+
+        return match.Groups["unit"].Value.Equals("pt", StringComparison.OrdinalIgnoreCase)
+            ? size * 96d / 72d
+            : size;
     }
 
     private static IReadOnlyList<PresentationMediaTranscriptCueDescriptor> ParseSrt(string text)
@@ -1949,7 +1987,9 @@ public static class PresentationMediaTranscriptPlanner
                     Language = languages.LastOrDefault(),
                     Classes = classScopes.SelectMany(scope => scope).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
                     ForegroundColorHex = style.ForegroundColorHex,
-                    BackgroundColorHex = style.BackgroundColorHex
+                    BackgroundColorHex = style.BackgroundColorHex,
+                    FontFamily = style.FontFamily,
+                    FontSizePx = style.FontSizePx
                 });
             }
         }
@@ -1980,7 +2020,7 @@ public static class PresentationMediaTranscriptPlanner
         IEnumerable<string> classes,
         IReadOnlyDictionary<string, WebVttCueStyle>? styles)
     {
-        var result = new WebVttCueStyle(null, null, false, false, false);
+        var result = new WebVttCueStyle(null, null, false, false, false, null, null);
         if (styles is null)
         {
             return result;
@@ -1997,6 +2037,8 @@ public static class PresentationMediaTranscriptPlanner
             {
                 ForegroundColorHex = style.ForegroundColorHex ?? result.ForegroundColorHex,
                 BackgroundColorHex = style.BackgroundColorHex ?? result.BackgroundColorHex,
+                FontFamily = style.FontFamily ?? result.FontFamily,
+                FontSizePx = style.FontSizePx ?? result.FontSizePx,
                 Bold = result.Bold || style.Bold,
                 Italic = result.Italic || style.Italic,
                 Underline = result.Underline || style.Underline

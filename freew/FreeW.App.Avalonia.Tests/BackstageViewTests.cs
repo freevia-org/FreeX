@@ -198,6 +198,7 @@ public class BackstageViewTests
             });
 
             view.TryActivateEntry("Home").Should().BeTrue();
+            view.IsOpen.Should().BeTrue();
 
             var buttons = view.GetLogicalDescendants()
                 .OfType<Button>()
@@ -209,13 +210,14 @@ public class BackstageViewTests
                 .Should().Equal("Blank document", "Budget.docx", "Plan.rtf", "Browse", "Open More Documents");
             buttons.Select(AutomationProperties.GetName)
                 .Should().Equal("Blank document", "Budget.docx", "Plan.rtf", "Browse", "Open More Documents");
+            buttons.Should().OnlyContain(button => button.IsEffectivelyEnabled);
 
             var metrics = BackstagePaneSurfacePlanner.HomePaneVisualMetrics;
             buttons.Should().OnlyContain(button => button.Margin == new Thickness(
                 metrics.ActionRowMargin.Left,
                 metrics.ActionRowMargin.Top,
                 metrics.ActionRowMargin.Right,
-                metrics.ActionRowMargin.Bottom));
+                metrics.ActionRowMargin.Bottom - 1));
             buttons.Should().OnlyContain(button => ((StackPanel)button.Content!).Children.OfType<TextBlock>().First().FontSize
                 == metrics.ActionFontSize);
 

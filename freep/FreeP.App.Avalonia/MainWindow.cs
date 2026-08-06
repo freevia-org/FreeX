@@ -216,6 +216,10 @@ public sealed partial class MainWindow : Window
     private ComboBox _mediaStartModeBox = null!;
     private CheckBox _mediaLoopCheckBox = null!;
     private CheckBox _mediaShowWhenStoppedCheckBox = null!;
+    private CheckBox _mediaRewindAfterPlayingCheckBox = null!;
+    private CheckBox _mediaPlayFullScreenCheckBox = null!;
+    private TextBlock _mediaStopAfterSlidesText = null!;
+    private TextBox _mediaStopAfterSlidesBox = null!;
     private Button _mediaPlaybackApplyButton = null!;
     private TextBlock _mediaTrimStartText = null!;
     private TextBox _mediaTrimStartBox = null!;
@@ -608,6 +612,11 @@ public sealed partial class MainWindow : Window
         PresentationMediaPaneSession.GetPlaybackStartMode(_mediaStartModeBox?.SelectedIndex ?? -1);
     internal bool MediaLoop => _mediaLoopCheckBox?.IsChecked == true;
     internal bool MediaShowWhenStopped => _mediaShowWhenStoppedCheckBox?.IsChecked != false;
+    internal bool MediaRewindAfterPlaying => _mediaRewindAfterPlayingCheckBox?.IsChecked == true;
+    internal bool MediaPlayFullScreen => _mediaPlayFullScreenCheckBox?.IsChecked == true;
+    internal int MediaStopAfterSlides => int.TryParse(_mediaStopAfterSlidesBox?.Text, out var value)
+        ? Math.Max(1, value)
+        : 1;
     internal string? ReadingOrderMoveEarlierDisabledReason =>
         LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
             action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)?.DisabledReason;
@@ -1779,6 +1788,20 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(12, 2, 12, 4),
             IsChecked = true,
         };
+        _mediaRewindAfterPlayingCheckBox = new CheckBox
+        {
+            Content = "Rewind after playing",
+            Margin = new Thickness(12, 2, 12, 4),
+        };
+        _mediaPlayFullScreenCheckBox = new CheckBox
+        {
+            Content = "Play full screen",
+            Margin = new Thickness(12, 2, 12, 4),
+        };
+        _mediaStopAfterSlidesText = BuildMediaCaptionPaneLabel();
+        _mediaStopAfterSlidesText.Text = "Stop after slides";
+        _mediaStopAfterSlidesBox = BuildMediaCaptionPaneTextBox(singleLine: true);
+        _mediaStopAfterSlidesBox.Text = "1";
         _mediaPlaybackApplyButton = BuildMediaCaptionPaneButton();
         _mediaPlaybackApplyButton.Content = "Apply playback";
         _mediaPlaybackApplyButton.Click += (_, _) => ApplyMediaPlaybackPane();
@@ -1865,6 +1888,10 @@ public sealed partial class MainWindow : Window
                     _mediaStartModeBox,
                     _mediaLoopCheckBox,
                     _mediaShowWhenStoppedCheckBox,
+                    _mediaRewindAfterPlayingCheckBox,
+                    _mediaPlayFullScreenCheckBox,
+                    _mediaStopAfterSlidesText,
+                    _mediaStopAfterSlidesBox,
                     _mediaVolumeText,
                     _mediaVolumeSlider,
                     _mediaTrimStartText,
@@ -6894,7 +6921,10 @@ public sealed partial class MainWindow : Window
     internal void SetMediaPlaybackPaneInput(
         MediaPlaybackStartMode startMode,
         bool loop,
-        bool showWhenStopped = true)
+        bool showWhenStopped = true,
+        bool rewindAfterPlaying = false,
+        bool playFullScreen = false,
+        int stopAfterSlides = 1)
     {
         ShowMediaCaptionPane();
 
@@ -6904,6 +6934,9 @@ public sealed partial class MainWindow : Window
             _mediaStartModeBox.SelectedIndex = PresentationMediaPaneSession.GetPlaybackStartModeIndex(startMode);
             _mediaLoopCheckBox.IsChecked = loop;
             _mediaShowWhenStoppedCheckBox.IsChecked = showWhenStopped;
+            _mediaRewindAfterPlayingCheckBox.IsChecked = rewindAfterPlaying;
+            _mediaPlayFullScreenCheckBox.IsChecked = playFullScreen;
+            _mediaStopAfterSlidesBox.Text = Math.Max(1, stopAfterSlides).ToString();
         }
         finally
         {
@@ -6923,7 +6956,13 @@ public sealed partial class MainWindow : Window
     internal bool ApplyMediaVolumePane() => _mediaPaneSession.ApplyVolume(MediaVolumePercent);
 
     internal bool ApplyMediaPlaybackPane() =>
-        _mediaPaneSession.ApplyPlayback(MediaPlaybackStartMode, MediaLoop, MediaShowWhenStopped);
+        _mediaPaneSession.ApplyPlayback(
+            MediaPlaybackStartMode,
+            MediaLoop,
+            MediaShowWhenStopped,
+            MediaRewindAfterPlaying,
+            MediaPlayFullScreen,
+            MediaStopAfterSlides);
 
     internal double MediaTrimStartMilliseconds => PresentationMediaPaneSession.ParseTiming(_mediaTrimStartBox?.Text);
     internal double MediaTrimEndMilliseconds => PresentationMediaPaneSession.ParseTiming(_mediaTrimEndBox?.Text);
@@ -7053,9 +7092,15 @@ public sealed partial class MainWindow : Window
             _mediaStartModeBox.SelectedIndex = PresentationMediaPaneSession.GetPlaybackStartModeIndex(mediaPlan.PlaybackStartMode);
             _mediaLoopCheckBox.IsChecked = mediaPlan.Loop;
             _mediaShowWhenStoppedCheckBox.IsChecked = mediaPlan.ShowWhenStopped;
+            _mediaRewindAfterPlayingCheckBox.IsChecked = mediaPlan.RewindAfterPlaying;
+            _mediaPlayFullScreenCheckBox.IsChecked = mediaPlan.PlayFullScreen;
+            _mediaStopAfterSlidesBox.Text = mediaPlan.StopAfterSlides.ToString();
             _mediaStartModeBox.IsEnabled = mediaPlan.HasMedia;
             _mediaLoopCheckBox.IsEnabled = mediaPlan.HasMedia;
             _mediaShowWhenStoppedCheckBox.IsEnabled = mediaPlan.HasMedia;
+            _mediaRewindAfterPlayingCheckBox.IsEnabled = mediaPlan.HasMedia;
+            _mediaPlayFullScreenCheckBox.IsEnabled = mediaPlan.CanPlayFullScreen;
+            _mediaStopAfterSlidesBox.IsEnabled = mediaPlan.CanStopAfterSlides;
             _mediaPlaybackApplyButton.IsEnabled = mediaPlan.HasMedia;
             _mediaVolumeSlider.Value = mediaPlan.VolumePercent;
             _mediaVolumeSlider.IsEnabled = mediaPlan.HasMedia;

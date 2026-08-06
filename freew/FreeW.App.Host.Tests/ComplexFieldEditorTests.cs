@@ -186,6 +186,52 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void UpdateFields_SeqUsesAuthoredResultPicture()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" SEQ Figure \\r 14 \\* ROMAN ", "stale") }
+        });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be("XIV");
+    }
+
+    [StaFact]
+    public void UpdateFields_SeqCountsTableFieldsAndClearsHiddenResult()
+    {
+        var first = Run.ComplexFieldRun(" SEQ Figure ", "stale");
+        var hidden = Run.ComplexFieldRun(" SEQ Figure \\h ", "stale");
+        var last = Run.ComplexFieldRun(" SEQ Figure ", "stale");
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Add(new Paragraph { Runs = { hidden } });
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph { Runs = { first } });
+        doc.Blocks.Add(table);
+        doc.Blocks.Add(new Paragraph { Runs = { last } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        ((Paragraph)view.Model.Blocks[0]).Runs[0].Text.Should().Be("1");
+        ((Table)view.Model.Blocks[1]).Rows[0].Cells[0].Paragraphs[0].Runs[0].Text.Should().BeEmpty();
+        ((Paragraph)view.Model.Blocks[2]).Runs[0].Text.Should().Be("3");
+    }
+
+    [StaFact]
     public void UpdateFields_DoesNotRecomputeLockedImportedSimpleField()
     {
         var doc = TextDocument.CreateEmpty();

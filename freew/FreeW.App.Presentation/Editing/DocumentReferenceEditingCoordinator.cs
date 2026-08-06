@@ -48,9 +48,8 @@ public sealed class DocumentReferenceEditingCoordinator
 
     public DocumentFieldCodeToggleResult ToggleFieldCodes()
     {
-        var fields = _session.Document.Blocks
-            .OfType<Paragraph>()
-            .SelectMany(paragraph => paragraph.Runs)
+        var fields = EnumerateFieldParagraphs(_session.Document.Blocks)
+            .SelectMany(item => item.Paragraph.Runs)
             .Where(run => run.ComplexField is not null)
             .ToArray();
         if (fields.Length == 0)
@@ -70,22 +69,21 @@ public sealed class DocumentReferenceEditingCoordinator
         DateTime? evaluatedAt = null)
     {
         var document = _session.Document;
-        var fieldPages = RequiresBlockPageResolution(document)
+        var fieldParagraphs = EnumerateFieldParagraphs(document.Blocks).ToArray();
+        var fieldPages = RequiresBlockPageResolution(fieldParagraphs)
             ? ResolveBlockPages(blockPageResolutionFactory)
             : null;
         var fieldPageText = BuildPageTextResolver(fieldPages);
         var now = evaluatedAt ?? DateTime.Now;
         var updatedFieldCount = 0;
 
-        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        foreach (var (blockIndex, paragraph) in fieldParagraphs)
         {
-            if (document.Blocks[blockIndex] is not Paragraph paragraph)
-                continue;
-
             for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
             {
                 var run = paragraph.Runs[runIndex];
                 string resolved;
+                var allowEmptyResult = false;
                 if (run.CrossReference is { } crossReference)
                 {
                     resolved = CrossReferences.ResolveField(
@@ -94,18 +92,20 @@ public sealed class DocumentReferenceEditingCoordinator
                         run.Text,
                         blockIndex,
                         fieldPages?.PageNumberAtBlock,
-                        fieldPageText);
+                        fieldPageText,
+                        sourceRunIndex: runIndex);
                 }
                 else if (run.ComplexField is { } complexField)
                 {
                     if (complexField.SimpleField?.IsLocked == true)
                         continue;
 
-                    resolved = ComplexFieldEngine.CanRecompute(complexField)
+                    allowEmptyResult = ComplexFieldEngine.CanRecompute(complexField);
+                    resolved = allowEmptyResult
                         ? ComplexFieldEngine.Recompute(
                             document,
                             blockIndex,
-                            runIndex,
+                            run,
                             fieldPages?.PageNumberAtBlock,
                             fieldPageText)
                         : ResolveLiveFieldResult(
@@ -135,7 +135,8 @@ public sealed class DocumentReferenceEditingCoordinator
                     continue;
                 }
 
-                if (resolved.Length == 0 || string.Equals(resolved, run.Text, StringComparison.Ordinal))
+                if ((!allowEmptyResult && resolved.Length == 0)
+                    || string.Equals(resolved, run.Text, StringComparison.Ordinal))
                     continue;
 
                 run.Text = resolved;
@@ -231,7 +232,12 @@ public sealed class DocumentReferenceEditingCoordinator
             hostBlockIndex,
             plan.FieldRun,
             plan.Target.BlockIndex,
-            plan.BookmarkNameToAdd));
+            plan.BookmarkNameToAdd,
+            plan.TargetRunIndex,
+            plan.TargetNoteId,
+            plan.TargetIsFootnote,
+            plan.TargetTextStartOffset,
+            plan.TargetTextEndOffset));
         ExecuteGroup(commands, "Insert Cross-reference");
         return new DocumentReferenceEditResult(true, hostBlockIndex, -1);
     }
@@ -551,14 +557,35 @@ public sealed class DocumentReferenceEditingCoordinator
         Func<DocumentReferenceBlockPageResolution>? factory) =>
         factory?.Invoke();
 
-    private static bool RequiresBlockPageResolution(TextDocument document) =>
-        document.Blocks
-            .OfType<Paragraph>()
-            .SelectMany(paragraph => paragraph.Runs)
+    private static bool RequiresBlockPageResolution(
+        IReadOnlyList<(int BlockIndex, Paragraph Paragraph)> fieldParagraphs) =>
+        fieldParagraphs
+            .SelectMany(item => item.Paragraph.Runs)
             .Any(run =>
                 run.CrossReference?.Kind == CrossRefFieldKind.PageRef
                 || run.ComplexField?.Keyword is "PAGE" or "NUMPAGES" or "PAGEREF"
                 || run.FieldKind is RunFieldKind.PageNumber or RunFieldKind.NumPages);
+
+    private static IEnumerable<(int BlockIndex, Paragraph Paragraph)> EnumerateFieldParagraphs(
+        IReadOnlyList<Block> blocks)
+    {
+        for (var blockIndex = 0; blockIndex < blocks.Count; blockIndex++)
+        {
+            if (blocks[blockIndex] is Paragraph paragraph)
+            {
+                yield return (blockIndex, paragraph);
+                continue;
+            }
+
+            if (blocks[blockIndex] is not Table table)
+                continue;
+
+            foreach (var row in table.Rows)
+            foreach (var cell in row.Cells)
+            foreach (var cellParagraph in cell.Paragraphs)
+                yield return (blockIndex, cellParagraph);
+        }
+    }
 
     private static string ResolveLiveFieldResult(
         TextDocument document,

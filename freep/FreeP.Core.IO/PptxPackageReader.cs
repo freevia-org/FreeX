@@ -3140,9 +3140,10 @@ public static class PptxPackageReader
             && smart.FallbackShapes.Count > 0
             && !CanUseBasicRelationshipNodeCache(smart, data))
         {
-            // relationship1 is live only for the exact node-only overlapping-ellipse
-            // cache reproduced by the shared planner. Preserve any richer imported
-            // relationship drawing until its extra roles have a dedicated plan.
+            // relationship1 is live only for the exact two- or three-node
+            // overlapping-ellipse cache reproduced by the shared planner. Preserve
+            // any richer imported relationship drawing until its extra roles have
+            // a dedicated plan.
             data.IsLiveLayoutSupported = false;
         }
 
@@ -3581,7 +3582,11 @@ public static class PptxPackageReader
             return false;
 
         var nodes = FlattenSmartArtNodes(data);
-        if (nodes.Count != 3 || smart.FallbackShapes.Count != nodes.Count)
+        if (nodes.Count is < 2 or > 3 || smart.FallbackShapes.Count != nodes.Count)
+            return false;
+
+        if (data.Nodes.Count != nodes.Count
+            || data.Nodes.Any(node => node.Level != 0 || node.Children.Count != 0))
             return false;
 
         if (smart.FallbackShapes.Any(HasUnsupportedSmartArtShapeEffects)
@@ -4780,6 +4785,9 @@ public static class PptxPackageReader
                                ?? mediaEl.Attribute(R + "embed")?.Value;
 
                 var mediaInfo = new MediaInfo { IsVideo = isVideo };
+                mediaInfo.PlayFullScreen = isVideo && ReadBooleanOrDefault(
+                    mediaEl.Attribute("fullScrn")?.Value,
+                    defaultValue: false);
                 ReadMediaTiming(nvPr, mediaInfo);
 
                 if (!string.IsNullOrWhiteSpace(mediaRelId))
@@ -6606,10 +6614,22 @@ public static class PptxPackageReader
                 mediaNode.Attribute("showWhenStopped")?.Value,
                 defaultValue: true);
 
+            var stopAfterSlides = mediaNode.Attribute("numSld")?.Value;
+            shape.Media.StopAfterSlides = int.TryParse(
+                stopAfterSlides,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var slideCount)
+                ? Math.Max(1, slideCount)
+                : 1;
+
             var repeatCount = cTn?.Attribute("repeatCount")?.Value;
             shape.Media.Loop = string.Equals(repeatCount, "indefinite", StringComparison.OrdinalIgnoreCase)
                 || (int.TryParse(repeatCount, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
                     && count > 1);
+            shape.Media.RewindAfterPlaying = ReadBooleanOrDefault(
+                cTn?.Attribute("autoRev")?.Value,
+                defaultValue: false);
 
             var conditions = cTn?.Element(P + "stCondLst")?.Elements(P + "cond")
                 ?? Enumerable.Empty<XElement>();

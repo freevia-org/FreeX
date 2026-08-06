@@ -44,6 +44,25 @@ public sealed class CrossReferenceDialogPlannerTests
     }
 
     [Fact]
+    public void BuildInsertAsChoices_UsesWordsCaptionLabelsAndOrder()
+    {
+        var choices = CrossReferenceDialogPlanner.BuildInsertAsChoices(CrossRefType.Figure);
+
+        choices.Select(choice => choice.InsertAs).Should().Equal(
+            CrossRefInsertAs.Text,
+            CrossRefInsertAs.CaptionLabelAndNumber,
+            CrossRefInsertAs.CaptionText,
+            CrossRefInsertAs.PageNumber,
+            CrossRefInsertAs.AboveBelow);
+        choices.Select(choice => choice.Label).Should().Equal(
+            "Entire caption",
+            "Only label and number",
+            "Only caption text",
+            "Page number",
+            "Above/below");
+    }
+
+    [Fact]
     public void TryCreateChoice_SelectsRequestedTargetIndexInsteadOfDefaultingToFirstHeading()
     {
         var document = TextDocument.CreateEmpty();

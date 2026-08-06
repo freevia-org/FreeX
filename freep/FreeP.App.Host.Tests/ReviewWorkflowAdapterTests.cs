@@ -1037,14 +1037,22 @@ public sealed class ReviewWorkflowAdapterTests
             window.ShowMediaCaptionPane();
             window.MediaPlaybackStartMode.Should().Be(MediaPlaybackStartMode.InClickSequence);
             window.MediaLoop.Should().BeFalse();
+            window.MediaRewindAfterPlaying.Should().BeFalse();
+            window.MediaPlayFullScreen.Should().BeFalse();
 
-            window.SetMediaPlaybackPaneInput(MediaPlaybackStartMode.Automatically, true);
+            window.SetMediaPlaybackPaneInput(MediaPlaybackStartMode.Automatically, true, true, true, true, 3);
             window.MediaPlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
             window.MediaLoop.Should().BeTrue();
+            window.MediaRewindAfterPlaying.Should().BeTrue();
+            window.MediaPlayFullScreen.Should().BeTrue();
+            window.MediaStopAfterSlides.Should().Be(3);
             window.ApplyMediaPlaybackPane().Should().BeTrue();
 
             mediaShape.Media!.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
             mediaShape.Media.Loop.Should().BeTrue();
+            mediaShape.Media.RewindAfterPlaying.Should().BeTrue();
+            mediaShape.Media.PlayFullScreen.Should().BeTrue();
+            mediaShape.Media.StopAfterSlides.Should().Be(3);
             window.IsDirty.Should().BeTrue();
         }
         finally

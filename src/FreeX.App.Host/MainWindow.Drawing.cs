@@ -360,6 +360,44 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    // R121-model-drawing-delete-1: Delete-key/context-menu/Selection-Pane entry point for removing a
+    // selected picture/text box/shape/chart outright. Unlike ResizeSelectedDrawingObject etc., this
+    // deliberately does NOT fall back to "the last object anchored at the active cell" -- Excel only
+    // deletes an object that is GENUINELY selected (SheetGrid.SelectedObjectId/-Kind), never one merely
+    // under the cursor, so a plain cell selection with no object picked must fall through to
+    // ExecuteClearSelection's ordinary Clear Contents behavior instead.
+    private bool TryDeleteSelectedDrawingObject()
+    {
+        var kind = ToSelectionPaneObjectKindIncludingChart(SheetGrid.SelectedObjectKind);
+        var objectId = SheetGrid.SelectedObjectId;
+        if (kind is null || objectId == Guid.Empty)
+            return false;
+
+        var command = DrawingObjectCommandPlanner.BuildDeleteCommand(_currentSheetId, kind.Value, objectId);
+        if (!TryExecuteCommand(command, DrawingObjectActionPlanner.DeleteObjectCommandTitle, out var outcome))
+        {
+            // Rejected (e.g. protection) -- the key press is still "handled" (an object was selected),
+            // ShowCommandError already surfaced why.
+            return true;
+        }
+
+        SheetGrid.SelectedObjectId = Guid.Empty;
+        SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.None;
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        UpdateViewport();
+        return true;
+    }
+
+    private static SelectionPaneObjectKind? ToSelectionPaneObjectKindIncludingChart(FreeX.App.UI.ObjectKind kind) =>
+        kind switch
+        {
+            FreeX.App.UI.ObjectKind.Picture => SelectionPaneObjectKind.Picture,
+            FreeX.App.UI.ObjectKind.Shape => SelectionPaneObjectKind.Shape,
+            FreeX.App.UI.ObjectKind.TextBox => SelectionPaneObjectKind.TextBox,
+            FreeX.App.UI.ObjectKind.Chart => SelectionPaneObjectKind.Chart,
+            _ => null
+        };
+
     private void ResizeSelectedDrawingObject()
     {
         var target = GetTargetTransformDrawingObject(_currentSheetId);

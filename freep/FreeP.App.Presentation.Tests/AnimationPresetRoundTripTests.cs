@@ -8,6 +8,57 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class AnimationPresetRoundTripTests
 {
     [Fact]
+    public void PowerPointTeeterPreset32SurvivesReadAndWriteAsTeeter()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 1371600,
+        });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Teeter,
+        });
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+
+        using (var archive = new ZipArchive(new MemoryStream(first.ToArray()), ZipArchiveMode.Read))
+        using (var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open()))
+        {
+            var slideXml = XDocument.Parse(reader.ReadToEnd());
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            slideXml.Descendants(p + "cTn")
+                .Single(element => element.Attribute("nodeType")?.Value == "withEffect")
+                .Attribute("presetID")!.Value
+                .Should().Be("32");
+        }
+
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+        animation.Preset.Should().Be(AnimationPreset.Teeter);
+        animation.RawPresetClass.Should().BeNull();
+        animation.RawPresetId.Should().BeNull();
+
+        using var second = new MemoryStream();
+        PptxPackageWriter.Write(reloaded, second);
+        using var secondArchive = new ZipArchive(new MemoryStream(second.ToArray()), ZipArchiveMode.Read);
+        using var secondReader = new StreamReader(secondArchive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var secondXml = XDocument.Parse(secondReader.ReadToEnd());
+        XNamespace p2 = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        secondXml.Descendants(p2 + "cTn")
+            .Single(element => element.Attribute("nodeType")?.Value == "withEffect")
+            .Attribute("presetID")!.Value
+            .Should().Be("32");
+    }
+
+    [Fact]
     public void RepeatAndAutoReverseTimingSurviveReadCloneAndWrite()
     {
         var presentation = Presentation.CreateEmpty();
@@ -210,7 +261,7 @@ public sealed class AnimationPresetRoundTripTests
         var slideXml = XDocument.Parse(reader.ReadToEnd());
         XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
         var cTn = slideXml.Descendants(p + "cTn")
-            .Single(element => element.Attribute("presetID")?.Value == "3");
+            .Single(element => element.Attribute("presetID")?.Value == "8");
         cTn.Attribute("presetClass")!.Value.Should().Be("emph");
         cTn.Attribute("presetSubtype")!.Value.Should().Be("twoSpins");
     }

@@ -430,6 +430,71 @@ public sealed class DocumentReferenceEditingCoordinatorTests
     }
 
     [Fact]
+    public void FieldUpdateCoversTableRunsAndUsesSourceRunPositionForNoteReferences()
+    {
+        var noteReference = Run.CrossReferenceFieldRun(
+            new CrossReferenceField(
+                CrossRefFieldKind.NoteRef,
+                "_Ref1",
+                CrossRefInsertAs.AboveBelow,
+                Hyperlink: true),
+            "stale");
+        var noteMarker = Run.FootnoteReference(1);
+        var sequence = Run.ComplexFieldRun(" SEQ Figure \\h ", "stale");
+        var cellParagraph = new Paragraph { Runs = { noteReference, noteMarker, sequence } };
+        cellParagraph.BookmarkNames.Add("_Ref1");
+        cellParagraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.Start, 1, "_Ref1"));
+        cellParagraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.End, 2));
+        var cell = new TableCell();
+        cell.Paragraphs.Add(cellParagraph);
+        var row = new TableRow();
+        row.Cells.Add(cell);
+        var table = new Table();
+        table.Rows.Add(row);
+        var document = new TextDocument();
+        document.Blocks.Add(table);
+        document.Footnotes[1] = new Footnote(1, "note");
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var result = session.References.UpdateFields();
+
+        result.UpdatedFieldCount.Should().Be(2);
+        noteReference.Text.Should().Be("1 below");
+        sequence.Text.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CrossReferenceInsertionPreservesPlannedCaptionBookmarkScope()
+    {
+        var caption = Captions.BuildCaption(CaptionLabel.Figure, 1, "Sample caption text");
+        var host = new Paragraph("See ");
+        var document = new TextDocument();
+        document.Blocks.Add(caption);
+        document.Blocks.Add(host);
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+        var target = CrossReferences.Targets(document, CrossRefType.Figure).Single();
+
+        session.References.InsertCrossReference(
+            sourceBlockIndex: 1,
+            preferredHostBlockIndex: 1,
+            CrossRefType.Figure,
+            target,
+            CrossRefInsertAs.CaptionText,
+            hyperlink: true);
+
+        caption.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.Start, 3, "_Ref1"));
+        caption.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.End, 4));
+        host.Runs.Single(run => run.CrossReference is not null).Text
+            .Should().Be("Sample caption text");
+    }
+
+    [Fact]
     public void FieldUpdateRefreshesEveryGeneratedReferenceRegionInOnePass()
     {
         var document = new TextDocument();

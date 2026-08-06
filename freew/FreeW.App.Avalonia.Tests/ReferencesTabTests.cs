@@ -455,6 +455,50 @@ public sealed class ReferencesTabTests
             .Should().BeFalse("one undo reverts both the anchor command and field insertion");
     }
 
+    [Fact]
+    public void InsertCrossReference_footnote_anchors_only_the_physical_marker()
+    {
+        var marker = new Paragraph();
+        marker.Runs.Add(new Run("Body"));
+        marker.Runs.Add(Run.FootnoteReference(1));
+        var view = ViewWith(marker, new Paragraph("See "));
+        view.Document.Footnotes[1] = new Footnote(1, "note");
+
+        var target = CrossReferences.Targets(view.Document, CrossRefType.Footnote).Single();
+        view.InsertCrossReference(CrossRefType.Footnote, target, CrossRefInsertAs.Text, hyperlink: true);
+
+        marker.BookmarkNames.Should().Contain("_Ref1");
+        marker.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.Start, 1, "_Ref1"));
+        marker.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.End, 2));
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.CrossReference is not null)
+            .CrossReference!.Target.Should().Be("_Ref1");
+    }
+
+    [Fact]
+    public void InsertCrossReference_caption_text_anchors_only_descriptive_text()
+    {
+        var caption = Captions.BuildCaption(CaptionLabel.Figure, 1, "Sample caption text");
+        var view = ViewWith(caption, new Paragraph("See "));
+        var target = CrossReferences.Targets(view.Document, CrossRefType.Figure).Single();
+
+        view.InsertCrossReference(
+            CrossRefType.Figure, target, CrossRefInsertAs.CaptionText, hyperlink: true);
+
+        caption.Runs.Select(run => run.Text).Should().Equal("Figure ", "1", ": ", "Sample caption text");
+        caption.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.Start, 3, "_Ref1"));
+        caption.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.End, 4));
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.CrossReference is not null)
+            .Text.Should().Be("Sample caption text");
+    }
+
     // ── Citation / Bibliography ─────────────────────────────────────────────────────
 
     [Fact]
@@ -593,6 +637,15 @@ public sealed class ReferencesTabTests
         view.InsertBibliography();
 
         view.Document.Blocks.Count.Should().BeGreaterThan(before, "bibliography paragraphs are inserted");
+        var bibliography = view.Document.Blocks.OfType<Paragraph>()
+            .Where(Citations.IsBibliographyParagraph)
+            .ToArray();
+        bibliography.Select(paragraph => paragraph.PlainText).Should().Equal(
+            "References",
+            "Smith. (2024). A Work.");
+        bibliography[0].SpanningFieldOwner.Should().BeNull();
+        bibliography[1].SpanningFieldStart!.Instruction.Should().Be(Citations.NativeFieldInstruction);
+        bibliography[1].EndsSpanningField.Should().BeTrue();
 
         view.Undo();
         view.Document.Blocks.Count.Should().Be(before, "undo removes the whole bibliography block");

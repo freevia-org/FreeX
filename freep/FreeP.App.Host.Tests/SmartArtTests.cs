@@ -4826,6 +4826,41 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ImportedRelationship1_AdmitsExactTwoNodeEllipseCache()
+    {
+        var presentation = PptxPackageReader.Read(MakeSmartArtPptx(
+            ["For", "Against"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/relationship1",
+            relationship1NodeAndEllipseCache: true));
+        var relationship = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        relationship.Data.Should().NotBeNull();
+        relationship.Data!.IsLiveLayoutSupported.Should().BeTrue(
+            "the bounded relationship1 cache grammar also covers its source-backed two-node variant");
+        relationship.FallbackShapes.Should().HaveCount(2);
+        relationship.FallbackShapes.Should().OnlyContain(shape =>
+            shape.Kind == SlideShapeKind.AutoShape
+            && shape.AutoShapeKind == DrawingShapeKind.Ellipse
+            && shape.Effects == null);
+        relationship.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Equal("For", "Against");
+
+        var live = SmartArtLayoutEngine.Layout(
+            relationship.Data,
+            0,
+            0,
+            8_229_600,
+            5_744_800,
+            presentation.Theme);
+        live.Should().NotBeNull();
+        live!.Should().HaveCount(2);
+        live.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse);
+        live.Select(shape => shape.PlainText).Should().Equal("For", "Against");
+    }
+
+    [Fact]
     public void Reader_Relationship1_WithExtraRole_PreservesCachedFallback()
     {
         var pptxPath = MakeSmartArtPptx(
@@ -4840,6 +4875,24 @@ public sealed class SmartArtTests : IDisposable
 
         smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
             "an extra relationship role is outside the exact node-only cache grammar");
+    }
+
+    [Fact]
+    public void Reader_Relationship1_TwoNodeWithExtraRole_PreservesCachedFallback()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["For", "Against"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/relationship1",
+            relationship1NodeAndEllipseCache: true,
+            groupedListUnmodeledRole: true);
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "the two-node admission must still reject an extra cached relationship role");
+        smartArt.FallbackShapes.Should().HaveCount(3);
     }
 
     [Fact]
@@ -4890,6 +4943,65 @@ public sealed class SmartArtTests : IDisposable
 
         smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
             "relationship1 shape effects are outside the exact shared node grammar");
+    }
+
+    [Fact]
+    public void EditingSession_Relationship1TwoNodeCacheEdit_IsUndoableAndRoundTrips()
+    {
+        var sourcePath = MakeSmartArtPptx(
+            ["For", "Against"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/relationship1",
+            relationship1NodeAndEllipseCache: true);
+        var presentation = PptxPackageReader.Read(sourcePath);
+        var shape = presentation.Slides[0].Shapes
+            .First(candidate => candidate.Kind == SlideShapeKind.SmartArt);
+        var smartArt = shape.SmartArt!;
+        var targetId = smartArt.Data!.Nodes[1].ModelId;
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+
+        session.EditSmartArt(shape.Id, candidate =>
+        {
+            var edit = SmartArtEditingPlanner.Apply(
+                candidate.Data,
+                SmartArtNodeEditIntent.ChangeText(targetId, "Against revised"));
+            if (!edit.Applied || !SmartArtEditingPlanner.RewriteDataPart(candidate).Applied)
+                return false;
+
+            return SmartArtEditingPlanner.RegenerateDrawingCache(
+                candidate,
+                shape.OffsetXEmu,
+                shape.OffsetYEmu,
+                shape.ExtentCxEmu,
+                shape.ExtentCyEmu,
+                presentation.Theme!).Applied;
+        }).Should().BeTrue();
+
+        var updated = presentation.Slides[0].Shapes
+            .First(candidate => candidate.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        updated.Data!.Nodes.Select(node => node.Text).Should().Equal("For", "Against revised");
+        updated.Data.IsLiveLayoutSupported.Should().BeTrue();
+        updated.FallbackShapes.Should().HaveCount(2);
+        updated.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Equal("For", "Against revised");
+
+        session.Bus.Undo();
+        var undone = presentation.Slides[0].Shapes
+            .First(candidate => candidate.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        undone.Data!.Nodes.Select(node => node.Text).Should().Equal("For", "Against");
+        undone.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Equal("For", "Against");
+
+        session.Bus.Redo();
+        var roundTripPath = WriteToPptx(presentation);
+        var reopened = PptxPackageReader.Read(roundTripPath).Slides[0].Shapes
+            .First(candidate => candidate.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        reopened.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        reopened.FallbackShapes.Should().HaveCount(2);
+        reopened.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Equal("For", "Against revised");
     }
 
     [Fact]

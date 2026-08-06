@@ -2140,7 +2140,9 @@ public sealed class SlideShowMediaControllerTests
                         new("Bold", Bold: true)
                         {
                             ForegroundColorHex = "FFCC00",
-                            BackgroundColorHex = "000000"
+                            BackgroundColorHex = "000000",
+                            FontFamily = "Aptos",
+                            FontSizePx = 24
                         },
                         new(" italic", Italic: true),
                         new(" underline", Underline: true)
@@ -2160,6 +2162,8 @@ public sealed class SlideShowMediaControllerTests
             .Which.Color.Should().Be(System.Windows.Media.Color.FromRgb(0xFF, 0xCC, 0x00));
         runs[0].Background.Should().BeOfType<System.Windows.Media.SolidColorBrush>()
             .Which.Color.Should().Be(System.Windows.Media.Colors.Black);
+        runs[0].FontFamily.Source.Should().Be("Aptos");
+        runs[0].FontSize.Should().Be(24);
         runs[1].FontStyle.Should().Be(System.Windows.FontStyles.Italic);
         runs[2].TextDecorations.Should().ContainSingle()
             .Which.Should().Be(System.Windows.TextDecorations.Underline[0]);

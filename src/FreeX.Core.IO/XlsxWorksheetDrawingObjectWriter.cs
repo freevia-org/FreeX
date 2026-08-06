@@ -69,6 +69,20 @@ internal static class XlsxWorksheetDrawingObjectWriter
     /// one's original anchor must keep being preserved. Names are compared ordinally, matching the
     /// verbatim round-trip through the reader and writer.
     /// </para>
+    /// <para>
+    /// R121-model-drawing-delete-1: also unions in <see cref="Sheet.DeletedSourceDrawingObjectNames"/> --
+    /// a drawing object (picture, text box, shape, OR CHART) that DeleteDrawingObjectCommand removed
+    /// outright this session is, from the merger's point of view, exactly the same problem as an edited
+    /// one: it has no live model entry the writer can re-emit a fresh anchor for (there IS no fresh
+    /// anchor -- the object is gone), yet its name still matches an ORIGINAL anchor sitting untouched in
+    /// the true source package. Without this union that anchor -- and, for a picture, its image
+    /// relationship -- gets copied straight back into the saved drawing part by
+    /// <see cref="XlsxWorksheetDrawingPartMerger"/>, resurrecting a deleted object on the very next
+    /// reload. A chart has no <c>IsSourceLoaded</c> flag of its own (charts are always fully rewritten by
+    /// <c>XlsxWorksheetChartWriter</c> for supported chart types), but the merger's supersede check reads
+    /// a source anchor's <c>cNvPr@name</c> generically regardless of anchor kind, so listing a deleted
+    /// chart's name here is enough to keep its original graphicFrame out of the merge too.
+    /// </para>
     /// </summary>
     public static IReadOnlySet<string> GetRewrittenSourceObjectNames(Sheet sheet)
     {
@@ -78,6 +92,13 @@ internal static class XlsxWorksheetDrawingObjectWriter
         CollectDrawingObjectNames(sheet.TextBoxes, IsSupportedTextBox, textBox => textBox.Name, textBox => textBox.IsSourceLoaded, rewrittenNames, sourceLoadedNames);
         CollectDrawingObjectNames(sheet.DrawingShapes, IsSupportedShape, shape => shape.Name, shape => shape.IsSourceLoaded, rewrittenNames, sourceLoadedNames);
         rewrittenNames.ExceptWith(sourceLoadedNames);
+
+        foreach (var deletedName in sheet.DeletedSourceDrawingObjectNames)
+        {
+            if (!string.IsNullOrWhiteSpace(deletedName) && !sourceLoadedNames.Contains(deletedName))
+                rewrittenNames.Add(deletedName);
+        }
+
         return rewrittenNames;
     }
 
@@ -172,8 +193,23 @@ internal static class XlsxWorksheetDrawingObjectWriter
             var pictures = sheet.Pictures.Where(IsSupportedPicture).ToList();
             var textBoxes = sheet.TextBoxes.Where(IsSupportedTextBox).ToList();
             var shapes = sheet.DrawingShapes.Where(IsSupportedShape).ToList();
-            if (pictures.Count == 0 && textBoxes.Count == 0 && shapes.Count == 0)
+            // R121-io-drawing-delete-1: normally a sheet with nothing "supported" left to emit (every
+            // remaining object still IsSourceLoaded) is skipped entirely -- the merger repopulates its
+            // drawing part later from the untouched source. But when this sheet ALSO has a tombstoned
+            // deletion (DeleteDrawingObjectCommand removed a picture/text box/shape/chart this session),
+            // skipping here means the writer never touches this sheet's drawing part at all, so
+            // XlsxPackageMetadataMerger.CopyUnknownPackageParts (which only copies a source part when the
+            // TARGET has no entry at that path yet) blindly copies the stale, UNFILTERED source drawing
+            // part back in wholesale before the merger's own supersededSourceNames-aware add-back logic
+            // ever runs -- resurrecting the deleted object regardless of that check. Falling through
+            // (even with all three lists empty) makes the writer emit this sheet's own drawing part --
+            // empty of anchors, but present in the archive -- so CopyUnknownPackageParts skips its raw
+            // copy and the merger's filtered add-back is what actually repopulates it.
+            if (pictures.Count == 0 && textBoxes.Count == 0 && shapes.Count == 0 &&
+                sheet.DeletedSourceDrawingObjectNames.Count == 0)
+            {
                 continue;
+            }
 
             // Reuse the sheet's own source drawing part when it has one (so authored objects land on
             // the same drawing as any source-preserved content for that sheet); otherwise allocate the

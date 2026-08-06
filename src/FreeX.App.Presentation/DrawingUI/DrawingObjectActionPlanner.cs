@@ -30,6 +30,7 @@ public static class DrawingObjectActionPlanner
     public const string ShapeGradientCommandTitle = "Shape Gradient";
     public const string ShapeEffectsCommandTitle = "Shape Effects";
     public const string CropPictureCommandTitle = "Crop Picture";
+    public const string DeleteObjectCommandTitle = "Delete";
 
     public static string ZOrderCommandTitle(bool forward) =>
         forward ? BringForwardCommandTitle : SendBackwardCommandTitle;
