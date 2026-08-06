@@ -16,9 +16,11 @@ using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation;
 using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Documents;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Panes;
@@ -202,14 +204,9 @@ public sealed class MainWindow : Window
     // Multiple Pages / Side to Side / Split share the same host-neutral view-depth policy as Avalonia.
     // Multiple Pages remains a read-only paginator; Side to Side uses the existing editable page-box
     // surface so the command no longer discards edits behind a snapshot.
-    private FreeWViewDepthPlan _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
+    private readonly FreeWViewSession _viewSession = new(FreeWViewDepthCapabilities.FullDesktop);
     private FlowDocumentPageViewer? _paginatedViewer; // the overlay page viewer (non-null while active)
     private PaginatedEditorPanel? _sideToSideEditorPanel;
-    private FreeWViewDepthPagePairNavigationState _sideToSideNavigation =
-        FreeWViewDepthPlanner.BuildPagePairNavigation(
-            FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor),
-            requestedFirstVisiblePageNumber: 1,
-            totalPages: 1);
     private Button? _sideToSidePreviousPairButton;
     private Button? _sideToSideNextPairButton;
     private TextBlock? _sideToSidePairStatusText;
@@ -289,7 +286,7 @@ public sealed class MainWindow : Window
         // Push the persisted AutoCorrect / AutoFormat-As-You-Type settings so the editor's as-you-type
         // rules honour the user's toggles from the first keystroke (re-applied when Options is saved).
         ApplyAutoFormatOptions();
-        editor.LoadModel(CreateSampleDocument());
+        editor.LoadModel(FreeWSampleDocumentFactory.Create(FreeWSampleDocumentProfile.ClassicEditor));
         _navigationPaneSession = new NavigationPaneSession(
             CurrentPaneDocument,
             new NavigationPaneMutationActions(
@@ -370,15 +367,15 @@ public sealed class MainWindow : Window
             onToggleRuler: ToggleRulers,
             isRulerVisible: () => _rulersVisible,
             onToggleMultiplePages: ToggleMultiplePages,
-            isMultiplePagesActive: () => _viewDepthPlan.IsMultiplePagesActive,
+            isMultiplePagesActive: () => _viewSession.CurrentDepth.IsMultiplePagesActive,
             onToggleSideToSide: ToggleSideToSide,
-            isSideToSideActive: () => _viewDepthPlan.IsSideToSideActive,
+            isSideToSideActive: () => _viewSession.CurrentDepth.IsSideToSideActive,
             onToggleSplitWindow: ToggleSplitWindow,
-            isSplitWindowActive: () => _viewDepthPlan.IsSplitActive,
-            onHelpOnline: () => OpenExternalHelpLink(FreeWAppInfo.HelpUrl, "Help Online"),
-            onFeedback: () => OpenExternalHelpLink(FreeWAppInfo.FeedbackUrl, "Feedback"),
+            isSplitWindowActive: () => _viewSession.CurrentDepth.IsSplitActive,
+            onHelpOnline: () => OpenExternalHelpLink(FreeWProductInfo.HelpUrl, "Help Online"),
+            onFeedback: () => OpenExternalHelpLink(FreeWProductInfo.FeedbackUrl, "Feedback"),
             onCopyDiagnostics: CopyDiagnostics,
-            onCheckForUpdates: () => OpenExternalHelpLink(FreeWAppInfo.LatestReleaseUrl, "Check for Updates"),
+            onCheckForUpdates: () => OpenExternalHelpLink(FreeWProductInfo.LatestReleaseUrl, "Check for Updates"),
             onAbout: ShowAboutDialog,
             onLegalNotices: ShowLegalNoticesDialog,
             onToggleNotesPane: ToggleNotesPane,
@@ -2126,15 +2123,17 @@ public sealed class MainWindow : Window
     // bar so exactly one mode reads as active. Switching never mutates the model.
     private void SetViewMode(DocumentViewMode mode)
     {
-        var plan = _editorInteraction.PlanDocumentViewChange(
-            CurrentDocumentViewSnapshot(),
+        var plan = _viewSession.PlanDocumentViewChange(
+            _editor.ViewMode,
+            _outlineMode,
+            _pagedEditMode,
             mode);
 
         if (plan.ExitOutlineMode)
             ToggleOutlineView();
 
         if (plan.ExitPaginatedView)
-            ExitPaginatedView();
+            ApplyViewDepthTransition(_viewSession.RestoreLiveEditor());
 
         if (plan.ExitPagedEditMode)
             ExitPagedEdit();
@@ -2143,12 +2142,6 @@ public sealed class MainWindow : Window
         RefreshViewModeChecks();
     }
 
-    private FreeWDocumentViewSnapshot CurrentDocumentViewSnapshot() => new(
-        _editor.ViewMode,
-        _outlineMode,
-        _pagedEditMode,
-        _viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive);
-
     // Push the active view mode into the shared RibbonStateStore (so the View ribbon's Print Layout /
     // Web Layout / Draft / Page Edit toggle buttons reflect it) and the status-bar toggle buttons.
     // Exactly one is checked at a time — PagedEdit has its own surface and is mutually exclusive with
@@ -2156,7 +2149,10 @@ public sealed class MainWindow : Window
     // read-mode / nav-pane toggles keep their buttons in sync.
     private void RefreshViewModeChecks()
     {
-        var plan = _editorInteraction.BuildDocumentViewChecks(CurrentDocumentViewSnapshot());
+        var plan = _viewSession.BuildDocumentViewChecks(
+            _editor.ViewMode,
+            _outlineMode,
+            _pagedEditMode);
 
         _stateStore.SetChecked("freew.print-layout", plan.PrintLayout);
         _stateStore.SetChecked("freew.web-layout", plan.WebLayout);
@@ -2207,7 +2203,8 @@ public sealed class MainWindow : Window
     // view mode (Print Layout / Web Layout / Draft) restores the live editor via ExitPaginatedView.
     // The two modes are mutually exclusive with each other and with any live-editor overlay mode.
 
-    internal FreeWViewDepthPagePairNavigationState SideToSideNavigationForTests => _sideToSideNavigation;
+    internal FreeWViewDepthPagePairNavigationState SideToSideNavigationForTests =>
+        _viewSession.PagePairNavigation;
     internal bool HasSideToSideEditablePageSurfaceForTests => _sideToSideEditorPanel is not null;
     internal bool HasSideToSidePagePairNavigationForTests =>
         _sideToSidePreviousPairButton is not null &&
@@ -2226,37 +2223,23 @@ public sealed class MainWindow : Window
     /// a full-window <see cref="FlowDocumentPageViewer"/> backed by <see cref="PrintLayout.BuildPaginatedDocument"/>.
     /// </summary>
     private void ToggleMultiplePages() =>
-        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleMultiplePages));
+        ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleMultiplePages));
 
     /// <summary>
     /// Enters (or exits) the Side to Side paginated overlay — same as Multiple Pages but the viewer
     /// is zoomed to fit two pages and exposes shared pair-wise page navigation.
     /// </summary>
     private void ToggleSideToSide() =>
-        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSideToSide));
+        ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleSideToSide));
 
-    private FreeWViewDepthState CurrentViewDepthState() => new(_viewDepthPlan.Mode);
-
-    private void ApplyViewDepthPlan(FreeWViewDepthPlan plan)
+    private void ApplyViewDepthTransition(FreeWViewDepthTransition transition)
     {
-        if (_viewDepthPlan.IsSplitActive && plan.SurfaceKind != FreeWViewDepthSurfaceKind.SplitEditorWithReadOnlyPreview)
-            ExitSplitView(resetPlan: false);
+        if (transition.ExitSplitSurface)
+            ExitSplitView();
+        if (transition.ExitPageSurface)
+            ExitPaginatedView();
 
-        if ((_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive) &&
-            plan.SurfaceKind is not FreeWViewDepthSurfaceKind.ReadOnlyPagePreview and
-            not FreeWViewDepthSurfaceKind.EditablePageView)
-        {
-            ExitPaginatedView(resetPlan: false);
-        }
-        else if ((_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive) &&
-                 plan.SurfaceKind is (FreeWViewDepthSurfaceKind.ReadOnlyPagePreview or
-                     FreeWViewDepthSurfaceKind.EditablePageView) &&
-                 plan.Mode != _viewDepthPlan.Mode)
-        {
-            ExitPaginatedView(resetPlan: false);
-        }
-
-        _viewDepthPlan = plan;
+        var plan = transition.Current;
         _editor.ApplyViewDepthLayout(plan.Layout);
 
         switch (plan.SurfaceKind)
@@ -2286,9 +2269,7 @@ public sealed class MainWindow : Window
     {
         _editor.CommitToModel();
         _sideToSideEditorPanel = PaginatedEditorPanel.Build(_editor, horizontalFlow: true);
-        _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
-            plan,
-            requestedFirstVisiblePageNumber: 1,
+        _viewSession.StartPagePairNavigation(
             totalPages: _sideToSideEditorPanel.PageBoxes.Count);
 
         _workspaceGridChild = _workspace.Child;
@@ -2332,10 +2313,7 @@ public sealed class MainWindow : Window
         UIElement preview = viewer;
         if (plan.IsSideToSideActive)
         {
-            _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
-                plan,
-                requestedFirstVisiblePageNumber: 1,
-                totalPages: paginator.PageCount);
+            _viewSession.StartPagePairNavigation(totalPages: paginator.PageCount);
             preview = BuildSideToSideNavigationHost(viewer);
         }
         else
@@ -2403,24 +2381,21 @@ public sealed class MainWindow : Window
 
     private void NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand command)
     {
-        if (!_viewDepthPlan.IsSideToSideActive ||
+        if (!_viewSession.CurrentDepth.IsSideToSideActive ||
             (_paginatedViewer is null && _sideToSideEditorPanel is null))
             return;
 
-        _sideToSideNavigation = FreeWViewDepthPlanner.NavigatePagePair(
-            _viewDepthPlan,
-            _sideToSideNavigation,
-            command);
+        _viewSession.NavigatePagePair(command);
         ApplySideToSideNavigationToViewer();
         SyncSideToSideNavigationControls();
     }
 
     private void ApplySideToSideNavigationToViewer()
     {
-        if (!_viewDepthPlan.IsSideToSideActive)
+        if (!_viewSession.CurrentDepth.IsSideToSideActive)
             return;
 
-        var firstPage = _sideToSideNavigation.FirstVisiblePageNumber;
+        var firstPage = _viewSession.PagePairNavigation.FirstVisiblePageNumber;
         if (_paginatedViewer is not null && _paginatedViewer.CanGoToPage(firstPage))
             _paginatedViewer.GoToPage(firstPage);
         else
@@ -2430,19 +2405,16 @@ public sealed class MainWindow : Window
     private void SyncSideToSideNavigationControls()
     {
         if (_sideToSidePreviousPairButton is not null)
-            _sideToSidePreviousPairButton.IsEnabled = _sideToSideNavigation.CanGoToPreviousPair;
+            _sideToSidePreviousPairButton.IsEnabled = _viewSession.PagePairNavigation.CanGoToPreviousPair;
         if (_sideToSideNextPairButton is not null)
-            _sideToSideNextPairButton.IsEnabled = _sideToSideNavigation.CanGoToNextPair;
+            _sideToSideNextPairButton.IsEnabled = _viewSession.PagePairNavigation.CanGoToNextPair;
         if (_sideToSidePairStatusText is not null)
-            _sideToSidePairStatusText.Text = _sideToSideNavigation.StatusText;
+            _sideToSidePairStatusText.Text = _viewSession.PagePairNavigation.StatusText;
     }
 
     private void ResetSideToSideNavigation()
     {
-        _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
-            FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor),
-            requestedFirstVisiblePageNumber: 1,
-            totalPages: 1);
+        _viewSession.ResetPagePairNavigation();
         _sideToSidePreviousPairButton = null;
         _sideToSideNextPairButton = null;
         _sideToSidePairStatusText = null;
@@ -2452,7 +2424,7 @@ public sealed class MainWindow : Window
     /// Restores the live workspaceGrid as the workspace child, dismissing the paginated overlay and
     /// clearing both the Multiple Pages and Side to Side flags.
     /// </summary>
-    private void ExitPaginatedView(bool resetPlan = true)
+    private void ExitPaginatedView()
     {
         if (_workspaceGridChild is not null)
             _workspace.Child = _workspaceGridChild;
@@ -2466,11 +2438,6 @@ public sealed class MainWindow : Window
         _sideToSideEditorPanel = null;
         _workspaceGridChild = null;
         ResetSideToSideNavigation();
-        if (resetPlan)
-        {
-            _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
-            _editor.ApplyViewDepthLayout(_viewDepthPlan.Layout);
-        }
         SyncViewDepthRibbonState();
     }
 
@@ -2503,8 +2470,8 @@ public sealed class MainWindow : Window
             return;
 
         // Leave any overlay modes that also swap the workspace child.
-        if (_viewDepthPlan.Mode != FreeWViewDepthMode.LiveEditor)
-            ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor));
+        if (_viewSession.CurrentDepth.Mode != FreeWViewDepthMode.LiveEditor)
+            ApplyViewDepthTransition(_viewSession.RestoreLiveEditor());
         if (_outlineMode)
             ToggleOutlineView();
 
@@ -2561,7 +2528,7 @@ public sealed class MainWindow : Window
     /// <see cref="FlowDocumentScrollViewer"/> snapshot (bottom). When exiting, restores the original child.
     /// </summary>
     private void ToggleSplitWindow() =>
-        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSplit));
+        ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleSplit));
 
     private void EnterSplitView()
     {
@@ -2625,15 +2592,10 @@ public sealed class MainWindow : Window
     /// <summary>
     /// Exits the split-window view, restoring the original workspace child (the workspaceGrid + editor).
     /// </summary>
-    private void ExitSplitView(bool resetPlan = true)
+    private void ExitSplitView()
     {
         if (_splitGrid is null)
         {
-            if (resetPlan)
-            {
-                _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
-                _editor.ApplyViewDepthLayout(_viewDepthPlan.Layout);
-            }
             SyncViewDepthRibbonState();
             return;
         }
@@ -2649,19 +2611,14 @@ public sealed class MainWindow : Window
         _splitDebounceTimer?.Stop();
         _splitDebounceTimer = null;
 
-        if (resetPlan)
-        {
-            _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
-            _editor.ApplyViewDepthLayout(_viewDepthPlan.Layout);
-        }
         SyncViewDepthRibbonState();
     }
 
     private void SyncViewDepthRibbonState()
     {
-        _stateStore.SetChecked("freew.zoom-multiple-pages", _viewDepthPlan.IsMultiplePagesActive);
-        _stateStore.SetChecked("freew.zoom-side-to-side", _viewDepthPlan.IsSideToSideActive);
-        _stateStore.SetChecked("freew.split-window", _viewDepthPlan.IsSplitActive);
+        _stateStore.SetChecked("freew.zoom-multiple-pages", _viewSession.CurrentDepth.IsMultiplePagesActive);
+        _stateStore.SetChecked("freew.zoom-side-to-side", _viewSession.CurrentDepth.IsSideToSideActive);
+        _stateStore.SetChecked("freew.split-window", _viewSession.CurrentDepth.IsSplitActive);
     }
 
     /// <summary>
@@ -2671,7 +2628,7 @@ public sealed class MainWindow : Window
     /// </summary>
     private void ScheduleSplitPaneRefresh()
     {
-        if (!_viewDepthPlan.IsSplitActive || _splitGrid is null)
+        if (!_viewSession.CurrentDepth.IsSplitActive || _splitGrid is null)
             return;
 
         // Restart the debounce timer on every TextChanged.
@@ -2701,7 +2658,7 @@ public sealed class MainWindow : Window
     /// </summary>
     private void RefreshSplitSnapshot()
     {
-        if (!_viewDepthPlan.IsSplitActive || _splitGrid is null || _splitGrid.Children.Count < 3)
+        if (!_viewSession.CurrentDepth.IsSplitActive || _splitGrid is null || _splitGrid.Children.Count < 3)
             return;
 
         _editor.CommitToModel();
@@ -3145,35 +3102,6 @@ public sealed class MainWindow : Window
     // Shows that AppProduct = "FreeW" routes the shared storage helpers to FreeW's own folder.
     private static string ResolveDataFolderLabel()
         => AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
-
-    // A sample document that exercises the model's styles + run/paragraph formatting.
-    private static TextDocument CreateSampleDocument()
-    {
-        var doc = TextDocument.CreateEmpty();
-        doc.Blocks.Clear();
-
-        doc.Blocks.Add(new Paragraph("Welcome to FreeW") { StyleId = "Title" });
-        doc.Blocks.Add(new Paragraph("A free word processor") { StyleId = "Heading1" });
-
-        var intro = new Paragraph();
-        intro.Runs.Add(new Run("This document is rendered from the FreeW model. Formatting like "));
-        intro.Runs.Add(new Run("bold", new RunFormatting { Bold = true }));
-        intro.Runs.Add(new Run(", "));
-        intro.Runs.Add(new Run("italic", new RunFormatting { Italic = true }));
-        intro.Runs.Add(new Run(", "));
-        intro.Runs.Add(new Run("underline", new RunFormatting { Underline = true }));
-        intro.Runs.Add(new Run(" and "));
-        intro.Runs.Add(new Run("colour", new RunFormatting { ColorHex = "#C0504D", Bold = true }));
-        intro.Runs.Add(new Run(" resolves through styles and document defaults. Edit freely — the surface is a live RichTextBox; CommitToModel() maps your edits back."));
-        doc.Blocks.Add(intro);
-
-        doc.Blocks.Add(new Paragraph("Centered paragraph.")
-        {
-            Formatting = ParagraphFormatting.Default with { Alignment = FreeW.Core.Model.TextAlignment.Center }
-        });
-
-        return doc;
-    }
 
     // --- Real Word-style ribbon, rendered by the shared WPF renderer ---
     //

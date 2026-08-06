@@ -118,12 +118,7 @@ public sealed partial class MainWindow : Window
     private Control? _liveWorkspaceContent;
     private Grid? _splitPreviewGrid;
     private Control? _splitPreviewSnapshot;
-    private FreeWViewDepthPlan _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
-    private FreeWViewDepthPagePairNavigationState _sideToSideNavigation =
-        FreeWViewDepthPlanner.BuildPagePairNavigation(
-            FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor),
-            requestedFirstVisiblePageNumber: 1,
-            totalPages: 1);
+    private readonly FreeWViewSession _viewSession = new(FreeWViewDepthCapabilities.FullDesktop);
     private ScrollViewer? _sideToSidePreviewScrollViewer;
     private Button? _sideToSidePreviousPairButton;
     private Button? _sideToSideNextPairButton;
@@ -469,12 +464,13 @@ public sealed partial class MainWindow : Window
     internal NotesPane NotesPaneForTest => _notesPane;
     internal ThesaurusPane ThesaurusPaneForTest => _thesaurusPane;
 
-    internal FreeWViewDepthMode ViewDepthMode => _viewDepthPlan.Mode;
-    internal bool IsSplitPreviewActive => _viewDepthPlan.IsSplitActive;
-    internal bool IsMultiplePagesPreviewActive => _viewDepthPlan.IsMultiplePagesActive;
-    internal bool IsSideToSidePreviewActive => _viewDepthPlan.IsSideToSideActive;
-    internal string? ViewDepthLimitation => _viewDepthPlan.Limitation;
-    internal FreeWViewDepthPagePairNavigationState SideToSideNavigationForTests => _sideToSideNavigation;
+    internal FreeWViewDepthMode ViewDepthMode => _viewSession.CurrentDepth.Mode;
+    internal bool IsSplitPreviewActive => _viewSession.CurrentDepth.IsSplitActive;
+    internal bool IsMultiplePagesPreviewActive => _viewSession.CurrentDepth.IsMultiplePagesActive;
+    internal bool IsSideToSidePreviewActive => _viewSession.CurrentDepth.IsSideToSideActive;
+    internal string? ViewDepthLimitation => _viewSession.CurrentDepth.Limitation;
+    internal FreeWViewDepthPagePairNavigationState SideToSideNavigationForTests =>
+        _viewSession.PagePairNavigation;
     internal bool HasSideToSidePagePairNavigationForTests =>
         _sideToSidePreviewScrollViewer is not null &&
         _sideToSidePreviousPairButton is not null &&
@@ -1405,7 +1401,7 @@ public sealed partial class MainWindow : Window
     /// read-only paginated snapshot, so the command is backed without pretending to offer dual live editing.
     /// </summary>
     internal void ToggleSplit() =>
-        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSplit));
+        ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleSplit));
 
     private void ZoomToOnePage()
     {
@@ -1422,10 +1418,10 @@ public sealed partial class MainWindow : Window
     }
 
     internal void ToggleMultiplePages() =>
-        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleMultiplePages));
+        ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleMultiplePages));
 
     internal void ToggleSideToSide() =>
-        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSideToSide));
+        ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleSideToSide));
 
     internal void NavigateSideToSideNextPairForTests() =>
         NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair);
@@ -1433,12 +1429,12 @@ public sealed partial class MainWindow : Window
     internal void NavigateSideToSidePreviousPairForTests() =>
         NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair);
 
-    private FreeWViewDepthState CurrentViewDepthState() => new(_viewDepthPlan.Mode);
-
-    private void ApplyViewDepthPlan(FreeWViewDepthPlan plan, bool updateStatus = true)
+    private void ApplyViewDepthTransition(FreeWViewDepthTransition transition, bool updateStatus = true)
     {
         if (_outlineMode)
             LeaveOutlineView(restorePriorView: false);
+
+        var plan = transition.Current;
 
         switch (plan.SurfaceKind)
         {
@@ -1456,11 +1452,10 @@ public sealed partial class MainWindow : Window
                 break;
         }
 
-        _viewDepthPlan = plan;
         _editor.ApplyViewDepthLayout(plan.Layout);
         if (updateStatus)
             _status.Text = plan.IsSideToSideActive
-                ? _sideToSideNavigation.StatusText
+                ? _viewSession.PagePairNavigation.StatusText
                 : plan.StatusText;
     }
 
@@ -1537,10 +1532,7 @@ public sealed partial class MainWindow : Window
 
         _scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
         _sideToSideUsesLiveEditor = true;
-        _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
-            plan,
-            requestedFirstVisiblePageNumber: 1,
-            totalPages: Math.Max(1, _editor.PageCount));
+        _viewSession.StartPagePairNavigation(totalPages: Math.Max(1, _editor.PageCount));
         var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(_editor.Document.Page);
         var (viewportWidth, viewportHeight) = GetWorkspaceViewportSize(compact: false);
         var viewport = DocumentViewDepthLayoutPlanner.BuildViewportPlan(
@@ -1560,10 +1552,10 @@ public sealed partial class MainWindow : Window
 
     private void RefreshSplitPreviewSnapshot()
     {
-        if (!_viewDepthPlan.IsSplitActive || _splitPreviewGrid is null || _splitPreviewSnapshot is null)
+        if (!_viewSession.CurrentDepth.IsSplitActive || _splitPreviewGrid is null || _splitPreviewSnapshot is null)
             return;
 
-        var replacement = BuildReadOnlyPagePreviewSurface(_viewDepthPlan, compact: true);
+        var replacement = BuildReadOnlyPagePreviewSurface(_viewSession.CurrentDepth, compact: true);
         var index = _splitPreviewGrid.Children.IndexOf(_splitPreviewSnapshot);
         if (index < 0)
             return;
@@ -1611,10 +1603,7 @@ public sealed partial class MainWindow : Window
 
         if (!compact && plan.IsSideToSideActive)
         {
-            _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
-                plan,
-                requestedFirstVisiblePageNumber: 1,
-                totalPages: snapshot.PageCount);
+            _viewSession.StartPagePairNavigation(totalPages: snapshot.PageCount);
             _sideToSidePreviewScrollViewer = scroller;
             _sideToSidePairScrollStrideDip = 2 * (pageWidthDip + plan.Layout.InterPageGapDip) * viewport.Scale;
             return BuildSideToSideNavigationHost(scroller);
@@ -1672,16 +1661,13 @@ public sealed partial class MainWindow : Window
 
     private void NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand command)
     {
-        if (!_viewDepthPlan.IsSideToSideActive || _sideToSidePreviewScrollViewer is null)
+        if (!_viewSession.CurrentDepth.IsSideToSideActive || _sideToSidePreviewScrollViewer is null)
             return;
 
-        _sideToSideNavigation = FreeWViewDepthPlanner.NavigatePagePair(
-            _viewDepthPlan,
-            _sideToSideNavigation,
-            command);
-        ApplySideToSideNavigationToScrollViewer(_viewDepthPlan);
+        _viewSession.NavigatePagePair(command);
+        ApplySideToSideNavigationToScrollViewer(_viewSession.CurrentDepth);
         SyncSideToSideNavigationControls();
-        _status.Text = _sideToSideNavigation.StatusText;
+        _status.Text = _viewSession.PagePairNavigation.StatusText;
     }
 
     private void ApplySideToSideNavigationToScrollViewer(FreeWViewDepthPlan plan)
@@ -1689,8 +1675,8 @@ public sealed partial class MainWindow : Window
         if (!plan.IsSideToSideActive || _sideToSidePreviewScrollViewer is null)
             return;
 
-        var pairIndex = (_sideToSideNavigation.FirstVisiblePageNumber - 1) /
-            Math.Max(1, _sideToSideNavigation.PagesPerPair);
+        var pairIndex = (_viewSession.PagePairNavigation.FirstVisiblePageNumber - 1) /
+            Math.Max(1, _viewSession.PagePairNavigation.PagesPerPair);
         var horizontalOffset = Math.Max(0, pairIndex * _sideToSidePairScrollStrideDip);
         _sideToSidePlannedHorizontalOffsetDip = horizontalOffset;
         _sideToSidePreviewScrollViewer.Offset = new Vector(horizontalOffset, 0);
@@ -1699,19 +1685,16 @@ public sealed partial class MainWindow : Window
     private void SyncSideToSideNavigationControls()
     {
         if (_sideToSidePreviousPairButton is not null)
-            _sideToSidePreviousPairButton.IsEnabled = _sideToSideNavigation.CanGoToPreviousPair;
+            _sideToSidePreviousPairButton.IsEnabled = _viewSession.PagePairNavigation.CanGoToPreviousPair;
         if (_sideToSideNextPairButton is not null)
-            _sideToSideNextPairButton.IsEnabled = _sideToSideNavigation.CanGoToNextPair;
+            _sideToSideNextPairButton.IsEnabled = _viewSession.PagePairNavigation.CanGoToNextPair;
         if (_sideToSidePairStatusText is not null)
-            _sideToSidePairStatusText.Text = _sideToSideNavigation.StatusText;
+            _sideToSidePairStatusText.Text = _viewSession.PagePairNavigation.StatusText;
     }
 
     private void ResetSideToSideNavigation()
     {
-        _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
-            FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor),
-            requestedFirstVisiblePageNumber: 1,
-            totalPages: 1);
+        _viewSession.ResetPagePairNavigation();
         _sideToSidePreviewScrollViewer = null;
         _sideToSidePreviousPairButton = null;
         _sideToSideNextPairButton = null;
@@ -1895,13 +1878,13 @@ public sealed partial class MainWindow : Window
             NewWindow:       OpenNewWindow,
             ArrangeAll:      ArrangeAllWindows,
             ToggleSplit:     ToggleSplit,
-            IsSplitActive:   () => _viewDepthPlan.IsSplitActive,
+            IsSplitActive:   () => _viewSession.CurrentDepth.IsSplitActive,
             ZoomOnePage:     ZoomToOnePage,
             ZoomPageWidth:   ZoomToPageWidth,
             ToggleMultiplePages: ToggleMultiplePages,
-            IsMultiplePagesActive: () => _viewDepthPlan.IsMultiplePagesActive,
+            IsMultiplePagesActive: () => _viewSession.CurrentDepth.IsMultiplePagesActive,
             ToggleSideToSide: ToggleSideToSide,
-            IsSideToSideActive: () => _viewDepthPlan.IsSideToSideActive,
+            IsSideToSideActive: () => _viewSession.CurrentDepth.IsSideToSideActive,
             TogglePagedEditView: TogglePagedEditView,
             IsPagedEditViewActive: () => _pagedEditMode,
             // AV-INSERT2: Insert depth 2 dialog launchers (optional callbacks).
@@ -2626,8 +2609,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (_viewDepthPlan.Mode != FreeWViewDepthMode.LiveEditor)
-            ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
+        if (_viewSession.CurrentDepth.Mode != FreeWViewDepthMode.LiveEditor)
+            ApplyViewDepthTransition(_viewSession.RestoreLiveEditor(), updateStatus: false);
 
         _pagedEditModeBeforeOutline = _pagedEditMode;
         _pagedEditMode = false;
@@ -2656,35 +2639,34 @@ public sealed partial class MainWindow : Window
 
     private void SetViewMode(DocumentViewMode mode)
     {
-        var plan = _editorInteraction.PlanDocumentViewChange(
-            CurrentDocumentViewSnapshot(),
+        var plan = _viewSession.PlanDocumentViewChange(
+            _editor.ViewMode,
+            _outlineMode,
+            _pagedEditMode,
             mode);
 
         if (plan.ExitOutlineMode)
             LeaveOutlineView(restorePriorView: false);
 
         if (plan.ExitPaginatedView)
-            ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
+            ApplyViewDepthTransition(_viewSession.RestoreLiveEditor(), updateStatus: false);
 
         if (plan.ExitPagedEditMode)
             _pagedEditMode = false;
         _editor.ViewMode = plan.TargetMode;
-        if (_viewDepthPlan.IsSplitActive)
+        if (_viewSession.CurrentDepth.IsSplitActive)
             RefreshSplitPreviewSnapshot();
         UpdateViewModeButtons();
         RefreshRibbonCommandStates();
         _editor.Focus();
     }
 
-    private FreeWDocumentViewSnapshot CurrentDocumentViewSnapshot() => new(
-        _editor.ViewMode,
-        _outlineMode,
-        _pagedEditMode,
-        _viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive);
-
     private void UpdateViewModeButtons()
     {
-        var plan = _editorInteraction.BuildDocumentViewChecks(CurrentDocumentViewSnapshot());
+        var plan = _viewSession.BuildDocumentViewChecks(
+            _editor.ViewMode,
+            _outlineMode,
+            _pagedEditMode);
         ApplyStatusToggleState(_printLayoutSwitch, plan.PrintLayout);
         ApplyStatusToggleState(_webLayoutSwitch, plan.WebLayout);
         ApplyStatusToggleState(_draftSwitch, plan.Draft);
@@ -2714,8 +2696,8 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            if (_viewDepthPlan.Mode != FreeWViewDepthMode.LiveEditor)
-                ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
+            if (_viewSession.CurrentDepth.Mode != FreeWViewDepthMode.LiveEditor)
+                ApplyViewDepthTransition(_viewSession.RestoreLiveEditor(), updateStatus: false);
             _viewModeBeforePagedEdit = _editor.ViewMode;
             _editor.ViewMode = DocumentViewMode.PrintLayout;
             _pagedEditMode = true;
@@ -3054,7 +3036,7 @@ public sealed partial class MainWindow : Window
         if (_scroller is null)
             return;
         var target = Math.Max(0, _editor.CaretTop - 40);
-        var horizontal = _viewDepthPlan.IsSideToSideActive
+        var horizontal = _viewSession.CurrentDepth.IsSideToSideActive
             ? Math.Max(0, _editor.CaretLeft - 40)
             : _scroller.Offset.X;
         _scroller.Offset = new Vector(horizontal, target);
@@ -4076,7 +4058,7 @@ public sealed partial class MainWindow : Window
     private void LoadDocumentContent(TextDocument document)
     {
         StopReadAloud();
-        ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
+        ApplyViewDepthTransition(_viewSession.RestoreLiveEditor(), updateStatus: false);
         _suppressEditorDirty = true;
         try
         {

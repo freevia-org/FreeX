@@ -46,24 +46,6 @@ public sealed record FreeWReadModePageColorPlan(
     string PageColorHex,
     bool ApplyImmediately);
 
-public sealed record FreeWDocumentViewSnapshot(
-    DocumentViewMode ViewMode,
-    bool IsOutlineMode,
-    bool IsPagedEditMode,
-    bool IsPaginatedViewActive);
-
-public sealed record FreeWDocumentViewChangePlan(
-    DocumentViewMode TargetMode,
-    bool ExitOutlineMode,
-    bool ExitPagedEditMode,
-    bool ExitPaginatedView);
-
-public sealed record FreeWDocumentViewCheckPlan(
-    bool PrintLayout,
-    bool WebLayout,
-    bool Draft,
-    bool PagedEdit);
-
 /// <summary>
 /// Owns host-neutral interaction state and decisions for the FreeW editor work area.
 /// Native controls, rendering, focus, and editor-layout snapshots stay in the platform adapters.
@@ -110,35 +92,6 @@ public sealed class FreeWEditorInteractionSession
             ReadModePageColor,
             FreeWReadModePlanner.PageColorHex(ReadModePageColor),
             IsReadModeActive);
-    }
-
-    public FreeWDocumentViewChangePlan PlanDocumentViewChange(
-        FreeWDocumentViewSnapshot snapshot,
-        DocumentViewMode targetMode)
-    {
-        ArgumentNullException.ThrowIfNull(snapshot);
-        if (targetMode == DocumentViewMode.PagedEdit)
-            throw new ArgumentOutOfRangeException(nameof(targetMode), targetMode, "Paged Edit is an overlay workflow.");
-
-        return new FreeWDocumentViewChangePlan(
-            targetMode,
-            ExitOutlineMode: snapshot.IsOutlineMode,
-            ExitPagedEditMode: snapshot.IsPagedEditMode,
-            ExitPaginatedView: snapshot.IsPaginatedViewActive);
-    }
-
-    public FreeWDocumentViewCheckPlan BuildDocumentViewChecks(FreeWDocumentViewSnapshot snapshot)
-    {
-        ArgumentNullException.ThrowIfNull(snapshot);
-
-        return new FreeWDocumentViewCheckPlan(
-            PrintLayout: !snapshot.IsOutlineMode && !snapshot.IsPagedEditMode &&
-                         snapshot.ViewMode == DocumentViewMode.PrintLayout,
-            WebLayout: !snapshot.IsOutlineMode && !snapshot.IsPagedEditMode &&
-                       snapshot.ViewMode == DocumentViewMode.WebLayout,
-            Draft: !snapshot.IsOutlineMode && !snapshot.IsPagedEditMode &&
-                   snapshot.ViewMode == DocumentViewMode.Draft,
-            PagedEdit: snapshot.IsPagedEditMode);
     }
 
     public FreeWEditorStatusPlan BuildStatus(FreeWEditorStatusSnapshot snapshot) =>

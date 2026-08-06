@@ -58,81 +58,6 @@ public sealed class FreeWEditorInteractionSessionTests
     }
 
     [Fact]
-    public void DocumentViewChange_ExitsEveryMutuallyExclusiveSurface()
-    {
-        var session = new FreeWEditorInteractionSession();
-        var snapshot = new FreeWDocumentViewSnapshot(
-            DocumentViewMode.Draft,
-            IsOutlineMode: true,
-            IsPagedEditMode: true,
-            IsPaginatedViewActive: true);
-
-        var plan = session.PlanDocumentViewChange(snapshot, DocumentViewMode.WebLayout);
-
-        plan.Should().Be(new FreeWDocumentViewChangePlan(
-            DocumentViewMode.WebLayout,
-            ExitOutlineMode: true,
-            ExitPagedEditMode: true,
-            ExitPaginatedView: true));
-    }
-
-    [Fact]
-    public void DocumentViewChange_RejectsPagedEditAsALiveEditorMode()
-    {
-        var session = new FreeWEditorInteractionSession();
-        var snapshot = new FreeWDocumentViewSnapshot(
-            DocumentViewMode.PrintLayout,
-            IsOutlineMode: false,
-            IsPagedEditMode: false,
-            IsPaginatedViewActive: false);
-
-        var act = () => session.PlanDocumentViewChange(snapshot, DocumentViewMode.PagedEdit);
-
-        act.Should().Throw<ArgumentOutOfRangeException>();
-    }
-
-    [Theory]
-    [InlineData(DocumentViewMode.PrintLayout, true, false, false)]
-    [InlineData(DocumentViewMode.WebLayout, false, true, false)]
-    [InlineData(DocumentViewMode.Draft, false, false, true)]
-    public void DocumentViewChecks_ProjectOneLiveMode(
-        DocumentViewMode mode,
-        bool printLayout,
-        bool webLayout,
-        bool draft)
-    {
-        var session = new FreeWEditorInteractionSession();
-
-        var plan = session.BuildDocumentViewChecks(new FreeWDocumentViewSnapshot(
-            mode,
-            IsOutlineMode: false,
-            IsPagedEditMode: false,
-            IsPaginatedViewActive: false));
-
-        plan.Should().Be(new FreeWDocumentViewCheckPlan(printLayout, webLayout, draft, PagedEdit: false));
-    }
-
-    [Fact]
-    public void DocumentViewChecks_ClearLiveModesForOutlineAndKeepPagedEditExclusive()
-    {
-        var session = new FreeWEditorInteractionSession();
-
-        var outline = session.BuildDocumentViewChecks(new FreeWDocumentViewSnapshot(
-            DocumentViewMode.PrintLayout,
-            IsOutlineMode: true,
-            IsPagedEditMode: false,
-            IsPaginatedViewActive: false));
-        var paged = session.BuildDocumentViewChecks(new FreeWDocumentViewSnapshot(
-            DocumentViewMode.PrintLayout,
-            IsOutlineMode: false,
-            IsPagedEditMode: true,
-            IsPaginatedViewActive: false));
-
-        outline.Should().Be(new FreeWDocumentViewCheckPlan(false, false, false, false));
-        paged.Should().Be(new FreeWDocumentViewCheckPlan(false, false, false, true));
-    }
-
-    [Fact]
     public void StatusDispatch_UsesTheCanonicalEditorStatusPlanner()
     {
         var session = new FreeWEditorInteractionSession();
@@ -159,10 +84,12 @@ public sealed class FreeWEditorInteractionSessionSourceOwnershipTests
         foreach (var source in new[] { wpfMainWindow, avaloniaMainWindow })
         {
             source.Should().Contain("FreeWEditorInteractionSession _editorInteraction");
+            source.Should().Contain("FreeWViewSession _viewSession");
             source.Should().Contain("_editorInteraction.ToggleReadMode(");
-            source.Should().Contain("_editorInteraction.PlanDocumentViewChange(");
-            source.Should().Contain("_editorInteraction.BuildDocumentViewChecks(");
+            source.Should().Contain("_viewSession.PlanDocumentViewChange(");
+            source.Should().Contain("_viewSession.BuildDocumentViewChecks(");
             source.Should().Contain("_editorInteraction.BuildStatus(");
+            source.Should().NotContain("CurrentDocumentViewSnapshot");
             source.Should().NotContain("FreeWReadModePlanner.Normalize");
             source.Should().NotContain("FreeWEditorStatusPlanner.Build(");
             source.Should().NotContain("private bool _readMode;");
@@ -187,13 +114,18 @@ public sealed class FreeWEditorInteractionSessionSourceOwnershipTests
     [Fact]
     public void PortableSession_HasNoRendererDependencies()
     {
-        var source = ReadSource(
+        var interactionSource = ReadSource(
             "freew", "FreeW.App.Presentation", "Shell", "FreeWEditorInteractionSession.cs");
+        var viewSource = ReadSource(
+            "freew", "FreeW.App.Presentation", "Shell", "FreeWViewSession.cs");
 
-        source.Should().NotContain("using Avalonia");
-        source.Should().NotContain("using System.Windows");
-        source.Should().NotContain("System.Windows.Visibility");
-        source.Should().NotContain("Avalonia.Controls");
+        foreach (var source in new[] { interactionSource, viewSource })
+        {
+            source.Should().NotContain("using Avalonia");
+            source.Should().NotContain("using System.Windows");
+            source.Should().NotContain("System.Windows.Visibility");
+            source.Should().NotContain("Avalonia.Controls");
+        }
     }
 
     private static string ReadSource(params string[] parts)
