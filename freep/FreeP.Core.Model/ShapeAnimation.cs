@@ -90,6 +90,12 @@ public sealed class ShapeAnimation
     public string? PreservedFillBehaviorXml { get; set; }
 
     /// <summary>
+    /// Preserves PowerPoint's native line-color behavior group, including the
+    /// <c>stroke.on</c> setter that accompanies <c>stroke.color</c>.
+    /// </summary>
+    public string? PreservedLineBehaviorXml { get; set; }
+
+    /// <summary>
     /// Preserves an animation preset that is not represented by the current
     /// <see cref="AnimationPreset"/> enum. Playback still uses the mapped
     /// fallback, but package save can re-emit the authored PowerPoint token.
@@ -175,6 +181,7 @@ public enum AnimationPreset
     GrowWithColor,
     ChangeColor,
     ChangeFillColor,
+    ChangeLineColor,
     Shimmer,
 }
 

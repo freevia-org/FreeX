@@ -6844,15 +6844,26 @@ public static class PptxPackageReader
             : null;
         var colorBehavior = buildPar.Descendants(P + "animClr")
             .FirstOrDefault();
+        var lineColorBehavior = presetClass == "emph"
+            && presetId == 7
+            ? buildPar.Descendants(P + "animClr")
+                .FirstOrDefault(element => element.Descendants(P + "attrName")
+                    .Any(attribute => attribute.Value == "stroke.color"))
+            : null;
         var isNativeFillColor = presetClass == "emph"
             && presetId == 1
             && colorBehavior?.Descendants(P + "attrName")
                 .Any(element => element.Value == "fillcolor") == true;
+        var isNativeLineColor = lineColorBehavior is not null;
         var preservedColorBehaviorXml = isNativeFillColor
+            || isNativeLineColor
             ? null
             : colorBehavior?.ToString(SaveOptions.DisableFormatting);
         var preservedFillBehaviorXml = isNativeFillColor
             ? BuildPreservedFillBehaviorXml(colorBehavior!)
+            : null;
+        var preservedLineBehaviorXml = isNativeLineColor
+            ? BuildPreservedFillBehaviorXml(lineColorBehavior!)
             : null;
 
         var repeatInfo = ReadRepeat(cTn);
@@ -6867,6 +6878,8 @@ public static class PptxPackageReader
         var (kind, preset) = PptxAnimationMap.OoxmlToAnimationPreset(presetClass, presetId);
         if (isNativeFillColor)
             preset = AnimationPreset.ChangeFillColor;
+        else if (isNativeLineColor)
+            preset = AnimationPreset.ChangeLineColor;
         if (presetClass == "emph" && presetId == 4 && scaleBehavior is null)
         {
             var numericTo = buildPar.Descendants(P + "anim")
@@ -6916,6 +6929,7 @@ public static class PptxPackageReader
             PreservedColorBehaviorXml = preservedColorBehaviorXml,
             PreservedNumericBehaviorXml = preservedNumericBehaviorXml,
             PreservedFillBehaviorXml = preservedFillBehaviorXml,
+            PreservedLineBehaviorXml = preservedLineBehaviorXml,
             TriggerShapeId = triggerShapeId,
             RawPresetClass = knownPreset ? null : presetClass,
             RawPresetId = knownPreset ? null : presetId,
