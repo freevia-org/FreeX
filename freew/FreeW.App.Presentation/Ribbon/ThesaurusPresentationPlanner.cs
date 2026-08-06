@@ -20,10 +20,7 @@ public sealed record ThesaurusActionRow(
     string RawSynonym,
     string DisplayText,
     string InsertToolTip,
-    string CopyToolTip)
-{
-    public string ReplaceToolTip => InsertToolTip;
-}
+    string CopyToolTip);
 
 public static class ThesaurusActionRowExtensions
 {

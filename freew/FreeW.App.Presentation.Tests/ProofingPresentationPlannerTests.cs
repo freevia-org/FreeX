@@ -121,7 +121,7 @@ public sealed class ProofingPresentationPlannerTests
         plan.Senses[0].DisplayLabel.Should().Be("adjective");
         plan.Senses[0].Actions.Select(action => action.DisplayText)
             .Should().Equal("glad of", "cheerful");
-        plan.Senses[0].Actions[0].ReplaceToolTip.Should().Be("Replace \"Happy\" with \"glad of\"");
+        plan.Senses[0].Actions[0].InsertToolTip.Should().Be("Insert \"glad of\" in place of \"Happy\"");
         plan.Senses[0].Actions[0].CopyToolTip.Should().Be("Copy \"glad of\" to clipboard");
     }
 
