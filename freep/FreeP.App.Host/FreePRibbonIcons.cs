@@ -214,6 +214,7 @@ internal static class FreePRibbonIcons
             ["freep.anim.emphasis.change-font-color"] = RibbonCommandIconKind.FontColor,
             ["freep.anim.emphasis.change-font-size"] = RibbonCommandIconKind.Size,
             ["freep.anim.emphasis.change-line-color"] = RibbonCommandIconKind.Color,
+            ["freep.anim.emphasis.change-font-style"] = RibbonCommandIconKind.Bold,
             ["freep.anim.emphasis.grow-with-color"] = RibbonCommandIconKind.Color,
             ["freep.anim.emphasis.wave"]         = RibbonCommandIconKind.Effects,
             ["freep.anim.emphasis.shimmer"]      = RibbonCommandIconKind.Effects,

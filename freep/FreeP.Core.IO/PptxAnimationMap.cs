@@ -72,6 +72,7 @@ namespace FreeP.Core.IO;
 /// ChangeFontSize  | emph        | 4   (uses the Grow/Shrink amount contract)
 /// ChangeFillColor | emph        | 1   (native fillcolor behavior; raw ID retained)
 /// ChangeLineColor | emph        | 7   (native stroke.color behavior; subtype=2)
+/// ChangeFontStyle | emph        | 5   (native font-style behavior; subtype=1)
 ///
 /// Exit effects share the same presetIDs as Entrance (presetClass = "exit").
 /// </summary>
@@ -279,6 +280,7 @@ internal static class PptxAnimationMap
                 AnimationPreset.ChangeColor    => 7,
                 AnimationPreset.ChangeFillColor => 1,
                 AnimationPreset.ChangeLineColor => 7,
+                AnimationPreset.ChangeFontStyle => 5,
                 AnimationPreset.Shimmer        => 36,
                 AnimationPreset.GrowWithColor  => 12,
                 AnimationPreset.Wave           => 34,

@@ -2428,6 +2428,8 @@ public static class PptxPackageWriter
             childTimingItems.Add(fillBehavior);
         foreach (var lineBehavior in BuildPreservedLineBehaviorEls(anim, ref nodeId))
             childTimingItems.Add(lineBehavior);
+        foreach (var fontStyleBehavior in BuildPreservedFontStyleBehaviorEls(anim, ref nodeId))
+            childTimingItems.Add(fontStyleBehavior);
         if (anim.Preset is AnimationPreset.ColorPulse
             or AnimationPreset.ChangeColor
             or AnimationPreset.ChangeFillColor
@@ -2529,6 +2531,35 @@ public static class PptxPackageWriter
         try
         {
             behaviorList = XElement.Parse(anim.PreservedLineBehaviorXml, LoadOptions.PreserveWhitespace);
+        }
+        catch (XmlException)
+        {
+            return Array.Empty<XElement>();
+        }
+
+        var result = new List<XElement>();
+        foreach (var behavior in behaviorList.Elements().Select(element => new XElement(element)))
+        {
+            foreach (var timingNode in behavior.Descendants(P + "cTn"))
+                timingNode.SetAttributeValue("id", nodeId++);
+            result.Add(behavior);
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<XElement> BuildPreservedFontStyleBehaviorEls(ShapeAnimation anim, ref uint nodeId)
+    {
+        if (string.IsNullOrWhiteSpace(anim.PreservedFontStyleBehaviorXml)
+            || anim.Preset != AnimationPreset.ChangeFontStyle)
+        {
+            return Array.Empty<XElement>();
+        }
+
+        XElement behaviorList;
+        try
+        {
+            behaviorList = XElement.Parse(anim.PreservedFontStyleBehaviorXml, LoadOptions.PreserveWhitespace);
         }
         catch (XmlException)
         {

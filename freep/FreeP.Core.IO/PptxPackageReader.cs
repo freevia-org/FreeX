@@ -6850,6 +6850,24 @@ public static class PptxPackageReader
                 .FirstOrDefault(element => element.Descendants(P + "attrName")
                     .Any(attribute => attribute.Value == "stroke.color"))
             : null;
+        var fontStyleBehavior = presetClass == "emph"
+            && presetId == 5
+            ? buildPar.Descendants(P + "set")
+                .FirstOrDefault(element => element.Descendants(P + "attrName")
+                    .Any(attribute => attribute.Value == "style.fontWeight"))
+            : null;
+        var fontStyleTargets = fontStyleBehavior is null
+            ? new HashSet<string>(StringComparer.Ordinal)
+            : buildPar.Descendants(P + "set")
+                .Descendants(P + "attrName")
+                .Select(element => element.Value)
+                .ToHashSet(StringComparer.Ordinal);
+        var isNativeFontStyle = fontStyleTargets.IsSupersetOf(new[]
+        {
+            "style.fontStyle",
+            "style.fontWeight",
+            "style.textDecorationUnderline",
+        });
         var isNativeFillColor = presetClass == "emph"
             && presetId == 1
             && colorBehavior?.Descendants(P + "attrName")
@@ -6864,6 +6882,9 @@ public static class PptxPackageReader
             : null;
         var preservedLineBehaviorXml = isNativeLineColor
             ? BuildPreservedFillBehaviorXml(lineColorBehavior!)
+            : null;
+        var preservedFontStyleBehaviorXml = isNativeFontStyle
+            ? BuildPreservedFillBehaviorXml(fontStyleBehavior!)
             : null;
 
         var repeatInfo = ReadRepeat(cTn);
@@ -6880,6 +6901,8 @@ public static class PptxPackageReader
             preset = AnimationPreset.ChangeFillColor;
         else if (isNativeLineColor)
             preset = AnimationPreset.ChangeLineColor;
+        else if (isNativeFontStyle)
+            preset = AnimationPreset.ChangeFontStyle;
         if (presetClass == "emph" && presetId == 4 && scaleBehavior is null)
         {
             var numericTo = buildPar.Descendants(P + "anim")
@@ -6930,6 +6953,7 @@ public static class PptxPackageReader
             PreservedNumericBehaviorXml = preservedNumericBehaviorXml,
             PreservedFillBehaviorXml = preservedFillBehaviorXml,
             PreservedLineBehaviorXml = preservedLineBehaviorXml,
+            PreservedFontStyleBehaviorXml = preservedFontStyleBehaviorXml,
             TriggerShapeId = triggerShapeId,
             RawPresetClass = knownPreset ? null : presetClass,
             RawPresetId = knownPreset ? null : presetId,

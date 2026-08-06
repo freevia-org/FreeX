@@ -2017,6 +2017,7 @@ public sealed class SlideShowPlaybackPlannerTests
             [AnimationPreset.ColorPulse] = SlideShowShapeAnimationEffectKind.ColorPulse,
             [AnimationPreset.ChangeColor] = SlideShowShapeAnimationEffectKind.ChangeColor,
             [AnimationPreset.ChangeLineColor] = SlideShowShapeAnimationEffectKind.ChangeColor,
+            [AnimationPreset.ChangeFontStyle] = SlideShowShapeAnimationEffectKind.ChangeFontStyle,
             [AnimationPreset.GrowWithColor] = SlideShowShapeAnimationEffectKind.GrowWithColor,
             [AnimationPreset.Wave] = SlideShowShapeAnimationEffectKind.Wave,
             [AnimationPreset.Shimmer] = SlideShowShapeAnimationEffectKind.Shimmer,

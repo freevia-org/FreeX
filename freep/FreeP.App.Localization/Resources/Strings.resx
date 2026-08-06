@@ -2512,6 +2512,12 @@
   <data name="Ribbon_Command_AnimationEmphasisChangeLineColor_KeyTip" xml:space="preserve">
     <value>LC</value>
   </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeFontStyle_Label" xml:space="preserve">
+    <value>Change Font Style</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeFontStyle_KeyTip" xml:space="preserve">
+    <value>FT</value>
+  </data>
   <data name="Ribbon_Command_AnimationEmphasisGrowWithColor_Label" xml:space="preserve">
     <value>Grow With Color</value>
   </data>

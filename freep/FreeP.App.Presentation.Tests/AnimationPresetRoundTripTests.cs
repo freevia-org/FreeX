@@ -524,6 +524,60 @@ public sealed class AnimationPresetRoundTripTests
     }
 
     [Fact]
+    public void AuthoredChangeFontStyleWritesNativeStyleBehaviors()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(
+            PresentationAnimationCommandPlanner.BuildFontStyleAnimation(7));
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+
+        animation.Preset.Should().Be(AnimationPreset.ChangeFontStyle);
+        animation.RawPresetClass.Should().BeNull();
+        animation.RawPresetId.Should().BeNull();
+        animation.RawPresetSubtype.Should().BeNull();
+        animation.EffectSubtype.Should().Be("1");
+        animation.PreservedFontStyleBehaviorXml.Should().Contain("style.fontStyle");
+        animation.PreservedFontStyleBehaviorXml.Should().Contain("style.fontWeight");
+        animation.PreservedFontStyleBehaviorXml.Should().Contain("style.textDecorationUnderline");
+        animation.PreservedFontStyleBehaviorXml.Should().Contain("normal");
+        animation.PreservedFontStyleBehaviorXml.Should().Contain("bold");
+        animation.PreservedFontStyleBehaviorXml.Should().Contain("false");
+        SlideShowPlaybackPlanner.PlanShapeAnimation(animation, startDelayMs: 0)
+            .EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ChangeFontStyle);
+
+        var clonedAnimation = SlideCloner.CloneSlide(reloaded.Slides[0]).Animations.Single();
+        clonedAnimation.PreservedFontStyleBehaviorXml.Should().Be(animation.PreservedFontStyleBehaviorXml);
+
+        using var archive = new ZipArchive(new MemoryStream(first.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetClass")?.Value == "emph"
+                && element.Attribute("presetID")?.Value == "5");
+        cTn.Attribute("presetSubtype")!.Value.Should().Be("1");
+        var styleSetters = cTn.Descendants(p + "set")
+            .Where(element => element.Descendants(p + "attrName")
+                .Any(attribute => attribute.Value.StartsWith("style.", StringComparison.Ordinal)))
+            .ToList();
+        styleSetters.Should().HaveCount(3);
+        styleSetters.Single(element => element.Descendants(p + "attrName")
+                .Any(attribute => attribute.Value == "style.fontStyle"))
+            .Descendants(p + "strVal").Single().Attribute("val")!.Value.Should().Be("normal");
+        styleSetters.Single(element => element.Descendants(p + "attrName")
+                .Any(attribute => attribute.Value == "style.fontWeight"))
+            .Descendants(p + "strVal").Single().Attribute("val")!.Value.Should().Be("bold");
+        styleSetters.Single(element => element.Descendants(p + "attrName")
+                .Any(attribute => attribute.Value == "style.textDecorationUnderline"))
+            .Descendants(p + "strVal").Single().Attribute("val")!.Value.Should().Be("false");
+    }
+
+    [Fact]
     public void ImportedChangeFillColorRetainsFillTargetAndNativeSetters()
     {
         var presentation = Presentation.CreateEmpty();
