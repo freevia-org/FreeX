@@ -58,7 +58,7 @@ internal sealed class MailMergeEngine
 
         // Seed the dialog with a header line built from the «Field» placeholders already in the document,
         // so the user knows which columns the template expects.
-        var fields = MailMerge.FieldNames(_editor.Document);
+        var fields = MailMerge.FieldNames(Session.Template ?? _editor.Document);
         var seed = fields.Count > 0 ? string.Join(",", fields) : string.Empty;
 
         var csv = ask(seed);
@@ -78,9 +78,9 @@ internal sealed class MailMergeEngine
     {
         ArgumentNullException.ThrowIfNull(csv);
         var data = MergeData.FromCsv(csv);
+        RestoreEditableTemplateIfPreviewing();
         Session.Data = data;
         Session.Mapping = MailMerge.AutoMatchFields(data.Header);
-        Session.Template = null;   // leaving any active preview
         Session.CurrentIndex = 0;
         return data;
     }
@@ -97,14 +97,15 @@ internal sealed class MailMergeEngine
 
     public void ClearMergeSession()
     {
+        RestoreEditableTemplateIfPreviewing();
         Session.Clear();
         ShowInfo("Mail merge reset to a normal document.");
     }
 
     private void SetMergeMode(MailMergeOutputMode mode, string message)
     {
+        RestoreEditableTemplateIfPreviewing();
         Session.Mode = mode;
-        Session.Template = null;
         Session.CurrentIndex = 0;
         ShowInfo(message);
     }
@@ -154,6 +155,7 @@ internal sealed class MailMergeEngine
             return;
 
         var data = Session.Data!;
+        RestoreEditableTemplateIfPreviewing();
         var sortColumn = data.Header.FirstOrDefault();
         Session.Data = MailMergeRecipientFilterSortPlanner.Apply(
             data,
@@ -168,6 +170,15 @@ internal sealed class MailMergeEngine
     }
 
     // ── Rules ──────────────────────────────────────────────────────────────────────
+
+    private void RestoreEditableTemplateIfPreviewing()
+    {
+        if (Session.Template is not { } template)
+            return;
+
+        _editor.LoadDocument(template);
+        Session.Template = null;
+    }
 
     // Rules commands are inserted through the same shared field-instruction builders as WPF.
     public void InsertIfRule()
@@ -336,17 +347,19 @@ internal sealed class MailMergeEngine
     }
 
     /// <summary>
-    /// Insert a «Field» merge-field placeholder for <paramref name="name"/> at the caret (undoable). Any
-    /// guillemets the caller already wrapped around the name are stripped so the placeholder is well-formed.
-    /// A blank name is ignored.
+    /// Insert a native Word MERGEFIELD for <paramref name="name"/> at the caret (undoable), retaining the
+    /// familiar «Field» cached label. Any existing guillemets are stripped. A blank name is ignored.
     /// </summary>
     public void InsertMergeFieldNamed(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
-        var trimmed = name.Trim().Trim(MailMerge.FieldOpen, MailMerge.FieldClose).Trim();
+        var trimmed = MailMerge.NormalizeMergeFieldName(name);
         if (trimmed.Length == 0)
             return;
-        _editor.InsertText($"{MailMerge.FieldOpen}{trimmed}{MailMerge.FieldClose}");
+
+        _editor.InsertComplexField(
+            MailMerge.BuildMergeFieldInstruction(trimmed),
+            $"{MailMerge.FieldOpen}{trimmed}{MailMerge.FieldClose}");
     }
 
     // ── Address Block / Greeting Line ───────────────────────────────────────────────

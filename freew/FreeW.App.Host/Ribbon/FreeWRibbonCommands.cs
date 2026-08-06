@@ -1907,18 +1907,18 @@ internal static class FreeWRibbonCommands
         if (onLegalNotices is not null)
             registry.Register("freew.legal-notices", new ActionRibbonCommand(onLegalNotices));
 
-        // Mailings tab — a simple mail merge. Field placeholders are the literal text «FieldName»
-        // (ordinary run text, so they round-trip through docx as plain text). The four commands share a
+        // Mailings tab — a simple mail merge. Newly inserted recipient columns use native MERGEFIELD runs;
+        // imported and legacy literal «FieldName» placeholders remain supported. The commands share a
         // MailMergeSession: Start Mail Merge selects the output mode; "Select Recipients" / "Edit
         // Recipient List" capture CSV/typed records; "Insert Merge Field" drops a «Name» placeholder at
         // the caret; "Preview Results" loads MergeRecord(template, row) into the editor, and the preview
         // navigation commands move through real recipient rows; "Finish & Merge" combines every merged
         // record according to the selected output mode.
         var mergeSession = new MailMergeSession();
-        registry.Register("freew.start-mail-merge", new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Letters));
-        registry.Register("freew.start-mail-merge-letters", new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Letters));
-        registry.Register("freew.start-mail-merge-directory", new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Directory));
-        registry.Register("freew.start-mail-merge-normal", new ClearMergeSessionCommand(mergeSession));
+        registry.Register("freew.start-mail-merge", new SetMergeModeCommand(editor, mergeSession, MailMergeOutputMode.Letters));
+        registry.Register("freew.start-mail-merge-letters", new SetMergeModeCommand(editor, mergeSession, MailMergeOutputMode.Letters));
+        registry.Register("freew.start-mail-merge-directory", new SetMergeModeCommand(editor, mergeSession, MailMergeOutputMode.Directory));
+        registry.Register("freew.start-mail-merge-normal", new ClearMergeSessionCommand(editor, mergeSession));
         registry.Register("freew.merge-data", new SetMergeDataCommand(editor, mergeSession));
         registry.Register("freew.merge-edit-recipients", new SetMergeDataCommand(editor, mergeSession));
         registry.Register("freew.merge-field", new InsertMergeFieldCommand(editor));
@@ -6367,24 +6367,33 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    private sealed class SetMergeModeCommand(MailMergeSession session, MailMergeOutputMode mode) : IRibbonCommand
+    private sealed class SetMergeModeCommand(
+        DocumentView editor,
+        MailMergeSession session,
+        MailMergeOutputMode mode) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            if (session.IsPreviewing)
+                editor.LoadModel(session.Template!);
             session.Mode = mode;
             session.Template = null;
             session.CurrentIndex = 0;
         }
     }
 
-    private sealed class ClearMergeSessionCommand(MailMergeSession session) : IRibbonCommand
+    private sealed class ClearMergeSessionCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
     {
-        public void Execute(RibbonCommandContext context) => session.Clear();
+        public void Execute(RibbonCommandContext context)
+        {
+            if (session.IsPreviewing)
+                editor.LoadModel(session.Template!);
+            session.Clear();
+        }
     }
 
-    // Mailings > Insert Merge Field: prompt for a field name and insert the placeholder «Name» at the
-    // caret as ordinary text (through the editor's normal edit/undo path, so it is reversible). The
-    // guillemets are added automatically; a name the user already wrapped in « » is accepted as-is.
+    // Mailings > Insert Merge Field: prompt for a field name and insert a native Word MERGEFIELD at the
+    // caret through the editor's normal undo path. The cached result keeps Word's familiar «Name» label.
     private sealed class InsertMergeFieldCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -6394,12 +6403,14 @@ internal static class FreeWRibbonCommands
             if (string.IsNullOrWhiteSpace(name))
                 return; // cancelled or blank — nothing to insert
 
-            var trimmed = name.Trim().Trim(MailMerge.FieldOpen, MailMerge.FieldClose).Trim();
+            var trimmed = MailMerge.NormalizeMergeFieldName(name);
             if (trimmed.Length == 0)
                 return;
 
             editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}{trimmed}{MailMerge.FieldClose}");
+            editor.InsertComplexField(
+                MailMerge.BuildMergeFieldInstruction(trimmed),
+                $"{MailMerge.FieldOpen}{trimmed}{MailMerge.FieldClose}");
         }
     }
 
@@ -6847,8 +6858,18 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            editor.CommitToModel();
-            var fields = MailMerge.FieldNames(editor.Model);
+            TextDocument template;
+            if (session.IsPreviewing)
+            {
+                template = session.Template!;
+            }
+            else
+            {
+                editor.CommitToModel();
+                template = editor.Model;
+            }
+
+            var fields = MailMerge.FieldNames(template);
             var seed = session.Data is { } data ? DescribeAsCsv(data) : SeedFromFields(fields);
 
             var csv = MergeDataDialog.Ask(Window.GetWindow(editor), fields, seed);
@@ -6856,6 +6877,8 @@ internal static class FreeWRibbonCommands
                 return; // cancelled
 
             var parsed = MergeData.FromCsv(csv);
+            if (session.IsPreviewing)
+                editor.LoadModel(template);
             session.Data = parsed;
             session.Template = null; // any in-progress preview is invalidated by new data
             session.CurrentIndex = 0;
@@ -7602,6 +7625,8 @@ internal static class FreeWRibbonCommands
             if (updatedData is null)
                 return; // cancelled
 
+            if (session.IsPreviewing)
+                editor.LoadModel(session.Template!);
             session.Data = updatedData;
             // Invalidate any in-progress preview so it re-reads the new filtered data.
             session.Template = null;
