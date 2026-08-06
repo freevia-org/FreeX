@@ -4,6 +4,17 @@ public sealed record SlideShowPresenterViewActionResult(
     bool NotesCommitted,
     bool CommandInvoked);
 
+public sealed record SlideShowPresenterViewDispatchRequest(
+    SlideShowPresenterViewAction Action,
+    string? SlideNumberText = null,
+    bool NotesDirty = false,
+    string? NotesText = null);
+
+public sealed record SlideShowPresenterViewDispatchResult(
+    bool NotesCommitted,
+    bool CommandInvoked,
+    bool ShouldRefresh);
+
 /// <summary>
 /// Renderer-neutral presenter-window interaction session. Native adapters provide
 /// controls, focus state, and refresh timing while this class owns command intent,
@@ -62,6 +73,9 @@ public sealed class SlideShowPresenterViewSession
 
     public bool CanSetNotes => _setNotesText is not null;
 
+    public SlideShowPresenterViewSurfacePlan Surface =>
+        SlideShowPresenterViewSurfaceCatalog.Surface;
+
     public SlideShowPresenterViewPlan BuildViewPlan()
     {
         var state = _stateProvider();
@@ -73,6 +87,56 @@ public sealed class SlideShowPresenterViewSession
             canSetTimingIntent: _setTimingIntent is not null,
             canSetMediaIntent: _setMediaIntent is not null,
             canApplyRecording: _applyRecordingReview is not null);
+    }
+
+    public SlideShowPresenterViewDispatchResult Dispatch(
+        SlideShowPresenterViewDispatchRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        switch (request.Action)
+        {
+            case SlideShowPresenterViewAction.Previous:
+                return new(
+                    GoBack(request.NotesDirty, request.NotesText),
+                    _goBack is not null,
+                    ShouldRefresh: true);
+            case SlideShowPresenterViewAction.Next:
+                return new(
+                    GoNext(request.NotesDirty, request.NotesText),
+                    _goNext is not null,
+                    ShouldRefresh: true);
+            case SlideShowPresenterViewAction.GoToSlide:
+                var jump = GoToSlide(
+                    request.SlideNumberText,
+                    request.NotesDirty,
+                    request.NotesText);
+                return new(jump.NotesCommitted, jump.CommandInvoked, jump.CommandInvoked);
+            case SlideShowPresenterViewAction.RecordTimings:
+                return ToggleTiming(SlideShowTimingIntent.RecordTimings);
+            case SlideShowPresenterViewAction.RehearseTimings:
+                return ToggleTiming(SlideShowTimingIntent.RehearseTimings);
+            case SlideShowPresenterViewAction.Narration:
+                return ToggleMedia(SlideShowRecordingMediaIntent.Narration);
+            case SlideShowPresenterViewAction.NarrationAndMedia:
+                return ToggleMedia(SlideShowRecordingMediaIntent.NarrationAndMedia);
+            case SlideShowPresenterViewAction.ApplyRecording:
+                var canApplyRecording = _applyRecordingReview is not null;
+                ApplyRecordingReview();
+                return ToolResult(canApplyRecording, shouldRefresh: canApplyRecording);
+            case SlideShowPresenterViewAction.ShowScreen:
+                return SetScreen(SlideShowScreenMode.Normal);
+            case SlideShowPresenterViewAction.BlackScreen:
+                return SetScreen(SlideShowScreenMode.Black);
+            case SlideShowPresenterViewAction.WhiteScreen:
+                return SetScreen(SlideShowScreenMode.White);
+            case SlideShowPresenterViewAction.ClearInk:
+                var canClearInk = _clearInk is not null;
+                ClearInk();
+                return ToolResult(canClearInk);
+            default:
+                throw new ArgumentOutOfRangeException(nameof(request), request.Action, null);
+        }
     }
 
     public bool GoBack(bool notesDirty, string? notesText)
@@ -153,4 +217,32 @@ public sealed class SlideShowPresenterViewSession
 
     public SlideShowRecordingReviewApplyResult? ApplyRecordingReview() =>
         _applyRecordingReview?.Invoke();
+
+    private SlideShowPresenterViewDispatchResult ToggleTiming(
+        SlideShowTimingIntent intent)
+    {
+        var canToggle = _setTimingIntent is not null;
+        ToggleTimingIntent(intent);
+        return ToolResult(canToggle, shouldRefresh: canToggle);
+    }
+
+    private SlideShowPresenterViewDispatchResult ToggleMedia(
+        SlideShowRecordingMediaIntent intent)
+    {
+        var canToggle = _setMediaIntent is not null;
+        ToggleMediaIntent(intent);
+        return ToolResult(canToggle, shouldRefresh: canToggle);
+    }
+
+    private SlideShowPresenterViewDispatchResult SetScreen(SlideShowScreenMode mode)
+    {
+        var canSet = _setScreenMode is not null;
+        SetScreenMode(mode);
+        return ToolResult(canSet);
+    }
+
+    private static SlideShowPresenterViewDispatchResult ToolResult(
+        bool commandInvoked,
+        bool shouldRefresh = false) =>
+        new(false, commandInvoked, shouldRefresh);
 }

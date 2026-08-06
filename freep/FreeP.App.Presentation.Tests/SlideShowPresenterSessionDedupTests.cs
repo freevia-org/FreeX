@@ -200,12 +200,20 @@ public sealed class SlideShowPresenterSessionDedupTests
             goToSlide: slideNumber => events.Add($"jump:{slideNumber}"),
             setNotesText: (slideIndex, text) => events.Add($"notes:{slideIndex}:{text}"));
 
-        presenter.GoToSlide("2", notesDirty: true, notesText: "Updated notes")
-            .Should().Be(new SlideShowPresenterViewActionResult(true, true));
+        presenter.Dispatch(new SlideShowPresenterViewDispatchRequest(
+                SlideShowPresenterViewAction.GoToSlide,
+                "2",
+                NotesDirty: true,
+                NotesText: "Updated notes"))
+            .Should().Be(new SlideShowPresenterViewDispatchResult(true, true, true));
         events.Should().Equal("notes:0:Updated notes", "jump:2");
 
-        presenter.ToggleTimingIntent(SlideShowTimingIntent.RecordTimings);
-        presenter.ToggleMediaIntent(SlideShowRecordingMediaIntent.NarrationAndMedia);
+        presenter.Dispatch(new SlideShowPresenterViewDispatchRequest(
+                SlideShowPresenterViewAction.RecordTimings))
+            .Should().Be(new SlideShowPresenterViewDispatchResult(false, true, true));
+        presenter.Dispatch(new SlideShowPresenterViewDispatchRequest(
+                SlideShowPresenterViewAction.NarrationAndMedia))
+            .Should().Be(new SlideShowPresenterViewDispatchResult(false, true, true));
         timingIntent.Should().Be(SlideShowTimingIntent.RecordTimings);
         mediaIntent.Should().Be(SlideShowRecordingMediaIntent.NarrationAndMedia);
 
@@ -216,6 +224,87 @@ public sealed class SlideShowPresenterSessionDedupTests
         plan.CanAdvance.Should().BeTrue();
         plan.CanSetTimingIntent.Should().BeTrue();
         plan.CanSetMediaIntent.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PresenterViewSurface_OwnsLabelsActionsAndAccessibilitySemantics()
+    {
+        var surface = SlideShowPresenterViewSurfaceCatalog.Surface;
+
+        surface.Title.Should().Be("Presenter View");
+        surface.Schema.Fields.Select(field => field.Id).Should().OnlyHaveUniqueItems();
+        surface.Schema.Actions.Select(action => action.Id).Should().OnlyHaveUniqueItems();
+        surface.Schema.Fields.Select(field => field.AutomationId).Should().OnlyHaveUniqueItems();
+        surface.Schema.Actions.Select(action => action.AutomationId).Should().OnlyHaveUniqueItems();
+        surface.Schema.Fields.Should().OnlyContain(field =>
+            !string.IsNullOrWhiteSpace(field.AccessibleName) &&
+            !string.IsNullOrWhiteSpace(field.AutomationId));
+        surface.Schema.Actions.Should().OnlyContain(action =>
+            !string.IsNullOrWhiteSpace(action.AccessibleName) &&
+            !string.IsNullOrWhiteSpace(action.AutomationId));
+        surface.Action(SlideShowPresenterViewAction.GoToSlide).IsDefault.Should().BeTrue();
+        surface.Field(SlideShowPresenterViewField.SlideNumber).HelpText.Should()
+            .Be("Enter a slide number and activate Go.");
+        surface.FormatElapsed("01:05").Should().Be("Elapsed 01:05");
+    }
+
+    [Fact]
+    public void PresenterViewDispatch_OwnsNavigationScreenAndRecordingActions()
+    {
+        var presentation = MakePresentation(2);
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        var started = new DateTimeOffset(2026, 8, 5, 12, 0, 0, TimeSpan.Zero);
+        var slideshow = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            SlideShowHostCapabilityRecordingCaptureBackend.Deferred("portable presenter test"));
+        var events = new List<string>();
+
+        var presenter = new SlideShowPresenterViewSession(
+            () => slideshow.CreatePresenterState(started),
+            goBack: () => events.Add("back"),
+            goNext: () => events.Add("next"),
+            setScreenMode: mode => events.Add($"screen:{mode}"),
+            clearInk: () => events.Add("clear-ink"),
+            setTimingIntent: intent => events.Add($"timing:{intent}"),
+            setMediaIntent: intent => events.Add($"media:{intent}"),
+            applyRecordingReview: () =>
+            {
+                events.Add("apply-recording");
+                return new SlideShowRecordingReviewApplyResult(1, 1);
+            },
+            setNotesText: (slideIndex, text) => events.Add($"notes:{slideIndex}:{text}"));
+
+        presenter.Dispatch(new SlideShowPresenterViewDispatchRequest(
+                SlideShowPresenterViewAction.Previous,
+                NotesDirty: true,
+                NotesText: "Notes"))
+            .Should().Be(new SlideShowPresenterViewDispatchResult(true, true, true));
+        presenter.Dispatch(new SlideShowPresenterViewDispatchRequest(SlideShowPresenterViewAction.Next))
+            .Should().Be(new SlideShowPresenterViewDispatchResult(false, true, true));
+        presenter.Dispatch(new SlideShowPresenterViewDispatchRequest(SlideShowPresenterViewAction.RehearseTimings))
+            .Should().Be(new SlideShowPresenterViewDispatchResult(false, true, true));
+        presenter.Dispatch(new SlideShowPresenterViewDispatchRequest(SlideShowPresenterViewAction.Narration))
+            .Should().Be(new SlideShowPresenterViewDispatchResult(false, true, true));
+        presenter.Dispatch(new SlideShowPresenterViewDispatchRequest(SlideShowPresenterViewAction.ApplyRecording))
+            .Should().Be(new SlideShowPresenterViewDispatchResult(false, true, true));
+        presenter.Dispatch(new SlideShowPresenterViewDispatchRequest(SlideShowPresenterViewAction.ShowScreen));
+        presenter.Dispatch(new SlideShowPresenterViewDispatchRequest(SlideShowPresenterViewAction.BlackScreen));
+        presenter.Dispatch(new SlideShowPresenterViewDispatchRequest(SlideShowPresenterViewAction.WhiteScreen));
+        presenter.Dispatch(new SlideShowPresenterViewDispatchRequest(SlideShowPresenterViewAction.ClearInk));
+
+        events.Should().Equal(
+            "notes:0:Notes",
+            "back",
+            "next",
+            "timing:RehearseTimings",
+            "media:Narration",
+            "apply-recording",
+            "screen:Normal",
+            "screen:Black",
+            "screen:White",
+            "clear-ink");
     }
 
     [Fact]
@@ -238,14 +327,39 @@ public sealed class SlideShowPresenterSessionDedupTests
             source.Should().Contain("SlideShowPresenterViewSession");
             source.Should().Contain("SlideShowPresenterViewOperations operations");
             source.Should().Contain("_session.BuildViewPlan()");
-            source.Should().Contain("_session.GoBack(_notesDirty, _notesText.Text)");
-            source.Should().Contain("_session.GoNext(_notesDirty, _notesText.Text)");
+            source.Should().Contain("_session.Surface");
+            source.Should().Contain("_session.Dispatch(new SlideShowPresenterViewDispatchRequest(");
+            source.Should().Contain("_session.Surface.FormatElapsed(");
+            source.Should().Contain("AutomationProperties.SetName(");
+            source.Should().Contain("AutomationProperties.SetAutomationId(");
             source.Should().Contain("DispatcherTimer");
             source.Should().Contain("SlideCanvas");
             source.Should().NotContain("SlideShowSlideNumberPlanner");
             source.Should().NotContain("BuildRecordingSummary");
             source.Should().NotContain("TotalArtifactCount");
             source.Should().NotContain("private readonly Func<SlideShowPresenterState> _stateProvider");
+            source.Should().NotContain("_session.GoBack(");
+            source.Should().NotContain("_session.GoNext(");
+            source.Should().NotContain("_session.GoToSlide(");
+            source.Should().NotContain("_session.ToggleTimingIntent(");
+            source.Should().NotContain("_session.ToggleMediaIntent(");
+            source.Should().NotContain("_session.SetScreenMode(");
+            source.Should().NotContain("_session.ClearInk(");
+            source.Should().NotContain("_session.ApplyRecordingReview(");
+            foreach (var sharedLiteral in new[]
+            {
+                "\"Presenter View\"",
+                "\"Previous\"",
+                "\"Next\"",
+                "\"Record timings\"",
+                "\"Rehearse timings\"",
+                "\"Narration + camera\"",
+                "\"Apply recording\"",
+                "\"Speaker notes\"",
+            })
+            {
+                source.Should().NotContain(sharedLiteral);
+            }
         }
 
         foreach (var source in slideShowFiles)

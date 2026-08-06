@@ -2,6 +2,105 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
+public enum SlideShowPresenterViewField
+{
+    Status,
+    Elapsed,
+    SlideNumber,
+    PointerMode,
+    RecordingStatus,
+    CurrentPreview,
+    NextPreview,
+    SpeakerNotes,
+}
+
+public enum SlideShowPresenterViewAction
+{
+    Previous,
+    Next,
+    GoToSlide,
+    RecordTimings,
+    RehearseTimings,
+    Narration,
+    NarrationAndMedia,
+    ApplyRecording,
+    ShowScreen,
+    BlackScreen,
+    WhiteScreen,
+    ClearInk,
+}
+
+public sealed record SlideShowPresenterViewSurfacePlan(
+    PresentationDialogSurfacePlan<SlideShowPresenterViewField, SlideShowPresenterViewAction> Schema)
+{
+    public string Title => Schema.Title;
+
+    public PresentationDialogFieldPlan<SlideShowPresenterViewField> Field(
+        SlideShowPresenterViewField id) => Schema.Field(id);
+
+    public PresentationDialogActionPlan<SlideShowPresenterViewAction> Action(
+        SlideShowPresenterViewAction id) => Schema.Action(id);
+
+    public string FormatElapsed(string elapsedText) =>
+        $"{Field(SlideShowPresenterViewField.Elapsed).Label} {elapsedText}";
+}
+
+public static class SlideShowPresenterViewSurfaceCatalog
+{
+    public static SlideShowPresenterViewSurfacePlan Surface { get; } = new(
+        new PresentationDialogSurfacePlan<SlideShowPresenterViewField, SlideShowPresenterViewAction>(
+            "Presenter View",
+            "Presenter View",
+            "FreeP.PresenterView.Window",
+            [
+                Field(SlideShowPresenterViewField.Status, PresentationDialogControlKind.Status,
+                    string.Empty, "Slide show status"),
+                Field(SlideShowPresenterViewField.Elapsed, PresentationDialogControlKind.Status,
+                    "Elapsed", "Elapsed slide show time"),
+                Field(SlideShowPresenterViewField.SlideNumber, PresentationDialogControlKind.Text,
+                    "Slide", "Go to slide number", "Enter a slide number and activate Go."),
+                Field(SlideShowPresenterViewField.PointerMode, PresentationDialogControlKind.Choice,
+                    "Pointer mode", "Presenter pointer mode"),
+                Field(SlideShowPresenterViewField.RecordingStatus, PresentationDialogControlKind.Status,
+                    string.Empty, "Recording review status"),
+                Field(SlideShowPresenterViewField.CurrentPreview, PresentationDialogControlKind.Label,
+                    "Current", "Current slide preview"),
+                Field(SlideShowPresenterViewField.NextPreview, PresentationDialogControlKind.Label,
+                    "Next", "Next slide preview"),
+                Field(SlideShowPresenterViewField.SpeakerNotes, PresentationDialogControlKind.Text,
+                    "Speaker notes", "Speaker notes"),
+            ],
+            [
+                Action(SlideShowPresenterViewAction.Previous, "Previous", "Show previous slide"),
+                Action(SlideShowPresenterViewAction.Next, "Next", "Show next slide"),
+                Action(SlideShowPresenterViewAction.GoToSlide, "Go", "Go to slide number", isDefault: true),
+                Action(SlideShowPresenterViewAction.RecordTimings, "Record timings", "Toggle timing recording"),
+                Action(SlideShowPresenterViewAction.RehearseTimings, "Rehearse timings", "Toggle timing rehearsal"),
+                Action(SlideShowPresenterViewAction.Narration, "Narration", "Toggle narration recording"),
+                Action(SlideShowPresenterViewAction.NarrationAndMedia, "Narration + camera", "Toggle narration and camera recording"),
+                Action(SlideShowPresenterViewAction.ApplyRecording, "Apply recording", "Apply recorded timings and media"),
+                Action(SlideShowPresenterViewAction.ShowScreen, "Show", "Show the current slide"),
+                Action(SlideShowPresenterViewAction.BlackScreen, "Black", "Show a black screen"),
+                Action(SlideShowPresenterViewAction.WhiteScreen, "White", "Show a white screen"),
+                Action(SlideShowPresenterViewAction.ClearInk, "Clear ink", "Clear presenter ink"),
+            ]));
+
+    private static PresentationDialogFieldPlan<SlideShowPresenterViewField> Field(
+        SlideShowPresenterViewField id,
+        PresentationDialogControlKind kind,
+        string label,
+        string accessibleName,
+        string? helpText = null) =>
+        new(id, kind, label, accessibleName, $"FreeP.PresenterView.{id}", helpText);
+
+    private static PresentationDialogActionPlan<SlideShowPresenterViewAction> Action(
+        SlideShowPresenterViewAction id,
+        string label,
+        string accessibleName,
+        bool isDefault = false) =>
+        new(id, label, accessibleName, $"FreeP.PresenterView.{id}", IsDefault: isDefault);
+}
+
 /// <summary>Shared display contract for the presenter view adapters.</summary>
 public sealed record SlideShowPresenterViewPlan(
     string StatusText,

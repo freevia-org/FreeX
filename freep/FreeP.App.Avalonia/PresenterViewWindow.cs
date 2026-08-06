@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -86,8 +87,11 @@ public sealed class PresenterViewWindow : Window
             applyRecordingReview,
             goToSlide,
             setNotesText);
+        var surface = _session.Surface;
 
-        Title = "Presenter View";
+        Title = surface.Title;
+        AutomationProperties.SetName(this, surface.Schema.AccessibleName);
+        AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
         Width = 1200;
         Height = 760;
         MinWidth = 860;
@@ -108,60 +112,64 @@ public sealed class PresenterViewWindow : Window
         header.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _statusText = MakeText(18, FontWeight.SemiBold);
         _elapsedText = MakeText(18, FontWeight.Normal);
+        ApplySemantic(_statusText, surface.Field(SlideShowPresenterViewField.Status));
+        ApplySemantic(_elapsedText, surface.Field(SlideShowPresenterViewField.Elapsed));
         var controls = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(18, 0, 18, 0),
         };
-        _backButton = MakeActionButton("Previous", GoBack);
-        _advanceButton = MakeActionButton("Next", GoNext);
+        _backButton = MakeActionButton(
+            surface.Action(SlideShowPresenterViewAction.Previous),
+            () => ExecuteAction(SlideShowPresenterViewAction.Previous));
+        _advanceButton = MakeActionButton(
+            surface.Action(SlideShowPresenterViewAction.Next),
+            () => ExecuteAction(SlideShowPresenterViewAction.Next));
         _slideNumberBox = new TextBox
         {
             Width = 48,
             Height = 28,
             Margin = new Thickness(6, 0, 0, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
-            PlaceholderText = "Slide",
+            PlaceholderText = surface.Field(SlideShowPresenterViewField.SlideNumber).Label,
         };
-        ToolTip.SetTip(_slideNumberBox, "Go to slide number");
+        ToolTip.SetTip(
+            _slideNumberBox,
+            surface.Field(SlideShowPresenterViewField.SlideNumber).HelpText);
+        ApplySemantic(_slideNumberBox, surface.Field(SlideShowPresenterViewField.SlideNumber));
         _slideNumberBox.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter)
             {
-                SubmitSlideNumber();
+                ExecuteAction(SlideShowPresenterViewAction.GoToSlide);
                 e.Handled = true;
             }
         };
-        _goToSlideButton = MakeActionButton("Go", SubmitSlideNumber);
+        _goToSlideButton = MakeActionButton(
+            surface.Action(SlideShowPresenterViewAction.GoToSlide),
+            () => ExecuteAction(SlideShowPresenterViewAction.GoToSlide));
         _goToSlideButton.IsEnabled = _session.CanGoToSlide;
-        _recordTimingsButton = MakeActionButton("Record timings", () =>
-        {
-            _session.ToggleTimingIntent(SlideShowTimingIntent.RecordTimings);
-            RefreshFromState();
-        });
-        _rehearseTimingsButton = MakeActionButton("Rehearse timings", () =>
-        {
-            _session.ToggleTimingIntent(SlideShowTimingIntent.RehearseTimings);
-            RefreshFromState();
-        });
-        _narrationButton = MakeActionButton("Narration", () =>
-        {
-            _session.ToggleMediaIntent(SlideShowRecordingMediaIntent.Narration);
-            RefreshFromState();
-        });
-        _narrationAndMediaButton = MakeActionButton("Narration + camera", () =>
-        {
-            _session.ToggleMediaIntent(SlideShowRecordingMediaIntent.NarrationAndMedia);
-            RefreshFromState();
-        });
+        _recordTimingsButton = MakeActionButton(
+            surface.Action(SlideShowPresenterViewAction.RecordTimings),
+            () => ExecuteAction(SlideShowPresenterViewAction.RecordTimings));
+        _rehearseTimingsButton = MakeActionButton(
+            surface.Action(SlideShowPresenterViewAction.RehearseTimings),
+            () => ExecuteAction(SlideShowPresenterViewAction.RehearseTimings));
+        _narrationButton = MakeActionButton(
+            surface.Action(SlideShowPresenterViewAction.Narration),
+            () => ExecuteAction(SlideShowPresenterViewAction.Narration));
+        _narrationAndMediaButton = MakeActionButton(
+            surface.Action(SlideShowPresenterViewAction.NarrationAndMedia),
+            () => ExecuteAction(SlideShowPresenterViewAction.NarrationAndMedia));
         _recordingStatusText = MakeText(13, FontWeight.Normal);
         _recordingStatusText.Foreground = new SolidColorBrush(Color.FromRgb(170, 178, 194));
         _recordingStatusText.Margin = new Thickness(0, 6, 0, 0);
-        _applyRecordingButton = MakeActionButton("Apply recording", () =>
-        {
-            _session.ApplyRecordingReview();
-            RefreshFromState();
-        });
+        ApplySemantic(
+            _recordingStatusText,
+            surface.Field(SlideShowPresenterViewField.RecordingStatus));
+        _applyRecordingButton = MakeActionButton(
+            surface.Action(SlideShowPresenterViewAction.ApplyRecording),
+            () => ExecuteAction(SlideShowPresenterViewAction.ApplyRecording));
         controls.Children.Add(_backButton);
         controls.Children.Add(_advanceButton);
         controls.Children.Add(_slideNumberBox);
@@ -171,10 +179,18 @@ public sealed class PresenterViewWindow : Window
         controls.Children.Add(_narrationButton);
         controls.Children.Add(_narrationAndMediaButton);
         controls.Children.Add(_applyRecordingButton);
-        var normalButton = MakeActionButton("Show", () => _session.SetScreenMode(SlideShowScreenMode.Normal));
-        var blackButton = MakeActionButton("Black", () => _session.SetScreenMode(SlideShowScreenMode.Black));
-        var whiteButton = MakeActionButton("White", () => _session.SetScreenMode(SlideShowScreenMode.White));
-        var clearInkButton = MakeActionButton("Clear ink", _session.ClearInk);
+        var normalButton = MakeActionButton(
+            surface.Action(SlideShowPresenterViewAction.ShowScreen),
+            () => ExecuteAction(SlideShowPresenterViewAction.ShowScreen));
+        var blackButton = MakeActionButton(
+            surface.Action(SlideShowPresenterViewAction.BlackScreen),
+            () => ExecuteAction(SlideShowPresenterViewAction.BlackScreen));
+        var whiteButton = MakeActionButton(
+            surface.Action(SlideShowPresenterViewAction.WhiteScreen),
+            () => ExecuteAction(SlideShowPresenterViewAction.WhiteScreen));
+        var clearInkButton = MakeActionButton(
+            surface.Action(SlideShowPresenterViewAction.ClearInk),
+            () => ExecuteAction(SlideShowPresenterViewAction.ClearInk));
         normalButton.IsEnabled = _session.CanSetScreenMode;
         blackButton.IsEnabled = _session.CanSetScreenMode;
         whiteButton.IsEnabled = _session.CanSetScreenMode;
@@ -188,6 +204,7 @@ public sealed class PresenterViewWindow : Window
             }
         });
         _pointerModeCombo.IsEnabled = _session.CanSelectPointerMode;
+        ApplySemantic(_pointerModeCombo, surface.Field(SlideShowPresenterViewField.PointerMode));
         controls.Children.Add(normalButton);
         controls.Children.Add(blackButton);
         controls.Children.Add(whiteButton);
@@ -210,8 +227,16 @@ public sealed class PresenterViewWindow : Window
         _nextLabel = MakeText(14, FontWeight.SemiBold);
         _currentPreview = MakePreview();
         _nextPreview = MakePreview();
-        previews.Children.Add(BuildPreviewPanel("Current", _currentLabel, _currentPreview));
-        var nextPanel = BuildPreviewPanel("Next", _nextLabel, _nextPreview);
+        ApplySemantic(_currentPreview, surface.Field(SlideShowPresenterViewField.CurrentPreview));
+        ApplySemantic(_nextPreview, surface.Field(SlideShowPresenterViewField.NextPreview));
+        previews.Children.Add(BuildPreviewPanel(
+            surface.Field(SlideShowPresenterViewField.CurrentPreview),
+            _currentLabel,
+            _currentPreview));
+        var nextPanel = BuildPreviewPanel(
+            surface.Field(SlideShowPresenterViewField.NextPreview),
+            _nextLabel,
+            _nextPreview);
         Grid.SetColumn(nextPanel, 1);
         previews.Children.Add(nextPanel);
         Grid.SetRow(previews, 1);
@@ -221,7 +246,7 @@ public sealed class PresenterViewWindow : Window
         notesPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         notesPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         var notesHeading = MakeText(14, FontWeight.SemiBold);
-        notesHeading.Text = "Speaker notes";
+        notesHeading.Text = surface.Field(SlideShowPresenterViewField.SpeakerNotes).Label;
         notesHeading.Margin = new Thickness(0, 0, 0, 6);
         _notesText = new TextBox
         {
@@ -233,6 +258,7 @@ public sealed class PresenterViewWindow : Window
             BorderBrush = new SolidColorBrush(Color.FromRgb(80, 87, 102)),
             Padding = new Thickness(10),
         };
+        ApplySemantic(_notesText, surface.Field(SlideShowPresenterViewField.SpeakerNotes));
         _notesText.TextChanged += (_, _) =>
         {
             if (!_refreshing && _session.CanSetNotes)
@@ -282,7 +308,7 @@ public sealed class PresenterViewWindow : Window
         try
         {
             _statusText.Text = plan.StatusText;
-            _elapsedText.Text = $"Elapsed {plan.ElapsedText}";
+            _elapsedText.Text = _session.Surface.FormatElapsed(plan.ElapsedText);
             _currentLabel.Text = plan.CurrentSlideLabel;
             _nextLabel.Text = plan.NextSlideLabel;
             if (!_notesText.IsFocused && !_notesDirty)
@@ -321,26 +347,16 @@ public sealed class PresenterViewWindow : Window
         Margin = new Thickness(0, 6, 0, 0),
     };
 
-    private void GoBack()
+    private void ExecuteAction(SlideShowPresenterViewAction action)
     {
-        _notesDirty &= !_session.GoBack(_notesDirty, _notesText.Text);
-        RefreshFromState();
-    }
-
-    private void GoNext()
-    {
-        _notesDirty &= !_session.GoNext(_notesDirty, _notesText.Text);
-        RefreshFromState();
-    }
-
-    private void SubmitSlideNumber()
-    {
-        var result = _session.GoToSlide(_slideNumberBox.Text, _notesDirty, _notesText.Text);
+        var result = _session.Dispatch(new SlideShowPresenterViewDispatchRequest(
+            action,
+            _slideNumberBox.Text,
+            _notesDirty,
+            _notesText.Text));
         _notesDirty &= !result.NotesCommitted;
-        if (!result.CommandInvoked)
-            return;
-
-        RefreshFromState();
+        if (result.ShouldRefresh)
+            RefreshFromState();
     }
 
     private void CommitNotes()
@@ -349,16 +365,23 @@ public sealed class PresenterViewWindow : Window
     }
 
     private static Border BuildPreviewPanel(
-        string heading,
+        PresentationDialogFieldPlan<SlideShowPresenterViewField> field,
         TextBlock label,
         SlideCanvas preview)
     {
-        var panel = new Grid { Margin = new Thickness(heading == "Current" ? 0 : 8, 0, 0, 0) };
+        var panel = new Grid
+        {
+            Margin = new Thickness(
+                field.Id == SlideShowPresenterViewField.CurrentPreview ? 0 : 8,
+                0,
+                0,
+                0),
+        };
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         var title = MakeText(13, FontWeight.Normal);
-        title.Text = heading;
+        title.Text = field.Label;
         title.Foreground = new SolidColorBrush(Color.FromRgb(170, 178, 194));
         panel.Children.Add(title);
         Grid.SetRow(label, 1);
@@ -384,17 +407,32 @@ public sealed class PresenterViewWindow : Window
         VerticalAlignment = VerticalAlignment.Center,
     };
 
-    private static Button MakeActionButton(string label, Action action)
+    private static Button MakeActionButton(
+        PresentationDialogActionPlan<SlideShowPresenterViewAction> plan,
+        Action action)
     {
         var button = new Button
         {
-            Content = label,
+            Content = plan.Label,
             Padding = new Thickness(12, 5, 12, 5),
             Margin = new Thickness(3, 0, 3, 0),
             MinWidth = 78,
+            IsDefault = plan.IsDefault,
         };
+        AutomationProperties.SetName(button, plan.AccessibleName);
+        AutomationProperties.SetAutomationId(button, plan.AutomationId);
         button.Click += (_, _) => action();
         return button;
+    }
+
+    private static void ApplySemantic(
+        Control control,
+        PresentationDialogFieldPlan<SlideShowPresenterViewField> field)
+    {
+        AutomationProperties.SetName(control, field.AccessibleName);
+        AutomationProperties.SetAutomationId(control, field.AutomationId);
+        if (!string.IsNullOrWhiteSpace(field.HelpText))
+            AutomationProperties.SetHelpText(control, field.HelpText);
     }
 
     private static ComboBox MakePointerModePicker(Action<SlideShowPresenterPointerMode?> changed)
