@@ -5648,10 +5648,11 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(mediaShape.Id);
 
             window.ShowMediaCaptionPane();
-            window.SetMediaPlaybackPaneInput(MediaPlaybackStartMode.Automatically, true);
+            window.SetMediaPlaybackPaneInput(MediaPlaybackStartMode.Automatically, true, true, true);
             applied = window.ApplyMediaPlaybackPane();
             startMode = mediaShape.Media!.PlaybackStartMode;
             loop = mediaShape.Media.Loop;
+            mediaShape.Media.RewindAfterPlaying.Should().BeTrue();
             dirty = window.IsDirty;
         });
 

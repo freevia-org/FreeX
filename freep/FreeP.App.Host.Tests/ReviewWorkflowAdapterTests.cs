@@ -1037,14 +1037,17 @@ public sealed class ReviewWorkflowAdapterTests
             window.ShowMediaCaptionPane();
             window.MediaPlaybackStartMode.Should().Be(MediaPlaybackStartMode.InClickSequence);
             window.MediaLoop.Should().BeFalse();
+            window.MediaRewindAfterPlaying.Should().BeFalse();
 
-            window.SetMediaPlaybackPaneInput(MediaPlaybackStartMode.Automatically, true);
+            window.SetMediaPlaybackPaneInput(MediaPlaybackStartMode.Automatically, true, true, true);
             window.MediaPlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
             window.MediaLoop.Should().BeTrue();
+            window.MediaRewindAfterPlaying.Should().BeTrue();
             window.ApplyMediaPlaybackPane().Should().BeTrue();
 
             mediaShape.Media!.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
             mediaShape.Media.Loop.Should().BeTrue();
+            mediaShape.Media.RewindAfterPlaying.Should().BeTrue();
             window.IsDirty.Should().BeTrue();
         }
         finally

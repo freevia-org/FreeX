@@ -28,6 +28,13 @@ public readonly record struct SlideShowMediaTrimWindow(
     public bool IsTrimmed => Start > TimeSpan.Zero || End < TimeSpan.MaxValue;
 }
 
+public enum SlideShowMediaEndAction
+{
+    Stop,
+    Rewind,
+    Loop,
+}
+
 /// <summary>
 /// Shared slideshow media hit-testing and source policy. WPF and Avalonia keep
 /// native playback optional, but they must agree on hit rectangles and consume
@@ -150,6 +157,16 @@ public static class SlideShowMediaInteractionPlanner
         ArgumentNullException.ThrowIfNull(media);
         var start = PositiveMilliseconds(media.TrimStartMilliseconds);
         return position < start ? start : position;
+    }
+
+    public static SlideShowMediaEndAction ResolveEndAction(MediaInfo media)
+    {
+        ArgumentNullException.ThrowIfNull(media);
+        return media.Loop
+            ? SlideShowMediaEndAction.Loop
+            : media.RewindAfterPlaying
+                ? SlideShowMediaEndAction.Rewind
+                : SlideShowMediaEndAction.Stop;
     }
 
     /// <summary>

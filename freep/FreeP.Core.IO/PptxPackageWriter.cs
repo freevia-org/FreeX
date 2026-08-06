@@ -2152,7 +2152,8 @@ public static class PptxPackageWriter
                 && (shape.Media?.PlaybackStartMode == MediaPlaybackStartMode.Automatically
                     || shape.Media?.Loop == true
                     || shape.Media?.VolumePercent != 80
-                    || shape.Media?.ShowWhenStopped == false))
+                    || shape.Media?.ShowWhenStopped == false
+                    || shape.Media?.RewindAfterPlaying == true))
             .ToList();
         if (animations.Count == 0 && timedMedia.Count == 0 && string.IsNullOrWhiteSpace(slide.AnimationBuildListXml))
             return null;
@@ -2288,6 +2289,8 @@ public static class PptxPackageWriter
         };
         if (shape.Media?.Loop == true)
             cTnAttributes.Add(new XAttribute("repeatCount", "indefinite"));
+        if (shape.Media?.RewindAfterPlaying == true)
+            cTnAttributes.Add(new XAttribute("autoRev", "1"));
 
         return new XElement(mediaElementName,
             new XElement(P + "cMediaNode",

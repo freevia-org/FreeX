@@ -194,8 +194,20 @@ internal sealed class AvaloniaSlideShowMediaController
                 }
                 session.Ended += (_, _) =>
                 {
-                    if (view is not null && !shape.Media!.ShowWhenStopped)
+                    var endAction = SlideShowMediaInteractionPlanner.ResolveEndAction(shape.Media!);
+                    if (endAction == SlideShowMediaEndAction.Rewind)
+                    {
+                        SeekToTrimStart(session, shape.Media!);
+                        ApplyFade(session, shape.Media!, baseVolumePercent);
+                        session.Pause();
+                        if (view is not null)
+                            view.IsVisible = shape.Media.ShowWhenStopped;
+                    }
+                    else if (endAction == SlideShowMediaEndAction.Stop &&
+                             view is not null && !shape.Media!.ShowWhenStopped)
+                    {
                         view.IsVisible = false;
+                    }
                 };
 
                 var captionTrack = captionSlideIndex is int currentSlideIndex
@@ -581,15 +593,23 @@ internal sealed class AvaloniaSlideShowMediaController
                     slot.Media, slot.Session.Position, slot.Session.Duration))
                 continue;
 
-            if (slot.Media.Loop)
+            switch (SlideShowMediaInteractionPlanner.ResolveEndAction(slot.Media))
             {
-                StartPlayback(slot.Session, slot.Media, slot.BaseVolumePercent);
-            }
-            else
-            {
-                slot.Session.Pause();
-                if (slot.VideoView is not null && !slot.ShowWhenStopped)
-                    slot.VideoView.IsVisible = false;
+                case SlideShowMediaEndAction.Loop:
+                    StartPlayback(slot.Session, slot.Media, slot.BaseVolumePercent);
+                    break;
+                case SlideShowMediaEndAction.Rewind:
+                    SeekToTrimStart(slot.Session, slot.Media);
+                    ApplyFade(slot.Session, slot.Media, slot.BaseVolumePercent);
+                    slot.Session.Pause();
+                    if (slot.VideoView is not null)
+                        slot.VideoView.IsVisible = slot.ShowWhenStopped;
+                    break;
+                default:
+                    slot.Session.Pause();
+                    if (slot.VideoView is not null && !slot.ShowWhenStopped)
+                        slot.VideoView.IsVisible = false;
+                    break;
             }
         }
     }

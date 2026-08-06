@@ -224,6 +224,46 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Media_RewindAfterPlaying_RoundTripsThroughPresentationTiming()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 12,
+            Name = "Rewinding video",
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                RewindAfterPlaying = true,
+                Bytes = [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70],
+                ContentType = "video/mp4",
+            },
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+
+        ms.Position = 0;
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
+            var p = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+            slideXml.Descendants(p + "cTn")
+                .Single(element => element.Attribute("autoRev") is not null)
+                .Attribute("autoRev")!.Value.Should().Be("1");
+        }
+
+        ms.Position = 0;
+        var reopened = PptxPackageReader.Read(ms);
+        reopened.Slides[0].Shapes[0].Media!.RewindAfterPlaying.Should().BeTrue();
+    }
+
+    [Fact]
     public void Media_TrimAndFade_RoundTripThroughP14Extension()
     {
         var pres = new Presentation();

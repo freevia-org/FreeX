@@ -2432,7 +2432,8 @@ public sealed class EditingSession
     public bool SetSelectedMediaPlaybackOptions(
         MediaPlaybackStartMode startMode,
         bool loop,
-        bool showWhenStopped = true)
+        bool showWhenStopped = true,
+        bool rewindAfterPlaying = false)
     {
         var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
             CurrentSlide,
@@ -2449,7 +2450,9 @@ public sealed class EditingSession
             startMode,
             loop,
             media.ShowWhenStopped,
-            showWhenStopped));
+            showWhenStopped,
+            media.RewindAfterPlaying,
+            rewindAfterPlaying));
         return true;
     }
 
