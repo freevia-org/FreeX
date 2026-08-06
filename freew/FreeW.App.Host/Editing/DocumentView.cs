@@ -16756,7 +16756,9 @@ public sealed class DocumentView : RichTextBox
                 plan.BookmarkNameToAdd,
                 plan.TargetRunIndex,
                 plan.TargetNoteId,
-                plan.TargetIsFootnote));
+                plan.TargetIsFootnote,
+                plan.TargetTextStartOffset,
+                plan.TargetTextEndOffset));
             _commands.CommitUndoGroup("Insert Cross-reference");
         }
         catch

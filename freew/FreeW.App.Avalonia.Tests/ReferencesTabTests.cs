@@ -478,6 +478,27 @@ public sealed class ReferencesTabTests
             .CrossReference!.Target.Should().Be("_Ref1");
     }
 
+    [Fact]
+    public void InsertCrossReference_caption_text_anchors_only_descriptive_text()
+    {
+        var caption = Captions.BuildCaption(CaptionLabel.Figure, 1, "Sample caption text");
+        var view = ViewWith(caption, new Paragraph("See "));
+        var target = CrossReferences.Targets(view.Document, CrossRefType.Figure).Single();
+
+        view.InsertCrossReference(
+            CrossRefType.Figure, target, CrossRefInsertAs.CaptionText, hyperlink: true);
+
+        caption.Runs.Select(run => run.Text).Should().Equal("Figure ", "1", ": ", "Sample caption text");
+        caption.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.Start, 3, "_Ref1"));
+        caption.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.End, 4));
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.CrossReference is not null)
+            .Text.Should().Be("Sample caption text");
+    }
+
     // ── Citation / Bibliography ─────────────────────────────────────────────────────
 
     [Fact]
