@@ -1795,6 +1795,52 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void RegenerateDrawingCache_BasicRelationshipTwoNodeUsesSharedEllipsePlan()
+    {
+        var data = MakeFlatData(
+            SmartArtFamily.Relationship,
+            ("for", "For"),
+            ("against", "Against"));
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/relationship1";
+        var smartArt = new SmartArtShape
+        {
+            Data = data,
+            DrawingPartPath = "ppt/diagrams/drawing1.xml",
+        };
+        smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />"),
+        };
+
+        var result = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme());
+
+        result.Applied.Should().BeTrue(result.Message);
+        result.ShapeCount.Should().Be(2);
+        smartArt.FallbackShapes.Should().HaveCount(2);
+        smartArt.FallbackShapes.Should().OnlyContain(shape =>
+            shape.Kind == SlideShapeKind.AutoShape
+            && shape.AutoShapeKind == DrawingShapeKind.Ellipse);
+        smartArt.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Equal("For", "Against");
+
+        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var drawing = XDocument.Parse(Encoding.UTF8.GetString(
+            smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
+        drawing.Descendants(dsp + "sp").Should().HaveCount(2);
+        drawing.Descendants(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "prstGeom")
+            .Select(element => (string?)element.Attribute("prst"))
+            .Should().OnlyContain(value => value == "ellipse");
+    }
+
+    [Fact]
     public void RegenerateDrawingCache_ContinuousBlockProcessUsesSharedBlockPlan()
     {
         var data = MakeFlatData(

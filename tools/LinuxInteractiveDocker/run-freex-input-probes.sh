@@ -2367,42 +2367,109 @@ probe_grid_drag_parity() {
 
 probe_grid_autofit() {
     local seeded_text="Long deterministic X11 AutoFit text for column growth"
-    local before_width=0 after_width=0 boundary_x boundary_y
-    local grown=false
-    local artifacts="grid-autofit-before.png;grid-autofit-after.png;grid-autofit-postcondition.txt"
+    local before_width=0 after_width=0 row_before_height=0 row_after_height=0
+    local hidden_row4_height=0 hidden_row5_height=0
+    local column_boundary_x=0 column_boundary_y=0 row_boundary_x=0 row_boundary_y=0 hidden_boundary_x=0 hidden_boundary_y=0
+    local column_grown=false row_grown=false hidden_unhidden=false hidden_sized=false
+    local hidden_rows_after='[4,5]'
+    local artifacts="grid-autofit-before.png;grid-autofit-after.png;grid-autofit-row-before.png;grid-autofit-row-after.png;grid-autofit-hidden-before.png;grid-autofit-hidden-after.png;grid-autofit-postcondition.json"
+    local row_header_x handle_center_inset=4
 
-    if ! set_cell_text_without_save 0 0 A1 "$seeded_text" ||
-       ! select_cell 0 0 A1 ||
-       ! capture_selection "grid-autofit-before.png"; then
-        write_artifact "grid-autofit-postcondition.txt" "seeded=$seeded_text\nbefore-width=unavailable\nafter-width=unavailable\nwidth-grew=false\n"
-        record "grid-header-double-click-autofit-column-physical" "failed" "grid-autofit-before.png; grid-autofit-after.png; grid-autofit-postcondition.txt" "Could not seed A1 or capture the pre-AutoFit selection." "$artifacts"
+    if ! select_cell 1 2 B3 ||
+       ! capture "grid-autofit-hidden-before.png"; then
+        write_artifact "grid-autofit-postcondition.json" '{"schemaVersion":2,"suite":"freex-grid-autofit-physical","platform":"linux","shell":"avalonia","app":"FreeX","viewport":{"width":1280,"height":820,"dpi":96},"column":{"seedCell":"A1","beforeSize":1,"afterSize":1,"boundaryX":1,"boundaryY":1,"grew":false},"row":{"seedCell":"B2","beforeSize":1,"afterSize":1,"boundaryX":1,"boundaryY":1,"grew":false},"hiddenRowBoundary":{"targetStart":4,"targetEnd":5,"hiddenRowsBefore":[4,5],"hiddenRowsAfter":[],"beforeHeights":[0,0],"afterHeights":[16,16],"unhidden":false,"sized":false,"boundaryX":1,"boundaryY":1}'
+        record "grid-header-double-click-autofit-column-physical" "failed" "grid-autofit-before.png; grid-autofit-after.png; grid-autofit-postcondition.json" "Could not reach the fixture grid before the AutoFit proofs." "$artifacts"
+        record "grid-header-double-click-autofit-row-physical" "failed" "grid-autofit-row-before.png; grid-autofit-row-after.png; grid-autofit-postcondition.json" "Column setup failed before the visible-row AutoFit proof." "$artifacts"
+        record "grid-header-double-click-autofit-hidden-row-boundary-physical" "failed" "grid-autofit-hidden-before.png; grid-autofit-hidden-after.png; grid-autofit-postcondition.json" "Column setup failed before the hidden-row boundary proof." "$artifacts"
         return
     fi
 
-    before_width="$observed_width"
-    # The selection outline includes a few pixels outside the cell. Use the calibrated
-    # A1-to-B1 pitch for the physical boundary, rather than the outline width.
-    boundary_x=$((a1_x + cell_width - 1))
-    boundary_y=$((a1_y - cell_height / 2))
-    focus_app
-    xdotool_mousemove_sync "$boundary_x" "$boundary_y"
-    xdotool click --repeat 2 --delay 180 1
-    sleep "$settle_seconds"
+    row_header_x=$((window_x + (a1_x - window_x) / 2))
 
-    select_cell 0 0 A1 || true
-    if capture_selection "grid-autofit-after.png"; then
-        after_width="$observed_width"
-    fi
-    if [[ "$after_width" =~ ^[0-9]+$ ]] && (( after_width > before_width )); then
-        grown=true
+    # The hidden-row boundary proof runs before the visible-row proof so all row coordinates remain
+    # on the default-height grid; the existing calibrated pitch is still valid for column B.
+    hidden_boundary_x="$row_header_x"
+    hidden_boundary_y=$((a1_y + 3 * cell_height - handle_center_inset))
+    if [[ -f "$output/grid-autofit-hidden-before.png" ]]; then
+        focus_app
+        xdotool_mousemove_sync "$hidden_boundary_x" "$hidden_boundary_y"
+        xdotool click --repeat 2 --delay 180 1
+        sleep "$settle_seconds"
+        if select_cell 1 3 B4 && capture "grid-autofit-hidden-after.png"; then
+            hidden_row4_height="$observed_height"
+            hidden_rows_after='[5]'
+            local hidden_row5_top hidden_row5_left hidden_row5_center_x hidden_row5_center_y
+            hidden_row5_top=$((a1_y + 3 * cell_height + hidden_row4_height))
+            hidden_row5_left=$((a1_x + cell_width))
+            hidden_row5_center_x=$((hidden_row5_left + cell_width / 2))
+            hidden_row5_center_y=$((hidden_row5_top + cell_height / 2))
+            focus_app
+            xdotool_mousemove_sync "$hidden_row5_center_x" "$hidden_row5_center_y" click 1
+            if wait_for_selection "$hidden_row5_left" "$hidden_row5_top" "selection-B5.png" && capture "grid-autofit-hidden-after.png"; then
+                hidden_row5_height="$observed_height"
+                hidden_rows_after='[]'
+                hidden_unhidden=true
+                if (( hidden_row4_height > cell_height && hidden_row5_height > cell_height )); then
+                    hidden_sized=true
+                fi
+            fi
+        fi
     fi
 
-    write_artifact "grid-autofit-postcondition.txt" \
-        "seeded=$seeded_text\nbefore-width=$before_width\nafter-width=$after_width\nboundary-x=$boundary_x\nboundary-y=$boundary_y\nwidth-grew=$grown\n"
-    if $grown; then
-        record "grid-header-double-click-autofit-column-physical" "passed" "grid-autofit-before.png; grid-autofit-after.png; before-width=$before_width; after-width=$after_width" "A real X11 double-click on the first column boundary widened the seeded long-text column." "$artifacts"
+    # A separate visible row keeps the ordinary row-boundary proof explicit after the hidden run.
+    if select_cell 1 1 B2 && capture "grid-autofit-row-before.png"; then
+        row_before_height="$observed_height"
+        row_boundary_x="$row_header_x"
+        row_boundary_y=$((a1_y + 2 * cell_height - handle_center_inset))
+        focus_app
+        xdotool_mousemove_sync "$row_boundary_x" "$row_boundary_y"
+        xdotool click --repeat 2 --delay 180 1
+        sleep "$settle_seconds"
+        if select_cell 1 1 B2 && capture "grid-autofit-row-after.png"; then
+            row_after_height="$observed_height"
+            if (( row_after_height > row_before_height )); then
+                row_grown=true
+            fi
+        fi
+    fi
+
+    # Preserve the existing passing column proof after the row proofs, while the calibrated
+    # pitch still describes the default-width grid.
+    if select_cell 0 0 A1 && capture_selection "grid-autofit-before.png"; then
+        before_width="$observed_width"
+        # The selection outline includes a few pixels outside the cell. Use the calibrated
+        # A1-to-B1 pitch for the physical boundary, rather than the outline width.
+        column_boundary_x=$((a1_x + cell_width - 1 - handle_center_inset))
+        column_boundary_y=$((a1_y - cell_height / 2))
+        focus_app
+        xdotool_mousemove_sync "$column_boundary_x" "$column_boundary_y"
+        xdotool click --repeat 2 --delay 180 1
+        sleep "$settle_seconds"
+        select_cell 0 0 A1 || true
+        if capture_selection "grid-autofit-after.png"; then
+            after_width="$observed_width"
+        fi
+        if [[ "$after_width" =~ ^[0-9]+$ ]] && (( after_width > before_width )); then
+            column_grown=true
+        fi
+    fi
+
+    write_artifact "grid-autofit-postcondition.json" \
+        "{\n  \"schemaVersion\":2,\n  \"suite\":\"freex-grid-autofit-physical\",\n  \"platform\":\"linux\",\n  \"shell\":\"avalonia\",\n  \"app\":\"FreeX\",\n  \"viewport\":{\"width\":1280,\"height\":820,\"dpi\":96},\n  \"column\":{\"seedCell\":\"A1\",\"beforeSize\":$before_width,\"afterSize\":$after_width,\"boundaryX\":$column_boundary_x,\"boundaryY\":$column_boundary_y,\"grew\":$column_grown},\n  \"row\":{\"seedCell\":\"B2\",\"beforeSize\":$row_before_height,\"afterSize\":$row_after_height,\"boundaryX\":$row_boundary_x,\"boundaryY\":$row_boundary_y,\"grew\":$row_grown},\n  \"hiddenRowBoundary\":{\"targetStart\":4,\"targetEnd\":5,\"hiddenRowsBefore\":[4,5],\"hiddenRowsAfter\":$hidden_rows_after,\"beforeHeights\":[0,0],\"afterHeights\":[$hidden_row4_height,$hidden_row5_height],\"unhidden\":$hidden_unhidden,\"sized\":$hidden_sized,\"boundaryX\":$hidden_boundary_x,\"boundaryY\":$hidden_boundary_y}\n}"
+    if $column_grown; then
+        record "grid-header-double-click-autofit-column-physical" "passed" "grid-autofit-before.png; grid-autofit-after.png; grid-autofit-postcondition.json; before-width=$before_width; after-width=$after_width" "A real X11 double-click on the first column boundary widened the seeded long-text column." "$artifacts"
     else
-        record "grid-header-double-click-autofit-column-physical" "failed" "grid-autofit-before.png; grid-autofit-after.png; grid-autofit-postcondition.txt" "The real X11 column-boundary double-click did not produce deterministic column growth." "$artifacts"
+        record "grid-header-double-click-autofit-column-physical" "failed" "grid-autofit-before.png; grid-autofit-after.png; grid-autofit-postcondition.json" "The real X11 column-boundary double-click did not produce deterministic column growth." "$artifacts"
+    fi
+    if $row_grown; then
+        record "grid-header-double-click-autofit-row-physical" "passed" "grid-autofit-row-before.png; grid-autofit-row-after.png; grid-autofit-postcondition.json; before-height=$row_before_height; after-height=$row_after_height" "A real X11 double-click on a visible row boundary grew the wrapped row to its content." "$artifacts"
+    else
+        record "grid-header-double-click-autofit-row-physical" "failed" "grid-autofit-row-before.png; grid-autofit-row-after.png; grid-autofit-postcondition.json" "The real X11 visible row-boundary double-click did not produce deterministic row growth." "$artifacts"
+    fi
+    if $hidden_sized; then
+        record "grid-header-double-click-autofit-hidden-row-boundary-physical" "passed" "grid-autofit-hidden-before.png; grid-autofit-hidden-after.png; grid-autofit-postcondition.json; rows=4:5; heights=$hidden_row4_height,$hidden_row5_height" "A real X11 double-click on the contiguous hidden-row boundary reopened rows 4:5 and AutoFit-sized both rows." "$artifacts"
+    else
+        record "grid-header-double-click-autofit-hidden-row-boundary-physical" "failed" "grid-autofit-hidden-before.png; grid-autofit-hidden-after.png; grid-autofit-postcondition.json" "The real X11 hidden-row boundary double-click did not prove contiguous unhide and AutoFit sizing." "$artifacts"
     fi
 }
 

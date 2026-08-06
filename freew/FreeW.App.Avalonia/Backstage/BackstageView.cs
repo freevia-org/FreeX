@@ -42,6 +42,8 @@ internal sealed class BackstageView : Window
     private static readonly IBrush SeparatorBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD));
     private static readonly IBrush WpfScrollTrackBrush = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0));
     private static readonly IBrush WpfScrollThumbBrush = new SolidColorBrush(Color.FromRgb(0xCD, 0xCD, 0xCD));
+    // Fluent's Home action footprint is one DIP taller than the WPF link row.
+    private const double HomeActionRowBottomCompensation = 1;
     private static readonly AvaloniaBackstageChromeStyle BackstageChromeStyle = new(PrimaryInk, SecondaryInk)
     {
         SeparatorBrush = SeparatorBrush,
@@ -783,7 +785,11 @@ internal sealed class BackstageView : Window
             automationId: $"BackstageAction_{action.Label.Replace(' ', '_')}");
         button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         button.HorizontalAlignment = HorizontalAlignment.Stretch;
-        button.Margin = ToThickness(metrics.ActionRowMargin);
+        button.Margin = new Thickness(
+            metrics.ActionRowMargin.Left,
+            metrics.ActionRowMargin.Top,
+            metrics.ActionRowMargin.Right,
+            Math.Max(0, metrics.ActionRowMargin.Bottom - HomeActionRowBottomCompensation));
         AutomationProperties.SetName(button, action.Label);
         var stack = new StackPanel();
         stack.Children.Add(new TextBlock

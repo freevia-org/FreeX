@@ -1967,6 +1967,7 @@ public static class SmartArtEditingPlanner
             DrawingShapeKind.Diamond => "diamond",
             DrawingShapeKind.Trapezoid => "trapezoid",
             DrawingShapeKind.Chord => "chord",
+            DrawingShapeKind.Ellipse => "ellipse",
             _ => "rect"
         };
 

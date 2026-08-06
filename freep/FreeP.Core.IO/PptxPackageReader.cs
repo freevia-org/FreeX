@@ -3140,9 +3140,10 @@ public static class PptxPackageReader
             && smart.FallbackShapes.Count > 0
             && !CanUseBasicRelationshipNodeCache(smart, data))
         {
-            // relationship1 is live only for the exact node-only overlapping-ellipse
-            // cache reproduced by the shared planner. Preserve any richer imported
-            // relationship drawing until its extra roles have a dedicated plan.
+            // relationship1 is live only for the exact two- or three-node
+            // overlapping-ellipse cache reproduced by the shared planner. Preserve
+            // any richer imported relationship drawing until its extra roles have
+            // a dedicated plan.
             data.IsLiveLayoutSupported = false;
         }
 
@@ -3581,7 +3582,11 @@ public static class PptxPackageReader
             return false;
 
         var nodes = FlattenSmartArtNodes(data);
-        if (nodes.Count != 3 || smart.FallbackShapes.Count != nodes.Count)
+        if (nodes.Count is < 2 or > 3 || smart.FallbackShapes.Count != nodes.Count)
+            return false;
+
+        if (data.Nodes.Count != nodes.Count
+            || data.Nodes.Any(node => node.Level != 0 || node.Children.Count != 0))
             return false;
 
         if (smart.FallbackShapes.Any(HasUnsupportedSmartArtShapeEffects)

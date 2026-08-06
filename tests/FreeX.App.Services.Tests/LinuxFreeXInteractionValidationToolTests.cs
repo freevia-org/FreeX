@@ -48,6 +48,37 @@ public sealed class LinuxFreeXInteractionValidationToolTests
     }
 
     [Fact]
+    public void GridAutofitSelectorRequiresColumnRowAndHiddenBoundarySchemaV2Evidence()
+    {
+        var runner = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+        var schema = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "freex-grid-autofit-validation.schema.json"));
+        var fixture = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "New-FreeXWave164GridAutofitFixture.ps1"));
+
+        runner.Should().Contain("Assert-GridAutofitPostcondition");
+        runner.Should().Contain("grid-header-double-click-autofit-column-physical");
+        runner.Should().Contain("grid-header-double-click-autofit-row-physical");
+        runner.Should().Contain("grid-header-double-click-autofit-hidden-row-boundary-physical");
+        runner.Should().Contain("$hiddenRowsAfterValid");
+        runner.Should().Contain("Grid AutoFit hidden-row diagnostic");
+        runner.Should().Contain("freex-wave164-grid-autofit.xlsx");
+        probe.Should().Contain("grid-autofit-postcondition.json");
+        probe.Should().Contain("hiddenRowsBefore\\\":[4,5]");
+        probe.Should().Contain("hiddenRowsAfter\\\":$hidden_rows_after");
+        probe.Should().Contain("xdotool click --repeat 2 --delay 180 1");
+        schema.Should().Contain("\"schemaVersion\": { \"const\": 2 }");
+        schema.Should().Contain("\"hiddenRowBoundary\"");
+        schema.Should().Contain("\"unhidden\": { \"type\": \"boolean\" }");
+        fixture.Should().Contain("hidden=\"1\"");
+        fixture.Should().Contain("r=\"4\"");
+        fixture.Should().Contain("r=\"5\"");
+    }
+
+    [Fact]
     public void SplitPanePointerSelectorRequiresSharedScrollbarPhysicalEvidenceRows()
     {
         var runner = File.ReadAllText(RepositoryFileLocator.Find(

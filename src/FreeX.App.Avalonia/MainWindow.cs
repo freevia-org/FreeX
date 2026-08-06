@@ -5077,7 +5077,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (showHeadings)
             {
                 var selectedRow = IsSelectedRow(row);
-                AddGridChild(grid, CreateRowHeaderCell(row, rowMetric, selectedRow, zoomFactor), rowIndex + headerOffset, 0);
+                AddGridChild(
+                    grid,
+                    CreateRowHeaderCell(row, rowMetric, selectedRow, zoomFactor),
+                    rowIndex + headerOffset,
+                    0);
             }
 
             for (var colIndex = 0; colIndex < colMetrics.Count; colIndex++)
@@ -7581,7 +7585,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         header.PointerMoved += (_, args) => ContinueHeaderSelectionDrag(args, HeaderResizeKind.Row, row);
         header.PointerReleased += (_, args) => EndHeaderSelectionDrag(args);
-        return AddRowResizeHandle(header, row, metric, zoomFactor);
+        var resizeRow = ResolveRowResizeHandleTarget(row);
+        var resizeHeight = resizeRow == row ? GetDisplayedRowHeight(metric, zoomFactor) : 0;
+        return AddRowResizeHandle(header, resizeRow, resizeHeight);
+    }
+
+    private uint ResolveRowResizeHandleTarget(uint visibleRow)
+    {
+        var sheet = _session.ActiveSheet;
+        if (visibleRow >= CellAddress.MaxRow || !sheet.HiddenRows.Contains(visibleRow + 1))
+            return visibleRow;
+
+        return GridResizePreviewPlanner.GetRowResizeRange(sheet, selectedRange: null, visibleRow + 1).Start;
     }
 
     private static bool IsContextClick(PointerPoint point, PointerEventArgs args) =>
@@ -8124,7 +8139,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return CreateHeaderWithResizeHandle(header, handle);
     }
 
-    private Control AddRowResizeHandle(Border header, uint row, RowMetric metric, double zoomFactor)
+    private Control AddRowResizeHandle(Border header, uint row, double displayedHeight)
     {
         var handle = CreateHeaderResizeHandle(HeaderResizeKind.Row);
         handle.PointerPressed += (_, args) =>
@@ -8138,7 +8153,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
-            BeginHeaderResize(args, handle, HeaderResizeKind.Row, row, GetDisplayedRowHeight(metric, zoomFactor));
+            BeginHeaderResize(args, handle, HeaderResizeKind.Row, row, displayedHeight);
         };
         handle.PointerMoved += (_, args) => ContinueHeaderResize(args);
         handle.PointerReleased += (_, args) => CommitHeaderResize(args);
