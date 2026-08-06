@@ -157,6 +157,49 @@ public sealed class FreeWRibbonCommandWorkflowTests
     }
 
     [Fact]
+    public void Host_execution_profile_owns_direct_shell_routes_and_preserves_fallback_state()
+    {
+        var cutCount = 0;
+        var findCount = 0;
+        var aboutCount = 0;
+        var ports = FreeWRibbonHostExecutionPorts.Empty with
+        {
+            Cut = () => cutCount++,
+            OpenFindReplaceDialog = () => findCount++,
+            OpenAbout = () => aboutCount++,
+        };
+        var bindings = new FreeWRibbonCommandBindingPorts();
+
+        FreeWRibbonHostExecutionProfile.Register(
+            bindings,
+            ports,
+            registerFileAdapterCommands: true);
+        var registry = FreeWRibbonExecutionProfile.Build(bindings).Registry;
+
+        registry.TryGet("freew.cut", out var cut).Should().BeTrue();
+        registry.TryGet("freew.find", out var find).Should().BeTrue();
+        registry.TryGet("freew.replace", out var replace).Should().BeTrue();
+        registry.TryGet("freew.about", out var about).Should().BeTrue();
+        registry.TryGet("freew.open", out var open).Should().BeTrue();
+
+        cut!.Execute(RibbonCommandContext.Empty);
+        find!.Execute(RibbonCommandContext.Empty);
+        replace!.Execute(RibbonCommandContext.Empty);
+        about!.Execute(RibbonCommandContext.Empty);
+        open!.Execute(RibbonCommandContext.Empty);
+
+        cutCount.Should().Be(1);
+        findCount.Should().Be(2);
+        aboutCount.Should().Be(1);
+
+        registry.TryGet("freew.screen-clipping", out var unavailable).Should().BeTrue();
+        unavailable.Should().BeAssignableTo<IRibbonStatefulCommand>()
+            .Which.GetState().IsEnabled.Should().BeFalse();
+        registry.TryGet("freew.screenshot", out var screenshot).Should().BeTrue();
+        screenshot.Should().BeSameAs(unavailable);
+    }
+
+    [Fact]
     public void Callback_ports_preserve_action_toggle_and_value_state_contracts()
     {
         var bindings = new FreeWRibbonCommandBindingPorts();
@@ -207,6 +250,11 @@ public sealed class FreeWRibbonCommandWorkflowTests
             "FreeW.App.Avalonia",
             "Ribbon",
             "FreeWRibbon.cs");
+        var hostProfile = ReadSource(
+            "freew",
+            "FreeW.App.Presentation",
+            "Ribbon",
+            "FreeWRibbonHostExecutionProfile.cs");
         var directRegistration = new Regex(
             @"(?:registry|r)\.Register\(\s*""(?<id>freew\.[^""]+)""",
             RegexOptions.CultureInvariant);
@@ -231,15 +279,19 @@ public sealed class FreeWRibbonCommandWorkflowTests
         avaloniaRibbon.Should().Contain(
             "global using RibbonHostCallbacks = FreeW.App.Presentation.Ribbon.FreeWRibbonHostExecutionPorts;");
         avaloniaRibbon.Should().NotContain("record RibbonHostCallbacks");
+        avalonia.Should().Contain(
+            "FreeWRibbonHostExecutionProfile.Register(r, callbacks, registerFileAdapterCommands: true);");
+        avalonia.Should().NotContain("new ActionRibbonCommand(callbacks.OpenFindReplaceDialog)");
+        avalonia.Should().NotContain("HostCommand(callbacks.OpenAbout)");
 
-        foreach (var source in new[] { wpf, avalonia })
-        {
-            Regex.Matches(source, @"FreeWRibbonCommandAction\.(?<action>[A-Za-z0-9_]+)")
-                .Select(match => match.Groups["action"].Value)
-                .Distinct(StringComparer.Ordinal)
-                .Should().HaveCount(399)
-                .And.BeEquivalentTo(Enum.GetNames<FreeWRibbonCommandAction>());
-        }
+        RibbonActions(wpf).Should().HaveCountLessThan(399);
+        RibbonActions(wpf + hostProfile)
+            .Should().HaveCount(399)
+            .And.BeEquivalentTo(Enum.GetNames<FreeWRibbonCommandAction>());
+        RibbonActions(avalonia).Should().HaveCountLessThan(399);
+        RibbonActions(avalonia + hostProfile)
+            .Should().HaveCount(399)
+            .And.BeEquivalentTo(Enum.GetNames<FreeWRibbonCommandAction>());
 
         foreach (var helperPrefix in new[]
                  {
@@ -261,6 +313,12 @@ public sealed class FreeWRibbonCommandWorkflowTests
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         return File.ReadAllText(relativePath.Aggregate(root, Path.Combine));
     }
+
+    private static string[] RibbonActions(string source) =>
+        Regex.Matches(source, @"FreeWRibbonCommandAction\.(?<action>[A-Za-z0-9_]+)")
+            .Select(match => match.Groups["action"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
     private sealed class RecordingCommand : IRibbonCommand
     {

@@ -9,6 +9,8 @@ namespace FreeW.App.Presentation.Ribbon;
 /// </summary>
 public static class FreeWRibbonExecutionProfile
 {
+    public static IRibbonCommand UnavailableCommand => UnavailableCommandImpl.Instance;
+
     public static FreeWRibbonCommandBuildResult Build(FreeWRibbonCommandBindingPorts ports)
     {
         ArgumentNullException.ThrowIfNull(ports);
@@ -20,7 +22,7 @@ public static class FreeWRibbonExecutionProfile
                 action,
                 ports.CanonicalBindings.TryGetValue(action, out var command)
                     ? command
-                    : UnavailableCommand.Instance);
+                    : UnavailableCommandImpl.Instance);
         }
 
         foreach (var (commandId, command) in ports.AdapterBindings)
@@ -29,11 +31,11 @@ public static class FreeWRibbonExecutionProfile
         return FreeWRibbonCommandWorkflow.Build(completed);
     }
 
-    private sealed class UnavailableCommand : IRibbonStatefulCommand
+    private sealed class UnavailableCommandImpl : IRibbonStatefulCommand
     {
-        public static UnavailableCommand Instance { get; } = new();
+        public static UnavailableCommandImpl Instance { get; } = new();
 
-        private UnavailableCommand()
+        private UnavailableCommandImpl()
         {
         }
 

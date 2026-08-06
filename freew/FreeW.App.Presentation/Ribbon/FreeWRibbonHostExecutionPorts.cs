@@ -169,4 +169,42 @@ public sealed record FreeWRibbonHostExecutionPorts(
     Func<bool>? IsReadModeActive = null,
     Action<string>? ApplyReadModeColumnWidth = null,
     Action<string>? ApplyReadModePageColor = null,
-    Func<bool, string, Task<string?>>? AskHeaderFooterText = null);
+    Func<bool, string, Task<string?>>? AskHeaderFooterText = null)
+{
+    public static FreeWRibbonHostExecutionPorts Empty { get; } = new(
+        Open: Noop,
+        Save: Noop,
+        Cut: Noop,
+        Copy: Noop,
+        Paste: Noop,
+        Backstage: Noop,
+        NewDocument: Noop,
+        ToggleNavigationPane: Noop,
+        ToggleReviewingPane: Noop,
+        ToggleRevealFormatting: Noop,
+        OpenFindReplaceDialog: Noop,
+        SetPrintLayout: Noop,
+        SetWebLayout: Noop,
+        SetDraftView: Noop,
+        OpenFontDialog: Noop,
+        OpenParagraphDialog: Noop,
+        OpenPageSetupDialog: Noop,
+        ToggleOrientation: Noop,
+        ApplyMarginPreset: Ignore,
+        ApplyPaperSize: Ignore,
+        InsertPicture: Noop,
+        OpenWordCountDialog: Noop,
+        ApplyZoom: IgnoreZoom);
+
+    private static void Noop()
+    {
+    }
+
+    private static void Ignore(string value)
+    {
+    }
+
+    private static void IgnoreZoom(double? absolute, double delta)
+    {
+    }
+}

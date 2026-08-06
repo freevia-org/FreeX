@@ -1825,18 +1825,17 @@ internal static class FreeWRibbonCommands
         if (viewRibbon.Gridlines is { } viewGridlines)
             stateful.Add(("freew.gridlines", viewGridlines));
 
-        if (onHelpOnline is not null)
-            registry.Bind(FreeWRibbonCommandAction.HelpOnline, new ActionRibbonCommand(onHelpOnline));
-        if (onFeedback is not null)
-            registry.Bind(FreeWRibbonCommandAction.Feedback, new ActionRibbonCommand(onFeedback));
-        if (onCopyDiagnostics is not null)
-            registry.Bind(FreeWRibbonCommandAction.CopyDiagnostics, new ActionRibbonCommand(onCopyDiagnostics));
-        if (onCheckForUpdates is not null)
-            registry.Bind(FreeWRibbonCommandAction.CheckUpdates, new ActionRibbonCommand(onCheckForUpdates));
-        if (onAbout is not null)
-            registry.Bind(FreeWRibbonCommandAction.About, new ActionRibbonCommand(onAbout));
-        if (onLegalNotices is not null)
-            registry.Bind(FreeWRibbonCommandAction.LegalNotices, new ActionRibbonCommand(onLegalNotices));
+        FreeWRibbonHostExecutionProfile.RegisterSupportCommands(
+            registry,
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                OpenHelpOnline = onHelpOnline,
+                OpenFeedback = onFeedback,
+                CopyDiagnostics = onCopyDiagnostics,
+                CheckForUpdates = onCheckForUpdates,
+                OpenAbout = onAbout,
+                OpenLegalNotices = onLegalNotices,
+            });
 
         // Mailings tab — a simple mail merge. Field placeholders are the literal text «FieldName»
         // (ordinary run text, so they round-trip through docx as plain text). The four commands share a

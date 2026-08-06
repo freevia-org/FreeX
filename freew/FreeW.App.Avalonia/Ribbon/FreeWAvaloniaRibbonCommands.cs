@@ -87,21 +87,11 @@ internal static class FreeWAvaloniaRibbonCommands
 
         var r = new FreeWRibbonCommandBindingPorts();
         mailMerge = new MailMergeEngine(editor, callbacks);
+        FreeWRibbonHostExecutionProfile.Register(r, callbacks, registerFileAdapterCommands: true);
 
         // ── File ─────────────────────────────────────────────────────────────
-        r.Register("freew.backstage", new ActionRibbonCommand(callbacks.Backstage));
-        r.Register("freew.new",       new ActionRibbonCommand(callbacks.NewDocument));
-        r.Register("freew.open",      new ActionRibbonCommand(callbacks.Open));
-        r.Register("freew.import-pdf-text", new ActionRibbonCommand(callbacks.ImportPdfText ?? (() => { })));
-        r.Register("freew.save",      new ActionRibbonCommand(callbacks.Save));
 
         // ── Clipboard ────────────────────────────────────────────────────────
-        r.Bind(FreeWRibbonCommandAction.Cut,   new ActionRibbonCommand(callbacks.Cut));
-        r.Bind(FreeWRibbonCommandAction.Copy,  new ActionRibbonCommand(callbacks.Copy));
-        r.Bind(FreeWRibbonCommandAction.Paste, new ActionRibbonCommand(callbacks.Paste));
-        r.Bind(FreeWRibbonCommandAction.PastePlain, new ActionRibbonCommand(callbacks.PastePlainText ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.PasteMerge, new ActionRibbonCommand(callbacks.PasteMergeFormatting ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.PasteSpecial, new ActionRibbonCommand(callbacks.OpenPasteSpecial ?? (() => { })));
         r.Bind(FreeWRibbonCommandAction.FormatPainter, new FormatPainterCommand(editor));
 
         // ── Font ─────────────────────────────────────────────────────────────
@@ -116,8 +106,6 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.Superscript,      new ActionRibbonCommand(editor.ToggleSuperscript));
         r.Bind(FreeWRibbonCommandAction.Subscript,        new ActionRibbonCommand(editor.ToggleSubscript));
         r.Bind(FreeWRibbonCommandAction.Highlight,        new ValueRibbonCommand(value => editor.SetHighlightColor(value)));
-        r.Bind(FreeWRibbonCommandAction.CharBorder,      new ActionRibbonCommand(callbacks.OpenCharacterBorderDialog ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.CharShading,     new ActionRibbonCommand(callbacks.OpenCharacterShadingDialog ?? (() => { })));
         RegisterHighlightPalette(r, editor);
         RegisterCharacterBorderPalette(r, editor);
         RegisterCharacterShadingPalette(r, editor);
@@ -133,7 +121,6 @@ internal static class FreeWAvaloniaRibbonCommands
 
         r.Bind(FreeWRibbonCommandAction.ChangeCase,   new ActionRibbonCommand(editor.ChangeCase));
         // Dialog launchers — open modal dialogs via shell callbacks (no direct editor method).
-        r.Bind(FreeWRibbonCommandAction.FontDialog,      new ActionRibbonCommand(callbacks.OpenFontDialog));
 
         // ── Paragraph ────────────────────────────────────────────────────────
         r.Bind(FreeWRibbonCommandAction.Bullets,          new ActionRibbonCommand(() => editor.ToggleList(ListKind.Bullet)));
@@ -191,8 +178,6 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.ParaBorder, new ActionRibbonCommand(() => editor.ToggleParagraphBorder()));
         r.Bind(FreeWRibbonCommandAction.ParaShading, new ActionRibbonCommand(() => { /* dropdown opener */ }));
         RegisterParagraphShadingPalette(r, editor);
-        r.Bind(FreeWRibbonCommandAction.BordersShading, new ActionRibbonCommand(callbacks.OpenBordersAndShadingDialog ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.TabsDialog, new ActionRibbonCommand(callbacks.OpenTabsDialog ?? (() => { })));
         r.Bind(FreeWRibbonCommandAction.Sort, new ActionRibbonCommand(() => ExecuteSortCommand(editor, callbacks)));
         // Line-spacing commands — value = multiplier for Multiple. The fixed ids are compatibility
         // aliases for older Avalonia controls and are no longer used by the Home ribbon profile.
@@ -202,7 +187,6 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.line-spacing-15",   new ActionRibbonCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.5)));
         r.Register("freew.line-spacing-2",    new ActionRibbonCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 2.0)));
         // Paragraph dialog launcher.
-        r.Bind(FreeWRibbonCommandAction.ParagraphDialog,  new ActionRibbonCommand(callbacks.OpenParagraphDialog));
 
         // ── Styles (AV-STYLES) ────────────────────────────────────────────────
         // Existing quick-style buttons — now routed through the model-backed, undoable ApplyNamedStyle
@@ -221,17 +205,12 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // Clear style — revert the paragraph to the document default (Word's paragraph-level reset).
         r.Bind(FreeWRibbonCommandAction.StyleClear, new ActionRibbonCommand(editor.ClearParagraphStyle));
-        r.Bind(FreeWRibbonCommandAction.NewStyle, new ActionRibbonCommand(callbacks.OpenNewStyleDialog ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.ManageStyles, new ActionRibbonCommand(callbacks.OpenManageStylesDialog ?? (() => { })));
 
         // ── Editing ──────────────────────────────────────────────────────────
         r.Bind(FreeWRibbonCommandAction.Undo,              new ActionRibbonCommand(editor.Undo));
         r.Bind(FreeWRibbonCommandAction.Redo,              new ActionRibbonCommand(editor.Redo));
         r.Bind(FreeWRibbonCommandAction.Select,            new ActionRibbonCommand(editor.SelectAll));
         r.Register("freew.select-all",        new ActionRibbonCommand(editor.SelectAll));
-        r.Bind(FreeWRibbonCommandAction.Find,              new ActionRibbonCommand(callbacks.OpenFindReplaceDialog));
-        r.Bind(FreeWRibbonCommandAction.Replace,           new ActionRibbonCommand(callbacks.OpenFindReplaceDialog));
-        r.Register("freew.find-replace-dialog", new ActionRibbonCommand(callbacks.OpenFindReplaceDialog));
 
         // ── Insert ───────────────────────────────────────────────────────────
         // AV-INSERT: Insert-tab depth. Table dropdown (default + sized presets), page break, picture
@@ -251,16 +230,12 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.HorizontalRule, new ActionRibbonCommand(editor.InsertHorizontalRule));
 
         // Picture — open a file picker, load the bytes, insert as an inline image (host callback).
-        r.Bind(FreeWRibbonCommandAction.Picture, new ActionRibbonCommand(callbacks.InsertPicture));
 
         // Shape / Text Box — floating drawing objects at the caret.
         r.Register("freew.shape",    new ActionRibbonCommand(editor.InsertShape));
         r.Register("freew.text-box", new ActionRibbonCommand(editor.InsertTextBox));
 
-        r.Bind(FreeWRibbonCommandAction.Symbol, HostCommand(callbacks.OpenSymbolPickerDialog));
         RegisterSymbolPalette(r, editor);
-        r.Register("freew.screenshot", HostCommand(callbacks.CaptureScreenClip));
-        r.Bind(FreeWRibbonCommandAction.ScreenClipping, HostCommand(callbacks.CaptureScreenClip));
 
         // Header / Footer — match WPF's text prompt when the shell supplies it. The fallback keeps
         // headless registry callers deterministic and retains the old region-creation behavior.
@@ -274,9 +249,6 @@ internal static class FreeWAvaloniaRibbonCommands
             context => ExecutePageNumberFormat(editor, callbacks, context)));
         r.Bind(FreeWRibbonCommandAction.Datetime, new ActionRibbonCommand(
             callbacks.OpenDateTimeDialog ?? (() => editor.InsertField(RunFieldKind.Date))));
-        r.Bind(FreeWRibbonCommandAction.Field, new ActionRibbonCommand(callbacks.OpenFieldDialog ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.SaveQuickpart, new ActionRibbonCommand(callbacks.SaveQuickPartSelection ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.BuildingBlocksOrganizer, new ActionRibbonCommand(callbacks.OpenBuildingBlocksOrganizer ?? (() => { })));
         RegisterHeaderFooterCommands(r, editor);
 
         // ── Insert depth 2 (AV-INSERT2) ──────────────────────────────────────
@@ -308,7 +280,6 @@ internal static class FreeWAvaloniaRibbonCommands
         // Borders dropdown — opener no-op; sub-commands apply specific edges.
         r.Register("freew.table-borders", new ActionRibbonCommand(() => { /* flyout opener */ }));
         RegisterTableBorderCommands(r, editor);
-        r.Bind(FreeWRibbonCommandAction.DrawTable, new ActionRibbonCommand(callbacks.OpenDrawTableDialog ?? (() => { })));
         r.Bind(FreeWRibbonCommandAction.Eraser, new ActionRibbonCommand(editor.EraseTableBorderAtCaret));
 
         // ── Table Layout contextual tab ───────────────────────────────────────
@@ -397,11 +368,6 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Layout / Page Setup (AV-PAGE) ────────────────────────────────────
         // Dialog launcher: opens the Page Setup modal (margins + paper + orientation).
-        var pageSetupCommand = new ActionRibbonCommand(callbacks.OpenPageSetupDialog);
-        r.Bind(FreeWRibbonCommandAction.PageSetup, pageSetupCommand);
-        r.Bind(FreeWRibbonCommandAction.CustomMargins, new ActionRibbonCommand(callbacks.OpenCustomMarginsDialog ?? callbacks.OpenPageSetupDialog));
-        r.Bind(FreeWRibbonCommandAction.MorePaperSizes, new ActionRibbonCommand(callbacks.OpenMorePaperSizesDialog ?? callbacks.OpenPageSetupDialog));
-        r.Register("freew.page-setup-dialog", pageSetupCommand);
         // Toggle orientation (portrait ↔ landscape).
         var orientationCommand = new HostPageSettingCommand(editor, callbacks.ToggleOrientation);
         r.Bind(FreeWRibbonCommandAction.Orientation, orientationCommand);
@@ -446,12 +412,9 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.LineNumbersContinuous, new PageSettingCommand(editor, page => page.LineNumberMode = LineNumberMode.Continuous, page => page.LineNumberMode == LineNumberMode.Continuous));
         r.Bind(FreeWRibbonCommandAction.LineNumbersRestartPage, new PageSettingCommand(editor, page => page.LineNumberMode = LineNumberMode.RestartEachPage, page => page.LineNumberMode == LineNumberMode.RestartEachPage));
         r.Bind(FreeWRibbonCommandAction.LineNumbersRestartSection, new PageSettingCommand(editor, page => page.LineNumberMode = LineNumberMode.RestartEachSection, page => page.LineNumberMode == LineNumberMode.RestartEachSection));
-        r.Bind(FreeWRibbonCommandAction.LineNumbersOptions, new ActionRibbonCommand(callbacks.OpenLineNumberOptionsDialog ?? (() => { })));
         r.Bind(FreeWRibbonCommandAction.Hyphenation, new PageSettingCommand(editor, PageLayoutCommandPlanner.ToggleHyphenation, page => page.AutoHyphenation));
         r.Bind(FreeWRibbonCommandAction.HyphenationNone, new PageSettingCommand(editor, page => page.AutoHyphenation = false, page => !page.AutoHyphenation));
         r.Bind(FreeWRibbonCommandAction.HyphenationAuto, new PageSettingCommand(editor, page => page.AutoHyphenation = true, page => page.AutoHyphenation));
-        r.Bind(FreeWRibbonCommandAction.HyphenationManual, new ActionRibbonCommand(callbacks.OpenManualHyphenationDialog ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.HyphenationOptions, new ActionRibbonCommand(callbacks.OpenHyphenationOptionsDialog ?? (() => { })));
         r.Bind(FreeWRibbonCommandAction.DifferentFirstPage, new PageSettingCommand(editor, page => page.DifferentFirstPage = !page.DifferentFirstPage, page => page.DifferentFirstPage));
         r.Bind(FreeWRibbonCommandAction.PageValign, new ActionRibbonCommand(editor.CyclePageVerticalAlignment));
         r.Bind(FreeWRibbonCommandAction.TextToTable, new ActionRibbonCommand(
@@ -560,8 +523,6 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.accept-change", acceptCurrentRevisionCommand);
         r.Bind(FreeWRibbonCommandAction.RejectThis, rejectCurrentRevisionCommand);
         r.Register("freew.reject-change", rejectCurrentRevisionCommand);
-        r.Bind(FreeWRibbonCommandAction.PreviousChange, new ActionRibbonCommand(callbacks.PreviousChange ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.NextChange, new ActionRibbonCommand(callbacks.NextChange ?? (() => { })));
         // Comments — thread navigation/actions over the shared comment model.
         r.Bind(FreeWRibbonCommandAction.NewComment,    new ActionRibbonCommand(() => editor.NewComment()));
         r.Bind(FreeWRibbonCommandAction.DeleteComment, new ActionRibbonCommand(() => editor.DeleteCommentAtCaret()));
@@ -573,29 +534,15 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.ShowComments, new ActionRibbonCommand(() =>
             callbacks.ShowComments?.Invoke(editor.PlannedCommentList())));
         // Word Count — opens the modal stats dialog (shell callback; reads DocumentStatistics).
-        var statisticsCommand = new ActionRibbonCommand(callbacks.OpenWordCountDialog);
-        r.Bind(FreeWRibbonCommandAction.Statistics, statisticsCommand);
-        r.Register("freew.word-count", statisticsCommand);
         r.Bind(FreeWRibbonCommandAction.SpellcheckToggle, new ToggleActionCommand(
             callbacks.ToggleSpellcheck ?? (() => editor.ToggleSpellCheck()),
             callbacks.IsSpellcheckActive ?? (() => editor.SpellCheckEnabled)));
         r.Bind(FreeWRibbonCommandAction.AddToDictionary, new ActionRibbonCommand(
             callbacks.AddToDictionary ?? (() => editor.AddCurrentWordToDictionary())));
-        r.Bind(FreeWRibbonCommandAction.Thesaurus, new ActionRibbonCommand(callbacks.OpenThesaurus ?? (() => { })));
         r.Bind(FreeWRibbonCommandAction.SetProofingLanguage, new ProofingLanguageCommand(editor, callbacks));
         r.Bind(FreeWRibbonCommandAction.ReadAloud, new ToggleActionCommand(
             callbacks.ToggleReadAloud ?? (() => { }),
             callbacks.IsReadAloudActive ?? (() => false)));
-        r.Bind(FreeWRibbonCommandAction.CheckAccessibility, new ActionRibbonCommand(callbacks.CheckAccessibility ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.InspectDocument, new ActionRibbonCommand(callbacks.InspectDocument ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.Compare, HostCommand(callbacks.CompareDocuments));
-        r.Bind(FreeWRibbonCommandAction.Combine, new ActionRibbonCommand(callbacks.CombineDocuments ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.HelpOnline, HostCommand(callbacks.OpenHelpOnline));
-        r.Bind(FreeWRibbonCommandAction.Feedback, HostCommand(callbacks.OpenFeedback));
-        r.Bind(FreeWRibbonCommandAction.CopyDiagnostics, HostCommand(callbacks.CopyDiagnostics));
-        r.Bind(FreeWRibbonCommandAction.CheckUpdates, HostCommand(callbacks.CheckForUpdates));
-        r.Bind(FreeWRibbonCommandAction.About, HostCommand(callbacks.OpenAbout));
-        r.Bind(FreeWRibbonCommandAction.LegalNotices, HostCommand(callbacks.OpenLegalNotices));
         r.Bind(FreeWRibbonCommandAction.MarkAsFinal, new ToggleActionCommand(
             callbacks.MarkAsFinal ?? (() => editor.SetMarkedAsFinal(!editor.IsMarkedAsFinal)),
             () => ReviewProtectionStatePlanner.Build(editor.Document.Protection, editor.IsMarkedAsFinal)
