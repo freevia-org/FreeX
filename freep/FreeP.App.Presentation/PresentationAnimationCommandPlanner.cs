@@ -70,6 +70,8 @@ public static class PresentationAnimationCommandPlanner
             new PresentationAnimationCommandPlan("freep.anim.emphasis.color-pulse", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ColorPulse),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.change-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ChangeColor),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.change-fill-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ChangeFillColor),
+            new PresentationAnimationCommandPlan("freep.anim.emphasis.change-font-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ChangeColor),
+            new PresentationAnimationCommandPlan("freep.anim.emphasis.change-font-size", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Grow),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.grow-with-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.GrowWithColor),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.wave", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Wave),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.shimmer", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Shimmer),
@@ -150,7 +152,17 @@ public static class PresentationAnimationCommandPlanner
                     return false;
                 }
 
-                editor.AddAnimation(selectedShapeId, BuildAnimation(kind, preset, selectedShapeId));
+                var animation = BuildAnimation(kind, preset, selectedShapeId);
+                if (StringComparer.Ordinal.Equals(plan.CommandId, "freep.anim.emphasis.change-font-color"))
+                {
+                    animation = BuildFontColorAnimation(selectedShapeId);
+                }
+                else if (StringComparer.Ordinal.Equals(plan.CommandId, "freep.anim.emphasis.change-font-size"))
+                {
+                    animation = BuildFontSizeAnimation(selectedShapeId);
+                }
+
+                editor.AddAnimation(selectedShapeId, animation);
                 return true;
 
             case PresentationAnimationCommandIntentKind.AddMotionPath:
@@ -264,6 +276,36 @@ public static class PresentationAnimationCommandPlanner
         return animation;
     }
 
+    public static ShapeAnimation BuildFontColorAnimation(uint shapeId)
+    {
+        var animation = BuildAnimation(AnimationKind.Emphasis, AnimationPreset.ChangeColor, shapeId);
+        AuthorFontColorBehavior(animation, shapeId);
+        return animation;
+    }
+
+    public static ShapeAnimation BuildFontSizeAnimation(uint shapeId)
+    {
+        var animation = BuildAnimation(AnimationKind.Emphasis, AnimationPreset.Grow, shapeId);
+        AuthorFontSizeBehavior(animation, shapeId);
+        return animation;
+    }
+
+    private static void AuthorFontColorBehavior(ShapeAnimation animation, uint shapeId)
+    {
+        animation.RawPresetClass = "emph";
+        animation.RawPresetId = 3;
+        animation.RawPresetSubtype = "0";
+        animation.PreservedColorBehaviorXml = BuildDefaultFontColorBehaviorXml(shapeId);
+    }
+
+    private static void AuthorFontSizeBehavior(ShapeAnimation animation, uint shapeId)
+    {
+        animation.RawPresetClass = "emph";
+        animation.RawPresetId = 4;
+        animation.RawPresetSubtype = "2";
+        animation.PreservedNumericBehaviorXml = BuildDefaultFontSizeBehaviorXml(shapeId);
+    }
+
     private static string BuildDefaultFillColorBehaviorXml(uint shapeId) => $"""
         <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
                       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
@@ -292,6 +334,30 @@ public static class PresentationAnimationCommandPlanner
             <p:to><p:strVal val="true"/></p:to>
           </p:set>
         </p:childTnLst>
+        """;
+
+    private static string BuildDefaultFontColorBehaviorXml(uint shapeId) => $"""
+        <p:animClr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                   xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                   clrSpc="rgb" dir="cw">
+          <p:cBhvr>
+            <p:cTn id="1" dur="500" fill="hold"/>
+            <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+            <p:attrNameLst><p:attrName>style.color</p:attrName></p:attrNameLst>
+          </p:cBhvr>
+          <p:to><a:schemeClr val="accent2"/></p:to>
+        </p:animClr>
+        """;
+
+    private static string BuildDefaultFontSizeBehaviorXml(uint shapeId) => $"""
+        <p:anim xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                to="1.5" calcmode="lin" valueType="num">
+          <p:cBhvr override="childStyle">
+            <p:cTn id="1" dur="500" fill="hold"/>
+            <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+            <p:attrNameLst><p:attrName>style.fontSize</p:attrName></p:attrNameLst>
+          </p:cBhvr>
+        </p:anim>
         """;
 
     public static ShapeAnimation BuildMotionAnimation(PresentationMotionPathPreset preset)
