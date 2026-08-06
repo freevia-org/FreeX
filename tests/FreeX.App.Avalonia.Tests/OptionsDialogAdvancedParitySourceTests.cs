@@ -93,9 +93,10 @@ public sealed class OptionsDialogAdvancedParitySourceTests
         source.Should().Contain("Key.End");
         source.Should().Contain("Key.Enter or Key.Space");
         source.Should().Contain("args.Handled = true;");
-        source.Should().Contain("SpellCheckWorkflowPlanner.AddCustomDictionaryWord");
-        source.Should().Contain("SpellCheckWorkflowPlanner.RemoveCustomDictionaryWordAndSelectNext");
-        source.Should().Contain("SpellCheckWorkflowPlanner.ClearCustomDictionaryWords");
+        source.Should().Contain("new CustomDictionaryEditorSession(current.SpellCheckCustomDictionaryWords)");
+        source.Should().Contain("customDictionaryEditor.AddPendingWord();");
+        source.Should().Contain("customDictionaryEditor.RemoveSelectedWord();");
+        source.Should().Contain("customDictionaryEditor.Clear();");
         source.Should().Contain("proofingAddButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));");
 
         wpf.Should().Contain("Height=\"108\"");

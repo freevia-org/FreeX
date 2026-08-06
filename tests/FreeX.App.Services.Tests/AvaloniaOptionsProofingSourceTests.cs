@@ -58,7 +58,8 @@ public sealed class AvaloniaOptionsProofingSourceTests
         source.Should().Contain("projected.SpellCheckCustomDictionaryWords");
         source.Should().Contain("_avaloniaQuickAccessOptions = AppOptionsStore.Load();");
         source.Should().Contain("RebuildAvaloniaQuickAccessToolbar();");
-        source.Should().Contain("UiText.Get(\"DeferredCommand_AutoCorrectOptions_Body\")");
+        source.Should().Contain("DeferredCommandMessagePlanner.AutoCorrectOptions()");
+        source.Should().Contain("DeferredCommandMessageResolver.Resolve(");
         source.Should().Contain("var selectedAvailableId = (quickAccessAvailableList.SelectedItem as OptionsQuickAccessCommandChoice)?.Id;");
         source.Should().Contain("var selectedCommandId = (quickAccessSelectedList.SelectedItem as OptionsQuickAccessCommandChoice)?.Id;");
         source.Should().Contain("QuickAccessToolbarCustomizationFile.FilePickerPatterns");
@@ -66,7 +67,8 @@ public sealed class AvaloniaOptionsProofingSourceTests
         source.Should().Contain("Options_QuickAccessAddCommandHelpText");
         source.Should().Contain("Options_QuickAccessImportExportHelpText");
         source.Should().Contain("catch (Exception ex)");
-        source.Should().Contain("SpellCheckWorkflowPlanner.RemoveCustomDictionaryWordAndSelectNext");
+        source.Should().Contain("new CustomDictionaryEditorSession(current.SpellCheckCustomDictionaryWords)");
+        source.Should().Contain("customDictionaryEditor.RemoveSelectedWord();");
         var initialRefresh = source.IndexOf("RefreshQuickAccessLists();", StringComparison.Ordinal);
         initialRefresh.Should().BeGreaterThanOrEqualTo(0);
         source[initialRefresh..].Should().Contain("var quickAccessPanel");

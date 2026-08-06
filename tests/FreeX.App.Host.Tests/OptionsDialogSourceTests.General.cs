@@ -59,7 +59,7 @@ public sealed partial class OptionsDialogSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         source.Should().Contain("PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage)");
-        source.Should().Contain("SpellCheckCustomDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords)");
+        source.Should().Contain("SpellCheckCustomDictionaryWords = _customDictionaryEditor.Model.Words.ToList()");
         source.Should().NotContain("SpellCheckCustomDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords)");
     }
 

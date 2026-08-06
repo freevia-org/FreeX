@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
@@ -19,26 +18,9 @@ public sealed partial class MainWindow
     private static AvaloniaCompactDialogChromeStyle ProofingDialogChromeStyle => new(FormulaBarFontFamily);
 
     // Review ▸ Proofing (Thesaurus / Translate) and Insert ▸ Equation / Object.
-    // Honest scope: the thesaurus uses a small built-in synonym map (see ThesaurusData),
+    // Honest scope: the thesaurus uses the shared small built-in synonym planner,
     // translation is offline-unavailable (no network/service in this build), equation is
     // inserted as plain cell text (no true equation object), and object embedding is unsupported.
-
-    private static string? FirstAlphabeticWord(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-
-        var builder = new StringBuilder();
-        foreach (var ch in text)
-        {
-            if (char.IsLetter(ch))
-                builder.Append(ch);
-            else if (builder.Length > 0)
-                break;
-        }
-
-        return builder.Length > 0 ? builder.ToString() : null;
-    }
 
     private bool CommitProofingText(string text, string successStatus)
     {
@@ -61,15 +43,14 @@ public sealed partial class MainWindow
     {
         var address = _session.ActiveCell;
         var cellText = FormatEditText(_session.ActiveSheet.GetCell(address), address);
-        var word = FirstAlphabeticWord(cellText);
-
-        if (word is null)
+        if (!ThesaurusWorkflowPlanner.TryCreateLookup(cellText, out var lookup))
         {
             RefreshShell(UiText.Get("ShellLoc_ThesaurusSelectWord"));
             return;
         }
 
-        var synonyms = ThesaurusData.Lookup(word);
+        var word = lookup.Word;
+        var synonyms = lookup.Synonyms;
 
         var layout = new StackPanel { Margin = new Thickness(16), Spacing = 8 };
         layout.Children.Add(new TextBlock { Text = UiText.Format("ShellLoc_ThesaurusLookedUp", word), FontWeight = FontWeight.SemiBold });
@@ -101,12 +82,9 @@ public sealed partial class MainWindow
         replace.Click += (_, _) =>
         {
             var chosen = list.SelectedItem as string ?? (synonyms.Count > 0 ? synonyms[0] : null);
-            if (chosen is not null && cellText is not null)
+            if (chosen is not null)
             {
-                var index = cellText.IndexOf(word, System.StringComparison.OrdinalIgnoreCase);
-                var updated = index >= 0
-                    ? cellText.Remove(index, word.Length).Insert(index, chosen)
-                    : chosen;
+                var updated = ThesaurusWorkflowPlanner.ApplyReplacement(lookup, chosen);
                 CommitProofingText(updated, UiText.Format("ShellLoc_ThesaurusReplaced", word, chosen));
             }
             dialog.Close();
@@ -265,15 +243,13 @@ public sealed partial class MainWindow
             return false;
         }
 
-        foreach (var write in plan.Writes)
+        var result = _session.ExecuteReviewCommand(
+            TranslateDialogPlanner.BuildCommand(plan),
+            plan.TargetRange.Start);
+        if (!result.Success)
         {
-            _session.SelectCell(write.Address);
-            var result = _session.CommitCellText(write.Text);
-            if (!result.Success)
-            {
-                RefreshShell(result.ErrorMessage ?? UiText.Get("WfTranslate_ErrorGeneric"));
-                return false;
-            }
+            RefreshShell(result.ErrorMessage ?? UiText.Get("WfTranslate_ErrorGeneric"));
+            return false;
         }
 
         _session.SelectCell(plan.TargetRange.Start);

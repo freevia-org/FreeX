@@ -36,9 +36,10 @@ public sealed partial class OptionsDialogSourceTests
         xaml.Should().Contain("AutomationProperties.HelpText=\"Clear all custom dictionary words.\"");
 
         source.Should().Contain("PopulateProofingCustomDictionaryWords();");
-        source.Should().Contain("AppOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text)");
-        source.Should().Contain("AppOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords.Append(word))");
-        source.Should().Contain("SpellCheckCustomDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords)");
+        source.Should().Contain("private readonly CustomDictionaryEditorSession _customDictionaryEditor");
+        source.Should().Contain("_customDictionaryEditor.SetPendingWord(ProofingCustomDictionaryWordBox.Text)");
+        source.Should().Contain("_customDictionaryEditor.AddPendingWord();");
+        source.Should().Contain("SpellCheckCustomDictionaryWords = _customDictionaryEditor.Model.Words.ToList()");
         source.Should().Contain("OptProofingIgnoreUppercase.IsChecked = _opts.ProofingIgnoreUppercase;");
         source.Should().Contain("ProofingIgnoreUppercase = _opts.ProofingIgnoreUppercase");
         source.Should().Contain("ProofingIgnoreNumbers = _opts.ProofingIgnoreNumbers");

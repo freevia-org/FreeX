@@ -10,6 +10,8 @@ using Avalonia.Platform.Storage;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Localization;
+using FreeX.App.Presentation.Localization;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
@@ -58,7 +60,7 @@ public sealed partial class MainWindow
             ? AppOptionsStore.Load()
             : OptionsDialogParityFixture.Create();
         var quickAccessCommandIds = QuickAccessToolbarCatalog.NormalizeCommandIds(current.QuickAccessToolbarCommands).ToList();
-        var customDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(current.SpellCheckCustomDictionaryWords);
+        var customDictionaryEditor = new CustomDictionaryEditorSession(current.SpellCheckCustomDictionaryWords);
         var warningText = new TextBlock
         {
             Foreground = Brush(180, 30, 30),
@@ -242,7 +244,7 @@ public sealed partial class MainWindow
         {
             Width = OptionsDialogPlanner.ProofingContentWidth,
             Height = OptionsDialogPlanner.ProofingWordsListHeight,
-            ItemsSource = customDictionaryWords.ToList(),
+            ItemsSource = customDictionaryEditor.Model.Words,
         };
         ApplyOptionsListBoxChrome(proofingWordsList);
         AutomationProperties.SetName(proofingWordsList, OptionsText("Options_CustomDictionaryWordsAutomationName"));
@@ -267,35 +269,39 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(proofingRemoveButton, "ProofingCustomDictionaryRemoveWordButton");
         AutomationProperties.SetHelpText(proofingRemoveButton, OptionsText("Options_CustomDictionaryRemoveWordHelpText"));
 
-        var proofingClearButton = new Button { Content = OptionsText("Options_CustomDictionaryClearAllButton"), Width = OptionsDialogPlanner.ProofingClearWordsButtonWidth, Height = OptionsDialogPlanner.ButtonHeight, IsEnabled = customDictionaryWords.Count > 0 };
+        var proofingClearButton = new Button { Content = OptionsText("Options_CustomDictionaryClearAllButton"), Width = OptionsDialogPlanner.ProofingClearWordsButtonWidth, Height = OptionsDialogPlanner.ButtonHeight, IsEnabled = customDictionaryEditor.Model.CanClear };
         ApplyOptionsButtonChrome(proofingClearButton, OptionsDialogPlanner.ProofingClearWordsButtonWidth);
         AutomationProperties.SetName(proofingClearButton, OptionsText("Options_CustomDictionaryClearAllButtonAutomationName"));
         AutomationProperties.SetAutomationId(proofingClearButton, "ProofingCustomDictionaryClearWordsButton");
         AutomationProperties.SetHelpText(proofingClearButton, OptionsText("Options_CustomDictionaryClearAllHelpText"));
 
-        void RefreshProofingWords(string? selectedWord = null)
+        void RefreshProofingWords()
         {
-            var previous = selectedWord ?? proofingWordsList.SelectedItem as string;
-            proofingWordsList.ItemsSource = customDictionaryWords.ToList();
-            if (!string.IsNullOrWhiteSpace(previous))
-            {
-                proofingWordsList.SelectedItem = customDictionaryWords.FirstOrDefault(
-                    word => string.Equals(word, previous, StringComparison.OrdinalIgnoreCase));
-            }
-
-            proofingRemoveButton.IsEnabled = proofingWordsList.SelectedItem is string;
-            proofingClearButton.IsEnabled = customDictionaryWords.Count > 0;
+            var model = customDictionaryEditor.Model;
+            proofingWordsList.ItemsSource = model.Words;
+            proofingWordsList.SelectedItem = model.SelectedWord;
+            proofingRemoveButton.IsEnabled = model.CanRemove;
+            proofingClearButton.IsEnabled = model.CanClear;
         }
 
         void UpdateProofingButtons()
         {
-            proofingAddButton.IsEnabled = AppOptions.NormalizeSpellCheckCustomDictionaryWord(proofingWordBox.Text) is not null;
-            proofingRemoveButton.IsEnabled = proofingWordsList.SelectedItem is string;
-            proofingClearButton.IsEnabled = customDictionaryWords.Count > 0;
+            var model = customDictionaryEditor.Model;
+            proofingAddButton.IsEnabled = model.CanAdd;
+            proofingRemoveButton.IsEnabled = model.CanRemove;
+            proofingClearButton.IsEnabled = model.CanClear;
         }
 
-        proofingWordBox.TextChanged += (_, _) => UpdateProofingButtons();
-        proofingWordsList.SelectionChanged += (_, _) => UpdateProofingButtons();
+        proofingWordBox.TextChanged += (_, _) =>
+        {
+            customDictionaryEditor.SetPendingWord(proofingWordBox.Text);
+            UpdateProofingButtons();
+        };
+        proofingWordsList.SelectionChanged += (_, _) =>
+        {
+            customDictionaryEditor.SelectWord(proofingWordsList.SelectedItem as string);
+            UpdateProofingButtons();
+        };
         proofingWordBox.KeyDown += (_, args) =>
         {
             if (args.Key is not (Key.Enter or Key.Return) || !proofingAddButton.IsEnabled)
@@ -306,32 +312,23 @@ public sealed partial class MainWindow
         };
         proofingAddButton.Click += (_, _) =>
         {
-            if (SpellCheckWorkflowPlanner.AddCustomDictionaryWord(customDictionaryWords, new HashSet<string>(customDictionaryWords, StringComparer.OrdinalIgnoreCase), proofingWordBox.Text ?? string.Empty))
-            {
-                var added = AppOptions.NormalizeSpellCheckCustomDictionaryWord(proofingWordBox.Text);
-                proofingWordBox.Clear();
-                RefreshProofingWords(added);
-            }
-            else
-            {
-                customDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(customDictionaryWords);
-                proofingWordBox.Clear();
-                RefreshProofingWords();
-            }
+            customDictionaryEditor.SetPendingWord(proofingWordBox.Text);
+            customDictionaryEditor.AddPendingWord();
+            proofingWordBox.Clear();
+            RefreshProofingWords();
         };
         proofingRemoveButton.Click += (_, _) =>
         {
             if (proofingWordsList.SelectedItem is not string selected)
                 return;
 
-            var nextWord = SpellCheckWorkflowPlanner.RemoveCustomDictionaryWordAndSelectNext(
-                customDictionaryWords,
-                selected);
-            RefreshProofingWords(nextWord);
+            customDictionaryEditor.SelectWord(selected);
+            customDictionaryEditor.RemoveSelectedWord();
+            RefreshProofingWords();
         };
         proofingClearButton.Click += (_, _) =>
         {
-            SpellCheckWorkflowPlanner.ClearCustomDictionaryWords(customDictionaryWords);
+            customDictionaryEditor.Clear();
             RefreshProofingWords();
             proofingWordBox.Focus();
         };
@@ -372,7 +369,10 @@ public sealed partial class MainWindow
             },
         };
         var autoCorrectButton = OptionsButton(OptionsText("Options_AutoCorrectOptions2"), OptionsDialogPlanner.ProofingAutoCorrectButtonWidth);
-        autoCorrectButton.Click += (_, _) => ShowOptionsWarning(UiText.Get("DeferredCommand_AutoCorrectOptions_Body"));
+        var autoCorrectMessage = DeferredCommandMessageResolver.Resolve(
+            DeferredCommandMessagePlanner.AutoCorrectOptions(),
+            new ResourceKeyTextResolver(UiText.Get, UiText.Format));
+        autoCorrectButton.Click += (_, _) => ShowOptionsWarning(autoCorrectMessage.Body);
 
         var proofingChecks = new StackPanel
         {
@@ -1219,7 +1219,7 @@ public sealed partial class MainWindow
             projected.EnableFillHandleAndCellDragAndDrop = advancedFillHandleBox.IsChecked == true;
             projected.QuickAccessToolbarBelowRibbon = quickAccessBelowRibbonBox.IsChecked == true;
             projected.QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(quickAccessCommandIds).ToList();
-            projected.SpellCheckCustomDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(customDictionaryWords);
+            projected.SpellCheckCustomDictionaryWords = customDictionaryEditor.Model.Words.ToList();
             projected.NormalizePersistedCollections();
             if (!AppOptionsStore.Save(projected))
             {

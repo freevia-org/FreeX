@@ -1,3 +1,4 @@
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -144,6 +145,18 @@ public static class TranslateDialogPlanner
             NormalizeLanguageCode(toLanguageCode, DefaultToCode));
         error = TranslateDialogValidationError.None;
         return true;
+    }
+
+    public static IWorkbookCommand BuildCommand(TranslateWritePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        return new EditCellsCommand(
+            plan.TargetRange.Start.Sheet,
+            plan.Writes
+                .Select(write => (
+                    write.Address,
+                    Cell.FromValue(new TextValue(write.Text))))
+                .ToList());
     }
 
     private static IReadOnlyList<TranslateCellWrite> BuildWrites(GridRange target, string translation)

@@ -58,7 +58,7 @@ public partial class OptionsDialog : Window
     private readonly HashSet<string> _disabledFormulaErrorCodes;
     private readonly Dictionary<string, CheckBox> _errorRuleBoxes = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _quickAccessCommandIds = [];
-    private readonly List<string> _customDictionaryWords = [];
+    private readonly CustomDictionaryEditorSession _customDictionaryEditor = new([]);
     private readonly OptionsDialogInitialSection _initialSection;
     public AppOptions Result { get; private set; }
     public IReadOnlySet<string> DisabledFormulaErrorCodesResult { get; private set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -598,7 +598,7 @@ public partial class OptionsDialog : Window
             ProofingIgnoreUppercase = _opts.ProofingIgnoreUppercase,
             ProofingIgnoreNumbers = _opts.ProofingIgnoreNumbers,
             AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string),
-            SpellCheckCustomDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords),
+            SpellCheckCustomDictionaryWords = _customDictionaryEditor.Model.Words.ToList(),
             CrashAnalyticsEnabled = OptCrashAnalytics.IsChecked == true,
             CrashAnalyticsPrompted = _opts.CrashAnalyticsPrompted || OptCrashAnalytics.IsChecked == true,
             PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage),
@@ -651,52 +651,35 @@ public partial class OptionsDialog : Window
 
     private void PopulateProofingCustomDictionaryWords()
     {
-        _customDictionaryWords.Clear();
-        _customDictionaryWords.AddRange(
-            AppOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords));
+        _customDictionaryEditor.Reset(_opts.SpellCheckCustomDictionaryWords);
         RefreshProofingCustomDictionaryWordsList();
     }
 
-    private void RefreshProofingCustomDictionaryWordsList(string? selectedWord = null)
+    private void RefreshProofingCustomDictionaryWordsList()
     {
-        var previousSelection = selectedWord ?? ProofingCustomDictionaryWordsList.SelectedItem as string;
-        ProofingCustomDictionaryWordsList.ItemsSource = _customDictionaryWords.ToList();
-        if (!string.IsNullOrWhiteSpace(previousSelection))
-        {
-            ProofingCustomDictionaryWordsList.SelectedItem = FindCustomDictionaryWord(previousSelection);
-        }
+        var model = _customDictionaryEditor.Model;
+        ProofingCustomDictionaryWordsList.ItemsSource = model.Words;
+        ProofingCustomDictionaryWordsList.SelectedItem = model.SelectedWord;
 
         UpdateProofingCustomDictionaryButtons();
     }
-
-    private string? FindCustomDictionaryWord(string word)
-    {
-        foreach (var candidate in _customDictionaryWords)
-        {
-            if (CustomDictionaryWordsEqual(candidate, word))
-                return candidate;
-        }
-
-        return null;
-    }
-
-    private static bool CustomDictionaryWordsEqual(string word, string otherWord) =>
-        string.Equals(word, otherWord, StringComparison.OrdinalIgnoreCase);
 
     private void UpdateProofingCustomDictionaryButtons()
     {
         if (ProofingCustomDictionaryAddWordButton is null)
             return;
 
-        ProofingCustomDictionaryAddWordButton.IsEnabled =
-            AppOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text) is not null;
-        ProofingCustomDictionaryRemoveWordButton.IsEnabled =
-            ProofingCustomDictionaryWordsList.SelectedItem is string;
-        ProofingCustomDictionaryClearWordsButton.IsEnabled = _customDictionaryWords.Count > 0;
+        var model = _customDictionaryEditor.Model;
+        ProofingCustomDictionaryAddWordButton.IsEnabled = model.CanAdd;
+        ProofingCustomDictionaryRemoveWordButton.IsEnabled = model.CanRemove;
+        ProofingCustomDictionaryClearWordsButton.IsEnabled = model.CanClear;
     }
 
-    private void ProofingCustomDictionaryWordBox_TextChanged(object sender, TextChangedEventArgs e) =>
+    private void ProofingCustomDictionaryWordBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _customDictionaryEditor.SetPendingWord(ProofingCustomDictionaryWordBox.Text);
         UpdateProofingCustomDictionaryButtons();
+    }
 
     private void ProofingCustomDictionaryWordBox_KeyDown(object sender, KeyEventArgs e)
     {
@@ -709,24 +692,18 @@ public partial class OptionsDialog : Window
         e.Handled = true;
     }
 
-    private void ProofingCustomDictionaryWordsList_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+    private void ProofingCustomDictionaryWordsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        _customDictionaryEditor.SelectWord(ProofingCustomDictionaryWordsList.SelectedItem as string);
         UpdateProofingCustomDictionaryButtons();
+    }
 
     private void ProofingCustomDictionaryAddWordButton_Click(object sender, RoutedEventArgs e)
     {
-        var word = AppOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text);
-        if (word is null)
-        {
-            ProofingCustomDictionaryWordBox.Clear();
-            UpdateProofingCustomDictionaryButtons();
-            return;
-        }
-
-        var normalized = AppOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords.Append(word));
-        _customDictionaryWords.Clear();
-        _customDictionaryWords.AddRange(normalized);
+        _customDictionaryEditor.SetPendingWord(ProofingCustomDictionaryWordBox.Text);
+        _customDictionaryEditor.AddPendingWord();
         ProofingCustomDictionaryWordBox.Clear();
-        RefreshProofingCustomDictionaryWordsList(word);
+        RefreshProofingCustomDictionaryWordsList();
     }
 
     private void ProofingCustomDictionaryRemoveWordButton_Click(object sender, RoutedEventArgs e)
@@ -734,15 +711,14 @@ public partial class OptionsDialog : Window
         if (ProofingCustomDictionaryWordsList.SelectedItem is not string selectedWord)
             return;
 
-        var nextWord = SpellCheckWorkflowPlanner.RemoveCustomDictionaryWordAndSelectNext(
-            _customDictionaryWords,
-            selectedWord);
-        RefreshProofingCustomDictionaryWordsList(nextWord);
+        _customDictionaryEditor.SelectWord(selectedWord);
+        _customDictionaryEditor.RemoveSelectedWord();
+        RefreshProofingCustomDictionaryWordsList();
     }
 
     private void ProofingCustomDictionaryClearWordsButton_Click(object sender, RoutedEventArgs e)
     {
-        _customDictionaryWords.Clear();
+        _customDictionaryEditor.Clear();
         RefreshProofingCustomDictionaryWordsList();
         ProofingCustomDictionaryWordBox.Focus();
         Keyboard.Focus(ProofingCustomDictionaryWordBox);
