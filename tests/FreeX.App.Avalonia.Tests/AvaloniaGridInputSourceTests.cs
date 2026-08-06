@@ -27,8 +27,10 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("_sheetGridHost.PointerReleased += HeaderResizeCapturePointerReleased;");
         source.Should().Contain("GridResizeSizePlanner.ClampColumnSize(requestedSize)");
         source.Should().Contain("GridResizeSizePlanner.ClampRowSize(requestedSize)");
-        source.Should().Contain("new SetColumnWidthCommand(");
-        source.Should().Contain("new SetRowHeightCommand(");
+        source.Should().Contain("_session.SetColumnsWidthPixels(");
+        source.Should().Contain("_session.SetRowsHeightPixels(");
+        source.Should().NotContain("new SetColumnWidthCommand(");
+        source.Should().NotContain("new SetRowHeightCommand(");
         var commitResize = source[
             source.IndexOf("private void CommitHeaderResize(", StringComparison.Ordinal)..
             source.IndexOf("private void PreviewHeaderResize(", StringComparison.Ordinal)];
