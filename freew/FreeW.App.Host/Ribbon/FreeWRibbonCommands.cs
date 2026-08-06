@@ -6461,7 +6461,7 @@ internal static class FreeWRibbonCommands
     // Simple single-prompt dialog (for Fill-in prompt text and Ref bookmark name).
     private static class MergeRulePromptDialog
     {
-        public static string? AskPrompt(Window? owner, string title, string label)
+        public static string? AskPrompt(Window? owner, string title, string label, string initialValue = "")
         {
             string? result = null;
             var dialog = new Window
@@ -6474,7 +6474,12 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var box = new System.Windows.Controls.TextBox { MinWidth = 260, Margin = new Thickness(0, 0, 0, 12) };
+            var box = new System.Windows.Controls.TextBox
+            {
+                Text = initialValue,
+                MinWidth = 260,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
             var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) => { result = box.Text; dialog.DialogResult = true; };
@@ -6794,11 +6799,14 @@ internal static class FreeWRibbonCommands
         MailMergeSession session,
         Action<TextDocument>? printDocument = null,
         Func<Window?, int, int, MailMergeFinishPlan?>? ask = null,
-        Action<Window?, string>? showInfo = null) : IRibbonCommand
+        Action<Window?, string>? showInfo = null,
+        Func<Window?, string, string, string, string?>? askInteractivePrompt = null) : IRibbonCommand
     {
         private readonly Func<Window?, int, int, MailMergeFinishPlan?> _ask = ask ?? MailMergeFinishDialog.Ask;
         private readonly Action<Window?, string> _showInfo = showInfo ??
             ((owner, message) => DialogMessageHelper.ShowInfo(owner, message, "Mail Merge"));
+        private readonly Func<Window?, string, string, string, string?> _askInteractivePrompt =
+            askInteractivePrompt ?? MergeRulePromptDialog.AskPrompt;
 
         public void Execute(RibbonCommandContext context)
         {
@@ -6827,7 +6835,11 @@ internal static class FreeWRibbonCommands
             // Collect Fill-in and Ask prompts from the template body so we can ask the user once
             // before the merge run starts (matching Word's behaviour).
             var mergeState = new MergeState();
-            CollectFillInAndAskAnswers(template, mergeState, owner);
+            if (!CollectFillInAndAskAnswers(template, mergeState, owner))
+            {
+                editor.Focus();
+                return;
+            }
 
             var execution = workflow.BuildFinish(template, finishPlan, mergeState);
             if (!execution.Success || execution.Document is null)
@@ -6851,14 +6863,20 @@ internal static class FreeWRibbonCommands
 
         // Scan the template for «Fill-in "Prompt"» and «Ask BookmarkName "Prompt"» instructions and
         // prompt the user once per unique prompt/bookmark before the merge run.
-        private static void CollectFillInAndAskAnswers(TextDocument template, MergeState state, Window? owner)
+        private bool CollectFillInAndAskAnswers(TextDocument template, MergeState state, Window? owner)
         {
             foreach (var prompt in MailMergeInteractivePromptPlanner.Plan(template))
             {
                 var title = prompt.Kind == MailMergeInteractivePromptKind.FillIn ? "Fill-in" : "Ask";
-                var answer = MergeRulePromptDialog.AskPrompt(owner, title, prompt.Prompt);
+                var answer = _askInteractivePrompt(
+                    owner, title, prompt.Prompt, prompt.DefaultAnswer);
+                if (answer is null)
+                    return false;
+
                 MailMergeInteractivePromptPlanner.ApplyResponse(state, prompt, answer);
             }
+
+            return true;
         }
     }
 

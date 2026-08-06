@@ -10,13 +10,22 @@ public sealed record PresentationVideoMediaMuxTrack(
     TimeSpan StartTime,
     TimeSpan Duration);
 
+public sealed record PresentationVideoMediaCaptionTrack(
+    PresentationRecordingMediaArtifactKind Kind,
+    string Path,
+    TimeSpan StartTime,
+    TimeSpan Duration);
+
 public sealed record PresentationVideoMediaMuxPlan(
     IReadOnlyList<PresentationVideoMediaMuxTrack> NarrationTracks,
-    IReadOnlyList<PresentationVideoMediaMuxTrack> CameraTracks)
+    IReadOnlyList<PresentationVideoMediaMuxTrack> CameraTracks,
+    IReadOnlyList<PresentationVideoMediaCaptionTrack> CaptionTracks)
 {
     public int MuxedNarrationTrackCount => NarrationTracks.Count;
 
     public int MuxedCameraTrackCount => CameraTracks.Count;
+
+    public int MuxedCaptionTrackCount => CaptionTracks.Count;
 
     public bool HasVideoOverlay => CameraTracks.Count > 0;
 }
@@ -37,13 +46,14 @@ public static class PresentationVideoMediaMuxPlanner
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
 
         if (mediaArtifacts is null || mediaArtifacts.Count == 0)
-            return new([], []);
+            return new([], [], []);
 
         var slideStartTimes = package.Frames
             .GroupBy(frame => frame.SlideIndex)
             .ToDictionary(group => group.Key, group => group.Min(frame => frame.StartTime));
         var narrationTracks = new List<PresentationVideoMediaMuxTrack>();
         var cameraTracks = new List<PresentationVideoMediaMuxTrack>();
+        var captionTracks = new List<PresentationVideoMediaCaptionTrack>();
 
         foreach (var artifact in mediaArtifacts)
         {
@@ -56,17 +66,45 @@ public static class PresentationVideoMediaMuxPlanner
                 continue;
             }
 
+            var isCaption = artifact.Kind is
+                PresentationRecordingMediaArtifactKind.NarrationCaption or
+                PresentationRecordingMediaArtifactKind.CameraCaption;
+            if (isCaption &&
+                artifact.Kind == PresentationRecordingMediaArtifactKind.NarrationCaption &&
+                !package.Plan.ExportPlan.IncludeNarration)
+            {
+                continue;
+            }
+
             if (artifact.Kind is not PresentationRecordingMediaArtifactKind.NarrationAudio and
-                not PresentationRecordingMediaArtifactKind.CameraVideo)
+                not PresentationRecordingMediaArtifactKind.CameraVideo and
+                not PresentationRecordingMediaArtifactKind.NarrationCaption and
+                not PresentationRecordingMediaArtifactKind.CameraCaption)
             {
                 continue;
             }
 
             var extension = Path.GetExtension(artifact.SuggestedFileName);
             if (string.IsNullOrWhiteSpace(extension) || extension.Length > 8)
-                extension = artifact.Kind == PresentationRecordingMediaArtifactKind.CameraVideo
+                extension = artifact.Kind is PresentationRecordingMediaArtifactKind.CameraVideo
                     ? ".mp4"
-                    : ".audio";
+                    : artifact.Kind is PresentationRecordingMediaArtifactKind.NarrationCaption or
+                        PresentationRecordingMediaArtifactKind.CameraCaption
+                        ? ".vtt"
+                        : ".audio";
+
+            if (isCaption)
+            {
+                var captionIndex = captionTracks.Count;
+                var captionPath = Path.Combine(directory, $"caption-{captionIndex:D4}{extension}");
+                File.WriteAllBytes(captionPath, artifact.PayloadBytes!);
+                captionTracks.Add(new PresentationVideoMediaCaptionTrack(
+                    artifact.Kind,
+                    captionPath,
+                    startTime,
+                    TimeSpan.FromMilliseconds(Math.Max(0, artifact.DurationMs))));
+                continue;
+            }
 
             var trackIndex = artifact.Kind == PresentationRecordingMediaArtifactKind.CameraVideo
                 ? cameraTracks.Count
@@ -85,7 +123,7 @@ public static class PresentationVideoMediaMuxPlanner
                 narrationTracks.Add(track);
         }
 
-        return new(narrationTracks, cameraTracks);
+        return new(narrationTracks, cameraTracks, captionTracks);
     }
 
     public static IReadOnlyList<string> BuildFfmpegArguments(
@@ -117,6 +155,14 @@ public static class PresentationVideoMediaMuxPlanner
 
         foreach (var track in mediaPlan.CameraTracks)
         {
+            arguments.Add("-i");
+            arguments.Add(track.Path);
+        }
+
+        foreach (var track in mediaPlan.CaptionTracks)
+        {
+            arguments.Add("-itsoffset");
+            arguments.Add(Seconds(track.StartTime));
             arguments.Add("-i");
             arguments.Add(track.Path);
         }
@@ -183,6 +229,25 @@ public static class PresentationVideoMediaMuxPlanner
                 arguments.Add("192k");
             }
         }
+        else
+        {
+            arguments.Add("-map");
+            arguments.Add("0:v:0");
+            if (mediaPlan.NarrationTracks.Count == 0)
+                arguments.Add("-an");
+        }
+
+        var captionInputBase = 1 + mediaPlan.NarrationTracks.Count + mediaPlan.CameraTracks.Count;
+        for (var index = 0; index < mediaPlan.CaptionTracks.Count; index++)
+        {
+            arguments.Add("-map");
+            arguments.Add($"{captionInputBase + index}:0");
+        }
+        if (mediaPlan.CaptionTracks.Count > 0)
+        {
+            arguments.Add("-c:s");
+            arguments.Add("mov_text");
+        }
 
         arguments.Add("-c:v");
         arguments.Add(encoderName);
@@ -196,4 +261,7 @@ public static class PresentationVideoMediaMuxPlanner
 
     private static long StartDelayMilliseconds(TimeSpan startTime) =>
         Math.Max(0, (long)Math.Round(startTime.TotalMilliseconds, MidpointRounding.AwayFromZero));
+
+    private static string Seconds(TimeSpan value) =>
+        Math.Max(0, value.TotalSeconds).ToString("0.######", CultureInfo.InvariantCulture);
 }

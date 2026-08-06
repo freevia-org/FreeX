@@ -1835,8 +1835,16 @@ public class MailMergeTests
         var prompts = MailMergeInteractivePromptPlanner.Plan(document);
 
         prompts.Should().Equal(
-            new MailMergeInteractivePrompt(MailMergeInteractivePromptKind.FillIn, "Office location?", "Office location?"),
-            new MailMergeInteractivePrompt(MailMergeInteractivePromptKind.Ask, "Approver", "Who approves?"));
+            new MailMergeInteractivePrompt(
+                MailMergeInteractivePromptKind.FillIn,
+                "Office location?",
+                "Office location?",
+                "Kyiv"),
+            new MailMergeInteractivePrompt(
+                MailMergeInteractivePromptKind.Ask,
+                "Approver",
+                "Who approves?",
+                "Ada"));
     }
 
     [Fact]
@@ -2028,6 +2036,54 @@ public class MailMergeTests
             .SelectMany(resultParagraph => resultParagraph.Runs)
             .Should().AllSatisfy(run => run.ComplexField.Should().BeNull());
         state.Bookmarks["Manager"].Should().Be("Margaret");
+    }
+
+    [Fact]
+    public void MergeAllWithRules_NativeOnceFields_UseAuthoredDefaultsWhenAnswersAreAbsent()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(" FILLIN \"Department\" \\d \"Engineering\" \\o ", "cached"),
+                new Run(" | "),
+                Run.ComplexFieldRun(" ASK Manager \"Who is the manager?\" \\d \"Margaret\" \\o ", "cached")
+            }
+        });
+        var state = new MergeState();
+
+        var merged = MailMerge.MergeAllWithRules(
+            template,
+            new MergeData(["Name"], [["Ada"]]),
+            state);
+
+        merged.Should().ContainSingle().Which.PlainText.Should().Be("Engineering | Margaret");
+        state.Bookmarks["Manager"].Should().Be("Margaret");
+    }
+
+    [Fact]
+    public void MergeAllWithRules_NativeOnceField_ExplicitEmptyAnswerOverridesAuthoredDefault()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " FILLIN \"Department\" \\d \"Engineering\" \\o ",
+                    "cached")
+            }
+        });
+        var state = new MergeState();
+        state.FillInAnswers["Department"] = string.Empty;
+
+        var merged = MailMerge.MergeAllWithRules(
+            template,
+            new MergeData(["Name"], [["Ada"]]),
+            state);
+
+        merged.Should().ContainSingle().Which.PlainText.Should().BeEmpty();
     }
 
     [Fact]

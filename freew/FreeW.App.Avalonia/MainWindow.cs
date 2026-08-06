@@ -2253,7 +2253,8 @@ public sealed partial class MainWindow : Window
         foreach (var prompt in _mailMerge.GetInteractiveFinishPrompts())
         {
             var title = prompt.Kind == MailMergeInteractivePromptKind.FillIn ? "Fill-in" : "Ask";
-            var answer = await MailMergeDialogs.AskMergeRulePromptAsync(this, title, prompt.Prompt);
+            var answer = await MailMergeDialogs.AskMergeRulePromptAsync(
+                this, title, prompt.Prompt, prompt.DefaultAnswer);
             if (answer is null)
                 return null;
 
