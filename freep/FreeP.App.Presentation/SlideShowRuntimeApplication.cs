@@ -50,7 +50,9 @@ public sealed record SlideShowRuntimeRendererCallbacks(
     Action<SlideShowRuntimeScreenModePlan> RenderScreenMode,
     Action<Hyperlink> OpenExternalHyperlink,
     Action RefreshInkOverlay,
-    Action<Hyperlink>? InternalHyperlinkNavigated = null);
+    Action<Hyperlink>? InternalHyperlinkNavigated = null,
+    Action? StopTransitionAudio = null,
+    Action? TeardownMedia = null);
 
 public sealed record SlideShowPresenterViewOperations(
     Func<SlideShowPresenterState> StateProvider,
@@ -76,9 +78,12 @@ public sealed class SlideShowRuntimeApplication
     private readonly SlideShowSessionController _session;
     private readonly SlideShowRuntimeCaptionPreference _captionPreference;
     private readonly Func<DateTimeOffset> _utcNow;
+    private readonly SlideShowDisplayCoordinator _displayCoordinator = new();
     private SlideShowRuntimeRendererCallbacks? _renderer;
+    private ISlideShowDisplayRenderer? _displayRenderer;
     private SlideShowSessionInputExecutionCallbacks? _inputCallbacks;
     private SlideShowHostExecutionCallbacks? _hostCallbacks;
+    private bool _rendererSessionClosed;
 
     public SlideShowRuntimeApplication(
         Presentation presentation,
@@ -143,11 +148,15 @@ public sealed class SlideShowRuntimeApplication
 
     public bool IsClosed => _session.IsClosed;
 
+    public bool IsPresenterViewOpen => _displayCoordinator.IsPresenterViewOpen;
+
     public SlideShowPresenterSessionSummary PresenterSummary => _session.PresenterSummary;
 
     public SlideShowRecordingReviewPlan RecordingReviewPlan => _session.RecordingReviewPlan;
 
-    public void BindRenderer(SlideShowRuntimeRendererCallbacks callbacks)
+    public void BindRenderer(
+        SlideShowRuntimeRendererCallbacks callbacks,
+        ISlideShowDisplayRenderer? displayRenderer = null)
     {
         ArgumentNullException.ThrowIfNull(callbacks);
         if (_renderer is not null)
@@ -156,6 +165,7 @@ public sealed class SlideShowRuntimeApplication
         }
 
         _renderer = callbacks;
+        _displayRenderer = displayRenderer;
         _hostCallbacks = new SlideShowHostExecutionCallbacks(
             callbacks.StopAutoAdvance,
             callbacks.Close,
@@ -169,6 +179,29 @@ public sealed class SlideShowRuntimeApplication
             callbacks.OpenExternalHyperlink,
             callbacks.InternalHyperlinkNavigated);
     }
+
+    public SlideShowDisplayRendererPlan DisplayCurrentSlide(
+        bool animated,
+        int? zoomTransitionDurationMs = null,
+        bool zoomShowBackground = true) =>
+        _displayCoordinator.Display(
+            BuildDisplayPlan(animated, zoomTransitionDurationMs, zoomShowBackground),
+            RequireDisplayRenderer());
+
+    public SlideShowDisplayRendererPlan StartRendererSession() =>
+        _displayCoordinator.StartSession(KioskRestartInterval, RequireDisplayRenderer());
+
+    public SlideShowDisplayRendererPlan HandleAutoAdvanceElapsed(long displayVersion) =>
+        _displayCoordinator.HandleAutoAdvanceElapsed(displayVersion, RequireDisplayRenderer());
+
+    public SlideShowDisplayRendererPlan HandleKioskRestartElapsed() =>
+        _displayCoordinator.HandleKioskRestartElapsed(RequireDisplayRenderer());
+
+    public SlideShowDisplayRendererPlan TogglePresenterView() =>
+        _displayCoordinator.TogglePresenterView(RequireDisplayRenderer());
+
+    public void NotifyPresenterViewClosed() =>
+        _displayCoordinator.NotifyPresenterViewClosed();
 
     public AdvanceResult ExecuteAdvance(
         DateTimeOffset? nowUtc = null,
@@ -361,6 +394,28 @@ public sealed class SlideShowRuntimeApplication
     public void Close(DateTimeOffset? nowUtc = null) =>
         _session.Close(ResolveNow(nowUtc));
 
+    public void CloseRendererSession(DateTimeOffset? nowUtc = null)
+    {
+        if (_rendererSessionClosed)
+        {
+            return;
+        }
+
+        _rendererSessionClosed = true;
+        var renderer = RequireRenderer();
+        renderer.StopTransitionAudio?.Invoke();
+        if (_displayRenderer is not null)
+        {
+            _displayCoordinator.CloseSession(_displayRenderer);
+        }
+
+        renderer.TeardownMedia?.Invoke();
+        if (!IsClosed)
+        {
+            Close(nowUtc);
+        }
+    }
+
     private void ExecuteHostCommand(
         SlideShowHostCommand command,
         DateTimeOffset? nowUtc = null) =>
@@ -382,4 +437,8 @@ public sealed class SlideShowRuntimeApplication
 
     private SlideShowHostExecutionCallbacks RequireHostCallbacks() =>
         _hostCallbacks ?? throw new InvalidOperationException("Bind a slideshow runtime renderer before executing host commands.");
+
+    private ISlideShowDisplayRenderer RequireDisplayRenderer() =>
+        _displayRenderer ?? throw new InvalidOperationException(
+            "Bind a slideshow display renderer before executing renderer-session actions.");
 }

@@ -15,8 +15,8 @@ public sealed class SlideShowHostPolicySourceTests
 
         source.Should().Contain("HorizontalScrollBarVisibility = windowPlan.ShowBrowseScrollbars");
         source.Should().Contain("VerticalScrollBarVisibility = windowPlan.ShowBrowseScrollbars");
-        source.Should().Contain("_displayCoordinator.StartSession(_runtime.KioskRestartInterval, this);");
-        source.Should().Contain("_displayCoordinator.HandleKioskRestartElapsed(this);");
+        source.Should().Contain("_runtime.StartRendererSession();");
+        source.Should().Contain("_runtime.HandleKioskRestartElapsed();");
         source.Should().Contain("ISlideShowDisplayRenderer.RequestKioskRestart() => _runtime.RestartKioskShow();");
         source.Should().NotContain("private void StartKioskRestartTimer()");
         source.Should().NotContain("_presentation.ShowBrowseScrollbar");
@@ -404,14 +404,14 @@ public sealed class SlideShowHostPolicySourceTests
         adapterStart.Should().BeGreaterThan(displayStart);
         var displayMethod = source[displayStart..adapterStart];
 
-        displayMethod.Should().Contain("_displayCoordinator.Display(");
-        displayMethod.Should().Contain("_runtime.BuildDisplayPlan(");
+        displayMethod.Should().Contain("_runtime.DisplayCurrentSlide(");
         displayMethod.Should().NotContain("PrepareAnimationOverlay(");
         displayMethod.Should().NotContain("_mediaController.EnterSlide(");
         displayMethod.Should().NotContain("_autoAdvanceTimer");
-        source.Should().Contain("_displayCoordinator.HandleAutoAdvanceElapsed(");
-        source.Should().Contain("_displayCoordinator.TogglePresenterView(this);");
-        source.Should().Contain("_displayCoordinator.CloseSession(this);");
+        source.Should().Contain("_runtime.HandleAutoAdvanceElapsed(");
+        source.Should().Contain("_runtime.TogglePresenterView();");
+        source.Should().Contain("_runtime.CloseRendererSession(nowUtc);");
+        source.Should().NotContain("SlideShowDisplayCoordinator _displayCoordinator");
         source.Should().Contain("void ISlideShowDisplayRenderer.CancelVisualOperations()");
         source.Should().Contain("void ISlideShowDisplayRenderer.EnterMediaSlide(");
     }

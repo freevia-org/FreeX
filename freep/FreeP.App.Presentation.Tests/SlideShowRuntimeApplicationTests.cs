@@ -196,6 +196,40 @@ public sealed class SlideShowRuntimeApplicationTests
             .WithMessage("*already bound*");
     }
 
+    [Fact]
+    public void Runtime_OwnsDisplayPresenterAndIdempotentRendererTeardown()
+    {
+        var events = new List<string>();
+        var runtime = CreateRuntime(MakePresentation(1));
+        var displayRenderer = new RecordingDisplayRenderer(events);
+        runtime.BindRenderer(
+            NoOpRenderer() with
+            {
+                StopTransitionAudio = () => events.Add("stop-audio"),
+                TeardownMedia = () => events.Add("teardown-media")
+            },
+            displayRenderer);
+
+        runtime.DisplayCurrentSlide(animated: false);
+        runtime.StartRendererSession();
+        runtime.TogglePresenterView();
+        runtime.IsPresenterViewOpen.Should().BeTrue();
+        events.Clear();
+
+        runtime.CloseRendererSession(StartedAtUtc.AddSeconds(5));
+        runtime.CloseRendererSession(StartedAtUtc.AddSeconds(6));
+
+        events.Should().Equal(
+            "stop-audio",
+            "stop-auto",
+            "stop-kiosk",
+            "cancel-visuals",
+            "close-presenter",
+            "teardown-media");
+        runtime.IsPresenterViewOpen.Should().BeFalse();
+        runtime.IsClosed.Should().BeTrue();
+    }
+
     private static SlideShowRuntimeApplication CreateRuntime(
         Presentation presentation,
         SlideShowRuntimeCaptionPreference? captionPreference = null,
@@ -228,5 +262,25 @@ public sealed class SlideShowRuntimeApplicationTests
         }
 
         return presentation;
+    }
+
+    private sealed class RecordingDisplayRenderer(List<string> events) : ISlideShowDisplayRenderer
+    {
+        public void StopAutoAdvanceTimer() => events.Add("stop-auto");
+        public void CancelVisualOperations() => events.Add("cancel-visuals");
+        public void ApplyDisplayState(SlideShowRuntimeDisplayPlan plan) => events.Add("apply-display");
+        public void RefreshInkOverlay() => events.Add("refresh-ink");
+        public void PrepareAnimationOverlay(Slide slide) => events.Add("prepare-overlay");
+        public void EnterMediaSlide(SlideShowRuntimeDisplayPlan plan) => events.Add("enter-media");
+        public void PlayTransition(Slide slide, SlideTransition transition) => events.Add("transition");
+        public void ShowSlideInstant(Slide slide) => events.Add("instant");
+        public void StartAutoAdvanceTimer(TimeSpan interval, long displayVersion) => events.Add("start-auto");
+        public void RefreshPresenterView() => events.Add("refresh-presenter");
+        public void StopKioskRestartTimer() => events.Add("stop-kiosk");
+        public void StartKioskRestartTimer(TimeSpan interval) => events.Add("start-kiosk");
+        public void RequestAutoAdvance() => events.Add("request-auto");
+        public void RequestKioskRestart() => events.Add("request-kiosk");
+        public void OpenPresenterView() => events.Add("open-presenter");
+        public void ClosePresenterView() => events.Add("close-presenter");
     }
 }

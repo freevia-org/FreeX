@@ -68,7 +68,6 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private readonly Presentation    _presentation;
     private readonly SlideShowRuntimeApplication _runtime;
-    private readonly SlideShowDisplayCoordinator _displayCoordinator = new();
     private readonly Action<int, string?>? _setSlideNotesText;
     private readonly AvaloniaSlideShowMediaController _mediaController;
     private readonly DispatcherTimer  _autoAdvanceTimer;
@@ -325,14 +324,14 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             IsEnabled = false,
         };
         _autoAdvanceTimer.Tick += (_, _) =>
-            _displayCoordinator.HandleAutoAdvanceElapsed(_autoAdvanceDisplayVersion, this);
+            _runtime.HandleAutoAdvanceElapsed(_autoAdvanceDisplayVersion);
 
         _kioskRestartTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             IsEnabled = false,
         };
         _kioskRestartTimer.Tick += (_, _) =>
-            _displayCoordinator.HandleKioskRestartElapsed(this);
+            _runtime.HandleKioskRestartElapsed();
 
         _runtime.BindRenderer(new SlideShowRuntimeRendererCallbacks(
             _autoAdvanceTimer.Stop,
@@ -347,7 +346,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             RenderScreenMode,
             hyperlink => OpenExternalUrl(hyperlink.Url!),
             RefreshInkOverlay,
-            RecordInternalHyperlinkNavigation));
+            RecordInternalHyperlinkNavigation,
+            TeardownMedia: _mediaController.Teardown),
+            this);
 
         // ── Event wiring ───────────────────────────────────────────────────────
         KeyDown             += OnKeyDown;
@@ -358,7 +359,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             Focus();
             DisplayCurrentSlide(animated: false);
-            _displayCoordinator.StartSession(_runtime.KioskRestartInterval, this);
+            _runtime.StartRendererSession();
         };
         Closed              += (_, _) => Teardown();
     }
@@ -447,11 +448,11 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _runtime.CreatePresenterState(nowUtc, displayIntent);
 
     /// <summary>Whether the synchronized presenter dashboard is currently open.</summary>
-    public bool IsPresenterViewOpen => _displayCoordinator.IsPresenterViewOpen;
+    public bool IsPresenterViewOpen => _runtime.IsPresenterViewOpen;
 
     /// <summary>Opens or closes the presenter dashboard without changing audience playback.</summary>
     public void TogglePresenterView()
-        => _displayCoordinator.TogglePresenterView(this);
+        => _runtime.TogglePresenterView();
 
     void ISlideShowDisplayRenderer.OpenPresenterView()
     {
@@ -464,7 +465,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             if (ReferenceEquals(_presenterViewWindow, window))
             {
                 _presenterViewWindow = null;
-                _displayCoordinator.NotifyPresenterViewClosed();
+                _runtime.NotifyPresenterViewClosed();
             }
         };
         window.Show(this);
@@ -796,12 +797,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         bool animated,
         int? zoomTransitionDurationMs = null,
         bool zoomShowBackground = true)
-        => _displayCoordinator.Display(
-            _runtime.BuildDisplayPlan(
-                animated,
-                zoomTransitionDurationMs,
-                zoomShowBackground),
-            this);
+        => _runtime.DisplayCurrentSlide(
+            animated,
+            zoomTransitionDurationMs,
+            zoomShowBackground);
 
     void ISlideShowDisplayRenderer.ApplyDisplayState(SlideShowRuntimeDisplayPlan plan)
     {
@@ -5766,14 +5765,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     // ── Teardown ──────────────────────────────────────────────────────────────────
 
     private void Teardown(DateTimeOffset? nowUtc = null)
-    {
-        _displayCoordinator.CloseSession(this);
-        _mediaController.Teardown();
-        if (!_runtime.IsClosed)
-        {
-            _runtime.Close(nowUtc);
-        }
-    }
+        => _runtime.CloseRendererSession(nowUtc);
 
     /// <summary>Expose active-timer count for test assertions (DA2/DA3).</summary>
     internal int ActiveTimerCount => _activeTimers.Count;
