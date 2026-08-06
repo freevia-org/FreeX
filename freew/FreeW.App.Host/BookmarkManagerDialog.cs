@@ -1,5 +1,6 @@
 using System;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -20,9 +21,10 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private static readonly BookmarkManagerSurfaceSpec Surface = BookmarkManagerDialogPlanner.Surface;
     private readonly DocumentView _editor;
-    private readonly ListBox _list = new() { MinWidth = 300, MinHeight = 180 };
-    private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 8, 0, 0) };
+    private readonly ListBox _list = new() { MinWidth = Surface.ListMinWidth, MinHeight = Surface.ListMinHeight };
+    private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, Surface.StatusTopMargin, 0, 0) };
     private readonly Button _goToButton;
     private readonly Button _deleteButton;
     private readonly BookmarkManagerDialogSession _session = new();
@@ -32,37 +34,34 @@ internal sealed class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.DialogWindo
     {
         _editor = editor;
         Owner = owner;
-        Title = "Bookmark Manager";
-        System.Windows.Automation.AutomationProperties.SetAutomationId(this, "BookmarkManagerDialog");
-        Width = 380;
+        Title = Surface.Title;
+        AutomationProperties.SetAutomationId(this, Surface.WindowAutomationId);
+        Width = Surface.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var panel = new StackPanel { Margin = new Thickness(14) };
-        panel.Children.Add(new TextBlock { Text = "Bookmarks:", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
-        System.Windows.Automation.AutomationProperties.SetAutomationId(panel.Children[0], "BookmarkManagerHeading");
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_list, "BookmarkManagerList");
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_status, "BookmarkManagerStatus");
+        var panel = new StackPanel { Margin = new Thickness(Surface.OuterMargin) };
+        var heading = new TextBlock { Text = Surface.Heading, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, Surface.HeadingBottomMargin) };
+        AutomationProperties.SetAutomationId(heading, Surface.HeadingAutomationId);
+        AutomationProperties.SetAutomationId(_list, Surface.ListAutomationId);
+        AutomationProperties.SetAutomationId(_status, Surface.StatusAutomationId);
+        panel.Children.Add(heading);
 
         _list.SelectionChanged += (_, _) => UpdateSelection();
         _list.MouseDoubleClick += (_, _) => GoTo();
         panel.Children.Add(_list);
 
-        _goToButton = MakeButton("Go To", (_, _) => GoTo());
-        _deleteButton = MakeButton("Delete", (_, _) => Delete());
-        var closeButton = MakeButton("Close", (_, _) => Close());
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_goToButton, "BookmarkManagerGoToButton");
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_deleteButton, "BookmarkManagerDeleteButton");
-        System.Windows.Automation.AutomationProperties.SetAutomationId(closeButton, "BookmarkManagerCloseButton");
-        closeButton.IsCancel = true;
+        _goToButton = MakeButton(Surface.Action(BookmarkManagerActionKind.GoTo), (_, _) => GoTo());
+        _deleteButton = MakeButton(Surface.Action(BookmarkManagerActionKind.Delete), (_, _) => Delete());
+        var closeButton = MakeButton(Surface.Action(BookmarkManagerActionKind.Close), (_, _) => Close());
 
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0)
+            Margin = new Thickness(0, Surface.ActionTopMargin, 0, 0)
         };
         buttons.Children.Add(_goToButton);
         buttons.Children.Add(_deleteButton);
@@ -130,8 +129,8 @@ internal sealed class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
     private void ApplyActionState(BookmarkManagerDialogState state)
     {
-        _goToButton.IsEnabled = state.CanGoTo;
-        _deleteButton.IsEnabled = state.CanDelete;
+        _goToButton.IsEnabled = state.IsEnabled(BookmarkManagerActionKind.GoTo);
+        _deleteButton.IsEnabled = state.IsEnabled(BookmarkManagerActionKind.Delete);
     }
 
     private void GoTo()
@@ -154,9 +153,12 @@ internal sealed class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         RefreshList(plan);
     }
 
-    private static Button MakeButton(string content, RoutedEventHandler onClick)
+    private static Button MakeButton(BookmarkManagerActionSpec spec, RoutedEventHandler onClick)
     {
-        var button = new Button { Content = content, MinWidth = 84, Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(6, 3, 6, 3) };
+        var button = new Button { Content = spec.Label, IsCancel = spec.IsCancel, MinWidth = Surface.ButtonMinWidth };
+        button.Margin = new Thickness(Surface.ButtonLeadingMargin, 0, 0, 0);
+        button.Padding = new Thickness(Surface.ButtonHorizontalPadding, Surface.ButtonVerticalPadding, Surface.ButtonHorizontalPadding, Surface.ButtonVerticalPadding);
+        AutomationProperties.SetAutomationId(button, spec.AutomationId);
         button.Click += onClick;
         return button;
     }

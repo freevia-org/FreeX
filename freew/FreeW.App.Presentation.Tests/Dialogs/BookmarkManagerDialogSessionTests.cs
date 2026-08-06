@@ -5,6 +5,22 @@ namespace FreeW.App.Presentation.Tests.Dialogs;
 public sealed class BookmarkManagerDialogSessionTests
 {
     [Fact]
+    public void Surface_OwnsTextGeometryActionsAndAccessibility()
+    {
+        var surface = BookmarkManagerDialogPlanner.Surface;
+
+        surface.Title.Should().Be("Bookmark Manager");
+        surface.Heading.Should().Be("Bookmarks:");
+        surface.DialogWidth.Should().Be(380);
+        surface.ListMinWidth.Should().Be(300);
+        surface.ListMinHeight.Should().Be(180);
+        surface.Actions.Select(action => action.Kind).Should().Equal(Enum.GetValues<BookmarkManagerActionKind>());
+        surface.Actions.Select(action => action.AutomationId).Should().OnlyHaveUniqueItems();
+        surface.Action(BookmarkManagerActionKind.Close).IsCancel.Should().BeTrue();
+        BookmarkManagerDialogPlanner.RemovedStatusText("Here").Should().Be("Removed bookmark \"Here\".");
+    }
+
+    [Fact]
     public void Refresh_ProjectsBookmarksInOrderAndSelectsTheFirstItem()
     {
         var session = new BookmarkManagerDialogSession();
@@ -59,9 +75,11 @@ public sealed class BookmarkManagerDialogSessionTests
         empty.Items.Should().BeEmpty();
         empty.SelectedIndex.Should().Be(-1);
         empty.SelectedName.Should().BeNull();
-        empty.StatusText.Should().Be("This document has no bookmarks.");
+        empty.StatusText.Should().Be(BookmarkManagerDialogPlanner.EmptyStatusText);
         empty.CanGoTo.Should().BeFalse();
         empty.CanDelete.Should().BeFalse();
+        empty.IsEnabled(BookmarkManagerActionKind.GoTo).Should().BeFalse();
+        empty.IsEnabled(BookmarkManagerActionKind.Close).Should().BeTrue();
 
         session.Refresh([new BookmarkLocation("Target", 3)]);
         var cleared = session.SelectIndex(-1);
@@ -136,6 +154,9 @@ public sealed class BookmarkManagerDialogSourceOwnershipTests
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("BookmarkManagerDialogSession _session");
+            source.Should().Contain("BookmarkManagerDialogPlanner.Surface");
+            source.Should().Contain("Surface.Action(BookmarkManagerActionKind.GoTo)");
+            source.Should().Contain("state.IsEnabled(BookmarkManagerActionKind.GoTo)");
             source.Should().Contain("_session.Refresh(locations)");
             source.Should().Contain("_session.SelectIndex(_list.SelectedIndex)");
             source.Should().Contain("_session.PlanGoTo()");
@@ -144,6 +165,8 @@ public sealed class BookmarkManagerDialogSourceOwnershipTests
             source.Should().NotContain("This document has no bookmarks.");
             source.Should().NotContain("Removed bookmark \\\"");
             source.Should().NotContain("record Item(");
+            source.Should().NotContain("Title = \"Bookmark Manager\"");
+            source.Should().NotContain("Button(\"Go To\"");
         }
 
         wpf.Should().Contain("_editor.RemoveBookmark(plan.Name)");

@@ -7,13 +7,91 @@ public sealed record BookmarkManagerItem(string Name, int BlockIndex)
     public override string ToString() => Name;
 }
 
+public enum BookmarkManagerActionKind
+{
+    GoTo,
+    Delete,
+    Close,
+}
+
+public sealed record BookmarkManagerActionSpec(
+    BookmarkManagerActionKind Kind,
+    string Label,
+    string AutomationId,
+    bool IsCancel = false);
+
+public sealed record BookmarkManagerSurfaceSpec(
+    string Title,
+    string Heading,
+    double DialogWidth,
+    double OuterMargin,
+    double ListMinWidth,
+    double ListMinHeight,
+    double ButtonMinWidth,
+    double ActionTopMargin,
+    double HeadingBottomMargin,
+    double StatusTopMargin,
+    double ButtonLeadingMargin,
+    double ButtonHorizontalPadding,
+    double ButtonVerticalPadding,
+    string WindowAutomationId,
+    string HeadingAutomationId,
+    string ListAutomationId,
+    string StatusAutomationId,
+    IReadOnlyList<BookmarkManagerActionSpec> Actions)
+{
+    public BookmarkManagerActionSpec Action(BookmarkManagerActionKind kind) =>
+        Actions.First(action => action.Kind == kind);
+}
+
+public static class BookmarkManagerDialogPlanner
+{
+    public const string EmptyStatusText = "This document has no bookmarks.";
+
+    public static BookmarkManagerSurfaceSpec Surface { get; } = new(
+        Title: "Bookmark Manager",
+        Heading: "Bookmarks:",
+        DialogWidth: 380,
+        OuterMargin: 14,
+        ListMinWidth: 300,
+        ListMinHeight: 180,
+        ButtonMinWidth: 84,
+        ActionTopMargin: 10,
+        HeadingBottomMargin: 4,
+        StatusTopMargin: 8,
+        ButtonLeadingMargin: 6,
+        ButtonHorizontalPadding: 6,
+        ButtonVerticalPadding: 3,
+        WindowAutomationId: "BookmarkManagerDialog",
+        HeadingAutomationId: "BookmarkManagerHeading",
+        ListAutomationId: "BookmarkManagerList",
+        StatusAutomationId: "BookmarkManagerStatus",
+        Actions:
+        [
+            new(BookmarkManagerActionKind.GoTo, "Go To", "BookmarkManagerGoToButton"),
+            new(BookmarkManagerActionKind.Delete, "Delete", "BookmarkManagerDeleteButton"),
+            new(BookmarkManagerActionKind.Close, "Close", "BookmarkManagerCloseButton", IsCancel: true),
+        ]);
+
+    public static string RemovedStatusText(string name) => $"Removed bookmark \"{name}\".";
+}
+
 public sealed record BookmarkManagerDialogState(
     IReadOnlyList<BookmarkManagerItem> Items,
     int SelectedIndex,
     string? SelectedName,
     string StatusText,
     bool CanGoTo,
-    bool CanDelete);
+    bool CanDelete)
+{
+    public bool IsEnabled(BookmarkManagerActionKind kind) => kind switch
+    {
+        BookmarkManagerActionKind.GoTo => CanGoTo,
+        BookmarkManagerActionKind.Delete => CanDelete,
+        BookmarkManagerActionKind.Close => true,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+}
 
 public sealed record BookmarkManagerDeleteRefreshPlan(string Name);
 
@@ -25,8 +103,6 @@ public sealed record BookmarkManagerGoToIntent(string Name, int BlockIndex);
 /// </summary>
 public sealed class BookmarkManagerDialogSession
 {
-    private const string EmptyStatusText = "This document has no bookmarks.";
-
     public BookmarkManagerDialogState State { get; private set; } = new(
         [],
         SelectedIndex: -1,
@@ -76,7 +152,7 @@ public sealed class BookmarkManagerDialogSession
         IEnumerable<BookmarkLocation> locations)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        return Project(locations, plan.Name, $"Removed bookmark \"{plan.Name}\".");
+        return Project(locations, plan.Name, BookmarkManagerDialogPlanner.RemovedStatusText(plan.Name));
     }
 
     private BookmarkManagerDialogState Project(
@@ -96,7 +172,7 @@ public sealed class BookmarkManagerDialogSession
             items,
             selectedIndex,
             hasSelection ? items[selectedIndex].Name : null,
-            statusText ?? (items.Length == 0 ? EmptyStatusText : string.Empty),
+            statusText ?? (items.Length == 0 ? BookmarkManagerDialogPlanner.EmptyStatusText : string.Empty),
             CanGoTo: hasSelection,
             CanDelete: hasSelection);
         return State;
