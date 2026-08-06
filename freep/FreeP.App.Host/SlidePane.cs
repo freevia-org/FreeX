@@ -196,6 +196,8 @@ public sealed class SlidePane : Border
             ToolTip = plan.ToolTipText,
             ContextMenu = BuildSlideContextMenu(plan.SlideIndex),
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
         };
         ApplyThumbnailChrome(chrome, item, projected.AccessibilityOrdinal, plan);
 
@@ -269,6 +271,8 @@ public sealed class SlidePane : Border
             Focusable = true,
             ToolTip = plan.ToolTipText,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
         };
         item.MouseEnter += (_, _) => chrome.Background = hoverBackground;
         item.MouseLeave += (_, _) => chrome.Background = normalBackground;
