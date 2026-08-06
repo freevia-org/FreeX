@@ -59,6 +59,9 @@ internal static class BookmarkBoundaryMapper
         Restore(target, Capture(source), advancesOffset: targetAdvancesOffset);
     }
 
+    internal static int EnsureRunBoundaryAtTextOffset(Paragraph paragraph, int textOffset) =>
+        EnsureRunBoundary(paragraph, textOffset, static _ => true);
+
     private static int EnsureRunBoundary(Paragraph paragraph, int targetOffset, Func<Run, bool> advancesOffset)
     {
         var offset = 0;

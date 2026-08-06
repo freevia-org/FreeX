@@ -139,6 +139,77 @@ public class CrossReferenceRoundTripTests
     }
 
     [Fact]
+    public void CaptionVariantBookmarksAndPlainRefFieldsRoundTripWithExactRanges()
+    {
+        var doc = new TextDocument();
+        var caption = Captions.BuildCaption(CaptionLabel.Figure, 1, "Sample caption text");
+        caption.Runs[2] = RevisionEditPlanner.CloneRunWithText(caption.Runs[2], ": ");
+        caption.Runs.Add(new Run("Sample caption text"));
+        caption.BookmarkNames.AddRange(["_RefWhole", "_RefLabel", "_RefText"]);
+        caption.BookmarkBoundaries.AddRange(
+        [
+            new BookmarkBoundary("whole", BookmarkBoundaryKind.Start, 0, "_RefWhole"),
+            new BookmarkBoundary("whole", BookmarkBoundaryKind.End, 4),
+            new BookmarkBoundary("label", BookmarkBoundaryKind.Start, 0, "_RefLabel"),
+            new BookmarkBoundary("label", BookmarkBoundaryKind.End, 2),
+            new BookmarkBoundary("text", BookmarkBoundaryKind.Start, 3, "_RefText"),
+            new BookmarkBoundary("text", BookmarkBoundaryKind.End, 4)
+        ]);
+        doc.Blocks.Add(caption);
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.CrossReferenceFieldRun(
+                    new CrossReferenceField(CrossRefFieldKind.Ref, "_RefWhole", CrossRefInsertAs.Text, true),
+                    "Figure 1: Sample caption text"),
+                Run.CrossReferenceFieldRun(
+                    new CrossReferenceField(
+                        CrossRefFieldKind.Ref, "_RefLabel", CrossRefInsertAs.CaptionLabelAndNumber, true),
+                    "Figure 1"),
+                Run.CrossReferenceFieldRun(
+                    new CrossReferenceField(CrossRefFieldKind.Ref, "_RefText", CrossRefInsertAs.CaptionText, true),
+                    "Sample caption text")
+            }
+        });
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        var package = stream.ToArray();
+        using (var zip = new ZipArchive(new MemoryStream(package), ZipArchiveMode.Read))
+        using (var entry = zip.GetEntry("word/document.xml")!.Open())
+        {
+            var xml = XDocument.Load(entry);
+            xml.Descendants(W + "fldSimple")
+                .Select(field => field.Attribute(W + "instr")!.Value)
+                .Should().Equal(
+                    " REF _RefWhole \\h ",
+                    " REF _RefLabel \\h ",
+                    " REF _RefText \\h ");
+            xml.Descendants(W + "bookmarkStart")
+                .Select(start => start.Attribute(W + "name")!.Value)
+                .Should().Equal("_RefWhole", "_RefLabel", "_RefText");
+        }
+
+        var reopened = DocxReader.Read(new MemoryStream(package));
+        var reopenedCaption = (Paragraph)reopened.Blocks[0];
+        var reopenedFields = ((Paragraph)reopened.Blocks[1]).Runs;
+        reopenedFields.Select(run => run.CrossReference!.InsertAs)
+            .Should().OnlyContain(insertAs => insertAs == CrossRefInsertAs.Text,
+                "plain REF fields carry caption-variant semantics in their bookmark ranges, not a field switch");
+        CrossReferences.ResolveField(
+                reopened, reopenedFields[0].CrossReference!, reopenedFields[0].Text, sourceBlockIndex: 1)
+            .Should().Be("Figure 1: Sample caption text");
+        CrossReferences.ResolveField(
+                reopened, reopenedFields[1].CrossReference!, reopenedFields[1].Text, sourceBlockIndex: 1)
+            .Should().Be("Figure 1");
+        CrossReferences.ResolveField(
+                reopened, reopenedFields[2].CrossReference!, reopenedFields[2].Text, sourceBlockIndex: 1)
+            .Should().Be("Sample caption text");
+        reopenedCaption.BookmarkNames.Should().Contain(["_RefWhole", "_RefLabel", "_RefText"]);
+    }
+
+    [Fact]
     public void HeadingNumberField_RoundTripsWithWSwitch()
     {
         var field = new CrossReferenceField(CrossRefFieldKind.Ref, "_Ref4", CrossRefInsertAs.HeadingNumber, Hyperlink: false);

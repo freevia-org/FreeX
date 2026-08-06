@@ -103,6 +103,38 @@ public sealed class CrossReferenceCommandTests
         marker.BookmarkBoundaries.Should().BeEmpty();
     }
 
+    [Fact]
+    public void InsertCrossReference_WrapsCaptionTextWithoutItsSeparatorAndRestoresRuns()
+    {
+        var target = Captions.BuildCaption(CaptionLabel.Figure, 1, "Sample caption text");
+        var originalRuns = target.Runs.ToArray();
+        var host = new Paragraph("See ");
+        var document = new TextDocument();
+        document.Blocks.Add(target);
+        document.Blocks.Add(host);
+        var bus = new DocumentCommandBus(new TestContext(document));
+        var field = Run.CrossReferenceFieldRun(
+            new CrossReferenceField(CrossRefFieldKind.Ref, "_Ref1", CrossRefInsertAs.CaptionText, true),
+            "Sample caption text");
+
+        bus.Execute(new InsertCrossReferenceCommand(
+            1, field, 0, "_Ref1", targetTextStartOffset: 10, targetTextEndOffset: 29));
+
+        target.Runs.Select(run => run.Text).Should().Equal("Figure ", "1", ": ", "Sample caption text");
+        target.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.Start, 3, "_Ref1"));
+        target.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.End, 4));
+
+        bus.Undo().Should().BeTrue();
+        target.Runs.Should().Equal(originalRuns);
+        target.BookmarkNames.Should().BeEmpty();
+        target.BookmarkBoundaries.Should().BeEmpty();
+
+        bus.Redo().Should().BeTrue();
+        target.Runs.Select(run => run.Text).Should().Equal("Figure ", "1", ": ", "Sample caption text");
+    }
+
     private sealed class TestContext(TextDocument document) : IDocumentCommandContext
     {
         public TextDocument Document { get; } = document;

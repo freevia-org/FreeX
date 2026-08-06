@@ -21184,7 +21184,9 @@ public sealed class DocumentView : Control
             plan.BookmarkNameToAdd,
             plan.TargetRunIndex,
             plan.TargetNoteId,
-            plan.TargetIsFootnote));
+            plan.TargetIsFootnote,
+            plan.TargetTextStartOffset,
+            plan.TargetTextEndOffset));
 
         _cellCaret = null;
         _caret = new DocPosition(hostIndex, BlockLength(hostIndex));
