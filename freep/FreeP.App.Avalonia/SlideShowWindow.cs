@@ -106,6 +106,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     // Maps shapeId → the Image element in _animOverlay that represents that shape.
     private readonly Dictionary<uint, Control> _animElements = new();
     private readonly Dictionary<uint, Control> _animFillElements = new();
+    private readonly Dictionary<uint, Control> _animLineElements = new();
     private readonly Dictionary<uint, IReadOnlyList<Control>> _paragraphAnimElements = new();
 
     // Track which shapes have been revealed.
@@ -3249,6 +3250,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _animOverlay.Children.Clear();
         _animElements.Clear();
         _animFillElements.Clear();
+        _animLineElements.Clear();
         _paragraphAnimElements.Clear();
         _revealedShapes.Clear();
 
@@ -3379,6 +3381,44 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 }
             }
 
+            var lineAnimation = slide.Animations.FirstOrDefault(a =>
+                a.ShapeId == shapeId && a.Preset == AnimationPreset.ChangeLineColor);
+            if (lineAnimation is not null
+                && shape.TextBody is null
+                && shape.Outline is ShapeOutline.Visible outline
+                && SlideShowPlaybackPlanner.PlanShapeAnimation(
+                    lineAnimation,
+                    startDelayMs: 0,
+                    presentation: _presentation,
+                    effectiveClrMap: slide.ColorMapOverride).ColorToHex is { } lineColor
+                && TryParseAnimationColorHex(lineColor, out var lineRgb))
+            {
+                var lineShape = SlideCloner.CloneShape(shape);
+                lineShape.Outline = new ShapeOutline.Visible(
+                    lineRgb,
+                    outline.WidthPt,
+                    outline.Dash,
+                    outline.BeginLineEnd,
+                    outline.EndLineEnd);
+                var lineBitmap = RenderShapeToOverlayBitmap(slide, lineShape, w, h);
+                if (lineBitmap is not null)
+                {
+                    var lineElement = new Image
+                    {
+                        Source = lineBitmap,
+                        Width = w,
+                        Height = h,
+                        Stretch = Stretch.None,
+                        Opacity = 0,
+                        IsHitTestVisible = false,
+                    };
+                    Canvas.SetLeft(lineElement, 0);
+                    Canvas.SetTop(lineElement, 0);
+                    _animOverlay.Children.Add(lineElement);
+                    _animLineElements[shapeId] = lineElement;
+                }
+            }
+
             // DA1: hide this shape in the base canvas — the overlay image is the sole copy.
             _slideCanvas.SuppressedShapeIds.Add(shapeId);
         }
@@ -3474,6 +3514,14 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 && _animFillElements.TryGetValue(anim.ShapeId, out var fillElement))
             {
                 PlayShapeAnimationWithTiming(fillElement, plan, onReveal: null);
+                _revealedShapes.Add(anim.ShapeId);
+                continue;
+            }
+
+            if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeLineColor
+                && _animLineElements.TryGetValue(anim.ShapeId, out var lineElement))
+            {
+                PlayShapeAnimationWithTiming(lineElement, plan, onReveal: null);
                 _revealedShapes.Add(anim.ShapeId);
                 continue;
             }
@@ -3734,6 +3782,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
             case SlideShowShapeAnimationEffectKind.ColorWave:
                 ColorWaveEffect(element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.ChangeLineColor:
+                LineColorEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.ChangeFillColor:
@@ -5191,6 +5243,15 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         });
     }
 
+    private void LineColorEffect(Control element, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        element.Opacity = 0;
+        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
+            plan.DurationMs,
+            new[] { (0.0, 0.0), (1.0, 1.0) },
+            value => element.Opacity = value));
+    }
+
     private void AddAuthoredColorOverlay(Control element, SlideShowShapeAnimationPlaybackPlan plan)
     {
         if (plan.ColorFromHex is null
@@ -5254,6 +5315,20 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         color = Color.FromRgb(rgb.R, rgb.G, rgb.B);
         return true;
+    }
+
+    private static bool TryParseAnimationColorHex(string value, out SrgbColor color)
+    {
+        if (value is { Length: 6 }
+            && int.TryParse(value, System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture, out var rgb))
+        {
+            color = SrgbColor.FromRgb(rgb);
+            return true;
+        }
+
+        color = SrgbColor.Black;
+        return false;
     }
 
     private void AnimateColorKeyframes(

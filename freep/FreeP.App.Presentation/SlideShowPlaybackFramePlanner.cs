@@ -373,6 +373,7 @@ public static class SlideShowPlaybackFramePlanner
 
         if (plan.EffectKind is SlideShowShapeAnimationEffectKind.ColorPulse
             or SlideShowShapeAnimationEffectKind.ChangeColor
+            or SlideShowShapeAnimationEffectKind.ChangeLineColor
             or SlideShowShapeAnimationEffectKind.ChangeFontStyle
             or SlideShowShapeAnimationEffectKind.GrowWithColor
             or SlideShowShapeAnimationEffectKind.Shimmer
@@ -607,6 +608,7 @@ public static class SlideShowPlaybackFramePlanner
             SlideShowShapeAnimationEffectKind.ColorPulse
                 or SlideShowShapeAnimationEffectKind.ColorWave
                 or SlideShowShapeAnimationEffectKind.ChangeColor
+                or SlideShowShapeAnimationEffectKind.ChangeLineColor
                 or SlideShowShapeAnimationEffectKind.ChangeFontStyle
                 or SlideShowShapeAnimationEffectKind.ChangeFillColor
                 or SlideShowShapeAnimationEffectKind.GrowWithColor
