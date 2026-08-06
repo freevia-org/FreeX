@@ -901,10 +901,26 @@ public sealed class RendererNeutralDedupPlannerTests
             "freep",
             "FreeP.App.Avalonia",
             "AvaloniaSlideShowMediaController.cs");
+        var session = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowMediaPlaybackSession.cs");
 
         wpf.Should().Contain("SlideShowMediaInteractionPlanner.ComputeMediaBounds");
         avalonia.Should().Contain("SlideShowMediaInteractionPlanner.BuildSlidePlan");
         avalonia.Should().Contain("SlideShowMediaInteractionPlanner.PlanClick");
+        foreach (var adapter in new[] { wpf, avalonia })
+        {
+            adapter.Should().Contain("SlideShowMediaPlaybackSession");
+            adapter.Should().Contain("IMediaPlaybackPort");
+            adapter.Should().NotContain("SlideShowMediaInteractionPlanner.ResolveEndAction");
+            adapter.Should().NotContain("SlideShowMediaInteractionPlanner.ResolveTrimWindow");
+            adapter.Should().NotContain("SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent");
+            adapter.Should().NotContain("SlideShowMediaInteractionPlanner.NormalizeVolumePercent");
+        }
+        session.Should().Contain("SlideShowMediaInteractionPlanner.ResolveEndAction");
+        session.Should().Contain("SlideShowMediaInteractionPlanner.ResolveTrimWindow");
+        session.Should().Contain("SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent");
         avalonia.Should().NotContain("MediaElement");
         avalonia.Should().Contain("LibVlcMediaPlaybackBackendFactory");
     }

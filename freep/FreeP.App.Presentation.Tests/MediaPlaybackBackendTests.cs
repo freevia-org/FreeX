@@ -100,6 +100,8 @@ public sealed class MediaPlaybackBackendTests
 
         avaloniaController.Should().Contain("LibVlcMediaPlaybackBackendFactory");
         avaloniaController.Should().Contain("LibVlcMediaPlaybackSession");
+        avaloniaController.Should().Contain("AvaloniaMediaPlaybackPort");
+        avaloniaController.Should().Contain("SlideShowMediaPlaybackSession");
         avaloniaController.Should().Contain("VideoView");
         avaloniaController.Should().Contain("PlayTransitionSound");
         avaloniaController.Should().Contain("TrySeek");
