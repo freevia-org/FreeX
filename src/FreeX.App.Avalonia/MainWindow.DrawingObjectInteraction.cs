@@ -687,7 +687,7 @@ public sealed partial class MainWindow
 
     private bool ApplyPictureCrop(Guid pictureId, PictureCropRatios crop)
     {
-        var result = _session.ExecuteReviewCommand(new SetPictureCropCommand(
+        var result = _session.ExecuteReviewCommand(PictureCropDialogPlanner.BuildCommand(
             _session.ActiveSheet.Id,
             pictureId,
             crop.Left,

@@ -291,36 +291,26 @@ public partial class MainWindow
 
         if (command?.NewObjectId is { } newObjectId)
         {
-            if (objectClip.Kind == SelectionPaneObjectKind.Chart)
+            var selection = DrawingObjectClipboardSession.CreatePasteSelectionPlan(
+                _workbook.GetSheet(destinationSheetId),
+                destinationSheetId,
+                objectClip.Kind,
+                newObjectId);
+            if (selection.Kind == SelectionPaneObjectKind.Chart)
             {
-                SelectInsertedChart(newObjectId);
+                SelectInsertedChart(selection.ObjectId);
             }
-            else if (objectClip.Kind == SelectionPaneObjectKind.Shape)
+            else
             {
-                var newAnchor = DrawingObjectClipboardSession.ResolveAnchor(
-                    _workbook.GetSheet(destinationSheetId),
-                    destinationSheetId,
-                    objectClip.Kind,
-                    newObjectId);
-                SelectInsertedDrawingObject(newObjectId, FreeX.App.UI.ObjectKind.Shape, newAnchor);
-            }
-            else if (objectClip.Kind == SelectionPaneObjectKind.Picture)
-            {
-                var newAnchor = DrawingObjectClipboardSession.ResolveAnchor(
-                    _workbook.GetSheet(destinationSheetId),
-                    destinationSheetId,
-                    objectClip.Kind,
-                    newObjectId);
-                SelectInsertedDrawingObject(newObjectId, FreeX.App.UI.ObjectKind.Picture, newAnchor);
-            }
-            else if (objectClip.Kind == SelectionPaneObjectKind.TextBox)
-            {
-                var newAnchor = DrawingObjectClipboardSession.ResolveAnchor(
-                    _workbook.GetSheet(destinationSheetId),
-                    destinationSheetId,
-                    objectClip.Kind,
-                    newObjectId);
-                SelectInsertedDrawingObject(newObjectId, FreeX.App.UI.ObjectKind.TextBox, newAnchor);
+                var nativeKind = selection.Kind switch
+                {
+                    SelectionPaneObjectKind.Shape => FreeX.App.UI.ObjectKind.Shape,
+                    SelectionPaneObjectKind.Picture => FreeX.App.UI.ObjectKind.Picture,
+                    SelectionPaneObjectKind.TextBox => FreeX.App.UI.ObjectKind.TextBox,
+                    _ => FreeX.App.UI.ObjectKind.None,
+                };
+                if (nativeKind != FreeX.App.UI.ObjectKind.None)
+                    SelectInsertedDrawingObject(selection.ObjectId, nativeKind, selection.Anchor);
             }
         }
 

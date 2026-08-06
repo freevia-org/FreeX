@@ -278,7 +278,7 @@ public sealed partial class MainWindow
         var status = FormatDrawingObjectResourceText(
             DrawingObjectActionPlanner.ShapeEffectSuccess(normalized, ShapeEffectPresetLabel(normalized)));
         RunDrawingObjectCommand(
-            new SetDrawingShapeEffectCommand(_session.ActiveSheet.Id, shape.Id, normalized),
+            ShapeEffectsPlanner.BuildCommand(_session.ActiveSheet.Id, shape.Id, normalized),
             status,
             UiText.Get("InsertLoc_ShapeEffectsLabel"));
     }

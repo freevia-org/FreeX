@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Services;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -85,5 +86,17 @@ public sealed class ShapeGradientPlannerTests
     {
         ShapeGradientPlanner.PreviewVector(DrawingShapeGradientDirection.Vertical, 100, 50)
             .Should().Be((0.5, 0.0, 0.5, 1.0));
+    }
+
+    [Fact]
+    public void BuildCommand_MapsPortableResultToCoreCommand()
+    {
+        var result = ShapeGradientPlanner.CreateResult(
+            new CellColor(1, 2, 3),
+            new CellColor(4, 5, 6),
+            DrawingShapeGradientDirection.Horizontal);
+
+        ShapeGradientPlanner.BuildCommand(SheetId.New(), Guid.NewGuid(), result)
+            .Should().BeOfType<SetDrawingShapeGradientCommand>();
     }
 }

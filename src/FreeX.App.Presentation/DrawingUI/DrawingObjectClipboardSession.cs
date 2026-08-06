@@ -9,6 +9,11 @@ public sealed record DrawingObjectClipboardSnapshot(
     Guid ObjectId,
     bool IsCut);
 
+public sealed record DrawingObjectPasteSelectionPlan(
+    SelectionPaneObjectKind Kind,
+    Guid ObjectId,
+    CellAddress Anchor);
+
 public sealed class DrawingObjectClipboardSession
 {
     public DrawingObjectClipboardSnapshot? Content { get; private set; }
@@ -102,6 +107,16 @@ public sealed class DrawingObjectClipboardSession
                 textBox.Anchor,
             _ => new CellAddress(destinationSheetId, 1, 1),
         };
+
+    public static DrawingObjectPasteSelectionPlan CreatePasteSelectionPlan(
+        Sheet? destinationSheet,
+        SheetId destinationSheetId,
+        SelectionPaneObjectKind kind,
+        Guid objectId) =>
+        new(
+            kind,
+            objectId,
+            ResolveAnchor(destinationSheet, destinationSheetId, kind, objectId));
 
     private static bool IsSupportedKind(SelectionPaneObjectKind kind) => kind is
         SelectionPaneObjectKind.Chart or

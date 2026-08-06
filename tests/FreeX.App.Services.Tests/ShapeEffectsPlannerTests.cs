@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Services;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -46,5 +47,12 @@ public sealed class ShapeEffectsPlannerTests
         var options = ShapeEffectsPlanner.CreateOptions();
         var index = ShapeEffectsPlanner.FindOptionIndex(options, DrawingShapeEffectPreset.Reflection);
         options[index].Preset.Should().Be(DrawingShapeEffectPreset.Reflection);
+    }
+
+    [Fact]
+    public void BuildCommand_MapsPortablePresetToCoreCommand()
+    {
+        ShapeEffectsPlanner.BuildCommand(SheetId.New(), Guid.NewGuid(), DrawingShapeEffectPreset.Glow)
+            .Should().BeOfType<SetDrawingShapeEffectCommand>();
     }
 }

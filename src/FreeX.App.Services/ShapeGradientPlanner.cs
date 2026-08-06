@@ -1,3 +1,4 @@
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -94,6 +95,23 @@ public static class ShapeGradientPlanner
         CellColor endColor,
         DrawingShapeGradientDirection direction) =>
         new(startColor, endColor, NormalizeDirection(direction));
+
+    public static SetDrawingShapeGradientCommand BuildCommand(
+        SheetId sheetId,
+        Guid shapeId,
+        GradientResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return BuildCommand(sheetId, shapeId, result.StartColor, result.EndColor, result.Direction);
+    }
+
+    public static SetDrawingShapeGradientCommand BuildCommand(
+        SheetId sheetId,
+        Guid shapeId,
+        CellColor startColor,
+        CellColor endColor,
+        DrawingShapeGradientDirection direction) =>
+        new(sheetId, shapeId, startColor, endColor, NormalizeDirection(direction));
 
     /// <summary>
     /// Normalized (0-1) gradient preview vector for a given direction and aspect, matching the host preview so

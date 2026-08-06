@@ -51,15 +51,19 @@ public sealed partial class MainWindow
         Guid objectId)
     {
         var sheet = _session.Workbook.GetSheet(destinationSheetId);
-        var anchor = DrawingObjectClipboardSession.ResolveAnchor(sheet, destinationSheetId, kind, objectId);
+        var selection = DrawingObjectClipboardSession.CreatePasteSelectionPlan(
+            sheet,
+            destinationSheetId,
+            kind,
+            objectId);
 
-        _session.SelectCell(anchor);
-        _selectedDrawingObjectKind = kind;
-        _selectedDrawingObjectId = objectId;
-        _ribbonContextSource.OnDrawingObjectSelected(kind);
+        _session.SelectCell(selection.Anchor);
+        _selectedDrawingObjectKind = selection.Kind;
+        _selectedDrawingObjectId = selection.ObjectId;
+        _ribbonContextSource.OnDrawingObjectSelected(selection.Kind);
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
-        RefreshShell($"Selected {FormatDrawingObjectKind(kind)}");
+        RefreshShell($"Selected {FormatDrawingObjectKind(selection.Kind)}");
     }
 
     // Test seams drive the same copy/paste entry points used by Ctrl+C/Ctrl+V without depending on

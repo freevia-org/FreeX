@@ -144,10 +144,11 @@ public partial class MainWindow
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Rotate Picture",
-                sheetId => new RotatePictureCommand(
+                sheetId => DrawingObjectFormatCommandPolicy.BuildRotationCommand(
                     sheetId,
+                    DrawingObjectTargetKind.Picture,
                     GetTargetPicture(sheetId)?.Id ?? Guid.Empty,
-                    dialog.Result.Degrees)))
+                    new FormatPicturePlanner.RotationResult(dialog.Result.Degrees))))
             return;
 
         UpdateViewport();
@@ -207,10 +208,9 @@ public partial class MainWindow
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Reset Crop",
-                sheetId => new SetPictureCropCommand(
+                sheetId => PictureCropDialogPlanner.BuildResetCommand(
                     sheetId,
-                    GetTargetPicture(sheetId)?.Id ?? Guid.Empty,
-                    0, 0, 0, 0)))
+                    GetTargetPicture(sheetId)?.Id ?? Guid.Empty)))
             return;
 
         UpdateViewport();
@@ -662,7 +662,7 @@ public partial class MainWindow
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 DrawingObjectActionPlanner.ShapeGradientCommandTitle,
-                sheetId => new SetDrawingShapeGradientCommand(
+                sheetId => ShapeGradientPlanner.BuildCommand(
                     sheetId,
                     GetTargetDrawingShape(sheetId)?.Id ?? Guid.Empty,
                     dialog.Result.StartColor,
@@ -716,7 +716,7 @@ public partial class MainWindow
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 DrawingObjectActionPlanner.ShapeEffectsCommandTitle,
-                sheetId => new SetDrawingShapeEffectCommand(
+                sheetId => ShapeEffectsPlanner.BuildCommand(
                     sheetId,
                     GetTargetDrawingShape(sheetId)?.Id ?? Guid.Empty,
                     normalizedPreset)))
@@ -922,7 +922,7 @@ public partial class MainWindow
     private void OnPictureCropped(Guid id, FreeX.App.UI.PictureCropRatios crop)
     {
         if (!TryExecuteCommand(
-                new SetPictureCropCommand(
+                PictureCropDialogPlanner.BuildCommand(
                     _currentSheetId,
                     id,
                     crop.Left,

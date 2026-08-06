@@ -82,6 +82,20 @@ public sealed class DrawingObjectClipboardSessionTests
             .Should().Be(expectedAnchor);
     }
 
+    [Theory]
+    [InlineData(SelectionPaneObjectKind.Chart)]
+    [InlineData(SelectionPaneObjectKind.Shape)]
+    [InlineData(SelectionPaneObjectKind.Picture)]
+    [InlineData(SelectionPaneObjectKind.TextBox)]
+    public void CreatePasteSelectionPlan_CarriesKindIdentityAndResolvedAnchor(SelectionPaneObjectKind kind)
+    {
+        var sheet = new Workbook("clipboard").AddSheet("Sheet1");
+        var (objectId, expectedAnchor) = AddObject(sheet, kind);
+
+        DrawingObjectClipboardSession.CreatePasteSelectionPlan(sheet, sheet.Id, kind, objectId)
+            .Should().Be(new DrawingObjectPasteSelectionPlan(kind, objectId, expectedAnchor));
+    }
+
     [Fact]
     public void WpfAndAvaloniaHosts_UseSharedDrawingObjectClipboardSession()
     {
@@ -97,6 +111,7 @@ public sealed class DrawingObjectClipboardSessionTests
         sources.Should().OnlyContain(source => !source.Contains("InternalObjectClipboard", StringComparison.Ordinal));
         sources.Should().OnlyContain(source => !source.Contains("new DuplicateDrawingObjectCommand", StringComparison.Ordinal));
         string.Concat(sources).Should().Contain("DrawingObjectClipboardSession");
+        sources.Take(2).Should().OnlyContain(source => source.Contains("CreatePasteSelectionPlan(", StringComparison.Ordinal));
     }
 
     private static (Guid ObjectId, CellAddress Anchor) AddObject(Sheet sheet, SelectionPaneObjectKind kind)

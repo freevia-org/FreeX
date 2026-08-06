@@ -1,3 +1,4 @@
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -53,4 +54,10 @@ public static class ShapeEffectsPlanner
 
         return 0;
     }
+
+    public static SetDrawingShapeEffectCommand BuildCommand(
+        SheetId sheetId,
+        Guid shapeId,
+        DrawingShapeEffectPreset preset) =>
+        new(sheetId, shapeId, NormalizePreset(preset));
 }
