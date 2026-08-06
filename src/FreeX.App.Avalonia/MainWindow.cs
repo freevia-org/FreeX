@@ -19963,14 +19963,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var range = _session.SelectedRange;
         var rangeReference = FormatRangeReference(range);
-        // Match WPF's quick-sort path: a labels-over-values first row stays outside the sort range,
-        // while a headerless selection keeps every row as data. The session overload preserves the
-        // grouped-sheet command path and undo semantics used by the desktop host.
-        var hasHeaders = QuickAnalysisSelectionReader.Describe(_session.ActiveSheet, range).HasHeaderRow;
-        var result = _session.SortSelectedRange(
-            [new CoreSortKey(0, ascending)],
-            new SortOptions(CaseSensitive: false, LeftToRight: false),
-            hasHeaders);
+        var result = _session.SortSelectedRange(ascending);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Sort failed.");

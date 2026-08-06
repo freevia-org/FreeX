@@ -1,5 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using FreeX.App.Presentation.QuickAnalysis;
 
 namespace FreeX.App.Services;
 
@@ -61,42 +62,7 @@ public static class QuickSortRangePlanner
 
     public static bool HasLikelyHeaderRow(Sheet sheet, GridRange range)
     {
-        if (range.RowCount <= 1)
-            return false;
-
-        var nonBlankHeaderCells = 0;
-        var textHeaderCells = 0;
-        var dataColumns = 0;
-        for (var col = range.Start.Col; col <= range.End.Col; col++)
-        {
-            var headerCell = sheet.GetCell(range.Start.Row, col);
-            if (!HasCellContent(headerCell))
-                continue;
-
-            nonBlankHeaderCells++;
-            if (headerCell?.Value is TextValue text && !string.IsNullOrWhiteSpace(text.Value))
-                textHeaderCells++;
-
-            if (ColumnHasDataBelow(sheet, range, col))
-                dataColumns++;
-        }
-
-        return nonBlankHeaderCells > 0 &&
-               textHeaderCells == nonBlankHeaderCells &&
-               dataColumns > 0;
+        ArgumentNullException.ThrowIfNull(sheet);
+        return QuickAnalysisSelectionReader.HasHeaderRow(sheet, range);
     }
-
-    private static bool ColumnHasDataBelow(Sheet sheet, GridRange range, uint col)
-    {
-        for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
-        {
-            if (HasCellContent(sheet.GetCell(row, col)))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool HasCellContent(Cell? cell) =>
-        cell is not null && (cell.HasFormula || cell.Value is not BlankValue);
 }

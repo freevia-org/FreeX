@@ -2510,9 +2510,6 @@ public sealed class MacOsAppReadinessPreflightTests
                     case WorkbookShortcutRoute.FlashFill:
                     private void SortSelectedRange(bool ascending)
                     _session.SortSelectedRange(ascending)
-                    QuickAnalysisSelectionReader.Describe(_session.ActiveSheet, range).HasHeaderRow
-                    new CoreSortKey(0, ascending)
-                    new SortOptions(CaseSensitive: false, LeftToRight: false)
                     private void FlashFillSelectedRange()
                     _session.FlashFillSelectedRange()
                     var hasNativeDataMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Data);

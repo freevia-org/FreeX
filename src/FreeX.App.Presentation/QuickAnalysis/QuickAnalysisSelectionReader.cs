@@ -21,7 +21,7 @@ public static class QuickAnalysisSelectionReader
         ArgumentNullException.ThrowIfNull(sheet);
 
         var tableContext = StructuredTableSelectionPlanner.Describe(sheet, range);
-        var hasHeaderRow = tableContext?.IncludesHeader ?? DetectHeaderRow(sheet, range);
+        var hasHeaderRow = HasHeaderRow(sheet, range, tableContext);
         var dataRange = ResolveDataRange(range, hasHeaderRow, tableContext);
         var contentRange = TryGetContentRange(sheet, dataRange);
 
@@ -42,6 +42,16 @@ public static class QuickAnalysisSelectionReader
                 ? null
                 : dataRange?.RowCount ?? 0
         };
+    }
+
+    /// <summary>
+    /// Interprets whether the selection begins with a header row, honoring structured-table metadata
+    /// before falling back to the portable labels-over-values heuristic.
+    /// </summary>
+    public static bool HasHeaderRow(Sheet sheet, GridRange range)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        return HasHeaderRow(sheet, range, StructuredTableSelectionPlanner.Describe(sheet, range));
     }
 
     /// <summary>
@@ -148,6 +158,12 @@ public static class QuickAnalysisSelectionReader
 
         return sawLabelOverValueColumn;
     }
+
+    private static bool HasHeaderRow(
+        Sheet sheet,
+        GridRange range,
+        StructuredTableSelectionContext? tableContext) =>
+        tableContext?.IncludesHeader ?? DetectHeaderRow(sheet, range);
 
     private static GridRange? ResolveDataRange(
         GridRange selection,

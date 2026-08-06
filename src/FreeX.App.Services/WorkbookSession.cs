@@ -4459,12 +4459,17 @@ public sealed class WorkbookSession : IDisposable
         }
 
         var range = SelectedRange;
+        var sortPlan = QuickSortRangePlanner.Create(ActiveSheet, range, ActiveCell);
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
             CreateRangeCommand(
-                range,
+                sortPlan.Range,
                 "Sort",
-                (sheetId, sheetRange) => new SortCommand(sheetId, sheetRange, sortByColOffset: 0, ascending)));
+                (sheetId, sheetRange) => new SortCommand(
+                    sheetId,
+                    sheetRange,
+                    sortPlan.SortByColOffset,
+                    ascending)));
         if (!result.Success)
             return result;
 

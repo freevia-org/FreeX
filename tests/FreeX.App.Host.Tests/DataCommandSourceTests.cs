@@ -13,8 +13,11 @@ public sealed class DataCommandSourceTests
         var dataSource = ReadHostSourceFile("MainWindow.DataCommands.cs");
         var editingDropdownSource = ReadHostSourceFile("MainWindow.EditingDropdowns.cs");
 
-        filterSource.Should().Contain("new SortCommand(_currentSheetId, ExcludeHeaderRowForQuickSort(currentRange), sortByColOffset: 0, ascending: true)");
-        filterSource.Should().Contain("new SortCommand(_currentSheetId, ExcludeHeaderRowForQuickSort(currentRange), sortByColOffset: 0, ascending: false)");
+        filterSource.Should().Contain("currentRange => CreateQuickSortCommand(currentRange, ascending: true)");
+        filterSource.Should().Contain("currentRange => CreateQuickSortCommand(currentRange, ascending: false)");
+        filterSource.Should().Contain("QuickSortRangePlanner.Create(sheet, range, SheetGrid.ActiveCell)");
+        filterSource.Should().Contain("QuickSortRangePlanner.HasLikelyHeaderRow(sheet, range)");
+        filterSource.Should().NotContain("QuickAnalysisSelectionReader.Describe(");
         filterSource.Should().Contain("new SortDialog(");
         var filterButtonHandler = SourceMethodExtractor.ExtractMethodSource(filterSource, "private void FilterButton_Click(");
         filterButtonHandler.Should().Contain("AutoFilterToggleRangePlanner.Create(sheet, selectedRange)");
@@ -26,7 +29,7 @@ public sealed class DataCommandSourceTests
         editingDropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan(");
         editingDropdownSource.Should().Contain("AutoFilterMenuResources.TextProvider");
         filterSource.Should().Contain("_filterWorkflowSession.PlanDialogResult(");
-        filterSource.Should().Contain("FormatFilterPromptPlanError(plan.PromptError)");
+        filterSource.Should().Contain("WorksheetFilterMessagePlanner.GetPlanErrorResourceKey(plan)");
         filterSource.Should().NotContain("new FilterCommand(_currentSheetId, currentRange, filterColOffset");
         filterSource.Should().Contain("private void ClearFilterButton_Click(object sender, RoutedEventArgs e)");
         filterSource.Should().Contain("AutoFilterToggleRangePlanner.Create(sheet, selectedRange)");

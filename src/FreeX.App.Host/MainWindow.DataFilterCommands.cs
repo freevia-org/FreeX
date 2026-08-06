@@ -2,7 +2,7 @@ using System;
 using System.Windows;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.Filtering;
-using FreeX.App.Presentation.QuickAnalysis;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -32,7 +32,7 @@ public partial class MainWindow
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Sort",
                 range,
-                currentRange => new SortCommand(_currentSheetId, ExcludeHeaderRowForQuickSort(currentRange), sortByColOffset: 0, ascending: true)))
+                currentRange => CreateQuickSortCommand(currentRange, ascending: true)))
             return;
         RecalculateAfterFilterOrSort();
         UpdateViewport();
@@ -44,7 +44,7 @@ public partial class MainWindow
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Sort",
                 range,
-                currentRange => new SortCommand(_currentSheetId, ExcludeHeaderRowForQuickSort(currentRange), sortByColOffset: 0, ascending: false)))
+                currentRange => CreateQuickSortCommand(currentRange, ascending: false)))
             return;
         RecalculateAfterFilterOrSort();
         UpdateViewport();
@@ -59,22 +59,22 @@ public partial class MainWindow
     /// ask the user, so auto-detect a header row with the same heuristic Quick Analysis already uses
     /// (first row all-text, at least one data row numeric/date) and exclude it the same way.
     /// </summary>
-    private GridRange ExcludeHeaderRowForQuickSort(GridRange range)
+    private SortCommand CreateQuickSortCommand(GridRange range, bool ascending)
     {
         if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
-            return range;
+            return new SortCommand(_currentSheetId, range, sortByColOffset: 0, ascending);
 
-        var hasHeaderRow = QuickAnalysisSelectionReader.Describe(sheet, range).HasHeaderRow;
-        return SortDialog.ExcludeHeaderRow(range, hasHeaderRow);
+        var plan = QuickSortRangePlanner.Create(sheet, range, SheetGrid.ActiveCell);
+        return new SortCommand(_currentSheetId, plan.Range, plan.SortByColOffset, ascending);
     }
 
     // Auto-detects whether `range` looks like it has a header row, using the same heuristic the
-    // quick ribbon Sort Asc/Desc buttons (ExcludeHeaderRowForQuickSort, above) and Quick Analysis
-    // already use, instead of always defaulting the Custom Sort dialog's "My data has headers"
+    // quick ribbon Sort Asc/Desc buttons (CreateQuickSortCommand, above) already use, instead of
+    // always defaulting the Custom Sort dialog's "My data has headers"
     // checkbox to checked (R51-commands-sort-custom-multilevel-3-1).
     private bool DetectSortDialogHasHeaders(GridRange range) =>
         _workbook.GetSheet(_currentSheetId) is { } sheet &&
-        QuickAnalysisSelectionReader.Describe(sheet, range).HasHeaderRow;
+        QuickSortRangePlanner.HasLikelyHeaderRow(sheet, range);
 
     private void SortCustomButton_Click(object sender, RoutedEventArgs e)
     {
