@@ -459,6 +459,56 @@ public sealed class SlidePanePlannerTests
         show.IsChecked.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(FreePContextMenuCommand.NewSlide, SlidePaneActionKind.InsertAfterSlide)]
+    [InlineData(FreePContextMenuCommand.DuplicateSlide, SlidePaneActionKind.DuplicateSlide)]
+    [InlineData(FreePContextMenuCommand.DeleteSlide, SlidePaneActionKind.DeleteSlide)]
+    [InlineData(FreePContextMenuCommand.ToggleHiddenSlide, SlidePaneActionKind.ToggleHiddenSlide)]
+    public void BuildContextCommandRoute_MapsSlideCommands(
+        FreePContextMenuCommand command,
+        SlidePaneActionKind expectedKind)
+    {
+        var slides = new[] { new Slide(), new Slide() };
+
+        var route = SlidePanePlanner.BuildContextCommandRoute(
+            command,
+            slides,
+            Array.Empty<PresentationSection>(),
+            slideIndex: 0,
+            sectionIndex: -1);
+
+        route.SlideAction!.Kind.Should().Be(expectedKind);
+        route.SectionExecution.Should().BeNull();
+        route.IsEnabled.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(FreePContextMenuCommand.AddSection, SlideSectionActionKind.AddSection, true)]
+    [InlineData(FreePContextMenuCommand.RenameSection, SlideSectionActionKind.RenameSection, true)]
+    [InlineData(FreePContextMenuCommand.RemoveSection, SlideSectionActionKind.RemoveSection, false)]
+    [InlineData(FreePContextMenuCommand.RemoveAllSections, SlideSectionActionKind.RemoveAllSections, false)]
+    public void BuildContextCommandRoute_MapsSectionCommandsAndPromptState(
+        FreePContextMenuCommand command,
+        SlideSectionActionKind expectedKind,
+        bool requiresPrompt)
+    {
+        var slides = new[] { new Slide { Id = "slide-1" } };
+        var section = new PresentationSection { Name = "Intro" };
+        section.SlideIds.Add("slide-1");
+
+        var route = SlidePanePlanner.BuildContextCommandRoute(
+            command,
+            slides,
+            new[] { section },
+            slideIndex: 0,
+            sectionIndex: 0);
+
+        route.SlideAction.Should().BeNull();
+        route.SectionExecution!.Kind.Should().Be(expectedKind);
+        route.SectionExecution.RequiresNamePrompt.Should().Be(requiresPrompt);
+        route.IsEnabled.Should().BeTrue();
+    }
+
     [Fact]
     public void TryApplyAction_ToggleHidden_UsesSharedSelectionAndCommandRouting()
     {

@@ -5302,15 +5302,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private static bool TryParseAnimationColor(string value, out Color color)
     {
         color = default;
-        if (value.Length != 6
-            || !byte.TryParse(value[..2], System.Globalization.NumberStyles.HexNumber, null, out var r)
-            || !byte.TryParse(value[2..4], System.Globalization.NumberStyles.HexNumber, null, out var g)
-            || !byte.TryParse(value[4..], System.Globalization.NumberStyles.HexNumber, null, out var b))
-        {
+        if (!DrawingMlRgbColor.TryParseHexRgb(value, out var rgb))
             return false;
-        }
 
-        color = Color.FromRgb(r, g, b);
+        color = Color.FromRgb(rgb.R, rgb.G, rgb.B);
         return true;
     }
 

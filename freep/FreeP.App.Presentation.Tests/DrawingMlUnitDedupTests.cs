@@ -58,6 +58,23 @@ public sealed class DrawingMlUnitDedupTests
             .And.NotContain("9144000");
     }
 
+    [Fact]
+    public void SlideShowRenderers_UseSharedDrawingMlRgbParser()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var renderers = new[]
+        {
+            Read(root, "freep", "FreeP.App.Host", "SlideShowWindow.cs"),
+            Read(root, "freep", "FreeP.App.Avalonia", "SlideShowWindow.cs"),
+        };
+
+        foreach (var renderer in renderers)
+        {
+            renderer.Should().Contain("DrawingMlRgbColor.TryParseHexRgb")
+                .And.NotContain("NumberStyles.HexNumber");
+        }
+    }
+
     private static string Read(string root, params string[] relativeParts) =>
         File.ReadAllText(Path.Combine(new[] { root }.Concat(relativeParts).ToArray()));
 

@@ -481,44 +481,20 @@ public sealed class SlidePane : Border
         int slideIndex,
         int sectionIndex)
     {
-        if (command is FreePContextMenuCommand.NewSlide or
-            FreePContextMenuCommand.DuplicateSlide or
-            FreePContextMenuCommand.DeleteSlide or
-            FreePContextMenuCommand.ToggleHiddenSlide)
+        var route = SlidePanePlanner.BuildContextCommandRoute(
+            command,
+            _editor.Presentation.Slides,
+            _editor.Presentation.Sections,
+            slideIndex,
+            sectionIndex);
+        if (route.SlideAction is { } slideAction)
         {
-            var kind = command switch
-            {
-                FreePContextMenuCommand.NewSlide => SlidePaneActionKind.InsertAfterSlide,
-                FreePContextMenuCommand.DuplicateSlide => SlidePaneActionKind.DuplicateSlide,
-                FreePContextMenuCommand.DeleteSlide => SlidePaneActionKind.DeleteSlide,
-                _ => SlidePaneActionKind.ToggleHiddenSlide,
-            };
-            var action = kind == SlidePaneActionKind.ToggleHiddenSlide
-                ? SlidePanePlanner.BuildHiddenSlideAction(_editor.Presentation.Slides, slideIndex)
-                : SlidePanePlanner.BuildContextActions(_editor.Presentation.Slides.Count, slideIndex)
-                    .Single(candidate => candidate.Kind == kind);
-            SlidePanePlanner.TryApplyAction(_editor, action);
+            SlidePanePlanner.TryApplyAction(_editor, slideAction);
             return;
         }
 
-        var sectionActionKind = command switch
-        {
-            FreePContextMenuCommand.AddSection => SlideSectionActionKind.AddSection,
-            FreePContextMenuCommand.RenameSection => SlideSectionActionKind.RenameSection,
-            FreePContextMenuCommand.RemoveSection => SlideSectionActionKind.RemoveSection,
-            FreePContextMenuCommand.RemoveAllSections => SlideSectionActionKind.RemoveAllSections,
-            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
-        };
-        var actions = sectionActionKind == SlideSectionActionKind.AddSection
-            ? SlideSectionPlanner.BuildSlideContextActions(
-                _editor.Presentation.Slides,
-                _editor.Presentation.Sections,
-                slideIndex)
-            : SlideSectionPlanner.BuildSectionHeaderActions(
-                _editor.Presentation.Sections,
-                sectionIndex,
-                slideIndex);
-        ApplySectionAction(actions.Single(candidate => candidate.Kind == sectionActionKind));
+        if (route.SectionExecution is { } sectionExecution)
+            ApplySectionAction(sectionExecution);
     }
 
     private void ToggleSection(string sectionId)
@@ -633,9 +609,8 @@ public sealed class SlidePane : Border
         return intent != SlidePaneKeyboardIntentKind.None;
     }
 
-    private void ApplySectionAction(SlideSectionActionPlan action)
+    private void ApplySectionAction(SlideSectionActionExecutionPlan execution)
     {
-        var execution = SlideSectionPlanner.BuildExecutionPlan(action);
         if (!execution.IsEnabled)
             return;
 

@@ -216,6 +216,7 @@ public sealed partial class MainWindow : Window
     private readonly PresentationDomainContextMenuSession _domainContextMenuSession;
     private readonly PresentationNotesPaneSession _notesPaneSession;
     private readonly PresentationHyperlinkWorkflowSession _hyperlinkWorkflowSession;
+    private readonly SlideShowCustomShowSession _customShowSession;
     private Border _smartArtTextPaneHost = null!;
     private TextBlock _smartArtTextPaneHeading = null!;
     private TextBlock _smartArtTextPaneMessage = null!;
@@ -539,6 +540,7 @@ public sealed partial class MainWindow : Window
                 OpenChartOptions: OpenChartDisplayOptionsDialog));
         _notesPaneSession = new(() => Editor);
         _hyperlinkWorkflowSession = new(() => Editor);
+        _customShowSession = new(() => Editor);
 
         // File commands.
         _file = new FileCommands(
@@ -3947,22 +3949,8 @@ public sealed partial class MainWindow : Window
         FreeP.App.Compositor.SlideShowTimingIntent timingIntent,
         int? animationStartIndex = null)
     {
-        if (_presentation.Slides.Count == 0) return;
-
-        var choiceId = fromStart
-            ? SlideShowCustomShowPlanner.FullPresentationChoiceId
-            : SlideShowCustomShowPlanner.FromCurrentSlideChoiceId;
-        if (!SlideShowCustomShowPlanner.TryBuildRouteForLaunchChoice(
-                _presentation,
-                choiceId,
-                Editor.CurrentSlideIndex,
-                out var route))
-        {
+        if (!_customShowSession.TryBuildLaunchRoute(fromStart, animationStartIndex, out var route))
             return;
-        }
-
-        if (animationStartIndex is int selectedAnimationIndex)
-            route = route.WithAnimationStartIndex(selectedAnimationIndex);
 
         var selectedCaption = GetSelectedCaptionPlaybackSelection();
         var window = new SlideShowWindow(
@@ -3999,65 +3987,52 @@ public sealed partial class MainWindow : Window
         string? customShowName,
         int startIndex,
         out SlideShowPlaybackRoute route) =>
-        SlideShowCustomShowPlanner.TryBuildNamedCustomShowRoute(
-            _presentation,
-            customShowName,
-            startIndex,
-            out route);
+        _customShowSession.TryBuildNamedRoute(customShowName, startIndex, out route);
 
     internal SlideShowLaunchPlan BuildSlideShowLaunchPlan() =>
-        SlideShowCustomShowPlanner.BuildLaunchPlan(_presentation, Editor.CurrentSlideIndex);
+        _customShowSession.BuildLaunchPlan();
 
     internal SlideShowCustomShowAuthoringPlan BuildCustomShowAuthoringPlan() =>
-        SlideShowCustomShowPlanner.BuildAuthoringPlan(_presentation);
+        _customShowSession.BuildAuthoringPlan();
 
     internal SlideShowCustomShowSessionPlan BuildCustomShowSessionPlan(
         SlideShowCustomShowSessionState state) =>
-        SlideShowCustomShowSessionPlanner.BuildPlan(
-            BuildCustomShowAuthoringPlan(),
-            state);
+        _customShowSession.BuildDialogPlan(state);
 
     internal SlideShowCustomShowMutationResult ApplyCustomShowDialogMutation(
         SlideShowCustomShowDialogMutationRequest request)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        return Editor.ApplyCustomShowMutation(request.Apply);
+        return _customShowSession.ApplyMutation(request);
     }
 
     internal SlideShowCustomShowMutationResult CreateCustomShow(
         string? name,
         IEnumerable<string?> slideIds) =>
-        Editor.ApplyCustomShowMutation(presentation =>
-            SlideShowCustomShowPlanner.CreateCustomShow(presentation, name, slideIds));
+        _customShowSession.Create(name, slideIds);
 
     internal SlideShowCustomShowMutationResult RenameCustomShow(
         int customShowIndex,
         string? name) =>
-        Editor.ApplyCustomShowMutation(presentation =>
-            SlideShowCustomShowPlanner.RenameCustomShow(presentation, customShowIndex, name));
+        _customShowSession.Rename(customShowIndex, name);
 
     internal SlideShowCustomShowMutationResult DeleteCustomShow(int customShowIndex) =>
-        Editor.ApplyCustomShowMutation(presentation =>
-            SlideShowCustomShowPlanner.DeleteCustomShow(presentation, customShowIndex));
+        _customShowSession.Delete(customShowIndex);
 
     internal SlideShowCustomShowMutationResult UpdateCustomShowSlides(
         int customShowIndex,
         IEnumerable<string?> slideIds) =>
-        Editor.ApplyCustomShowMutation(presentation =>
-            SlideShowCustomShowPlanner.UpdateCustomShowSlides(presentation, customShowIndex, slideIds));
+        _customShowSession.UpdateSlides(customShowIndex, slideIds);
 
     internal SlideShowCustomShowMutationResult MoveCustomShowSlide(
         int customShowIndex,
         int sourceSlideIndex,
         string? sourceSlideId,
         int targetSlideIndex) =>
-        Editor.ApplyCustomShowMutation(presentation =>
-            SlideShowCustomShowPlanner.MoveCustomShowSlide(
-                presentation,
-                customShowIndex,
-                sourceSlideIndex,
-                sourceSlideId,
-                targetSlideIndex));
+        _customShowSession.MoveSlide(
+            customShowIndex,
+            sourceSlideIndex,
+            sourceSlideId,
+            targetSlideIndex);
 
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
     {

@@ -251,6 +251,7 @@ public sealed partial class MainWindow : Window
     private readonly PresentationNotesPaneSession _notesPaneSession;
     private readonly PresentationHyperlinkWorkflowSession _hyperlinkWorkflowSession;
     private readonly AnimationPaneSession _animationPaneSession;
+    private readonly SlideShowCustomShowSession _customShowSession;
     private Border _smartArtTextPaneHost = null!;
     private TextBlock _smartArtTextPaneHeading = null!;
     private TextBlock _smartArtTextPaneMessage = null!;
@@ -892,6 +893,7 @@ public sealed partial class MainWindow : Window
         _notesPaneSession = new(() => Editor);
         _hyperlinkWorkflowSession = new(() => Editor);
         _animationPaneSession = new(() => Editor);
+        _customShowSession = new(() => Editor);
 
         _applicationFrameSession = new PresentationApplicationFrameSession(
             new PresentationApplicationFrameCallbacks
@@ -7981,45 +7983,24 @@ public sealed partial class MainWindow : Window
         int slideIndex,
         int sectionIndex)
     {
-        if (command is FreePContextMenuCommand.NewSlide or
-            FreePContextMenuCommand.DuplicateSlide or
-            FreePContextMenuCommand.DeleteSlide or
-            FreePContextMenuCommand.ToggleHiddenSlide)
+        var route = SlidePanePlanner.BuildContextCommandRoute(
+            command,
+            _presentation.Slides,
+            _presentation.Sections,
+            slideIndex,
+            sectionIndex);
+        if (route.SlideAction is { } slideAction)
         {
-            var kind = command switch
-            {
-                FreePContextMenuCommand.NewSlide => SlidePaneActionKind.InsertAfterSlide,
-                FreePContextMenuCommand.DuplicateSlide => SlidePaneActionKind.DuplicateSlide,
-                FreePContextMenuCommand.DeleteSlide => SlidePaneActionKind.DeleteSlide,
-                _ => SlidePaneActionKind.ToggleHiddenSlide,
-            };
-            TryApplySlidePaneContextAction(slideIndex, kind);
+            SlidePanePlanner.TryApplyAction(Editor, slideAction);
             return;
         }
 
-        var sectionActionKind = command switch
-        {
-            FreePContextMenuCommand.AddSection => SlideSectionActionKind.AddSection,
-            FreePContextMenuCommand.RenameSection => SlideSectionActionKind.RenameSection,
-            FreePContextMenuCommand.RemoveSection => SlideSectionActionKind.RemoveSection,
-            FreePContextMenuCommand.RemoveAllSections => SlideSectionActionKind.RemoveAllSections,
-            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
-        };
-        var actions = sectionActionKind == SlideSectionActionKind.AddSection
-            ? SlideSectionPlanner.BuildSlideContextActions(
-                _presentation.Slides,
-                _presentation.Sections,
-                slideIndex)
-            : SlideSectionPlanner.BuildSectionHeaderActions(
-                _presentation.Sections,
-                sectionIndex,
-                slideIndex);
-        await ApplySlideSectionActionAsync(actions.Single(candidate => candidate.Kind == sectionActionKind));
+        if (route.SectionExecution is { } sectionExecution)
+            await ApplySlideSectionActionAsync(sectionExecution);
     }
 
-    private async Task ApplySlideSectionActionAsync(SlideSectionActionPlan action)
+    private async Task ApplySlideSectionActionAsync(SlideSectionActionExecutionPlan execution)
     {
-        var execution = SlideSectionPlanner.BuildExecutionPlan(action);
         if (!execution.IsEnabled)
             return;
 
@@ -9201,23 +9182,8 @@ public sealed partial class MainWindow : Window
         FreeP.App.Compositor.SlideShowTimingIntent timingIntent,
         int? animationStartIndex = null)
     {
-        if (_presentation.Slides.Count == 0)
-            return; // nothing to show
-
-        var choiceId = fromStart
-            ? SlideShowCustomShowPlanner.FullPresentationChoiceId
-            : SlideShowCustomShowPlanner.FromCurrentSlideChoiceId;
-        if (!SlideShowCustomShowPlanner.TryBuildRouteForLaunchChoice(
-                _presentation,
-                choiceId,
-                Editor.CurrentSlideIndex,
-                out var route))
-        {
+        if (!_customShowSession.TryBuildLaunchRoute(fromStart, animationStartIndex, out var route))
             return;
-        }
-
-        if (animationStartIndex is int selectedAnimationIndex)
-            route = route.WithAnimationStartIndex(selectedAnimationIndex);
 
         var selectedCaption = GetSelectedCaptionPlaybackSelection();
         var slideShow = new SlideShowWindow(
@@ -9257,65 +9223,52 @@ public sealed partial class MainWindow : Window
         string? customShowName,
         int startIndex,
         out SlideShowPlaybackRoute route) =>
-        SlideShowCustomShowPlanner.TryBuildNamedCustomShowRoute(
-            _presentation,
-            customShowName,
-            startIndex,
-            out route);
+        _customShowSession.TryBuildNamedRoute(customShowName, startIndex, out route);
 
     internal SlideShowLaunchPlan BuildSlideShowLaunchPlan() =>
-        SlideShowCustomShowPlanner.BuildLaunchPlan(_presentation, Editor.CurrentSlideIndex);
+        _customShowSession.BuildLaunchPlan();
 
     internal SlideShowCustomShowAuthoringPlan BuildCustomShowAuthoringPlan() =>
-        SlideShowCustomShowPlanner.BuildAuthoringPlan(_presentation);
+        _customShowSession.BuildAuthoringPlan();
 
     internal SlideShowCustomShowSessionPlan BuildCustomShowSessionPlan(
         SlideShowCustomShowSessionState state) =>
-        SlideShowCustomShowSessionPlanner.BuildPlan(
-            BuildCustomShowAuthoringPlan(),
-            state);
+        _customShowSession.BuildDialogPlan(state);
 
     internal SlideShowCustomShowMutationResult ApplyCustomShowDialogMutation(
         SlideShowCustomShowDialogMutationRequest request)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        return Editor.ApplyCustomShowMutation(request.Apply);
+        return _customShowSession.ApplyMutation(request);
     }
 
     internal SlideShowCustomShowMutationResult CreateCustomShow(
         string? name,
         IEnumerable<string?> slideIds) =>
-        Editor.ApplyCustomShowMutation(presentation =>
-            SlideShowCustomShowPlanner.CreateCustomShow(presentation, name, slideIds));
+        _customShowSession.Create(name, slideIds);
 
     internal SlideShowCustomShowMutationResult RenameCustomShow(
         int customShowIndex,
         string? name) =>
-        Editor.ApplyCustomShowMutation(presentation =>
-            SlideShowCustomShowPlanner.RenameCustomShow(presentation, customShowIndex, name));
+        _customShowSession.Rename(customShowIndex, name);
 
     internal SlideShowCustomShowMutationResult DeleteCustomShow(int customShowIndex) =>
-        Editor.ApplyCustomShowMutation(presentation =>
-            SlideShowCustomShowPlanner.DeleteCustomShow(presentation, customShowIndex));
+        _customShowSession.Delete(customShowIndex);
 
     internal SlideShowCustomShowMutationResult UpdateCustomShowSlides(
         int customShowIndex,
         IEnumerable<string?> slideIds) =>
-        Editor.ApplyCustomShowMutation(presentation =>
-            SlideShowCustomShowPlanner.UpdateCustomShowSlides(presentation, customShowIndex, slideIds));
+        _customShowSession.UpdateSlides(customShowIndex, slideIds);
 
     internal SlideShowCustomShowMutationResult MoveCustomShowSlide(
         int customShowIndex,
         int sourceSlideIndex,
         string? sourceSlideId,
         int targetSlideIndex) =>
-        Editor.ApplyCustomShowMutation(presentation =>
-            SlideShowCustomShowPlanner.MoveCustomShowSlide(
-                presentation,
-                customShowIndex,
-                sourceSlideIndex,
-                sourceSlideId,
-                targetSlideIndex));
+        _customShowSession.MoveSlide(
+            customShowIndex,
+            sourceSlideIndex,
+            sourceSlideId,
+            targetSlideIndex);
 
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
     {

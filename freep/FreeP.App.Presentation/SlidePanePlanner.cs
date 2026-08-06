@@ -161,6 +161,14 @@ public sealed record SlidePaneActionPlan(
     bool IsEnabled,
     bool IsChecked = false);
 
+public sealed record SlidePaneContextCommandRoutePlan(
+    FreePContextMenuCommand Command,
+    SlidePaneActionPlan? SlideAction,
+    SlideSectionActionExecutionPlan? SectionExecution)
+{
+    public bool IsEnabled => SlideAction?.IsEnabled == true || SectionExecution?.IsEnabled == true;
+}
+
 public static class SlidePanePlanner
 {
     public const string NewSlideButtonText = "+ New Slide";
@@ -415,6 +423,52 @@ public static class SlidePanePlanner
             slideIndex,
             isValid,
             isHidden);
+    }
+
+    public static SlidePaneContextCommandRoutePlan BuildContextCommandRoute(
+        FreePContextMenuCommand command,
+        IReadOnlyList<Slide> slides,
+        IReadOnlyList<PresentationSection> sections,
+        int slideIndex,
+        int sectionIndex)
+    {
+        ArgumentNullException.ThrowIfNull(slides);
+        ArgumentNullException.ThrowIfNull(sections);
+
+        SlidePaneActionPlan SlideAction(SlidePaneActionKind kind) =>
+            kind == SlidePaneActionKind.ToggleHiddenSlide
+                ? BuildHiddenSlideAction(slides, slideIndex)
+                : BuildContextActions(slides.Count, slideIndex)
+                    .Single(action => action.Kind == kind);
+
+        SlideSectionActionExecutionPlan SectionAction(SlideSectionActionKind kind)
+        {
+            var action = kind == SlideSectionActionKind.AddSection
+                ? SlideSectionPlanner.BuildSlideContextActions(slides, sections, slideIndex)
+                    .Single(candidate => candidate.Kind == kind)
+                : SlideSectionPlanner.BuildSectionHeaderActions(sections, sectionIndex, slideIndex)
+                    .Single(candidate => candidate.Kind == kind);
+            return SlideSectionPlanner.BuildExecutionPlan(action);
+        }
+
+        return command switch
+        {
+            FreePContextMenuCommand.NewSlide => SlideRoute(SlidePaneActionKind.InsertAfterSlide),
+            FreePContextMenuCommand.DuplicateSlide => SlideRoute(SlidePaneActionKind.DuplicateSlide),
+            FreePContextMenuCommand.DeleteSlide => SlideRoute(SlidePaneActionKind.DeleteSlide),
+            FreePContextMenuCommand.ToggleHiddenSlide => SlideRoute(SlidePaneActionKind.ToggleHiddenSlide),
+            FreePContextMenuCommand.AddSection => SectionRoute(SlideSectionActionKind.AddSection),
+            FreePContextMenuCommand.RenameSection => SectionRoute(SlideSectionActionKind.RenameSection),
+            FreePContextMenuCommand.RemoveSection => SectionRoute(SlideSectionActionKind.RemoveSection),
+            FreePContextMenuCommand.RemoveAllSections => SectionRoute(SlideSectionActionKind.RemoveAllSections),
+            _ => new SlidePaneContextCommandRoutePlan(command, null, null),
+        };
+
+        SlidePaneContextCommandRoutePlan SlideRoute(SlidePaneActionKind kind) =>
+            new(command, SlideAction(kind), null);
+
+        SlidePaneContextCommandRoutePlan SectionRoute(SlideSectionActionKind kind) =>
+            new(command, null, SectionAction(kind));
     }
 
     public static SlidePaneBottomAffordancePlan BuildBottomNewSlideAffordance(
