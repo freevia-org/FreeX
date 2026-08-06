@@ -348,6 +348,10 @@ internal static class PptxAnimationMap
                 // while using the closest existing visibility playback contract.
                 26 => AnimationPreset.Blink,
                 27 => AnimationPreset.Blink,
+                // PowerPoint ColorWave is not modeled as a separate authoring
+                // preset; retain its raw ID while using the existing color pulse
+                // playback contract until wave-specific color timing is modeled.
+                20 => AnimationPreset.ColorPulse,
                 _  => AnimationPreset.Pulse
             };
             return (kind, emphPreset);
