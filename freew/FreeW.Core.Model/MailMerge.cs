@@ -1943,7 +1943,7 @@ public static class MailMerge
             if (!TryGetMergeFieldName(run.ComplexField, out var fieldName))
                 return false;
 
-            run.Text = Lookup(row, fieldName);
+            run.Text = ResolveMergeFieldResult(run.ComplexField!, fieldName, row);
             run.ComplexField = null;
             return true;
         }
@@ -1973,7 +1973,7 @@ public static class MailMerge
             switch (run.ComplexField?.Keyword)
             {
                 case "MERGEFIELD" when TryGetMergeFieldName(run.ComplexField, out var fieldName):
-                    run.Text = Lookup(row, fieldName);
+                    run.Text = ResolveMergeFieldResult(run.ComplexField!, fieldName, row);
                     run.ComplexField = null;
                     return true;
                 case NextRecordInstruction:
@@ -1990,6 +1990,20 @@ public static class MailMerge
                     return false;
             }
         }
+    }
+
+    private static string ResolveMergeFieldResult(
+        ComplexField field,
+        string fieldName,
+        IReadOnlyDictionary<string, string> row)
+    {
+        var value = Lookup(row, fieldName);
+        if (value.Length == 0)
+            return string.Empty;
+
+        var before = ComplexFieldEngine.SwitchValue(field.Instruction, 'b') ?? string.Empty;
+        var after = ComplexFieldEngine.SwitchValue(field.Instruction, 'f') ?? string.Empty;
+        return before + value + after;
     }
 
     private static void TransformBlockText(

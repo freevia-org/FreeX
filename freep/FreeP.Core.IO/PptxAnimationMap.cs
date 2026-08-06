@@ -68,6 +68,7 @@ namespace FreeP.Core.IO;
 /// GrowWithColor   | emph        | 12
 /// ChangeColor     | emph        | 7
 /// Shimmer         | emph        | 36
+/// ChangeFontColor | emph        | 3   (uses the ChangeColor playback contract)
 ///
 /// Exit effects share the same presetIDs as Entrance (presetClass = "exit").
 /// </summary>
@@ -338,6 +339,10 @@ internal static class PptxAnimationMap
                 5  => AnimationPreset.Grow,
                 6  => AnimationPreset.ColorPulse,
                 7  => AnimationPreset.ChangeColor,
+                // PowerPoint ChangeFontColor emits the same animClr payload shape
+                // as other color emphasis effects. Preserve its raw ID while
+                // using the existing color-emphasis playback contract.
+                3  => AnimationPreset.ChangeColor,
                 36 => AnimationPreset.Shimmer,
                 12 => AnimationPreset.GrowWithColor,
                 34 => AnimationPreset.Wave,
