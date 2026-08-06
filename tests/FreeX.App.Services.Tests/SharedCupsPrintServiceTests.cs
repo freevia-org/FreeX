@@ -56,6 +56,125 @@ public sealed class SharedCupsPrintServiceTests
     }
 
     [Fact]
+    public void DialogSession_InitializesRendererStateFromTheSharedPlan()
+    {
+        var session = PrintDialogSession.Start(
+            new PrinterDiscoveryResult(
+                PrinterDiscoveryStatus.Available,
+                [new PrinterInfo("Office", true), new PrinterInfo("PDF")],
+                "Office"),
+            new PrintSelection(
+                "PDF",
+                3,
+                PrintPageRange.Between(2, 4),
+                PrintOrientation.Landscape,
+                Collate: false));
+
+        session.State.PrinterNames.Should().Equal("Office", "PDF");
+        session.State.SelectedPrinterIndex.Should().Be(1);
+        session.State.CopiesText.Should().Be("3");
+        session.State.PageRangeIndex.Should().Be((int)PrintPageRangeKind.Range);
+        session.State.FirstPageText.Should().Be("2");
+        session.State.LastPageText.Should().Be("4");
+        session.State.OrientationIndex.Should().Be((int)PrintOrientation.Landscape);
+        session.State.Collate.Should().BeFalse();
+        session.State.CanSubmit.Should().BeTrue();
+        session.State.StatusMessage(PrintDialogText.DefaultEnglish)
+            .Should().Be("Choose the printer and print settings.");
+    }
+
+    [Theory]
+    [InlineData(0, false, false)]
+    [InlineData(1, true, false)]
+    [InlineData(2, true, true)]
+    public void DialogSession_ProjectsPageRangeVisibility(
+        int selectedIndex,
+        bool showFirstPage,
+        bool showLastPage)
+    {
+        var visibility = PrintDialogSession.RangeVisibility(selectedIndex);
+
+        visibility.ShowFirstPage.Should().Be(showFirstPage);
+        visibility.ShowLastPage.Should().Be(showLastPage);
+    }
+
+    [Theory]
+    [InlineData("0", 0, "1", "1", PrintDialogValidationIssue.CopiesOutOfRange)]
+    [InlineData("1000", 0, "1", "1", PrintDialogValidationIssue.CopiesOutOfRange)]
+    [InlineData("1", 1, "0", "1", PrintDialogValidationIssue.FirstPageInvalid)]
+    [InlineData("1", 2, "3", "2", PrintDialogValidationIssue.LastPageBeforeFirstPage)]
+    public void DialogSession_ClassifiesInvalidRendererInput(
+        string copies,
+        int pageRangeIndex,
+        string firstPage,
+        string lastPage,
+        PrintDialogValidationIssue expectedIssue)
+    {
+        var session = ReadyDialogSession();
+
+        var submission = session.Submit(
+            "Office",
+            copies,
+            pageRangeIndex,
+            firstPage,
+            lastPage,
+            (int)PrintOrientation.Document,
+            collate: true);
+
+        submission.Succeeded.Should().BeFalse();
+        submission.Selection.Should().BeNull();
+        submission.ValidationIssue.Should().Be(expectedIssue);
+        PrintDialogText.DefaultEnglish.ValidationMessage(expectedIssue).Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Theory]
+    [InlineData(0, "9", "3", PrintPageRangeKind.All)]
+    [InlineData(1, "9", "3", PrintPageRangeKind.Single)]
+    [InlineData(2, "3", "9", PrintPageRangeKind.Range)]
+    public void DialogSession_CreatesSelectionForEveryPageRangeMode(
+        int pageRangeIndex,
+        string firstPage,
+        string lastPage,
+        PrintPageRangeKind expectedKind)
+    {
+        var submission = ReadyDialogSession().Submit(
+            "Office",
+            "2",
+            pageRangeIndex,
+            firstPage,
+            lastPage,
+            (int)PrintOrientation.Landscape,
+            collate: false);
+
+        submission.Succeeded.Should().BeTrue();
+        submission.ValidationIssue.Should().Be(PrintDialogValidationIssue.None);
+        submission.Selection.Should().BeEquivalentTo(new PrintSelection(
+            "Office",
+            2,
+            expectedKind switch
+            {
+                PrintPageRangeKind.All => PrintPageRange.All,
+                PrintPageRangeKind.Single => PrintPageRange.Single(9),
+                _ => PrintPageRange.Between(3, 9),
+            },
+            PrintOrientation.Landscape,
+            Collate: false));
+    }
+
+    [Fact]
+    public void DialogSession_PreservesDiscoveryStatusMessage()
+    {
+        var session = PrintDialogSession.Start(new PrinterDiscoveryResult(
+            PrinterDiscoveryStatus.Unavailable,
+            [],
+            null,
+            "CUPS is unavailable."));
+
+        session.State.CanSubmit.Should().BeFalse();
+        session.State.StatusMessage(PrintDialogText.DefaultEnglish).Should().Be("CUPS is unavailable.");
+    }
+
+    [Fact]
     public void PrintSelection_RejectsInvalidCopiesAndRanges()
     {
         var copies = () => new PrintSelection(Copies: 0).Validate();
@@ -238,6 +357,12 @@ public sealed class SharedCupsPrintServiceTests
         new ProcessResult(0, "printer Office is idle.\n", ""),
         new ProcessResult(0, "system default destination: Office\n", ""),
         new ProcessResult(0, "request id is Office-17 (1 file(s))\n", ""));
+
+    private static PrintDialogSession ReadyDialogSession() => PrintDialogSession.Start(
+        new PrinterDiscoveryResult(
+            PrinterDiscoveryStatus.Available,
+            [new PrinterInfo("Office", true)],
+            "Office"));
 
     private static async Task<string> CreatePdfStubAsync()
     {
