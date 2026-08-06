@@ -585,7 +585,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
             PumpDispatcher();
         }
 
-        public static MainWindowHarness Create(FreeXOptions? options = null)
+        public static MainWindowHarness Create(AppOptions? options = null)
         {
             var workbook = new Workbook("Book1");
             workbook.AddSheet("Sheet1");

@@ -75,7 +75,7 @@ public partial class MainWindow
                         _options.SpellCheckCustomDictionaryWords,
                         customDictionary,
                         issue.Word))
-                    _options.Save();
+                    AppOptionsStore.Save(_options);
 
                 continue;
             }

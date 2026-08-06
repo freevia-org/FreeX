@@ -30,6 +30,8 @@ public sealed class MiscWorkflowPlannerDedupSourceTests
     [Fact]
     public void RemainingHostWorkflowPlannerFiles_AreDocumentedAdapters()
     {
+        var hostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
+
         DialogSourceTestSupport.ReadHostSources("LocalAccountPlanner.cs")
             .Should()
             .Contain("Host adapter");
@@ -42,8 +44,11 @@ public sealed class MiscWorkflowPlannerDedupSourceTests
             .NotContain("\"Local OS account\"")
             .And
             .NotContain("\"Options file\"");
-        DialogSourceTestSupport.ReadHostSources("CrashAnalyticsConsentPlanner.cs")
+        File.Exists(Path.Combine(hostDirectory, "CrashAnalyticsConsentPlanner.cs"))
             .Should()
-            .Contain("Host adapter");
+            .BeFalse();
+        DialogSourceTestSupport.ReadHostSources("App.xaml.cs")
+            .Should()
+            .Contain("CrashAnalyticsConsentWorkflowPlanner.ShouldPrompt(");
     }
 }

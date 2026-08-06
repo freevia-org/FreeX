@@ -239,7 +239,7 @@ public sealed class FreeXCleanupB2RightToLeftTests
                 workbookRef,
                 workbook,
                 NullUserMessageService.Instance,
-                options: new FreeXOptions())
+                options: new AppOptions())
             {
                 WindowState = WindowState.Normal,
                 Width = 1280,

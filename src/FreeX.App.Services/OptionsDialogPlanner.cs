@@ -13,7 +13,7 @@ namespace FreeX.App.Services;
 /// <see cref="AppOptions.AutoCalculate"/>, how the default-format picker index maps to the format string,
 /// which fields the dialog does NOT edit and must therefore be carried over verbatim) in one shared place,
 /// so the Avalonia view is pure UI and macOS inherits identical behaviour. The numeric validation mirrors
-/// the host's <c>OptionsInputParser</c>; the projection reuses the <see cref="AppOptions"/> normalizers.
+/// the shared parser entry points below; the projection reuses the <see cref="AppOptions"/> normalizers.
 /// </para>
 /// </summary>
 public static class OptionsDialogPlanner

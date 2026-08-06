@@ -5,9 +5,9 @@ namespace FreeX.App.Host;
 
 internal static class NewWorkbookFactory
 {
-    public static Workbook Create(FreeXOptions options) => Create(options, name: null);
+    public static Workbook Create(AppOptions options) => Create(options, name: null);
 
-    public static Workbook Create(FreeXOptions options, string? name)
+    public static Workbook Create(AppOptions options, string? name)
     {
         ArgumentNullException.ThrowIfNull(options);
 

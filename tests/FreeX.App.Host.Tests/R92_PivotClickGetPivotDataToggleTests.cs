@@ -19,7 +19,7 @@ public sealed class R92_PivotClickGetPivotDataToggleTests
         StaTestRunner.Run(() =>
         {
             using var harness = MainWindowFormulaBarSyncTests.MainWindowHarness.Create(
-                new FreeXOptions { GenerateGetPivotData = true });
+                new AppOptions { GenerateGetPivotData = true });
 
             SetUpRowPivot(harness);
 
@@ -44,7 +44,7 @@ public sealed class R92_PivotClickGetPivotDataToggleTests
         StaTestRunner.Run(() =>
         {
             using var harness = MainWindowFormulaBarSyncTests.MainWindowHarness.Create(
-                new FreeXOptions { GenerateGetPivotData = false });
+                new AppOptions { GenerateGetPivotData = false });
 
             SetUpRowPivot(harness);
 
@@ -75,7 +75,7 @@ public sealed class R92_PivotClickGetPivotDataToggleTests
         StaTestRunner.Run(() =>
         {
             using var harness = MainWindowFormulaBarSyncTests.MainWindowHarness.Create(
-                new FreeXOptions { GenerateGetPivotData = true });
+                new AppOptions { GenerateGetPivotData = true });
 
             SetUpRowPivot(harness);
 

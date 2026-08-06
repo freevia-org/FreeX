@@ -72,7 +72,7 @@ public partial class MainWindow
 
     private void SheetGrid_MouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
     {
-        int notches = ViewportScrollCalculator.NormalizeWheelNotches(e.Delta);
+        int notches = WorkbookViewportScrollPlanner.NormalizeWheelNotches(e.Delta);
         var horizontal = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
         if (SheetGrid.Viewport is { } wheelViewport)
         {
@@ -198,7 +198,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (request.HorizontalDirection != 0)
         {
-            var (maximum, value) = ViewportScrollCalculator.CalculateDragAutoScroll(
+            var (maximum, value) = WorkbookViewportScrollPlanner.CalculateDragAutoScroll(
                 HorizontalScroll.Value,
                 HorizontalScroll.Maximum,
                 request.HorizontalDirection,
@@ -211,7 +211,7 @@ public partial class MainWindow
 
         if (request.VerticalDirection != 0)
         {
-            var (maximum, value) = ViewportScrollCalculator.CalculateDragAutoScroll(
+            var (maximum, value) = WorkbookViewportScrollPlanner.CalculateDragAutoScroll(
                 VerticalScroll.Value,
                 VerticalScroll.Maximum,
                 request.VerticalDirection,
@@ -272,7 +272,7 @@ public partial class MainWindow
         if (vp == null) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
 
-        var plan = ViewportScrollCalculator.PlanCellReveal(
+        var plan = WorkbookViewportScrollPlanner.PlanCellReveal(
             vp,
             sheet,
             addr,
@@ -447,7 +447,7 @@ public partial class MainWindow
         double horizontalScrollValue)
     {
         var viewState = GetEffectiveViewState(sheet);
-        return ViewportScrollCalculator.CalculateViewportOrigin(
+        return WorkbookViewportScrollPlanner.CalculateViewportOrigin(
             viewState.FrozenRows,
             viewState.FrozenCols,
             verticalScrollValue,
@@ -541,11 +541,11 @@ public partial class MainWindow
                 .ToHashSet();
         SheetGrid.ObjectDisplayMode = _options.ObjectsDisplay switch
         {
-            FreeXObjectDisplay.Placeholders => FreeX.App.UI.GridObjectDisplayMode.Placeholders,
-            FreeXObjectDisplay.Nothing => FreeX.App.UI.GridObjectDisplayMode.Nothing,
+            AppOptionsObjectDisplay.Placeholders => FreeX.App.UI.GridObjectDisplayMode.Placeholders,
+            AppOptionsObjectDisplay.Nothing => FreeX.App.UI.GridObjectDisplayMode.Nothing,
             _ => FreeX.App.UI.GridObjectDisplayMode.All
         };
-        var keepObjectData = _options.ObjectsDisplay != FreeXObjectDisplay.Nothing;
+        var keepObjectData = _options.ObjectsDisplay != AppOptionsObjectDisplay.Nothing;
         SheetGrid.Charts = keepObjectData ? sheet?.Charts : null;
         SheetGrid.TextBoxes = keepObjectData ? sheet?.TextBoxes : null;
         SheetGrid.DrawingShapes = keepObjectData ? sheet?.DrawingShapes : null;
@@ -927,7 +927,7 @@ public partial class MainWindow
             LeftCol: leftCol,
             AvailableHeight: (SheetGrid.ActualHeight - SheetGrid.EffectiveColHeaderHeight) / _zoomLevel,
             AvailableWidth: CalculateViewportAvailableWidth(SheetGrid.ActualWidth, rowHeaderWidth, _zoomLevel),
-            IncludeObjects: _options.ObjectsDisplay == FreeXObjectDisplay.All,
+            IncludeObjects: _options.ObjectsDisplay == AppOptionsObjectDisplay.All,
             SplitPaneOffsets: GetSplitPaneViewportOffsets(viewState, topRow, leftCol),
             FrozenRowsOverride: viewState.FrozenRows,
             FrozenColsOverride: viewState.FrozenCols,
@@ -1028,50 +1028,50 @@ public partial class MainWindow
         Sheet? sheet,
         double verticalScrollValue,
         double horizontalScrollValue) =>
-        ViewportScrollCalculator.CalculateViewportOrigin(sheet, verticalScrollValue, horizontalScrollValue);
+        WorkbookViewportScrollPlanner.CalculateViewportOrigin(sheet, verticalScrollValue, horizontalScrollValue);
 
     public static uint ScrollbarValueToWorksheetIndex(
         double scrollbarValue,
         uint frozenCount,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.ScrollbarValueToWorksheetIndex(scrollbarValue, frozenCount, absoluteLimit);
+        WorkbookViewportScrollPlanner.ScrollbarValueToWorksheetIndex(scrollbarValue, frozenCount, absoluteLimit);
 
     public static uint WorksheetIndexToScrollbarValue(
         uint worksheetIndex,
         uint frozenCount) =>
-        ViewportScrollCalculator.WorksheetIndexToScrollbarValue(worksheetIndex, frozenCount);
+        WorkbookViewportScrollPlanner.WorksheetIndexToScrollbarValue(worksheetIndex, frozenCount);
 
     public static uint CalculateScrollableLimit(uint absoluteLimit, uint frozenCount)
-        => ViewportScrollCalculator.CalculateScrollableLimit(absoluteLimit, frozenCount);
+        => WorkbookViewportScrollPlanner.CalculateScrollableLimit(absoluteLimit, frozenCount);
 
     // R89-freeze-split-per-window-1: resolves against THIS window's effective Freeze Panes
     // count (GetEffectiveViewState), not the shared Sheet.FrozenRows/FrozenCols a sibling
     // "New Window" may have changed -- mirrors the ShowGridlines/ShowHeadings/ShowRulers
     // per-window pattern above (R87-order-guard-window-state-sweep-1). The plain
-    // Sheet-based ViewportScrollCalculator.GetScrollableRowLimit/GetScrollableColumnLimit
+    // Sheet-based WorkbookViewportScrollPlanner.GetScrollableRowLimit/GetScrollableColumnLimit
     // overloads are left untouched (ViewportOriginTests/ViewportScrollCalculatorTests still
     // exercise those directly against a bare Sheet).
     private uint GetScrollableRowLimit(Sheet? sheet) =>
-        ViewportScrollCalculator.GetScrollableRowLimit(GetEffectiveViewState(sheet).FrozenRows);
+        WorkbookViewportScrollPlanner.GetScrollableRowLimit(GetEffectiveViewState(sheet).FrozenRows);
 
     private uint GetScrollableColumnLimit(Sheet? sheet) =>
-        ViewportScrollCalculator.GetScrollableColumnLimit(GetEffectiveViewState(sheet).FrozenCols);
+        WorkbookViewportScrollPlanner.GetScrollableColumnLimit(GetEffectiveViewState(sheet).FrozenCols);
 
     public static uint ClampViewportOrigin(double rawValue, uint absoluteLimit, uint visibleSpan)
-        => ViewportScrollCalculator.ClampViewportOrigin(rawValue, absoluteLimit, visibleSpan);
+        => WorkbookViewportScrollPlanner.ClampViewportOrigin(rawValue, absoluteLimit, visibleSpan);
 
     public static double CalculateViewportAvailableWidth(
         double gridWidth,
         double rowHeaderWidth,
         double zoomLevel) =>
-        ViewportScrollCalculator.CalculateViewportAvailableWidth(gridWidth, rowHeaderWidth, zoomLevel);
+        WorkbookViewportScrollPlanner.CalculateViewportAvailableWidth(gridWidth, rowHeaderWidth, zoomLevel);
 
     public static uint CalculateOpenedWorksheetScrollValue(
         uint? savedTopLeftIndex,
         uint fallbackIndex,
         uint absoluteLimit,
         uint frozenCount = 0) =>
-        ViewportScrollCalculator.CalculateOpenedWorksheetScrollValue(
+        WorkbookViewportScrollPlanner.CalculateOpenedWorksheetScrollValue(
             savedTopLeftIndex,
             fallbackIndex,
             absoluteLimit,
@@ -1082,7 +1082,7 @@ public partial class MainWindow
         uint firstVisibleIndex,
         uint lastVisibleIndex,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.CalculateScrollValueToRevealCell(
+        WorkbookViewportScrollPlanner.CalculateScrollValueToRevealCell(
             targetIndex,
             firstVisibleIndex,
             lastVisibleIndex,
@@ -1094,7 +1094,7 @@ public partial class MainWindow
         uint lastVisibleIndex,
         uint absoluteLimit,
         uint visibleSpan) =>
-        ViewportScrollCalculator.CalculateScrollValueToRevealCell(
+        WorkbookViewportScrollPlanner.CalculateScrollValueToRevealCell(
             targetIndex,
             firstVisibleIndex,
             lastVisibleIndex,
@@ -1105,13 +1105,13 @@ public partial class MainWindow
         uint targetIndex,
         uint firstVisibleIndex,
         uint lastVisibleIndex) =>
-        ViewportScrollCalculator.CalculateScrollValueToRevealCell(targetIndex, firstVisibleIndex, lastVisibleIndex);
+        WorkbookViewportScrollPlanner.CalculateScrollValueToRevealCell(targetIndex, firstVisibleIndex, lastVisibleIndex);
 
     public static double CalculateScrollbarMaximumForKeyboardReveal(
         double currentMaximum,
         uint desiredScrollValue,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.CalculateScrollbarMaximumForKeyboardReveal(
+        WorkbookViewportScrollPlanner.CalculateScrollbarMaximumForKeyboardReveal(
             currentMaximum,
             desiredScrollValue,
             absoluteLimit);
@@ -1119,14 +1119,14 @@ public partial class MainWindow
     public static double CalculateScrollbarMaximumForKeyboardReveal(
         double currentMaximum,
         uint desiredScrollValue) =>
-        ViewportScrollCalculator.CalculateScrollbarMaximumForKeyboardReveal(currentMaximum, desiredScrollValue);
+        WorkbookViewportScrollPlanner.CalculateScrollbarMaximumForKeyboardReveal(currentMaximum, desiredScrollValue);
 
     public static (double Maximum, double Value) CalculateScrollbarArrowSmallIncrement(
         double currentValue,
         double currentMaximum,
         double smallChange,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.CalculateScrollbarArrowSmallIncrement(
+        WorkbookViewportScrollPlanner.CalculateScrollbarArrowSmallIncrement(
             currentValue,
             currentMaximum,
             smallChange,
@@ -1138,7 +1138,7 @@ public partial class MainWindow
         double smallChange,
         double visibleSpan,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.CalculateScrollbarArrowSmallIncrement(
+        WorkbookViewportScrollPlanner.CalculateScrollbarArrowSmallIncrement(
             currentValue,
             currentMaximum,
             smallChange,
@@ -1152,7 +1152,7 @@ public partial class MainWindow
         double stepPerNotch,
         double visibleSpan,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.CalculateWheelScroll(
+        WorkbookViewportScrollPlanner.CalculateWheelScroll(
             currentValue,
             currentMaximum,
             wheelNotches,
@@ -1167,7 +1167,7 @@ public partial class MainWindow
         double step,
         double visibleSpan,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.CalculateDragAutoScroll(
+        WorkbookViewportScrollPlanner.CalculateDragAutoScroll(
             currentValue,
             currentMaximum,
             direction,
@@ -1176,14 +1176,14 @@ public partial class MainWindow
             absoluteLimit);
 
     public static uint CalculateMaximumViewportOrigin(uint absoluteLimit, uint visibleSpan)
-        => ViewportScrollCalculator.CalculateMaximumViewportOrigin(absoluteLimit, visibleSpan);
+        => WorkbookViewportScrollPlanner.CalculateMaximumViewportOrigin(absoluteLimit, visibleSpan);
 
     public static uint CalculateScrollbarMaximumForUsedRange(
         uint usedMax,
         uint visibleSpan,
         uint currentScrollValue,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.CalculateScrollbarMaximumForUsedRange(
+        WorkbookViewportScrollPlanner.CalculateScrollbarMaximumForUsedRange(
             usedMax,
             visibleSpan,
             currentScrollValue,

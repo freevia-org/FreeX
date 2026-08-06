@@ -243,7 +243,7 @@ public partial class MainWindow
                 string.Equals(candidate.Title, "Waterfall Context", StringComparison.OrdinalIgnoreCase));
         }
 
-        _options.ObjectsDisplay = FreeXObjectDisplay.Placeholders;
+        _options.ObjectsDisplay = AppOptionsObjectDisplay.Placeholders;
         SetSelectionRange(new GridRange(sourceRange.Start, sourceRange.Start), sourceRange.Start);
         EnsureCellVisible(sourceRange.Start);
         RefreshChartContextualTabs();

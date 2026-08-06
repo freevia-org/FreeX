@@ -9,7 +9,7 @@ public sealed partial class SpellCheckWorkflowPlannerTests
     [Fact]
     public void CreateCustomDictionary_LoadsPersistedWordsCaseInsensitively()
     {
-        var options = new FreeXOptions
+        var options = new AppOptions
         {
             SpellCheckCustomDictionaryWords = ["  TeH  ", "", "teh", "the the"]
         };
@@ -23,7 +23,7 @@ public sealed partial class SpellCheckWorkflowPlannerTests
     [Fact]
     public void AddCustomDictionaryWord_NormalizesPersistsAndUpdatesRuntimeDictionary()
     {
-        var options = new FreeXOptions
+        var options = new AppOptions
         {
             SpellCheckCustomDictionaryWords = ["recieve"]
         };
@@ -42,7 +42,7 @@ public sealed partial class SpellCheckWorkflowPlannerTests
     [Fact]
     public void AddCustomDictionaryWord_IgnoresBlankAndDuplicateWords()
     {
-        var options = new FreeXOptions
+        var options = new AppOptions
         {
             SpellCheckCustomDictionaryWords = ["TeH"]
         };
@@ -65,7 +65,7 @@ public sealed partial class SpellCheckWorkflowPlannerTests
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("TEH adn value"));
-        var options = new FreeXOptions
+        var options = new AppOptions
         {
             SpellCheckCustomDictionaryWords = ["teh"]
         };
@@ -89,6 +89,6 @@ public sealed partial class SpellCheckWorkflowPlannerTests
         source.Should().Contain("dialog.Result.Action == SpellCheckDialogAction.Add");
         source.Should().Contain("SpellCheckWorkflowPlanner.AddCustomDictionaryWord(");
         source.Should().Contain("_options.SpellCheckCustomDictionaryWords,");
-        source.Should().Contain("_options.Save();");
+        source.Should().Contain("AppOptionsStore.Save(_options);");
     }
 }

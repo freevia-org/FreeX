@@ -24,7 +24,7 @@ public partial class App : Application
 {
     private static readonly IUserMessageService StartupMessageService = new WpfUserMessageService();
 
-    private static FreeXOptions? _startupOptions;
+    private static AppOptions? _startupOptions;
 
     private static ServiceProvider? _services;
 
@@ -80,7 +80,7 @@ public partial class App : Application
 
         // Velopack is invoked earlier, from Program.Main, before the WPF Application is created,
         // so install/update/uninstall hooks are serviced before any UI initializes.
-        var options = FreeXOptions.Load();
+        var options = AppOptionsStore.Load();
         AppLocalization.Bootstrap.InstallSharedSeams();
         AppLocalization.Bootstrap.ApplyAppLanguage(options.AppLanguage);
         AppLocalization.Bootstrap.ApplyCurrentCultureToWpf();
@@ -356,7 +356,7 @@ public partial class App : Application
             builder.AddSerilog();
         });
 
-        var options = _startupOptions ?? FreeXOptions.Load();
+        var options = _startupOptions ?? AppOptionsStore.Load();
         services.AddSingleton(options);
 
         services.AddSingleton<IApplicationDataPathProvider>(PlatformApplicationDataPathProvider.Instance);
@@ -412,7 +412,7 @@ public partial class App : Application
         // the secondary window over the originating window's context (see ViewNewWindowBtn_Click).
         services.AddTransient(sp =>
         {
-            var workbook = NewWorkbookFactory.Create(sp.GetRequiredService<FreeXOptions>());
+            var workbook = NewWorkbookFactory.Create(sp.GetRequiredService<AppOptions>());
             var workbookRef = new WorkbookRef { Current = workbook };
             return ActivatorUtilities.CreateInstance<MainWindow>(
                 sp,
@@ -754,17 +754,21 @@ public partial class App : Application
     }
 
     private static void PromptForCrashAnalyticsConsentIfNeeded(
-        FreeXOptions options,
+        AppOptions options,
         AppCrashAnalyticsOptions crashAnalyticsOptions)
     {
-        if (!CrashAnalyticsConsentPlanner.ShouldPrompt(options, crashAnalyticsOptions))
+        if (!CrashAnalyticsConsentWorkflowPlanner.ShouldPrompt(
+                options.CrashAnalyticsPrompted,
+                crashAnalyticsOptions.Dsn,
+                crashAnalyticsOptions.IsDisabledByEnvironment))
             return;
 
         var accepted = AskStartupYesNo(
             UiText.Get("Startup_CrashReportsConsentPrompt"),
             UiText.Get("Startup_CrashReportsTitle"));
-        CrashAnalyticsConsentPlanner.ApplyConsent(options, accepted);
-        options.Save();
+        options.CrashAnalyticsEnabled = accepted;
+        options.CrashAnalyticsPrompted = true;
+        AppOptionsStore.Save(options);
     }
 
     private static bool AskStartupYesNo(string message, string title) =>

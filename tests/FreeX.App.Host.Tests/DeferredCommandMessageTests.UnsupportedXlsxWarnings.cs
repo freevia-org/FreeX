@@ -14,7 +14,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.SmartArtDiagrams, "xl/diagrams/data1.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureSaveWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureSaveWarning(report);
 
         message.Title.Should().Be("Unsupported XLSX Features");
         message.Body.Should().Contain("retains as opaque package parts");
@@ -34,7 +34,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.LiveWebQueries, "xl/webPublishItems.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Title.Should().Be("Unsupported XLSX Features Detected");
         message.Body.Should().Contain("opened this workbook");
@@ -52,7 +52,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.DigitalSignatures, "_xmlsignatures/sig1.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("digital signatures");
         message.Body.Should().Contain("Digital signatures may no longer validate after workbook edits");
@@ -65,7 +65,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Charts, "xl/charts/chart1.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("XLSX chart package parts");
         message.Body.Should().NotContain("charts.");
@@ -80,7 +80,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.CustomXmlParts, "customXml/item1.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("unsupported conditional formatting");
         message.Body.Should().Contain("drawing objects");
@@ -95,7 +95,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.DataModel, "xl/model/item.data")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("Power Query queries (excluded)");
         message.Body.Should().Contain("Data Model / Power Pivot (excluded)");
@@ -108,7 +108,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.LinkedDataTypes, "xl/richData/rdrichvalue.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("Microsoft linked data types (excluded)");
     }
@@ -120,7 +120,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.ThreadedComments, "xl/threadedComments/threadedComment1.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("threaded comments");
     }
@@ -132,7 +132,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.TrackChanges, "xl/revisions/revisionLog1.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("track changes / revision history");
     }
@@ -144,7 +144,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.FormControls, "xl/activeX/activeX1.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("form controls / ActiveX controls");
     }
@@ -156,7 +156,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.DigitalSignatures, "_xmlsignatures/sig1.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("digital signatures");
     }
@@ -168,7 +168,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.CustomRibbonUi, "customUI/customUI.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("custom ribbon UI");
     }
@@ -180,7 +180,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.OfficeAddIns, "xl/webextensions/taskpanes.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("Office add-ins");
     }
@@ -192,7 +192,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.LiveWebQueries, "xl/webPublishItems.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("live web queries / web publishing");
     }
@@ -204,7 +204,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.SensitivityLabels, "docProps/custom.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("sensitivity labels / IRM metadata");
     }
@@ -216,7 +216,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.SmartArtDiagrams, "xl/diagrams/data1.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("SmartArt diagrams");
     }
@@ -228,7 +228,7 @@ public sealed partial class DeferredCommandMessageTests
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.UnsupportedSheetTypes, "xl/chartsheets/sheet1.xml")
         ]);
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+        var message = TestDeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("chart sheets / dialog sheets / macro sheets");
     }

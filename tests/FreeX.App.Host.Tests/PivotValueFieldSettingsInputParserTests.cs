@@ -3,7 +3,7 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed class PivotValueFieldSettingsInputParserTests
+public sealed class PivotValueFieldPlannerTests
 {
     [Theory]
     [InlineData("", null)]
@@ -12,7 +12,7 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [InlineData(" 165 ", 165)]
     public void TryParseOptionalNumberFormatId_AcceptsBlankOrWholeNumber(string input, int? expected)
     {
-        PivotValueFieldSettingsInputParser.TryParseOptionalNumberFormatId(input, out var numberFormatId)
+        PivotValueFieldPlanner.TryParseOptionalNumberFormatId(input, out var numberFormatId)
             .Should().BeTrue();
 
         numberFormatId.Should().Be(expected);
@@ -23,7 +23,7 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [InlineData("abc")]
     public void TryParseOptionalNumberFormatId_RejectsNonIntegers(string input)
     {
-        PivotValueFieldSettingsInputParser.TryParseOptionalNumberFormatId(input, out _).Should().BeFalse();
+        PivotValueFieldPlanner.TryParseOptionalNumberFormatId(input, out _).Should().BeFalse();
     }
 
     [Theory]
@@ -32,7 +32,7 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [InlineData(" #,##0.0 \"kg\" ", "#,##0.0 \"kg\"")]
     public void ResolveOptionalNumberFormatCode_TrimsBlankToNull(string input, string? expected)
     {
-        PivotValueFieldSettingsInputParser.ResolveOptionalNumberFormatCode(input).Should().Be(expected);
+        PivotValueFieldPlanner.ResolveOptionalNumberFormatCode(input).Should().Be(expected);
     }
 
     [Theory]
@@ -46,7 +46,7 @@ public sealed class PivotValueFieldSettingsInputParserTests
         string? inputCode,
         int? expected)
     {
-        PivotValueFieldSettingsInputParser.ResolveNumberFormatIdForCode(inputId, inputCode).Should().Be(expected);
+        PivotValueFieldPlanner.ResolveNumberFormatIdForCode(inputId, inputCode).Should().Be(expected);
     }
 
     [Theory]
@@ -79,7 +79,7 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [InlineData("Accounting", 44)]
     public void ResolvePresetNumberFormatId_MapsExcelStylePresetLabels(string label, int? expected)
     {
-        PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatId(label).Should().Be(expected);
+        PivotValueFieldPlanner.ResolvePresetNumberFormatId(label).Should().Be(expected);
     }
 
     [Theory]
@@ -97,7 +97,7 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [InlineData("Accounting no symbol 0 decimals", "_(* #,##0_);_(* (#,##0);_(* \"-\"_);_(@_)")]
     public void ResolvePresetNumberFormatCode_MapsExcelStylePresetLabels(string label, string expected)
     {
-        PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatCode(label).Should().Be(expected);
+        PivotValueFieldPlanner.ResolvePresetNumberFormatCode(label).Should().Be(expected);
     }
 
     [Theory]
@@ -111,13 +111,13 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [InlineData("#,##0.0 \"kg\"", null)]
     public void ResolveBuiltInNumberFormatIdForCode_MapsKnownPresetCodes(string formatCode, int? expected)
     {
-        PivotValueFieldSettingsInputParser.ResolveBuiltInNumberFormatIdForCode(formatCode).Should().Be(expected);
+        PivotValueFieldPlanner.ResolveBuiltInNumberFormatIdForCode(formatCode).Should().Be(expected);
     }
 
     [Fact]
     public void NumberFormatPresets_ExposeExcelStyleLabels()
     {
-        PivotValueFieldSettingsInputParser.NumberFormatPresets
+        PivotValueFieldPlanner.NumberFormatPresets
             .Select(preset => preset.Label)
             .Should()
             .Contain([
@@ -154,7 +154,7 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [Fact]
     public void NumberFormatPresets_PreferShortDateAsCanonicalBuiltIn14Label()
     {
-        var firstBuiltIn14 = PivotValueFieldSettingsInputParser.NumberFormatPresets
+        var firstBuiltIn14 = PivotValueFieldPlanner.NumberFormatPresets
             .First(preset => preset.NumberFormatId == 14);
 
         firstBuiltIn14.Label.Should().Be("Short Date");
@@ -163,7 +163,7 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [Fact]
     public void NumberFormatPresets_UseSharedBuiltInCatalogCodes()
     {
-        foreach (var preset in PivotValueFieldSettingsInputParser.NumberFormatPresets)
+        foreach (var preset in PivotValueFieldPlanner.NumberFormatPresets)
         {
             BuiltInNumberFormatCatalog.TryResolveFormatCode(preset.NumberFormatId, out var formatCode)
                 .Should().BeTrue();
@@ -178,13 +178,13 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [InlineData(PivotShowValuesAs.PercentOfParentTotal)]
     public void TryValidateShowValuesAs_RequiresBaseFieldForBaseFieldModes(PivotShowValuesAs showValuesAs)
     {
-        PivotValueFieldSettingsDialogPlanner.TryValidateShowValuesAs(showValuesAs, null, null, out var error)
+        PivotValueFieldPlanner.TryValidateShowValuesAs(showValuesAs, null, null, out var error)
             .Should()
             .BeFalse();
 
         error.Should().Be("Select a base field for this Show Values As calculation.");
 
-        PivotValueFieldSettingsDialogPlanner.TryValidateShowValuesAs(showValuesAs, 1, null, out error)
+        PivotValueFieldPlanner.TryValidateShowValuesAs(showValuesAs, 1, null, out error)
             .Should()
             .BeTrue();
         error.Should().BeNull();
@@ -195,13 +195,13 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [InlineData(PivotShowValuesAs.PercentDifferenceFrom)]
     public void TryValidateShowValuesAs_RequiresBaseItemForDifferenceModes(PivotShowValuesAs showValuesAs)
     {
-        PivotValueFieldSettingsDialogPlanner.TryValidateShowValuesAs(showValuesAs, 1, "", out var error)
+        PivotValueFieldPlanner.TryValidateShowValuesAs(showValuesAs, 1, "", out var error)
             .Should()
             .BeFalse();
 
         error.Should().Be("Enter a base item for this Show Values As calculation.");
 
-        PivotValueFieldSettingsDialogPlanner.TryValidateShowValuesAs(showValuesAs, 1, "Q1", out error)
+        PivotValueFieldPlanner.TryValidateShowValuesAs(showValuesAs, 1, "Q1", out error)
             .Should()
             .BeTrue();
         error.Should().BeNull();
@@ -215,14 +215,15 @@ public sealed class PivotValueFieldSettingsInputParserTests
             ShowValuesAs = PivotShowValuesAs.None
         };
 
-        PivotValueFieldSettingsDialogPlanner.FindSummaryFunctionIndex("average").Should().Be(2);
-        PivotValueFieldSettingsDialogPlanner.FindShowValuesAsIndex(PivotShowValuesAs.DifferenceFrom).Should().Be(5);
-        PivotValueFieldSettingsDialogPlanner.FindBaseFieldIndex(1, sourceHeaderCount: 3).Should().Be(2);
-        PivotValueFieldSettingsDialogPlanner.ShowValuesAsRequiresBaseField(PivotShowValuesAs.PercentOfGrandTotal).Should().BeFalse();
+        PivotValueFieldPlanner.FindSummaryFunctionIndex("average").Should().Be(2);
+        PivotValueFieldPlanner.FindShowValuesAsIndex(PivotShowValuesAs.DifferenceFrom).Should().Be(5);
+        PivotValueFieldPlanner.FindBaseFieldIndex(1, sourceHeaderCount: 3).Should().Be(2);
+        PivotValueFieldPlanner.ShowValuesAsRequiresBaseField(PivotShowValuesAs.PercentOfGrandTotal).Should().BeFalse();
 
-        var result = PivotValueFieldSettingsDialogPlanner.CreateResult(
+        var result = PivotValueFieldPlanner.CreateResult(
             field,
-            " Average Amount ",
+            sourceHeaders: [],
+            customName: " Average Amount ",
             summaryFunctionIndex: 2,
             showValuesAsIndex: 5,
             baseFieldSelectedIndex: 3,
@@ -244,7 +245,7 @@ public sealed class PivotValueFieldSettingsInputParserTests
     {
         var field = new PivotDataFieldModel(1, "Sum of Loan Amount", "sum");
 
-        var result = PivotValueFieldSettingsDialogPlanner.CreateResult(
+        var result = PivotValueFieldPlanner.CreateResult(
             field,
             sourceHeaders: ["Region", "Loan Amount"],
             customName: "Sum of Loan Amount",
@@ -264,7 +265,7 @@ public sealed class PivotValueFieldSettingsInputParserTests
     {
         var field = new PivotDataFieldModel(1, "Loan Total", "sum");
 
-        var result = PivotValueFieldSettingsDialogPlanner.CreateResult(
+        var result = PivotValueFieldPlanner.CreateResult(
             field,
             sourceHeaders: ["Region", "Loan Amount"],
             customName: "Loan Total",

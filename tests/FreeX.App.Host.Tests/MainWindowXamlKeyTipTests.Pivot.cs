@@ -1,5 +1,6 @@
 using System.Windows.Input;
 using System.Xml.Linq;
+using System.IO;
 using FluentAssertions;
 using FreeX.App.Host;
 using FreeX.App.Presentation.PivotUI;
@@ -209,7 +210,11 @@ public sealed partial class MainWindowXamlKeyTipTests
 
         mainWindowSource.Should().Contain("new PivotValueFieldSettingsDialog(current, context.Headers)");
         mainWindowSource.Should().NotContain("Value Field Settings: name,function,show-values-as");
-        var plannerSource = DialogSourceTestSupport.ReadHostSources("PivotValueFieldSettingsDialogPlanner.cs");
+        var hostPlannerPath = Path.Combine(
+            WorkspaceFileLocator.FindWorkspaceRoot(),
+            "src",
+            "FreeX.App.Host",
+            "PivotValueFieldSettingsDialogPlanner.cs");
         var presentationSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "PivotValueFieldPlanner.cs");
         var dialogSource = DialogSourceTestSupport.ReadHostSources("PivotValueFieldSettingsDialog.xaml.cs");
         var expectedShowValuesAsKeys = new[]
@@ -224,7 +229,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         foreach (var key in expectedShowValuesAsKeys)
         {
             presentationSource.Should().Contain($"\"{key}\"");
-            plannerSource.Should().NotContain($"\"{key}\"");
+            dialogSource.Should().NotContain($"\"{key}\"");
         }
 
         presentationSource.Should().Contain("PivotValueFieldOption<PivotShowValuesAs>");
@@ -235,19 +240,19 @@ public sealed partial class MainWindowXamlKeyTipTests
         presentationSource.Should().Contain("DefaultCustomNumberFormatId");
         presentationSource.Should().Contain("\"PivotValueFieldSettings_SelectBaseFieldMessage\"");
         presentationSource.Should().Contain("\"PivotValueFieldSettings_EnterBaseItemMessage\"");
-        plannerSource.Should().Contain("LocalizeOptions(PivotValueFieldPlanner.ShowValuesAsOptions)");
-        plannerSource.Should().Contain("UiText.Get(option.ResourceKey)");
-        plannerSource.Should().Contain("PivotValueFieldPlanner.DescribeValidationError");
-        plannerSource.Should().Contain("UiText.Get(errorPlan.ResourceKey)");
-        plannerSource.Should().Contain("PivotValueFieldPlanner.FindNumberFormatPresetIndex");
-        plannerSource.Should().NotContain("\"PivotValueFieldSettings_SelectBaseFieldMessage\"");
-        plannerSource.Should().NotContain("\"PivotValueFieldSettings_EnterBaseItemMessage\"");
-        plannerSource.Should().NotContain("\"PivotValueFieldSettings_NumberFormatCurrency\"");
+        File.Exists(hostPlannerPath).Should().BeFalse();
+        presentationSource.Should().Contain("GetShowValuesAsOptions(");
+        presentationSource.Should().Contain("GetNumberFormatPresets(");
+        presentationSource.Should().Contain("ResourceKeyTextResolver text");
+        dialogSource.Should().Contain("WpfResourceKeyTextResolver.Instance");
+        dialogSource.Should().NotContain("\"PivotValueFieldSettings_SelectBaseFieldMessage\"");
+        dialogSource.Should().NotContain("\"PivotValueFieldSettings_EnterBaseItemMessage\"");
+        dialogSource.Should().NotContain("\"PivotValueFieldSettings_NumberFormatCurrency\"");
         PivotValueFieldPlanner.ShowValuesAsOptions
             .Select(option => option.ResourceKey)
             .Should()
             .Contain(expectedShowValuesAsKeys);
-        PivotValueFieldSettingsDialogPlanner.ShowValuesAsOptions
+        PivotValueFieldPlanner.GetShowValuesAsOptions(new ResourceKeyTextResolver(UiText.Get, UiText.Format))
             .Select(option => option.Label)
             .Should()
             .Contain(expectedShowValuesAsKeys.Select(UiText.Get));

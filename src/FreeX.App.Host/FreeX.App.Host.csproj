@@ -100,9 +100,12 @@
     <Using Include="Free.Shared.Commands" />
     <Using Include="Free.Shared.AppServices" />
     <Using Include="Free.Shared.Shell" />
+    <Using Include="FreeX.App.Services" />
     <Using Include="FreeX.App.Presentation" />
+    <Using Include="FreeX.App.Presentation.Shell" />
     <Using Include="FreeX.App.Presentation.FormulaBar" />
     <Using Include="FreeX.App.Presentation.Charts" />
+    <Using Include="FreeX.App.Presentation.Charts.Editing" />
     <Using Include="FreeX.App.Presentation.PageLayout" />
     <Using Include="FreeX.App.Presentation.DrawingInteraction" />
     <Using Include="FreeX.App.Presentation.TextToColumns" />

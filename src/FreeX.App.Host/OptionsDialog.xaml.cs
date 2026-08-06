@@ -20,7 +20,7 @@ public enum OptionsDialogInitialSection
 /// Snapshot of the live workbook's calculation settings (calc mode + iterative-calculation
 /// enable/max-iterations/max-change), captured just before the Options dialog opens so the
 /// Formulas panel seeds from the workbook actually being edited, not the persisted app-wide
-/// <see cref="FreeXOptions.AutoCalculate"/> default. Excel's Options dialog reflects the active
+/// <see cref="AppOptions.AutoCalculate"/> default. Excel's Options dialog reflects the active
 /// workbook's calculation state, not a saved app preference.
 /// </summary>
 /// <param name="AutoCalculate">
@@ -53,14 +53,14 @@ public sealed record OptionsDialogCalculationSettings(
 
 public partial class OptionsDialog : Window
 {
-    private readonly FreeXOptions _opts;
+    private readonly AppOptions _opts;
     private readonly OptionsDialogCalculationSettings _calcSettings;
     private readonly HashSet<string> _disabledFormulaErrorCodes;
     private readonly Dictionary<string, CheckBox> _errorRuleBoxes = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _quickAccessCommandIds = [];
     private readonly List<string> _customDictionaryWords = [];
     private readonly OptionsDialogInitialSection _initialSection;
-    public FreeXOptions Result { get; private set; }
+    public AppOptions Result { get; private set; }
     public IReadOnlySet<string> DisabledFormulaErrorCodesResult { get; private set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -79,7 +79,7 @@ public partial class OptionsDialog : Window
         ["8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36"];
 
     public OptionsDialog(
-        FreeXOptions opts,
+        AppOptions opts,
         IEnumerable<string>? disabledFormulaErrorCodes = null,
         OptionsDialogInitialSection initialSection = OptionsDialogInitialSection.General,
         OptionsDialogCalculationSettings? calcSettings = null)
@@ -143,12 +143,12 @@ public partial class OptionsDialog : Window
     {
         // General
         OptDefaultFont.ItemsSource = Fonts;
-        var defaultFontName = FreeXOptions.NormalizeDefaultFontName(_opts.DefaultFontName);
+        var defaultFontName = AppOptions.NormalizeDefaultFontName(_opts.DefaultFontName);
         OptDefaultFont.SelectedItem = Fonts.Contains(defaultFontName)
-            ? defaultFontName : FreeXOptions.DefaultFontNameFallback;
+            ? defaultFontName : AppOptions.DefaultFontNameFallback;
 
         OptDefaultFontSize.ItemsSource = Sizes;
-        OptDefaultFontSize.Text = FreeXOptions.NormalizeDefaultFontSize(_opts.DefaultFontSize).ToString();
+        OptDefaultFontSize.Text = AppOptions.NormalizeDefaultFontSize(_opts.DefaultFontSize).ToString();
 
         OptSheetCount.Text = _opts.DefaultSheetCount.ToString();
         OptUserName.Text   = _opts.UserName;
@@ -181,9 +181,9 @@ public partial class OptionsDialog : Window
         };
         OptAfterEnterDirection.SelectedIndex = _opts.AfterEnterDirection switch
         {
-            FreeXEnterDirection.Right => 1,
-            FreeXEnterDirection.Up => 2,
-            FreeXEnterDirection.Left => 3,
+            AppOptionsEnterDirection.Right => 1,
+            AppOptionsEnterDirection.Up => 2,
+            AppOptionsEnterDirection.Left => 3,
             _ => 0
         };
         UpdateAfterEnterDirectionState();
@@ -199,8 +199,8 @@ public partial class OptionsDialog : Window
         };
         OptObjectsDisplay.SelectedIndex = _opts.ObjectsDisplay switch
         {
-            FreeXObjectDisplay.Placeholders => 1,
-            FreeXObjectDisplay.Nothing => 2,
+            AppOptionsObjectDisplay.Placeholders => 1,
+            AppOptionsObjectDisplay.Nothing => 2,
             _ => 0
         };
 
@@ -215,7 +215,7 @@ public partial class OptionsDialog : Window
             UiText.Get("Options_DefaultFormatXlsx"),
             UiText.Get("Options_DefaultFormatJson")
         };
-        OptDefaultFormat.SelectedIndex = FreeXOptions.NormalizeDefaultFormat(_opts.DefaultFormat) == FreeXOptions.FreeXWorkbookDefaultFormat ? 1 : 0;
+        OptDefaultFormat.SelectedIndex = AppOptions.NormalizeDefaultFormat(_opts.DefaultFormat) == AppOptions.FreeXWorkbookDefaultFormat ? 1 : 0;
         OptCrashAnalytics.IsChecked = _opts.CrashAnalyticsEnabled;
 
         OptRecentFilesPath.Text = Path.Combine(
@@ -530,13 +530,13 @@ public partial class OptionsDialog : Window
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!OptionsInputParser.TryParseDefaultFontSize(OptDefaultFontSize.Text, out var defaultFontSize))
+        if (!OptionsDialogPlanner.TryParseDefaultFontSize(OptDefaultFontSize.Text, out var defaultFontSize))
         {
             ShowInvalidInputWarning(UiText.Get("Options_InvalidDefaultFontSizeMessage"), OptDefaultFontSize);
             return;
         }
 
-        if (!OptionsInputParser.TryParseDefaultSheetCount(OptSheetCount.Text, out var defaultSheetCount))
+        if (!OptionsDialogPlanner.TryParseDefaultSheetCount(OptSheetCount.Text, out var defaultSheetCount))
         {
             ShowInvalidInputWarning(UiText.Get("Options_InvalidSheetCountMessage"), OptSheetCount);
             return;
@@ -562,7 +562,7 @@ public partial class OptionsDialog : Window
             return;
         }
 
-        var opts = new FreeXOptions
+        var opts = new AppOptions
         {
             DefaultFontName   = OptDefaultFont.SelectedItem as string ?? _opts.DefaultFontName,
             DefaultFontSize   = defaultFontSize,
@@ -577,10 +577,10 @@ public partial class OptionsDialog : Window
             MoveSelectionAfterEnter = OptMoveAfterEnter.IsChecked == true,
             AfterEnterDirection = OptAfterEnterDirection.SelectedIndex switch
             {
-                1 => FreeXEnterDirection.Right,
-                2 => FreeXEnterDirection.Up,
-                3 => FreeXEnterDirection.Left,
-                _ => FreeXEnterDirection.Down
+                1 => AppOptionsEnterDirection.Right,
+                2 => AppOptionsEnterDirection.Up,
+                3 => AppOptionsEnterDirection.Left,
+                _ => AppOptionsEnterDirection.Down
             },
             EnableFillHandleAndCellDragAndDrop = OptAdvancedFillHandle.IsChecked == true,
             EnableAutoCompleteForCellValues = OptAdvancedAutoComplete.IsChecked == true,
@@ -588,22 +588,22 @@ public partial class OptionsDialog : Window
             ShowHeadings = OptShowHeadings.IsChecked == true,
             ObjectsDisplay = OptObjectsDisplay.SelectedIndex switch
             {
-                1 => FreeXObjectDisplay.Placeholders,
-                2 => FreeXObjectDisplay.Nothing,
-                _ => FreeXObjectDisplay.All
+                1 => AppOptionsObjectDisplay.Placeholders,
+                2 => AppOptionsObjectDisplay.Nothing,
+                _ => AppOptionsObjectDisplay.All
             },
-            DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? FreeXOptions.FreeXWorkbookDefaultFormat : FreeXOptions.XlsxDefaultFormat,
+            DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? AppOptions.FreeXWorkbookDefaultFormat : AppOptions.XlsxDefaultFormat,
             QuickAccessToolbarBelowRibbon = QuickAccessBelowRibbonCheckBox.IsChecked == true,
             QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList(),
             ProofingIgnoreUppercase = _opts.ProofingIgnoreUppercase,
             ProofingIgnoreNumbers = _opts.ProofingIgnoreNumbers,
             AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string),
-            SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords),
+            SpellCheckCustomDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords),
             CrashAnalyticsEnabled = OptCrashAnalytics.IsChecked == true,
             CrashAnalyticsPrompted = _opts.CrashAnalyticsPrompted || OptCrashAnalytics.IsChecked == true,
             PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage),
         };
-        if (!opts.Save())
+        if (!AppOptionsStore.Save(opts))
         {
             DialogMessageHelper.ShowError(this, opts.LastPersistenceError, Title);
             return;
@@ -647,13 +647,13 @@ public partial class OptionsDialog : Window
     }
 
     private void AutoCorrectOptionsButton_Click(object sender, RoutedEventArgs e) =>
-        ShowDeferredOptionsMessage(DeferredCommandMessages.AutoCorrectOptions());
+        ShowDeferredOptionsMessage(WpfResourceKeyTextResolver.Resolve(DeferredCommandMessagePlanner.AutoCorrectOptions()));
 
     private void PopulateProofingCustomDictionaryWords()
     {
         _customDictionaryWords.Clear();
         _customDictionaryWords.AddRange(
-            FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords));
+            AppOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords));
         RefreshProofingCustomDictionaryWordsList();
     }
 
@@ -689,7 +689,7 @@ public partial class OptionsDialog : Window
             return;
 
         ProofingCustomDictionaryAddWordButton.IsEnabled =
-            FreeXOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text) is not null;
+            AppOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text) is not null;
         ProofingCustomDictionaryRemoveWordButton.IsEnabled =
             ProofingCustomDictionaryWordsList.SelectedItem is string;
         ProofingCustomDictionaryClearWordsButton.IsEnabled = _customDictionaryWords.Count > 0;
@@ -714,7 +714,7 @@ public partial class OptionsDialog : Window
 
     private void ProofingCustomDictionaryAddWordButton_Click(object sender, RoutedEventArgs e)
     {
-        var word = FreeXOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text);
+        var word = AppOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text);
         if (word is null)
         {
             ProofingCustomDictionaryWordBox.Clear();
@@ -722,7 +722,7 @@ public partial class OptionsDialog : Window
             return;
         }
 
-        var normalized = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords.Append(word));
+        var normalized = AppOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords.Append(word));
         _customDictionaryWords.Clear();
         _customDictionaryWords.AddRange(normalized);
         ProofingCustomDictionaryWordBox.Clear();
@@ -749,7 +749,7 @@ public partial class OptionsDialog : Window
     }
 
     private void RibbonImportExportButton_Click(object sender, RoutedEventArgs e) =>
-        ShowDeferredOptionsMessage(DeferredCommandMessages.RibbonCustomizationImportExport());
+        ShowDeferredOptionsMessage(WpfResourceKeyTextResolver.Resolve(DeferredCommandMessagePlanner.RibbonCustomizationImportExport()));
 
     private void QuickAccessResetButton_Click(object sender, RoutedEventArgs e)
     {
@@ -838,10 +838,10 @@ public partial class OptionsDialog : Window
     }
 
     private void AddInsGoButton_Click(object sender, RoutedEventArgs e) =>
-        ShowDeferredOptionsMessage(DeferredCommandMessages.OfficeAddIns());
+        ShowDeferredOptionsMessage(WpfResourceKeyTextResolver.Resolve(DeferredCommandMessagePlanner.OfficeAddIns()));
 
     private void TrustCenterSettingsButton_Click(object sender, RoutedEventArgs e) =>
-        ShowDeferredOptionsMessage(DeferredCommandMessages.TrustCenterSettings());
+        ShowDeferredOptionsMessage(WpfResourceKeyTextResolver.Resolve(DeferredCommandMessagePlanner.TrustCenterSettings()));
 
     private void ShowDeferredOptionsMessage(DeferredCommandMessage message) =>
         DialogMessageHelper.ShowInfo(this, message.Body, message.Title);

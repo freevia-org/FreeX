@@ -178,7 +178,7 @@ public sealed partial class MainWindowSourceHygieneTests
         gridSource.Should().Contain("GridResizePreviewPlanner.CaptureRowSnapshot(sheet, startRow, endRow)");
         gridSource.Should().Contain("GridResizePreviewPlanner.ApplyColumnResizePreview(sheet, startCol, endCol, newWidthPx)");
         gridSource.Should().Contain("GridResizePreviewPlanner.ApplyRowResizePreview(sheet, startRow, endRow, newHeightPx)");
-        gridSource.Should().Contain("StatusBarCalculator");
+        gridSource.Should().Contain("StatusBarRefreshPlanner");
     }
 
     [Fact]
@@ -611,7 +611,8 @@ public sealed partial class MainWindowSourceHygieneTests
 
         gridStatusSource.Should().Contain("StatusBarRefreshPlanner.Build(");
         gridStatusSource.Should().Contain("ApplyStatusBarRefreshPlan(plan)");
-        gridStatusSource.Should().Contain("StatusBarCalculator.ToShared(_statusBarStatsCache.GetOrCalculate");
+        gridStatusSource.Should().Contain("_statusBarStatsCache.GetOrCalculate");
+        gridStatusSource.Should().Contain("WpfResourceKeyTextResolver.StatusBarTextProvider");
         gridStatusSource.Should().Contain("IsFileOperationProgressVisible()");
         gridStatusSource.Should().Contain("SetVisibilityIfChanged(StatusReadyText, Visibility.Collapsed)");
         gridStatusSource.Should().Contain("SetVisibilityIfChanged(StatusStatsPanel, Visibility.Collapsed)");

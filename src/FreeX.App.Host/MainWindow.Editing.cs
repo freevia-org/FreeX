@@ -274,7 +274,7 @@ public partial class MainWindow
     /// never fires while the user is mid-formula, mid-navigation, or already accepted/rejected a
     /// suggestion:
     /// <list type="bullet">
-    /// <item>the option is enabled (<see cref="FreeXOptions.EnableAutoCompleteForCellValues"/>);</item>
+    /// <item>the option is enabled (<see cref="AppOptions.EnableAutoCompleteForCellValues"/>);</item>
     /// <item>the cell is a plain text entry -- not a formula (leading '=') and not mid formula
     /// range-reference entry;</item>
     /// <item>the caret sits at the very end of the text with nothing selected -- i.e. the user is

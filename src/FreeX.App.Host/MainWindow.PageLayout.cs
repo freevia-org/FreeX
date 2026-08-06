@@ -24,7 +24,7 @@ public partial class MainWindow
     {
         var commandName = (sender as System.Windows.Controls.Button)?.Content?.ToString()
             ?? UiText.Get("MainWindowMessage_DeferredCommandFallbackName");
-        var message = DeferredCommandMessages.WorkbookTheme(commandName);
+        var message = WpfResourceKeyTextResolver.Resolve(DeferredCommandMessagePlanner.WorkbookTheme(commandName));
         _messageService.ShowInfo(message.Body, message.Title);
     }
 

@@ -547,11 +547,13 @@ public sealed partial class MainWindowSourceHygieneTests
         openMethod.Should().Contain("_isOpeningFile = false;");
         openMethod.Should().NotContain("MessageBox.Show(");
 
-        saveWarningMethod.Should().Contain("DeferredCommandMessages.UnsupportedXlsxFeatureSaveWarning(_currentXlsxFeatureReport)");
+        saveWarningMethod.Should().Contain("DeferredCommandMessagePlanner.UnsupportedXlsxFeatureSaveWarning(_currentXlsxFeatureReport)");
+        saveWarningMethod.Should().Contain("WpfResourceKeyTextResolver.Resolve(");
         saveWarningMethod.Should().Contain("ShowOwnedMessage(");
         saveWarningMethod.Should().NotContain("MessageBox.Show(");
 
-        openWarningMethod.Should().Contain("DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(_currentXlsxFeatureReport)");
+        openWarningMethod.Should().Contain("DeferredCommandMessagePlanner.UnsupportedXlsxFeatureOpenWarning(_currentXlsxFeatureReport)");
+        openWarningMethod.Should().Contain("WpfResourceKeyTextResolver.Resolve(");
         openWarningMethod.Should().Contain("ShowOwnedMessage(");
         openWarningMethod.Should().NotContain("MessageBox.Show(");
     }
@@ -588,7 +590,8 @@ public sealed partial class MainWindowSourceHygieneTests
         nextMethodStart.Should().BeGreaterThan(methodStart);
 
         var method = backstageSource[methodStart..nextMethodStart];
-        method.Should().Contain("DeferredCommandMessages.OnlineTemplatesExcluded()");
+        method.Should().Contain("DeferredCommandMessagePlanner.OnlineTemplatesExcluded()");
+        method.Should().Contain("WpfResourceKeyTextResolver.Resolve(");
         method.Should().Contain("ShowOwnedMessage(");
         method.Should().NotContain("MessageBox.Show(");
     }

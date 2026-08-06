@@ -159,7 +159,7 @@ public partial class MainWindow
 
             await OpenFileAsync(savedWorkbookPath);
             context = ResolveChartObjectSelectionCurrentContext(savedWorkbookPath, "after-reopen");
-            _options.ObjectsDisplay = FreeXObjectDisplay.All;
+            _options.ObjectsDisplay = AppOptionsObjectDisplay.All;
             SelectChartObjectSelectionChart(context);
             SelectRibbonTourTab(RibbonScreenshotTourPlanner.ChartContextTabs.Single(tab => tab.Header == "Chart Design"));
             captures.Add(await CaptureChartObjectSelectionWindowStateAsync(
@@ -199,7 +199,7 @@ public partial class MainWindow
         _currentFilePath = null;
         _workbook.Name = "Chart Object Selection";
         sheet.Name = "Chart Object Selection";
-        _options.ObjectsDisplay = FreeXObjectDisplay.All;
+        _options.ObjectsDisplay = AppOptionsObjectDisplay.All;
 
         for (uint row = 1; row <= 18; row++)
         {

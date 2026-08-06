@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -960,8 +960,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("FREEX_CHART_PERSISTENCE_RENDER_TOUR");
         source.Should().Contain("chart-persistence-render-tour");
         source.Should().Contain("EnsureChartPersistenceRenderTourContext");
-        source.Should().Contain("FreeXObjectDisplay.All");
-        source.Should().Contain("FreeXObjectDisplay.Placeholders");
+        source.Should().Contain("AppOptionsObjectDisplay.All");
+        source.Should().Contain("AppOptionsObjectDisplay.Placeholders");
         source.Should().Contain("new ChangeChartSourceCommand(context.Sheet.Id, context.Chart.Id, context.MutatedSourceRange");
         source.Should().Contain("new ChangeChartTypeCommand(context.Sheet.Id, context.Chart.Id, ChartType.Line)");
         source.Should().Contain("new SetChartStyleCommand(context.Sheet.Id, context.Chart.Id, 18)");

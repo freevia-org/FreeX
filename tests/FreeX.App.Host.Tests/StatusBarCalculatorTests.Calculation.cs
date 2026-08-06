@@ -15,7 +15,7 @@ public sealed partial class StatusBarCalculatorTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 3), Cell.FromValue(BlankValue.Instance));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 4), Cell.FromValue(new NumberValue(3)));
 
-        var stats = StatusBarCalculator.Calculate(
+        var stats = WorkbookSelectionStatsCalculator.Calculate(
             sheet,
             new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
@@ -35,7 +35,7 @@ public sealed partial class StatusBarCalculatorTests
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("text")));
 
-        var stats = StatusBarCalculator.Calculate(
+        var stats = WorkbookSelectionStatsCalculator.Calculate(
             sheet,
             new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
@@ -59,7 +59,7 @@ public sealed partial class StatusBarCalculatorTests
         sheet.SetCell(new CellAddress(sheet.Id, 4, 1), Cell.FromValue(new TextValue("visible")));
         sheet.FilterHiddenRows.Add(2);
 
-        var stats = StatusBarCalculator.Calculate(
+        var stats = WorkbookSelectionStatsCalculator.Calculate(
             sheet,
             new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
@@ -80,9 +80,9 @@ public sealed partial class StatusBarCalculatorTests
         var address = new CellAddress(sheet.Id, 5, 3);
         sheet.SetCell(address, Cell.FromValue(new NumberValue(42)));
 
-        var stats = StatusBarCalculator.Calculate(sheet, new GridRange(address, address));
+        var stats = WorkbookSelectionStatsCalculator.Calculate(sheet, new GridRange(address, address));
 
-        stats.Should().Be(new StatusBarCalculator.Stats(42, 1, 1, 42, 42, 42));
+        stats.Should().Be(new WorkbookSelectionStats(42, 1, 1, 42, 42, 42));
     }
 
     [Fact]
@@ -92,13 +92,13 @@ public sealed partial class StatusBarCalculatorTests
         for (uint row = 1; row <= 1_000; row++)
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), Cell.FromValue(new NumberValue(row)));
 
-        var stats = StatusBarCalculator.Calculate(
+        var stats = WorkbookSelectionStatsCalculator.Calculate(
             sheet,
             new GridRange(
                 new CellAddress(sheet.Id, 1, 5),
                 new CellAddress(sheet.Id, CellAddress.MaxRow, 5)));
 
-        stats.Should().Be(new StatusBarCalculator.Stats(0, 0, 0, null, null, null));
+        stats.Should().Be(new WorkbookSelectionStats(0, 0, 0, null, null, null));
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public sealed partial class StatusBarCalculatorTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(ErrorValue.DivByZero));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 3), Cell.FromValue(new NumberValue(20)));
 
-        var stats = StatusBarCalculator.Calculate(
+        var stats = WorkbookSelectionStatsCalculator.Calculate(
             sheet,
             new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
@@ -136,7 +136,7 @@ public sealed partial class StatusBarCalculatorTests
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, CellAddress.MaxRow, 1));
 
-        var stats = StatusBarCalculator.Calculate(sheet, range);
+        var stats = WorkbookSelectionStatsCalculator.Calculate(sheet, range);
 
         stats.Count.Should().Be(2);
         stats.NumericalCount.Should().Be(2);

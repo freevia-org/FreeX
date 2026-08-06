@@ -8,7 +8,7 @@ public sealed class StatusBarCustomizeMenuSourceTests
     [Fact]
     public void DefaultStatusBarCustomization_MatchesExcelVisibleStatistics()
     {
-        var options = new FreeXOptions();
+        var options = new AppOptions();
 
         options.StatusBarShowAverage.Should().BeTrue();
         options.StatusBarShowCount.Should().BeTrue();
@@ -22,7 +22,7 @@ public sealed class StatusBarCustomizeMenuSourceTests
     public void StatusBarCustomizeMenu_WiresHandlersToPersistedOptions()
     {
         var gridStatusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.GridStatus.cs"));
-        var optionsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FreeXOptions.cs"));
+        var optionsSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "AppOptions.cs");
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var contextMenuSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ContextMenus.cs"));
 
@@ -51,7 +51,7 @@ public sealed class StatusBarCustomizeMenuSourceTests
         gridStatusSource.Should().Contain("StatusBarOptionVisibilityStore.ToVisibility(_options)");
         gridStatusSource.Should().Contain("StatusBarOptionVisibilityStore.TrySetOption(_options, option, isChecked)");
         gridStatusSource.Should().NotContain("case StatusBarOptionTags.Average");
-        gridStatusSource.Should().Contain("_options.Save()");
+        gridStatusSource.Should().Contain("AppOptionsStore.Save(_options)");
         gridStatusSource.Should().NotContain("ApplyStatusBarInteractiveDisplayState(BuildStatusBarPresentationPlan(state).Visibility);");
     }
 }

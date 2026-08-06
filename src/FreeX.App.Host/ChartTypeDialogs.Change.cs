@@ -93,7 +93,7 @@ public sealed class ChangeChartTypeDialog : Window
             _categoryList.SelectedItem = category;
         }
 
-        var choices = ChartTypePickerPlanner.GetGalleryChoices(category.Name);
+        var choices = ChartTypePickerPlanner.GetGalleryChoices(category.Name, WpfResourceKeyTextResolver.Instance);
         _subtypeGallery.ItemsSource = choices;
         var selected = choices.FirstOrDefault(c => c.Type == currentType)
             ?? (choices.Count > 0 ? choices[0] : null);

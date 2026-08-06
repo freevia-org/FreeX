@@ -662,7 +662,7 @@ public sealed class StatusBarLayoutTests
                 workbookRef,
                 workbook,
                 NullUserMessageService.Instance,
-                options: new FreeXOptions())
+                options: new AppOptions())
             {
                 WindowState = WindowState.Normal,
                 Width = 1280,

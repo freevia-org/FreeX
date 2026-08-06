@@ -120,7 +120,7 @@ public partial class MainWindow
         _currentFilePath = null;
         _workbook.Name = "Insert object persistence";
         sheet.Name = "Insert Object Persistence";
-        _options.ObjectsDisplay = FreeXObjectDisplay.All;
+        _options.ObjectsDisplay = AppOptionsObjectDisplay.All;
 
         for (uint row = 1; row <= 16; row++)
         {

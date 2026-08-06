@@ -138,8 +138,24 @@ public static class WorkbookViewportScrollPlanner
     public static uint GetScrollableRowLimit(Sheet? sheet) =>
         CalculateScrollableLimit(CellAddress.MaxRow, sheet?.FrozenRows ?? 0);
 
+    public static uint GetScrollableRowLimit(uint frozenRows) =>
+        CalculateScrollableLimit(CellAddress.MaxRow, frozenRows);
+
     public static uint GetScrollableColumnLimit(Sheet? sheet) =>
         CalculateScrollableLimit(CellAddress.MaxCol, sheet?.FrozenCols ?? 0);
+
+    public static uint GetScrollableColumnLimit(uint frozenColumns) =>
+        CalculateScrollableLimit(CellAddress.MaxCol, frozenColumns);
+
+    public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(
+        uint frozenRows,
+        uint frozenColumns,
+        double verticalScrollValue,
+        double horizontalScrollValue) =>
+        (
+            ScrollbarValueToWorksheetIndex(verticalScrollValue, frozenRows, CellAddress.MaxRow),
+            ScrollbarValueToWorksheetIndex(horizontalScrollValue, frozenColumns, CellAddress.MaxCol)
+        );
 
     public static uint ClampViewportOrigin(double rawValue, uint absoluteLimit, uint visibleSpan)
     {

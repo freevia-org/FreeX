@@ -2767,7 +2767,8 @@ public partial class MainWindow
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Macros, "xl/vbaProject.bin"),
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.SmartArtDiagrams, "xl/diagrams/data1.xml")
         ]);
-        var unsupportedMessage = DeferredCommandMessages.UnsupportedXlsxFeatureSaveWarning(_currentXlsxFeatureReport);
+        var unsupportedMessage = WpfResourceKeyTextResolver.Resolve(
+            DeferredCommandMessagePlanner.UnsupportedXlsxFeatureSaveWarning(_currentXlsxFeatureReport));
         var unsupportedCaptureTask = CaptureBackstageOwnedNativeDialogWhenShownAsync(
             unsupportedMessage.Title,
             outputDir,
@@ -8916,7 +8917,7 @@ public partial class MainWindow
             openDialog = null;
 
             CreateTourChart(context);
-            _options.ObjectsDisplay = FreeXObjectDisplay.Placeholders;
+            _options.ObjectsDisplay = AppOptionsObjectDisplay.Placeholders;
             SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Insert"));
             UpdateViewport();
             RefreshToolbar();

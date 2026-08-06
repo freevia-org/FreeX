@@ -7,10 +7,10 @@ namespace FreeX.App.Host.Tests;
 
 /// <summary>
 /// Round-10 COMMENTS-HOST fixes: P5 -- new threaded comments and replies must be authored with the
-/// configured Options &#9656; User name (<see cref="FreeXOptions.UserName"/>) instead of always being
+/// configured Options &#9656; User name (<see cref="AppOptions.UserName"/>) instead of always being
 /// stamped "FreeX", matching exactly what <c>MainWindow.ReviewCommands.cs</c>'s
 /// <c>SheetGrid_ThreadedCommentInlineEditSubmitted</c> handler now does: resolve the author via
-/// <see cref="FreeXOptions.NormalizeUserName"/> and pass it into the threaded-comment commands.
+/// <see cref="AppOptions.NormalizeUserName"/> and pass it into the threaded-comment commands.
 /// </summary>
 public sealed class FreeXReview10CommentsHostTests
 {
@@ -30,7 +30,7 @@ public sealed class FreeXReview10CommentsHostTests
         // Mirrors MainWindow.ReviewCommands.cs's SheetGrid_ThreadedCommentInlineEditSubmitted
         // new-thread branch: resolve the author from the configured Options user name, not the
         // command's "FreeX" default.
-        var author = FreeXOptions.NormalizeUserName("Alice");
+        var author = AppOptions.NormalizeUserName("Alice");
         var cmd = new SetThreadedCommentCommand(sheet.Id, addr, "Start discussion", author);
         var outcome = cmd.Apply(ctx);
 
@@ -47,9 +47,9 @@ public sealed class FreeXReview10CommentsHostTests
         var (_, sheet, ctx) = Setup();
         var addr = new CellAddress(sheet.Id, 1, 1);
 
-        // FreeXOptions.NormalizeUserName mirrors AppOptions.NormalizeUserName: a blank/whitespace
+        // AppOptions.NormalizeUserName mirrors AppOptions.NormalizeUserName: a blank/whitespace
         // configured name falls back to Environment.UserName rather than authoring blank comments.
-        var author = FreeXOptions.NormalizeUserName("   ");
+        var author = AppOptions.NormalizeUserName("   ");
         var cmd = new SetThreadedCommentCommand(sheet.Id, addr, "Start discussion", author);
         cmd.Apply(ctx);
 
@@ -66,7 +66,7 @@ public sealed class FreeXReview10CommentsHostTests
         // Mirrors MainWindow.ReviewCommands.cs's SheetGrid_ThreadedCommentInlineEditSubmitted
         // existing-thread "Edit Comment" branch: the reply author must be the configured user, not
         // the command's "FreeX" default.
-        var replyAuthor = FreeXOptions.NormalizeUserName("Bob");
+        var replyAuthor = AppOptions.NormalizeUserName("Bob");
         var cmd = new ApplyThreadedCommentChangesCommand(
             sheet.Id,
             addr,
@@ -89,14 +89,14 @@ public sealed class FreeXReview10CommentsHostTests
     {
         // Behavioral command-level coverage above proves the correct Excel semantics once an author
         // is supplied; this anchors that MainWindow.ReviewCommands.cs's actual call sites now resolve
-        // and pass that author (via FreeXOptions.NormalizeUserName(_options.UserName)) instead of
+        // and pass that author (via AppOptions.NormalizeUserName(_options.UserName)) instead of
         // leaving the SetThreadedCommentCommand/ApplyThreadedCommentChangesCommand author parameters
         // on their "FreeX" default, which was the root cause of P5.
         var adapterSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewSessionController.cs");
         var mutationSource = DialogSourceTestSupport.ReadPresentationSources(
             "Comments", "PresentationCommentMutationService.cs");
 
-        adapterSource.Should().Contain("FreeXOptions.NormalizeUserName(_options.UserName)");
+        adapterSource.Should().Contain("AppOptions.NormalizeUserName(_options.UserName)");
         mutationSource.Should().Contain("new SetThreadedCommentCommand(sheetId, range.Start, result.ReplyText, author)");
         mutationSource.Should().Contain("new ApplyThreadedCommentChangesCommand(");
         mutationSource.Should().MatchRegex(@"result\.IsResolved,\s+author\)\)");

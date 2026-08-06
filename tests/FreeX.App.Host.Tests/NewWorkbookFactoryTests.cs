@@ -33,7 +33,7 @@ public sealed class NewWorkbookFactoryTests
         string expectedFontName,
         int expectedFontSize)
     {
-        var workbook = NewWorkbookFactory.Create(new FreeXOptions
+        var workbook = NewWorkbookFactory.Create(new AppOptions
         {
             DefaultFontName = defaultFontName,
             DefaultFontSize = defaultFontSize,
@@ -50,7 +50,7 @@ public sealed class NewWorkbookFactoryTests
     [Fact]
     public void Create_FromOptions_HonorsNormalizedUserNameMetadata()
     {
-        var workbook = NewWorkbookFactory.Create(new FreeXOptions
+        var workbook = NewWorkbookFactory.Create(new AppOptions
         {
             UserName = "  Analyst  ",
             DefaultSheetCount = 1
@@ -69,14 +69,14 @@ public sealed class NewWorkbookFactoryTests
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         // K4: every MainWindow resolved from DI now gets its own document context, so the app-level
-        // factory call resolves FreeXOptions straight from the service provider at the call site
+        // factory call resolves AppOptions straight from the service provider at the call site
         // rather than through a locally-bound "options" variable -- but it still routes the full
-        // FreeXOptions object into the factory, not just DefaultSheetCount.
-        appSource.Should().Contain("NewWorkbookFactory.Create(sp.GetRequiredService<FreeXOptions>())");
+        // AppOptions object into the factory, not just DefaultSheetCount.
+        appSource.Should().Contain("NewWorkbookFactory.Create(sp.GetRequiredService<AppOptions>())");
         // File > New now also threads the chosen workbook name through the factory, but still routes
         // the full options object (font, sheet count, user name) rather than only DefaultSheetCount.
         backstageSource.Should().Contain("NewWorkbookFactory.Create(_options, workbookName)");
-        appSource.Should().NotContain("NewWorkbookFactory.Create(sp.GetRequiredService<FreeXOptions>().DefaultSheetCount)");
+        appSource.Should().NotContain("NewWorkbookFactory.Create(sp.GetRequiredService<AppOptions>().DefaultSheetCount)");
         backstageSource.Should().NotContain("NewWorkbookFactory.Create(_options.DefaultSheetCount)");
     }
 }

@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Windows.Controls;
 using System.Xml.Linq;
 using FreeX.App.Host;
@@ -13,11 +13,11 @@ public sealed partial class OptionsDialogSourceTests
     {
         using var temp = new TestTemporaryDirectory();
         var path = Path.Combine(temp.Path, "options.json");
-        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
+        using var optionsPath = TestEnvironmentVariableScope.Set(AppOptionsStore.OptionsPathEnvironmentVariable, path);
 
         StaTestRunner.Run(() =>
         {
-            var dialog = new OptionsDialog(new FreeXOptions
+            var dialog = new OptionsDialog(new AppOptions
             {
                 CollapseRibbonAutomatically = true,
                 ShowScreenTips = false,
@@ -47,7 +47,7 @@ public sealed partial class OptionsDialogSourceTests
             }
         });
 
-        var reloaded = FreeXOptions.LoadFromPath(path);
+        var reloaded = AppOptionsStore.LoadFromPath(path);
         reloaded.CollapseRibbonAutomatically.Should().BeFalse();
         reloaded.ShowScreenTips.Should().BeTrue();
         reloaded.SpellCheckCustomDictionaryWords.Should().Equal("adn", "TeH");
@@ -59,8 +59,8 @@ public sealed partial class OptionsDialogSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         source.Should().Contain("PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage)");
-        source.Should().Contain("SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords)");
-        source.Should().NotContain("SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords)");
+        source.Should().Contain("SpellCheckCustomDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords)");
+        source.Should().NotContain("SpellCheckCustomDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords)");
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public sealed partial class OptionsDialogSourceTests
         xaml.Should().Contain("Click=\"AddInsGoButton_Click\"");
         source.Should().Contain("PanelAddIns.Visibility");
         source.Should().Contain("private void AddInsGoButton_Click");
-        source.Should().Contain("DeferredCommandMessages.OfficeAddIns()");
+        source.Should().Contain("DeferredCommandMessagePlanner.OfficeAddIns()");
     }
 
     [Fact]
@@ -158,8 +158,8 @@ public sealed partial class OptionsDialogSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         UiText.Get("Options_DefaultFormatJson").Should().Be("FreeX Workbook (.fxl)");
-        source.Should().Contain("FreeXOptions.NormalizeDefaultFormat(_opts.DefaultFormat)");
-        source.Should().Contain("FreeXOptions.FreeXWorkbookDefaultFormat");
+        source.Should().Contain("AppOptions.NormalizeDefaultFormat(_opts.DefaultFormat)");
+        source.Should().Contain("AppOptions.FreeXWorkbookDefaultFormat");
         source.Should().NotContain("DefaultFormat == \".json\"");
         source.Should().NotContain("? \".json\"");
     }
@@ -217,8 +217,8 @@ public sealed partial class OptionsDialogSourceTests
         appSource.Should().Contain("AppLocalization.Bootstrap.ApplyAppLanguage(options.AppLanguage);");
         appSource.Should().Contain("_startupOptions = options;");
         appSource.Should().Contain("ConfigureServices(serviceCollection);");
-        appSource.Should().Contain("var options = _startupOptions ?? FreeXOptions.Load();");
-        appSource.Should().NotContain("var options = Services.GetRequiredService<FreeXOptions>();");
+        appSource.Should().Contain("var options = _startupOptions ?? AppOptionsStore.Load();");
+        appSource.Should().NotContain("var options = Services.GetRequiredService<AppOptions>();");
     }
 
     [Fact]
@@ -226,9 +226,9 @@ public sealed partial class OptionsDialogSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
-        source.Should().Contain("OptionsInputParser.TryParseDefaultFontSize(OptDefaultFontSize.Text, out var defaultFontSize)");
+        source.Should().Contain("OptionsDialogPlanner.TryParseDefaultFontSize(OptDefaultFontSize.Text, out var defaultFontSize)");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Options_InvalidDefaultFontSizeMessage\"), OptDefaultFontSize);");
-        source.Should().Contain("OptionsInputParser.TryParseDefaultSheetCount(OptSheetCount.Text, out var defaultSheetCount)");
+        source.Should().Contain("OptionsDialogPlanner.TryParseDefaultSheetCount(OptSheetCount.Text, out var defaultSheetCount)");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Options_InvalidSheetCountMessage\"), OptSheetCount);");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, Control target)");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
@@ -241,7 +241,7 @@ public sealed partial class OptionsDialogSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
-        source.Should().Contain("if (!opts.Save())");
+        source.Should().Contain("if (!AppOptionsStore.Save(opts))");
         source.Should().Contain("DialogMessageHelper.ShowError(this, opts.LastPersistenceError, Title);");
         source.Should().Contain("return;");
         source.Should().Contain("DialogResult = true;");

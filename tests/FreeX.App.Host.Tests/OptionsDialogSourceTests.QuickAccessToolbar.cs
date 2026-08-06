@@ -214,7 +214,7 @@ public sealed partial class OptionsDialogSourceTests
 
         {
 
-            var dialog = new OptionsDialog(new FreeXOptions());
+            var dialog = new OptionsDialog(new AppOptions());
 
             dialog.Show();
 
@@ -292,7 +292,7 @@ public sealed partial class OptionsDialogSourceTests
 
         {
 
-            var dialog = new OptionsDialog(new FreeXOptions());
+            var dialog = new OptionsDialog(new AppOptions());
 
             dialog.Show();
 
@@ -384,7 +384,7 @@ public sealed partial class OptionsDialogSourceTests
 
         {
 
-            var dialog = new OptionsDialog(new FreeXOptions());
+            var dialog = new OptionsDialog(new AppOptions());
 
             dialog.Show();
 

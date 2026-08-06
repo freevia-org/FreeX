@@ -42,7 +42,7 @@ public sealed partial class InsertChartDialog
         ListBox subtypeGallery,
         ChartType? selectedType = null)
     {
-        var categories = ChartTypePickerPlanner.GetCategories();
+        var categories = ChartTypePickerPlanner.GetCategories(WpfResourceKeyTextResolver.Instance);
         var panel = PresentationChartTypePickerPlanner.GetAllChartsPanel();
         var grid = CreatePickerGrid();
         categoryList.ItemsSource = categories;
@@ -58,7 +58,7 @@ public sealed partial class InsertChartDialog
             if (categoryList.SelectedItem is not ChartTypePickerCategory category)
                 return;
 
-            subtypeGallery.ItemsSource = ChartTypePickerPlanner.GetGalleryChoices(category.Name);
+            subtypeGallery.ItemsSource = ChartTypePickerPlanner.GetGalleryChoices(category.Name, WpfResourceKeyTextResolver.Instance);
             subtypeGallery.SelectedIndex = 0;
         };
 

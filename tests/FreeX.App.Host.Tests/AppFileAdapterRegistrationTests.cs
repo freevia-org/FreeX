@@ -53,7 +53,7 @@ public sealed class AppFileAdapterRegistrationTests
         var saveFilterParts = FileDialogFilterBuilder.BuildSaveFilter(adapters).Split('|');
         var nativeFilterIndex = FileDialogFilterBuilder.FindSaveFilterIndex(
             adapters,
-            FreeXOptions.FreeXWorkbookDefaultFormat);
+            AppOptions.FreeXWorkbookDefaultFormat);
 
         saveFilterParts.Should().Contain("FreeX Workbook (*.fxl)");
         saveFilterParts.Should().Contain("*.fxl");

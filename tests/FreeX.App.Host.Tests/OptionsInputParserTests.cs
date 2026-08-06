@@ -2,7 +2,7 @@ using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed class OptionsInputParserTests
+public sealed class OptionsDialogPlannerTests
 {
     [Theory]
     [InlineData("11", true, 11)]
@@ -15,7 +15,7 @@ public sealed class OptionsInputParserTests
         bool expectedResult,
         int expectedValue)
     {
-        OptionsInputParser.TryParseDefaultFontSize(input, out var value).Should().Be(expectedResult);
+        OptionsDialogPlanner.TryParseDefaultFontSize(input, out var value).Should().Be(expectedResult);
         value.Should().Be(expectedValue);
     }
 
@@ -31,7 +31,7 @@ public sealed class OptionsInputParserTests
         bool expectedResult,
         int expectedValue)
     {
-        OptionsInputParser.TryParseDefaultSheetCount(input, out var value).Should().Be(expectedResult);
+        OptionsDialogPlanner.TryParseDefaultSheetCount(input, out var value).Should().Be(expectedResult);
         value.Should().Be(expectedValue);
     }
 }

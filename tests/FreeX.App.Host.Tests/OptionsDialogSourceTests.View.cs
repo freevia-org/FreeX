@@ -42,7 +42,7 @@ public sealed partial class OptionsDialogSourceTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new OptionsDialog(new FreeXOptions
+            var dialog = new OptionsDialog(new AppOptions
             {
                 ShowFormulaBar = false,
                 FormulaBarExpanded = true

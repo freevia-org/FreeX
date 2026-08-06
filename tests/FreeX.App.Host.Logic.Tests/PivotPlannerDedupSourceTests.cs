@@ -66,7 +66,12 @@ public sealed class PivotPlannerDedupSourceTests
         var deferredLayoutSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.PivotFieldListDeferredLayout.cs");
         var headerSource = DialogSourceTestSupport.ReadHostSourceFile("PivotHeaderDropdownPlanner.cs");
         var adornmentSource = DialogSourceTestSupport.ReadHostSourceFile("PivotRowLabelAdornmentPlanner.cs");
-        var valueFieldDialogSource = DialogSourceTestSupport.ReadHostSourceFile("PivotValueFieldSettingsDialogPlanner.cs");
+        var valueFieldPlannerPath = Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Host",
+            "PivotValueFieldSettingsDialogPlanner.cs");
+        var valueFieldDialogSource = DialogSourceTestSupport.ReadHostSourceFile("PivotValueFieldSettingsDialog.xaml.cs");
         var sharedUiSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "PivotUiPlanner.cs");
         var sharedAdornmentSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "PivotGridAdornmentPlanner.cs");
         var sharedValueFieldSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "PivotValueFieldPlanner.cs");
@@ -88,9 +93,10 @@ public sealed class PivotPlannerDedupSourceTests
         adornmentSource.Should().NotContain("private static void AddAdornments");
         adornmentSource.Should().NotContain("private static bool HasChildRowsBeforeNextPeer");
 
-        valueFieldDialogSource.Should().Contain("PivotValueFieldPlanner.SummaryFunctions");
-        valueFieldDialogSource.Should().Contain("PivotValueFieldPlanner.ShowValuesAsOptions");
-        valueFieldDialogSource.Should().Contain("PivotValueFieldPlanner.ValidateShowValuesAs");
+        File.Exists(valueFieldPlannerPath).Should().BeFalse();
+        valueFieldDialogSource.Should().Contain("PivotValueFieldPlanner.GetSummaryFunctions(WpfResourceKeyTextResolver.Instance)");
+        valueFieldDialogSource.Should().Contain("PivotValueFieldPlanner.GetShowValuesAsOptions(WpfResourceKeyTextResolver.Instance)");
+        valueFieldDialogSource.Should().Contain("PivotValueFieldPlanner.TryValidateShowValuesAs(");
         valueFieldDialogSource.Should().Contain("PivotValueFieldPlanner.CreateResult(");
 
         sharedUiSource.Should().Contain("public sealed record PivotFieldListPanePlan");
@@ -98,5 +104,6 @@ public sealed class PivotPlannerDedupSourceTests
         sharedAdornmentSource.Should().Contain("public static IReadOnlyList<PivotHeaderDropdownTarget> BuildHeaderTargets");
         sharedAdornmentSource.Should().Contain("public static IReadOnlyList<PivotRowLabelAdornment> BuildRowLabelAdornments");
         sharedValueFieldSource.Should().Contain("public enum PivotShowValuesAsValidationError");
+        sharedValueFieldSource.Should().Contain("ResourceKeyTextResolver text");
     }
 }

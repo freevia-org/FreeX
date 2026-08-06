@@ -8,15 +8,15 @@ public partial class ExportPlannerTests
     public void ExportWorkflow_UsesOptionsDialogSelectionRangeAndOpenAfterPublish()
     {
         var printExport = DialogSourceTestSupport.ReadHostSources("MainWindow.PrintExport.cs");
-        var optionsSource = DialogSourceTestSupport.ReadHostSources("FreeXOptions.cs");
+        var optionsSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "AppOptions.cs");
 
-        optionsSource.Should().Contain("public string PdfExportLanguage { get; set; } = ExportPlanner.DefaultPdfLanguage;");
+        optionsSource.Should().Contain("public string PdfExportLanguage { get; set; } = DefaultPdfExportLanguage;");
         printExport.Should().Contain("ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveResult.FilterIndex)");
         printExport.Should().Contain("selectedExportFileFormat == ExportFileFormat.Xps");
         printExport.Should().Contain("new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage, selectedFormat)");
         printExport.Should().Contain("if (selectedFormat == ExportFormat.Pdf)");
         printExport.Should().Contain("_options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;");
-        printExport.Should().Contain("_options.Save();");
+        printExport.Should().Contain("AppOptionsStore.Save(_options);");
         printExport.Should().Contain("ExportPlanner.PlanExport(saveResult.FileName!, selectedFormat, optionsDialog.Result)");
         printExport.Should().Contain("ExportPlanner.ShouldPromptForNormalizedOverwrite(saveResult.FileName!, request, File.Exists)");
         printExport.Should().Contain("UiText.Format(\"MainWindowMessage_ExportNormalizedOverwritePrompt\", request.Path)");

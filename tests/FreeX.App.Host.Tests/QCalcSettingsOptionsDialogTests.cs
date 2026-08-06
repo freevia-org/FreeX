@@ -22,14 +22,14 @@ public sealed partial class OptionsDialogSourceTests
     {
         using var temp = new TestTemporaryDirectory();
         var path = Path.Combine(temp.Path, "options.json");
-        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
+        using var optionsPath = TestEnvironmentVariableScope.Set(AppOptionsStore.OptionsPathEnvironmentVariable, path);
 
         StaTestRunner.Run(() =>
         {
             // The persisted app default says Automatic (true), but the live workbook the user is
             // actually editing has been switched to Manual via the ribbon. The dialog must reflect
             // the workbook, not the stale app-wide default.
-            var opts = new FreeXOptions { AutoCalculate = true };
+            var opts = new AppOptions { AutoCalculate = true };
             var calcSettings = new OptionsDialogCalculationSettings(
                 AutoCalculate: false,
                 IterativeCalculation: false,
@@ -64,7 +64,7 @@ public sealed partial class OptionsDialogSourceTests
                 MaxCalculationIterations: null,
                 MaxCalculationChange: null);
 
-            var dialog = new OptionsDialog(new FreeXOptions(), calcSettings: calcSettings);
+            var dialog = new OptionsDialog(new AppOptions(), calcSettings: calcSettings);
             dialog.Show();
             try
             {
@@ -94,7 +94,7 @@ public sealed partial class OptionsDialogSourceTests
                 MaxCalculationIterations: null,
                 MaxCalculationChange: null);
 
-            var dialog = new OptionsDialog(new FreeXOptions(), calcSettings: calcSettings);
+            var dialog = new OptionsDialog(new AppOptions(), calcSettings: calcSettings);
             dialog.Show();
             try
             {
@@ -123,7 +123,7 @@ public sealed partial class OptionsDialogSourceTests
                 MaxCalculationIterations: 250,
                 MaxCalculationChange: 0.0005);
 
-            var dialog = new OptionsDialog(new FreeXOptions(), calcSettings: calcSettings);
+            var dialog = new OptionsDialog(new AppOptions(), calcSettings: calcSettings);
             dialog.Show();
             try
             {
@@ -150,7 +150,7 @@ public sealed partial class OptionsDialogSourceTests
         StaTestRunner.Run(() =>
         {
             var calcSettings = new OptionsDialogCalculationSettings(true, true, 100, 0.001);
-            var dialog = new OptionsDialog(new FreeXOptions(), calcSettings: calcSettings);
+            var dialog = new OptionsDialog(new AppOptions(), calcSettings: calcSettings);
             dialog.Show();
             try
             {
@@ -176,7 +176,7 @@ public sealed partial class OptionsDialogSourceTests
         StaTestRunner.Run(() =>
         {
             var calcSettings = new OptionsDialogCalculationSettings(true, false, null, null);
-            var dialog = new OptionsDialog(new FreeXOptions(), calcSettings: calcSettings);
+            var dialog = new OptionsDialog(new AppOptions(), calcSettings: calcSettings);
             dialog.Show();
             try
             {
@@ -203,12 +203,12 @@ public sealed partial class OptionsDialogSourceTests
     {
         using var temp = new TestTemporaryDirectory();
         var path = Path.Combine(temp.Path, "options.json");
-        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
+        using var optionsPath = TestEnvironmentVariableScope.Set(AppOptionsStore.OptionsPathEnvironmentVariable, path);
 
         StaTestRunner.Run(() =>
         {
             var calcSettings = new OptionsDialogCalculationSettings(true, false, null, null);
-            var dialog = new OptionsDialog(new FreeXOptions(), calcSettings: calcSettings);
+            var dialog = new OptionsDialog(new AppOptions(), calcSettings: calcSettings);
             dialog.Show();
             try
             {

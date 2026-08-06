@@ -193,7 +193,7 @@ internal sealed class FreeXUiRun : IDisposable
             UseShellExecute = false
         };
         startInfo.Environment["APPDATA"] = artifacts.FullName;
-        startInfo.Environment[FreeXOptions.OptionsPathEnvironmentVariable] = optionsPath;
+        startInfo.Environment[AppOptionsStore.OptionsPathEnvironmentVariable] = optionsPath;
 
         var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to launch FreeX.");
 
@@ -209,10 +209,11 @@ internal sealed class FreeXUiRun : IDisposable
     private static string SeedDeterministicOptions(DirectoryInfo artifacts)
     {
         var optionsPath = Path.Combine(artifacts.FullName, "FreeX", "options.json");
-        var saved = new FreeXOptions
+        var options = new AppOptions
         {
             AppLanguage = AppLanguageCatalog.EnglishUnitedStatesCultureName
-        }.SaveToPath(optionsPath);
+        };
+        var saved = AppOptionsStore.SaveToPath(options, optionsPath);
 
         if (!saved)
             throw new InvalidOperationException($"Failed to seed deterministic FreeX UIE2E options at {optionsPath}.");

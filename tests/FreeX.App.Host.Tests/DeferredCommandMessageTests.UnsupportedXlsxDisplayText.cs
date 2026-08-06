@@ -30,7 +30,7 @@ public sealed partial class DeferredCommandMessageTests
         XlsxUnsupportedFeatureKind kind,
         string expectedDisplayText)
     {
-        DeferredCommandMessages.FormatUnsupportedXlsxFeatureKind(kind)
+        TestDeferredCommandMessages.FormatUnsupportedXlsxFeatureKind(kind)
             .Should().Be(expectedDisplayText);
     }
 }

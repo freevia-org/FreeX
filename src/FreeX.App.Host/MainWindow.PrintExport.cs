@@ -140,7 +140,7 @@ public partial class MainWindow
         if (selectedFormat == ExportFormat.Pdf)
         {
             _options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;
-            _options.Save();
+            AppOptionsStore.Save(_options);
         }
 
         var request = ExportPlanner.PlanExport(saveResult.FileName!, selectedFormat, optionsDialog.Result);

@@ -491,7 +491,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public void ConfigureQuickAccessToolbar(IReadOnlyList<string> commandIds, bool belowRibbon)
         {
-            var options = (FreeXOptions)_optionsField.GetValue(_window)!;
+            var options = (AppOptions)_optionsField.GetValue(_window)!;
             options.QuickAccessToolbarCommands = commandIds.ToList();
             options.QuickAccessToolbarBelowRibbon = belowRibbon;
             _rebuildQuickAccessToolbar.Invoke(_window, null);

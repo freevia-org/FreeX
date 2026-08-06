@@ -40,9 +40,9 @@ public partial class MainWindow
         WorkbookSelectionStats? stats = sheet is null
             ? null
             : selectedRanges is { Count: > 0 }
-                ? StatusBarCalculator.ToShared(_statusBarStatsCache.GetOrCalculate(sheet, selectedRanges, _navigationCacheRevision))
+                ? _statusBarStatsCache.GetOrCalculate(sheet, selectedRanges, _navigationCacheRevision)
                 : selectedRange is { } range
-                    ? StatusBarCalculator.ToShared(_statusBarStatsCache.GetOrCalculate(sheet, range, _navigationCacheRevision))
+                    ? _statusBarStatsCache.GetOrCalculate(sheet, range, _navigationCacheRevision)
                     : null;
 
         var plan = StatusBarRefreshPlanner.Build(
@@ -51,7 +51,7 @@ public partial class MainWindow
             stats,
             IsFileOperationProgressVisible(),
             zoomPercent: 0,
-            StatusBarCalculator.TextProvider,
+            WpfResourceKeyTextResolver.StatusBarTextProvider,
             sheet is null ? null : GetEffectiveViewState(sheet).ViewMode);
         ApplyStatusBarRefreshPlan(plan);
     }
@@ -252,7 +252,7 @@ public partial class MainWindow
         if (!StatusBarOptionVisibilityStore.TrySetOption(_options, option, isChecked))
             return;
 
-        if (!_options.Save())
+        if (!AppOptionsStore.Save(_options))
         {
             ShowOwnedMessage(
                 _options.LastPersistenceError ?? "Failed to save status bar customization.",

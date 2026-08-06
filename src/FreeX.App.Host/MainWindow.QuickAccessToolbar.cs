@@ -260,7 +260,7 @@ public partial class MainWindow
             return;
 
         _options.QuickAccessToolbarCommands = commandIds.ToList();
-        if (!_options.Save())
+        if (!AppOptionsStore.Save(_options))
         {
             ShowOwnedMessage(
                 _options.LastPersistenceError ?? "Failed to save Quick Access Toolbar customization.",

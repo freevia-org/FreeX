@@ -4,12 +4,12 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-// Host adapter: supplies localized labels, app-version text, and FreeXOptions persistence
+// Host adapter: supplies localized labels, app-version text, and AppOptions persistence
 // boundaries, while LocalAccountWorkflowPlanner owns the portable account/workbook status shape.
 public static class LocalAccountPlanner
 {
     public static LocalAccountPlan Create(
-        FreeXOptions options,
+        AppOptions options,
         string? currentFilePath,
         string? workbookName,
         Func<string>? userNameProvider = null,
@@ -25,7 +25,7 @@ public static class LocalAccountPlanner
         userNameProvider ??= () => Environment.UserName;
         userDomainProvider ??= () => Environment.UserDomainName;
         machineNameProvider ??= () => Environment.MachineName;
-        optionsPathProvider ??= () => FreeXOptions.StorePathForDisplay;
+        optionsPathProvider ??= () => AppOptionsStore.StorePath;
 
         var workflowPlan = LocalAccountWorkflowPlanner.Create(
             new LocalAccountPlannerInput(

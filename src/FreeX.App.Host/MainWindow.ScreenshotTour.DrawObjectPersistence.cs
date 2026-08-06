@@ -38,7 +38,7 @@ public partial class MainWindow
 
         try
         {
-            _options.ObjectsDisplay = FreeXObjectDisplay.All;
+            _options.ObjectsDisplay = AppOptionsObjectDisplay.All;
             HideStartScreen();
             _workbook.Name = "Draw Object Persistence";
             MarkWorkbookDirty();
@@ -100,7 +100,7 @@ public partial class MainWindow
 
             await OpenFileAsync(savedWorkbookPath);
             context = ResolveDrawObjectPersistenceCurrentContext(savedWorkbookPath, "after-reopen");
-            _options.ObjectsDisplay = FreeXObjectDisplay.All;
+            _options.ObjectsDisplay = AppOptionsObjectDisplay.All;
             SelectDrawObjectPersistenceShape(context);
             captures.Add(await CaptureDrawObjectPersistenceWindowStateAsync(
                 outputDir,

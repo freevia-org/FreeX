@@ -29,7 +29,7 @@ public partial class MainWindow
 
         try
         {
-            _options.ObjectsDisplay = FreeXObjectDisplay.All;
+            _options.ObjectsDisplay = AppOptionsObjectDisplay.All;
             SelectRibbonTourTab(RibbonScreenshotTourPlanner.ChartContextTabs.Single(tab => tab.Header == "Chart Design"));
             UpdateViewport();
             RefreshToolbar();
@@ -47,7 +47,7 @@ public partial class MainWindow
 
             SubmitChartPersistenceRenderMutations(context);
             context = ResolveChartPersistenceRenderCurrentContext(savedWorkbookPath, "after-mutation");
-            _options.ObjectsDisplay = FreeXObjectDisplay.All;
+            _options.ObjectsDisplay = AppOptionsObjectDisplay.All;
             SelectRibbonTourTab(RibbonScreenshotTourPlanner.ChartContextTabs.Single(tab => tab.Header == "Chart Design"));
             UpdateViewport();
             RefreshToolbar();
@@ -59,7 +59,7 @@ public partial class MainWindow
                 "Submitted chart mutations changed type, style, title, legend, axis titles, colors, data labels, and data source through workbook commands; Objects Display All captures the rendered result.",
                 "after-mutation-render"));
 
-            _options.ObjectsDisplay = FreeXObjectDisplay.Placeholders;
+            _options.ObjectsDisplay = AppOptionsObjectDisplay.Placeholders;
             UpdateViewport();
             captures.Add(await CaptureChartPersistenceRenderWindowStateAsync(
                 outputDir,
@@ -80,7 +80,7 @@ public partial class MainWindow
 
             await OpenFileAsync(savedWorkbookPath);
             context = ResolveChartPersistenceRenderCurrentContext(savedWorkbookPath, "after-reopen");
-            _options.ObjectsDisplay = FreeXObjectDisplay.All;
+            _options.ObjectsDisplay = AppOptionsObjectDisplay.All;
             SelectRibbonTourTab(RibbonScreenshotTourPlanner.ChartContextTabs.Single(tab => tab.Header == "Chart Design"));
             UpdateViewport();
             RefreshToolbar();
@@ -92,7 +92,7 @@ public partial class MainWindow
                 "The saved native FreeX workbook is reopened through the host open path, and the mutated chart metadata/data source is visible again with Objects Display All.",
                 "after-reopen-render"));
 
-            _options.ObjectsDisplay = FreeXObjectDisplay.Placeholders;
+            _options.ObjectsDisplay = AppOptionsObjectDisplay.Placeholders;
             UpdateViewport();
             captures.Add(await CaptureChartPersistenceRenderWindowStateAsync(
                 outputDir,
@@ -434,7 +434,7 @@ public partial class MainWindow
             state,
             fileName,
             "Chart workbook window",
-            _options.ObjectsDisplay == FreeXObjectDisplay.All
+            _options.ObjectsDisplay == AppOptionsObjectDisplay.All
                 ? "RenderTargetBitmap-window-full-chart-renderer"
                 : "RenderTargetBitmap-window-full-chart-placeholder",
             ActualWidth,

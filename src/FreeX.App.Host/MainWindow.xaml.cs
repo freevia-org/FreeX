@@ -157,7 +157,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private readonly RecentFilesStore _recentFiles;
     private readonly IWorkbookShareService _shareService = new WindowsWorkbookShareService();
     private List<RecentFileViewModel> _allRecentItems = [];
-    private FreeXOptions _options;
+    private AppOptions _options;
     // _currentFilePath is declared as a delegating property in the dirty/save-state cluster above.
     private XlsxFeatureReport? _currentXlsxFeatureReport;
     // Snapshot of _currentFilePath's on-disk write time taken at open (OpenWorkbookResult.
@@ -331,7 +331,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         IAppDiagnostics? diagnostics = null,
         AppDiagnosticsMetadata? diagnosticsMetadata = null,
         AppDiagnosticsOptions? diagnosticsOptions = null,
-        FreeXOptions? options = null,
+        AppOptions? options = null,
         WorkbookWindowRegistry? windowRegistry = null,
         NewWorkbookNameSequence? newWorkbookNameSequence = null,
         WorkbookSession? workbookSession = null)
@@ -370,7 +370,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         _workbook = _session.Workbook;
         _currentSheetId = _session.ActiveSheet.Id;
         ConfigureWorkbookSessionRendererAdapters();
-        _options = options ?? FreeXOptions.Load();
+        _options = options ?? AppOptionsStore.Load();
         _windowRegistry = windowRegistry;
         // A window handed a workbook that a registered window already views is a secondary view
         // of that document (View > New Window passed the originating window's context); it must

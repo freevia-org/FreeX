@@ -19,7 +19,6 @@ public sealed partial class ChartDialogTests
     private static string ReadChartTypeDialogSource() =>
         DialogSourceTestSupport.ReadHostSources(
             "ChartTypeDialogs.cs",
-            "ChartTypeDialogs.Planner.cs",
             "ChartTypeDialogs.PickerUi.cs",
             "ChartTypeDialogs.Change.cs");
 

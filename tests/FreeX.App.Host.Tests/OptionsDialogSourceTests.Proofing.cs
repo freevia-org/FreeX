@@ -36,9 +36,9 @@ public sealed partial class OptionsDialogSourceTests
         xaml.Should().Contain("AutomationProperties.HelpText=\"Clear all custom dictionary words.\"");
 
         source.Should().Contain("PopulateProofingCustomDictionaryWords();");
-        source.Should().Contain("FreeXOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text)");
-        source.Should().Contain("FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords.Append(word))");
-        source.Should().Contain("SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords)");
+        source.Should().Contain("AppOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text)");
+        source.Should().Contain("AppOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords.Append(word))");
+        source.Should().Contain("SpellCheckCustomDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords)");
         source.Should().Contain("OptProofingIgnoreUppercase.IsChecked = _opts.ProofingIgnoreUppercase;");
         source.Should().Contain("ProofingIgnoreUppercase = _opts.ProofingIgnoreUppercase");
         source.Should().Contain("ProofingIgnoreNumbers = _opts.ProofingIgnoreNumbers");
@@ -49,11 +49,11 @@ public sealed partial class OptionsDialogSourceTests
     {
         using var temp = new TestTemporaryDirectory();
         var path = Path.Combine(temp.Path, "options.json");
-        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
+        using var optionsPath = TestEnvironmentVariableScope.Set(AppOptionsStore.OptionsPathEnvironmentVariable, path);
 
         StaTestRunner.Run(() =>
         {
-            var dialog = new OptionsDialog(new FreeXOptions
+            var dialog = new OptionsDialog(new AppOptions
             {
                 SpellCheckCustomDictionaryWords = ["  TeH  ", "adn", "teh"]
             });
@@ -97,7 +97,7 @@ public sealed partial class OptionsDialogSourceTests
             }
         });
 
-        FreeXOptions.LoadFromPath(path)
+        AppOptionsStore.LoadFromPath(path)
             .SpellCheckCustomDictionaryWords
             .Should()
             .Equal("Final");
@@ -106,7 +106,7 @@ public sealed partial class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialog_CancelDoesNotMutateOriginalProofingCustomDictionaryWords()
     {
-        var options = new FreeXOptions
+        var options = new AppOptions
         {
             SpellCheckCustomDictionaryWords = [" keep ", "Keep", "also"]
         };

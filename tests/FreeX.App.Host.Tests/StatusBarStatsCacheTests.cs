@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -19,13 +20,13 @@ public sealed class StatusBarStatsCacheTests
         var second = cache.GetOrCreate(sheet, range, revision: 4, CreateStats);
 
         calls.Should().Be(1);
-        second.Should().Be(new StatusBarCalculator.Stats(42, 2, 2, 21, 10, 32));
+        second.Should().Be(new WorkbookSelectionStats(42, 2, 2, 21, 10, 32));
         return;
 
-        StatusBarCalculator.Stats CreateStats()
+        WorkbookSelectionStats CreateStats()
         {
             calls++;
-            return new StatusBarCalculator.Stats(42, 2, 2, 21, 10, 32);
+            return new WorkbookSelectionStats(42, 2, 2, 21, 10, 32);
         }
     }
 
@@ -44,9 +45,9 @@ public sealed class StatusBarStatsCacheTests
         var second = cache.GetOrCalculate(sheet, range, revision: 4);
         var third = cache.GetOrCalculate(sheet, range, revision: 5);
 
-        first.Should().Be(new StatusBarCalculator.Stats(7, 1, 1, 7, 7, 7));
+        first.Should().Be(new WorkbookSelectionStats(7, 1, 1, 7, 7, 7));
         second.Should().Be(first);
-        third.Should().Be(new StatusBarCalculator.Stats(8, 1, 1, 8, 8, 8));
+        third.Should().Be(new WorkbookSelectionStats(8, 1, 1, 8, 8, 8));
     }
 
     [Fact]
@@ -66,10 +67,10 @@ public sealed class StatusBarStatsCacheTests
         second.Sum.Should().Be(2);
         return;
 
-        StatusBarCalculator.Stats CreateStats()
+        WorkbookSelectionStats CreateStats()
         {
             calls++;
-            return new StatusBarCalculator.Stats(calls, calls, calls, calls, calls, calls);
+            return new WorkbookSelectionStats(calls, calls, calls, calls, calls, calls);
         }
     }
 
@@ -90,19 +91,17 @@ public sealed class StatusBarStatsCacheTests
         calls.Should().Be(2);
         return;
 
-        StatusBarCalculator.Stats CreateStats()
+        WorkbookSelectionStats CreateStats()
         {
             calls++;
-            return new StatusBarCalculator.Stats(calls, calls, calls, calls, calls, calls);
+            return new WorkbookSelectionStats(calls, calls, calls, calls, calls, calls);
         }
     }
 
     [Fact]
     public void GetOrCreate_PreservesAggregateErrorCodeThroughSharedConversionRoundTrip()
     {
-        // R67 backlog (status-bar-6-2): GetOrCreate round-trips through
-        // StatusBarCalculator.ToShared/ToStats to reuse the shared WorkbookSelectionStatsCache --
-        // that conversion must not drop AggregateErrorCode.
+        // The Host cache now owns the shared stats record directly; aggregate errors must survive caching.
         var cache = new StatusBarStatsCache();
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         var range = new GridRange(
@@ -113,7 +112,7 @@ public sealed class StatusBarStatsCacheTests
             sheet,
             range,
             revision: 4,
-            () => new StatusBarCalculator.Stats(30, 3, 2, 15, 10, 20, "#DIV/0!"));
+            () => new WorkbookSelectionStats(30, 3, 2, 15, 10, 20, "#DIV/0!"));
 
         stats.AggregateErrorCode.Should().Be("#DIV/0!");
     }
@@ -122,12 +121,16 @@ public sealed class StatusBarStatsCacheTests
     public void HostCache_DelegatesExpansionCachingToSharedWorkbookSelectionStatsCache()
     {
         var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "StatusBarStatsCache.cs");
-        var calculatorSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "StatusBarCalculator.cs");
+        var calculatorPath = Path.Combine(
+            WorkspaceFileLocator.FindWorkspaceRoot(),
+            "src",
+            "FreeX.App.Host",
+            "StatusBarCalculator.cs");
 
         source.Should().Contain("WorkbookSelectionStatsCache");
         source.Should().NotContain("TryCalculateContainingExpansion");
         source.Should().NotContain("private static bool Contains");
-        source.Should().NotContain("StatusBarCalculator.Combine");
-        calculatorSource.Should().NotContain("public static Stats Combine");
+        source.Should().NotContain("StatusBarCalculator");
+        File.Exists(calculatorPath).Should().BeFalse();
     }
 }

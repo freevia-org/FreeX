@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -18,7 +18,7 @@ public sealed partial class OptionsDialogSourceTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new OptionsDialog(new FreeXOptions());
+            var dialog = new OptionsDialog(new AppOptions());
             try
             {
                 dialog.Width.Should().Be(OptionsDialogPlanner.WindowWidth);
@@ -110,7 +110,7 @@ public sealed partial class OptionsDialogSourceTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new OptionsDialog(new FreeXOptions())
+            var dialog = new OptionsDialog(new AppOptions())
             {
                 WindowStartupLocation = WindowStartupLocation.Manual,
                 ShowInTaskbar = false,

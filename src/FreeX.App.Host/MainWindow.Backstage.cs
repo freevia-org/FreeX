@@ -1034,7 +1034,9 @@ public partial class MainWindow
             _workbook.Name,
             workbook: _workbook,
             hasSelection: SheetGrid.SelectedRange is not null);
-        var message = DeferredCommandMessages.LocalAccountInfo(plan);
+        var message = WpfResourceKeyTextResolver.Resolve(
+            DeferredCommandMessagePlanner.LocalAccountInfo(),
+            body => LocalAccountWorkflowPlanner.FormatMessageBody(plan, body));
         ShowOwnedMessage(
             message.Body,
             message.Title,
@@ -1044,7 +1046,7 @@ public partial class MainWindow
 
     private void SsMoreTemplatesBtn_Click(object sender, RoutedEventArgs e)
     {
-        var message = DeferredCommandMessages.OnlineTemplatesExcluded();
+        var message = WpfResourceKeyTextResolver.Resolve(DeferredCommandMessagePlanner.OnlineTemplatesExcluded());
         ShowOwnedMessage(
             message.Body,
             message.Title,
@@ -1514,7 +1516,8 @@ public partial class MainWindow
         if (_currentXlsxFeatureReport?.HasUnsupportedFeatures != true)
             return true;
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureSaveWarning(_currentXlsxFeatureReport);
+        var message = WpfResourceKeyTextResolver.Resolve(
+            DeferredCommandMessagePlanner.UnsupportedXlsxFeatureSaveWarning(_currentXlsxFeatureReport));
 
         var result = ShowOwnedMessage(
             message.Body,
@@ -1576,7 +1579,8 @@ public partial class MainWindow
         if (_currentXlsxFeatureReport?.HasUnsupportedFeatures != true)
             return;
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(_currentXlsxFeatureReport);
+        var message = WpfResourceKeyTextResolver.Resolve(
+            DeferredCommandMessagePlanner.UnsupportedXlsxFeatureOpenWarning(_currentXlsxFeatureReport));
         ShowOwnedMessage(
             message.Body,
             message.Title,

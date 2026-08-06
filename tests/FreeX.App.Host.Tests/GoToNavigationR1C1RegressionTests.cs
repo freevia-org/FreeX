@@ -360,7 +360,7 @@ public sealed class GoToNavigationR1C1RegressionTests
                 workbookRef,
                 workbook,
                 NullUserMessageService.Instance,
-                options: new FreeXOptions { UseR1C1ReferenceStyle = useR1C1ReferenceStyle })
+                options: new AppOptions { UseR1C1ReferenceStyle = useR1C1ReferenceStyle })
             {
                 WindowState = WindowState.Normal,
                 Width = 1280,
