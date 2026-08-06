@@ -21963,17 +21963,8 @@ public sealed class DocumentView : Control
     /// </summary>
     public void ToggleFieldCodes()
     {
-        var fields = _doc.Blocks
-            .OfType<Paragraph>()
-            .SelectMany(p => p.Runs)
-            .Where(r => r.ComplexField is not null)
-            .ToList();
-        if (fields.Count == 0)
+        if (!ReferenceEdits.ToggleFieldCodes().Applied)
             return;
-
-        var show = fields.Count(r => r.ComplexField!.ShowCode) * 2 <= fields.Count;
-        foreach (var run in fields)
-            run.ComplexField = run.ComplexField! with { ShowCode = show };
 
         InvalidateLayoutAndVisual();
         Focus();
@@ -21984,103 +21975,17 @@ public sealed class DocumentView : Control
     /// </summary>
     public void UpdateFields()
     {
-        var crossReferencePageResolver = _doc.Blocks
-            .OfType<Paragraph>()
-            .SelectMany(paragraph => paragraph.Runs)
-            .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef
-                || run.ComplexField?.Keyword == "PAGEREF")
-                ? BuildCrossReferencePageResolver()
-                : null;
-        var crossReferencePageTextResolver = crossReferencePageResolver is null
-            ? null
-            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
-                _doc,
-                crossReferencePageResolver);
-        for (var b = 0; b < _doc.Blocks.Count; b++)
-        {
-            if (_doc.Blocks[b] is not Paragraph paragraph)
-                continue;
-
-            for (var r = 0; r < paragraph.Runs.Count; r++)
-            {
-                var run = paragraph.Runs[r];
-                if (run.CrossReference is { } crossReference)
-                {
-                    var resolved = CrossReferences.ResolveField(
-                        _doc,
-                        crossReference,
-                        run.Text,
-                        b,
-                        crossReferencePageResolver,
-                        crossReferencePageTextResolver);
-                    if (!string.IsNullOrEmpty(resolved))
-                        run.Text = resolved;
-                }
-                else if (run.ComplexField is { } complexField)
-                {
-                    if (complexField.SimpleField?.IsLocked == true)
-                        continue;
-
-                    var resolved = ComplexFieldEngine.CanRecompute(complexField)
-                        ? ComplexFieldEngine.Recompute(
-                            _doc,
-                            b,
-                            r,
-                            crossReferencePageResolver,
-                            crossReferencePageTextResolver)
-                        : ResolveComplexField(complexField, run.Text);
-                    if (!string.IsNullOrEmpty(resolved))
-                        run.Text = resolved;
-                }
-                else if (run.FieldKind != RunFieldKind.None)
-                {
-                    var resolved = ResolveDocumentField(run.FieldKind);
-                    if (!string.IsNullOrEmpty(resolved))
-                        run.Text = resolved;
-                }
-            }
-        }
-
-        var refreshedGeneratedRegion = false;
-        if (_doc.Blocks.Any(TableOfContents.IsTocParagraph))
-        {
-            UpdateTableOfContents();
-            refreshedGeneratedRegion = true;
-        }
-
-        if (_doc.Blocks.Any(Citations.IsBibliographyParagraph))
-        {
-            RefreshBibliography();
-            refreshedGeneratedRegion = true;
-        }
-
-        if (_doc.Blocks.Any(TableOfFigures.IsTableOfFiguresParagraph))
-        {
-            RefreshTableOfFigures(TableOfFigures.ExistingLabelText(_doc) ?? Captions.FigureLabelText);
-            refreshedGeneratedRegion = true;
-        }
-
-        if (TableOfAuthoritiesRegionPlanner.ContainsRegion(_doc))
-        {
-            var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
-                _doc,
-                pageResolver: BuildTableOfAuthoritiesPageResolver());
-            ApplyGeneratedReferencePlan(plan, "Update Table of Authorities", adjustCaretForInsert: false);
-            refreshedGeneratedRegion = true;
-        }
-
-        if (refreshedGeneratedRegion)
-        {
-            InvalidateVisual();
-            Focus();
-            return;
-        }
-
+        ReferenceEdits.UpdateFields(
+            BuildReferenceBlockPageResolution,
+            BuildTableOfAuthoritiesPageResolver);
         InvalidateVisual();
         Focus();
     }
 
-    private Func<int, int?>? BuildCrossReferencePageResolver()
+    private Func<int, int?>? BuildCrossReferencePageResolver() =>
+        BuildReferenceBlockPageResolution().PageNumberAtBlock;
+
+    private DocumentReferenceBlockPageResolution BuildReferenceBlockPageResolution()
     {
         try
         {
@@ -22088,27 +21993,30 @@ public sealed class DocumentView : Control
             var pageCount = Math.Max(1, _pageCount);
             var hasExplicitPageBoundary = HasExplicitPageBoundary(_doc);
 
-            return blockIndex =>
-            {
-                if (blockIndex < 0
-                    || blockIndex >= _doc.Blocks.Count
-                    || _doc.Blocks[blockIndex] is not Paragraph)
+            return new DocumentReferenceBlockPageResolution(
+                blockIndex =>
                 {
-                    return null;
-                }
+                    if (blockIndex < 0
+                        || blockIndex >= _doc.Blocks.Count
+                        || _doc.Blocks[blockIndex] is not Paragraph)
+                    {
+                        return null;
+                    }
 
-                var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex);
-                if (TryResolvePlacedPageForBlockOffset(blockIndex, 0, pageCount, out var pageIndex))
-                    return explicitPage is { } authoredPage
-                        ? Math.Max(pageIndex + 1, authoredPage)
-                        : pageIndex + 1;
+                    var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex);
+                    if (TryResolvePlacedPageForBlockOffset(blockIndex, 0, pageCount, out var pageIndex))
+                        return explicitPage is { } authoredPage
+                            ? Math.Max(pageIndex + 1, authoredPage)
+                            : pageIndex + 1;
 
-                return explicitPage ?? (pageCount == 1 && !hasExplicitPageBoundary ? 1 : null);
-            };
+                    return explicitPage ?? (pageCount == 1 && !hasExplicitPageBoundary ? 1 : null);
+                },
+                pageCount);
         }
         catch (InvalidOperationException)
         {
-            return blockIndex => CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex);
+            return new DocumentReferenceBlockPageResolution(
+                blockIndex => CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex));
         }
     }
 

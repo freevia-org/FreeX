@@ -1,3 +1,7 @@
+using System.Globalization;
+using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Editing;
@@ -19,6 +23,19 @@ public readonly record struct DocumentReferenceTextEditResult(
     int TextOffset,
     int NoteId);
 
+public sealed record DocumentReferenceBlockPageResolution(
+    Func<int, int?>? PageNumberAtBlock,
+    int? PageCount = null);
+
+public readonly record struct DocumentFieldCodeToggleResult(
+    bool Applied,
+    bool ShowCodes,
+    int FieldCount);
+
+public readonly record struct DocumentFieldUpdateResult(
+    int UpdatedFieldCount,
+    int RefreshedGeneratedRegionCount);
+
 /// <summary>
 /// Owns portable generated-reference region replacement and field insertion. Renderers retain native
 /// caret extraction, focus, and projection of the resulting model position.
@@ -28,6 +45,109 @@ public sealed class DocumentReferenceEditingCoordinator
     private readonly DocumentEditingSession _session;
 
     internal DocumentReferenceEditingCoordinator(DocumentEditingSession session) => _session = session;
+
+    public DocumentFieldCodeToggleResult ToggleFieldCodes()
+    {
+        var fields = _session.Document.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
+            .ToArray();
+        if (fields.Length == 0)
+            return new DocumentFieldCodeToggleResult(false, false, 0);
+
+        var showCodes = fields.Count(run => run.ComplexField!.ShowCode) * 2 <= fields.Length;
+        foreach (var run in fields)
+            run.ComplexField = run.ComplexField! with { ShowCode = showCodes };
+
+        return new DocumentFieldCodeToggleResult(true, showCodes, fields.Length);
+    }
+
+    public DocumentFieldUpdateResult UpdateFields(
+        Func<DocumentReferenceBlockPageResolution>? blockPageResolutionFactory = null,
+        Func<ToaCitationPageResolver?>? authorityPageResolverFactory = null,
+        string? fileName = null,
+        DateTime? evaluatedAt = null)
+    {
+        var document = _session.Document;
+        var fieldPages = RequiresBlockPageResolution(document)
+            ? ResolveBlockPages(blockPageResolutionFactory)
+            : null;
+        var fieldPageText = BuildPageTextResolver(fieldPages);
+        var now = evaluatedAt ?? DateTime.Now;
+        var updatedFieldCount = 0;
+
+        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        {
+            if (document.Blocks[blockIndex] is not Paragraph paragraph)
+                continue;
+
+            for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
+            {
+                var run = paragraph.Runs[runIndex];
+                string resolved;
+                if (run.CrossReference is { } crossReference)
+                {
+                    resolved = CrossReferences.ResolveField(
+                        document,
+                        crossReference,
+                        run.Text,
+                        blockIndex,
+                        fieldPages?.PageNumberAtBlock,
+                        fieldPageText);
+                }
+                else if (run.ComplexField is { } complexField)
+                {
+                    if (complexField.SimpleField?.IsLocked == true)
+                        continue;
+
+                    resolved = ComplexFieldEngine.CanRecompute(complexField)
+                        ? ComplexFieldEngine.Recompute(
+                            document,
+                            blockIndex,
+                            runIndex,
+                            fieldPages?.PageNumberAtBlock,
+                            fieldPageText)
+                        : ResolveLiveFieldResult(
+                            document,
+                            ComplexFieldDisplayPlanner.ResolveLiveKind(complexField.Keyword),
+                            run.Text,
+                            blockIndex,
+                            fieldPages,
+                            fieldPageText,
+                            fileName,
+                            now);
+                }
+                else if (run.FieldKind != RunFieldKind.None)
+                {
+                    resolved = ResolveLiveFieldResult(
+                        document,
+                        run.FieldKind,
+                        run.Text,
+                        blockIndex,
+                        fieldPages,
+                        fieldPageText,
+                        fileName,
+                        now);
+                }
+                else
+                {
+                    continue;
+                }
+
+                if (resolved.Length == 0 || string.Equals(resolved, run.Text, StringComparison.Ordinal))
+                    continue;
+
+                run.Text = resolved;
+                updatedFieldCount++;
+            }
+        }
+
+        var refreshedGeneratedRegionCount = RefreshGeneratedReferenceRegions(
+            blockPageResolutionFactory,
+            authorityPageResolverFactory);
+        return new DocumentFieldUpdateResult(updatedFieldCount, refreshedGeneratedRegionCount);
+    }
 
     public DocumentReferenceEditResult InsertTableOfContents(
         int insertionIndex,
@@ -352,6 +472,129 @@ public sealed class DocumentReferenceEditingCoordinator
 
         paragraph = resolved;
         return true;
+    }
+
+    private int RefreshGeneratedReferenceRegions(
+        Func<DocumentReferenceBlockPageResolution>? blockPageResolutionFactory,
+        Func<ToaCitationPageResolver?>? authorityPageResolverFactory)
+    {
+        var document = _session.Document;
+        var refreshedCount = 0;
+
+        if (document.Blocks.Any(TableOfContents.IsTocParagraph))
+        {
+            var pages = ResolveBlockPages(blockPageResolutionFactory);
+            if (RefreshTableOfContents(BuildPageTextResolver(pages)).Applied)
+                refreshedCount++;
+        }
+
+        if (document.Blocks.Any(Citations.IsBibliographyParagraph))
+        {
+            var plan = BibliographyRegionPlanner.BuildRefreshPlan(
+                document,
+                document.BibliographyStyle);
+            if (ApplyGeneratedRegion(
+                    plan.DeleteIndicesDescending,
+                    plan.InsertIndex,
+                    plan.Paragraphs,
+                    "Update Bibliography").Applied)
+            {
+                refreshedCount++;
+            }
+        }
+
+        if (document.Blocks.Any(TableOfFigures.IsTableOfFiguresParagraph))
+        {
+            var labelText = TableOfFigures.ExistingLabelText(document) ?? Captions.FigureLabelText;
+            TableOfFigures.EnsureStyles(document);
+            var pages = ResolveBlockPages(blockPageResolutionFactory);
+            var paragraphs = TableOfFigures.Build(
+                document,
+                labelText,
+                BuildPageTextResolver(pages));
+            if (RefreshGeneratedRegion(
+                    TableOfFigures.IsTableOfFiguresParagraph,
+                    document.Blocks.Count,
+                    paragraphs,
+                    "Update Table of Figures").Applied)
+            {
+                refreshedCount++;
+            }
+        }
+
+        if (TableOfAuthoritiesRegionPlanner.ContainsRegion(document))
+        {
+            var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+                document,
+                pageResolver: authorityPageResolverFactory?.Invoke());
+            if (ApplyGeneratedRegion(
+                    plan.DeleteIndicesDescending,
+                    plan.InsertIndex,
+                    plan.Paragraphs,
+                    "Update Table of Authorities").Applied)
+            {
+                refreshedCount++;
+            }
+        }
+
+        return refreshedCount;
+    }
+
+    private Func<int, string?>? BuildPageTextResolver(DocumentReferenceBlockPageResolution? pages) =>
+        pages?.PageNumberAtBlock is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
+                _session.Document,
+                pages.PageNumberAtBlock);
+
+    private static DocumentReferenceBlockPageResolution? ResolveBlockPages(
+        Func<DocumentReferenceBlockPageResolution>? factory) =>
+        factory?.Invoke();
+
+    private static bool RequiresBlockPageResolution(TextDocument document) =>
+        document.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Any(run =>
+                run.CrossReference?.Kind == CrossRefFieldKind.PageRef
+                || run.ComplexField?.Keyword is "PAGE" or "NUMPAGES" or "PAGEREF"
+                || run.FieldKind is RunFieldKind.PageNumber or RunFieldKind.NumPages);
+
+    private static string ResolveLiveFieldResult(
+        TextDocument document,
+        RunFieldKind kind,
+        string cached,
+        int blockIndex,
+        DocumentReferenceBlockPageResolution? pages,
+        Func<int, string?>? pageTextAtBlock,
+        string? fileName,
+        DateTime evaluatedAt)
+    {
+        var liveValue = kind switch
+        {
+            RunFieldKind.Date or RunFieldKind.Time =>
+                ComplexFieldDisplayPlanner.FormatInvariantTemporalValue(kind, evaluatedAt),
+            RunFieldKind.Author => document.Properties.Author,
+            RunFieldKind.FileName => fileName,
+            RunFieldKind.Title => document.Properties.Title,
+            RunFieldKind.Subject => document.Properties.Subject,
+            RunFieldKind.Keywords => document.Properties.Keywords,
+            RunFieldKind.DocComments => document.Properties.Comments,
+            RunFieldKind.PageNumber => pageTextAtBlock?.Invoke(blockIndex)
+                ?? FirstPageNumberText(document),
+            RunFieldKind.NumPages when pages?.PageCount is > 0 =>
+                pages.PageCount.Value.ToString(CultureInfo.InvariantCulture),
+            _ => null,
+        };
+        return string.IsNullOrEmpty(liveValue) ? cached : liveValue;
+    }
+
+    private static string FirstPageNumberText(TextDocument document)
+    {
+        var firstValue = Math.Max(1, document.Page.PageNumberStartAt ?? 1);
+        return PageNumberFormatDialogPlanner.FormatPageNumber(
+            firstValue,
+            document.Page.PageNumberFormat);
     }
 
     private void ExecuteGroup(IReadOnlyList<IDocumentCommand> commands, string undoLabel)

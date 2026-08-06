@@ -12341,18 +12341,8 @@ public sealed class DocumentView : RichTextBox
     public void ToggleFieldCodes()
     {
         CommitToModel();
-        var fields = _model.Blocks
-            .OfType<ModelParagraph>()
-            .SelectMany(p => p.Runs)
-            .Where(r => r.ComplexField is not null)
-            .ToList();
-        if (fields.Count == 0)
-            return;
-        // Show codes unless they are already (mostly) shown, in which case hide them again.
-        var show = fields.Count(r => r.ComplexField!.ShowCode) * 2 <= fields.Count;
-        foreach (var r in fields)
-            r.ComplexField = r.ComplexField! with { ShowCode = show };
-        Render();
+        if (ReferenceEdits.ToggleFieldCodes().Applied)
+            Render();
     }
 
     /// <summary>
@@ -12366,154 +12356,76 @@ public sealed class DocumentView : RichTextBox
     public void UpdateFields()
     {
         CommitToModel();
-        var blocks = _model.Blocks;
-        var crossReferencePageResolver = blocks
-            .OfType<ModelParagraph>()
-            .SelectMany(paragraph => paragraph.Runs)
-            .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef
-                || run.ComplexField?.Keyword == "PAGEREF")
-                ? BuildCrossReferencePageResolver()
-                : null;
-        var crossReferencePageTextResolver = crossReferencePageResolver is null
-            ? null
-            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
-                _model,
-                crossReferencePageResolver);
-        for (var b = 0; b < blocks.Count; b++)
-        {
-            if (blocks[b] is not ModelParagraph paragraph)
-                continue;
-            for (var i = 0; i < paragraph.Runs.Count; i++)
-            {
-                var r = paragraph.Runs[i];
-                if (r.CrossReference is { } crossReference)
-                {
-                    var resolved = CrossReferences.ResolveField(
-                        _model,
-                        crossReference,
-                        r.Text,
-                        b,
-                        crossReferencePageResolver,
-                        crossReferencePageTextResolver);
-                    if (resolved.Length > 0)
-                        r.Text = resolved;
-                }
-                else if (r.ComplexField is { } cf)
-                {
-                    if (cf.SimpleField?.IsLocked == true)
-                        continue;
-
-                    // REF/PAGEREF/SEQ re-evaluate against current bookmarks/sequences; the rest reuse the
-                    // live DATE/AUTHOR/… resolver (PAGE/NUMPAGES keep their cached value here).
-                    var resolved = ComplexFieldEngine.CanRecompute(cf)
-                        ? ComplexFieldEngine.Recompute(
-                            _model,
-                            b,
-                            i,
-                            crossReferencePageResolver,
-                            crossReferencePageTextResolver)
-                        : ResolveFieldText(ComplexFieldDisplayPlanner.ResolveLiveKind(cf.Keyword), r.Text, _model, CurrentFileName);
-                    if (resolved.Length > 0)
-                        r.Text = resolved;
-                }
-                else if (r.FieldKind != RunFieldKind.None)
-                {
-                    var resolved = ResolveFieldText(r.FieldKind, r.Text, _model, CurrentFileName);
-                    if (resolved.Length > 0)
-                        r.Text = resolved;
-                }
-            }
-        }
-
-        // "Update entire table": regenerate inserted generated-reference regions from current document
-        // state. Keep TOC and bibliography independent so a document containing both updates both in one
-        // F9 pass instead of short-circuiting after the first region.
-        var refreshedGeneratedRegion = false;
-        if (_model.Blocks.Any(TableOfContents.IsTocParagraph))
-        {
-            RefreshTableOfContentsFromModel();
-            refreshedGeneratedRegion = true;
-        }
-
-        if (_model.Blocks.Any(Citations.IsBibliographyParagraph))
-        {
-            RefreshBibliographyFromModel();
-            refreshedGeneratedRegion = true;
-        }
-
-        if (_model.Blocks.Any(TableOfFigures.IsTableOfFiguresParagraph))
-        {
-            RefreshTableOfFigures(TableOfFigures.ExistingLabelText(_model) ?? Captions.FigureLabelText);
-            refreshedGeneratedRegion = true;
-        }
-
-        if (TableOfAuthoritiesRegionPlanner.ContainsRegion(_model))
-        {
-            ApplyTableOfAuthoritiesPlan(
-                TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
-                    _model,
-                    pageResolver: BuildTableOfAuthoritiesPageResolver()));
-            refreshedGeneratedRegion = true;
-        }
-
-        if (refreshedGeneratedRegion)
-        {
-            Render();
-            return;
-        }
-
+        ReferenceEdits.UpdateFields(
+            BuildReferenceBlockPageResolution,
+            BuildTableOfAuthoritiesPageResolver,
+            CurrentFileName);
         Render();
     }
 
-    private Func<int, int?>? BuildCrossReferencePageResolver()
+    private Func<int, int?>? BuildCrossReferencePageResolver() =>
+        BuildReferenceBlockPageResolution().PageNumberAtBlock;
+
+    private DocumentReferenceBlockPageResolution BuildReferenceBlockPageResolution()
     {
         try
         {
             var pagination = PaginationEngine.Compute(this);
             var pageCount = Math.Max(1, pagination.PageCount);
             if (pageCount == 1 || pagination.PageBreakYsDip.Count == 0)
-                return blockIndex => IsModelParagraph(blockIndex)
-                    ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex) ?? 1
-                    : null;
+            {
+                return new DocumentReferenceBlockPageResolution(
+                    blockIndex => IsModelParagraph(blockIndex)
+                        ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex) ?? 1
+                        : null,
+                    pageCount);
+            }
 
             var firstRect = Document.ContentStart.GetCharacterRect(LogicalDirection.Forward);
             if (firstRect.IsEmpty)
-                return blockIndex => IsModelParagraph(blockIndex)
-                    ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
-                    : null;
+            {
+                return new DocumentReferenceBlockPageResolution(
+                    blockIndex => IsModelParagraph(blockIndex)
+                        ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
+                        : null,
+                    pageCount);
+            }
 
             var topY = firstRect.Top;
-            return blockIndex =>
-            {
-                if (!IsModelParagraph(blockIndex))
-                    return null;
-
-                var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex);
-                if (TextPointerAtModelTextOffset(blockIndex, 0) is not { } pointer)
-                    return explicitPage;
-
-                var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
-                if (rect.IsEmpty)
-                    return explicitPage;
-
-                var y = rect.Top - topY;
-                var pageIndex = 0;
-                foreach (var breakY in pagination.PageBreakYsDip)
+            return new DocumentReferenceBlockPageResolution(
+                blockIndex =>
                 {
-                    if (y + 0.5 < breakY)
-                        break;
-                    pageIndex++;
-                }
+                    if (!IsModelParagraph(blockIndex))
+                        return null;
 
-                var placedPage = Math.Min(Math.Max(1, pageIndex + 1), pageCount);
-                return explicitPage is { } authoredPage
-                    ? Math.Max(placedPage, authoredPage)
-                    : placedPage;
-            };
+                    var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex);
+                    if (TextPointerAtModelTextOffset(blockIndex, 0) is not { } pointer)
+                        return explicitPage;
+
+                    var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
+                    if (rect.IsEmpty)
+                        return explicitPage;
+
+                    var y = rect.Top - topY;
+                    var pageIndex = 0;
+                    foreach (var breakY in pagination.PageBreakYsDip)
+                    {
+                        if (y + 0.5 < breakY)
+                            break;
+                        pageIndex++;
+                    }
+
+                    var placedPage = Math.Min(Math.Max(1, pageIndex + 1), pageCount);
+                    return explicitPage is { } authoredPage
+                        ? Math.Max(placedPage, authoredPage)
+                        : placedPage;
+                },
+                pageCount);
         }
         catch (InvalidOperationException)
         {
-            return blockIndex => CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex);
+            return new DocumentReferenceBlockPageResolution(
+                blockIndex => CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex));
         }
     }
 

@@ -324,6 +324,194 @@ public sealed class DocumentEditingSessionWorkflowTests
 public sealed class DocumentReferenceEditingCoordinatorTests
 {
     [Fact]
+    public void FieldCodeToggleUsesOnePortableDocumentWideMajorityDecision()
+    {
+        var hiddenOne = Run.ComplexFieldRun(" PAGE ", "1");
+        var shown = Run.ComplexFieldRun(" AUTHOR ", "Ada", showCode: true);
+        var hiddenTwo = Run.ComplexFieldRun(" TITLE ", "Notes");
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph { Runs = { hiddenOne, shown, hiddenTwo } });
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var showResult = session.References.ToggleFieldCodes();
+
+        showResult.Should().Be(new DocumentFieldCodeToggleResult(true, true, 3));
+        document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Should().OnlyContain(run => run.ComplexField!.ShowCode);
+
+        var hideResult = session.References.ToggleFieldCodes();
+
+        hideResult.Should().Be(new DocumentFieldCodeToggleResult(true, false, 3));
+        document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Should().OnlyContain(run => !run.ComplexField!.ShowCode);
+    }
+
+    [Fact]
+    public void FieldUpdateOwnsLiveReferenceLockAndPageResultPolicy()
+    {
+        var evaluatedAt = new DateTime(2026, 8, 6, 14, 5, 0, DateTimeKind.Local);
+        var simpleDate = new Run("old date") { FieldKind = RunFieldKind.Date };
+        var complexTime = Run.ComplexFieldRun(" TIME ", "old time");
+        var author = new Run("old author") { FieldKind = RunFieldKind.Author };
+        var fileName = Run.ComplexFieldRun(" FILENAME ", "old.docx");
+        var page = new Run("9") { FieldKind = RunFieldKind.PageNumber };
+        var pageCount = Run.ComplexFieldRun(" NUMPAGES ", "9");
+        var pageReference = Run.CrossReferenceFieldRun(
+            new CrossReferenceField(
+                CrossRefFieldKind.PageRef,
+                "target",
+                CrossRefInsertAs.PageNumber,
+                Hyperlink: false),
+            "9");
+        var importedPageReference = Run.ComplexFieldRun(" PAGEREF target ", "9");
+        var styleReference = Run.ComplexFieldRun(" STYLEREF 1 ", "Old heading");
+        var lockedStyleReference = new Run("Locked heading")
+        {
+            ComplexField = new ComplexField(
+                " STYLEREF 1 ",
+                SimpleField: new SimpleFieldMetadata(IsLocked: true, IsDirty: true))
+        };
+        var document = new TextDocument();
+        document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        document.Page.PageNumberStartAt = 4;
+        document.Properties.Author = "Ada Lovelace";
+        document.Blocks.Add(new Paragraph("Current heading")
+        {
+            StyleId = "Heading1",
+            BookmarkName = "target"
+        });
+        document.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                simpleDate,
+                complexTime,
+                author,
+                fileName,
+                page,
+                pageCount,
+                pageReference,
+                importedPageReference,
+                styleReference,
+                lockedStyleReference
+            }
+        });
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+        var layoutCalls = 0;
+
+        var result = session.References.UpdateFields(
+            blockPageResolutionFactory: () =>
+            {
+                layoutCalls++;
+                return new DocumentReferenceBlockPageResolution(_ => 2, PageCount: 7);
+            },
+            fileName: "current.docx",
+            evaluatedAt: evaluatedAt);
+
+        result.UpdatedFieldCount.Should().Be(9);
+        result.RefreshedGeneratedRegionCount.Should().Be(0);
+        layoutCalls.Should().Be(1);
+        simpleDate.Text.Should().Be("8/6/2026");
+        complexTime.Text.Should().Be("2:05 PM");
+        author.Text.Should().Be("Ada Lovelace");
+        fileName.Text.Should().Be("current.docx");
+        page.Text.Should().Be("V");
+        pageCount.Text.Should().Be("7");
+        pageReference.Text.Should().Be("V");
+        importedPageReference.Text.Should().Be("V");
+        styleReference.Text.Should().Be("Current heading");
+        lockedStyleReference.Text.Should().Be("Locked heading");
+        lockedStyleReference.ComplexField!.SimpleField.Should()
+            .Be(new SimpleFieldMetadata(IsLocked: true, IsDirty: true));
+    }
+
+    [Fact]
+    public void FieldUpdateRefreshesEveryGeneratedReferenceRegionInOnePass()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph(TableOfContents.HeadingText)
+        {
+            StyleId = TableOfContents.HeadingStyleId
+        });
+        document.Blocks.Add(new Paragraph("Old heading\t9")
+        {
+            StyleId = TableOfContents.EntryStyleId(1)
+        });
+        document.Blocks.Add(new Paragraph("Fresh heading") { StyleId = "Heading1" });
+        document.Blocks.Add(new Paragraph(Citations.HeadingText)
+        {
+            StyleId = Citations.HeadingStyleId
+        });
+        document.Blocks.Add(new Paragraph("Old bibliography")
+        {
+            StyleId = Citations.EntryStyleId
+        });
+        document.Blocks.Add(Captions.BuildCaption(CaptionLabel.Figure, 1, "Fresh diagram"));
+        document.Blocks.Add(new Paragraph("Table of Figures")
+        {
+            StyleId = TableOfFigures.HeadingStyleId
+        });
+        document.Blocks.Add(new Paragraph("Old figure\t9")
+        {
+            StyleId = TableOfFigures.EntryStyleId
+        });
+        document.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.CitationMark(new Citation("Fresh Case", CitationCategory.Cases)) }
+        });
+        document.Blocks.AddRange(TableOfAuthorities.Build(
+            new[] { new Citation("Old Case", CitationCategory.Cases) }));
+        document.Sources.Add(new Source
+        {
+            Tag = "Fresh2026",
+            Author = "Fresh Author",
+            Title = "Current Source",
+            Year = "2026"
+        });
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+        var blockPageLayoutCalls = 0;
+        var authorityLayoutCalls = 0;
+
+        var result = session.References.UpdateFields(
+            blockPageResolutionFactory: () =>
+            {
+                blockPageLayoutCalls++;
+                return new DocumentReferenceBlockPageResolution(_ => 1, PageCount: 1);
+            },
+            authorityPageResolverFactory: () =>
+            {
+                authorityLayoutCalls++;
+                return (_, _, _, _) => TableOfAuthorities.CreatePageReference(3);
+            });
+
+        result.RefreshedGeneratedRegionCount.Should().Be(4);
+        blockPageLayoutCalls.Should().Be(2, "TOC and figure pages are resolved after prior region edits");
+        authorityLayoutCalls.Should().Be(1);
+        document.Blocks.Where(TableOfContents.IsTocParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Fresh heading\t1").And.NotContain("Old heading\t9");
+        document.Blocks.Where(Citations.IsBibliographyParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain(text => text.Contains("Current Source", StringComparison.Ordinal))
+            .And.NotContain("Old bibliography");
+        document.Blocks.Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Figure 1: Fresh diagram\t1").And.NotContain("Old figure\t9");
+        document.Blocks.Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Fresh Case\t3").And.NotContain(text => text.Contains("Old Case", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void TocInsertAndRefreshAreAtomicGeneratedRegionEdits()
     {
         var heading = new Paragraph("Old heading") { StyleId = "Heading1" };
@@ -454,6 +642,13 @@ public sealed class DocumentPortableEditingOwnershipTests
             source.Should().Contain("_editingSession.ApplyDropCap(");
             source.Should().Contain("ReferenceEdits.InsertIndexEntry(");
             source.Should().Contain("ReferenceEdits.MarkAllIndexEntries(");
+            source.Should().Contain("ReferenceEdits.ToggleFieldCodes()");
+            source.Should().Contain("ReferenceEdits.UpdateFields(");
+            source.Should().Contain("DocumentReferenceBlockPageResolution BuildReferenceBlockPageResolution()");
+            source.Should().NotContain("CrossReferences.ResolveField(");
+            source.Should().NotContain("ComplexFieldEngine.Recompute(");
+            source.Should().NotContain("refreshedGeneratedRegion");
+            source.Should().NotContain("with { ShowCode = show");
             foreach (var constructor in forbidden)
                 source.Should().NotContain(constructor);
         }
@@ -471,7 +666,8 @@ public sealed class DocumentPortableEditingOwnershipTests
             var source = ReadSource("freew", "FreeW.App.Presentation", "Editing", file);
             source.Should().NotContain("using Avalonia");
             source.Should().NotContain("using System.Windows");
-            source.Should().NotContain("DocumentView");
+            source.Should().NotContain("FreeW.App.Host");
+            source.Should().NotContain("FreeW.App.Avalonia");
             source.Should().NotContain("TextPointer");
             source.Should().NotContain("DocPosition");
         }
