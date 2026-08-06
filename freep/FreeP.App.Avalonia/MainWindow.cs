@@ -146,10 +146,6 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     private readonly ListBox _slidePaneList;
     private readonly Border _slidePaneInsertionIndicator;
     private readonly Button _slidePaneNewSlideButton;
-    private SlidePaneSessionState _slidePaneSessionState = SlidePaneSessionState.Empty;
-    private SlidePaneSessionProjection? _slidePaneProjection;
-    private readonly List<SlidePaneThumbnailVisualPlan> _slidePaneRenderedThumbnailPlans = new();
-    private readonly List<SlidePaneSectionHeaderVisualPlan> _slidePaneRenderedSectionHeaderPlans = new();
     private readonly TextBox _notesBox;
     private readonly TextBlock _statusText;
     private readonly BackstageView _backstage;
@@ -369,8 +365,18 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     internal IReadOnlyList<string?> SelectionPaneRenameToolTipsForTests => _selectionPane.RenameToolTipsForTests;
     internal bool IsShellShortcutTargetForTests(Control? focused) => IsShellShortcutTarget(focused);
     internal ListBoxItem? SelectedSlidePaneItemForTests => GetCurrentSlidePaneItem();
-    internal IReadOnlyList<SlidePaneThumbnailVisualPlan> SlidePaneRenderedThumbnailPlans => _slidePaneRenderedThumbnailPlans;
-    internal IReadOnlyList<SlidePaneSectionHeaderVisualPlan> SlidePaneRenderedSectionHeaderPlans => _slidePaneRenderedSectionHeaderPlans;
+    internal IReadOnlyList<int> SlidePaneSelectedSlideIndicesForTests =>
+        _workareaSession.SlidePaneSession.Selection.SelectedSlideIndices;
+    internal IReadOnlyList<SlidePaneThumbnailVisualPlan> SlidePaneRenderedThumbnailPlans =>
+        _workareaSession.SlidePaneSession.Projection.Items
+            .Select(item => item.Thumbnail)
+            .OfType<SlidePaneThumbnailVisualPlan>()
+            .ToArray();
+    internal IReadOnlyList<SlidePaneSectionHeaderVisualPlan> SlidePaneRenderedSectionHeaderPlans =>
+        _workareaSession.SlidePaneSession.Projection.Items
+            .Select(item => item.SectionHeader)
+            .OfType<SlidePaneSectionHeaderVisualPlan>()
+            .ToArray();
     internal IReadOnlyList<string?> SlidePaneSectionHeaderAutomationNamesForTests => _slidePaneList.Items
         .OfType<ListBoxItem>()
         .Where(item => item.Tag is SlidePaneSectionHeaderTag)
@@ -783,6 +789,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             MaxHeight   = 520,
             Padding     = new Thickness(4),
             Background  = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex),
+            SelectionMode = SelectionMode.Multiple,
         };
         _slidePaneList.SelectionChanged += OnSlidePaneSelectionChanged;
 
@@ -7225,31 +7232,20 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         try
         {
             _slidePaneList.Items.Clear();
-            _slidePaneRenderedThumbnailPlans.Clear();
-            _slidePaneRenderedSectionHeaderPlans.Clear();
-
-            _slidePaneSessionState = SlidePanePlanner.SetSelectedSlide(
-                _slidePaneSessionState,
-                Editor.CurrentSlideIndex);
-            _slidePaneProjection = SlidePanePlanner.BuildSessionProjection(
-                _presentation.Slides,
-                _presentation.Sections,
-                _slidePaneSessionState);
-            var accessibilityOrdinal = 0;
-            foreach (var entry in _slidePaneProjection.Entries)
+            var projection = _workareaSession.SlidePaneSession.Projection;
+            foreach (var projected in projection.Items)
             {
-                if (entry.Kind == SlidePaneEntryKind.SectionHeader)
+                var entry = projected.Entry;
+                if (projected.SectionHeader is { } sectionHeader)
                 {
-                    _slidePaneList.Items.Add(BuildSlidePaneSectionHeader(entry, accessibilityOrdinal++));
+                    _slidePaneList.Items.Add(BuildSlidePaneSectionHeader(
+                        projected,
+                        sectionHeader));
                     continue;
                 }
 
                 var slide = _presentation.Slides[entry.SlideIndex];
-                var plan = SlidePanePlanner.BuildThumbnailVisualPlan(
-                    entry,
-                    slide,
-                    _slidePaneProjection.SelectedSlideIndex);
-                _slidePaneRenderedThumbnailPlans.Add(plan);
+                var plan = projected.Thumbnail!;
 
                 // Small SlideCanvas thumbnail using the shared slide pane metrics.
                 var thumb = new SlideCanvas
@@ -7319,7 +7315,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
                 PresentationPaneAccessibilityAdapter.ApplyItem(
                     item,
                     PresentationPaneAccessibilityPlanner.SlidePaneId,
-                    accessibilityOrdinal++,
+                    projected.AccessibilityOrdinal,
                     plan.AccessibleName,
                     plan.IsSelected ? "Selected" : "Not selected",
                     $"Slide{plan.SlideIndex + 1}");
@@ -7328,13 +7324,15 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
                 item.KeyDown += OnSlidePaneItemKeyDown;
                 item.PointerEntered += (_, _) =>
                 {
-                    if (item.Tag is int idx && idx != Editor.CurrentSlideIndex)
+                    if (item.Tag is int idx &&
+                        !_workareaSession.SlidePaneSession.Selection.IsSelected(idx))
                         itemChrome.Background = BrushFromHex(plan.ItemHoverBackgroundHex);
                 };
                 item.PointerExited += (_, _) =>
                 {
                     if (item.Tag is int idx)
-                        itemChrome.Background = BrushFromHex(idx == Editor.CurrentSlideIndex
+                        itemChrome.Background = BrushFromHex(
+                            _workareaSession.SlidePaneSession.Selection.IsSelected(idx)
                             ? plan.ItemSelectedBackgroundHex
                             : plan.ItemNormalBackgroundHex);
                 };
@@ -7347,8 +7345,8 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
                 PresentationPaneAccessibilityPlanner.SlidePaneId,
                 true,
                 _presentation.Slides.Count,
-                Editor.CurrentSlideIndex);
-            SelectSlidePaneItem(Editor.CurrentSlideIndex);
+                projection.Selection.ActiveSlideIndex);
+            SyncSlidePaneSelectionFromSession(scrollActiveIntoView: false);
             if (restoreSlidePaneFocus)
             {
                 GetCurrentSlidePaneItem()?.Focus();
@@ -7363,11 +7361,10 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     }
 
     private ListBoxItem BuildSlidePaneSectionHeader(
-        SlidePaneEntry entry,
-        int accessibilityOrdinal)
+        PresentationSlidePaneItemProjection projected,
+        SlidePaneSectionHeaderVisualPlan plan)
     {
-        var plan = SlidePanePlanner.BuildSectionHeaderVisualPlan(entry);
-        _slidePaneRenderedSectionHeaderPlans.Add(plan);
+        var entry = projected.Entry;
         var normalBackground = BrushFromHex(plan.BackgroundHex);
         var hoverBackground = BrushFromHex(plan.HoverBackgroundHex);
 
@@ -7422,7 +7419,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         PresentationPaneAccessibilityAdapter.ApplyItem(
             item,
             PresentationPaneAccessibilityPlanner.SlidePaneId,
-            accessibilityOrdinal,
+            projected.AccessibilityOrdinal,
             plan.AccessibleName,
             "Not selected",
             $"Section{plan.SectionIndex + 1}");
@@ -7472,14 +7469,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         BuildSlidePaneContextMenu(slideIndex);
 
     internal bool TryApplySlidePaneContextAction(int slideIndex, SlidePaneActionKind kind)
-    {
-        var action = kind == SlidePaneActionKind.ToggleHiddenSlide
-            ? SlidePanePlanner.BuildHiddenSlideAction(_presentation.Slides, slideIndex)
-            : SlidePanePlanner.BuildContextActions(_presentation.Slides.Count, slideIndex)
-                .FirstOrDefault(candidate => candidate.Kind == kind);
-
-        return action is not null && SlidePanePlanner.TryApplyAction(Editor, action);
-    }
+        => _workareaSession.ExecuteSlidePaneAction(kind, slideIndex);
 
     private ContextMenu BuildSlidePaneSectionContextMenu(SlidePaneEntry entry)
     {
@@ -7531,15 +7521,16 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         int slideIndex,
         int sectionIndex)
     {
-        var route = SlidePanePlanner.BuildContextCommandRoute(
+        var route = _workareaSession.BuildSlidePaneContextCommandRoute(
             command,
-            _presentation.Slides,
-            _presentation.Sections,
             slideIndex,
             sectionIndex);
         if (route.SlideAction is { } slideAction)
         {
-            SlidePanePlanner.TryApplyAction(Editor, slideAction);
+            _workareaSession.ExecuteSlidePaneAction(
+                slideAction.Kind,
+                slideIndex,
+                slideAction.TargetSlideIndex);
             return;
         }
 
@@ -7560,7 +7551,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
                 return;
         }
 
-        SlideSectionPlanner.TryApplyAction(Editor, execution, promptedName);
+        _workareaSession.ExecuteSlidePaneSectionAction(execution, promptedName);
     }
 
     private void ToggleSlidePaneSection(string sectionId)
@@ -7568,9 +7559,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         if (string.IsNullOrWhiteSpace(sectionId))
             return;
 
-        _slidePaneSessionState = SlidePanePlanner.ToggleSection(_slidePaneSessionState, sectionId);
-
-        RefreshSlidePane();
+        _workareaSession.ToggleSlidePaneSection(sectionId);
     }
 
     internal bool ToggleSlidePaneSectionForTests(int sectionIndex)
@@ -7588,23 +7577,21 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         int sectionIndex = -1,
         string? promptedName = null)
     {
-        var action = kind == SlideSectionActionKind.AddSection
-            ? SlideSectionPlanner.BuildSlideContextActions(
-                    _presentation.Slides,
-                    _presentation.Sections,
-                    slideIndex)
-                .SingleOrDefault(candidate => candidate.Kind == kind)
-            : SlideSectionPlanner.BuildSectionHeaderActions(
-                    _presentation.Sections,
-                    sectionIndex,
-                    slideIndex)
-                .SingleOrDefault(candidate => candidate.Kind == kind);
-
-        if (action is null)
-            return false;
-
-        var execution = SlideSectionPlanner.BuildExecutionPlan(action);
-        return SlideSectionPlanner.TryApplyAction(Editor, execution, promptedName);
+        var command = kind switch
+        {
+            SlideSectionActionKind.AddSection => FreePContextMenuCommand.AddSection,
+            SlideSectionActionKind.RenameSection => FreePContextMenuCommand.RenameSection,
+            SlideSectionActionKind.RemoveSection => FreePContextMenuCommand.RemoveSection,
+            SlideSectionActionKind.RemoveAllSections => FreePContextMenuCommand.RemoveAllSections,
+            _ => default,
+        };
+        var execution = _workareaSession.BuildSlidePaneContextCommandRoute(
+                command,
+                slideIndex,
+                sectionIndex)
+            .SectionExecution;
+        return execution is not null &&
+            _workareaSession.ExecuteSlidePaneSectionAction(execution, promptedName);
     }
 
     private async Task<string?> PromptSectionNameAsync(string title, string initialName)
@@ -7687,34 +7674,24 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         if (!point.Properties.IsLeftButtonPressed)
             return;
 
-        _slidePaneSessionState = _slidePaneSessionState with
-        {
-            DragSession = SlidePanePlanner.BeginDragSession(
-                sourceSlideIndex,
-                e.GetPosition(item).Y)
-        };
-        // Match WPF: a left-click selects the thumbnail before a possible drag
-        // starts, so a click-and-hold always operates on the clicked slide.
-        Editor.SelectSlide(sourceSlideIndex);
+        _workareaSession.BeginSlidePaneDrag(sourceSlideIndex, e.GetPosition(item).Y);
     }
 
     private void OnSlidePaneItemPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (sender is not ListBoxItem item || !_slidePaneSessionState.DragSession.IsTracking)
+        if (sender is not ListBoxItem item ||
+            !_workareaSession.SlidePaneSession.Projection.Layout.DragSession.IsTracking)
             return;
 
         var point = e.GetCurrentPoint(item);
         if (!point.Properties.IsLeftButtonPressed)
             return;
 
-        var update = SlidePanePlanner.UpdateDragSession(
-            _slidePaneSessionState.DragSession,
-            GetSlidePaneItemKinds(),
+        var update = _workareaSession.UpdateSlidePaneDrag(
             e.GetPosition(item).Y,
             e.GetPosition(_slidePaneList).Y,
             SlidePanePlanner.DefaultSlideItemHeight);
-        _slidePaneSessionState = _slidePaneSessionState with { DragSession = update.State };
-        if (!_slidePaneSessionState.DragSession.IsDragging)
+        if (!update.State.IsDragging)
             return;
 
         if (update.ShouldCapturePointer)
@@ -7726,12 +7703,8 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
     private void OnSlidePaneItemPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        var completion = SlidePanePlanner.CompleteDragSession(
-            _slidePaneSessionState.DragSession,
-            _presentation.Slides.Count);
-        _slidePaneSessionState = _slidePaneSessionState with { DragSession = completion.State };
-
-        if (!completion.ShouldReleaseCapture)
+        _workareaSession.CompleteSlidePaneDrag(out var shouldReleaseCapture);
+        if (!shouldReleaseCapture)
         {
             return;
         }
@@ -7739,28 +7712,20 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         e.Pointer.Capture(null);
         HideSlidePaneInsertionIndicator();
 
-        SlidePanePlanner.TryApplyAction(Editor, completion.Action);
         e.Handled = true;
     }
 
     private void OnSlidePaneItemPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
     {
-        _slidePaneSessionState = _slidePaneSessionState with
-        {
-            DragSession = SlidePanePlanner.CancelDragSession(_slidePaneSessionState.DragSession)
-        };
+        _workareaSession.CancelSlidePaneDrag();
         HideSlidePaneInsertionIndicator();
     }
 
     internal bool TryApplySlidePaneMove(int sourceSlideIndex, int targetInsertionIndex)
-    {
-        var action = SlidePanePlanner.PlanMoveAction(
-            _presentation.Slides.Count,
+        => _workareaSession.ExecuteSlidePaneAction(
+            SlidePaneActionKind.MoveSlide,
             sourceSlideIndex,
             targetInsertionIndex);
-
-        return SlidePanePlanner.TryApplyAction(Editor, action);
-    }
 
     internal SlidePaneDropVisualPlan PreviewSlidePaneDragForTests(
         int sourceSlideIndex,
@@ -7768,17 +7733,11 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         double pointerYWithinItem,
         double pointerYWithinPane)
     {
-        _slidePaneSessionState = _slidePaneSessionState with
-        {
-            DragSession = SlidePanePlanner.BeginDragSession(sourceSlideIndex, startPointerY)
-        };
-        var update = SlidePanePlanner.UpdateDragSession(
-            _slidePaneSessionState.DragSession,
-            GetSlidePaneItemKinds(),
+        _workareaSession.BeginSlidePaneDrag(sourceSlideIndex, startPointerY);
+        var update = _workareaSession.UpdateSlidePaneDrag(
             pointerYWithinItem,
             pointerYWithinPane,
             SlidePanePlanner.DefaultSlideItemHeight);
-        _slidePaneSessionState = _slidePaneSessionState with { DragSession = update.State };
         if (update.State.IsDragging)
             ShowSlidePaneInsertionIndicator(update.DropVisualPlan);
         else
@@ -7789,24 +7748,13 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
     internal bool CompleteSlidePaneDragForTests()
     {
-        var completion = SlidePanePlanner.CompleteDragSession(
-            _slidePaneSessionState.DragSession,
-            _presentation.Slides.Count);
-        _slidePaneSessionState = _slidePaneSessionState with { DragSession = completion.State };
+        var applied = _workareaSession.CompleteSlidePaneDrag(out var shouldReleaseCapture);
         HideSlidePaneInsertionIndicator();
-        return completion.ShouldReleaseCapture &&
-            SlidePanePlanner.TryApplyAction(Editor, completion.Action);
+        return shouldReleaseCapture && applied;
     }
 
     internal bool TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind intent)
-    {
-        var action = SlidePanePlanner.BuildKeyboardAction(
-            _presentation.Slides.Count,
-            Editor.CurrentSlideIndex,
-            intent);
-
-        return SlidePanePlanner.TryApplyAction(Editor, action);
-    }
+        => _workareaSession.ExecuteSlidePaneKeyboardAction(intent);
 
     private void OnSlidePaneItemKeyDown(object? sender, KeyEventArgs e)
     {
@@ -7899,9 +7847,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
     private Button BuildSlidePaneNewSlideButton()
     {
-        var plan = SlidePanePlanner.BuildBottomNewSlideAffordance(
-            _presentation.Slides.Count,
-            Editor.CurrentSlideIndex);
+        var plan = _workareaSession.SlidePaneSession.Projection.BottomAffordance;
         var button = new Button
         {
             Content                    = plan.Text,
@@ -7925,7 +7871,9 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     }
 
     private bool InsertSlideFromSlidePaneAffordance() =>
-        SlidePanePlanner.TryApplyBottomNewSlideAffordance(Editor);
+        _workareaSession.ExecuteSlidePaneAction(
+            SlidePaneActionKind.InsertAfterSlide,
+            _workareaSession.SlidePaneSession.Selection.ActiveSlideIndex);
 
     private void ShowSlidePaneInsertionIndicator(SlidePaneDropVisualPlan plan)
     {
@@ -7948,34 +7896,28 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     private void HideSlidePaneInsertionIndicator() =>
         _slidePaneInsertionIndicator.IsVisible = false;
 
-    private IReadOnlyList<bool> GetSlidePaneItemKinds() =>
-        _slidePaneProjection?.PaneItemIsSlide ?? Array.Empty<bool>();
-
     private static IBrush BrushFromHex(string hex) =>
         new SolidColorBrush(Color.Parse(hex));
 
-    private void SelectSlidePaneItem(int slideIndex)
+    private void SyncSlidePaneSelectionFromSession(bool scrollActiveIntoView = true)
     {
-        var itemIndex = 0;
-        foreach (var item in _slidePaneList.Items)
+        var selection = _workareaSession.SlidePaneSession.Selection;
+        _slidePaneList.SelectedItems?.Clear();
+        foreach (var item in _slidePaneList.Items.OfType<ListBoxItem>())
         {
-            if (item is ListBoxItem { Tag: int itemSlideIndex } && itemSlideIndex == slideIndex)
-            {
-                _slidePaneList.SelectedIndex = itemIndex;
-                return;
-            }
-
-            itemIndex++;
+            if (item.Tag is int slideIndex && selection.IsSelected(slideIndex))
+                _slidePaneList.SelectedItems?.Add(item);
         }
 
-        _slidePaneList.SelectedIndex = -1;
+        if (scrollActiveIntoView && GetCurrentSlidePaneItem() is { } active)
+            active.BringIntoView();
     }
 
     private ListBoxItem? GetCurrentSlidePaneItem() =>
         _slidePaneList.Items
             .OfType<ListBoxItem>()
             .FirstOrDefault(item => item.Tag is int slideIndex &&
-                slideIndex == Editor.CurrentSlideIndex);
+                slideIndex == _workareaSession.SlidePaneSession.Selection.ActiveSlideIndex);
 
     private void RestoreSlidePaneFocusAfterRefresh()
     {
@@ -7988,44 +7930,31 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
     private void UpdateSlidePaneItemChrome()
     {
+        var projection = _workareaSession.SlidePaneSession.Projection;
         foreach (var item in _slidePaneList.Items.OfType<ListBoxItem>())
         {
             if (item.Tag is not int slideIndex || item.Content is not Border chrome)
                 continue;
 
-            var plan = _slidePaneRenderedThumbnailPlans.FirstOrDefault(p => p.SlideIndex == slideIndex);
-            if (plan is null)
+            var projected = projection.Items.FirstOrDefault(candidate =>
+                candidate.Entry.Kind == SlidePaneEntryKind.Slide &&
+                candidate.Entry.SlideIndex == slideIndex);
+            if (projected?.Thumbnail is not { } plan)
                 continue;
 
-            var selected = slideIndex == Editor.CurrentSlideIndex;
-            chrome.Background = BrushFromHex(selected ? plan.ItemSelectedBackgroundHex : plan.ItemNormalBackgroundHex);
-            chrome.BorderBrush = BrushFromHex(selected ? plan.ItemSelectedBorderHex : plan.ItemNormalBorderHex);
-            chrome.BorderThickness = new Thickness(selected ? plan.SelectedBorderThickness : plan.NormalBorderThickness);
+            chrome.Background = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBackgroundHex : plan.ItemNormalBackgroundHex);
+            chrome.BorderBrush = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBorderHex : plan.ItemNormalBorderHex);
+            chrome.BorderThickness = new Thickness(plan.IsSelected ? plan.SelectedBorderThickness : plan.NormalBorderThickness);
             AutomationProperties.SetName(item, plan.AccessibleName);
             PresentationPaneAccessibilityAdapter.ApplyItem(
                 item,
                 PresentationPaneAccessibilityPlanner.SlidePaneId,
-                GetAccessibilityOrdinalForSlide(slideIndex),
+                projected.AccessibilityOrdinal,
                 plan.AccessibleName,
-                selected ? "Selected" : "Not selected",
+                plan.IsActive ? "Active and selected" : plan.IsSelected ? "Selected" : "Not selected",
                 $"Slide{slideIndex + 1}");
         }
         RefreshPaneAccessibilityMetadata();
-    }
-
-    private int GetAccessibilityOrdinalForSlide(int slideIndex)
-    {
-        if (_slidePaneProjection is null)
-            return slideIndex;
-
-        for (var ordinal = 0; ordinal < _slidePaneProjection.Entries.Count; ordinal++)
-        {
-            var entry = _slidePaneProjection.Entries[ordinal];
-            if (entry.Kind == SlidePaneEntryKind.Slide && entry.SlideIndex == slideIndex)
-                return ordinal;
-        }
-
-        return slideIndex;
     }
 
     private void OnSlidePaneSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -8033,13 +7962,20 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         if (_slidePaneRefreshing)
             return;
 
-        if (_slidePaneList.SelectedItem is not ListBoxItem { Tag: int idx })
+        var selected = _slidePaneList.SelectedItems?
+            .OfType<ListBoxItem>()
+            .Select(item => item.Tag)
+            .OfType<int>()
+            .ToArray() ?? [];
+        var active = e.AddedItems
+            .OfType<ListBoxItem>()
+            .Select(item => item.Tag)
+            .OfType<int>()
+            .LastOrDefault(_workareaSession.SlidePaneSession.Selection.ActiveSlideIndex);
+        if (selected.Length == 0 || active < 0)
             return;
 
-        if (idx < 0 || idx >= _presentation.Slides.Count)
-            return;
-
-        Editor.SelectSlide(idx);
+        _workareaSession.ApplySlidePaneNativeSelection(selected, active);
     }
 
     // ── Notes pane ─────────────────────────────────────────────────────────────
@@ -8077,7 +8013,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     private void SyncSlidePaneSelectionFromEditor()
     {
         _slidePaneRefreshing = true;
-        try { SelectSlidePaneItem(Editor.CurrentSlideIndex); }
+        try { SyncSlidePaneSelectionFromSession(); }
         finally { _slidePaneRefreshing = false; }
     }
 

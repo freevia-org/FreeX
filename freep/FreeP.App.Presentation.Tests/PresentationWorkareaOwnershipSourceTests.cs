@@ -37,10 +37,12 @@ public sealed class PresentationWorkareaOwnershipSourceTests
         avalonia.Should().Contain("TryMapKeyboardKey(")
             .And.NotContain("QueueClipboardCopy();");
         wpfEndpoint.Should().Contain("WpfClipboardCommands.Copy(Editor, _osClipboard)")
-            .And.Contain("SlidePaneHost.Child = new SlidePane(context.Snapshot.Editor)");
+            .And.Contain("PresentationWorkareaOperation.RefreshSlidePane => RefreshSlidePane")
+            .And.NotContain("SlidePaneHost.Child = new SlidePane(context.Snapshot.Editor)");
         avaloniaEndpoint.Should().Contain(
                 "PresentationWorkareaNativeCommand.Copy => QueueClipboardCopy")
-            .And.Contain("RewireInteractionToEditor();");
+            .And.Contain("RewireInteractionToEditor();")
+            .And.NotContain("SlidePanePlanner.SetSelectedSlide(");
     }
 
     [Fact]
@@ -51,8 +53,22 @@ public sealed class PresentationWorkareaOwnershipSourceTests
 
         source.Should().Contain("public static class PresentationWorkareaOperationPlanner")
             .And.Contain("public sealed class PresentationWorkareaSession : IDisposable")
+            .And.Contain("public PresentationSlidePaneSession SlidePaneSession { get; }")
             .And.Contain("editor.CurrentSlideChanged += HandleCurrentSlideChanged;")
             .And.Contain("editor.SelectionChanged += HandleSelectionChanged;")
+            .And.NotContain("System.Windows")
+            .And.NotContain("Avalonia");
+
+        var slidePane = Read(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationSlidePaneSession.cs");
+        slidePane.Should().Contain("public sealed class PresentationSlidePaneSession")
+            .And.Contain("public SlidePaneSessionChangePlan ApplyNativeSelection(")
+            .And.Contain("editor.Bus.Execute(new BatchCommand(\"Duplicate Slides\"")
+            .And.Contain("editor.Bus.Execute(new BatchCommand(\"Delete Slides\"")
+            .And.Contain("editor.Bus.Execute(new BatchCommand(\"Move Slides\"")
             .And.NotContain("System.Windows")
             .And.NotContain("Avalonia");
     }

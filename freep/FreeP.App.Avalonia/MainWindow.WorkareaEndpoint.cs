@@ -91,9 +91,6 @@ public sealed partial class MainWindow
     private void PrepareCurrentSlideChange(PresentationWorkareaContext context)
     {
         _startupDirtyTrace?.Record("current-slide-changed", _fileWorkflow);
-        _slidePaneSessionState = SlidePanePlanner.SetSelectedSlide(
-            _slidePaneSessionState,
-            context.Snapshot.CurrentSlideIndex);
     }
 
     private void BindWorkareaEditor(EditingSession editor)

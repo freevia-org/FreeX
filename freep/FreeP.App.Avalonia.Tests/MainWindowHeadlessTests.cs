@@ -3084,6 +3084,38 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_native_multi_selection_feeds_shared_batch_commands()
+    {
+        int[] selectedBefore = [];
+        int[] selectedAfter = [];
+        var slideCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+            var list = window.SlidePaneForAccessibilityTests;
+            var items = list.Items.OfType<ListBoxItem>().Where(item => item.Tag is int).ToArray();
+
+            list.SelectedItems!.Clear();
+            list.SelectedItems.Add(items[0]);
+            list.SelectedItems.Add(items[2]);
+            selectedBefore = window.SlidePaneSelectedSlideIndicesForTests.ToArray();
+
+            window.TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind.DuplicateCurrentSlide)
+                .Should().BeTrue();
+            selectedAfter = window.SlidePaneSelectedSlideIndicesForTests.ToArray();
+            slideCount = window.Editor.Presentation.Slides.Count;
+        });
+
+        if (!ran) return;
+        selectedBefore.Should().Equal(0, 2);
+        selectedAfter.Should().Equal(1, 4);
+        slideCount.Should().Be(5);
+    }
+
+    [Fact]
     public async Task SlidePane_keyboard_actions_route_through_shared_planner()
     {
         var deletedSingleSlide = true;
