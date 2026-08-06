@@ -6844,15 +6844,68 @@ public static class PptxPackageReader
             : null;
         var colorBehavior = buildPar.Descendants(P + "animClr")
             .FirstOrDefault();
+        var lineColorBehavior = presetClass == "emph"
+            && presetId == 7
+            ? buildPar.Descendants(P + "animClr")
+                .FirstOrDefault(element => element.Descendants(P + "attrName")
+                    .Any(attribute => attribute.Value == "stroke.color"))
+            : null;
+        var fontStyleBehavior = presetClass == "emph"
+            && presetId == 5
+            ? buildPar.Descendants(P + "set")
+                .FirstOrDefault(element => element.Descendants(P + "attrName")
+                    .Any(attribute => attribute.Value == "style.fontWeight"))
+            : null;
+        var fontStyleTargets = fontStyleBehavior is null
+            ? new HashSet<string>(StringComparer.Ordinal)
+            : buildPar.Descendants(P + "set")
+                .Descendants(P + "attrName")
+                .Select(element => element.Value)
+                .ToHashSet(StringComparer.Ordinal);
+        var isNativeFontStyle = fontStyleTargets.IsSupersetOf(new[]
+        {
+            "style.fontStyle",
+            "style.fontWeight",
+            "style.textDecorationUnderline",
+        });
+        var boldBehavior = presetClass == "emph" && presetId == 15
+            ? buildPar.Descendants(P + "set")
+                .FirstOrDefault(element => element.Descendants(P + "attrName")
+                    .Any(attribute => attribute.Value == "style.fontWeight")
+                    && element.Descendants(P + "strVal")
+                        .Any(value => value.Attribute("val")?.Value == "bold"))
+            : null;
+        var underlineBehavior = presetClass == "emph" && presetId == 18
+            ? buildPar.Descendants(P + "set")
+                .FirstOrDefault(element => element.Descendants(P + "attrName")
+                    .Any(attribute => attribute.Value == "style.textDecorationUnderline")
+                    && element.Descendants(P + "strVal")
+                        .Any(value => value.Attribute("val")?.Value == "true"))
+            : null;
+        var isNativeBold = boldBehavior is not null;
+        var isNativeUnderline = underlineBehavior is not null;
+        var nativeFontBehavior = fontStyleBehavior ?? boldBehavior ?? underlineBehavior;
         var isNativeFillColor = presetClass == "emph"
             && presetId == 1
             && colorBehavior?.Descendants(P + "attrName")
                 .Any(element => element.Value == "fillcolor") == true;
+        var isNativeLineColor = lineColorBehavior is not null;
         var preservedColorBehaviorXml = isNativeFillColor
+            || isNativeLineColor
             ? null
             : colorBehavior?.ToString(SaveOptions.DisableFormatting);
         var preservedFillBehaviorXml = isNativeFillColor
             ? BuildPreservedFillBehaviorXml(colorBehavior!)
+            : null;
+        var preservedLineBehaviorXml = isNativeLineColor
+            ? BuildPreservedFillBehaviorXml(lineColorBehavior!)
+            : null;
+        var preservedFontStyleBehaviorXml = isNativeFontStyle || isNativeBold || isNativeUnderline
+            ? BuildPreservedFillBehaviorXml(nativeFontBehavior!)
+            : null;
+        var preservedIterationXml = isNativeBold || isNativeUnderline
+            ? buildPar.Descendants(P + "iterate").FirstOrDefault()
+                ?.ToString(SaveOptions.DisableFormatting)
             : null;
 
         var repeatInfo = ReadRepeat(cTn);
@@ -6867,6 +6920,14 @@ public static class PptxPackageReader
         var (kind, preset) = PptxAnimationMap.OoxmlToAnimationPreset(presetClass, presetId);
         if (isNativeFillColor)
             preset = AnimationPreset.ChangeFillColor;
+        else if (isNativeLineColor)
+            preset = AnimationPreset.ChangeLineColor;
+        else if (isNativeFontStyle)
+            preset = AnimationPreset.ChangeFontStyle;
+        else if (isNativeBold)
+            preset = AnimationPreset.Bold;
+        else if (isNativeUnderline)
+            preset = AnimationPreset.Underline;
         if (presetClass == "emph" && presetId == 4 && scaleBehavior is null)
         {
             var numericTo = buildPar.Descendants(P + "anim")
@@ -6879,6 +6940,8 @@ public static class PptxPackageReader
             }
         }
         bool knownPreset = !isNativeFillColor
+            && !isNativeBold
+            && !isNativeUnderline
             && PptxAnimationMap.IsKnownOoxmlPreset(presetClass, presetId);
         if (preset == AnimationPreset.Grow)
             preset = AnimationAmountSemantics.ResolvePreset(preset, scaleBehavior);
@@ -6916,6 +6979,9 @@ public static class PptxPackageReader
             PreservedColorBehaviorXml = preservedColorBehaviorXml,
             PreservedNumericBehaviorXml = preservedNumericBehaviorXml,
             PreservedFillBehaviorXml = preservedFillBehaviorXml,
+            PreservedLineBehaviorXml = preservedLineBehaviorXml,
+            PreservedFontStyleBehaviorXml = preservedFontStyleBehaviorXml,
+            PreservedIterationXml = preservedIterationXml,
             TriggerShapeId = triggerShapeId,
             RawPresetClass = knownPreset ? null : presetClass,
             RawPresetId = knownPreset ? null : presetId,

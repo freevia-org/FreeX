@@ -2426,6 +2426,11 @@ public static class PptxPackageWriter
             childTimingItems.Add(numericBehavior);
         foreach (var fillBehavior in BuildPreservedFillBehaviorEls(anim, ref nodeId))
             childTimingItems.Add(fillBehavior);
+        foreach (var lineBehavior in BuildPreservedLineBehaviorEls(anim, ref nodeId))
+            childTimingItems.Add(lineBehavior);
+        foreach (var fontStyleBehavior in BuildPreservedFontStyleBehaviorEls(anim, ref nodeId))
+            childTimingItems.Add(fontStyleBehavior);
+        var preservedIteration = BuildPreservedIterationEl(anim);
         if (anim.Preset is AnimationPreset.ColorPulse
             or AnimationPreset.ChangeColor
             or AnimationPreset.ChangeFillColor
@@ -2447,19 +2452,20 @@ public static class PptxPackageWriter
                     new XElement(P + "spTgt", new XAttribute("spid", anim.ShapeId)))));
         childTimingItems.Add(setEl);
 
+        var innerTiming = new XElement(P + "cTn",
+            new XAttribute("id", nodeId++),
+            new XAttribute("fill", "hold"),
+            new XElement(P + "stCondLst",
+                new XElement(P + "cond", new XAttribute("delay", "0"))),
+            preservedIteration,
+            new XElement(P + "childTnLst", childTimingItems));
+
         return new XElement(P + "par",
             new XElement(P + "cTn",
                 cTnAttrs.Cast<object>().ToArray(),
                 new XElement(P + "stCondLst",
                     new XElement(P + "cond", new XAttribute("delay", delayStr))),
-                new XElement(P + "childTnLst",
-                    new XElement(P + "par",
-                        new XElement(P + "cTn",
-                            new XAttribute("id", nodeId++),
-                            new XAttribute("fill", "hold"),
-                            new XElement(P + "stCondLst",
-                                new XElement(P + "cond", new XAttribute("delay", "0"))),
-                            new XElement(P + "childTnLst", childTimingItems))))));
+                new XElement(P + "childTnLst", new XElement(P + "par", innerTiming))));
     }
 
     private static XElement? BuildPreservedColorBehaviorEl(ShapeAnimation anim, ref uint nodeId)
@@ -2513,6 +2519,83 @@ public static class PptxPackageWriter
         }
 
         return result;
+    }
+
+    private static IReadOnlyList<XElement> BuildPreservedLineBehaviorEls(ShapeAnimation anim, ref uint nodeId)
+    {
+        if (string.IsNullOrWhiteSpace(anim.PreservedLineBehaviorXml)
+            || anim.Preset != AnimationPreset.ChangeLineColor)
+        {
+            return Array.Empty<XElement>();
+        }
+
+        XElement behaviorList;
+        try
+        {
+            behaviorList = XElement.Parse(anim.PreservedLineBehaviorXml, LoadOptions.PreserveWhitespace);
+        }
+        catch (XmlException)
+        {
+            return Array.Empty<XElement>();
+        }
+
+        var result = new List<XElement>();
+        foreach (var behavior in behaviorList.Elements().Select(element => new XElement(element)))
+        {
+            foreach (var timingNode in behavior.Descendants(P + "cTn"))
+                timingNode.SetAttributeValue("id", nodeId++);
+            result.Add(behavior);
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<XElement> BuildPreservedFontStyleBehaviorEls(ShapeAnimation anim, ref uint nodeId)
+    {
+        if (string.IsNullOrWhiteSpace(anim.PreservedFontStyleBehaviorXml)
+            || anim.Preset is not (AnimationPreset.ChangeFontStyle or AnimationPreset.Bold or AnimationPreset.Underline))
+        {
+            return Array.Empty<XElement>();
+        }
+
+        XElement behaviorList;
+        try
+        {
+            behaviorList = XElement.Parse(anim.PreservedFontStyleBehaviorXml, LoadOptions.PreserveWhitespace);
+        }
+        catch (XmlException)
+        {
+            return Array.Empty<XElement>();
+        }
+
+        var result = new List<XElement>();
+        foreach (var behavior in behaviorList.Elements().Select(element => new XElement(element)))
+        {
+            foreach (var timingNode in behavior.Descendants(P + "cTn"))
+                timingNode.SetAttributeValue("id", nodeId++);
+            result.Add(behavior);
+        }
+
+        return result;
+    }
+
+    private static XElement? BuildPreservedIterationEl(ShapeAnimation anim)
+    {
+        if (string.IsNullOrWhiteSpace(anim.PreservedIterationXml)
+            || anim.Preset is not (AnimationPreset.Bold or AnimationPreset.Underline))
+        {
+            return null;
+        }
+
+        try
+        {
+            var iteration = XElement.Parse(anim.PreservedIterationXml, LoadOptions.PreserveWhitespace);
+            return iteration.Name == P + "iterate" ? iteration : null;
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
     }
 
     private static XElement? BuildPreservedNumericBehaviorEl(ShapeAnimation anim, ref uint nodeId)

@@ -3871,6 +3871,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
             case SlideShowShapeAnimationEffectKind.ColorPulse:
             case SlideShowShapeAnimationEffectKind.ChangeColor:
+            case SlideShowShapeAnimationEffectKind.ChangeFontStyle:
                 EmphasisPulseEffect(sb, element, plan);
                 break;
 

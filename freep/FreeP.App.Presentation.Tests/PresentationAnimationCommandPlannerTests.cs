@@ -41,6 +41,8 @@ public sealed class PresentationAnimationCommandPlannerTests
     [InlineData("freep.anim.emphasis.change-fill-color", AnimationKind.Emphasis, AnimationPreset.ChangeFillColor)]
     [InlineData("freep.anim.emphasis.change-font-color", AnimationKind.Emphasis, AnimationPreset.ChangeColor)]
     [InlineData("freep.anim.emphasis.change-font-size", AnimationKind.Emphasis, AnimationPreset.Grow)]
+    [InlineData("freep.anim.emphasis.change-line-color", AnimationKind.Emphasis, AnimationPreset.ChangeLineColor)]
+    [InlineData("freep.anim.emphasis.change-font-style", AnimationKind.Emphasis, AnimationPreset.ChangeFontStyle)]
     [InlineData("freep.anim.emphasis.grow-with-color", AnimationKind.Emphasis, AnimationPreset.GrowWithColor)]
     [InlineData("freep.anim.emphasis.wave", AnimationKind.Emphasis, AnimationPreset.Wave)]
     [InlineData("freep.anim.emphasis.shimmer", AnimationKind.Emphasis, AnimationPreset.Shimmer)]
@@ -227,6 +229,94 @@ public sealed class PresentationAnimationCommandPlannerTests
         editor.Bus.Redo();
         editor.CurrentSlideAnimations.Should().ContainSingle()
             .Which.RawPresetId.Should().Be(4);
+    }
+
+    [Fact]
+    public void TryApply_ChangeLineColorAuthorsNativeStrokeTargetAndSupportsUndo()
+    {
+        var editor = MakeSession(out _, out var shapeId);
+        PresentationAnimationCommandPlanner.TryPlan("freep.anim.emphasis.change-line-color", out var plan)
+            .Should().BeTrue();
+
+        PresentationAnimationCommandPlanner.TryApply(editor, plan).Should().BeTrue();
+
+        var animation = editor.CurrentSlideAnimations.Should().ContainSingle().Subject;
+        animation.ShapeId.Should().Be(shapeId);
+        animation.Preset.Should().Be(AnimationPreset.ChangeLineColor);
+        animation.RawPresetClass.Should().Be("emph");
+        animation.RawPresetId.Should().Be(7);
+        animation.RawPresetSubtype.Should().Be("2");
+        animation.PreservedLineBehaviorXml.Should().Contain("stroke.color");
+        animation.PreservedLineBehaviorXml.Should().Contain("stroke.on");
+        animation.PreservedLineBehaviorXml.Should().Contain($"spid=\"{shapeId}\"");
+        animation.PreservedLineBehaviorXml.Should().Contain("accent2");
+
+        editor.Bus.CanUndo.Should().BeTrue();
+        editor.Bus.Undo();
+        editor.CurrentSlideAnimations.Should().BeEmpty();
+        editor.Bus.Redo();
+        editor.CurrentSlideAnimations.Should().ContainSingle()
+            .Which.Preset.Should().Be(AnimationPreset.ChangeLineColor);
+    }
+
+    [Fact]
+    public void TryApply_ChangeFontStyleAuthorsNativeStyleTargetsAndSupportsUndo()
+    {
+        var editor = MakeSession(out _, out var shapeId);
+        PresentationAnimationCommandPlanner.TryPlan("freep.anim.emphasis.change-font-style", out var plan)
+            .Should().BeTrue();
+
+        PresentationAnimationCommandPlanner.TryApply(editor, plan).Should().BeTrue();
+
+        var animation = editor.CurrentSlideAnimations.Should().ContainSingle().Subject;
+        animation.ShapeId.Should().Be(shapeId);
+        animation.Preset.Should().Be(AnimationPreset.ChangeFontStyle);
+        animation.RawPresetClass.Should().Be("emph");
+        animation.RawPresetId.Should().Be(5);
+        animation.RawPresetSubtype.Should().Be("1");
+        animation.PreservedFontStyleBehaviorXml.Should().Contain("style.fontStyle");
+        animation.PreservedFontStyleBehaviorXml.Should().Contain("style.fontWeight");
+        animation.PreservedFontStyleBehaviorXml.Should().Contain("style.textDecorationUnderline");
+        animation.PreservedFontStyleBehaviorXml.Should().Contain($"spid=\"{shapeId}\"");
+
+        editor.Bus.CanUndo.Should().BeTrue();
+        editor.Bus.Undo();
+        editor.CurrentSlideAnimations.Should().BeEmpty();
+        editor.Bus.Redo();
+        editor.CurrentSlideAnimations.Should().ContainSingle()
+            .Which.Preset.Should().Be(AnimationPreset.ChangeFontStyle);
+    }
+
+    [Theory]
+    [InlineData("freep.anim.emphasis.bold", AnimationPreset.Bold, 15)]
+    [InlineData("freep.anim.emphasis.underline", AnimationPreset.Underline, 18)]
+    public void TryApply_FontEmphasisAuthorsNativePowerPointPreset(
+        string commandId,
+        AnimationPreset expectedPreset,
+        int expectedPresetId)
+    {
+        var editor = MakeSession(out _, out var shapeId);
+        PresentationAnimationCommandPlanner.TryPlan(commandId, out var plan)
+            .Should().BeTrue();
+
+        PresentationAnimationCommandPlanner.TryApply(editor, plan).Should().BeTrue();
+
+        var animation = editor.CurrentSlideAnimations.Should().ContainSingle().Subject;
+        animation.ShapeId.Should().Be(shapeId);
+        animation.Preset.Should().Be(expectedPreset);
+        animation.RawPresetClass.Should().Be("emph");
+        animation.RawPresetId.Should().Be(expectedPresetId);
+        animation.RawPresetSubtype.Should().Be("0");
+        animation.PreservedFontStyleBehaviorXml.Should().Contain("style.");
+        if (expectedPreset == AnimationPreset.Underline)
+            animation.PreservedIterationXml.Should().Contain("4000");
+
+        editor.Bus.CanUndo.Should().BeTrue();
+        editor.Bus.Undo();
+        editor.CurrentSlideAnimations.Should().BeEmpty();
+        editor.Bus.Redo();
+        editor.CurrentSlideAnimations.Should().ContainSingle()
+            .Which.Preset.Should().Be(expectedPreset);
     }
 
     [Fact]

@@ -635,6 +635,8 @@ internal static class FreePRibbonText
     public static RibbonText AnimationEmphasisChangeFillColorCommand { get; } = new("Ribbon_Command_AnimationEmphasisChangeFillColor_Label", "Ribbon_Command_AnimationEmphasisChangeFillColor_KeyTip");
     public static RibbonText AnimationEmphasisChangeFontColorCommand { get; } = new("Ribbon_Command_AnimationEmphasisChangeFontColor_Label", "Ribbon_Command_AnimationEmphasisChangeFontColor_KeyTip");
     public static RibbonText AnimationEmphasisChangeFontSizeCommand { get; } = new("Ribbon_Command_AnimationEmphasisChangeFontSize_Label", "Ribbon_Command_AnimationEmphasisChangeFontSize_KeyTip");
+    public static RibbonText AnimationEmphasisChangeLineColorCommand { get; } = new("Ribbon_Command_AnimationEmphasisChangeLineColor_Label", "Ribbon_Command_AnimationEmphasisChangeLineColor_KeyTip");
+    public static RibbonText AnimationEmphasisChangeFontStyleCommand { get; } = new("Ribbon_Command_AnimationEmphasisChangeFontStyle_Label", "Ribbon_Command_AnimationEmphasisChangeFontStyle_KeyTip");
     public static RibbonText AnimationEmphasisGrowWithColorCommand { get; } = new("Ribbon_Command_AnimationEmphasisGrowWithColor_Label", "Ribbon_Command_AnimationEmphasisGrowWithColor_KeyTip");
     public static RibbonText AnimationEmphasisWaveCommand { get; } = new("Ribbon_Command_AnimationEmphasisWave_Label", "Ribbon_Command_AnimationEmphasisWave_KeyTip");
     public static RibbonText AnimationEmphasisShimmerCommand { get; } = new("Ribbon_Command_AnimationEmphasisShimmer_Label", "Ribbon_Command_AnimationEmphasisShimmer_KeyTip");

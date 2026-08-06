@@ -72,6 +72,8 @@ public static class PresentationAnimationCommandPlanner
             new PresentationAnimationCommandPlan("freep.anim.emphasis.change-fill-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ChangeFillColor),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.change-font-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ChangeColor),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.change-font-size", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Grow),
+            new PresentationAnimationCommandPlan("freep.anim.emphasis.change-line-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ChangeLineColor),
+            new PresentationAnimationCommandPlan("freep.anim.emphasis.change-font-style", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ChangeFontStyle),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.grow-with-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.GrowWithColor),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.wave", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Wave),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.shimmer", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Shimmer),
@@ -160,6 +162,22 @@ public static class PresentationAnimationCommandPlanner
                 else if (StringComparer.Ordinal.Equals(plan.CommandId, "freep.anim.emphasis.change-font-size"))
                 {
                     animation = BuildFontSizeAnimation(selectedShapeId);
+                }
+                else if (StringComparer.Ordinal.Equals(plan.CommandId, "freep.anim.emphasis.change-line-color"))
+                {
+                    animation = BuildLineColorAnimation(selectedShapeId);
+                }
+                else if (StringComparer.Ordinal.Equals(plan.CommandId, "freep.anim.emphasis.change-font-style"))
+                {
+                    animation = BuildFontStyleAnimation(selectedShapeId);
+                }
+                else if (StringComparer.Ordinal.Equals(plan.CommandId, "freep.anim.emphasis.bold"))
+                {
+                    animation = BuildBoldAnimation(selectedShapeId);
+                }
+                else if (StringComparer.Ordinal.Equals(plan.CommandId, "freep.anim.emphasis.underline"))
+                {
+                    animation = BuildUnderlineAnimation(selectedShapeId);
                 }
 
                 editor.AddAnimation(selectedShapeId, animation);
@@ -290,6 +308,51 @@ public static class PresentationAnimationCommandPlanner
         return animation;
     }
 
+    public static ShapeAnimation BuildLineColorAnimation(uint shapeId)
+    {
+        var animation = BuildAnimation(AnimationKind.Emphasis, AnimationPreset.ChangeLineColor, shapeId);
+        animation.RawPresetClass = "emph";
+        animation.RawPresetId = 7;
+        animation.RawPresetSubtype = "2";
+        animation.EffectSubtype = "2";
+        animation.PreservedLineBehaviorXml = BuildDefaultLineColorBehaviorXml(shapeId);
+        return animation;
+    }
+
+    public static ShapeAnimation BuildFontStyleAnimation(uint shapeId)
+    {
+        var animation = BuildAnimation(AnimationKind.Emphasis, AnimationPreset.ChangeFontStyle, shapeId);
+        animation.RawPresetClass = "emph";
+        animation.RawPresetId = 5;
+        animation.RawPresetSubtype = "1";
+        animation.EffectSubtype = "1";
+        animation.PreservedFontStyleBehaviorXml = BuildDefaultFontStyleBehaviorXml(shapeId);
+        return animation;
+    }
+
+    public static ShapeAnimation BuildBoldAnimation(uint shapeId)
+    {
+        var animation = BuildAnimation(AnimationKind.Emphasis, AnimationPreset.Bold, shapeId);
+        animation.RawPresetClass = "emph";
+        animation.RawPresetId = 15;
+        animation.RawPresetSubtype = "0";
+        animation.EffectSubtype = "0";
+        animation.PreservedFontStyleBehaviorXml = BuildDefaultBoldBehaviorXml(shapeId);
+        return animation;
+    }
+
+    public static ShapeAnimation BuildUnderlineAnimation(uint shapeId)
+    {
+        var animation = BuildAnimation(AnimationKind.Emphasis, AnimationPreset.Underline, shapeId);
+        animation.RawPresetClass = "emph";
+        animation.RawPresetId = 18;
+        animation.RawPresetSubtype = "0";
+        animation.EffectSubtype = "0";
+        animation.PreservedFontStyleBehaviorXml = BuildDefaultUnderlineBehaviorXml(shapeId);
+        animation.PreservedIterationXml = BuildDefaultUnderlineIterationXml();
+        return animation;
+    }
+
     private static void AuthorFontColorBehavior(ShapeAnimation animation, uint shapeId)
     {
         animation.RawPresetClass = "emph";
@@ -358,6 +421,89 @@ public static class PresentationAnimationCommandPlanner
             <p:attrNameLst><p:attrName>style.fontSize</p:attrName></p:attrNameLst>
           </p:cBhvr>
         </p:anim>
+        """;
+
+    private static string BuildDefaultBoldBehaviorXml(uint shapeId) => $"""
+        <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+          <p:set>
+            <p:cBhvr override="childStyle">
+              <p:cTn id="1" dur="indefinite"/>
+              <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+              <p:attrNameLst><p:attrName>style.fontWeight</p:attrName></p:attrNameLst>
+            </p:cBhvr>
+            <p:to><p:strVal val="bold"/></p:to>
+          </p:set>
+        </p:childTnLst>
+        """;
+
+    private static string BuildDefaultUnderlineBehaviorXml(uint shapeId) => $"""
+        <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+          <p:set>
+            <p:cBhvr override="childStyle">
+              <p:cTn id="1" dur="500" fill="hold"/>
+              <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+              <p:attrNameLst><p:attrName>style.textDecorationUnderline</p:attrName></p:attrNameLst>
+            </p:cBhvr>
+            <p:to><p:strVal val="true"/></p:to>
+          </p:set>
+        </p:childTnLst>
+        """;
+
+    private static string BuildDefaultUnderlineIterationXml() => """
+        <p:iterate xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="lt">
+          <p:tmPct val="4000"/>
+        </p:iterate>
+        """;
+
+    private static string BuildDefaultLineColorBehaviorXml(uint shapeId) => $"""
+        <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <p:animClr clrSpc="rgb" dir="cw">
+            <p:cBhvr>
+              <p:cTn id="1" dur="500" fill="hold"/>
+              <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+              <p:attrNameLst><p:attrName>stroke.color</p:attrName></p:attrNameLst>
+            </p:cBhvr>
+            <p:to><a:schemeClr val="accent2"/></p:to>
+          </p:animClr>
+          <p:set>
+            <p:cBhvr>
+              <p:cTn id="2" dur="500" fill="hold"/>
+              <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+              <p:attrNameLst><p:attrName>stroke.on</p:attrName></p:attrNameLst>
+            </p:cBhvr>
+            <p:to><p:strVal val="true"/></p:to>
+          </p:set>
+        </p:childTnLst>
+        """;
+
+    private static string BuildDefaultFontStyleBehaviorXml(uint shapeId) => $"""
+        <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+          <p:set>
+            <p:cBhvr override="childStyle">
+              <p:cTn id="1" dur="indefinite"/>
+              <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+              <p:attrNameLst><p:attrName>style.fontStyle</p:attrName></p:attrNameLst>
+            </p:cBhvr>
+            <p:to><p:strVal val="normal"/></p:to>
+          </p:set>
+          <p:set>
+            <p:cBhvr override="childStyle">
+              <p:cTn id="2" dur="indefinite"/>
+              <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+              <p:attrNameLst><p:attrName>style.fontWeight</p:attrName></p:attrNameLst>
+            </p:cBhvr>
+            <p:to><p:strVal val="bold"/></p:to>
+          </p:set>
+          <p:set>
+            <p:cBhvr override="childStyle">
+              <p:cTn id="3" dur="indefinite"/>
+              <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+              <p:attrNameLst><p:attrName>style.textDecorationUnderline</p:attrName></p:attrNameLst>
+            </p:cBhvr>
+            <p:to><p:strVal val="false"/></p:to>
+          </p:set>
+        </p:childTnLst>
         """;
 
     public static ShapeAnimation BuildMotionAnimation(PresentationMotionPathPreset preset)
@@ -486,6 +632,9 @@ public static class PresentationAnimationCommandPlanner
             PreservedColorBehaviorXml = animation.PreservedColorBehaviorXml,
             PreservedNumericBehaviorXml = animation.PreservedNumericBehaviorXml,
             PreservedFillBehaviorXml = animation.PreservedFillBehaviorXml,
+            PreservedLineBehaviorXml = animation.PreservedLineBehaviorXml,
+            PreservedFontStyleBehaviorXml = animation.PreservedFontStyleBehaviorXml,
+            PreservedIterationXml = animation.PreservedIterationXml,
             RawPresetClass = animation.RawPresetClass,
             RawPresetId = animation.RawPresetId,
             RawPresetSubtype = animation.RawPresetSubtype,

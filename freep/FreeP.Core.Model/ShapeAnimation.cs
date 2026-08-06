@@ -90,6 +90,25 @@ public sealed class ShapeAnimation
     public string? PreservedFillBehaviorXml { get; set; }
 
     /// <summary>
+    /// Preserves PowerPoint's native line-color behavior group, including the
+    /// <c>stroke.on</c> setter that accompanies <c>stroke.color</c>.
+    /// </summary>
+    public string? PreservedLineBehaviorXml { get; set; }
+
+    /// <summary>
+    /// Preserves PowerPoint's native combined font-style behavior group,
+    /// including font style, weight, and underline setters.
+    /// </summary>
+    public string? PreservedFontStyleBehaviorXml { get; set; }
+
+    /// <summary>
+    /// Preserves the native timing iterator used by a font emphasis effect.
+    /// PowerPoint's Brush On Underline effect uses this to reveal the setter
+    /// over a percentage of the target text.
+    /// </summary>
+    public string? PreservedIterationXml { get; set; }
+
+    /// <summary>
     /// Preserves an animation preset that is not represented by the current
     /// <see cref="AnimationPreset"/> enum. Playback still uses the mapped
     /// fallback, but package save can re-emit the authored PowerPoint token.
@@ -175,6 +194,8 @@ public enum AnimationPreset
     GrowWithColor,
     ChangeColor,
     ChangeFillColor,
+    ChangeLineColor,
+    ChangeFontStyle,
     Shimmer,
 }
 
