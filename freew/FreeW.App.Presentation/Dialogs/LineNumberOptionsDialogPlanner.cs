@@ -26,6 +26,10 @@ public static class LineNumberOptionsDialogPlanner
     public const string NumberingLabel = "Numbering:";
     public const string StartAtValidationMessage = "Start At must be a whole number of 1 or greater.";
     public const string CountByValidationMessage = "Count By must be a whole number of 1 or greater.";
+    public const string AutomationId = "LineNumberOptionsDialog";
+    public const string StartAtAutomationId = "LineNumberStartAt";
+    public const string CountByAutomationId = "LineNumberCountBy";
+    public const string ModeAutomationId = "LineNumberMode";
 
     private static readonly string[] ModeLabelValues = ["Continuous", "Restart Each Page", "Restart Each Section"];
 

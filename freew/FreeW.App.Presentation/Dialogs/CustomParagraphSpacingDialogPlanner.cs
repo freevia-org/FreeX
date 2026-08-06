@@ -34,6 +34,10 @@ public static class CustomParagraphSpacingDialogPlanner
     public const string SpaceBeforeValidationMessage = "Space before must be between 0 and 200 pt.";
     public const string SpaceAfterValidationMessage = "Space after must be between 0 and 200 pt.";
     public const string LineSpacingValidationMessage = "Line spacing must be between 0.01 and 10.";
+    public const string AutomationId = "CustomParagraphSpacingDialog";
+    public const string SpaceBeforeAutomationId = "CustomParagraphSpacingBefore";
+    public const string SpaceAfterAutomationId = "CustomParagraphSpacingAfter";
+    public const string LineSpacingAutomationId = "CustomParagraphSpacingLine";
 
     public static CustomParagraphSpacingInitialState BuildInitialState(
         DocumentParagraphSpacingSet? current,

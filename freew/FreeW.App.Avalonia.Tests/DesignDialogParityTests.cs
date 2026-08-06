@@ -30,8 +30,10 @@ public sealed class DesignDialogParityTests
         source.Should().Contain("SetAsDefaultConfirmationPlanner.BuildState()");
 
         var spacingSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "PageLayoutDialogs.cs"));
-        spacingSource.Should().Contain("CustomParagraphSpacingDialogPlanner.BuildInitialState(current, DialogCulture)");
-        spacingSource.Should().Contain("CustomParagraphSpacingDialogPlanner.TryBuildResult(");
+        spacingSource.Should().Contain("CustomParagraphSpacingDialogSession");
+        spacingSource.Should().Contain("_session.PlanAcceptance(");
+        spacingSource.Should().NotContain("CustomParagraphSpacingDialogPlanner.BuildInitialState(");
+        spacingSource.Should().NotContain("CustomParagraphSpacingDialogPlanner.TryBuildResult(");
 
         var borderSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "DesignDialogs.cs"));
         borderSource.Should().Contain("BordersAndShadingDialogPlanner.TryBuildResult(");

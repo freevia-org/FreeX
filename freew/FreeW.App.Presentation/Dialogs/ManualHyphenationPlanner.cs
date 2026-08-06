@@ -74,6 +74,28 @@ public sealed class ManualHyphenationSession
 
 public static class ManualHyphenationPlanner
 {
+    public const string Title = "Manual Hyphenation";
+    public const string HyphenateAtLabel = "Hyphenate at:";
+    public const string YesLabel = "Yes";
+    public const string NoLabel = "No";
+    public const string CancelLabel = "Cancel";
+    public const string YesAccessLabel = "_Yes";
+    public const string NoAccessLabel = "_No";
+    public const string AutomationId = "ManualHyphenationDialog";
+    public const string ChoicesAutomationId = "ManualHyphenationChoices";
+    public const string YesButtonAutomationId = "ManualHyphenationYesButton";
+    public const string NoButtonAutomationId = "ManualHyphenationNoButton";
+    public const string CancelButtonAutomationId = "ManualHyphenationCancelButton";
+    public const string NoCandidatesMessage = "Manual hyphenation found no words to review.";
+    public const string NoChangesMessage = "Manual hyphenation made no changes.";
+
+    public static string FormatCandidateLabel(int candidateNumber) => $"Word {candidateNumber}";
+
+    public static string FormatSummary(int acceptedCount) =>
+        acceptedCount == 0
+            ? NoChangesMessage
+            : $"Manual hyphenation inserted breaks in {acceptedCount} word(s).";
+
     public static ManualHyphenationSession CreateSession(TextDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);

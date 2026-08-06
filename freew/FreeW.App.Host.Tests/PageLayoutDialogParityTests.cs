@@ -86,9 +86,11 @@ public sealed class PageLayoutDialogParityTests
         command.Should().Contain("editor.ApplyManualHyphenation(session.Edits)");
         command.Should().NotContain("AutoHyphenation");
         command.Should().NotContain("ApplyPageSettings");
-        dialog.Should().Contain("ManualHyphenationDialogAction.Accept");
-        dialog.Should().Contain("ManualHyphenationDialogAction.Skip");
-        dialog.Should().Contain("ManualHyphenationDialogAction.Cancel");
+        dialog.Should().Contain("ManualHyphenationDialogSession");
+        dialog.Should().Contain("_session.PlanAcceptance(");
+        dialog.Should().Contain("_session.PlanSkip()");
+        dialog.Should().Contain("_session.PlanCancel()");
+        dialog.Should().NotContain("new ManualHyphenationDialogResult(");
     }
 
     private static string ReadHostSource(string relativePath)

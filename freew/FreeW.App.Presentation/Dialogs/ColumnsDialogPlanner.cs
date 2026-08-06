@@ -34,6 +34,11 @@ public static class ColumnsDialogPlanner
     public const string LineBetweenLabel = "Line between";
     public const string ValidationMessage =
         "Enter 1-12 columns and a non-negative spacing in points.";
+    public const string AutomationId = "ColumnsDialog";
+    public const string PresetAutomationId = "ColumnsPreset";
+    public const string CountAutomationId = "ColumnsCount";
+    public const string SpacingAutomationId = "ColumnsSpacing";
+    public const string LineBetweenAutomationId = "ColumnsLineBetween";
 
     public static readonly IReadOnlyList<ColumnsDialogPreset> Presets =
     [

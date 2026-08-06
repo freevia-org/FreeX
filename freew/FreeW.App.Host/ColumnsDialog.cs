@@ -19,35 +19,40 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class ColumnsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly ColumnsDialogSession _session;
     private readonly ComboBox _presetBox;
     private readonly TextBox _countBox;
     private readonly TextBox _spacingBox;
     private readonly CheckBox _lineBetween;
-    private readonly double _contentWidthPt;
     private ColumnsDialogResult? _result;
 
     private ColumnsDialog(Window? owner, PageSettings page)
     {
+        _session = new ColumnsDialogSession(page, CultureInfo.CurrentCulture);
         Owner = owner;
-        Title = "Columns";
+        Title = ColumnsDialogPlanner.Title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var plan = ColumnsDialogPlanner.BuildInitialState(page, CultureInfo.CurrentCulture);
-        _contentWidthPt = plan.ContentWidthPt;
+        var plan = _session.InitialState;
 
         _countBox = NumberBox(plan.CountText);
         _spacingBox = NumberBox(plan.SpacingText);
-        _lineBetween = new CheckBox { Content = "Line between", IsChecked = plan.LineBetween, Margin = new Thickness(0, 6, 0, 0) };
+        _lineBetween = new CheckBox { Content = ColumnsDialogPlanner.LineBetweenLabel, IsChecked = plan.LineBetween, Margin = new Thickness(0, 6, 0, 0) };
 
         _presetBox = new ComboBox { MinWidth = 140 };
-        foreach (var preset in ColumnsDialogPlanner.Presets)
+        foreach (var preset in _session.Presets)
             _presetBox.Items.Add(preset.Label);
         _presetBox.SelectedIndex = plan.PresetIndex;
         _presetBox.SelectionChanged += (_, _) => ApplySelectedPreset();
+        System.Windows.Automation.AutomationProperties.SetAutomationId(this, ColumnsDialogPlanner.AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_presetBox, ColumnsDialogPlanner.PresetAutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_countBox, ColumnsDialogPlanner.CountAutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_spacingBox, ColumnsDialogPlanner.SpacingAutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_lineBetween, ColumnsDialogPlanner.LineBetweenAutomationId);
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -55,9 +60,9 @@ internal sealed class ColumnsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         for (var i = 0; i < 5; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddRow(grid, 0, "Presets:", _presetBox);
-        AddRow(grid, 1, "Number of columns:", _countBox);
-        AddRow(grid, 2, "Spacing (pt):", _spacingBox);
+        AddRow(grid, 0, ColumnsDialogPlanner.PresetsLabel, _presetBox);
+        AddRow(grid, 1, ColumnsDialogPlanner.CountLabel, _countBox);
+        AddRow(grid, 2, ColumnsDialogPlanner.SpacingLabel, _spacingBox);
 
         Grid.SetRow(_lineBetween, 3);
         Grid.SetColumn(_lineBetween, 1);
@@ -101,26 +106,23 @@ internal sealed class ColumnsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void ApplySelectedPreset()
     {
-        var count = ColumnsDialogPlanner.ColumnCountForPreset(_presetBox.SelectedIndex);
-        _countBox.Text = count.ToString(CultureInfo.CurrentCulture);
+        _countBox.Text = _session.CountTextForPreset(_presetBox.SelectedIndex);
     }
 
     private void Accept()
     {
-        var input = new ColumnsDialogInput(
+        var acceptance = _session.PlanAcceptance(
             _presetBox.SelectedIndex,
             _countBox.Text,
             _spacingBox.Text,
-            _lineBetween.IsChecked == true,
-            _contentWidthPt);
-
-        if (!ColumnsDialogPlanner.TryBuildResult(input, CultureInfo.CurrentCulture, out var result, out var errorMessage))
+            _lineBetween.IsChecked == true);
+        if (!acceptance.IsAccepted)
         {
-            DialogMessageHelper.ShowWarning(this, errorMessage ?? ColumnsDialogPlanner.ValidationMessage);
+            DialogMessageHelper.ShowWarning(this, acceptance.ValidationMessage);
             return;
         }
 
-        _result = result;
+        _result = acceptance.Result;
         Close();
     }
 

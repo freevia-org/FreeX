@@ -13,6 +13,7 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly CustomParagraphSpacingDialogSession _session;
     private readonly TextBox _beforeBox;
     private readonly TextBox _afterBox;
     private readonly TextBox _lineBox;
@@ -21,18 +22,23 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
 
     private CustomParagraphSpacingDialog(Window? owner, DocumentParagraphSpacingSet? current)
     {
+        _session = new CustomParagraphSpacingDialogSession(current, CultureInfo.CurrentCulture);
         Owner = owner;
-        Title = "Custom Paragraph Spacing";
+        Title = CustomParagraphSpacingDialogPlanner.Title;
         Width = 360;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var state = CustomParagraphSpacingDialogPlanner.BuildInitialState(current, CultureInfo.CurrentCulture);
+        var state = _session.InitialState;
         _beforeBox = NumberBox(state.SpaceBeforeText);
         _afterBox = NumberBox(state.SpaceAfterText);
         _lineBox = NumberBox(state.LineSpacingText);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(this, CustomParagraphSpacingDialogPlanner.AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_beforeBox, CustomParagraphSpacingDialogPlanner.SpaceBeforeAutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_afterBox, CustomParagraphSpacingDialogPlanner.SpaceAfterAutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_lineBox, CustomParagraphSpacingDialogPlanner.LineSpacingAutomationId);
 
         Content = BuildContent();
         Loaded += (_, _) => DialogFocus.FocusAndSelect(_beforeBox);
@@ -67,7 +73,7 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
 
         var hint = new TextBlock
         {
-            Text = "All values in points (pt). Line spacing is a multiple (e.g. 1.15 = 115%).",
+            Text = CustomParagraphSpacingDialogPlanner.Hint,
             TextWrapping = TextWrapping.Wrap,
             Foreground = System.Windows.Media.Brushes.Gray,
             FontSize = 10,
@@ -77,9 +83,9 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
         Grid.SetColumnSpan(hint, 2);
         grid.Children.Add(hint);
 
-        AddRow(1, "Space before (pt):", _beforeBox);
-        AddRow(2, "Space after (pt):", _afterBox);
-        AddRow(3, "Line spacing (\u00d7):", _lineBox);
+        AddRow(1, CustomParagraphSpacingDialogPlanner.SpaceBeforeLabel, _beforeBox);
+        AddRow(2, CustomParagraphSpacingDialogPlanner.SpaceAfterLabel, _afterBox);
+        AddRow(3, CustomParagraphSpacingDialogPlanner.LineSpacingLabel, _lineBox);
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
         Grid.SetRow(buttons, 4);
@@ -96,21 +102,18 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
             _afterBox.Text,
             _lineBox.Text);
 
-        if (!CustomParagraphSpacingDialogPlanner.TryBuildResult(
-                input,
-                CultureInfo.CurrentCulture,
-                out var result,
-                out var validation))
+        var acceptance = _session.PlanAcceptance(input);
+        if (!acceptance.IsAccepted)
         {
             DialogMessageHelper.ShowWarning(
                 this,
-                validation?.Message ?? CustomParagraphSpacingDialogPlanner.LineSpacingValidationMessage,
+                acceptance.Validation?.Message ?? CustomParagraphSpacingDialogPlanner.LineSpacingValidationMessage,
                 Title);
-            FocusFailure(validation?.Field);
+            FocusFailure(acceptance.Validation?.Field);
             return;
         }
 
-        _result = result;
+        _result = acceptance.Result;
         Close();
     }
 

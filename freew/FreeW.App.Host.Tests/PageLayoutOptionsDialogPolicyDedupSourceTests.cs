@@ -5,18 +5,20 @@ namespace FreeW.App.Host.Tests;
 public sealed class PageLayoutOptionsDialogPolicyDedupSourceTests
 {
     [Theory]
-    [InlineData("HyphenationOptionsDialog.cs", "HyphenationOptionsDialogPlanner.BuildInitialState(", "HyphenationOptionsDialogPlanner.TryBuildResult(")]
-    [InlineData("LineNumberOptionsDialog.cs", "LineNumberOptionsDialogPlanner.BuildInitialState(", "LineNumberOptionsDialogPlanner.TryBuildResult(")]
-    public void Dialogs_DelegateInitialStateAndResultPolicyToPresentationPlanners(
+    [InlineData("HyphenationOptionsDialog.cs", "HyphenationOptionsDialogSession")]
+    [InlineData("LineNumberOptionsDialog.cs", "LineNumberOptionsDialogSession")]
+    public void Dialogs_DelegateInitialStateAndResultPolicyToPresentationSessions(
         string fileName,
-        string initialStateCall,
-        string resultCall)
+        string sessionName)
     {
         var source = ReadHostSource(fileName);
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain(initialStateCall);
-        source.Should().Contain(resultCall);
+        source.Should().Contain(sessionName);
+        source.Should().Contain("_session.InitialState");
+        source.Should().Contain("_session.PlanAcceptance(");
+        source.Should().NotContain("Planner.BuildInitialState(");
+        source.Should().NotContain("Planner.TryBuildResult(");
     }
 
     [Fact]

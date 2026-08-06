@@ -46,6 +46,13 @@ public static class DropCapOptionsDialogPlanner
     public const string LinesToDropLabel = "Lines to drop (1-10):";
     public const string DistanceFromTextLabel = "Distance from text (pt):";
     public const string CurrentFontLabel = "(Current font)";
+    public const string AutomationId = "DropCapOptionsDialog";
+    public const string NoneAutomationId = "DropCapNone";
+    public const string DroppedAutomationId = "DropCapDropped";
+    public const string InMarginAutomationId = "DropCapInMargin";
+    public const string FontAutomationId = "DropCapFont";
+    public const string LinesAutomationId = "DropCapLines";
+    public const string DistanceAutomationId = "DropCapDistance";
 
     public static readonly IReadOnlyList<string> FontNames =
         [CurrentFontLabel, "Arial", "Calibri", "Times New Roman", "Georgia", "Cambria"];

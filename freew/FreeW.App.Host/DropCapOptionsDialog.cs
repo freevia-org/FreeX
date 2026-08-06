@@ -8,6 +8,7 @@ namespace FreeW.App.Host;
 /// <summary>WPF chrome for the shared Drop Cap Options state and result policy.</summary>
 internal sealed class DropCapOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly DropCapOptionsDialogSession _session;
     private readonly RadioButton _none;
     private readonly RadioButton _dropped;
     private readonly RadioButton _inMargin;
@@ -18,6 +19,7 @@ internal sealed class DropCapOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private DropCapOptionsDialog(Window? owner)
     {
+        _session = new DropCapOptionsDialogSession(CultureInfo.CurrentCulture);
         Owner = owner;
         Title = DropCapOptionsDialogPlanner.Title;
         SizeToContent = SizeToContent.WidthAndHeight;
@@ -25,19 +27,26 @@ internal sealed class DropCapOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        var state = DropCapOptionsDialogPlanner.BuildInitialState(CultureInfo.CurrentCulture);
+        var state = _session.InitialState;
         _none = PositionButton(DropCapOptionsDialogPlanner.NoneLabel);
         _dropped = PositionButton(DropCapOptionsDialogPlanner.DroppedLabel);
         _inMargin = PositionButton(DropCapOptionsDialogPlanner.InMarginLabel);
         new[] { _none, _dropped, _inMargin }[state.PositionIndex].IsChecked = true;
 
         _font = new ComboBox { IsEditable = true, MinWidth = 160, Margin = new Thickness(0, 0, 0, 6) };
-        foreach (var fontName in DropCapOptionsDialogPlanner.FontNames)
+        foreach (var fontName in _session.FontNames)
             _font.Items.Add(fontName);
         _font.SelectedIndex = state.FontIndex;
 
         _lines = NumberBox(state.LinesToDropText);
         _distance = NumberBox(state.DistanceFromTextText);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(this, DropCapOptionsDialogPlanner.AutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_none, DropCapOptionsDialogPlanner.NoneAutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_dropped, DropCapOptionsDialogPlanner.DroppedAutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_inMargin, DropCapOptionsDialogPlanner.InMarginAutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_font, DropCapOptionsDialogPlanner.FontAutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_lines, DropCapOptionsDialogPlanner.LinesAutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_distance, DropCapOptionsDialogPlanner.DistanceAutomationId);
 
         var positionRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
         positionRow.Children.Add(_none);
@@ -91,9 +100,8 @@ internal sealed class DropCapOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             : _inMargin.IsChecked == true
                 ? (int)DropCapDialogPosition.InMargin
                 : (int)DropCapDialogPosition.Dropped;
-        _result = DropCapOptionsDialogPlanner.BuildResult(
-            new DropCapOptionsDialogInput(positionIndex, _font.Text, _lines.Text, _distance.Text),
-            CultureInfo.CurrentCulture);
+        _result = _session.PlanAcceptance(
+            new DropCapOptionsDialogInput(positionIndex, _font.Text, _lines.Text, _distance.Text));
         Close();
     }
 

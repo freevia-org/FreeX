@@ -6,7 +6,7 @@ public sealed class ParagraphNoteDialogPolicySourceGuardTests
 {
     [Theory]
     [InlineData("ParagraphIndentDialog.cs", "ParagraphIndentDialogPlanner.BuildInitialState(", "new ParagraphIndentDialogInput(", "ParagraphIndentDialogPlanner.TryBuildResult(")]
-    [InlineData("CustomParagraphSpacingDialog.cs", "CustomParagraphSpacingDialogPlanner.BuildInitialState(", "new CustomParagraphSpacingDialogInput(", "CustomParagraphSpacingDialogPlanner.TryBuildResult(")]
+    [InlineData("CustomParagraphSpacingDialog.cs", "_session.InitialState", "new CustomParagraphSpacingDialogInput(", "_session.PlanAcceptance(")]
     [InlineData("ParagraphBreaksDialog.cs", "ParagraphBreaksDialogPlanner.BuildInitialState(", "new ParagraphBreaksDialogInput(", "ParagraphBreaksDialogPlanner.TryBuildResult(")]
     public void Dialogs_DelegateStateValidationAndResultPolicyToPresentationPlanner(
         string fileName,

@@ -30,6 +30,11 @@ public static class HyphenationOptionsDialogPlanner
     public const string HyphenateCapsLabel = "Hyphenate words in CAPS";
     public const string ValidationMessage =
         "Enter a non-negative hyphenation zone and a non-negative consecutive-hyphen limit (0 = no limit).";
+    public const string AutomationId = "HyphenationOptionsDialog";
+    public const string AutomaticAutomationId = "HyphenationAutomatic";
+    public const string ZoneAutomationId = "HyphenationZone";
+    public const string ConsecutiveLimitAutomationId = "HyphenationConsecutiveLimit";
+    public const string HyphenateCapsAutomationId = "HyphenationCaps";
 
     public static HyphenationOptionsInitialState BuildInitialState(PageSettings page, CultureInfo culture)
     {
