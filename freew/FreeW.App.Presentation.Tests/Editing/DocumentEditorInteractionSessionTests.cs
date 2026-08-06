@@ -133,6 +133,65 @@ public sealed class DocumentEditorInteractionSessionTests
         session.Interaction.IsFormatPainterArmed.Should().BeTrue();
     }
 
+    [Fact]
+    public void BodyHorizontalNavigationSkipsNonEditableBlocksAndClampsDocumentEdges()
+    {
+        var session = SessionWith(
+            new Paragraph("before"),
+            new Table(),
+            new Paragraph { Runs = { Run.FootnoteReference(1) } },
+            new Paragraph("after"));
+
+        session.Interaction.NavigateBodyHorizontal(new DocumentTextPosition(0, 6), 1)
+            .BodyCaret.Should().Be(new DocumentTextPosition(3, 0));
+        session.Interaction.NavigateBodyHorizontal(new DocumentTextPosition(3, 0), -1)
+            .BodyCaret.Should().Be(new DocumentTextPosition(0, 6));
+        session.Interaction.NavigateBodyHorizontal(new DocumentTextPosition(0, 0), -1)
+            .BodyCaret.Should().Be(new DocumentTextPosition(0, 0));
+        session.Interaction.NavigateBodyHorizontal(new DocumentTextPosition(3, 5), 1)
+            .BodyCaret.Should().Be(new DocumentTextPosition(3, 5));
+    }
+
+    [Fact]
+    public void TableHorizontalNavigationCrossesParagraphsCellsAndBodyBlocks()
+    {
+        var table = NavigationTable();
+        table.Rows[0].Cells[0].Paragraphs.Add(new Paragraph("two"));
+        var session = SessionWith(new Paragraph("before"), table, new Paragraph("after"));
+
+        session.Interaction.NavigateTableHorizontal(
+                new DocumentTableCaretPosition(1, 0, 0, 0, 3), 1)
+            .TableCaret.Should().Be(new DocumentTableCaretPosition(1, 0, 0, 1, 0));
+        session.Interaction.NavigateTableHorizontal(
+                new DocumentTableCaretPosition(1, 0, 0, 1, 3), 1)
+            .TableCaret.Should().Be(new DocumentTableCaretPosition(1, 0, 2, 0, 0));
+        session.Interaction.NavigateTableHorizontal(
+                new DocumentTableCaretPosition(1, 1, 1, 0, 4), 1)
+            .BodyCaret.Should().Be(new DocumentTextPosition(2, 0));
+        session.Interaction.NavigateTableHorizontal(
+                new DocumentTableCaretPosition(1, 0, 0, 0, 0), -1)
+            .BodyCaret.Should().Be(new DocumentTextPosition(0, 6));
+    }
+
+    [Fact]
+    public void TableTabNavigationSkipsVerticalMergeContinuationsAndPlansAppend()
+    {
+        var session = SessionWith(NavigationTable());
+
+        session.Interaction.NavigateTableTab(
+                new DocumentTableCaretPosition(0, 0, 0, 0, 0), forward: true)
+            .TableCaret.Should().Be(new DocumentTableCaretPosition(0, 0, 2, 0, 0));
+        session.Interaction.NavigateTableTab(
+                new DocumentTableCaretPosition(0, 0, 2, 0, 0), forward: true)
+            .TableCaret.Should().Be(new DocumentTableCaretPosition(0, 1, 1, 0, 0));
+        session.Interaction.NavigateTableTab(
+                new DocumentTableCaretPosition(0, 1, 1, 0, 4), forward: true)
+            .AppendTableRow.Should().BeTrue();
+        session.Interaction.NavigateTableTab(
+                new DocumentTableCaretPosition(0, 0, 0, 0, 2), forward: false)
+            .TableCaret.Should().Be(new DocumentTableCaretPosition(0, 0, 0, 0, 2));
+    }
+
     private static DocumentEditingSession SessionWith(params Block[] blocks)
     {
         var document = new TextDocument();
@@ -150,5 +209,20 @@ public sealed class DocumentEditorInteractionSessionTests
         var result = new Paragraph { Formatting = paragraph };
         result.Runs.Add(new Run(text, run));
         return result;
+    }
+
+    private static Table NavigationTable()
+    {
+        var table = new Table();
+        var first = new TableRow();
+        first.Cells.Add(new TableCell("one") { GridSpan = 2 });
+        first.Cells.Add(new TableCell("next"));
+        table.Rows.Add(first);
+
+        var second = new TableRow();
+        second.Cells.Add(new TableCell("merged") { VerticalMerge = VerticalMergeState.Continue });
+        second.Cells.Add(new TableCell("last"));
+        table.Rows.Add(second);
+        return table;
     }
 }

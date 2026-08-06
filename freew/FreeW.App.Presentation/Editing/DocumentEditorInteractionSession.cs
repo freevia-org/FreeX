@@ -73,6 +73,19 @@ public sealed record DocumentPasteTextPlan(
 
 public readonly record struct DocumentSectionPosition(int Current, int Total);
 
+public readonly record struct DocumentTableCaretPosition(
+    int TableBlockIndex,
+    int RowIndex,
+    int GridColumnIndex,
+    int ParagraphIndex,
+    int Offset);
+
+public readonly record struct DocumentCaretNavigationResult(
+    DocumentTextPosition BodyCaret,
+    DocumentTableCaretPosition? TableCaret = null,
+    bool AppendTableRow = false,
+    bool Handled = true);
+
 /// <summary>
 /// Owns layout-independent editor projections and input decisions. Native controls translate keys,
 /// carets, selections, clipboard data, and coordinates at the renderer boundary.
@@ -202,6 +215,196 @@ public sealed class DocumentEditorInteractionSession
         return text.ToString();
     }
 
+    public DocumentCaretNavigationResult NavigateBodyHorizontal(
+        DocumentTextPosition caret,
+        int delta)
+    {
+        var length = BodyTextLength(caret.BlockIndex);
+        var offset = caret.Offset + delta;
+        if (offset < 0)
+        {
+            var previous = PreviousBodyTextBlock(caret.BlockIndex);
+            return new DocumentCaretNavigationResult(previous < 0
+                ? new DocumentTextPosition(caret.BlockIndex, 0)
+                : new DocumentTextPosition(previous, BodyTextLength(previous)));
+        }
+
+        if (offset > length)
+        {
+            var next = NextBodyTextBlock(caret.BlockIndex);
+            return new DocumentCaretNavigationResult(next < 0
+                ? new DocumentTextPosition(caret.BlockIndex, length)
+                : new DocumentTextPosition(next, 0));
+        }
+
+        return new DocumentCaretNavigationResult(
+            new DocumentTextPosition(caret.BlockIndex, offset));
+    }
+
+    public DocumentCaretNavigationResult NavigateTableHorizontal(
+        DocumentTableCaretPosition caret,
+        int delta)
+    {
+        if (!TryGetTable(caret.TableBlockIndex, out var table)
+            || CellAtGridColumn(table, caret.RowIndex, caret.GridColumnIndex) is not { } cell)
+        {
+            return default;
+        }
+
+        var paragraph = caret.ParagraphIndex >= 0 && caret.ParagraphIndex < cell.Paragraphs.Count
+            ? cell.Paragraphs[caret.ParagraphIndex]
+            : null;
+        var length = paragraph?.PlainText.Length ?? 0;
+        var offset = caret.Offset + delta;
+        if (offset >= 0 && offset <= length)
+        {
+            return TableResult(caret with { Offset = offset });
+        }
+
+        if (offset < 0 && caret.ParagraphIndex > 0)
+        {
+            var previousParagraph = cell.Paragraphs[caret.ParagraphIndex - 1];
+            return TableResult(caret with
+            {
+                ParagraphIndex = caret.ParagraphIndex - 1,
+                Offset = previousParagraph.PlainText.Length,
+            });
+        }
+
+        if (offset > length && caret.ParagraphIndex < cell.Paragraphs.Count - 1)
+        {
+            return TableResult(caret with
+            {
+                ParagraphIndex = caret.ParagraphIndex + 1,
+                Offset = 0,
+            });
+        }
+
+        var order = TableCellOrder(table, skipVerticalMergeContinuations: false);
+        var currentIndex = order.FindIndex(item =>
+            item.RowIndex == caret.RowIndex && item.GridColumnIndex == caret.GridColumnIndex);
+        var targetIndex = currentIndex + Math.Sign(delta);
+        if (currentIndex < 0)
+            return default;
+
+        if (targetIndex < 0 || targetIndex >= order.Count)
+        {
+            var bodyBlock = delta < 0
+                ? PreviousBodyTextBlock(caret.TableBlockIndex)
+                : NextBodyTextBlock(caret.TableBlockIndex);
+            var bodyCaret = bodyBlock < 0
+                ? new DocumentTextPosition(caret.TableBlockIndex, 0)
+                : new DocumentTextPosition(
+                    bodyBlock,
+                    delta < 0 ? BodyTextLength(bodyBlock) : 0);
+            return new DocumentCaretNavigationResult(bodyCaret);
+        }
+
+        var target = order[targetIndex];
+        var targetCell = CellAtGridColumn(table, target.RowIndex, target.GridColumnIndex)!;
+        var paragraphIndex = delta > 0 ? 0 : Math.Max(0, targetCell.Paragraphs.Count - 1);
+        var targetOffset = delta > 0 || targetCell.Paragraphs.Count == 0
+            ? 0
+            : targetCell.Paragraphs[paragraphIndex].PlainText.Length;
+        return TableResult(new DocumentTableCaretPosition(
+            caret.TableBlockIndex,
+            target.RowIndex,
+            target.GridColumnIndex,
+            paragraphIndex,
+            targetOffset));
+    }
+
+    public DocumentCaretNavigationResult NavigateTableTab(
+        DocumentTableCaretPosition caret,
+        bool forward)
+    {
+        if (!TryGetTable(caret.TableBlockIndex, out var table))
+            return default;
+
+        var order = TableCellOrder(table, skipVerticalMergeContinuations: true);
+        var currentIndex = order.FindIndex(item =>
+            item.RowIndex == caret.RowIndex && item.GridColumnIndex == caret.GridColumnIndex);
+        if (currentIndex < 0)
+            return default;
+
+        var targetIndex = currentIndex + (forward ? 1 : -1);
+        if (forward && targetIndex >= order.Count)
+        {
+            return new DocumentCaretNavigationResult(
+                new DocumentTextPosition(caret.TableBlockIndex, 0),
+                caret,
+                AppendTableRow: true);
+        }
+
+        if (targetIndex < 0)
+            return TableResult(caret);
+
+        var target = order[targetIndex];
+        return TableResult(new DocumentTableCaretPosition(
+            caret.TableBlockIndex,
+            target.RowIndex,
+            target.GridColumnIndex,
+            ParagraphIndex: 0,
+            Offset: 0));
+    }
+
+    public int BodyTextLength(int blockIndex)
+    {
+        if (blockIndex < 0
+            || blockIndex >= _editing.Document.Blocks.Count
+            || _editing.Document.Blocks[blockIndex] is not Paragraph paragraph
+            || !IsBodyTextNavigable(paragraph))
+        {
+            return 0;
+        }
+
+        return paragraph.Runs
+            .Where(run => !IsFloatingDrawingRun(run))
+            .Sum(run => run.Text.Length);
+    }
+
+    public int FirstBodyTextBlock()
+    {
+        for (var index = 0; index < _editing.Document.Blocks.Count; index++)
+        {
+            if (_editing.Document.Blocks[index] is Paragraph paragraph
+                && IsBodyTextNavigable(paragraph))
+            {
+                return index;
+            }
+        }
+
+        return 0;
+    }
+
+    public int NextBodyTextBlock(int from)
+    {
+        for (var index = from + 1; index < _editing.Document.Blocks.Count; index++)
+        {
+            if (_editing.Document.Blocks[index] is Paragraph paragraph
+                && IsBodyTextNavigable(paragraph))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    public int PreviousBodyTextBlock(int from)
+    {
+        for (var index = from - 1; index >= 0; index--)
+        {
+            if (_editing.Document.Blocks[index] is Paragraph paragraph
+                && IsBodyTextNavigable(paragraph))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
     public DocumentPasteTextPlan PlanPasteText(string? clipboardText, DocumentPasteTextKind kind)
     {
         var normalized = PasteText.Normalize(clipboardText);
@@ -282,6 +485,84 @@ public sealed class DocumentEditorInteractionSession
 
         return ranges;
     }
+
+    private bool TryGetTable(int blockIndex, out Table table)
+    {
+        table = null!;
+        if (blockIndex < 0
+            || blockIndex >= _editing.Document.Blocks.Count
+            || _editing.Document.Blocks[blockIndex] is not Table target)
+        {
+            return false;
+        }
+
+        table = target;
+        return true;
+    }
+
+    private static DocumentCaretNavigationResult TableResult(DocumentTableCaretPosition caret) =>
+        new(new DocumentTextPosition(caret.TableBlockIndex, 0), caret);
+
+    private static List<(int RowIndex, int GridColumnIndex)> TableCellOrder(
+        Table table,
+        bool skipVerticalMergeContinuations)
+    {
+        var order = new List<(int RowIndex, int GridColumnIndex)>();
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        {
+            var gridColumnIndex = 0;
+            foreach (var cell in table.Rows[rowIndex].Cells)
+            {
+                if (!skipVerticalMergeContinuations
+                    || cell.VerticalMerge != VerticalMergeState.Continue)
+                {
+                    order.Add((rowIndex, gridColumnIndex));
+                }
+                gridColumnIndex += Math.Max(1, cell.GridSpan);
+            }
+        }
+
+        return order;
+    }
+
+    private static TableCell? CellAtGridColumn(Table table, int rowIndex, int gridColumnIndex)
+    {
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count || gridColumnIndex < 0)
+            return null;
+
+        var currentGridColumn = 0;
+        foreach (var cell in table.Rows[rowIndex].Cells)
+        {
+            if (gridColumnIndex >= currentGridColumn
+                && gridColumnIndex < currentGridColumn + Math.Max(1, cell.GridSpan))
+            {
+                return cell;
+            }
+            currentGridColumn += Math.Max(1, cell.GridSpan);
+        }
+
+        return null;
+    }
+
+    private bool IsBodyTextNavigable(Paragraph paragraph) =>
+        !_editing.Review.RestrictEditingPolicy.IsBodyEditingLocked
+        && paragraph.Runs.All(run =>
+            run.Image is null
+            && run.Equation is null
+            && run.FieldKind == RunFieldKind.None
+            && run.ComplexField is null
+            && run.FootnoteId is null
+            && run.EndnoteId is null
+            && run.Control is null
+            && !IsFloatingDrawingRun(run));
+
+    private static bool IsFloatingDrawingRun(Run run) =>
+        run.Image is { IsFloating: true }
+        || run.Shape is { IsFloating: true }
+        || run.Chart is { IsFloating: true }
+        || run.WordArt is { IsFloating: true }
+        || run.SmartArt is { IsFloating: true }
+        || run.DrawingGroup is { IsFloating: true };
 
     private sealed class FormatPainterRangeCommand(
         int blockIndex,

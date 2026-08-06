@@ -22955,141 +22955,17 @@ public sealed class DocumentView : Control
         // by MoveCaretVertical.
         if (_cellCaret is { } cc)
         {
-            var newOffset = cc.Offset + delta;
-            var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
-            var len = para != null ? ParaCells(para).Count : 0;
-
-            if (newOffset >= 0 && newOffset <= len)
-            {
-                // Still within the current paragraph.
-                _cellCaret = cc with { Offset = newOffset };
-            }
-            else if (newOffset < 0 && cc.ParaIdx > 0)
-            {
-                // Move to end of previous paragraph in same cell.
-                var prevParaIdx = cc.ParaIdx - 1;
-                var prevPara = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, prevParaIdx);
-                var prevLen = prevPara != null ? ParaCells(prevPara).Count : 0;
-                _cellCaret = cc with { ParaIdx = prevParaIdx, Offset = prevLen };
-            }
-            else if (newOffset > len && cc.ParaIdx < (GetCellModel(cc.TableBlock, cc.Row, cc.Col)?.Paragraphs.Count ?? 1) - 1)
-            {
-                // Move to start of next paragraph in same cell.
-                _cellCaret = cc with { ParaIdx = cc.ParaIdx + 1, Offset = 0 };
-            }
-            else if (newOffset < 0)
-            {
-                // At start of first paragraph in cell — move to previous cell.
-                MoveCaretToAdjacentCell(cc, -1, extend);
-                return;
-            }
-            else
-            {
-                // At end of last paragraph in cell — move to next cell.
-                MoveCaretToAdjacentCell(cc, +1, extend);
-                return;
-            }
-
-            // Update _caret.Offset to point at the corresponding glyph for TryGetCaretRect.
-            var nc = _cellCaret.Value;
-            _caret = new DocPosition(nc.TableBlock, FindCellGlyphOffset(nc.TableBlock, nc.Row, nc.Col, nc.ParaIdx, nc.Offset));
-            if (!extend) { _selectionAnchor = _caret; _cellAnchor = _cellCaret; }
-            InvalidateVisual();
-            CaretMoved?.Invoke();
+            ApplyCaretNavigation(
+                _editingSession.Interaction.NavigateTableHorizontal(ToPortableCaret(cc), delta),
+                extend);
             return;
         }
 
-        // Body paragraph navigation.
-        var bodyLen = CurrentLength();
-        var bodyNewOffset = _caret.Offset + delta;
-        if (bodyNewOffset < 0)
-        {
-            var prev = PreviousEditableBlock(_caret.Block);
-            _caret = prev < 0 ? _caret with { Offset = 0 } : new DocPosition(prev, BlockLength(prev));
-        }
-        else if (bodyNewOffset > bodyLen)
-        {
-            var next = NextEditableBlock(_caret.Block);
-            _caret = next < 0 ? _caret with { Offset = bodyLen } : new DocPosition(next, 0);
-        }
-        else
-        {
-            _caret = _caret with { Offset = bodyNewOffset };
-        }
-
-        if (!extend)
-            _selectionAnchor = _caret;
-        InvalidateVisual();
-        CaretMoved?.Invoke();
-    }
-
-    // AV-TBL: move caret to the previous (-1) or next (+1) cell in the same row, or across rows.
-    private void MoveCaretToAdjacentCell((int TableBlock, int Row, int Col, int ParaIdx, int Offset) cc, int direction, bool extend)
-    {
-        if (_doc.Blocks.Count <= cc.TableBlock || _doc.Blocks[cc.TableBlock] is not Table table)
-            return;
-
-        // Build a flat list of (row, startCol) pairs in reading order.
-        var cellOrder = new List<(int Row, int Col)>();
-        for (var ri = 0; ri < table.Rows.Count; ri++)
-        {
-            var col = 0;
-            foreach (var cell in table.Rows[ri].Cells)
-            {
-                cellOrder.Add((ri, col));
-                col += Math.Max(1, cell.GridSpan);
-            }
-        }
-
-        var currentIdx = cellOrder.FindIndex(c => c.Row == cc.Row && c.Col == cc.Col);
-        if (currentIdx < 0)
-            return;
-
-        var targetIdx = currentIdx + direction;
-        if (targetIdx < 0 || targetIdx >= cellOrder.Count)
-        {
-            // Past first/last cell in table — move to adjacent paragraph block.
-            if (direction < 0)
-            {
-                var prevBlock = PreviousEditableBlock(cc.TableBlock);
-                _cellCaret = null;
-                _caret = prevBlock < 0 ? new DocPosition(cc.TableBlock, 0) : new DocPosition(prevBlock, BlockLength(prevBlock));
-            }
-            else
-            {
-                var nextBlock = NextEditableBlock(cc.TableBlock);
-                _cellCaret = null;
-                _caret = nextBlock < 0 ? new DocPosition(cc.TableBlock, 0) : new DocPosition(nextBlock, 0);
-            }
-            if (!extend) { _selectionAnchor = _caret; _cellAnchor = null; }
-            InvalidateVisual();
-            CaretMoved?.Invoke();
-            return;
-        }
-
-        var (targetRow, targetCol) = cellOrder[targetIdx];
-        var targetCell = GetCellModel(cc.TableBlock, targetRow, targetCol);
-        if (targetCell == null)
-            return;
-
-        int targetParaIdx, targetOffset;
-        if (direction > 0)
-        {
-            targetParaIdx = 0;
-            targetOffset = 0;
-        }
-        else
-        {
-            targetParaIdx = Math.Max(0, targetCell.Paragraphs.Count - 1);
-            var lastPara = targetCell.Paragraphs.Count > 0 ? targetCell.Paragraphs[targetParaIdx] : null;
-            targetOffset = lastPara != null ? ParaCells(lastPara).Count : 0;
-        }
-
-        _cellCaret = (cc.TableBlock, targetRow, targetCol, targetParaIdx, targetOffset);
-        _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, targetRow, targetCol, targetParaIdx, targetOffset));
-        if (!extend) { _selectionAnchor = _caret; _cellAnchor = _cellCaret; }
-        InvalidateVisual();
-        CaretMoved?.Invoke();
+        ApplyCaretNavigation(
+            _editingSession.Interaction.NavigateBodyHorizontal(
+                new DocumentTextPosition(_caret.Block, _caret.Offset),
+                delta),
+            extend);
     }
 
     // AV-TBL3: Tab / Shift-Tab cell navigation.
@@ -23102,33 +22978,12 @@ public sealed class DocumentView : Control
     {
         if (_cellCaret is not { } cc)
             return;
-        if (_doc.Blocks.Count <= cc.TableBlock || _doc.Blocks[cc.TableBlock] is not Table table)
+        var navigation = _editingSession.Interaction.NavigateTableTab(ToPortableCaret(cc), forward);
+        if (!navigation.Handled)
             return;
 
-        // Build a flat reading-order list of (row, gridCol) entries, honouring GridSpan.
-        // BH3: Skip VerticalMerge.Continue cells — they are visually part of the merge anchor
-        // above them. Tab should only land on Restart/None cells (Word semantics).
-        var cellOrder = new List<(int Row, int Col)>();
-        for (var ri = 0; ri < table.Rows.Count; ri++)
+        if (navigation.AppendTableRow)
         {
-            var col = 0;
-            foreach (var cell in table.Rows[ri].Cells)
-            {
-                if (cell.VerticalMerge != VerticalMergeState.Continue)
-                    cellOrder.Add((ri, col));
-                col += Math.Max(1, cell.GridSpan);
-            }
-        }
-
-        var currentIdx = cellOrder.FindIndex(c => c.Row == cc.Row && c.Col == cc.Col);
-        if (currentIdx < 0)
-            return;
-
-        var targetIdx = currentIdx + (forward ? 1 : -1);
-
-        if (forward && targetIdx >= cellOrder.Count)
-        {
-            // Tab in the last cell → append a new row (Word behaviour) and place caret in it.
             TableEdits.InsertRow(
                 new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col),
                 after: true);
@@ -23143,16 +22998,58 @@ public sealed class DocumentView : Control
             return;
         }
 
-        if (targetIdx < 0)
-        {
-            // Shift+Tab at the very first cell — stay put (no wrap before the table start).
+        if (navigation.TableCaret is not { } target || target == ToPortableCaret(cc))
             return;
-        }
 
-        var (targetRow, targetCol) = cellOrder[targetIdx];
         _cellBlockAnchor = null;
         _cellBlockFocus  = null;
-        PlaceCaretInCell(cc.TableBlock, targetRow, targetCol, 0, 0);
+        PlaceCaretInCell(
+            target.TableBlockIndex,
+            target.RowIndex,
+            target.GridColumnIndex,
+            target.ParagraphIndex,
+            target.Offset);
+    }
+
+    private static DocumentTableCaretPosition ToPortableCaret(
+        (int TableBlock, int Row, int Col, int ParaIdx, int Offset) caret) =>
+        new(caret.TableBlock, caret.Row, caret.Col, caret.ParaIdx, caret.Offset);
+
+    private void ApplyCaretNavigation(DocumentCaretNavigationResult navigation, bool extend)
+    {
+        if (!navigation.Handled)
+            return;
+
+        if (navigation.TableCaret is { } tableCaret)
+        {
+            _cellCaret = (
+                tableCaret.TableBlockIndex,
+                tableCaret.RowIndex,
+                tableCaret.GridColumnIndex,
+                tableCaret.ParagraphIndex,
+                tableCaret.Offset);
+            _caret = new DocPosition(
+                tableCaret.TableBlockIndex,
+                FindCellGlyphOffset(
+                    tableCaret.TableBlockIndex,
+                    tableCaret.RowIndex,
+                    tableCaret.GridColumnIndex,
+                    tableCaret.ParagraphIndex,
+                    tableCaret.Offset));
+        }
+        else
+        {
+            _cellCaret = null;
+            _caret = new DocPosition(navigation.BodyCaret.BlockIndex, navigation.BodyCaret.Offset);
+        }
+
+        if (!extend)
+        {
+            _selectionAnchor = _caret;
+            _cellAnchor = _cellCaret;
+        }
+        InvalidateVisual();
+        CaretMoved?.Invoke();
     }
 
     private void MoveToLineEdge(bool toStart, bool extend)
@@ -23509,34 +23406,14 @@ public sealed class DocumentView : Control
 
     private int CurrentLength() => BlockLength(_caret.Block);
 
-    private int BlockLength(int block) =>
-        block >= 0 && block < _doc.Blocks.Count && _doc.Blocks[block] is Paragraph p && IsEditable(p)
-            ? ParaCells(p).Count
-            : 0;
+    private int BlockLength(int block) => _editingSession.Interaction.BodyTextLength(block);
 
-    private int FirstEditableBlock()
-    {
-        for (var i = 0; i < _doc.Blocks.Count; i++)
-            if (_doc.Blocks[i] is Paragraph p && IsEditable(p))
-                return i;
-        return 0;
-    }
+    private int FirstEditableBlock() => _editingSession.Interaction.FirstBodyTextBlock();
 
-    private int NextEditableBlock(int from)
-    {
-        for (var i = from + 1; i < _doc.Blocks.Count; i++)
-            if (_doc.Blocks[i] is Paragraph p && IsEditable(p))
-                return i;
-        return -1;
-    }
+    private int NextEditableBlock(int from) => _editingSession.Interaction.NextBodyTextBlock(from);
 
-    private int PreviousEditableBlock(int from)
-    {
-        for (var i = from - 1; i >= 0; i--)
-            if (_doc.Blocks[i] is Paragraph p && IsEditable(p))
-                return i;
-        return -1;
-    }
+    private int PreviousEditableBlock(int from) =>
+        _editingSession.Interaction.PreviousBodyTextBlock(from);
 
     /// <summary>Char-level editing only on paragraphs whose runs are all plain text (no images/fields/controls).</summary>
     private bool IsEditable(Paragraph paragraph) =>
