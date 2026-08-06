@@ -239,12 +239,15 @@ public sealed class PresentationWorkareaSession : IDisposable
         _endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
         Presentation = presentation ?? Presentation.CreateEmpty();
         Editor = CreateEditor(Presentation);
+        SlidePaneSession = new PresentationSlidePaneSession(() => Editor);
         Attach(Editor);
     }
 
     public Presentation Presentation { get; private set; }
 
     public EditingSession Editor { get; private set; }
+
+    public PresentationSlidePaneSession SlidePaneSession { get; }
 
     public PresentationWorkareaSnapshot Snapshot => new(
         Presentation,
@@ -261,6 +264,7 @@ public sealed class PresentationWorkareaSession : IDisposable
             return;
 
         _initialized = true;
+        SlidePaneSession.ResetPresentation();
         Execute(PresentationWorkareaOperationPlanner.BuildBootstrap());
     }
 
@@ -276,6 +280,7 @@ public sealed class PresentationWorkareaSession : IDisposable
         Presentation = presentation;
         Editor = CreateEditor(presentation);
         Attach(Editor);
+        SlidePaneSession.ResetPresentation();
         _initialized = true;
         Execute(PresentationWorkareaOperationPlanner.BuildPresentationReplaced());
     }
@@ -324,8 +329,8 @@ public sealed class PresentationWorkareaSession : IDisposable
 
     public PresentationWorkareaStatusPlan BuildStatusPlan(string? dataFolderLabel = null)
     {
-        var current = Editor.CurrentSlideIndex;
-        var count = Presentation.Slides.Count;
+        var current = SlidePaneSession.Status.ActiveSlideIndex;
+        var count = SlidePaneSession.Status.SlideCount;
         return new(
             current,
             count,
@@ -334,6 +339,78 @@ public sealed class PresentationWorkareaSession : IDisposable
                 count,
                 dataFolderLabel ?? string.Empty));
     }
+
+    public SlidePaneSessionChangePlan ApplySlidePaneSelectionGesture(
+        int slideIndex,
+        SlidePaneSelectionGesture gesture) =>
+        ApplySlidePaneSelection(SlidePaneSession.ApplySelectionGesture(slideIndex, gesture));
+
+    public SlidePaneSessionChangePlan ApplySlidePaneNativeSelection(
+        IReadOnlyCollection<int> selectedSlideIndices,
+        int activeSlideIndex) =>
+        ApplySlidePaneSelection(SlidePaneSession.ApplyNativeSelection(
+            selectedSlideIndices,
+            activeSlideIndex));
+
+    public SlidePaneSessionChangePlan ToggleSlidePaneSection(string sectionId)
+    {
+        var change = SlidePaneSession.ToggleSection(sectionId);
+        if (change.ShouldRebuildItems)
+            Apply(PresentationWorkareaOperation.RefreshSlidePane, PresentationWorkareaTransition.SelectionChanged);
+        return change;
+    }
+
+    public SlidePaneContextCommandRoutePlan BuildSlidePaneContextCommandRoute(
+        FreePContextMenuCommand command,
+        int slideIndex,
+        int sectionIndex) =>
+        SlidePaneSession.BuildContextCommandRoute(command, slideIndex, sectionIndex);
+
+    public bool ExecuteSlidePaneAction(
+        SlidePaneActionKind kind,
+        int contextSlideIndex,
+        int targetInsertionIndex = -1)
+    {
+        var action = SlidePaneSession.BuildAction(kind, contextSlideIndex, targetInsertionIndex);
+        return ExecuteSlidePaneAction(action);
+    }
+
+    public bool ExecuteSlidePaneKeyboardAction(SlidePaneKeyboardIntentKind intent) =>
+        ExecuteSlidePaneAction(SlidePaneSession.BuildKeyboardAction(intent));
+
+    public bool ExecuteSlidePaneSectionAction(
+        SlideSectionActionExecutionPlan execution,
+        string? promptedName = null)
+    {
+        var applied = SlidePaneSession.TryExecuteSectionAction(execution, promptedName);
+        if (applied)
+            RefreshSlidePaneAfterCommand();
+        return applied;
+    }
+
+    public SlidePaneDragUpdatePlan BeginSlidePaneDrag(int sourceSlideIndex, double startPointerY) =>
+        SlidePaneSession.BeginDrag(sourceSlideIndex, startPointerY);
+
+    public SlidePaneDragUpdatePlan UpdateSlidePaneDrag(
+        double pointerYWithinItem,
+        double pointerYWithinPane,
+        double slideItemHeight = SlidePanePlanner.DefaultSlideItemHeight,
+        double nonSlideItemHeight = SlidePanePlanner.DefaultSectionHeaderHeight) =>
+        SlidePaneSession.UpdateDrag(
+            pointerYWithinItem,
+            pointerYWithinPane,
+            slideItemHeight,
+            nonSlideItemHeight);
+
+    public bool CompleteSlidePaneDrag(out bool shouldReleaseCapture)
+    {
+        var completion = SlidePaneSession.CompleteDrag();
+        shouldReleaseCapture = completion.ShouldReleaseCapture;
+        return completion.ShouldReleaseCapture && ExecuteSlidePaneAction(completion.Action);
+    }
+
+    public SlidePaneSessionChangePlan CancelSlidePaneDrag() =>
+        SlidePaneSession.CancelDrag();
 
     public void Dispose()
     {
@@ -365,12 +442,16 @@ public sealed class PresentationWorkareaSession : IDisposable
 
     private void HandleEditorChanged()
     {
+        SlidePaneSession.RefreshFromEditorChange();
         Execute(PresentationWorkareaOperationPlanner.BuildEditorChanged(
             _endpoint.IsPaneVisible(PresentationWorkareaPane.SmartArtText)));
     }
 
-    private void HandleCurrentSlideChanged(object? sender, EventArgs e) =>
+    private void HandleCurrentSlideChanged(object? sender, EventArgs e)
+    {
+        SlidePaneSession.SynchronizeEditorActiveSlide();
         Execute(PresentationWorkareaOperationPlanner.BuildCurrentSlideChanged());
+    }
 
     private void HandleSelectionChanged(object? sender, EventArgs e) =>
         Execute(PresentationWorkareaOperationPlanner.BuildSelectionChanged(
@@ -391,4 +472,35 @@ public sealed class PresentationWorkareaSession : IDisposable
         PresentationWorkareaOperation operation,
         PresentationWorkareaTransition transition) =>
         _endpoint.Apply(operation, new PresentationWorkareaContext(transition, Snapshot));
+
+    private SlidePaneSessionChangePlan ApplySlidePaneSelection(SlidePaneSessionChangePlan change)
+    {
+        if (change.Kind == SlidePaneSessionChangeKind.None)
+            return change;
+
+        var activeSlideIndex = change.Projection.Selection.ActiveSlideIndex;
+        if (activeSlideIndex >= 0 && activeSlideIndex != Editor.CurrentSlideIndex)
+        {
+            Editor.SelectSlide(activeSlideIndex);
+            return change;
+        }
+
+        Apply(PresentationWorkareaOperation.SyncSlidePaneSelection, PresentationWorkareaTransition.SelectionChanged);
+        Apply(PresentationWorkareaOperation.RefreshSlidePaneChrome, PresentationWorkareaTransition.SelectionChanged);
+        return change;
+    }
+
+    private bool ExecuteSlidePaneAction(SlidePaneSelectionActionPlan action)
+    {
+        var applied = SlidePaneSession.TryExecuteAction(action);
+        if (applied)
+            RefreshSlidePaneAfterCommand();
+        return applied;
+    }
+
+    private void RefreshSlidePaneAfterCommand()
+    {
+        SlidePaneSession.RefreshFromEditorChange();
+        Apply(PresentationWorkareaOperation.RefreshSlidePane, PresentationWorkareaTransition.EditorChanged);
+    }
 }

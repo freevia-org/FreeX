@@ -24,6 +24,7 @@ public sealed record SlidePaneThumbnailVisualPlan(
     string TitleText,
     int ShapeCount,
     bool IsSelected,
+    bool IsActive,
     double ThumbnailWidth,
     double ThumbnailHeight,
     double LabelHeight,
@@ -301,6 +302,17 @@ public static class SlidePanePlanner
         SlidePaneEntry entry,
         Slide slide,
         int currentSlideIndex)
+        => BuildThumbnailVisualPlan(
+            entry,
+            slide,
+            currentSlideIndex,
+            entry.SlideIndex == currentSlideIndex);
+
+    public static SlidePaneThumbnailVisualPlan BuildThumbnailVisualPlan(
+        SlidePaneEntry entry,
+        Slide slide,
+        int activeSlideIndex,
+        bool isSelected)
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(slide);
@@ -317,7 +329,8 @@ public static class SlidePanePlanner
             entry.Text,
             title,
             slide.Shapes.Count,
-            entry.SlideIndex == currentSlideIndex,
+            isSelected,
+            entry.SlideIndex == activeSlideIndex,
             DefaultThumbnailWidth,
             DefaultThumbnailHeight,
             DefaultLabelHeight,
