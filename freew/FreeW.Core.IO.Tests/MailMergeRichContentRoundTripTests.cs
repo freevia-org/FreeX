@@ -16,6 +16,8 @@ public sealed class MailMergeRichContentRoundTripTests
         paragraph.Runs.Add(Run.ComplexFieldRun(
             " ASK Manager \"Who is the manager?\" \\d \"Alex\" \\o ",
             "cached manager"));
+        paragraph.Runs.Add(new Run(" | "));
+        paragraph.Runs.Add(Run.ComplexFieldRun(" REF Manager ", "cached reference"));
         paragraph.Runs.Add(new Run(" | «Name»"));
         var template = new TextDocument { Blocks = { paragraph } };
         using var stream = new MemoryStream();
@@ -43,7 +45,7 @@ public sealed class MailMergeRichContentRoundTripTests
                 "Manager",
                 "Who is the manager?",
                 "Alex"));
-        merged.Should().ContainSingle().Which.PlainText.Should().Be("Engineering | Margaret | Ada");
+        merged.Should().ContainSingle().Which.PlainText.Should().Be("Engineering |  | Margaret | Ada");
         merged[0].Paragraphs.Single().Runs.Should().AllSatisfy(run => run.ComplexField.Should().BeNull());
         state.Bookmarks["Manager"].Should().Be("Margaret");
     }

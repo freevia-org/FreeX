@@ -26,6 +26,7 @@ public sealed class LinuxNativeOutputTests
         capabilities.Video.CanEncodeMp4.Should().BeTrue();
         capabilities.Video.EncoderName.Should().Be("libx264");
         capabilities.Video.CanCaptureNarration.Should().BeTrue();
+        capabilities.Video.CanMuxTimedCaptions.Should().BeTrue();
     }
 
     [Fact]

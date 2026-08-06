@@ -307,6 +307,24 @@ public static class MergeRuleEvaluator
         return false;
     }
 
+    public static bool TryParseBookmarkReference(string instruction, out string bookmarkName)
+    {
+        ArgumentNullException.ThrowIfNull(instruction);
+        var span = instruction.AsSpan().Trim();
+        if (TryParsePrefix(span, "Ref ", out var afterRef))
+        {
+            var tokens = Tokenize(afterRef.ToString());
+            if (tokens.Count >= 1)
+            {
+                bookmarkName = tokens[0];
+                return true;
+            }
+        }
+
+        bookmarkName = string.Empty;
+        return false;
+    }
+
     /// <summary>
     /// Returns the recipient field referenced by a valid conditional rule. Rules without a recipient-field
     /// operand (Set, Ref, Fill-in, Ask, and Merge Sequence #) return false.
@@ -376,10 +394,9 @@ public static class MergeRuleEvaluator
         }
 
         // ── Ref BookmarkName ─────────────────────────────────────────────────────────────────────
-        if (TryParsePrefix(span, "Ref ", out var afterRef))
+        if (TryParseBookmarkReference(instruction, out var referencedBookmarkName))
         {
-            var name = afterRef.Trim();
-            var value = state.Bookmarks.TryGetValue(name.ToString(), out var bv) ? bv : string.Empty;
+            var value = state.Bookmarks.TryGetValue(referencedBookmarkName, out var bv) ? bv : string.Empty;
             return new MergeRuleResult(value, false, false);
         }
 
@@ -2225,21 +2242,35 @@ public static class MailMerge
                     run.Text = state.SequenceNumber.ToString(CultureInfo.InvariantCulture);
                     return true;
                 case "FILLIN" when ComplexFieldEngine.HasSwitch(run.ComplexField.Instruction, 'o'):
-                case "ASK" when ComplexFieldEngine.HasSwitch(run.ComplexField.Instruction, 'o'):
                     if (MergeRuleEvaluator.TryParseInteractivePrompt(
                             run.ComplexField.Instruction,
                             out var prompt))
                     {
-                        var answers = prompt.Kind == MailMergeInteractivePromptKind.FillIn
-                            ? state.FillInAnswers
-                            : state.AskAnswers;
-                        run.Text = answers.TryGetValue(prompt.Key, out var answer)
+                        run.Text = state.FillInAnswers.TryGetValue(prompt.Key, out var answer)
                             ? answer
                             : prompt.DefaultAnswer;
-                        if (prompt.Kind == MailMergeInteractivePromptKind.Ask)
-                            state.Bookmarks[prompt.Key] = run.Text;
                         run.ComplexField = null;
                     }
+                    return true;
+                case "ASK" when ComplexFieldEngine.HasSwitch(run.ComplexField.Instruction, 'o'):
+                    if (MergeRuleEvaluator.TryParseInteractivePrompt(
+                            run.ComplexField.Instruction,
+                            out var askPrompt))
+                    {
+                        var answer = state.AskAnswers.TryGetValue(askPrompt.Key, out var suppliedAnswer)
+                            ? suppliedAnswer
+                            : askPrompt.DefaultAnswer;
+                        state.Bookmarks[askPrompt.Key] = answer;
+                        run.Text = string.Empty;
+                        run.ComplexField = null;
+                    }
+                    return true;
+                case "REF" when MergeRuleEvaluator.TryParseBookmarkReference(
+                        run.ComplexField.Instruction,
+                        out var bookmarkName)
+                    && state.Bookmarks.TryGetValue(bookmarkName, out var bookmarkValue):
+                    run.Text = bookmarkValue;
+                    run.ComplexField = null;
                     return true;
                 default:
                     return false;

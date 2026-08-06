@@ -26,7 +26,8 @@ public sealed record LinuxVideoEncoderCapability(
     string? EncoderName,
     bool CanCaptureNarration,
     string Reason,
-    bool CanCaptureCameraAndMedia = false)
+    bool CanCaptureCameraAndMedia = false,
+    bool CanMuxTimedCaptions = false)
 {
     public static LinuxVideoEncoderCapability Unavailable(
         string reason,
@@ -227,7 +228,8 @@ public sealed class LinuxNativeOutputCapabilityDetector
                 executable,
                 encoder,
                 canCaptureNarration,
-                $"Linux video export can use ffmpeg encoder '{encoder}'.");
+                $"Linux video export can use ffmpeg encoder '{encoder}'.",
+                CanMuxTimedCaptions: true);
     }
 
     internal static string? ParseDefaultPrinter(string output)

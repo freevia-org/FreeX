@@ -2419,6 +2419,31 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void VideoExportHandoffPlan_ReportsTimedCaptionMuxCapabilitySeparately()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var package = PresentationVideoFramePackageExecutor.BuildPackage(
+            presentation,
+            request: null,
+            (_, _, _, _) => TinyPng.ToArray());
+        var host = new PresentationVideoExportHandoffHostCapabilities(
+            "Windows video export host",
+            CanEncodeMp4: true,
+            CanCaptureNarration: false,
+            CanCaptureCameraAndMedia: false,
+            "ready",
+            CanMuxTimedCaptions: true);
+
+        var handoff = PresentationVideoFramePackageExecutor.BuildHandoffPlan(package.Plan, host);
+
+        handoff.Capabilities.Should().ContainSingle(capability =>
+            capability.Name == "Timed captions" &&
+            capability.IsAvailable &&
+            !capability.IsDeferred &&
+            capability.StatusText == "Timed captions available through host adapter.");
+    }
+
+    [Fact]
     public void VideoFramePackageExecutor_EmptyDeckBuildsNoFrames()
     {
         var presentation = Presentation.CreateEmpty();

@@ -170,7 +170,8 @@ internal sealed class FileCommands
             capability.CanEncodeMp4,
             capability.CanCaptureNarration,
             capability.CanCaptureCameraAndMedia,
-            capability.Reason);
+            capability.Reason,
+            capability.CanMuxTimedCaptions);
 }
 
 internal sealed class WpfPresentationFileLifecyclePort : IPresentationFileLifecyclePort

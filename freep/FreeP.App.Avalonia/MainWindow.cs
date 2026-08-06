@@ -4664,7 +4664,8 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             capability.CanEncodeMp4,
             CanCaptureNarration: capability.CanCaptureNarration,
             CanCaptureCameraAndMedia: capability.CanCaptureCameraAndMedia,
-            capability.CanEncodeMp4
+            CanMuxTimedCaptions: capability.CanMuxTimedCaptions,
+            UnavailableReason: capability.CanEncodeMp4
                 ? isWindowsNative
                     ? capability.Reason
                     : capability.CanCaptureNarration
