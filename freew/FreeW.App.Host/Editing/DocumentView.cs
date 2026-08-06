@@ -12880,8 +12880,28 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         var blocks = _model.Blocks;
-        var crossReferencePageResolver = blocks
-            .OfType<ModelParagraph>()
+        static IEnumerable<(int BlockIndex, ModelParagraph Paragraph)> EnumerateFieldParagraphs(
+            IReadOnlyList<ModelBlock> bodyBlocks)
+        {
+            for (var blockIndex = 0; blockIndex < bodyBlocks.Count; blockIndex++)
+            {
+                if (bodyBlocks[blockIndex] is ModelParagraph paragraph)
+                {
+                    yield return (blockIndex, paragraph);
+                }
+                else if (bodyBlocks[blockIndex] is ModelTable table)
+                {
+                    foreach (var row in table.Rows)
+                        foreach (var cell in row.Cells)
+                            foreach (var cellParagraph in cell.Paragraphs)
+                                yield return (blockIndex, cellParagraph);
+                }
+            }
+        }
+
+        var fieldParagraphs = EnumerateFieldParagraphs(blocks).ToList();
+        var crossReferencePageResolver = fieldParagraphs
+            .Select(item => item.Paragraph)
             .SelectMany(paragraph => paragraph.Runs)
             .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef
                 || run.ComplexField?.Keyword == "PAGEREF")
@@ -12892,10 +12912,8 @@ public sealed class DocumentView : RichTextBox
             : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
                 _model,
                 crossReferencePageResolver);
-        for (var b = 0; b < blocks.Count; b++)
+        foreach (var (b, paragraph) in fieldParagraphs)
         {
-            if (blocks[b] is not ModelParagraph paragraph)
-                continue;
             for (var i = 0; i < paragraph.Runs.Count; i++)
             {
                 var r = paragraph.Runs[i];
@@ -12923,11 +12941,11 @@ public sealed class DocumentView : RichTextBox
                         ? ComplexFieldEngine.Recompute(
                             _model,
                             b,
-                            i,
+                            r,
                             crossReferencePageResolver,
                             crossReferencePageTextResolver)
                         : ResolveFieldText(ComplexFieldDisplayPlanner.ResolveLiveKind(cf.Keyword), r.Text, _model, CurrentFileName);
-                    if (resolved.Length > 0)
+                    if (ComplexFieldEngine.CanRecompute(cf) || resolved.Length > 0)
                         r.Text = resolved;
                 }
                 else if (r.FieldKind != RunFieldKind.None)
