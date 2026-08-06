@@ -2428,6 +2428,7 @@ public static class PptxPackageWriter
             childTimingItems.Add(fillBehavior);
         if (anim.Preset is AnimationPreset.ColorPulse
             or AnimationPreset.ChangeColor
+            or AnimationPreset.ChangeFillColor
             or AnimationPreset.GrowWithColor
             or AnimationPreset.Shimmer)
         {

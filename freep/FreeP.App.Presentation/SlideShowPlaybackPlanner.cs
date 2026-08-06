@@ -104,6 +104,7 @@ public enum SlideShowShapeAnimationEffectKind
     Blink,
     ColorPulse,
     ChangeColor,
+    ChangeFillColor,
     GrowWithColor,
     Wave,
     Shimmer,
@@ -511,6 +512,7 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Blink => SlideShowShapeAnimationEffectKind.Blink,
             AnimationPreset.ColorPulse => SlideShowShapeAnimationEffectKind.ColorPulse,
             AnimationPreset.ChangeColor => SlideShowShapeAnimationEffectKind.ChangeColor,
+            AnimationPreset.ChangeFillColor => SlideShowShapeAnimationEffectKind.ChangeFillColor,
             AnimationPreset.GrowWithColor => SlideShowShapeAnimationEffectKind.GrowWithColor,
             AnimationPreset.Wave => SlideShowShapeAnimationEffectKind.Wave,
             AnimationPreset.Shimmer => SlideShowShapeAnimationEffectKind.Shimmer,
@@ -526,6 +528,9 @@ public static class SlideShowPlaybackPlanner
         Presentation? presentation,
         IReadOnlyDictionary<string, string>? effectiveClrMap)
     {
+        if (effectKind == SlideShowShapeAnimationEffectKind.ChangeFillColor)
+            return ResolveFillColorBehavior(animation, presentation, effectiveClrMap);
+
         if (effectKind is not (SlideShowShapeAnimationEffectKind.ColorPulse
             or SlideShowShapeAnimationEffectKind.ChangeColor
             or SlideShowShapeAnimationEffectKind.GrowWithColor
@@ -548,6 +553,57 @@ public static class SlideShowPlaybackPlanner
         {
             return (null, null);
         }
+    }
+
+    private static (string? From, string? To) ResolveFillColorBehavior(
+        ShapeAnimation animation,
+        Presentation? presentation,
+        IReadOnlyDictionary<string, string>? effectiveClrMap)
+    {
+        if (presentation is null || string.IsNullOrWhiteSpace(animation.PreservedFillBehaviorXml))
+            return (null, null);
+
+        try
+        {
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            var root = XElement.Parse(animation.PreservedFillBehaviorXml, LoadOptions.PreserveWhitespace);
+            var animClr = root.Descendants(p + "animClr").FirstOrDefault();
+            var to = ResolveAnimationColor(animClr?.Element(p + "to"), presentation, effectiveClrMap, a);
+            var shape = FindSlideShape(presentation, animation.ShapeId);
+            var from = shape?.Fill is ShapeFill.Solid solid
+                ? solid.Color.Resolved.ToString().TrimStart('#')
+                : null;
+            return (from, to);
+        }
+        catch (XmlException)
+        {
+            return (null, null);
+        }
+    }
+
+    private static SlideShape? FindSlideShape(Presentation presentation, uint shapeId)
+    {
+        foreach (var slide in presentation.Slides)
+        {
+            if (FindSlideShape(slide.Shapes, shapeId) is { } shape)
+                return shape;
+        }
+
+        return null;
+    }
+
+    private static SlideShape? FindSlideShape(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+            if (FindSlideShape(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
     }
 
     private static string? ResolveAnimationColor(

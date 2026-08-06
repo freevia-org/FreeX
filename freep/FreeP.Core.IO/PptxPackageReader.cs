@@ -6866,7 +6866,7 @@ public static class PptxPackageReader
 
         var (kind, preset) = PptxAnimationMap.OoxmlToAnimationPreset(presetClass, presetId);
         if (isNativeFillColor)
-            preset = AnimationPreset.ChangeColor;
+            preset = AnimationPreset.ChangeFillColor;
         if (presetClass == "emph" && presetId == 4 && scaleBehavior is null)
         {
             var numericTo = buildPar.Descendants(P + "anim")

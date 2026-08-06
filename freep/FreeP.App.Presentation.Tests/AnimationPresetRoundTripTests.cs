@@ -118,7 +118,11 @@ public sealed class AnimationPresetRoundTripTests
     public void IndefiniteRepeatTimingRoundTripsWithoutFiniteCount()
     {
         var presentation = Presentation.CreateEmpty();
-        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+        });
         presentation.Slides[0].Animations.Add(new ShapeAnimation
         {
             ShapeId = 7,
@@ -438,12 +442,17 @@ public sealed class AnimationPresetRoundTripTests
     public void ImportedChangeFillColorRetainsFillTargetAndNativeSetters()
     {
         var presentation = Presentation.CreateEmpty();
-        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x4472C4)),
+        });
         presentation.Slides[0].Animations.Add(new ShapeAnimation
         {
             ShapeId = 7,
             Kind = AnimationKind.Emphasis,
-            Preset = AnimationPreset.ChangeColor,
+            Preset = AnimationPreset.ChangeFillColor,
             RawPresetClass = "emph",
             RawPresetId = 1,
             RawPresetSubtype = "2",
@@ -474,14 +483,19 @@ public sealed class AnimationPresetRoundTripTests
         var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
         var animation = reloaded.Slides[0].Animations.Single();
 
-        animation.Preset.Should().Be(AnimationPreset.ChangeColor);
+        animation.Preset.Should().Be(AnimationPreset.ChangeFillColor);
         animation.RawPresetClass.Should().Be("emph");
         animation.RawPresetId.Should().Be(1);
         animation.PreservedFillBehaviorXml.Should().Contain("fillcolor");
         animation.PreservedFillBehaviorXml.Should().Contain("fill.type");
         animation.PreservedFillBehaviorXml.Should().Contain("fill.on");
-        SlideShowPlaybackPlanner.PlanShapeAnimation(animation, startDelayMs: 0)
-            .EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ChangeColor);
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            animation,
+            startDelayMs: 0,
+            presentation: reloaded);
+        plan.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ChangeFillColor);
+        plan.ColorFromHex.Should().Be("4472C4");
+        plan.ColorToHex.Should().Be("ED7D31");
 
         var clonedAnimation = SlideCloner.CloneSlide(reloaded.Slides[0]).Animations.Single();
         clonedAnimation.PreservedFillBehaviorXml.Should().Be(animation.PreservedFillBehaviorXml);
