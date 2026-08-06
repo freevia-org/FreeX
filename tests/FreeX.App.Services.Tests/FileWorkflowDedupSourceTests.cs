@@ -30,7 +30,7 @@ public sealed class FileWorkflowDedupSourceTests
         documentStateSource.Should().Contain("public bool TryMarkCleanIfAtSavePoint(int currentUndoDepth, long currentUndoStackVersion)");
 
         sessionSource.Should().Contain("private readonly WorkbookDocumentState _documentState;");
-        sessionSource.Should().Contain("sharedDocumentStateOwner?._documentState ?? new WorkbookDocumentState()");
+        sessionSource.Should().Contain("sharedDocumentStateOwner?._documentState ?? documentState ?? new WorkbookDocumentState()");
         sessionSource.Should().Contain("_documentState.MarkDirty();");
         sessionSource.Should().Contain("_documentState.MarkSavedAtUndoDepth(");
         sessionSource.Should().Contain("_documentState.TryMarkCleanIfAtSavePoint(");
@@ -40,12 +40,12 @@ public sealed class FileWorkflowDedupSourceTests
         sessionSource.Should().NotContain("private int _savedUndoDepth");
         sessionSource.Should().NotContain("private long? _savedUndoStackVersion");
 
-        wpfWindowSource.Should().Contain("private WorkbookDocumentState _documentState;");
-        wpfWindowSource.Should().Contain("private bool _workbookDirty => _documentState.IsDirty;");
-        wpfWindowSource.Should().Contain("private int _workbookDirtyGeneration => _documentState.DirtyGeneration;");
+        wpfWindowSource.Should().Contain("private bool _workbookDirty => _session.IsDirty;");
+        wpfWindowSource.Should().Contain("private int _workbookDirtyGeneration => _session.DirtyGeneration;");
+        wpfWindowSource.Should().NotContain("private WorkbookDocumentState _documentState;");
 
         avaloniaWindowSource.Should().Contain("isDirty: _session.IsDirty");
-        avaloniaWindowSource.Should().Contain("var generationAtSaveStart = _session.DirtyGeneration;");
+        avaloniaWindowSource.Should().Contain("GetDirtyGeneration: () => _session.DirtyGeneration");
         avaloniaWindowSource.Should().NotContain("private bool _workbookDirty;");
         avaloniaWindowSource.Should().NotContain("private int _workbookDirtyGeneration;");
     }
@@ -457,10 +457,12 @@ public sealed class FileWorkflowDedupSourceTests
         workflowSource.Should().Contain("CurrentFileNameWithoutExtensionOr");
         freewWpfSource.Should().Contain("_workflow.CurrentFileName");
         freewAvaloniaSource.Should().Contain("_fileWorkflow.CurrentFileName");
-        freewAvaloniaSource.Should().Contain("SisterAppFileTextPlanner.Document");
+        freewAvaloniaSource.Should().Contain("FreeWFileTextResources.Document");
+        freewAvaloniaSource.Should().NotContain("SisterAppFileTextPlanner.Document");
         freewAvaloniaSource.Should().Contain("_fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName)");
         freepWpfSource.Should().Contain("_workflow.CurrentFileName");
-        freepAvaloniaSource.Should().Contain("_fileWorkflow.CurrentFileName");
+        freepAvaloniaSource.Should().Contain("private readonly PresentationFileCommandSession _fileSession;");
+        freepAvaloniaSource.Should().NotContain("_fileWorkflow.CurrentFileName");
 
         freewWpfSource.Should().NotContain("Path.GetFileName(_workflow.CurrentPath)");
         freewAvaloniaSource.Should().NotContain("Path.GetFileName(_fileWorkflow.CurrentPath)");
