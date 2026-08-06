@@ -2926,6 +2926,9 @@
   <data name="Dialog_ZoomFormat_ReflectionAlpha" xml:space="preserve">
     <value>Reflection alpha (%):</value>
   </data>
+  <data name="Dialog_ZoomFormat_ReflectionBlur" xml:space="preserve">
+    <value>Reflection blur (pt):</value>
+  </data>
   <data name="Dialog_ZoomFormat_ReflectionDistance" xml:space="preserve">
     <value>Reflection distance (pt):</value>
   </data>

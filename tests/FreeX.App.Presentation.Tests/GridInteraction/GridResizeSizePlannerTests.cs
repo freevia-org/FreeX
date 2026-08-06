@@ -107,6 +107,25 @@ public sealed class GridResizeSizePlannerTests
         GridResizeSizePlanner.ClampRowSize(72.25).Should().Be(72.25);
     }
 
+    [Theory]
+    [InlineData(100, 103, false)]
+    [InlineData(100, 104, true)]
+    [InlineData(100, 96, true)]
+    public void IsMeaningfulDrag_UsesFourPixelThreshold(double startPointer, double currentPointer, bool expected)
+    {
+        GridResizeSizePlanner.IsMeaningfulDrag(startPointer, currentPointer).Should().Be(expected);
+    }
+
+    [Fact]
+    public void IsMeaningfulDrag_AllowsCollapsedBoundaryToCommitPositiveHeight()
+    {
+        const double collapsedStartHeight = 0;
+        const double dragDelta = 20;
+
+        GridResizeSizePlanner.IsMeaningfulDrag(100, 100 + dragDelta).Should().BeTrue();
+        GridResizeSizePlanner.ClampRowSize(collapsedStartHeight + dragDelta).Should().Be(dragDelta);
+    }
+
     [Fact]
     public void CalculateLinePosition_TracksPointerWhenResizeIsUnclamped()
     {

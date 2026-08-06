@@ -507,6 +507,11 @@ public static class ZoomObjectPropertiesPlanner
             ? (reflection.Alpha / 1000d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
             : "50";
 
+    public static string FormatFrameBorderReflectionBlur(ZoomObjectProperties properties) =>
+        properties.FrameBorderReflection is { } reflection
+            ? (reflection.BlurRadiusEmu / 12700d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+            : "0";
+
     public static string FormatFrameBorderReflectionDistance(ZoomObjectProperties properties) =>
         properties.FrameBorderReflection is { } reflection
             ? (reflection.DistanceEmu / 12700d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
@@ -527,6 +532,7 @@ public static class ZoomObjectPropertiesPlanner
         string? distanceText,
         string? directionText,
         string? scaleText,
+        string? blurText,
         bool enabled,
         out ZoomFrameBorderReflection? normalized)
     {
@@ -542,16 +548,19 @@ public static class ZoomObjectPropertiesPlanner
                 System.Globalization.CultureInfo.InvariantCulture, out var directionDegrees)
             || !double.TryParse(scaleText?.Trim(), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var scalePercent)
+            || !double.TryParse(blurText?.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var blurPoints)
             || !double.IsFinite(alphaPercent) || !double.IsFinite(distancePoints)
             || !double.IsFinite(directionDegrees) || !double.IsFinite(scalePercent)
+            || !double.IsFinite(blurPoints)
             || alphaPercent is < 0 or > 100 || distancePoints < 0
-            || directionDegrees is < 0 or > 360
+            || directionDegrees is < 0 or > 360 || blurPoints < 0
             || scalePercent is < -100 or > 100 || Math.Abs(scalePercent) < 0.01)
             return false;
 
         normalized = new ZoomFrameBorderReflection(
             checked((int)Math.Round(alphaPercent * 1000d, MidpointRounding.AwayFromZero)),
-            0,
+            checked((long)Math.Round(blurPoints * 12700d, MidpointRounding.AwayFromZero)),
             checked((long)Math.Round(distancePoints * 12700d, MidpointRounding.AwayFromZero)),
             checked((int)Math.Round(directionDegrees * 60000d, MidpointRounding.AwayFromZero)),
             checked((int)Math.Round(scalePercent * 1000d, MidpointRounding.AwayFromZero)),

@@ -117,6 +117,7 @@ public sealed class ZoomDialogSessionTests
             FrameBorderSoftEdgeRadius = "5",
             FrameBorderReflectionEnabled = true,
             FrameBorderReflectionAlpha = "42",
+            FrameBorderReflectionBlur = "2.5",
             FrameBorderReflectionDistance = "3.5",
             FrameBorderReflectionDirection = "90",
             FrameBorderReflectionScale = "-75",
@@ -143,7 +144,7 @@ public sealed class ZoomDialogSessionTests
             new ZoomFrameBorderSoftEdge(63500));
         session.Result.Properties.FrameBorderSoftEdgeEnabled.Should().BeTrue();
         session.Result.Properties.FrameBorderReflection.Should().Be(
-            new ZoomFrameBorderReflection(42000, 0, 44450, 5400000, -75000, 100000));
+            new ZoomFrameBorderReflection(42000, 31750, 44450, 5400000, -75000, 100000));
         session.Result.Properties.FrameBorderReflectionEnabled.Should().BeTrue();
         session.Result.Properties.CropTop.Should().Be(5000);
         session.Result.Properties.CropBottom.Should().Be(5000);
@@ -286,7 +287,7 @@ public sealed class ZoomDialogSessionTests
                 new ZoomObjectProperties(ImageType: "cover", ShowBackground: false),
             ]);
 
-        session.FieldCatalog.Should().HaveCount(43);
+        session.FieldCatalog.Should().HaveCount(44);
         session.FieldCatalog.Single(control =>
                 control.Field == ZoomObjectPropertiesDialogField.SummaryTile)
             .Options.Should().Equal(session.SummaryTargetOptions.Cast<object>());
@@ -363,11 +364,12 @@ public sealed class ZoomDialogSessionTests
             surface.Text.SoftEdgeRadiusLabel.Should().Be("Soft-edge radius (pt):");
             surface.Text.UseBorderReflectionLabel.Should().Be("Use border reflection");
             surface.Text.ReflectionAlphaLabel.Should().Be("Reflection alpha (%):");
+            surface.Text.ReflectionBlurLabel.Should().Be("Reflection blur (pt):");
             surface.Text.FrameShapeLabel.Should().Be("Frame shape:");
             surface.Text.ApplyToAllSummaryTilesLabel
                 .Should().Be("Apply format to all Summary Zoom tiles");
             surface.ImageTypeOptions.Should().Equal("preview", "cover");
-            surface.FieldCatalog.Should().HaveCount(43);
+            surface.FieldCatalog.Should().HaveCount(44);
             surface.FieldCatalog.Select(control => control.Field).Should().OnlyHaveUniqueItems();
             surface.FieldCatalog.First().Field.Should().Be(ZoomObjectPropertiesDialogField.ImageType);
             surface.FieldCatalog.Last().Field.Should().Be(ZoomObjectPropertiesDialogField.ShowBackground);
@@ -433,6 +435,7 @@ public sealed class ZoomDialogSessionTests
             FrameBorderSoftEdgeRadius: string.Empty,
             FrameBorderReflectionEnabled: false,
             FrameBorderReflectionAlpha: string.Empty,
+            FrameBorderReflectionBlur: string.Empty,
             FrameBorderReflectionDistance: string.Empty,
             FrameBorderReflectionDirection: string.Empty,
             FrameBorderReflectionScale: string.Empty,

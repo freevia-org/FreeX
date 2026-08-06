@@ -161,6 +161,7 @@ public enum ZoomObjectPropertiesDialogField
     FrameBorderSoftEdgeRadius,
     FrameBorderReflectionEnabled,
     FrameBorderReflectionAlpha,
+    FrameBorderReflectionBlur,
     FrameBorderReflectionDistance,
     FrameBorderReflectionDirection,
     FrameBorderReflectionScale,
@@ -279,6 +280,7 @@ public sealed record ZoomObjectPropertiesDialogFields(
     string FrameBorderSoftEdgeRadius,
     bool FrameBorderReflectionEnabled,
     string FrameBorderReflectionAlpha,
+    string FrameBorderReflectionBlur,
     string FrameBorderReflectionDistance,
     string FrameBorderReflectionDirection,
     string FrameBorderReflectionScale,
@@ -322,6 +324,7 @@ public sealed record ZoomObjectPropertiesDialogInput(
     string? FrameBorderSoftEdgeRadius,
     bool FrameBorderReflectionEnabled,
     string? FrameBorderReflectionAlpha,
+    string? FrameBorderReflectionBlur,
     string? FrameBorderReflectionDistance,
     string? FrameBorderReflectionDirection,
     string? FrameBorderReflectionScale,
@@ -581,6 +584,7 @@ public sealed class ZoomObjectPropertiesDialogSession
                 input.FrameBorderReflectionDistance,
                 input.FrameBorderReflectionDirection,
                 input.FrameBorderReflectionScale,
+                input.FrameBorderReflectionBlur,
                 input.FrameBorderReflectionEnabled,
                 out var frameBorderReflection))
             return Invalid(
@@ -802,6 +806,9 @@ public sealed class ZoomObjectPropertiesDialogSession
             case ZoomObjectPropertiesDialogField.FrameBorderReflectionAlpha:
                 _fields = _fields with { FrameBorderReflectionAlpha = text };
                 return true;
+            case ZoomObjectPropertiesDialogField.FrameBorderReflectionBlur:
+                _fields = _fields with { FrameBorderReflectionBlur = text };
+                return true;
             case ZoomObjectPropertiesDialogField.FrameBorderReflectionDistance:
                 _fields = _fields with { FrameBorderReflectionDistance = text };
                 return true;
@@ -935,6 +942,7 @@ public sealed class ZoomObjectPropertiesDialogSession
             FrameBorderSoftEdgeRadius: _fields.FrameBorderSoftEdgeRadius,
             FrameBorderReflectionEnabled: _fields.FrameBorderReflectionEnabled,
             FrameBorderReflectionAlpha: _fields.FrameBorderReflectionAlpha,
+            FrameBorderReflectionBlur: _fields.FrameBorderReflectionBlur,
             FrameBorderReflectionDistance: _fields.FrameBorderReflectionDistance,
             FrameBorderReflectionDirection: _fields.FrameBorderReflectionDirection,
             FrameBorderReflectionScale: _fields.FrameBorderReflectionScale,
@@ -1003,6 +1011,7 @@ public sealed class ZoomObjectPropertiesDialogSession
         ZoomObjectPropertiesDialogField.FrameBorderSoftEdgeRadius => _fields.FrameBorderSoftEdgeRadius,
         ZoomObjectPropertiesDialogField.FrameBorderReflectionEnabled => _fields.FrameBorderReflectionEnabled,
         ZoomObjectPropertiesDialogField.FrameBorderReflectionAlpha => _fields.FrameBorderReflectionAlpha,
+        ZoomObjectPropertiesDialogField.FrameBorderReflectionBlur => _fields.FrameBorderReflectionBlur,
         ZoomObjectPropertiesDialogField.FrameBorderReflectionDistance => _fields.FrameBorderReflectionDistance,
         ZoomObjectPropertiesDialogField.FrameBorderReflectionDirection => _fields.FrameBorderReflectionDirection,
         ZoomObjectPropertiesDialogField.FrameBorderReflectionScale => _fields.FrameBorderReflectionScale,
@@ -1065,6 +1074,7 @@ public sealed class ZoomObjectPropertiesDialogSession
         ZoomObjectPropertiesDialogField.FrameBorderReflectionEnabled =>
             enablement.FrameBorderReflectionToggle,
         ZoomObjectPropertiesDialogField.FrameBorderReflectionAlpha or
+            ZoomObjectPropertiesDialogField.FrameBorderReflectionBlur or
             ZoomObjectPropertiesDialogField.FrameBorderReflectionDistance or
             ZoomObjectPropertiesDialogField.FrameBorderReflectionDirection or
             ZoomObjectPropertiesDialogField.FrameBorderReflectionScale =>
@@ -1182,6 +1192,7 @@ public sealed class ZoomObjectPropertiesDialogSession
             FrameBorderSoftEdgeRadius: ZoomObjectPropertiesPlanner.FormatFrameBorderSoftEdgeRadius(properties),
             FrameBorderReflectionEnabled: ZoomObjectPropertiesPlanner.IsFrameBorderReflectionEnabled(properties),
             FrameBorderReflectionAlpha: ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionAlpha(properties),
+            FrameBorderReflectionBlur: ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionBlur(properties),
             FrameBorderReflectionDistance: ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(properties),
             FrameBorderReflectionDirection: ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(properties),
             FrameBorderReflectionScale: ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(properties),

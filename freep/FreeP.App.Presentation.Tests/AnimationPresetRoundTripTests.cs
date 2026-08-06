@@ -230,6 +230,105 @@ public sealed class AnimationPresetRoundTripTests
         cTn.Attribute("presetSubtype")!.Value.Should().Be("fromBottomRight");
     }
 
+    [Theory]
+    [InlineData(26)] // PowerPoint FlashBulb
+    [InlineData(27)] // PowerPoint Flicker
+    public void ImportedFlashBulbAndFlickerRetainNativeIdsAndUseBlinkPlayback(int presetId)
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 1371600,
+        });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Pulse,
+            RawPresetClass = "emph",
+            RawPresetId = presetId,
+            RawPresetSubtype = "0",
+        });
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+
+        animation.Preset.Should().Be(AnimationPreset.Blink);
+        animation.RawPresetClass.Should().Be("emph");
+        animation.RawPresetId.Should().Be(presetId);
+        animation.RawPresetSubtype.Should().Be("0");
+
+        SlideShowPlaybackPlanner.PlanShapeAnimation(animation, startDelayMs: 0)
+            .EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Blink);
+
+        using var second = new MemoryStream();
+        PptxPackageWriter.Write(reloaded, second);
+        using var archive = new ZipArchive(new MemoryStream(second.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetID")?.Value == presetId.ToString());
+        cTn.Attribute("presetClass")!.Value.Should().Be("emph");
+        cTn.Attribute("presetSubtype")!.Value.Should().Be("0");
+    }
+
+    [Fact]
+    public void ImportedColorWaveRetainsNativeIdAndUsesColorPulsePlayback()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 1371600,
+        });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Pulse,
+            RawPresetClass = "emph",
+            RawPresetId = 20,
+            RawPresetSubtype = "0",
+        });
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+
+        animation.Preset.Should().Be(AnimationPreset.ColorPulse);
+        animation.RawPresetClass.Should().Be("emph");
+        animation.RawPresetId.Should().Be(20);
+        animation.RawPresetSubtype.Should().Be("0");
+        SlideShowPlaybackPlanner.PlanShapeAnimation(animation, startDelayMs: 0)
+            .EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ColorPulse);
+
+        using var second = new MemoryStream();
+        PptxPackageWriter.Write(reloaded, second);
+        using var archive = new ZipArchive(new MemoryStream(second.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetID")?.Value == "20");
+        cTn.Attribute("presetClass")!.Value.Should().Be("emph");
+        cTn.Attribute("presetSubtype")!.Value.Should().Be("0");
+    }
+
     [Fact]
     public void SpinEffectSubtypeSurvivesReadCloneAndWrite()
     {
@@ -302,9 +401,10 @@ public sealed class AnimationPresetRoundTripTests
     }
 
     [Theory]
-    [InlineData(AnimationPreset.ChangeColor)]
-    [InlineData(AnimationPreset.GrowWithColor)]
-    public void ColorEffectBehaviorSurvivesReadCloneAndWrite(AnimationPreset preset)
+    [InlineData(AnimationPreset.ChangeColor, 7)]
+    [InlineData(AnimationPreset.GrowWithColor, 12)]
+    [InlineData(AnimationPreset.Shimmer, 36)]
+    public void ColorEffectBehaviorSurvivesReadCloneAndWrite(AnimationPreset preset, int expectedPresetId)
     {
         var presentation = Presentation.CreateEmpty();
         presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
@@ -340,6 +440,8 @@ public sealed class AnimationPresetRoundTripTests
         var slideXml = XDocument.Parse(reader.ReadToEnd());
         XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
         var colorBehavior = slideXml.Descendants(p + "animClr").Single();
+        slideXml.Descendants(p + "cTn").Single(element => element.Attribute("presetClass")?.Value == "emph")
+            .Attribute("presetID")!.Value.Should().Be(expectedPresetId.ToString());
         colorBehavior.Element(p + "clrFrom")!.Element(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "srgbClr")!
             .Attribute("val")!.Value.Should().Be("FF0000");
         colorBehavior.Descendants(p + "cTn").Single().Attribute("id")!.Value.Should().NotBe("77");
@@ -657,7 +759,7 @@ public sealed class AnimationPresetRoundTripTests
         XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
         var cTn = slideXml.Descendants(p + "cTn")
             .Single(element => element.Attribute("presetClass")?.Value == "emph"
-                && element.Attribute("presetID")?.Value == "13");
+                && element.Attribute("presetID")?.Value == "34");
         cTn.Attribute("presetSubtype")!.Value.Should().Be(expectedSubtype);
     }
 }

@@ -1,7 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
+using Avalonia.Styling;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
@@ -13,22 +16,14 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly TextDocument _document;
-    private readonly ComboBox _typeBox = new() { MinWidth = 170 };
-    private readonly ComboBox _insertAsBox = new() { MinWidth = 190 };
-    private readonly ListBox _targetList = new() { MinWidth = 340, Height = 180 };
+    private readonly ListBox _typeList = new() { MinWidth = 150, Height = 170 };
+    private readonly ListBox _insertAsList = new() { MinWidth = 180, Height = 170 };
+    private readonly ListBox _targetList = new() { MinWidth = 300, Height = 200 };
     private readonly CheckBox _hyperlinkBox = new()
     {
         Content = CrossReferenceDialogPlanner.HyperlinkLabel,
         IsChecked = true,
-        Margin = new Thickness(16, 8, 16, 0),
-    };
-
-    private readonly TextBlock _status = new()
-    {
-        Text = CrossReferenceDialogPlanner.MissingTargetMessage,
-        Foreground = Brushes.DarkRed,
-        Margin = new Thickness(16, 6, 16, 0),
-        IsVisible = false,
+        Margin = new Thickness(0, 10, 0, 0),
     };
 
     public CrossReferenceDialogChoice? Result { get; private set; }
@@ -39,75 +34,89 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
         _document = document;
 
         Title = CrossReferenceDialogPlanner.Title;
-        Width = 480;
-        SizeToContent = SizeToContent.Height;
+        SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _typeBox.ItemsSource = CrossReferenceDialogPlanner.BuildTypeChoices();
-        _typeBox.SelectedIndex = 0;
-        _typeBox.SelectionChanged += (_, _) =>
+        _typeList.ItemsSource = CrossReferenceDialogPlanner.BuildTypeChoices();
+        _typeList.SelectedIndex = 0;
+        _typeList.SelectionChanged += (_, _) =>
         {
             ReloadInsertAs();
             ReloadTargets();
         };
-        _insertAsBox.SelectionChanged += (_, _) => ReloadTargets();
+        _insertAsList.SelectionChanged += (_, _) => ReloadTargets();
 
-        AvaloniaCompactDialogChrome.ApplyComboBox(_typeBox, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyComboBox(_insertAsBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyListBox(_typeList, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyListBox(_insertAsList, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyListBox(_targetList, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyCheckBox(_hyperlinkBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_hyperlinkBox, DialogChromeStyle);
+        foreach (var list in new[] { _typeList, _insertAsList, _targetList })
+        {
+            list.Styles.Add(new Style(selector => selector.OfType<ListBoxItem>())
+            {
+                Setters =
+                {
+                    new Setter(Layoutable.HeightProperty, 21d),
+                    new Setter(Layoutable.MinHeightProperty, 21d),
+                    new Setter(Layoutable.MaxHeightProperty, 21d),
+                },
+            });
+        }
+        _insertAsList.Styles.Add(new Style(selector => selector.OfType<ListBoxItem>().Class(":selected"))
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, new ImmutableSolidColorBrush(Color.FromRgb(240, 240, 240))),
+                new Setter(TemplatedControl.BorderBrushProperty, new ImmutableSolidColorBrush(Color.FromRgb(171, 173, 179))),
+            },
+        });
 
         ReloadInsertAs();
         ReloadTargets();
 
-        var topGrid = new Grid { Margin = new Thickness(16, 12, 16, 0) };
+        var topGrid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
         topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
         topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        topGrid.Children.Add(LabeledColumn(CrossReferenceDialogPlanner.ReferenceTypeLabel, _typeBox, 0));
-        topGrid.Children.Add(LabeledColumn(CrossReferenceDialogPlanner.InsertReferenceToLabel, _insertAsBox, 2));
+        topGrid.Children.Add(LabeledColumn(CrossReferenceDialogPlanner.ReferenceTypeLabel, _typeList, 0));
+        topGrid.Children.Add(LabeledColumn(CrossReferenceDialogPlanner.InsertReferenceToLabel, _insertAsList, 2));
 
-        var targetLabel = new TextBlock
-        {
-            Text = CrossReferenceDialogPlanner.TargetLabel,
-            Margin = new Thickness(16, 10, 16, 4),
-        };
-
-        var targetHost = new Border
-        {
-            Margin = new Thickness(16, 0, 16, 0),
-            Child = _targetList,
-        };
+        var targetColumn = LabeledColumn(CrossReferenceDialogPlanner.TargetLabel, _targetList, -1);
 
         var actionPlans = CrossReferenceDialogPlanner.ActionButtons;
-        var ok = Button(actionPlans[0].Label, Accept, isDefault: actionPlans[0].IsDefault);
+        var ok = Button(actionPlans[0].Label, click: null, isDefault: actionPlans[0].IsDefault);
+        AvaloniaCompactDialogChrome.ApplyNeutralDefaultButtonChrome(ok);
+        ok.Click += async (_, _) => await AcceptAsync();
         var cancel = Button(actionPlans[1].Label, () => Close(), isCancel: actionPlans[1].IsCancel);
-        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(16, 12, 16, 14));
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0));
 
-        var body = new StackPanel();
+        var body = new StackPanel { Margin = new Thickness(16) };
         body.Children.Add(topGrid);
         body.Children.Add(_hyperlinkBox);
-        body.Children.Add(targetLabel);
-        body.Children.Add(targetHost);
-        body.Children.Add(_status);
+        body.Children.Add(targetColumn);
         body.Children.Add(buttons);
         Content = body;
+        Opened += (_, _) =>
+        {
+            _typeList.Focus();
+            AvaloniaCompactDialogChrome.ApplyNeutralDefaultButtonChrome(ok);
+        };
     }
 
     private CrossRefType SelectedType =>
-        (_typeBox.SelectedItem as CrossReferenceTypeChoice)?.Type ?? CrossRefType.Heading;
+        (_typeList.SelectedItem as CrossReferenceTypeChoice)?.Type ?? CrossRefType.Heading;
 
     private CrossRefInsertAs SelectedInsertAs =>
-        (_insertAsBox.SelectedItem as CrossReferenceInsertAsChoice)?.InsertAs ?? CrossRefInsertAs.Text;
+        (_insertAsList.SelectedItem as CrossReferenceInsertAsChoice)?.InsertAs ?? CrossRefInsertAs.Text;
 
     private void ReloadInsertAs()
     {
-        var previous = (_insertAsBox.SelectedItem as CrossReferenceInsertAsChoice)?.InsertAs;
+        var previous = (_insertAsList.SelectedItem as CrossReferenceInsertAsChoice)?.InsertAs;
         var choices = CrossReferenceDialogPlanner.BuildInsertAsChoices(SelectedType);
-        _insertAsBox.ItemsSource = choices;
-        _insertAsBox.SelectedIndex = CrossReferenceDialogPlanner.PreserveInsertAsSelection(choices, previous);
+        _insertAsList.ItemsSource = choices;
+        _insertAsList.SelectedIndex = CrossReferenceDialogPlanner.PreserveInsertAsSelection(choices, previous);
     }
 
     private void ReloadTargets()
@@ -115,10 +124,9 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
         var choices = CrossReferenceDialogPlanner.BuildTargetChoices(_document, SelectedType);
         _targetList.ItemsSource = choices;
         _targetList.SelectedIndex = choices.Count > 0 ? 0 : -1;
-        _status.IsVisible = false;
     }
 
-    private void Accept()
+    private async Task AcceptAsync()
     {
         if (!CrossReferenceDialogPlanner.TryCreateChoice(
                 _document,
@@ -128,7 +136,10 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
                 _hyperlinkBox.IsChecked == true,
                 out var choice))
         {
-            _status.IsVisible = true;
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                this,
+                CrossReferenceDialogPlanner.MissingTargetMessage,
+                CrossReferenceDialogPlanner.Title);
             return;
         }
 
@@ -139,17 +150,19 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
     private static StackPanel LabeledColumn(string label, Control control, int column)
     {
         var stack = new StackPanel();
-        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 8, 0, 4) });
         stack.Children.Add(control);
-        Grid.SetColumn(stack, column);
+        if (column >= 0)
+            Grid.SetColumn(stack, column);
         return stack;
     }
 
-    private static Button Button(string label, Action click, bool isDefault = false, bool isCancel = false)
+    private static Button Button(string label, Action? click, bool isDefault = false, bool isCancel = false)
     {
         var button = new Button { Content = label, IsDefault = isDefault, IsCancel = isCancel };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 84, isDefault: isDefault);
-        button.Click += (_, _) => click();
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
+        if (click is not null)
+            button.Click += (_, _) => click();
         return button;
     }
 }

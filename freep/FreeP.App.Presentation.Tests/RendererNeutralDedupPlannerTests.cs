@@ -812,6 +812,27 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void PictureRenderPlanner_PlansReflectionBlurAsSharedPasses()
+    {
+        var picture = new DrawOp.Picture
+        {
+            Effects = new ResolvedShapeEffects
+            {
+                HasReflection = true,
+                ReflectionAlpha = 128,
+                ReflectionBlurDip = 5,
+            }
+        };
+
+        var plan = PictureRenderPlanner.Plan(picture, pixelWidth: 100, pixelHeight: 50);
+
+        plan.ReflectionBlurDip.Should().Be(5);
+        plan.ReflectionBlurPasses.Should().HaveCount(25);
+        plan.ReflectionBlurPasses[^1].Should().Be(new PictureReflectionBlurPass(0, 0, 0.4));
+        plan.ReflectionBlurPasses.Take(24).Should().OnlyContain(pass => pass.Opacity > 0 && pass.Opacity < 1);
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralShapeAndWarpPlanners()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
@@ -900,6 +921,7 @@ public sealed class RendererNeutralDedupPlannerTests
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("PictureRenderPlanner.Plan(pic");
+            source.Should().Contain("ReflectionBlurPasses");
             source.Should().Contain("PictureColorEffectPlanner.ApplyToBgra32");
             source.Should().NotContain("0.2126 * r + 0.7152 * g + 0.0722 * b");
             source.Should().NotContain("Math.Round(pic.CropLeft");

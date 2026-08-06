@@ -28,6 +28,7 @@ public sealed class ZoomAuthoringParityTests
         source.Should().NotContain("ZoomObjectPropertiesDialogSession.SelectExclusiveBorderMode(");
         source.Should().NotContain("ZoomObjectPropertiesPlanner.FrameBorder");
         source.Should().NotContain("ZoomObjectPropertiesPlanner.TryParse");
+        source.Should().NotContain("Reflection blur (pt):");
         source.Should().NotContain("LoadSummaryTileFields");
         source.Should().NotContain("SyncFrameBorderState");
         source.Should().NotContain("private readonly CheckBox _returnToParent");
