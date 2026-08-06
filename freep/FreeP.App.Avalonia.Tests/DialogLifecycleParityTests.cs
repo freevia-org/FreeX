@@ -194,7 +194,10 @@ public sealed class DialogLifecycleParityTests
             "FreeP.App.Avalonia",
             "FindReplaceDialog.cs"));
 
-        source.Should().Contain("FindReplaceDialogPlanner.BuildSurfacePlan()");
+        source.Should().Contain("_session.Surface");
+        source.Should().Contain("AutomationProperties.SetName(");
+        source.Should().Contain("AutomationProperties.SetAutomationId(");
+        source.Should().NotContain("FindReplaceDialogPlanner.BuildSurfacePlan(");
         source.Should().Contain("_session.Dispatch(");
         source.Should().Contain("ApplyWorkflowPlan(_session.LastWorkflowPlan)");
         source.Should().NotContain("_session.Navigate(");

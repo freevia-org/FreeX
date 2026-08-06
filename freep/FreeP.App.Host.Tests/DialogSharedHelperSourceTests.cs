@@ -35,8 +35,8 @@ public sealed class DialogSharedHelperSourceTests
         var hyperlink = ReadHostSource("HyperlinkDialog.cs");
         hyperlink.Should().Contain("DialogButtonRowFactory.Create(");
         hyperlink.Should().Contain("buttonWidth: 75");
-        hyperlink.Should().Contain("acceptContent: Surface.AcceptLabel");
-        hyperlink.Should().Contain("cancelContent: Surface.CancelLabel");
+        hyperlink.Should().Contain("acceptContent: surface.AcceptLabel");
+        hyperlink.Should().Contain("cancelContent: surface.CancelLabel");
         hyperlink.Should().Contain("DialogMessageHelper.ShowWarning(this, validation.Message, validation.Caption)");
         hyperlink.Should().Contain("DialogFocus.FocusAndSelect(_urlBox)");
         hyperlink.Should().NotContain("Content = \"OK\"");

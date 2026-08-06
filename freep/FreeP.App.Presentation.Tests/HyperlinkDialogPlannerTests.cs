@@ -18,6 +18,12 @@ public sealed class HyperlinkDialogPlannerTests
         surface.TooltipLabel.Should().Be("Tooltip:");
         surface.AcceptLabel.Should().Be("OK");
         surface.CancelLabel.Should().Be("Cancel");
+        surface.Schema.Fields.Select(field => field.AutomationId).Should().OnlyHaveUniqueItems();
+        surface.Schema.Actions.Select(action => action.AutomationId).Should().OnlyHaveUniqueItems();
+        surface.Action(HyperlinkDialogAction.Accept).IsDefault.Should().BeTrue();
+        surface.Action(HyperlinkDialogAction.Cancel).IsCancel.Should().BeTrue();
+        surface.Field(HyperlinkDialogField.Url).HelpText.Should()
+            .Be("Enter an http, https, mailto, or local file URL.");
     }
 
     [Fact]
@@ -155,6 +161,7 @@ public sealed class HyperlinkDialogPlannerTests
             1));
 
         session.SlideOptions.Select(option => option.Id).Should().Equal("s1", "s2");
+        session.Surface.Should().BeSameAs(HyperlinkDialogSurfaceCatalog.Surface);
         session.State.Should().Be(new HyperlinkDialogViewState(
             HyperlinkDialogTargetKind.Slide,
             string.Empty,

@@ -22,6 +22,11 @@ public sealed class FindReplaceDialogPlannerTests
             new FindReplaceDialogActionOption(FindReplaceDialogAction.ReplaceCurrent, "Replace"),
             new FindReplaceDialogActionOption(FindReplaceDialogAction.ReplaceAll, "Replace All"));
         surface.CloseLabel.Should().Be("Close");
+        surface.Schema.Fields.Select(field => field.AutomationId).Should().OnlyHaveUniqueItems();
+        surface.Schema.Actions.Select(action => action.AutomationId).Should().OnlyHaveUniqueItems();
+        surface.Action(FindReplaceDialogAction.FindNext).IsDefault.Should().BeTrue();
+        surface.Action(FindReplaceDialogAction.Close).IsCancel.Should().BeTrue();
+        surface.Field(FindReplaceDialogField.Query).HelpText.Should().Be("Enter text to find.");
     }
 
     [Theory]

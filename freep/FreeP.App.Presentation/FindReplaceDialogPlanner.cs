@@ -9,12 +9,22 @@ public enum FindReplaceDialogOptionKind
     WholeWord,
 }
 
+public enum FindReplaceDialogField
+{
+    Query,
+    Replacement,
+    MatchCase,
+    WholeWord,
+    Status,
+}
+
 public enum FindReplaceDialogAction
 {
     FindNext,
     FindPrevious,
     ReplaceCurrent,
     ReplaceAll,
+    Close,
 }
 
 public sealed record FindReplaceDialogOption(
@@ -26,17 +36,93 @@ public sealed record FindReplaceDialogActionOption(
     string DisplayText);
 
 public sealed record FindReplaceDialogSurfacePlan(
-    string FindLabel,
-    string ReplaceLabel,
-    IReadOnlyList<FindReplaceDialogOption> Options,
-    IReadOnlyList<FindReplaceDialogActionOption> Actions,
-    string CloseLabel)
+    PresentationDialogSurfacePlan<FindReplaceDialogField, FindReplaceDialogAction> Schema,
+    string FindOnlyTitle)
 {
+    public string FindLabel => Field(FindReplaceDialogField.Query).Label;
+
+    public string ReplaceLabel => Field(FindReplaceDialogField.Replacement).Label;
+
+    public IReadOnlyList<FindReplaceDialogOption> Options { get; } =
+    [
+        new(FindReplaceDialogOptionKind.MatchCase,
+            Schema.Field(FindReplaceDialogField.MatchCase).Label),
+        new(FindReplaceDialogOptionKind.WholeWord,
+            Schema.Field(FindReplaceDialogField.WholeWord).Label),
+    ];
+
+    public IReadOnlyList<FindReplaceDialogActionOption> Actions { get; } = Schema.Actions
+        .Where(action => action.Id != FindReplaceDialogAction.Close)
+        .Select(action => new FindReplaceDialogActionOption(action.Id, action.Label))
+        .ToArray();
+
+    public string CloseLabel => Action(FindReplaceDialogAction.Close).Label;
+
+    public PresentationDialogFieldPlan<FindReplaceDialogField> Field(
+        FindReplaceDialogField field) => Schema.Field(field);
+
+    public PresentationDialogActionPlan<FindReplaceDialogAction> Action(
+        FindReplaceDialogAction action) => Schema.Action(action);
+
     public string OptionLabel(FindReplaceDialogOptionKind kind) =>
         Options.First(option => option.Kind == kind).DisplayText;
 
     public string ActionLabel(FindReplaceDialogAction action) =>
         Actions.First(option => option.Action == action).DisplayText;
+
+    public string TitleForMode(bool showReplace) =>
+        showReplace ? Schema.Title : FindOnlyTitle;
+}
+
+public static class FindReplaceDialogSurfaceCatalog
+{
+    public static FindReplaceDialogSurfacePlan Surface { get; } = new(
+        new PresentationDialogSurfacePlan<FindReplaceDialogField, FindReplaceDialogAction>(
+            FindReplaceDialogPlanner.FindAndReplaceTitle,
+            "Find and Replace dialog",
+            "FreeP.FindReplace.Window",
+            [
+                Field(FindReplaceDialogField.Query, PresentationDialogControlKind.Text,
+                    FindReplaceDialogPlanner.FindLabel, "Find text", "Enter text to find."),
+                Field(FindReplaceDialogField.Replacement, PresentationDialogControlKind.Text,
+                    FindReplaceDialogPlanner.ReplaceLabel, "Replacement text"),
+                Field(FindReplaceDialogField.MatchCase, PresentationDialogControlKind.Toggle,
+                    FindReplaceDialogPlanner.MatchCaseLabel, "Match case"),
+                Field(FindReplaceDialogField.WholeWord, PresentationDialogControlKind.Toggle,
+                    FindReplaceDialogPlanner.WholeWordLabel, "Match whole word"),
+                Field(FindReplaceDialogField.Status, PresentationDialogControlKind.Status,
+                    string.Empty, "Find and replace status"),
+            ],
+            [
+                Action(FindReplaceDialogAction.FindNext,
+                    FindReplaceDialogPlanner.FindNextLabel, "Find next match", isDefault: true),
+                Action(FindReplaceDialogAction.FindPrevious,
+                    FindReplaceDialogPlanner.FindPreviousLabel, "Find previous match"),
+                Action(FindReplaceDialogAction.ReplaceCurrent,
+                    FindReplaceDialogPlanner.ReplaceActionLabel, "Replace current match"),
+                Action(FindReplaceDialogAction.ReplaceAll,
+                    FindReplaceDialogPlanner.ReplaceAllLabel, "Replace all matches"),
+                Action(FindReplaceDialogAction.Close,
+                    FindReplaceDialogPlanner.CloseLabel, "Close find and replace", isCancel: true),
+            ]),
+        FindReplaceDialogPlanner.FindTitle);
+
+    private static PresentationDialogFieldPlan<FindReplaceDialogField> Field(
+        FindReplaceDialogField id,
+        PresentationDialogControlKind kind,
+        string label,
+        string accessibleName,
+        string? helpText = null) =>
+        new(id, kind, label, accessibleName, $"FreeP.FindReplace.{id}", helpText);
+
+    private static PresentationDialogActionPlan<FindReplaceDialogAction> Action(
+        FindReplaceDialogAction id,
+        string label,
+        string accessibleName,
+        bool isDefault = false,
+        bool isCancel = false) =>
+        new(id, label, accessibleName, $"FreeP.FindReplace.{id}",
+            IsDefault: isDefault, IsCancel: isCancel);
 }
 
 public sealed record FindReplaceDialogInitialState(
@@ -60,26 +146,14 @@ public static class FindReplaceDialogPlanner
     public const string ReplaceAllLabel = "Replace All";
     public const string CloseLabel = "Close";
 
-    public static IReadOnlyList<FindReplaceDialogOption> Options { get; } =
-    [
-        new(FindReplaceDialogOptionKind.MatchCase, MatchCaseLabel),
-        new(FindReplaceDialogOptionKind.WholeWord, WholeWordLabel),
-    ];
+    public static IReadOnlyList<FindReplaceDialogOption> Options =>
+        FindReplaceDialogSurfaceCatalog.Surface.Options;
 
-    public static IReadOnlyList<FindReplaceDialogActionOption> Actions { get; } =
-    [
-        new(FindReplaceDialogAction.FindNext, FindNextLabel),
-        new(FindReplaceDialogAction.FindPrevious, FindPreviousLabel),
-        new(FindReplaceDialogAction.ReplaceCurrent, ReplaceActionLabel),
-        new(FindReplaceDialogAction.ReplaceAll, ReplaceAllLabel),
-    ];
+    public static IReadOnlyList<FindReplaceDialogActionOption> Actions =>
+        FindReplaceDialogSurfaceCatalog.Surface.Actions;
 
-    public static FindReplaceDialogSurfacePlan BuildSurfacePlan() => new(
-        FindLabel,
-        ReplaceLabel,
-        Options,
-        Actions,
-        CloseLabel);
+    public static FindReplaceDialogSurfacePlan BuildSurfacePlan() =>
+        FindReplaceDialogSurfaceCatalog.Surface;
 
     public static FindReplaceDialogInitialState BuildInitialState(bool showReplace) => new(
         showReplace,
@@ -89,7 +163,7 @@ public static class FindReplaceDialogPlanner
         WholeWord: false);
 
     public static string TitleForMode(bool showReplace) =>
-        showReplace ? FindAndReplaceTitle : FindTitle;
+        FindReplaceDialogSurfaceCatalog.Surface.TitleForMode(showReplace);
 
     public static TextSearchOptions BuildOptions(bool matchCase, bool wholeWord) => new()
     {

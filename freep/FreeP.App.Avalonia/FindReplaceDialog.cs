@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -12,8 +13,6 @@ namespace FreeP.App.Avalonia;
 internal sealed class FindReplaceDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
-    private static readonly FindReplaceDialogSurfacePlan Surface =
-        FindReplaceDialogPlanner.BuildSurfacePlan();
 
     private readonly FindReplaceDialogSession _session;
     private readonly TextBox _findBox;
@@ -39,57 +38,68 @@ internal sealed class FindReplaceDialog : Window
     {
         _session = new FindReplaceDialogSession(editor, showReplace, onNavigationOrMutation);
         var initial = _session.InitialState;
+        var surface = _session.Surface;
 
         Width = 425.3333333333333;
         CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = Brushes.White;
+        AutomationProperties.SetName(this, surface.Schema.AccessibleName);
+        AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
 
+        var findField = surface.Field(FindReplaceDialogField.Query);
         _findBox = new TextBox
         {
             Text = initial.Query,
             MinWidth = 260,
             Margin = new Thickness(6, 4, 0, 4),
         };
-        _replaceLabel = BuildLabel(Surface.ReplaceLabel);
+        ApplySemantic(_findBox, findField);
+        var replacementField = surface.Field(FindReplaceDialogField.Replacement);
+        _replaceLabel = BuildLabel(replacementField.Label);
         _replaceBox = new TextBox
         {
             Text = initial.Replacement,
             MinWidth = 260,
             Margin = new Thickness(6, 4, 0, 4),
         };
+        ApplySemantic(_replaceBox, replacementField);
         _matchCaseCheck = new CheckBox
         {
-            Content = Surface.OptionLabel(FindReplaceDialogOptionKind.MatchCase),
+            Content = surface.OptionLabel(FindReplaceDialogOptionKind.MatchCase),
             IsChecked = initial.MatchCase,
             Margin = new Thickness(0, 0, 12, 0),
         };
         _wholeWordCheck = new CheckBox
         {
-            Content = Surface.OptionLabel(FindReplaceDialogOptionKind.WholeWord),
+            Content = surface.OptionLabel(FindReplaceDialogOptionKind.WholeWord),
             IsChecked = initial.WholeWord,
         };
+        ApplySemantic(_matchCaseCheck, surface.Field(FindReplaceDialogField.MatchCase));
+        ApplySemantic(_wholeWordCheck, surface.Field(FindReplaceDialogField.WholeWord));
         _findNextButton = BuildButton(
-            Surface.ActionLabel(FindReplaceDialogAction.FindNext),
-            () => ApplyWorkflowPlan(_session.Dispatch(FindReplaceDialogAction.FindNext)),
-            isDefault: true);
+            surface.Action(FindReplaceDialogAction.FindNext),
+            () => ApplyWorkflowPlan(_session.Dispatch(FindReplaceDialogAction.FindNext)));
         _findPreviousButton = BuildButton(
-            Surface.ActionLabel(FindReplaceDialogAction.FindPrevious),
+            surface.Action(FindReplaceDialogAction.FindPrevious),
             () => ApplyWorkflowPlan(_session.Dispatch(FindReplaceDialogAction.FindPrevious)));
         _replaceButton = BuildButton(
-            Surface.ActionLabel(FindReplaceDialogAction.ReplaceCurrent),
+            surface.Action(FindReplaceDialogAction.ReplaceCurrent),
             () => ApplyWorkflowPlan(_session.Dispatch(FindReplaceDialogAction.ReplaceCurrent)));
         _replaceAllButton = BuildButton(
-            Surface.ActionLabel(FindReplaceDialogAction.ReplaceAll),
+            surface.Action(FindReplaceDialogAction.ReplaceAll),
             () => ApplyWorkflowPlan(_session.Dispatch(FindReplaceDialogAction.ReplaceAll)));
-        var closeButton = BuildButton(Surface.CloseLabel, Close, isCancel: true);
+        var closeButton = BuildButton(
+            surface.Action(FindReplaceDialogAction.Close),
+            Close);
         _statusText = new TextBlock
         {
             FontSize = 11,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0),
         };
+        ApplySemantic(_statusText, surface.Field(FindReplaceDialogField.Status));
 
         AvaloniaCompactDialogChrome.ApplyTextBox(_findBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_replaceBox, DialogChromeStyle);
@@ -122,7 +132,7 @@ internal sealed class FindReplaceDialog : Window
             Margin = new Thickness(12),
             Children =
             {
-                BuildInputRow(BuildLabel(Surface.FindLabel), _findBox),
+                BuildInputRow(BuildLabel(findField.Label), _findBox),
                 _replaceInputRow,
                 new StackPanel
                 {
@@ -229,14 +239,33 @@ internal sealed class FindReplaceDialog : Window
     };
 
     private static Button BuildButton(
-        string text,
-        Action action,
-        bool isDefault = false,
-        bool isCancel = false)
+        PresentationDialogActionPlan<FindReplaceDialogAction> plan,
+        Action action)
     {
-        var button = new Button { Content = text, IsCancel = isCancel };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
+        var button = new Button
+        {
+            Content = plan.Label,
+            IsDefault = plan.IsDefault,
+            IsCancel = plan.IsCancel,
+        };
+        AutomationProperties.SetName(button, plan.AccessibleName);
+        AutomationProperties.SetAutomationId(button, plan.AutomationId);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DialogChromeStyle,
+            minWidth: 80,
+            isDefault: plan.IsDefault);
         button.Click += (_, _) => action();
         return button;
+    }
+
+    private static void ApplySemantic(
+        Control control,
+        PresentationDialogFieldPlan<FindReplaceDialogField> field)
+    {
+        AutomationProperties.SetName(control, field.AccessibleName);
+        AutomationProperties.SetAutomationId(control, field.AutomationId);
+        if (!string.IsNullOrWhiteSpace(field.HelpText))
+            AutomationProperties.SetHelpText(control, field.HelpText);
     }
 }

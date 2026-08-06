@@ -12,8 +12,18 @@ public enum HyperlinkDialogTargetKind
 public enum HyperlinkDialogField
 {
     None,
+    UrlTarget,
+    SlideTarget,
     Url,
-    Slide
+    Slide,
+    Tooltip,
+    Validation,
+}
+
+public enum HyperlinkDialogAction
+{
+    Accept,
+    Cancel,
 }
 
 public sealed record HyperlinkDialogTargetOption(
@@ -21,16 +31,90 @@ public sealed record HyperlinkDialogTargetOption(
     string DisplayText);
 
 public sealed record HyperlinkDialogSurfacePlan(
-    string Title,
-    IReadOnlyList<HyperlinkDialogTargetOption> TargetOptions,
-    string UrlLabel,
-    string SlideLabel,
-    string TooltipLabel,
-    string AcceptLabel,
-    string CancelLabel)
+    PresentationDialogSurfacePlan<HyperlinkDialogField, HyperlinkDialogAction> Schema)
 {
+    public string Title => Schema.Title;
+
+    public IReadOnlyList<HyperlinkDialogTargetOption> TargetOptions { get; } =
+    [
+        new(HyperlinkDialogTargetKind.Url,
+            Schema.Field(HyperlinkDialogField.UrlTarget).Label),
+        new(HyperlinkDialogTargetKind.Slide,
+            Schema.Field(HyperlinkDialogField.SlideTarget).Label),
+    ];
+
+    public string UrlLabel => Field(HyperlinkDialogField.Url).Label;
+
+    public string SlideLabel => Field(HyperlinkDialogField.Slide).Label;
+
+    public string TooltipLabel => Field(HyperlinkDialogField.Tooltip).Label;
+
+    public string AcceptLabel => Action(HyperlinkDialogAction.Accept).Label;
+
+    public string CancelLabel => Action(HyperlinkDialogAction.Cancel).Label;
+
+    public PresentationDialogFieldPlan<HyperlinkDialogField> Field(
+        HyperlinkDialogField field) => Schema.Field(field);
+
+    public PresentationDialogActionPlan<HyperlinkDialogAction> Action(
+        HyperlinkDialogAction action) => Schema.Action(action);
+
+    public PresentationDialogFieldPlan<HyperlinkDialogField> TargetField(
+        HyperlinkDialogTargetKind kind) => Field(kind switch
+        {
+            HyperlinkDialogTargetKind.Url => HyperlinkDialogField.UrlTarget,
+            HyperlinkDialogTargetKind.Slide => HyperlinkDialogField.SlideTarget,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+        });
+
     public string TargetLabel(HyperlinkDialogTargetKind kind) =>
         TargetOptions.First(option => option.Kind == kind).DisplayText;
+}
+
+public static class HyperlinkDialogSurfaceCatalog
+{
+    public static HyperlinkDialogSurfacePlan Surface { get; } = new(
+        new PresentationDialogSurfacePlan<HyperlinkDialogField, HyperlinkDialogAction>(
+            HyperlinkDialogPlanner.Caption,
+            "Insert Hyperlink dialog",
+            "FreeP.Hyperlink.Window",
+            [
+                Field(HyperlinkDialogField.UrlTarget, PresentationDialogControlKind.Choice,
+                    HyperlinkDialogPlanner.WebAddressLabel, "Web address target"),
+                Field(HyperlinkDialogField.SlideTarget, PresentationDialogControlKind.Choice,
+                    HyperlinkDialogPlanner.PresentationSlideLabel, "Presentation slide target"),
+                Field(HyperlinkDialogField.Url, PresentationDialogControlKind.Text,
+                    HyperlinkDialogPlanner.UrlLabel, "Hyperlink URL", "Enter an http, https, mailto, or local file URL."),
+                Field(HyperlinkDialogField.Slide, PresentationDialogControlKind.Choice,
+                    HyperlinkDialogPlanner.TargetSlideLabel, "Hyperlink target slide"),
+                Field(HyperlinkDialogField.Tooltip, PresentationDialogControlKind.Text,
+                    HyperlinkDialogPlanner.TooltipLabel, "Hyperlink tooltip"),
+                Field(HyperlinkDialogField.Validation, PresentationDialogControlKind.Status,
+                    string.Empty, "Hyperlink validation status"),
+            ],
+            [
+                Action(HyperlinkDialogAction.Accept,
+                    HyperlinkDialogPlanner.AcceptLabel, "Insert hyperlink", isDefault: true),
+                Action(HyperlinkDialogAction.Cancel,
+                    HyperlinkDialogPlanner.CancelLabel, "Cancel hyperlink", isCancel: true),
+            ]));
+
+    private static PresentationDialogFieldPlan<HyperlinkDialogField> Field(
+        HyperlinkDialogField id,
+        PresentationDialogControlKind kind,
+        string label,
+        string accessibleName,
+        string? helpText = null) =>
+        new(id, kind, label, accessibleName, $"FreeP.Hyperlink.{id}", helpText);
+
+    private static PresentationDialogActionPlan<HyperlinkDialogAction> Action(
+        HyperlinkDialogAction id,
+        string label,
+        string accessibleName,
+        bool isDefault = false,
+        bool isCancel = false) =>
+        new(id, label, accessibleName, $"FreeP.Hyperlink.{id}",
+            IsDefault: isDefault, IsCancel: isCancel);
 }
 
 public sealed record HyperlinkDialogInitialState(
@@ -105,6 +189,9 @@ public sealed class HyperlinkDialogSession
     public IReadOnlyList<HyperlinkDialogSlideOption> SlideOptions { get; }
 
     public HyperlinkDialogInitialState InitialState { get; }
+
+    public HyperlinkDialogSurfacePlan Surface =>
+        HyperlinkDialogSurfaceCatalog.Surface;
 
     public HyperlinkDialogViewState State { get; private set; }
 
@@ -199,20 +286,11 @@ public static class HyperlinkDialogPlanner
     public const string MissingSlideMessage =
         "Please select a target slide.";
 
-    public static IReadOnlyList<HyperlinkDialogTargetOption> TargetOptions { get; } =
-    [
-        new(HyperlinkDialogTargetKind.Url, WebAddressLabel),
-        new(HyperlinkDialogTargetKind.Slide, PresentationSlideLabel),
-    ];
+    public static IReadOnlyList<HyperlinkDialogTargetOption> TargetOptions =>
+        HyperlinkDialogSurfaceCatalog.Surface.TargetOptions;
 
-    public static HyperlinkDialogSurfacePlan BuildSurfacePlan() => new(
-        Caption,
-        TargetOptions,
-        UrlLabel,
-        TargetSlideLabel,
-        TooltipLabel,
-        AcceptLabel,
-        CancelLabel);
+    public static HyperlinkDialogSurfacePlan BuildSurfacePlan() =>
+        HyperlinkDialogSurfaceCatalog.Surface;
 
     public static HyperlinkDialogRequest BuildDialogRequest(
         IReadOnlyList<Slide> slides,

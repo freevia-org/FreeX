@@ -13,7 +13,7 @@ public sealed class FindReplaceDialogPolicySourceTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("FindReplaceDialogPlanner.BuildSurfacePlan()");
+            source.Should().Contain("_session.Surface");
             source.Should().Contain("private readonly FindReplaceDialogSession _session;");
             source.Should().Contain("_session.SetQuery(");
             source.Should().Contain("_session.SetReplacement(");
@@ -27,6 +27,8 @@ public sealed class FindReplaceDialogPolicySourceTests
             source.Should().Contain("ReplaceAllForTests(");
             source.Should().Contain("LastWorkflowPlan => _session.LastWorkflowPlan");
             source.Should().Contain("ShowReplace => _session.ShowReplace");
+            source.Should().Contain("AutomationProperties.SetName(");
+            source.Should().Contain("AutomationProperties.SetAutomationId(");
 
             source.Should().NotContain("List<TextSearchMatch>");
             source.Should().NotContain("_currentMatchIndex");
@@ -38,6 +40,7 @@ public sealed class FindReplaceDialogPolicySourceTests
             source.Should().NotContain("_session.ReplaceCurrent(");
             source.Should().NotContain("_session.ReplaceAll(");
             source.Should().NotContain("FindReplaceDialogPlanner.Navigate(");
+            source.Should().NotContain("FindReplaceDialogPlanner.BuildSurfacePlan(");
             source.Should().NotContain("\"Find what:\"");
             source.Should().NotContain("\"Replace with:\"");
             source.Should().NotContain("\"Match case\"");

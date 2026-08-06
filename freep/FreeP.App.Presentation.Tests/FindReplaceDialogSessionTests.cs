@@ -22,6 +22,7 @@ public sealed class FindReplaceDialogSessionTests
         session.LastWorkflowPlan.ShowReplace.Should().BeTrue();
         session.LastWorkflowPlan.Query.Should().BeEmpty();
         session.LastWorkflowPlan.Replacement.Should().BeEmpty();
+        session.Surface.Should().BeSameAs(FindReplaceDialogSurfaceCatalog.Surface);
     }
 
     [Fact]

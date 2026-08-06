@@ -32,6 +32,9 @@ public sealed class FindReplaceDialogSession
 
     public FindReplaceDialogInitialState InitialState { get; }
 
+    public FindReplaceDialogSurfacePlan Surface =>
+        FindReplaceDialogSurfaceCatalog.Surface;
+
     public string Query { get; private set; } = string.Empty;
 
     public string Replacement { get; private set; } = string.Empty;

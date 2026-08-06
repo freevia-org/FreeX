@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -22,9 +23,6 @@ namespace FreeP.App.Host;
 /// </summary>
 public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private static readonly FindReplaceDialogSurfacePlan Surface =
-        FindReplaceDialogPlanner.BuildSurfacePlan();
-
     private readonly FindReplaceDialogSession _session;
 
     // UI elements
@@ -53,6 +51,7 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         _session = new FindReplaceDialogSession(editor, showReplace, onNavigationOrMutation);
         var initial = _session.InitialState;
+        var surface = _session.Surface;
 
         Title  = _session.LastWorkflowPlan.Title;
         Width  = 440;
@@ -60,6 +59,8 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode    = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
+        AutomationProperties.SetName(this, surface.Schema.AccessibleName);
+        AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
 
         // ── Layout ────────────────────────────────────────────────────────────
 
@@ -84,7 +85,8 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 5 status
 
         // Row 0 — Find
-        var findLabel = MakeLabel(Surface.FindLabel);
+        var findField = surface.Field(FindReplaceDialogField.Query);
+        var findLabel = MakeLabel(findField.Label);
         Grid.SetRow(findLabel, 0);
         Grid.SetColumn(findLabel, 0);
         grid.Children.Add(findLabel);
@@ -96,12 +98,14 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         };
         _findBox.TextChanged += (_, _) => ApplyWorkflowPlan(_session.SetQuery(_findBox.Text));
         _findBox.KeyDown += OnFindBoxKeyDown;
+        ApplySemantic(_findBox, findField);
         Grid.SetRow(_findBox, 0);
         Grid.SetColumn(_findBox, 1);
         grid.Children.Add(_findBox);
 
         // Row 1 — Replace
-        var replaceLabel = MakeLabel(Surface.ReplaceLabel);
+        var replacementField = surface.Field(FindReplaceDialogField.Replacement);
+        var replaceLabel = MakeLabel(replacementField.Label);
         Grid.SetRow(replaceLabel, 1);
         Grid.SetColumn(replaceLabel, 0);
         grid.Children.Add(replaceLabel);
@@ -112,6 +116,7 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Margin = new Thickness(6, 4, 0, 4),
         };
         _replaceBox.TextChanged += (_, _) => ApplyWorkflowPlan(_session.SetReplacement(_replaceBox.Text));
+        ApplySemantic(_replaceBox, replacementField);
         Grid.SetRow(_replaceBox, 1);
         Grid.SetColumn(_replaceBox, 1);
         grid.Children.Add(_replaceBox);
@@ -124,13 +129,13 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         };
         _matchCaseBox = new CheckBox
         {
-            Content = Surface.OptionLabel(FindReplaceDialogOptionKind.MatchCase),
+            Content = surface.OptionLabel(FindReplaceDialogOptionKind.MatchCase),
             IsChecked = initial.MatchCase,
             Margin = new Thickness(0, 0, 12, 0),
         };
         _wholeWordBox = new CheckBox
         {
-            Content = Surface.OptionLabel(FindReplaceDialogOptionKind.WholeWord),
+            Content = surface.OptionLabel(FindReplaceDialogOptionKind.WholeWord),
             IsChecked = initial.WholeWord,
             Margin = new Thickness(0, 0, 0, 0),
         };
@@ -138,6 +143,8 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _matchCaseBox.Unchecked += (_, _) => ApplyWorkflowPlan(_session.SetMatchCase(false));
         _wholeWordBox.Checked   += (_, _) => ApplyWorkflowPlan(_session.SetWholeWord(true));
         _wholeWordBox.Unchecked += (_, _) => ApplyWorkflowPlan(_session.SetWholeWord(false));
+        ApplySemantic(_matchCaseBox, surface.Field(FindReplaceDialogField.MatchCase));
+        ApplySemantic(_wholeWordBox, surface.Field(FindReplaceDialogField.WholeWord));
         optPanel.Children.Add(_matchCaseBox);
         optPanel.Children.Add(_wholeWordBox);
         Grid.SetRow(optPanel, 2);
@@ -152,10 +159,10 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Margin = new Thickness(0, 4, 0, 0)
         };
         _replaceButton = MakeButton(
-            Surface.ActionLabel(FindReplaceDialogAction.ReplaceCurrent),
+            surface.Action(FindReplaceDialogAction.ReplaceCurrent),
             OnReplace);
         _replaceAllButton = MakeButton(
-            Surface.ActionLabel(FindReplaceDialogAction.ReplaceAll),
+            surface.Action(FindReplaceDialogAction.ReplaceAll),
             OnReplaceAll);
         replBtnPanel.Children.Add(_replaceButton);
         replBtnPanel.Children.Add(_replaceAllButton);
@@ -171,14 +178,14 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Margin = new Thickness(0, 4, 0, 0)
         };
         _findNextButton = MakeButton(
-            Surface.ActionLabel(FindReplaceDialogAction.FindNext),
-            OnFindNext,
-            isDefault: true);
+            surface.Action(FindReplaceDialogAction.FindNext),
+            OnFindNext);
         _findPreviousButton = MakeButton(
-            Surface.ActionLabel(FindReplaceDialogAction.FindPrevious),
+            surface.Action(FindReplaceDialogAction.FindPrevious),
             OnFindPrev);
-        var closeBtn = MakeButton(Surface.CloseLabel, (_, _) => Close());
-        closeBtn.IsCancel = true;
+        var closeBtn = MakeButton(
+            surface.Action(FindReplaceDialogAction.Close),
+            (_, _) => Close());
         findBtnPanel.Children.Add(_findNextButton);
         findBtnPanel.Children.Add(_findPreviousButton);
         findBtnPanel.Children.Add(closeBtn);
@@ -193,6 +200,7 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             FontSize   = 11,
             Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66))
         };
+        ApplySemantic(_statusText, surface.Field(FindReplaceDialogField.Status));
         Grid.SetRow(_statusText, 5);
         Grid.SetColumnSpan(_statusText, 2);
         grid.Children.Add(_statusText);
@@ -323,19 +331,31 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     };
 
     private static Button MakeButton(
-        string text,
-        RoutedEventHandler handler,
-        bool isDefault = false)
+        PresentationDialogActionPlan<FindReplaceDialogAction> action,
+        RoutedEventHandler handler)
     {
         var btn = new Button
         {
-            Content = text,
+            Content = action.Label,
             Padding = new Thickness(10, 4, 10, 4),
             Margin  = new Thickness(4, 0, 0, 0),
             MinWidth = 80,
-            IsDefault = isDefault,
+            IsDefault = action.IsDefault,
+            IsCancel = action.IsCancel,
         };
+        AutomationProperties.SetName(btn, action.AccessibleName);
+        AutomationProperties.SetAutomationId(btn, action.AutomationId);
         btn.Click += handler;
         return btn;
+    }
+
+    private static void ApplySemantic(
+        DependencyObject control,
+        PresentationDialogFieldPlan<FindReplaceDialogField> field)
+    {
+        AutomationProperties.SetName(control, field.AccessibleName);
+        AutomationProperties.SetAutomationId(control, field.AutomationId);
+        if (!string.IsNullOrWhiteSpace(field.HelpText))
+            AutomationProperties.SetHelpText(control, field.HelpText);
     }
 }

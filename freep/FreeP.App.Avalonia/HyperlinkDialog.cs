@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Layout;
@@ -15,12 +16,11 @@ internal sealed class HyperlinkDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = 26 };
-    private static readonly HyperlinkDialogSurfacePlan Surface =
-        HyperlinkDialogPlanner.BuildSurfacePlan();
     private static readonly IBrush WpfDefaultButtonBorderBrush = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
     private static readonly IBrush WpfCancelButtonBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xF1, 0xF1, 0xF1));
 
     private readonly HyperlinkDialogSession _session;
+    private readonly HyperlinkDialogSurfacePlan _surface;
     private readonly RadioButton _urlRadio;
     private readonly RadioButton _slideRadio;
     private readonly TextBox _urlBox;
@@ -50,31 +50,37 @@ internal sealed class HyperlinkDialog : Window
     {
         ArgumentNullException.ThrowIfNull(request);
         _session = new HyperlinkDialogSession(request);
+        _surface = _session.Surface;
 
-        Title = Surface.Title;
+        Title = _surface.Title;
         Width = 405.3333333333333;
         Height = 216;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         AvaloniaCompactDialogChrome.ApplyWindow(this, DialogChromeStyle);
+        AutomationProperties.SetName(this, _surface.Schema.AccessibleName);
+        AutomationProperties.SetAutomationId(this, _surface.Schema.AutomationId);
 
         _urlRadio = new RadioButton
         {
-            Content = Surface.TargetLabel(HyperlinkDialogTargetKind.Url),
+            Content = _surface.TargetLabel(HyperlinkDialogTargetKind.Url),
             GroupName = "HyperlinkTarget",
             Margin = new Thickness(0, 0, 0, 4),
         };
         _slideRadio = new RadioButton
         {
-            Content = Surface.TargetLabel(HyperlinkDialogTargetKind.Slide),
+            Content = _surface.TargetLabel(HyperlinkDialogTargetKind.Slide),
             GroupName = "HyperlinkTarget",
             Margin = new Thickness(0, 0, 0, 8),
         };
+        ApplySemantic(_urlRadio, _surface.TargetField(HyperlinkDialogTargetKind.Url));
+        ApplySemantic(_slideRadio, _surface.TargetField(HyperlinkDialogTargetKind.Slide));
         _urlBox = new TextBox
         {
             Margin = new Thickness(0, 0, 0, 4),
             MinWidth = 260,
         };
+        ApplySemantic(_urlBox, _surface.Field(HyperlinkDialogField.Url));
         _slideCombo = new ComboBox
         {
             Margin = new Thickness(0, 0, 0, 2),
@@ -82,17 +88,20 @@ internal sealed class HyperlinkDialog : Window
             ItemsSource = _session.SlideOptions,
             SelectedIndex = _session.State.SelectedSlideIndex,
         };
+        ApplySemantic(_slideCombo, _surface.Field(HyperlinkDialogField.Slide));
         _tooltipBox = new TextBox
         {
             Margin = new Thickness(0, 0, 0, 8),
             MinWidth = 260,
         };
+        ApplySemantic(_tooltipBox, _surface.Field(HyperlinkDialogField.Tooltip));
         _validationText = new TextBlock
         {
             Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 2, 0, 8),
         };
+        ApplySemantic(_validationText, _surface.Field(HyperlinkDialogField.Validation));
         AvaloniaCompactDialogChrome.ApplyCompactRadioButton(_urlRadio, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyCompactRadioButton(_slideRadio, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_urlBox, DialogChromeStyle);
@@ -171,17 +180,17 @@ internal sealed class HyperlinkDialog : Window
         Grid.SetColumnSpan(radioPanel, 2);
         grid.Children.Add(radioPanel);
 
-        AddLabel(grid, Surface.UrlLabel, row: 1);
+        AddLabel(grid, _surface.UrlLabel, row: 1);
         Grid.SetRow(_urlBox, 1);
         Grid.SetColumn(_urlBox, 1);
         grid.Children.Add(_urlBox);
 
-        AddLabel(grid, Surface.SlideLabel, row: 2);
+        AddLabel(grid, _surface.SlideLabel, row: 2);
         Grid.SetRow(_slideCombo, 2);
         Grid.SetColumn(_slideCombo, 1);
         grid.Children.Add(_slideCombo);
 
-        AddLabel(grid, Surface.TooltipLabel, row: 3);
+        AddLabel(grid, _surface.TooltipLabel, row: 3);
         Grid.SetRow(_tooltipBox, 3);
         Grid.SetColumn(_tooltipBox, 1);
         grid.Children.Add(_tooltipBox);
@@ -197,8 +206,12 @@ internal sealed class HyperlinkDialog : Window
             Spacing = 13,
             Margin = new Thickness(0, 2, 0, 0),
         };
-        var ok = MakeDialogButton(Surface.AcceptLabel, isDefault: true, OnOk);
-        var cancel = MakeDialogButton(Surface.CancelLabel, isDefault: false, () => Close(null));
+        var ok = MakeDialogButton(
+            _surface.Action(HyperlinkDialogAction.Accept),
+            OnOk);
+        var cancel = MakeDialogButton(
+            _surface.Action(HyperlinkDialogAction.Cancel),
+            () => Close(null));
         ok.TabIndex = 5;
         cancel.TabIndex = 6;
         buttons.Children.Add(ok);
@@ -223,21 +236,39 @@ internal sealed class HyperlinkDialog : Window
         grid.Children.Add(label);
     }
 
-    private static Button MakeDialogButton(string label, bool isDefault, Action onClick)
+    private static Button MakeDialogButton(
+        PresentationDialogActionPlan<HyperlinkDialogAction> action,
+        Action onClick)
     {
         var button = new Button
         {
-            Content = label,
-            IsDefault = isDefault,
-            IsCancel = !isDefault,
+            Content = action.Label,
+            IsDefault = action.IsDefault,
+            IsCancel = action.IsCancel,
         };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 75, isDefault: isDefault);
-        button.Background = isDefault ? Brushes.White : WpfCancelButtonBackgroundBrush;
-        button.BorderBrush = isDefault
+        AutomationProperties.SetName(button, action.AccessibleName);
+        AutomationProperties.SetAutomationId(button, action.AutomationId);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DialogChromeStyle,
+            minWidth: 75,
+            isDefault: action.IsDefault);
+        button.Background = action.IsDefault ? Brushes.White : WpfCancelButtonBackgroundBrush;
+        button.BorderBrush = action.IsDefault
             ? WpfDefaultButtonBorderBrush
             : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8));
         button.Click += (_, _) => onClick();
         return button;
+    }
+
+    private static void ApplySemantic(
+        Control control,
+        PresentationDialogFieldPlan<HyperlinkDialogField> field)
+    {
+        AutomationProperties.SetName(control, field.AccessibleName);
+        AutomationProperties.SetAutomationId(control, field.AutomationId);
+        if (!string.IsNullOrWhiteSpace(field.HelpText))
+            AutomationProperties.SetHelpText(control, field.HelpText);
     }
 
     private void RenderTargetState(HyperlinkDialogViewState state)
