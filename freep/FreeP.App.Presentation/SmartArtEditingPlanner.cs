@@ -618,24 +618,20 @@ public static class SmartArtEditingPlanner
         }
 
         var changedNodes = previousNodes.Zip(currentNodes)
-            .Where(pair => !StringComparer.Ordinal.Equals(
-                NormalizeText(pair.First.Text),
-                NormalizeText(pair.Second.Text)))
-            .Select(pair => (OldText: NormalizeText(pair.First.Text), NewText: NormalizeText(pair.Second.Text)))
+            .Select((pair, index) => (Index: index, Pair: pair))
+            .Where(item => !StringComparer.Ordinal.Equals(
+                NormalizeText(item.Pair.First.Text),
+                NormalizeText(item.Pair.Second.Text)))
+            .Select(item => (
+                Index: item.Index,
+                OldText: NormalizeText(item.Pair.First.Text),
+                NewText: NormalizeText(item.Pair.Second.Text)))
             .ToArray();
         if (changedNodes.Length == 0)
         {
             return NotAppliedDrawingCacheResult(
                 smartArt,
                 "Preserved SmartArt cache synchronization requires at least one text change.");
-        }
-
-        if (changedNodes.GroupBy(change => change.OldText, StringComparer.Ordinal)
-            .Any(group => group.Count() > 1))
-        {
-            return NotAppliedDrawingCacheResult(
-                smartArt,
-                "Preserved SmartArt cache synchronization cannot disambiguate duplicate source text.");
         }
 
         var drawingPart = FindDrawingPart(smartArt);
@@ -652,14 +648,36 @@ public static class SmartArtEditingPlanner
             return NotAppliedDrawingCacheResult(smartArt, "The preserved SmartArt drawing cache is malformed.");
         }
 
+        var cachedBodies = document.Descendants(Dsp + "txBody").ToArray();
+        var cachedFallbacks = smartArt.FallbackShapes
+            .Where(shape => shape.TextBody is not null)
+            .ToArray();
+        var previousTexts = previousNodes.Select(node => NormalizeText(node.Text)).ToArray();
+        var canUseOrdinalMapping =
+            cachedBodies.Length == previousTexts.Length &&
+            cachedBodies.Select(ReadDrawingText).SequenceEqual(previousTexts, StringComparer.Ordinal) &&
+            cachedFallbacks.Length == previousTexts.Length &&
+            cachedFallbacks.Select(shape => NormalizeText(shape.PlainText))
+                .SequenceEqual(previousTexts, StringComparer.Ordinal);
+
+        if (!canUseOrdinalMapping && changedNodes.GroupBy(change => change.OldText, StringComparer.Ordinal)
+            .Any(group => group.Count() > 1))
+        {
+            return NotAppliedDrawingCacheResult(
+                smartArt,
+                "Preserved SmartArt cache synchronization cannot disambiguate duplicate source text.");
+        }
+
         var bodyUpdates = new List<(XElement Body, string Text)>();
         var usedBodies = new HashSet<XElement>();
         foreach (var change in changedNodes)
         {
-            var matchingBody = document.Descendants(Dsp + "txBody")
-                .Where(body => !usedBodies.Contains(body) &&
-                               StringComparer.Ordinal.Equals(ReadDrawingText(body), change.OldText))
-                .ToArray();
+            var matchingBody = canUseOrdinalMapping
+                ? new[] { cachedBodies[change.Index] }
+                : cachedBodies
+                    .Where(body => !usedBodies.Contains(body) &&
+                                   StringComparer.Ordinal.Equals(ReadDrawingText(body), change.OldText))
+                    .ToArray();
             if (matchingBody.Length != 1)
             {
                 return NotAppliedDrawingCacheResult(
@@ -682,10 +700,12 @@ public static class SmartArtEditingPlanner
         var usedFallbacks = new HashSet<SlideShape>();
         foreach (var change in changedNodes)
         {
-            var matchingFallback = smartArt.FallbackShapes
-                .Where(shape => !usedFallbacks.Contains(shape) && shape.TextBody is not null &&
-                                StringComparer.Ordinal.Equals(NormalizeText(shape.PlainText), change.OldText))
-                .ToArray();
+            var matchingFallback = canUseOrdinalMapping
+                ? new[] { cachedFallbacks[change.Index] }
+                : cachedFallbacks
+                    .Where(shape => !usedFallbacks.Contains(shape) &&
+                                    StringComparer.Ordinal.Equals(NormalizeText(shape.PlainText), change.OldText))
+                    .ToArray();
             if (matchingFallback.Length != 1)
             {
                 return NotAppliedDrawingCacheResult(
