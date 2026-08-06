@@ -253,7 +253,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var plannerSource = DialogSourceTestSupport.ReadAppServicesSource("SpellCheckWorkflowPlanner.cs");
         var controllerSource = DialogSourceTestSupport.ReadAppServicesSource("SpellCheckSessionController.cs");
         plannerSource.Should().Contain("ContainsIgnoredWord(ignoredWords, issue.Word)");
-        plannerSource.Should().Contain("ignoredIssues.Contains(CreateIssueKey(issue))");
+        plannerSource.Should().Contain("ignoredIssues?.Contains(CreateIssueKey(issue)) == true");
         plannerSource.Should().Contain("new(FilterIssues(");
         plannerSource.Should().Contain("SpellCheckService.ApplyCorrection(issue, replacement)");
         plannerSource.Should().Contain("SpellingIssueSource.ThreadedCommentReply");
