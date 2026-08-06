@@ -1050,6 +1050,80 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Fact]
+    public void NativeChangeFontStyleEffectOptionsRewriteOnlyTheSelectedSetter()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(
+            PresentationAnimationCommandPlanner.BuildFontStyleAnimation(
+                presentation.Slides[0].Shapes[0].Id));
+
+        var options = AnimationPanePlanner.BuildEffectOptionsPlan(editor.CurrentSlideAnimations, 0);
+        options.CanApply.Should().BeTrue();
+        options.Options.Select(option => option.DisplayText)
+            .Should()
+            .Equal(
+                "Italic: Off", "Italic: On",
+                "Bold: Off", "Bold: On",
+                "Underline: Off", "Underline: On");
+        options.Options.Single(option => option.Id == "font-style-bold-on").IsSelected.Should().BeTrue();
+        options.Options.Single(option => option.Id == "font-style-italic-off").IsSelected.Should().BeTrue();
+
+        var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            "font-style-italic-on");
+        mutation.ShouldApply.Should().BeTrue();
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, mutation).Should().BeTrue();
+
+        var style = SlideShowPlaybackPlanner.ResolveFontStyleBehavior(
+            editor.CurrentSlideAnimations[0]);
+        style.Italic.Should().BeTrue();
+        style.Bold.Should().BeTrue();
+        style.Underline.Should().BeFalse();
+        editor.CurrentSlideAnimations[0].PreservedFontStyleBehaviorXml
+            .Should().Contain("style.fontWeight")
+            .And.Contain("val=\"bold\"")
+            .And.Contain("style.textDecorationUnderline")
+            .And.Contain("val=\"false\"");
+
+        using var output = new MemoryStream();
+        PptxPackageWriter.Write(presentation, output);
+        var reopened = PptxPackageReader.Read(new MemoryStream(output.ToArray()));
+        var reopenedStyle = SlideShowPlaybackPlanner.ResolveFontStyleBehavior(
+            reopened.Slides[0].Animations.Single());
+        reopenedStyle.Italic.Should().BeTrue();
+        reopenedStyle.Bold.Should().BeTrue();
+        reopenedStyle.Underline.Should().BeFalse();
+
+        editor.Undo();
+        var restored = SlideShowPlaybackPlanner.ResolveFontStyleBehavior(
+            editor.CurrentSlideAnimations[0]);
+        restored.Italic.Should().BeFalse();
+        restored.Bold.Should().BeTrue();
+        restored.Underline.Should().BeFalse();
+    }
+
+    [Fact]
+    public void RewriteFontStyleBehaviorRejectsUnknownSetterWithoutChangingPayload()
+    {
+        const string behavior = """
+            <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+              <p:set><p:attrNameLst><p:attrName>style.fontWeight</p:attrName></p:attrNameLst><p:to><p:strVal val="bold" /></p:to></p:set>
+            </p:childTnLst>
+            """;
+
+        SlideShowPlaybackPlanner.RewriteFontStyleBehavior(
+            behavior,
+            "style.unknown",
+            true).Should().BeNull();
+        SlideShowPlaybackPlanner.RewriteFontStyleBehavior(
+            behavior,
+            "style.fontWeight",
+            false).Should().Contain("val=\"normal\"");
+    }
+
+    [Fact]
     public void BuildEffectOptionsPlan_ProjectsPulseAmountAndAppliesIt()
     {
         var presentation = Presentation.CreateEmpty();
