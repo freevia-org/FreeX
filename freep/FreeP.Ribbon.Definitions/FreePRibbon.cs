@@ -1235,6 +1235,7 @@ public static class FreePRibbon
             group.Medium("freep.anim.emphasis.change-fill-color", FreePRibbonText.AnimationEmphasisChangeFillColorCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.AnimationEmphasisChangeFillColorCommand.KeyTip);
             group.Medium("freep.anim.emphasis.change-font-color", FreePRibbonText.AnimationEmphasisChangeFontColorCommand.Label, RibbonCommandIconKind.FontColor, FreePRibbonText.AnimationEmphasisChangeFontColorCommand.KeyTip);
             group.Medium("freep.anim.emphasis.change-font-size", FreePRibbonText.AnimationEmphasisChangeFontSizeCommand.Label, RibbonCommandIconKind.Size, FreePRibbonText.AnimationEmphasisChangeFontSizeCommand.KeyTip);
+            group.Medium("freep.anim.emphasis.change-line-color", FreePRibbonText.AnimationEmphasisChangeLineColorCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.AnimationEmphasisChangeLineColorCommand.KeyTip);
             group.Medium("freep.anim.emphasis.grow-with-color", FreePRibbonText.AnimationEmphasisGrowWithColorCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.AnimationEmphasisGrowWithColorCommand.KeyTip);
             group.Medium("freep.anim.emphasis.wave", FreePRibbonText.AnimationEmphasisWaveCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationEmphasisWaveCommand.KeyTip);
             group.Medium("freep.anim.emphasis.shimmer", FreePRibbonText.AnimationEmphasisShimmerCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationEmphasisShimmerCommand.KeyTip);

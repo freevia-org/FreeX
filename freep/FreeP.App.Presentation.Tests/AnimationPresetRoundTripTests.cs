@@ -474,6 +474,56 @@ public sealed class AnimationPresetRoundTripTests
     }
 
     [Fact]
+    public void AuthoredChangeLineColorWritesNativeStrokeBehaviors()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(
+            PresentationAnimationCommandPlanner.BuildLineColorAnimation(7));
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+
+        animation.Preset.Should().Be(AnimationPreset.ChangeLineColor);
+        animation.RawPresetClass.Should().BeNull();
+        animation.RawPresetId.Should().BeNull();
+        animation.RawPresetSubtype.Should().BeNull();
+        animation.EffectSubtype.Should().Be("2");
+        animation.PreservedLineBehaviorXml.Should().Contain("stroke.color");
+        animation.PreservedLineBehaviorXml.Should().Contain("stroke.on");
+        animation.PreservedLineBehaviorXml.Should().Contain("accent2");
+        animation.PreservedLineBehaviorXml.Should().Contain("spid=\"7\"");
+        SlideShowPlaybackPlanner.PlanShapeAnimation(animation, startDelayMs: 0)
+            .EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ChangeColor);
+
+        var clonedAnimation = SlideCloner.CloneSlide(reloaded.Slides[0]).Animations.Single();
+        clonedAnimation.PreservedLineBehaviorXml.Should().Be(animation.PreservedLineBehaviorXml);
+
+        using var archive = new ZipArchive(new MemoryStream(first.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetClass")?.Value == "emph"
+                && element.Attribute("presetID")?.Value == "7");
+        cTn.Attribute("presetSubtype")!.Value.Should().Be("2");
+        cTn.Descendants(p + "animClr").Should().ContainSingle()
+            .Which.Descendants(p + "attrName").Single().Value.Should().Be("stroke.color");
+        cTn.Descendants(p + "animClr").Single()
+            .Descendants(p + "spTgt").Single().Attribute("spid")!.Value.Should().Be("7");
+        var lineOnSetter = cTn.Descendants(p + "set")
+            .Single(element => element.Descendants(p + "attrName")
+                .Any(attribute => attribute.Value == "stroke.on"));
+        lineOnSetter.Descendants(p + "attrName").Single().Value.Should().Be("stroke.on");
+        lineOnSetter
+            .Descendants(p + "spTgt").Single().Attribute("spid")!.Value.Should().Be("7");
+        cTn.Descendants(a + "schemeClr").Single().Attribute("val")!.Value.Should().Be("accent2");
+    }
+
+    [Fact]
     public void ImportedChangeFillColorRetainsFillTargetAndNativeSetters()
     {
         var presentation = Presentation.CreateEmpty();

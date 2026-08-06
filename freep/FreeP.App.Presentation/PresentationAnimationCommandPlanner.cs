@@ -72,6 +72,7 @@ public static class PresentationAnimationCommandPlanner
             new PresentationAnimationCommandPlan("freep.anim.emphasis.change-fill-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ChangeFillColor),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.change-font-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ChangeColor),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.change-font-size", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Grow),
+            new PresentationAnimationCommandPlan("freep.anim.emphasis.change-line-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.ChangeLineColor),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.grow-with-color", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.GrowWithColor),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.wave", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Wave),
             new PresentationAnimationCommandPlan("freep.anim.emphasis.shimmer", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Emphasis, AnimationPreset.Shimmer),
@@ -160,6 +161,10 @@ public static class PresentationAnimationCommandPlanner
                 else if (StringComparer.Ordinal.Equals(plan.CommandId, "freep.anim.emphasis.change-font-size"))
                 {
                     animation = BuildFontSizeAnimation(selectedShapeId);
+                }
+                else if (StringComparer.Ordinal.Equals(plan.CommandId, "freep.anim.emphasis.change-line-color"))
+                {
+                    animation = BuildLineColorAnimation(selectedShapeId);
                 }
 
                 editor.AddAnimation(selectedShapeId, animation);
@@ -290,6 +295,17 @@ public static class PresentationAnimationCommandPlanner
         return animation;
     }
 
+    public static ShapeAnimation BuildLineColorAnimation(uint shapeId)
+    {
+        var animation = BuildAnimation(AnimationKind.Emphasis, AnimationPreset.ChangeLineColor, shapeId);
+        animation.RawPresetClass = "emph";
+        animation.RawPresetId = 7;
+        animation.RawPresetSubtype = "2";
+        animation.EffectSubtype = "2";
+        animation.PreservedLineBehaviorXml = BuildDefaultLineColorBehaviorXml(shapeId);
+        return animation;
+    }
+
     private static void AuthorFontColorBehavior(ShapeAnimation animation, uint shapeId)
     {
         animation.RawPresetClass = "emph";
@@ -358,6 +374,28 @@ public static class PresentationAnimationCommandPlanner
             <p:attrNameLst><p:attrName>style.fontSize</p:attrName></p:attrNameLst>
           </p:cBhvr>
         </p:anim>
+        """;
+
+    private static string BuildDefaultLineColorBehaviorXml(uint shapeId) => $"""
+        <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <p:animClr clrSpc="rgb" dir="cw">
+            <p:cBhvr>
+              <p:cTn id="1" dur="500" fill="hold"/>
+              <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+              <p:attrNameLst><p:attrName>stroke.color</p:attrName></p:attrNameLst>
+            </p:cBhvr>
+            <p:to><a:schemeClr val="accent2"/></p:to>
+          </p:animClr>
+          <p:set>
+            <p:cBhvr>
+              <p:cTn id="2" dur="500" fill="hold"/>
+              <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+              <p:attrNameLst><p:attrName>stroke.on</p:attrName></p:attrNameLst>
+            </p:cBhvr>
+            <p:to><p:strVal val="true"/></p:to>
+          </p:set>
+        </p:childTnLst>
         """;
 
     public static ShapeAnimation BuildMotionAnimation(PresentationMotionPathPreset preset)
@@ -486,6 +524,7 @@ public static class PresentationAnimationCommandPlanner
             PreservedColorBehaviorXml = animation.PreservedColorBehaviorXml,
             PreservedNumericBehaviorXml = animation.PreservedNumericBehaviorXml,
             PreservedFillBehaviorXml = animation.PreservedFillBehaviorXml,
+            PreservedLineBehaviorXml = animation.PreservedLineBehaviorXml,
             RawPresetClass = animation.RawPresetClass,
             RawPresetId = animation.RawPresetId,
             RawPresetSubtype = animation.RawPresetSubtype,

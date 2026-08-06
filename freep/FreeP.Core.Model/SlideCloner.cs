@@ -762,6 +762,7 @@ public static class SlideCloner
             PreservedColorBehaviorXml = a.PreservedColorBehaviorXml,
             PreservedNumericBehaviorXml = a.PreservedNumericBehaviorXml,
             PreservedFillBehaviorXml = a.PreservedFillBehaviorXml,
+            PreservedLineBehaviorXml = a.PreservedLineBehaviorXml,
             TriggerShapeId = a.TriggerShapeId,
             RawPresetClass = a.RawPresetClass,
             RawPresetId = a.RawPresetId,

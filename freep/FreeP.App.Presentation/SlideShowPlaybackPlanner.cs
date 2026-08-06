@@ -512,6 +512,7 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Blink => SlideShowShapeAnimationEffectKind.Blink,
             AnimationPreset.ColorPulse => SlideShowShapeAnimationEffectKind.ColorPulse,
             AnimationPreset.ChangeColor => SlideShowShapeAnimationEffectKind.ChangeColor,
+            AnimationPreset.ChangeLineColor => SlideShowShapeAnimationEffectKind.ChangeColor,
             AnimationPreset.ChangeFillColor => SlideShowShapeAnimationEffectKind.ChangeFillColor,
             AnimationPreset.GrowWithColor => SlideShowShapeAnimationEffectKind.GrowWithColor,
             AnimationPreset.Wave => SlideShowShapeAnimationEffectKind.Wave,

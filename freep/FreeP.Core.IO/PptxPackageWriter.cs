@@ -2426,6 +2426,8 @@ public static class PptxPackageWriter
             childTimingItems.Add(numericBehavior);
         foreach (var fillBehavior in BuildPreservedFillBehaviorEls(anim, ref nodeId))
             childTimingItems.Add(fillBehavior);
+        foreach (var lineBehavior in BuildPreservedLineBehaviorEls(anim, ref nodeId))
+            childTimingItems.Add(lineBehavior);
         if (anim.Preset is AnimationPreset.ColorPulse
             or AnimationPreset.ChangeColor
             or AnimationPreset.ChangeFillColor
@@ -2498,6 +2500,35 @@ public static class PptxPackageWriter
         try
         {
             behaviorList = XElement.Parse(anim.PreservedFillBehaviorXml, LoadOptions.PreserveWhitespace);
+        }
+        catch (XmlException)
+        {
+            return Array.Empty<XElement>();
+        }
+
+        var result = new List<XElement>();
+        foreach (var behavior in behaviorList.Elements().Select(element => new XElement(element)))
+        {
+            foreach (var timingNode in behavior.Descendants(P + "cTn"))
+                timingNode.SetAttributeValue("id", nodeId++);
+            result.Add(behavior);
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<XElement> BuildPreservedLineBehaviorEls(ShapeAnimation anim, ref uint nodeId)
+    {
+        if (string.IsNullOrWhiteSpace(anim.PreservedLineBehaviorXml)
+            || anim.Preset != AnimationPreset.ChangeLineColor)
+        {
+            return Array.Empty<XElement>();
+        }
+
+        XElement behaviorList;
+        try
+        {
+            behaviorList = XElement.Parse(anim.PreservedLineBehaviorXml, LoadOptions.PreserveWhitespace);
         }
         catch (XmlException)
         {
