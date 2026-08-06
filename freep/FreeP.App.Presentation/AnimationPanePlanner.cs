@@ -22,7 +22,8 @@ public sealed record AnimationPaneEffectOptionDescriptor(
     bool IsSelected,
     int? WheelSpokeCount = null,
     string? EffectSubtype = null,
-    AnimationScaleBehavior? ScaleBehavior = null)
+    AnimationScaleBehavior? ScaleBehavior = null,
+    string? PreservedNumericBehaviorXml = null)
 {
     public bool ReversesMotionPath { get; init; }
 }
@@ -47,7 +48,8 @@ public sealed record AnimationPaneEffectOptionMutationPlan(
     string? DisabledReason,
     int? WheelSpokeCount = null,
     string? EffectSubtype = null,
-    AnimationScaleBehavior? ScaleBehavior = null)
+    AnimationScaleBehavior? ScaleBehavior = null,
+    string? PreservedNumericBehaviorXml = null)
 {
     public bool ReversesMotionPath { get; init; }
 }
@@ -988,6 +990,7 @@ public static class AnimationPanePlanner
         }
 
         var descriptors = BuildSupportedEffectOptions(animation).ToArray();
+        var nativeFontSize = SlideShowPlaybackPlanner.ResolveFontSizeBehavior(animation);
         var wheelSpokeOptions = animation.Preset == AnimationPreset.Wheel
             ? BuildWheelSpokeOptions(animation.WheelSpokeCount).ToArray()
             : Array.Empty<AnimationPaneEffectOptionDescriptor>();
@@ -1039,7 +1042,9 @@ public static class AnimationPanePlanner
             true,
             animationIndex,
             FormatEffect(animation),
-            isAmountEffect
+            nativeFontSize is not null
+                ? selected.DisplayText
+                : isAmountEffect
                 ? AnimationAmountSemantics.Describe(animation.Preset, animation.ScaleBehavior)
                 : selected.DisplayText,
             normalized,
@@ -1102,12 +1107,21 @@ public static class AnimationPanePlanner
         var direction = option.Direction ?? animation.Direction;
         var effectSubtype = option.EffectSubtype ?? animation.EffectSubtype;
         var scaleBehavior = option.ScaleBehavior ?? animation.ScaleBehavior;
+        var preservedNumericBehaviorXml = option.PreservedNumericBehaviorXml
+            ?? animation.PreservedNumericBehaviorXml;
         if (option.EffectSubtype is not null)
             direction = null;
         var isAmountEffect = AnimationAmountSemantics.IsGrowShrink(animation.Preset);
+        var nativeFontSize = SlideShowPlaybackPlanner.ResolveFontSizeBehavior(animation);
+        var nextScale = isAmountEffect
+            ? AnimationAmountSemantics.ResolveScale(AnimationPreset.Grow, scaleBehavior)
+            : 1d;
+        var amountChanged = nativeFontSize is not null
+            ? Math.Abs(nativeFontSize.Multiplier - nextScale) >= 0.000001
+            : !ScaleBehaviorEquals(animation.ScaleBehavior, scaleBehavior);
         return new AnimationPaneEffectOptionMutationPlan(
             (isAmountEffect
-                ? !ScaleBehaviorEquals(animation.ScaleBehavior, scaleBehavior)
+                ? amountChanged
                 : animation.Direction != direction)
                 || (animation.Preset == AnimationPreset.Wheel
                     && option.WheelSpokeCount is not null
@@ -1119,7 +1133,8 @@ public static class AnimationPanePlanner
             null,
             option.WheelSpokeCount ?? animation.WheelSpokeCount,
             isAmountEffect ? null : effectSubtype,
-            scaleBehavior);
+            scaleBehavior,
+            preservedNumericBehaviorXml);
     }
 
     public static bool TryApplyEffectOptionMutation(
@@ -1148,7 +1163,11 @@ public static class AnimationPanePlanner
 
         updated.Direction = plan.Direction;
         if (AnimationAmountSemantics.IsGrowShrink(current.Preset))
+        {
             updated.ScaleBehavior = plan.ScaleBehavior?.Clone();
+            if (SlideShowPlaybackPlanner.ResolveFontSizeBehavior(current) is not null)
+                updated.PreservedNumericBehaviorXml = plan.PreservedNumericBehaviorXml;
+        }
         else
             updated.EffectSubtype = plan.EffectSubtype;
         if (current.Preset == AnimationPreset.Wheel)
@@ -1749,6 +1768,13 @@ public static class AnimationPanePlanner
             yield break;
         }
 
+        if (SlideShowPlaybackPlanner.ResolveFontSizeBehavior(animation) is not null)
+        {
+            foreach (var option in FontSizeAmountOptions(animation))
+                yield return option;
+            yield break;
+        }
+
         switch (animation.Preset)
         {
             case AnimationPreset.FlyIn:
@@ -1909,6 +1935,49 @@ public static class AnimationPanePlanner
                 null,
                 true,
                 ScaleBehavior: animation.ScaleBehavior.Clone());
+        }
+    }
+
+    private static IEnumerable<AnimationPaneEffectOptionDescriptor> FontSizeAmountOptions(
+        ShapeAnimation animation)
+    {
+        var current = SlideShowPlaybackPlanner.ResolveFontSizeBehavior(animation);
+        foreach (var choice in AnimationAmountSemantics.SupportedChoices)
+        {
+            var numericBehaviorXml = SlideShowPlaybackPlanner.RewriteFontSizeBehavior(
+                animation,
+                choice.Scale);
+            if (numericBehaviorXml is null)
+                continue;
+
+            yield return new AnimationPaneEffectOptionDescriptor(
+                $"amount-{choice.Token}",
+                choice.DisplayText,
+                null,
+                current is not null && Math.Abs(current.Multiplier - choice.Scale) < 0.000001,
+                ScaleBehavior: AnimationAmountSemantics.CreateChoiceBehavior(AnimationPreset.Grow, choice.Scale),
+                PreservedNumericBehaviorXml: numericBehaviorXml);
+        }
+
+        if (current is null
+            || AnimationAmountSemantics.SupportedChoices.Any(choice =>
+                Math.Abs(choice.Scale - current.Multiplier) < 0.000001))
+        {
+            yield break;
+        }
+
+        var customBehaviorXml = SlideShowPlaybackPlanner.RewriteFontSizeBehavior(
+            animation,
+            current.Multiplier);
+        if (customBehaviorXml is not null)
+        {
+            yield return new AnimationPaneEffectOptionDescriptor(
+                "amount-custom",
+                $"Custom ({current.Multiplier * 100:0.##}%)",
+                null,
+                true,
+                ScaleBehavior: AnimationScaleBehavior.FromTo(current.Multiplier),
+                PreservedNumericBehaviorXml: customBehaviorXml);
         }
     }
 

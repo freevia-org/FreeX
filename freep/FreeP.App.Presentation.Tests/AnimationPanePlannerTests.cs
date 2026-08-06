@@ -1,5 +1,8 @@
 using System.Globalization;
+using System.IO.Compression;
+using System.Xml.Linq;
 using FreeP.App.Compositor;
+using FreeP.Core.IO;
 
 namespace FreeP.App.Compositor.Tests;
 
@@ -945,6 +948,69 @@ public sealed class AnimationPanePlannerTests
         AnimationPanePlanner.TryApplyEffectOptionMutation(editor, mutation).Should().BeTrue();
         editor.CurrentSlideAnimations[0].ScaleBehavior!.ToX
             .Should().Be(AnimationScaleBehavior.Format(4));
+    }
+
+    [Fact]
+    public void NativeChangeFontSizeAmountEditPreservesNumericBehavior()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = presentation.Slides[0].Shapes[0].Id,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Grow,
+            RawPresetClass = "emph",
+            RawPresetId = 4,
+            RawPresetSubtype = "2",
+            PreservedNumericBehaviorXml = """
+                <p:anim xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" valueType="num" to="1.5">
+                  <p:cBhvr><p:attrNameLst><p:attrName>style.fontSize</p:attrName></p:attrNameLst></p:cBhvr>
+                </p:anim>
+                """
+        });
+
+        var options = AnimationPanePlanner.BuildEffectOptionsPlan(editor.CurrentSlideAnimations, 0);
+
+        options.CanApply.Should().BeTrue();
+        options.SelectedOptionText.Should().Be("Larger (150%)");
+        options.Options.Should().HaveCount(4);
+        options.Options.Should().OnlyContain(option =>
+            option.PreservedNumericBehaviorXml != null);
+
+        AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            "amount-150").ShouldApply.Should().BeFalse();
+
+        var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            "amount-400");
+
+        mutation.ShouldApply.Should().BeTrue();
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, mutation).Should().BeTrue();
+        SlideShowPlaybackPlanner.ResolveFontSizeBehavior(editor.CurrentSlideAnimations[0])!
+            .Multiplier.Should().Be(4);
+        editor.CurrentSlideAnimations[0].PreservedNumericBehaviorXml
+            .Should().Contain("to=\"4\"")
+            .And.NotContain("animScale");
+
+        using var output = new MemoryStream();
+        PptxPackageWriter.Write(presentation, output);
+        using var archive = new ZipArchive(new MemoryStream(output.ToArray()), ZipArchiveMode.Read);
+        using var slideReader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(slideReader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetClass")?.Value == "emph"
+                && element.Attribute("presetID")?.Value == "4");
+        cTn.Descendants(p + "anim").Single().Attribute("to")!.Value.Should().Be("4");
+        cTn.Descendants(p + "animScale").Should().BeEmpty();
+
+        editor.Undo();
+        SlideShowPlaybackPlanner.ResolveFontSizeBehavior(editor.CurrentSlideAnimations[0])!
+            .Multiplier.Should().Be(1.5);
     }
 
     [Fact]
