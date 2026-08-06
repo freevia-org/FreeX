@@ -202,6 +202,11 @@ public sealed class FreeWRibbonCommandWorkflowTests
             "FreeW.App.Avalonia",
             "Ribbon",
             "FreeWAvaloniaRibbonCommands.cs");
+        var avaloniaRibbon = ReadSource(
+            "freew",
+            "FreeW.App.Avalonia",
+            "Ribbon",
+            "FreeWRibbon.cs");
         var directRegistration = new Regex(
             @"(?:registry|r)\.Register\(\s*""(?<id>freew\.[^""]+)""",
             RegexOptions.CultureInvariant);
@@ -223,6 +228,9 @@ public sealed class FreeWRibbonCommandWorkflowTests
         avalonia.Should().NotContain(".Build().Registry");
         wpf.Should().NotContain("FreeWRibbonCommandWorkflow.Register(");
         avalonia.Should().NotContain("FreeWRibbonCommandWorkflow.Register(");
+        avaloniaRibbon.Should().Contain(
+            "global using RibbonHostCallbacks = FreeW.App.Presentation.Ribbon.FreeWRibbonHostExecutionPorts;");
+        avaloniaRibbon.Should().NotContain("record RibbonHostCallbacks");
 
         foreach (var source in new[] { wpf, avalonia })
         {

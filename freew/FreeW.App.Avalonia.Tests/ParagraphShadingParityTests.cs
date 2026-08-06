@@ -177,7 +177,7 @@ public sealed class ParagraphShadingParityTests
         command!.Execute(RibbonCommandContext.Empty);
     }
 
-    private static FreeW.App.Avalonia.Ribbon.RibbonHostCallbacks CreateCallbacks() =>
+    private static FreeW.App.Presentation.Ribbon.FreeWRibbonHostExecutionPorts CreateCallbacks() =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { }, ToggleNavigationPane: () => { },
