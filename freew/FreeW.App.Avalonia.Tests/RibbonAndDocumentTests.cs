@@ -123,7 +123,7 @@ public class RibbonAndDocumentTests
         mainWindow.Should().Contain("NewDocument: NewDocument");
         mainWindow.Should().Contain("ImportPdfText: () => _ = ImportPdfTextAsync()");
         mainWindow.Should().Contain("Backstage: () => _ = ShowBackstageAsync()");
-        mainWindow.Should().Contain("Save: () => _ = SaveAsync()");
+        mainWindow.Should().Contain("Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument)");
     }
 
     [Fact]
