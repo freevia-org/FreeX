@@ -462,7 +462,8 @@ public sealed partial class MainWindowXamlKeyTipTests
         source.Should().Contain("SetTimelineRangeCommand");
         source.Should().Contain("SlicerTileButton_Click");
         source.Should().Contain("TimelineApplyButton_Click");
-        source.Should().Contain("SlicerTimelinePlanner.HasActiveSlicerFilter(slicer)");
+        source.Should().Contain("new SlicerTimelineSourceSession(_workbook)");
+        source.Should().Contain("Select(sourceSession.BuildSlicerPaneItem)");
         xamlSource.Should().Contain("Binding=\"{Binding HasActiveFilter}\"");
         xamlSource.Should().Contain("IsEnabled=\"{Binding HasActiveFilter}\"");
         xamlSource.Should().Contain("Binding=\"{Binding IsSelected}\"");

@@ -38,6 +38,7 @@ public sealed partial class MainWindow
         var showHeadings = _session.IsShowingHeadings;
         var zoomFactor = GetActiveZoomFactor();
         var workbook = _session.Workbook;
+        var sourceSession = new SlicerTimelineSourceSession(workbook);
 
         foreach (var slicer in workbook.Slicers)
         {
@@ -47,7 +48,7 @@ public sealed partial class MainWindow
                 continue;
             }
 
-            var availableItems = ReadSlicerSourceItems(slicer);
+            var availableItems = sourceSession.ReadSlicerSourceItems(slicer);
             // Full multi-column item rendering (every available item, honoring columnCount + showCaption),
             // matching the WPF/headless renderer — not the single-column four-tile preview.
             var layout = SlicerLayoutBuilder.BuildFull(slicer, availableItems, ToModelBounds(bounds, zoomFactor));
@@ -65,7 +66,7 @@ public sealed partial class MainWindow
                 continue;
             }
 
-            var granularity = SlicerTimelineGranularity.Resolve(timeline);
+            var granularity = sourceSession.ResolveTimelineGranularity(timeline);
             var layout = TimelineLayoutBuilder.Build(timeline, ToModelBounds(bounds, zoomFactor), granularity);
             var visual = CreateTimelineVisual(timeline, layout, bounds.Width, bounds.Height, zoomFactor);
             Canvas.SetLeft(visual, bounds.Left);
@@ -435,43 +436,6 @@ public sealed partial class MainWindow
 
     private static double EmusToPixels(long emus) => emus / EmusPerPixel;
 
-    /// <summary>
-    /// Reads the available source items for a slicer from its connected PivotTable field, mirroring
-    /// the Windows host's <c>ReadSlicerSourceItems</c>. Returns an empty list when the slicer is not
-    /// connected or the field cannot be resolved.
-    /// </summary>
-    private IReadOnlyList<string> ReadSlicerSourceItems(SlicerModel slicer)
-    {
-        // Table slicers (and pivot slicers whose items live in the slicer cache) resolve through the
-        // shared SlicerItemResolver — table-column distinct values or pivot cache shared items.
-        var resolved = FreeX.Core.Commands.SlicerItemResolver.ResolveAvailableItems(slicer, _session.Workbook);
-        if (resolved.Count > 0)
-            return resolved;
-
-        if (string.IsNullOrWhiteSpace(slicer.SourcePivotTableName) ||
-            string.IsNullOrWhiteSpace(slicer.SourceFieldName))
-        {
-            return [];
-        }
-
-        foreach (var sheet in _session.Workbook.Sheets)
-        {
-            PivotTableModel? pivotTable = null;
-            foreach (var pivot in sheet.PivotTables)
-            {
-                if (string.Equals(pivot.Name, slicer.SourcePivotTableName, StringComparison.OrdinalIgnoreCase))
-                {
-                    pivotTable = pivot;
-                    break;
-                }
-            }
-
-            if (pivotTable is null)
-                continue;
-
-            return SlicerTimelineSourceReader.ReadFieldItems(sheet, pivotTable, slicer.SourceFieldName);
-        }
-
-        return [];
-    }
+    private IReadOnlyList<string> ReadSlicerSourceItems(SlicerModel slicer) =>
+        new SlicerTimelineSourceSession(_session.Workbook).ReadSlicerSourceItems(slicer);
 }

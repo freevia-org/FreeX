@@ -18,6 +18,7 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="Free.Shared.Drawing" />
+    <Using Include="FreeX.App.Presentation.SlicerTimeline" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,6 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />

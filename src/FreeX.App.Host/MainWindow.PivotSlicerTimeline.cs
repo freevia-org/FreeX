@@ -17,17 +17,14 @@ public partial class MainWindow
         if (SlicerTimelinePane is null)
             return;
 
+        var sourceSession = new SlicerTimelineSourceSession(_workbook);
         var slicers = _workbook.Slicers
             .Where(slicer => !string.IsNullOrWhiteSpace(slicer.Name))
-            .Select(slicer => new SlicerPaneItem(
-                slicer.Name,
-                slicer.SourceFieldName ?? slicer.CacheName,
-                BuildSlicerTiles(slicer),
-                SlicerTimelinePlanner.HasActiveSlicerFilter(slicer)))
+            .Select(sourceSession.BuildSlicerPaneItem)
             .ToList();
         var timelines = _workbook.Timelines
             .Where(timeline => !string.IsNullOrWhiteSpace(timeline.Name))
-            .Select(SlicerTimelinePlanner.BuildTimelineItem)
+            .Select(sourceSession.BuildTimelinePaneItem)
             .ToList();
 
         SlicerItemsControl.ItemsSource = slicers;
@@ -41,41 +38,8 @@ public partial class MainWindow
             SlicerTimelinePane.Visibility = Visibility.Visible;
     }
 
-    private IReadOnlyList<SlicerTileItem> BuildSlicerTiles(SlicerModel slicer)
-    {
-        return SlicerTimelinePlanner.BuildSlicerTiles(slicer, ReadSlicerSourceItems(slicer));
-    }
-
-    private IReadOnlyList<string> ReadSlicerSourceItems(SlicerModel slicer)
-    {
-        if (string.IsNullOrWhiteSpace(slicer.SourcePivotTableName) ||
-            string.IsNullOrWhiteSpace(slicer.SourceFieldName))
-        {
-            return [];
-        }
-
-        foreach (var sheet in _workbook.Sheets)
-        {
-            PivotTableModel? pivotTable = null;
-            foreach (var pivot in sheet.PivotTables)
-            {
-                if (!string.Equals(pivot.Name, slicer.SourcePivotTableName, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                pivotTable = pivot;
-                break;
-            }
-
-            if (pivotTable is null)
-                continue;
-
-            var headers = ReadPivotSourceHeaders(sheet, pivotTable);
-            var sourceIndex = PivotUiPlanner.FindSourceFieldIndex(headers, slicer.SourceFieldName);
-            return sourceIndex is null ? [] : ReadPivotFieldItems(sheet, pivotTable, sourceIndex.Value);
-        }
-
-        return [];
-    }
+    private IReadOnlyList<string> ReadSlicerSourceItems(SlicerModel slicer) =>
+        new SlicerTimelineSourceSession(_workbook).ReadSlicerSourceItems(slicer);
 
     private void SlicerTimelinePaneCloseBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -111,11 +75,11 @@ public partial class MainWindow
         // multi-item filter down to a single item; the additive toggle alone can never do that.
         IReadOnlyList<string> selected;
         if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
-            selected = SlicerTimelinePlanner.ExtendSlicerSelection(allItems, slicer.SelectedItems, tile.Caption);
+            selected = SlicerTimelinePanePlanner.ExtendSlicerSelection(allItems, slicer.SelectedItems, tile.Caption);
         else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
-            selected = SlicerTimelinePlanner.ToggleSlicerSelection(allItems, slicer.SelectedItems, tile.Caption);
+            selected = SlicerTimelinePanePlanner.ToggleSlicerSelection(allItems, slicer.SelectedItems, tile.Caption);
         else
-            selected = SlicerTimelinePlanner.ReplaceSlicerSelection(slicer.SelectedItems, tile.Caption);
+            selected = SlicerTimelinePanePlanner.ReplaceSlicerSelection(slicer.SelectedItems, tile.Caption);
 
         if (!TryExecuteCommand(new SetSlicerSelectionCommand(slicer.Name, selected.ToList()), "Slicer"))
             return;
@@ -142,8 +106,8 @@ public partial class MainWindow
         if (!TryExecuteCommand(
                 new SetTimelineRangeCommand(
                     item.Name,
-                    SlicerTimelinePlanner.NormalizeTimelineDateInput(item.SelectedStartDate),
-                    SlicerTimelinePlanner.NormalizeTimelineDateInput(item.SelectedEndDate)),
+                    SlicerTimelinePanePlanner.NormalizeTimelineDateInput(item.SelectedStartDate),
+                    SlicerTimelinePanePlanner.NormalizeTimelineDateInput(item.SelectedEndDate)),
                 "Timeline"))
             return;
 
@@ -188,13 +152,13 @@ public partial class MainWindow
 
         // P8/H45: GridView reports a plain click on an on-grid slicer tile with no modifier info
         // (NativeSlicerTileToggleRequested is Action<string,string>), so this path must apply Excel's
-        // plain-click REPLACE semantics — the same SlicerTimelinePlanner.ReplaceSlicerSelection path
+        // plain-click REPLACE semantics - the same shared ReplaceSlicerSelection path
         // SlicerTileButton_Click now uses for the pane's own plain clicks (R88-app-slicer-timeline-
         // interaction-5-2), matching the behaviour Avalonia gets from SlicerLayoutBuilder.Toggle(...,
         // additive: false). A plain click on a caption replaces the whole selection with just that
         // item; a second plain click on the lone already-selected item clears the filter back to
         // "everything selected".
-        var selected = SlicerTimelinePlanner.ReplaceSlicerSelection(slicer.SelectedItems, caption);
+        var selected = SlicerTimelinePanePlanner.ReplaceSlicerSelection(slicer.SelectedItems, caption);
 
         if (!TryExecuteCommand(new SetSlicerSelectionCommand(slicerName, selected.ToList()), "Slicer"))
             return;

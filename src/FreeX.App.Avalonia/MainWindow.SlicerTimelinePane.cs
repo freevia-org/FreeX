@@ -93,6 +93,7 @@ public sealed partial class MainWindow
     private Control BuildSlicerTimelinePaneBody(NativeVisualFilters filters)
     {
         _slicerTimelinePaneBuildCount++;
+        var sourceSession = new SlicerTimelineSourceSession(_session.Workbook);
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(10) };
         var header = new AvaloniaGrid
         {
@@ -117,9 +118,9 @@ public sealed partial class MainWindow
         content.Children.Add(header);
 
         foreach (var slicer in filters.Slicers.Where(item => !string.IsNullOrWhiteSpace(item.Name)))
-            content.Children.Add(BuildSlicerPaneCard(slicer));
+            content.Children.Add(BuildSlicerPaneCard(slicer, sourceSession));
         foreach (var timeline in filters.Timelines.Where(item => !string.IsNullOrWhiteSpace(item.Name)))
-            content.Children.Add(BuildTimelinePaneCard(timeline));
+            content.Children.Add(BuildTimelinePaneCard(timeline, sourceSession));
 
         return new ScrollViewer
         {
@@ -129,13 +130,9 @@ public sealed partial class MainWindow
         };
     }
 
-    private Control BuildSlicerPaneCard(SlicerModel slicer)
+    private Control BuildSlicerPaneCard(SlicerModel slicer, SlicerTimelineSourceSession sourceSession)
     {
-        var paneItem = new SlicerPaneItem(
-            slicer.Name,
-            slicer.SourceFieldName ?? slicer.CacheName,
-            SlicerTimelinePanePlanner.BuildSlicerTiles(slicer, ReadSlicerSourceItems(slicer)),
-            SlicerTimelinePanePlanner.HasActiveSlicerFilter(slicer));
+        var paneItem = sourceSession.BuildSlicerPaneItem(slicer);
         var body = new StackPanel { Spacing = 2 };
         body.Children.Add(new TextBlock { Text = paneItem.Name, FontWeight = FontWeight.SemiBold });
         body.Children.Add(new TextBlock
@@ -204,9 +201,9 @@ public sealed partial class MainWindow
         };
     }
 
-    private Control BuildTimelinePaneCard(TimelineModel timeline)
+    private Control BuildTimelinePaneCard(TimelineModel timeline, SlicerTimelineSourceSession sourceSession)
     {
-        var paneItem = SlicerTimelinePanePlanner.BuildTimelineItem(timeline);
+        var paneItem = sourceSession.BuildTimelinePaneItem(timeline);
         var body = new StackPanel { Spacing = 4 };
         body.Children.Add(new TextBlock { Text = paneItem.Name, FontWeight = FontWeight.SemiBold });
         body.Children.Add(new TextBlock

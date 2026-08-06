@@ -166,12 +166,27 @@ public sealed class PresentationPortabilityGuardTests
         File.Exists(Path.Combine(presentationRoot, "SlicerTimeline", "SlicerTimelineInteractionPlanner.cs"))
             .Should()
             .BeTrue("slicer/timeline hit-to-command planning is shared by renderers");
+        File.Exists(Path.Combine(presentationRoot, "SlicerTimeline", "SlicerTimelineSourceReader.cs"))
+            .Should()
+            .BeTrue("slicer/timeline source resolution and date granularity are Presentation-owned");
+        File.Exists(Path.Combine(presentationRoot, "SlicerTimeline", "SlicerItemResolver.cs"))
+            .Should()
+            .BeTrue("table and pivot-cache slicer item projection is Presentation-owned");
         File.Exists(Path.Combine(presentationRoot, "SparklineUI", "SparklineRenderPlanner.cs"))
             .Should()
             .BeTrue("sparkline render instruction planning is shared by renderers");
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "SlicerTimelineInteractionPlanner.cs"))
             .Should()
             .BeFalse("Avalonia should use the shared slicer/timeline interaction planner instead of carrying a renderer-local copy");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "SlicerTimelineSourceReader.cs"))
+            .Should()
+            .BeFalse("Avalonia should use the Presentation source session");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.Core.Commands", "SlicerItemResolver.cs"))
+            .Should()
+            .BeFalse("renderer-facing slicer item projection should not live in Commands");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "SlicerTimelinePlanner.cs"))
+            .Should()
+            .BeFalse("WPF should use the Presentation planner directly without a host facade");
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "SparklineRenderPlanner.cs"))
             .Should()
             .BeFalse("Avalonia should use the shared sparkline render planner instead of carrying a renderer-local copy");

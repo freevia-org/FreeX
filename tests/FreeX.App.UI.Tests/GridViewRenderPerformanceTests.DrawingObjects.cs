@@ -181,7 +181,8 @@ public sealed partial class GridViewRenderPerformanceTests
         drawNativeSlicer.Should().Contain("boldHeader: isAccentStyle);");
         drawNativeSlicer.Should().Contain("DrawClippedText(dc, caption, tileRect, itemTextBrush, 10, verticalPadding: 1, pixelsPerDip);");
         drawNativeTimeline.Should().Contain("TimelineLayoutBuilder.Build(");
-        drawNativeTimeline.Should().Contain("ResolveTimelineGranularity(timeline)");
+        drawNativeTimeline.Should().Contain("SlicerTimelineGranularity.Resolve(timeline)");
+        drawingSource.Should().NotContain("private static TimelineGranularity ResolveTimelineGranularity");
         drawNativeTimeline.Should().Contain("layout.Caption,");
         drawNativeTimeline.Should().Contain("DrawClippedText(dc, layout.DateLabel, ToRect(layout.DateLabelRect)");
         drawNativeTimeline.Should().Contain("ToRect(layout.SelectionRect)");

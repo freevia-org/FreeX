@@ -5,6 +5,7 @@ using System.Windows.Input;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.App.Presentation.Sparklines;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -552,13 +553,11 @@ public partial class MainWindow
         SheetGrid.Pictures = keepObjectData ? sheet?.Pictures : null;
         SheetGrid.DrawingObjectZOrder = keepObjectData ? sheet?.DrawingObjectZOrder : null;
         var nativeVisualFilters = keepObjectData && sheet is not null
-            ? SlicerTimelinePlanner.GetNativeVisualFilters(_workbook, sheet)
+            ? SlicerTimelinePanePlanner.GetNativeVisualFilters(_workbook, sheet)
             : null;
         if (nativeVisualFilters is { Slicers.Count: > 0 })
         {
-            // Resolve each slicer's available items (table-column distinct values or pivot cache shared
-            // items) into AvailableItems just before render, mirroring the form-control selected-text pass.
-            FreeX.Core.Commands.SlicerItemResolver.PopulateAvailableItems(_workbook);
+            new SlicerTimelineSourceSession(_workbook).PopulateAvailableItems(nativeVisualFilters.Slicers);
         }
         SheetGrid.NativeSlicers = nativeVisualFilters?.Slicers;
         SheetGrid.NativeTimelines = nativeVisualFilters?.Timelines;

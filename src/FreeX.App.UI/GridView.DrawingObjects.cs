@@ -797,7 +797,7 @@ public partial class GridView
         var layout = TimelineLayoutBuilder.Build(
             timeline,
             new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height),
-            ResolveTimelineGranularity(timeline));
+            SlicerTimelineGranularity.Resolve(timeline));
 
         DrawNativeControlFrame(
             dc,
@@ -974,34 +974,6 @@ public partial class GridView
 
     private static string GetNativeControlCaption(string? caption, string name, string? shapeName)
         => GridDrawingObjectPlanner.GetNativeControlCaption(caption, name, shapeName);
-
-    private static TimelineGranularity ResolveTimelineGranularity(TimelineModel timeline)
-    {
-        // The OOXML level attribute takes priority (0=years,1=quarters,2=months,3=days).
-        // TimelineLayoutBuilder.Build() applies this mapping, so we only need the heuristic
-        // here as the initial-pass value — the builder will override it when level is set.
-        if (!TryParseTimelineDate(timeline.StartDate, out var start) ||
-            !TryParseTimelineDate(timeline.EndDate, out var end))
-        {
-            return TimelineGranularity.Month;
-        }
-
-        var days = Math.Abs(end.DayNumber - start.DayNumber);
-        return days switch
-        {
-            <= 62 => TimelineGranularity.Day,
-            <= 366 => TimelineGranularity.Month,
-            <= 366 * 4 => TimelineGranularity.Quarter,
-            _ => TimelineGranularity.Year,
-        };
-    }
-
-    private static bool TryParseTimelineDate(string? value, out DateOnly date)
-    {
-        date = default;
-        return !string.IsNullOrWhiteSpace(value) &&
-            DateOnly.TryParseExact(value.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
-    }
 
     private static Rect ToRect(LayoutRect rect) => new(rect.X, rect.Y, rect.Width, rect.Height);
 
@@ -2135,7 +2107,7 @@ public partial class GridView
                 var modelBounds = new LayoutRect(
                     controlRect.Left, controlRect.Top, controlRect.Width, controlRect.Height);
                 var layout = FreeX.App.Presentation.SlicerTimeline.TimelineLayoutBuilder.Build(
-                    timeline, modelBounds, ResolveTimelineGranularity(timeline));
+                    timeline, modelBounds, SlicerTimelineGranularity.Resolve(timeline));
                 var hitPoint = new LayoutPoint(pos.X, pos.Y);
 
                 // Clear-filter icon hit?

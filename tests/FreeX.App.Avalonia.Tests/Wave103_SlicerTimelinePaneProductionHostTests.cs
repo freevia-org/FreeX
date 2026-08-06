@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 
 using FreeX.Core.Commands;
@@ -106,9 +107,43 @@ public sealed class Wave103_SlicerTimelinePaneProductionHostTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task Pane_UsesSharedSourceSessionForTableAndBoundPivotCacheItems()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                window.Show();
+                window.Measure(new global::Avalonia.Size(1120, 720));
+                window.Arrange(new global::Avalonia.Rect(0, 0, 1120, 720));
+                window.UpdateLayout();
+                SeedSourceResolutionFixture(window.Session.Workbook, window.Session.ActiveSheet);
+                window.RefreshSlicerTimelinePaneForTest();
+
+                var host = window.SlicerTimelinePaneHostForTest;
+                FindLogical<Button>(host, "SlicerPaneTile_Team Slicer_Admin").Should().NotBeNull();
+                FindLogical<Button>(host, "SlicerPaneTile_Team Slicer_Sales").Should().NotBeNull();
+                FindLogical<Button>(host, "SlicerPaneTile_Market Slicer_East").Should().NotBeNull();
+                FindLogical<Button>(host, "SlicerPaneTile_Market Slicer_West").Should().NotBeNull();
+            }
+            finally
+            {
+                if (window.IsVisible)
+                    window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     private static T Find<T>(Control root, string automationId)
         where T : Control =>
         root.GetVisualDescendants().OfType<T>().Single(control =>
+            string.Equals(AutomationProperties.GetAutomationId(control), automationId, StringComparison.Ordinal));
+
+    private static T FindLogical<T>(Control root, string automationId)
+        where T : Control =>
+        root.GetLogicalDescendants().OfType<T>().Single(control =>
             string.Equals(AutomationProperties.GetAutomationId(control), automationId, StringComparison.Ordinal));
 
     private static void SeedFixture(Workbook workbook, Sheet sheet)
@@ -157,6 +192,49 @@ public sealed class Wave103_SlicerTimelinePaneProductionHostTests
             EndDate = "2026-02-02",
             DrawingAnchor = anchor,
             SourceSheetName = sheet.Name,
+        });
+    }
+
+    private static void SeedSourceResolutionFixture(Workbook workbook, Sheet sheet)
+    {
+        Set(sheet, 1, 1, "Team");
+        Set(sheet, 2, 1, "Sales");
+        Set(sheet, 3, 1, "Admin");
+        var table = new StructuredTableModel
+        {
+            Id = 5,
+            Name = "Teams",
+            Range = Range(sheet, 1, 1, 3, 1),
+        };
+        table.Columns.Add(new StructuredTableColumnModel(9, "Team"));
+        sheet.StructuredTables.Add(table);
+
+        var decoy = new PivotCacheModel { CacheId = 11 };
+        decoy.Fields.Add(new PivotCacheFieldModel("Market", SharedItems: ["Wrong"]));
+        workbook.PivotCaches.Add(decoy);
+        var bound = new PivotCacheModel { CacheId = 12 };
+        bound.Fields.Add(new PivotCacheFieldModel("Market", SharedItems: ["West", "East"]));
+        workbook.PivotCaches.Add(bound);
+        sheet.PivotTables.Add(new PivotTableModel { Name = "PivotTable1", CacheId = 12 });
+
+        var anchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(6, 0, 1, 0),
+            new DrawingAnchorPoint(9, 0, 8, 0));
+        workbook.Slicers.Add(new SlicerModel
+        {
+            Name = "Team Slicer",
+            SourceTableId = 5,
+            SourceTableColumnId = 9,
+            SourceSheetName = sheet.Name,
+            DrawingAnchor = anchor,
+        });
+        workbook.Slicers.Add(new SlicerModel
+        {
+            Name = "Market Slicer",
+            SourcePivotTableName = "PivotTable1",
+            SourceFieldName = "Market",
+            SourceSheetName = sheet.Name,
+            DrawingAnchor = anchor,
         });
     }
 
