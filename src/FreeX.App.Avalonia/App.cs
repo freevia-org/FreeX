@@ -192,37 +192,19 @@ public sealed class App : Application
             // This process's OWN just-started coordinator has not written a snapshot yet at this
             // point in startup, so every candidate here necessarily belongs to a previous launch —
             // no self-recovery filtering is needed.
-            var candidates = AutosaveRecoveryCandidateProcessor.PrepareForRecovery(
+            var offers = AutosaveRecoveryOfferPlanner.PrepareOffers(
                 snapshotStore.EnumerateCandidates());
-            if (candidates.Count == 0)
+            if (offers.Count == 0)
                 return;
 
             var anyAccepted = false;
 
-            for (var i = 0; i < candidates.Count; i++)
+            foreach (var offer in offers)
             {
-                var candidate = candidates[i];
-                var displayName = candidate.Sidecar.DisplayName;
-                var remaining = candidates.Count - i;
+                var candidate = offer.Candidate;
+                var prompt = UiText.Format(offer.PromptKey, offer.PromptArguments);
 
-                // When multiple independent documents remain, mention how many are outstanding so
-                // the user is not surprised by repeated prompts — mirrors the WPF host's
-                // Startup_RecoveryPromptMultiple/-Named variants.
-                string prompt;
-                if (remaining > 1)
-                {
-                    prompt = string.IsNullOrWhiteSpace(displayName)
-                        ? $"FreeX found unsaved changes from a previous session ({remaining} unsaved workbooks found). Recover this one?"
-                        : $"FreeX found unsaved changes to \"{displayName}\" from a previous session ({remaining} unsaved workbooks found). Recover this one?";
-                }
-                else
-                {
-                    prompt = string.IsNullOrWhiteSpace(displayName)
-                        ? "FreeX found unsaved changes from a previous session. Recover them?"
-                        : $"FreeX found unsaved changes to \"{displayName}\" from a previous session. Recover them?";
-                }
-
-                var accepted = await mainWindow.ShowRecoveryPromptAsync(prompt, "Recover Unsaved Workbook");
+                var accepted = await mainWindow.ShowRecoveryPromptAsync(prompt, UiText.Get(offer.TitleKey));
                 if (accepted)
                 {
                     // The first accepted candidate restores into the already-shown main window; any

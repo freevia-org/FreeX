@@ -129,19 +129,22 @@ public sealed class AutosaveRecoveryCandidateProcessorTests
     }
 
     [Fact]
-    public void FreeXRenderers_DelegateRecoveryCandidatePolicyToSharedProcessor()
+    public void FreeXRenderers_DelegateRecoveryCandidatePolicyThroughSharedOfferPlanner()
     {
         var hostSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "App.xaml.cs"));
         var avaloniaSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "App.cs"));
         var processorSource = File.ReadAllText(RepositoryFileLocator.Find(
             "shared", "Free.Shared.AppServices", "AutosaveRecoveryCandidateProcessor.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "shared", "Free.Shared.AppServices", "AutosaveRecoveryOfferPlanner.cs"));
 
-        hostSource.Should().Contain("AutosaveRecoveryCandidateProcessor.PrepareForRecovery(");
-        avaloniaSource.Should().Contain("AutosaveRecoveryCandidateProcessor.PrepareForRecovery(");
+        hostSource.Should().Contain("AutosaveRecoveryOfferPlanner.PrepareOffers(");
+        avaloniaSource.Should().Contain("AutosaveRecoveryOfferPlanner.PrepareOffers(");
         hostSource.Should().NotContain("new Dictionary<string, AutosaveRecoveryCandidate>");
         avaloniaSource.Should().NotContain("new Dictionary<string, AutosaveRecoveryCandidate>");
         hostSource.Should().NotContain("DateTimeOffset.TryParse(candidate.Sidecar.TimestampUtc");
         avaloniaSource.Should().NotContain("DateTimeOffset.TryParse(candidate.Sidecar.TimestampUtc");
+        plannerSource.Should().Contain("AutosaveRecoveryCandidateProcessor.PrepareForRecovery(candidates)");
         processorSource.Should().Contain("public static IReadOnlyList<AutosaveRecoveryCandidate> PrepareForRecovery(");
         processorSource.Should().Contain("FilterSupersededByNewerOriginal(DeduplicateByDocument(candidates))");
     }

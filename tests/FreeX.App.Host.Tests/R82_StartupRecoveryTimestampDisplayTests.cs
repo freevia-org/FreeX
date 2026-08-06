@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.IO;
-using System.Reflection;
 using FluentAssertions;
 using Free.Shared.AppServices;
 
@@ -10,9 +9,9 @@ namespace FreeX.App.Host.Tests;
 /// Regression coverage for R82-services-autosave-recovery-5-3: the startup recovery prompt must
 /// surface the autosave timestamp (Excel's Document Recovery pane always shows "last autosaved at
 /// HH:MM" next to each recovered file) instead of leaving the user to guess how fresh/stale an
-/// offered snapshot is. App.FormatRecoveryTimestampForDisplay produces that display string, reusing
-/// GetCandidateTimestamp's parse-with-fallback-to-file-mtime logic so it always matches what
-/// dedup/ordering already compute internally.
+/// offered snapshot is. The shared recovery-offer planner produces that display string, reusing the
+/// candidate processor's parse-with-fallback-to-file-mtime logic so it always matches what
+/// deduplication and ordering compute internally.
 /// </summary>
 public sealed class R82_StartupRecoveryTimestampDisplayTests
 {
@@ -28,16 +27,6 @@ public sealed class R82_StartupRecoveryTimestampDisplayTests
             if (Directory.Exists(Path))
                 Directory.Delete(Path, recursive: true);
         }
-    }
-
-    private static string InvokeFormatRecoveryTimestampForDisplay(AutosaveRecoveryCandidate candidate)
-    {
-        var method = typeof(App).GetMethod(
-            "FormatRecoveryTimestampForDisplay",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
-
-        return (string)method!.Invoke(null, [candidate])!;
     }
 
     [Fact]
@@ -58,7 +47,7 @@ public sealed class R82_StartupRecoveryTimestampDisplayTests
         var candidate = new AutosaveRecoveryCandidate(
             @"C:\nonexistent\recovery-1-w0.fxl", @"C:\nonexistent\recovery-1-w0.sidecar.json", sidecar);
 
-        var display = InvokeFormatRecoveryTimestampForDisplay(candidate);
+        var display = AutosaveRecoveryOfferPlanner.FormatTimestamp(candidate, CultureInfo.CurrentCulture);
 
         display.Should().Be(timestampUtc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture));
     }
@@ -86,7 +75,7 @@ public sealed class R82_StartupRecoveryTimestampDisplayTests
         var candidate = new AutosaveRecoveryCandidate(
             snapshotPath, snapshotPath + ".sidecar.json", sidecar);
 
-        var display = InvokeFormatRecoveryTimestampForDisplay(candidate);
+        var display = AutosaveRecoveryOfferPlanner.FormatTimestamp(candidate, CultureInfo.CurrentCulture);
 
         var expected = new DateTimeOffset(mtimeUtc, TimeSpan.Zero).ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
         display.Should().Be(expected);

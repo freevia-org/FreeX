@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -617,20 +616,6 @@ public partial class App : Application
         AutosaveRecoveryCandidateProcessor.ResolveTimestamp(candidate);
 
     /// <summary>
-    /// Formats a candidate's autosave timestamp for display in the startup recovery prompt
-    /// (R82-services-autosave-recovery-5-3: Excel's Document Recovery pane always shows "last
-    /// autosaved at HH:MM" next to each recovered file; FreeX's prompt previously never surfaced
-    /// this at all, leaving the user unable to judge how fresh/stale an offered snapshot is, or to
-    /// tell two same-named candidates apart by recency). Reuses
-    /// <see cref="GetCandidateTimestamp"/>'s parse-with-fallback-to-file-mtime logic so the
-    /// displayed value matches exactly what dedup/ordering already use, converts it to local time
-    /// (the sidecar stores UTC), and formats it with the current UI culture so the punctuation and
-    /// ordering match the rest of the localized prompt.
-    /// </summary>
-    private static string FormatRecoveryTimestampForDisplay(AutosaveRecoveryCandidate candidate) =>
-        GetCandidateTimestamp(candidate).ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
-
-    /// <summary>
     /// Drops any candidate whose ORIGINAL on-disk file was saved more recently than the crash
     /// snapshot itself (R74-services-autosave-recovery-4-1). This happens when the user saved the
     /// document normally after the crash that produced the snapshot (e.g. reopened the file by
@@ -680,44 +665,21 @@ public partial class App : Application
     {
         try
         {
-            var candidates = AutosaveRecoveryCandidateProcessor.PrepareForRecovery(
+            var offers = AutosaveRecoveryOfferPlanner.PrepareOffers(
                 snapshotStore.EnumerateCandidates());
-            if (candidates.Count == 0)
+            if (offers.Count == 0)
                 return false;
 
             var anyAccepted = false;
 
-            for (var i = 0; i < candidates.Count; i++)
+            foreach (var offer in offers)
             {
-                var candidate = candidates[i];
-                var displayName = candidate.Sidecar.DisplayName;
-                var timestampText = FormatRecoveryTimestampForDisplay(candidate);
-
-                // Build the prompt. When multiple candidates remain we mention how many are
-                // outstanding so the user is not surprised by repeated dialogs. Every variant
-                // also carries the autosave timestamp (R82-services-autosave-recovery-5-3) so the
-                // user can judge how fresh/stale the offered snapshot is before deciding — the
-                // extra format argument is appended after the existing ones, so a satellite
-                // translation that has not yet picked up the new placeholder still formats
-                // correctly (unused trailing args are not an error for string.Format).
-                string prompt;
-                var remaining = candidates.Count - i;
-                if (remaining > 1)
-                {
-                    prompt = string.IsNullOrWhiteSpace(displayName)
-                        ? UiText.Format("Startup_RecoveryPromptMultiple", remaining, timestampText)
-                        : UiText.Format("Startup_RecoveryPromptNamedMultiple", displayName, remaining, timestampText);
-                }
-                else
-                {
-                    prompt = string.IsNullOrWhiteSpace(displayName)
-                        ? UiText.Format("Startup_RecoveryPrompt", timestampText)
-                        : UiText.Format("Startup_RecoveryPromptNamed", displayName, timestampText);
-                }
+                var candidate = offer.Candidate;
+                var prompt = UiText.Format(offer.PromptKey, offer.PromptArguments);
 
                 var accepted = AskStartupYesNo(
                     prompt,
-                    UiText.Get("Startup_RecoveryTitle"));
+                    UiText.Get(offer.TitleKey));
 
                 if (accepted)
                 {
