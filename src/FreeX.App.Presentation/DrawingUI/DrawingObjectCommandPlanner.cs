@@ -1,10 +1,44 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using FreeX.App.Presentation.DrawingInteraction;
 
 namespace FreeX.App.Presentation.DrawingUI;
 
 public static class DrawingObjectCommandPlanner
 {
+    public static IWorkbookCommand? BuildDragCommitCommand(
+        SheetId sheetId,
+        DrawingObjectTargetKind kind,
+        Guid objectId,
+        ObjectDragCommitPlan plan) =>
+        plan.Kind switch
+        {
+            ObjectDragCommitKind.Move => BuildMoveCommand(sheetId, kind, objectId, plan.Anchor!.Value),
+            ObjectDragCommitKind.Resize => BuildResizeCommand(
+                sheetId,
+                kind,
+                objectId,
+                plan.Width,
+                plan.Height,
+                plan.FlipHorizontal,
+                plan.FlipVertical),
+            ObjectDragCommitKind.ResizeWithAnchor => BuildResizeWithAnchorCommand(
+                sheetId,
+                kind,
+                objectId,
+                plan.Anchor!.Value,
+                plan.Width,
+                plan.Height,
+                plan.FlipHorizontal,
+                plan.FlipVertical),
+            ObjectDragCommitKind.Rotate => BuildRotateCommand(
+                sheetId,
+                kind,
+                objectId,
+                plan.RotationDegrees),
+            _ => null,
+        };
+
     public static IWorkbookCommand BuildMoveCommand(
         SheetId sheetId,
         DrawingObjectTargetKind kind,

@@ -296,11 +296,10 @@ public sealed class AvaloniaGridInputSourceTests
         interactionSource.Should().Contain("ObjectDragPlanner.HitTestHandle(");
         interactionSource.Should().Contain("ObjectDragPlanner.CalculateDragTransform(");
         interactionSource.Should().Contain("ObjectDragPlanner.CalculateRotationDegrees(");
-        interactionSource.Should().Contain("ObjectDragPlanner.ShouldCommitMove(");
-        interactionSource.Should().Contain("ObjectDragPlanner.ShouldCommitResize(");
-        interactionSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeWithAnchorCommand(");
-        interactionSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
-        interactionSource.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
+        interactionSource.Should().Contain("ObjectDragPlanner.PlanCommit(");
+        interactionSource.Should().Contain("DrawingObjectCommandPlanner.BuildDragCommitCommand(");
+        interactionSource.Should().NotContain("ObjectDragPlanner.ShouldCommitMove(");
+        interactionSource.Should().NotContain("ObjectDragPlanner.ShouldCommitResize(");
         interactionSource.Should().Contain("args.Pointer.Capture(container);");
         interactionSource.Should().Contain("args.Pointer.Capture(null);");
         interactionSource.Should().Contain("container.PointerCaptureLost +=");

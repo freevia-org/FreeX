@@ -33,6 +33,35 @@ public readonly record struct ObjectDragTransform(
     bool CrossedHorizontally,
     bool CrossedVertically);
 
+public enum ObjectDragCommitKind
+{
+    None,
+    Unavailable,
+    Move,
+    Resize,
+    ResizeWithAnchor,
+    Rotate
+}
+
+public readonly record struct ObjectDragCommitPlan(
+    ObjectDragCommitKind Kind,
+    CellAddress? Anchor,
+    double Width,
+    double Height,
+    double RotationDegrees,
+    bool FlipHorizontal,
+    bool FlipVertical)
+{
+    public static ObjectDragCommitPlan None { get; } = new(
+        ObjectDragCommitKind.None,
+        null,
+        0,
+        0,
+        0,
+        false,
+        false);
+}
+
 /// <summary>
 /// Pure, portable math for editing a drawing object via drag: move/resize transforms, rotation-grip
 /// angle math, and handle hit-testing (including inverse-rotation for rotated objects). No platform
@@ -131,6 +160,80 @@ public static class ObjectDragPlanner
         Math.Abs(currentRect.Height - startRect.Height) > threshold ||
         currentFlipHorizontal != startFlipHorizontal ||
         currentFlipVertical != startFlipVertical;
+
+    /// <summary>
+    /// Plans the model action for a completed drag. Hosts supply dimensions in model units and an
+    /// optional cell anchor resolved through their native viewport geometry.
+    /// </summary>
+    public static ObjectDragCommitPlan PlanCommit(
+        ObjectDragKind dragKind,
+        LayoutRect startRect,
+        LayoutRect currentRect,
+        CellAddress startAnchor,
+        CellAddress? currentAnchor,
+        double width,
+        double height,
+        double rotationDegrees,
+        bool startFlipHorizontal,
+        bool startFlipVertical,
+        bool currentFlipHorizontal,
+        bool currentFlipVertical)
+    {
+        if (dragKind == ObjectDragKind.Rotate)
+        {
+            return new ObjectDragCommitPlan(
+                ObjectDragCommitKind.Rotate,
+                null,
+                width,
+                height,
+                rotationDegrees,
+                currentFlipHorizontal,
+                currentFlipVertical);
+        }
+
+        if (dragKind == ObjectDragKind.Move)
+        {
+            if (currentAnchor is not { } anchor)
+                return ObjectDragCommitPlan.None with { Kind = ObjectDragCommitKind.Unavailable };
+
+            return ShouldCommitMove(startAnchor, anchor)
+                ? new ObjectDragCommitPlan(
+                    ObjectDragCommitKind.Move,
+                    anchor,
+                    width,
+                    height,
+                    rotationDegrees,
+                    currentFlipHorizontal,
+                    currentFlipVertical)
+                : ObjectDragCommitPlan.None;
+        }
+
+        if (dragKind == ObjectDragKind.None ||
+            !ShouldCommitResize(
+                startRect,
+                currentRect,
+                startFlipHorizontal,
+                startFlipVertical,
+                currentFlipHorizontal,
+                currentFlipVertical))
+        {
+            return ObjectDragCommitPlan.None;
+        }
+
+        var movedTopLeft =
+            Math.Abs(currentRect.Left - startRect.Left) > 1 ||
+            Math.Abs(currentRect.Top - startRect.Top) > 1;
+        return new ObjectDragCommitPlan(
+            movedTopLeft && currentAnchor is not null
+                ? ObjectDragCommitKind.ResizeWithAnchor
+                : ObjectDragCommitKind.Resize,
+            movedTopLeft ? currentAnchor : null,
+            width,
+            height,
+            rotationDegrees,
+            currentFlipHorizontal,
+            currentFlipVertical);
+    }
 
     /// <summary>
     /// Computes the rotation angle (in degrees, clockwise, 0 = pointer straight up) of the

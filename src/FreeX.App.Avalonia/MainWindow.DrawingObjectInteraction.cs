@@ -990,95 +990,48 @@ public sealed partial class MainWindow
         }
 
         var sheetId = _session.ActiveSheet.Id;
-        IWorkbookCommand? command = null;
-        string successStatus;
-        string failureTitle;
-
-        if (session.Kind == ObjectDragKind.Rotate)
+        CellAddress? currentAnchor = null;
+        if (session.Kind != ObjectDragKind.Rotate &&
+            TryResolveCellAddressFromSheetGridPosition(
+                new Point(session.CurrentCanvasRect.Left, session.CurrentCanvasRect.Top),
+                out var resolvedAnchor))
         {
-            command = DrawingObjectCommandPlanner.BuildRotateCommand(
-                sheetId,
-                targetKind,
-                session.RenderPlan.Bounds.Id,
-                session.CurrentRotationDegrees);
-            successStatus = FormatDrawingObjectResourceText(DrawingObjectActionPlanner.RotationSuccess(
-                new FormatPicturePlanner.RotationResult(session.CurrentRotationDegrees)));
-            failureTitle = DrawingObjectActionPlanner.RotateObjectCommandTitle;
+            currentAnchor = resolvedAnchor;
         }
-        else if (session.Kind == ObjectDragKind.Move)
+
+        var zoomFactor = Math.Max(0.01, GetActiveZoomFactor());
+        var plan = ObjectDragPlanner.PlanCommit(
+            session.Kind,
+            session.StartCanvasRect,
+            session.CurrentCanvasRect,
+            session.StartAnchor,
+            currentAnchor,
+            Math.Max(ObjectDragPlanner.MinimumObjectSize, session.CurrentCanvasRect.Width / zoomFactor),
+            Math.Max(ObjectDragPlanner.MinimumObjectSize, session.CurrentCanvasRect.Height / zoomFactor),
+            session.CurrentRotationDegrees,
+            session.StartFlipHorizontal,
+            session.StartFlipVertical,
+            session.CurrentFlipHorizontal,
+            session.CurrentFlipVertical);
+        if (plan.Kind == ObjectDragCommitKind.Unavailable)
         {
-            if (!TryResolveCellAddressFromSheetGridPosition(
-                    new Point(session.CurrentCanvasRect.Left, session.CurrentCanvasRect.Top),
-                    out var anchor))
-            {
-                RefreshShell(UiText.Get("Drawing_ObjectNoLongerAvailable"));
-                return;
-            }
-
-            if (!ObjectDragPlanner.ShouldCommitMove(session.StartAnchor, anchor))
-            {
-                RefreshShell(string.Empty);
-                return;
-            }
-
-            command = DrawingObjectCommandPlanner.BuildMoveCommand(
-                sheetId,
-                targetKind,
-                session.RenderPlan.Bounds.Id,
-                anchor);
-            successStatus = UiText.Get("DrawingInteract_Moved");
-            failureTitle = DrawingObjectActionPlanner.MoveObjectCommandTitle;
+            RefreshShell(UiText.Get("Drawing_ObjectNoLongerAvailable"));
+            return;
         }
-        else
+
+        if (plan.Kind == ObjectDragCommitKind.None)
         {
-            var zoomFactor = Math.Max(0.01, GetActiveZoomFactor());
-            var width = Math.Max(ObjectDragPlanner.MinimumObjectSize, session.CurrentCanvasRect.Width / zoomFactor);
-            var height = Math.Max(ObjectDragPlanner.MinimumObjectSize, session.CurrentCanvasRect.Height / zoomFactor);
-            var movedTopLeft =
-                Math.Abs(session.CurrentCanvasRect.Left - session.StartCanvasRect.Left) > 1 ||
-                Math.Abs(session.CurrentCanvasRect.Top - session.StartCanvasRect.Top) > 1;
-            if (!ObjectDragPlanner.ShouldCommitResize(
-                    session.StartCanvasRect,
-                    session.CurrentCanvasRect,
-                    session.StartFlipHorizontal,
-                    session.StartFlipVertical,
-                    session.CurrentFlipHorizontal,
-                    session.CurrentFlipVertical))
-            {
-                RefreshShell(string.Empty);
-                return;
-            }
-
-            if (movedTopLeft && TryResolveCellAddressFromSheetGridPosition(
-                    new Point(session.CurrentCanvasRect.Left, session.CurrentCanvasRect.Top),
-                    out var anchor))
-            {
-                command = DrawingObjectCommandPlanner.BuildResizeWithAnchorCommand(
-                    sheetId,
-                    targetKind,
-                    session.RenderPlan.Bounds.Id,
-                    anchor,
-                    width,
-                    height,
-                    session.CurrentFlipHorizontal,
-                    session.CurrentFlipVertical);
-            }
-            else
-            {
-                command = DrawingObjectCommandPlanner.BuildResizeCommand(
-                    sheetId,
-                    targetKind,
-                    session.RenderPlan.Bounds.Id,
-                    width,
-                    height,
-                    session.CurrentFlipHorizontal,
-                    session.CurrentFlipVertical);
-            }
-
-            successStatus = FormatDrawingObjectResourceText(DrawingObjectActionPlanner.ResizeSuccess(
-                new ObjectSizeDialogSize(width, height)));
-            failureTitle = DrawingObjectActionPlanner.ResizeObjectCommandTitle;
+            RefreshShell(string.Empty);
+            return;
         }
+
+        var command = DrawingObjectCommandPlanner.BuildDragCommitCommand(
+            sheetId,
+            targetKind,
+            session.RenderPlan.Bounds.Id,
+            plan)!;
+        var successStatus = FormatDrawingObjectResourceText(DrawingObjectActionPlanner.DragCommitSuccess(plan));
+        var failureTitle = DrawingObjectActionPlanner.DragCommitCommandTitle(plan.Kind);
 
         var result = _session.ExecuteReviewCommand(command);
         RefreshShell(result.Success
