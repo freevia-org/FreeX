@@ -6837,9 +6837,76 @@ public static class PptxPackageReader
         var presetSubtype = cTn.Attribute("presetSubtype")?.Value;
         var scaleBehavior = ReadScaleBehavior(
             buildPar.Descendants(P + "animScale").FirstOrDefault());
-        var preservedColorBehaviorXml = buildPar.Descendants(P + "animClr")
-            .FirstOrDefault()
-            ?.ToString(SaveOptions.DisableFormatting);
+        var preservedNumericBehaviorXml = presetClass == "emph" && presetId == 4
+            ? buildPar.Descendants(P + "anim")
+                .FirstOrDefault(element => element.Attribute("valueType")?.Value == "num")
+                ?.ToString(SaveOptions.DisableFormatting)
+            : null;
+        var colorBehavior = buildPar.Descendants(P + "animClr")
+            .FirstOrDefault();
+        var lineColorBehavior = presetClass == "emph"
+            && presetId == 7
+            ? buildPar.Descendants(P + "animClr")
+                .FirstOrDefault(element => element.Descendants(P + "attrName")
+                    .Any(attribute => attribute.Value == "stroke.color"))
+            : null;
+        var fontStyleBehavior = presetClass == "emph"
+            && presetId == 5
+            ? buildPar.Descendants(P + "set")
+                .FirstOrDefault(element => element.Descendants(P + "attrName")
+                    .Any(attribute => attribute.Value == "style.fontWeight"))
+            : null;
+        var fontStyleTargets = fontStyleBehavior is null
+            ? new HashSet<string>(StringComparer.Ordinal)
+            : buildPar.Descendants(P + "set")
+                .Descendants(P + "attrName")
+                .Select(element => element.Value)
+                .ToHashSet(StringComparer.Ordinal);
+        var isNativeFontStyle = fontStyleTargets.IsSupersetOf(new[]
+        {
+            "style.fontStyle",
+            "style.fontWeight",
+            "style.textDecorationUnderline",
+        });
+        var boldBehavior = presetClass == "emph" && presetId == 15
+            ? buildPar.Descendants(P + "set")
+                .FirstOrDefault(element => element.Descendants(P + "attrName")
+                    .Any(attribute => attribute.Value == "style.fontWeight")
+                    && element.Descendants(P + "strVal")
+                        .Any(value => value.Attribute("val")?.Value == "bold"))
+            : null;
+        var underlineBehavior = presetClass == "emph" && presetId == 18
+            ? buildPar.Descendants(P + "set")
+                .FirstOrDefault(element => element.Descendants(P + "attrName")
+                    .Any(attribute => attribute.Value == "style.textDecorationUnderline")
+                    && element.Descendants(P + "strVal")
+                        .Any(value => value.Attribute("val")?.Value == "true"))
+            : null;
+        var isNativeBold = boldBehavior is not null;
+        var isNativeUnderline = underlineBehavior is not null;
+        var nativeFontBehavior = fontStyleBehavior ?? boldBehavior ?? underlineBehavior;
+        var isNativeFillColor = presetClass == "emph"
+            && presetId == 1
+            && colorBehavior?.Descendants(P + "attrName")
+                .Any(element => element.Value == "fillcolor") == true;
+        var isNativeLineColor = lineColorBehavior is not null;
+        var preservedColorBehaviorXml = isNativeFillColor
+            || isNativeLineColor
+            ? null
+            : colorBehavior?.ToString(SaveOptions.DisableFormatting);
+        var preservedFillBehaviorXml = isNativeFillColor
+            ? BuildPreservedFillBehaviorXml(colorBehavior!)
+            : null;
+        var preservedLineBehaviorXml = isNativeLineColor
+            ? BuildPreservedFillBehaviorXml(lineColorBehavior!)
+            : null;
+        var preservedFontStyleBehaviorXml = isNativeFontStyle || isNativeBold || isNativeUnderline
+            ? BuildPreservedFillBehaviorXml(nativeFontBehavior!)
+            : null;
+        var preservedIterationXml = isNativeBold || isNativeUnderline
+            ? buildPar.Descendants(P + "iterate").FirstOrDefault()
+                ?.ToString(SaveOptions.DisableFormatting)
+            : null;
 
         var repeatInfo = ReadRepeat(cTn);
         var autoReverse = ReadBoolean(cTn.Attribute("autoRev")?.Value);
@@ -6851,7 +6918,31 @@ public static class PptxPackageReader
         if (!uint.TryParse(spTgt.Attribute("spid")?.Value, out var shapeId)) return null;
 
         var (kind, preset) = PptxAnimationMap.OoxmlToAnimationPreset(presetClass, presetId);
-        bool knownPreset = PptxAnimationMap.IsKnownOoxmlPreset(presetClass, presetId);
+        if (isNativeFillColor)
+            preset = AnimationPreset.ChangeFillColor;
+        else if (isNativeLineColor)
+            preset = AnimationPreset.ChangeLineColor;
+        else if (isNativeFontStyle)
+            preset = AnimationPreset.ChangeFontStyle;
+        else if (isNativeBold)
+            preset = AnimationPreset.Bold;
+        else if (isNativeUnderline)
+            preset = AnimationPreset.Underline;
+        if (presetClass == "emph" && presetId == 4 && scaleBehavior is null)
+        {
+            var numericTo = buildPar.Descendants(P + "anim")
+                .FirstOrDefault(element => element.Attribute("valueType")?.Value == "num")
+                ?.Attribute("to")?.Value;
+            if (double.TryParse(numericTo, NumberStyles.Float, CultureInfo.InvariantCulture, out var scale)
+                && scale >= 0)
+            {
+                scaleBehavior = AnimationScaleBehavior.FromTo(scale);
+            }
+        }
+        bool knownPreset = !isNativeFillColor
+            && !isNativeBold
+            && !isNativeUnderline
+            && PptxAnimationMap.IsKnownOoxmlPreset(presetClass, presetId);
         if (preset == AnimationPreset.Grow)
             preset = AnimationAmountSemantics.ResolvePreset(preset, scaleBehavior);
         var direction = AnimationAmountSemantics.IsGrowShrink(preset)
@@ -6886,11 +6977,28 @@ public static class PptxPackageReader
             EffectSubtype  = authoredEffectSubtype,
             ScaleBehavior = scaleBehavior,
             PreservedColorBehaviorXml = preservedColorBehaviorXml,
+            PreservedNumericBehaviorXml = preservedNumericBehaviorXml,
+            PreservedFillBehaviorXml = preservedFillBehaviorXml,
+            PreservedLineBehaviorXml = preservedLineBehaviorXml,
+            PreservedFontStyleBehaviorXml = preservedFontStyleBehaviorXml,
+            PreservedIterationXml = preservedIterationXml,
             TriggerShapeId = triggerShapeId,
             RawPresetClass = knownPreset ? null : presetClass,
             RawPresetId = knownPreset ? null : presetId,
             RawPresetSubtype = knownPreset ? null : presetSubtype,
         };
+    }
+
+    private static string? BuildPreservedFillBehaviorXml(XElement colorBehavior)
+    {
+        var behaviorList = colorBehavior.AncestorsAndSelf(P + "childTnLst").FirstOrDefault();
+        if (behaviorList is null)
+            return colorBehavior.ToString(SaveOptions.DisableFormatting);
+
+        return new XElement(
+            P + "childTnLst",
+            behaviorList.Elements().Select(element => new XElement(element)))
+            .ToString(SaveOptions.DisableFormatting);
     }
 
     private static AnimationScaleBehavior? ReadScaleBehavior(XElement? animScale)

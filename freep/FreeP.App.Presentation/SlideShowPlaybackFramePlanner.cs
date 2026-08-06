@@ -328,8 +328,56 @@ public static class SlideShowPlaybackFramePlanner
             return ((int)Math.Floor(phase) % 2) == 0 ? 1 : 0.15;
         }
 
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.FlashBulb)
+        {
+            if (isBeforeStart)
+                return 1;
+
+            return progress switch
+            {
+                < 0.08 => 1,
+                < 0.16 => 0.05,
+                < 0.30 => 1,
+                < 0.31 => 0.70,
+                _ => 1,
+            };
+        }
+
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.Flicker)
+        {
+            if (isBeforeStart)
+                return 1;
+
+            return progress switch
+            {
+                < 0.20 => 1,
+                < 0.35 => 0.20,
+                < 0.50 => 0.80,
+                < 0.65 => 0.15,
+                < 0.80 => 0.65,
+                < 0.90 => 0.25,
+                _ => 1,
+            };
+        }
+
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ColorWave)
+        {
+            if (progress <= 0.25)
+                return Lerp(1, 0.65, progress / 0.25);
+            if (progress <= 0.50)
+                return Lerp(0.65, 1, (progress - 0.25) / 0.25);
+            if (progress <= 0.75)
+                return Lerp(1, 0.65, (progress - 0.50) / 0.25);
+            return Lerp(0.65, 1, (progress - 0.75) / 0.25);
+        }
+
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeFontSize)
+            return isBeforeStart ? 0 : 1;
+
         if (plan.EffectKind is SlideShowShapeAnimationEffectKind.ColorPulse
             or SlideShowShapeAnimationEffectKind.ChangeColor
+            or SlideShowShapeAnimationEffectKind.ChangeLineColor
+            or SlideShowShapeAnimationEffectKind.ChangeFontStyle
             or SlideShowShapeAnimationEffectKind.GrowWithColor
             or SlideShowShapeAnimationEffectKind.Shimmer
             or SlideShowShapeAnimationEffectKind.Bold
@@ -558,8 +606,15 @@ public static class SlideShowPlaybackFramePlanner
                 or SlideShowShapeAnimationEffectKind.Swivel
                 or SlideShowShapeAnimationEffectKind.Teeter => SlideShowAnimationVisualTrackKind.Rotate,
             SlideShowShapeAnimationEffectKind.Blink => SlideShowAnimationVisualTrackKind.Opacity,
+            SlideShowShapeAnimationEffectKind.FlashBulb
+                or SlideShowShapeAnimationEffectKind.Flicker => SlideShowAnimationVisualTrackKind.Opacity,
             SlideShowShapeAnimationEffectKind.ColorPulse
+                or SlideShowShapeAnimationEffectKind.ColorWave
                 or SlideShowShapeAnimationEffectKind.ChangeColor
+                or SlideShowShapeAnimationEffectKind.ChangeLineColor
+                or SlideShowShapeAnimationEffectKind.ChangeFontStyle
+                or SlideShowShapeAnimationEffectKind.ChangeFontSize
+                or SlideShowShapeAnimationEffectKind.ChangeFillColor
                 or SlideShowShapeAnimationEffectKind.GrowWithColor
                 or SlideShowShapeAnimationEffectKind.Shimmer
                 or SlideShowShapeAnimationEffectKind.Bold

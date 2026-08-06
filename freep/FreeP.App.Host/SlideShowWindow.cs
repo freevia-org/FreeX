@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Globalization;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -99,6 +100,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     // Per-shape animation state for the current slide.
     // Maps shapeId → the Image element in _animOverlay that represents that shape.
     private readonly Dictionary<uint, FrameworkElement> _animElements = new();
+    private readonly Dictionary<uint, FrameworkElement> _animFillElements = new();
+    private readonly Dictionary<uint, FrameworkElement> _animLineElements = new();
+    private readonly Dictionary<uint, FrameworkElement> _animFontStyleElements = new();
+    private readonly Dictionary<uint, FrameworkElement> _animFontSizeElements = new();
     private readonly Dictionary<uint, IReadOnlyList<FrameworkElement>> _paragraphAnimElements = new();
 
     // Track which shapes have been revealed so the live canvas can hide/show correctly.
@@ -3795,6 +3800,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         _animOverlay.Children.Clear();
         _animElements.Clear();
+        _animFillElements.Clear();
+        _animLineElements.Clear();
+        _animFontStyleElements.Clear();
+        _animFontSizeElements.Clear();
         _paragraphAnimElements.Clear();
         _revealedShapes.Clear();
         _slideCanvas.SuppressedShapeIds.Clear();
@@ -3909,6 +3918,154 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             _animElements[shapeId] = img;
 
             if (slide.Animations.Any(a => a.ShapeId == shapeId
+                                          && a.Preset == AnimationPreset.ChangeFillColor)
+                && shape.Fill is not ShapeFill.None)
+            {
+                var fillMaskShape = SlideCloner.CloneShape(shape);
+                fillMaskShape.TextBody = null;
+                fillMaskShape.Outline = null;
+                var fillBitmap = RenderShapeToOverlayBitmap(slide, fillMaskShape, w, h);
+                if (fillBitmap is not null)
+                {
+                    var fillTint = new Rectangle
+                    {
+                        Width = w,
+                        Height = h,
+                        Fill = new SolidColorBrush(Colors.Transparent),
+                        Opacity = 0,
+                        OpacityMask = new ImageBrush(fillBitmap) { Stretch = Stretch.None },
+                        IsHitTestVisible = false,
+                    };
+                    Canvas.SetLeft(fillTint, 0);
+                    Canvas.SetTop(fillTint, 0);
+                    _animOverlay.Children.Add(fillTint);
+                    _animFillElements[shapeId] = fillTint;
+                }
+            }
+
+            var lineAnimation = slide.Animations.FirstOrDefault(a =>
+                a.ShapeId == shapeId && a.Preset == AnimationPreset.ChangeLineColor);
+            if (lineAnimation is not null
+                && shape.TextBody is null
+                && shape.Outline is ShapeOutline.Visible outline
+                && SlideShowPlaybackPlanner.PlanShapeAnimation(
+                    lineAnimation,
+                    startDelayMs: 0,
+                    presentation: _presentation,
+                    effectiveClrMap: slide.ColorMapOverride).ColorToHex is { } lineColor
+                && TryParseAnimationColorHex(lineColor, out var lineRgb))
+            {
+                var lineShape = SlideCloner.CloneShape(shape);
+                lineShape.Outline = new ShapeOutline.Visible(
+                    lineRgb,
+                    outline.WidthPt,
+                    outline.Dash,
+                    outline.BeginLineEnd,
+                    outline.EndLineEnd);
+                var lineBitmap = RenderShapeToOverlayBitmap(slide, lineShape, w, h);
+                if (lineBitmap is not null)
+                {
+                    var lineElement = new Image
+                    {
+                        Source = lineBitmap,
+                        Width = w,
+                        Height = h,
+                        Stretch = Stretch.None,
+                        Opacity = 0,
+                        IsHitTestVisible = false,
+                    };
+                    Canvas.SetLeft(lineElement, 0);
+                    Canvas.SetTop(lineElement, 0);
+                    _animOverlay.Children.Add(lineElement);
+                    _animLineElements[shapeId] = lineElement;
+                }
+            }
+
+            var fontStyleAnimation = slide.Animations.FirstOrDefault(a =>
+                a.ShapeId == shapeId
+                && a.Preset is (AnimationPreset.ChangeFontStyle
+                    or AnimationPreset.Bold
+                    or AnimationPreset.Underline));
+            var fontStylePlan = fontStyleAnimation is null
+                ? null
+                : SlideShowPlaybackPlanner.ResolveFontStyleBehavior(fontStyleAnimation);
+            if (fontStyleAnimation is not null
+                && shape.TextBody is not null
+                && shape.TextBody.Paragraphs.SelectMany(paragraph => paragraph.Runs).Any()
+                && fontStylePlan is { } targetStyle
+                && (targetStyle.Italic is not null
+                    || targetStyle.Bold is not null
+                    || targetStyle.Underline is not null))
+            {
+                var fontStyleShape = SlideCloner.CloneShape(shape);
+                foreach (var run in fontStyleShape.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs))
+                {
+                    if (targetStyle.Italic is bool italic)
+                        run.Italic = italic;
+                    if (targetStyle.Bold is bool bold)
+                        run.Bold = bold;
+                    if (targetStyle.Underline is bool underline)
+                        run.Underline = underline;
+                }
+
+                var fontStyleBitmap = RenderShapeToOverlayBitmap(slide, fontStyleShape, w, h);
+                if (fontStyleBitmap is not null)
+                {
+                    var fontStyleElement = new Image
+                    {
+                        Source = fontStyleBitmap,
+                        Width = w,
+                        Height = h,
+                        Stretch = Stretch.None,
+                        Opacity = 0,
+                        IsHitTestVisible = false,
+                    };
+                    Canvas.SetLeft(fontStyleElement, 0);
+                    Canvas.SetTop(fontStyleElement, 0);
+                    _animOverlay.Children.Add(fontStyleElement);
+                    _animFontStyleElements[shapeId] = fontStyleElement;
+                }
+            }
+
+            var fontSizeAnimation = slide.Animations.FirstOrDefault(a =>
+                a.ShapeId == shapeId
+                && a.Preset is (AnimationPreset.Grow or AnimationPreset.Shrink)
+                && SlideShowPlaybackPlanner.ResolveFontSizeBehavior(a) is not null);
+            var fontSizePlan = fontSizeAnimation is null
+                ? null
+                : SlideShowPlaybackPlanner.ResolveFontSizeBehavior(fontSizeAnimation);
+            var explicitRuns = shape.TextBody?.Paragraphs
+                .SelectMany(paragraph => paragraph.Runs)
+                .ToList();
+            if (fontSizeAnimation is not null
+                && explicitRuns is { Count: > 0 }
+                && explicitRuns.All(run => run.FontSizePt is > 0)
+                && fontSizePlan is { } targetSize)
+            {
+                var fontSizeShape = SlideCloner.CloneShape(shape);
+                foreach (var run in fontSizeShape.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs))
+                    run.FontSizePt = run.FontSizePt!.Value * targetSize.Multiplier;
+
+                var fontSizeBitmap = RenderShapeToOverlayBitmap(slide, fontSizeShape, w, h);
+                if (fontSizeBitmap is not null)
+                {
+                    var fontSizeElement = new Image
+                    {
+                        Source = fontSizeBitmap,
+                        Width = w,
+                        Height = h,
+                        Stretch = Stretch.None,
+                        Opacity = 0,
+                        IsHitTestVisible = false,
+                    };
+                    Canvas.SetLeft(fontSizeElement, 0);
+                    Canvas.SetTop(fontSizeElement, 0);
+                    _animOverlay.Children.Add(fontSizeElement);
+                    _animFontSizeElements[shapeId] = fontSizeElement;
+                }
+            }
+
+            if (slide.Animations.Any(a => a.ShapeId == shapeId
                                           && (a.Kind == AnimationKind.Entrance
                                               || a.Kind == AnimationKind.Motion)))
             {
@@ -4003,6 +4160,42 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 // shape is shown/hidden at the authored timing without inventing a motion
                 // path or clip for a visual we could not render safely.
                 PlayFallbackAnimation(anim, plan.DelayMs, plan.DurationMs);
+                continue;
+            }
+
+            if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeFillColor
+                && _animFillElements.TryGetValue(anim.ShapeId, out var fillElement))
+            {
+                PlayShapeAnimation(fillElement, plan);
+                _revealedShapes.Add(anim.ShapeId);
+                continue;
+            }
+
+            if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeLineColor
+                && _animLineElements.TryGetValue(anim.ShapeId, out var lineElement))
+            {
+                PlayShapeAnimation(lineElement, plan);
+                _revealedShapes.Add(anim.ShapeId);
+                continue;
+            }
+
+            if (plan.EffectKind is (SlideShowShapeAnimationEffectKind.ChangeFontStyle
+                    or SlideShowShapeAnimationEffectKind.Bold
+                    or SlideShowShapeAnimationEffectKind.Underline)
+                && _animFontStyleElements.TryGetValue(anim.ShapeId, out var fontStyleElement))
+            {
+                PlayShapeAnimation(fontStyleElement, plan);
+                _revealedShapes.Add(anim.ShapeId);
+                continue;
+            }
+
+            if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeFontSize)
+            {
+                if (_animFontSizeElements.TryGetValue(anim.ShapeId, out var fontSizeElement))
+                    PlayShapeAnimation(fontSizeElement, plan);
+                else
+                    PlayShapeAnimation(element, plan with { EffectKind = SlideShowShapeAnimationEffectKind.GrowShrink });
+                _revealedShapes.Add(anim.ShapeId);
                 continue;
             }
 
@@ -4163,17 +4356,51 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 BlinkEffect(sb, element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.FlashBulb:
+                FlashBulbEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Flicker:
+                FlickerEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Wave:
                 WaveEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.ColorPulse:
             case SlideShowShapeAnimationEffectKind.ChangeColor:
+                EmphasisPulseEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.ChangeFontStyle:
+                FontStyleEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.ChangeFontSize:
+                FontSizeEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.ColorWave:
+                ColorWaveEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.ChangeLineColor:
+                LineColorEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.ChangeFillColor:
+                FillColorEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.GrowWithColor:
             case SlideShowShapeAnimationEffectKind.Shimmer:
+                EmphasisPulseEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Bold:
             case SlideShowShapeAnimationEffectKind.Underline:
-                EmphasisPulseEffect(sb, element, plan);
+                FontStyleEffect(sb, element, plan);
                 break;
 
             default:
@@ -5748,6 +5975,42 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         sb.Children.Add(anim);
     }
 
+    private static void FlashBulbEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        var anim = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.05, KeyTime.FromPercent(0.08)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0.16)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.70, KeyTime.FromPercent(0.30)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
+        sb.Children.Add(anim);
+    }
+
+    private static void FlickerEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        var anim = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.20, KeyTime.FromPercent(0.20)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.80, KeyTime.FromPercent(0.35)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.15, KeyTime.FromPercent(0.50)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.65, KeyTime.FromPercent(0.65)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.25, KeyTime.FromPercent(0.80)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
+        sb.Children.Add(anim);
+    }
+
     private static void WaveEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
     {
         el.Opacity = 1;
@@ -5807,6 +6070,112 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         }
     }
 
+    private static void ColorWaveEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        var anim = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.25)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0.50)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.75)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
+        sb.Children.Add(anim);
+        AddAuthoredColorOverlay(sb, el, plan);
+    }
+
+    private static void FillColorEffect(
+        Storyboard storyboard,
+        FrameworkElement element,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        if (element is not Rectangle rectangle
+            || rectangle.Fill is not SolidColorBrush brush
+            || plan.ColorFromHex is null
+            || plan.ColorToHex is null
+            || !TryParseAnimationColor(plan.ColorFromHex, out var from)
+            || !TryParseAnimationColor(plan.ColorToHex, out var to))
+        {
+            return;
+        }
+
+        var color = new ColorAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs))
+        };
+        color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0)));
+        color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(color, brush);
+        Storyboard.SetTargetProperty(color, new PropertyPath(SolidColorBrush.ColorProperty));
+        storyboard.Children.Add(color);
+
+        var opacity = new DoubleAnimation
+        {
+            From = 0,
+            To = 1,
+            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs)),
+            Duration = TimeSpan.FromMilliseconds(Math.Max(1, plan.DurationMs)),
+        };
+        Storyboard.SetTarget(opacity, rectangle);
+        Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
+        storyboard.Children.Add(opacity);
+    }
+
+    private static void LineColorEffect(
+        Storyboard storyboard,
+        FrameworkElement element,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        var opacity = new DoubleAnimation
+        {
+            From = 0,
+            To = 1,
+            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs)),
+            Duration = TimeSpan.FromMilliseconds(Math.Max(1, plan.DurationMs)),
+        };
+        Storyboard.SetTarget(opacity, element);
+        Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
+        storyboard.Children.Add(opacity);
+    }
+
+    private static void FontStyleEffect(
+        Storyboard storyboard,
+        FrameworkElement element,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        var opacity = new DoubleAnimation
+        {
+            From = 0,
+            To = 1,
+            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs)),
+            Duration = TimeSpan.FromMilliseconds(1),
+        };
+        Storyboard.SetTarget(opacity, element);
+        Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
+        storyboard.Children.Add(opacity);
+    }
+
+    private static void FontSizeEffect(
+        Storyboard storyboard,
+        FrameworkElement element,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        var opacity = new DoubleAnimation
+        {
+            From = 0,
+            To = 1,
+            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs)),
+            Duration = TimeSpan.FromMilliseconds(1),
+        };
+        Storyboard.SetTarget(opacity, element);
+        Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
+        storyboard.Children.Add(opacity);
+    }
+
     private static void AddAuthoredColorOverlay(
         Storyboard storyboard,
         FrameworkElement element,
@@ -5843,11 +6212,22 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs))
         };
-        color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0)));
-        color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(0.5)));
-        color.KeyFrames.Add(new LinearColorKeyFrame(
-            plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? to : from,
-            KeyTime.FromPercent(1)));
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ColorWave)
+        {
+            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0)));
+            color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(0.25)));
+            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0.50)));
+            color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(0.75)));
+            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(1)));
+        }
+        else
+        {
+            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0)));
+            color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(0.5)));
+            color.KeyFrames.Add(new LinearColorKeyFrame(
+                plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? to : from,
+                KeyTime.FromPercent(1)));
+        }
         Storyboard.SetTarget(color, brush);
         Storyboard.SetTargetProperty(color, new PropertyPath(SolidColorBrush.ColorProperty));
         storyboard.Children.Add(color);
@@ -5857,10 +6237,20 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs))
         };
         opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0)));
-        opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.5)));
-        opacity.KeyFrames.Add(new LinearDoubleKeyFrame(
-            plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? 0.65 : 0,
-            KeyTime.FromPercent(1)));
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ColorWave)
+        {
+            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.25)));
+            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0.50)));
+            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.75)));
+            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
+        }
+        else
+        {
+            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.5)));
+            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(
+                plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? 0.65 : 0,
+                KeyTime.FromPercent(1)));
+        }
         Storyboard.SetTarget(opacity, tint);
         Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
         storyboard.Children.Add(opacity);
@@ -5879,6 +6269,19 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         color = Color.FromRgb(r, g, b);
         return true;
+    }
+
+    private static bool TryParseAnimationColorHex(string value, out SrgbColor color)
+    {
+        if (value is { Length: 6 }
+            && int.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
+        {
+            color = SrgbColor.FromRgb(rgb);
+            return true;
+        }
+
+        color = SrgbColor.Black;
+        return false;
     }
 
     /// <summary>

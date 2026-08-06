@@ -219,6 +219,416 @@ public class MailMergeTests
             .PlainText.Should().Be("Use «City»");
     }
 
+    [Theory]
+    [InlineData("Ada", "[Ada]")]
+    [InlineData("", "")]
+    public void MergeRecord_AppliesNativeConditionalBeforeAndAfterText(string value, string expected)
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" MERGEFIELD Name \\b \"[\" \\f \"]\" ", "«Name»") }
+        });
+        var row = new Dictionary<string, string> { ["Name"] = value };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be(expected);
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("Upper", "ADA LOVELACE")]
+    [InlineData("Lower", "ada lovelace")]
+    [InlineData("FirstCap", "Ada LOVELACE")]
+    [InlineData("Caps", "Ada LOVELACE")]
+    public void MergeRecord_AppliesNativeGeneralTextFormat(string format, string expected)
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    $" MERGEFIELD Name \\* {format} \\* MERGEFORMAT ",
+                    "«Name»")
+            }
+        });
+        var row = new Dictionary<string, string> { ["Name"] = "ada LOVELACE" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be(expected);
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be(expected);
+    }
+
+    [Fact]
+    public void MergeRecord_GeneralFormatIncludesConditionalText()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD Name \\b \"pre-\" \\f \"-post\" \\* Upper \\* MERGEFORMAT ",
+                    "«Name»")
+            }
+        });
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string> { ["Name"] = "ada LOVELACE" });
+
+        merged.PlainText.Should().Be("PRE-ADA LOVELACE-POST");
+    }
+
+    [Theory]
+    [InlineData("27", "Arabic", "27")]
+    [InlineData("12.5", "Arabic", "13")]
+    [InlineData("27", "ROMAN", "XXVII")]
+    [InlineData("27", "roman", "xxvii")]
+    [InlineData("4000", "ROMAN", "MMMM")]
+    [InlineData("0", "ROMAN", "")]
+    [InlineData("-3", "ROMAN", "Error! Number cannot be represented in specified format.")]
+    [InlineData("32768", "ROMAN", "Error! Number cannot be represented in specified format.")]
+    [InlineData("27", "ALPHABETIC", "AA")]
+    [InlineData("27", "alphabetic", "aa")]
+    [InlineData("0", "ALPHABETIC", "")]
+    [InlineData("-3", "ALPHABETIC", "Error! Number cannot be represented in specified format.")]
+    [InlineData("703", "ALPHABETIC", "AAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    [InlineData("781", "ALPHABETIC", "Error! Number cannot be represented in specified format.")]
+    [InlineData("27", "Hex", "1B")]
+    [InlineData("0", "Hex", "0")]
+    [InlineData("-3", "Hex", "Error! Number cannot be represented in specified format.")]
+    [InlineData("65535", "Hex", "FFFF")]
+    [InlineData("65536", "Hex", "Error! Number cannot be represented in specified format.")]
+    [InlineData("-21", "Ordinal", "-21st")]
+    [InlineData("12.5", "Ordinal", "13th")]
+    [InlineData("0", "OrdText", "zeroth")]
+    [InlineData("-3", "OrdText", "Error! Number cannot be represented in specified format.")]
+    [InlineData("1234", "OrdText", "one thousand two hundred thirty-fourth")]
+    [InlineData("0", "CardText", "zero")]
+    [InlineData("999999", "CardText", "nine hundred ninety-nine thousand nine hundred ninety-nine")]
+    [InlineData("1000000", "CardText", "Error! Number cannot be represented in specified format.")]
+    [InlineData("0", "DollarText", "zero and 00/100")]
+    [InlineData("999999.5", "DollarText", "nine hundred ninety-nine thousand nine hundred ninety-nine and 50/100")]
+    [InlineData("12.005", "DollarText", "twelve and 01/100")]
+    [InlineData("12.995", "DollarText", "twelve and 00/100")]
+    [InlineData("abc", "CardText", "abc")]
+    public void MergeRecord_AppliesNativeGeneralNumericFormat(
+        string value,
+        string format,
+        string expected)
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    $" MERGEFIELD Value \\* {format} \\* MERGEFORMAT ",
+                    "Â«ValueÂ»")
+            }
+        });
+        var row = new Dictionary<string, string> { ["Value"] = value };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be(expected);
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be(expected);
+    }
+
+    [Fact]
+    public void MergeRecord_LoneGeneralNumericFormatSuppressesConditionalTextLikeWord()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD Value \\b \"[\" \\f \"]\" \\* Roman ",
+                    "Â«ValueÂ»")
+            }
+        });
+        var row = new Dictionary<string, string> { ["Value"] = "27" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be("XXVII");
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be("XXVII");
+    }
+
+    [Fact]
+    public void MergeRecord_NonnumericGeneralNumericFormatKeepsConditionalText()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD Value \\b \"[\" \\f \"]\" \\* Roman ",
+                    "Â«ValueÂ»")
+            }
+        });
+        var row = new Dictionary<string, string> { ["Value"] = "abc" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be("[abc]");
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be("[abc]");
+    }
+
+    [Fact]
+    public void MergeRecord_CombinedGeneralFormatsSuppressPunctuationOnlyConditionalText()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD Value \\b \"[\" \\f \"]\" \\* Roman \\* Upper ",
+                    "Â«ValueÂ»")
+            }
+        });
+        var row = new Dictionary<string, string> { ["Value"] = "27" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be("XXVII");
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be("XXVII");
+    }
+
+    [Fact]
+    public void MergeRecord_CombinedGeneralFormatsProcessConditionalTextInOrder()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD Value \\b \"pre-\" \\f \"-post\" \\* CardText \\* Upper ",
+                    "Â«ValueÂ»")
+            }
+        });
+        var row = new Dictionary<string, string> { ["Value"] = "27" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be("PRE-27-POST");
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be("PRE-27-POST");
+    }
+
+    [Fact]
+    public void MergeRecord_CapsUsesWordPunctuationBoundariesButKeepsApostrophesInternal()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" MERGEFIELD Name \\* Caps ", "«Name»") }
+        });
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string>
+            {
+                ["Name"] = "ada-lovelace ada/lovelace o'connor"
+            });
+
+        merged.PlainText.Should().Be("Ada-Lovelace Ada/Lovelace O'connor");
+    }
+
+    [Theory]
+    [InlineData("1234.5", "$#,##0.00", "$1,234.50")]
+    [InlineData("12.5", "$#,##0.00", "$  12.50")]
+    [InlineData("0.125", "0.0%", "0.1%")]
+    [InlineData("abc", "0.00", "abc")]
+    [InlineData("1234.5", "x##", "1234.5")]
+    [InlineData("-12.5", "$#,##0.00", "-12.5")]
+    [InlineData("1234.5", "0", "1235")]
+    [InlineData("1234.5", "0.00", "1234.50")]
+    [InlineData("1234.5", "#,##0", "1,235")]
+    [InlineData("1234.5", "#,##0.00", "1,234.50")]
+    [InlineData("1234.5", "000000", "001235")]
+    [InlineData("-1234.5", "#,##0.00", "-1,234.50")]
+    [InlineData("1234.5", "$#,##0.00;($#,##0.00)", "$1,234.50")]
+    [InlineData("-1234.5", "$#,##0.00;($#,##0.00)", "($1,234.50)")]
+    [InlineData("1234.5", "0.00;-0.00;ZERO", "1234.50")]
+    [InlineData("-1234.5", "0.00;-0.00;ZERO", "-1234.50")]
+    [InlineData("0", "0.00;-0.00;ZERO", "ZERO")]
+    public void MergeRecord_AppliesNativeNumericPicture(string value, string picture, string expected)
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    $" MERGEFIELD Value \\# \"{picture}\" \\* MERGEFORMAT ",
+                    "«Value»")
+            }
+        });
+
+        var row = new Dictionary<string, string> { ["Value"] = value };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be(expected);
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("8/6/2026 2:05 PM", "MMMM d, yyyy", "August 6, 2026")]
+    [InlineData("8/6/2026 2:05 PM", "MM/dd/yyyy", "08/06/2026")]
+    [InlineData("8/6/2026 2:05 PM", "yyyy-MM-dd", "2026-08-06")]
+    [InlineData("8/6/2026 2:05 PM", "h:mm AM/PM", "2:05 PM")]
+    [InlineData("8/6/2026 2:05 PM", "M/d/yyyy", "8/6/2026")]
+    [InlineData("8/6/2026 2:05 PM", "dddd", "Thursday")]
+    [InlineData("8/6/2026 2:05 PM", "h:mm am/pm", "2:05 PM")]
+    [InlineData("8/6/2026 2:05 PM", "dd.MM.yyyy", "06.08.2026")]
+    [InlineData("8/6/2026 2:05 PM", "d", "6")]
+    [InlineData("8/6/2026 2:05 PM", "m", "5")]
+    [InlineData("8/6/2026 2:05 PM", "h", "2")]
+    [InlineData("8/6/2026 2:05 PM", "MMMM d, yyyy 'at' h:mm AM/PM", "August 6, 2026 at 2:05 PM")]
+    [InlineData("not-a-date", "yyyy-MM-dd", "not-a-date")]
+    public void MergeRecord_AppliesCalibratedNativeDatePicture(
+        string value,
+        string picture,
+        string expected)
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    $" MERGEFIELD When \\@ \"{picture}\" \\* MERGEFORMAT ",
+                    "«When»",
+                    formatting: new RunFormatting { LanguageTag = "en-US" })
+            }
+        });
+        var row = new Dictionary<string, string> { ["When"] = value };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be(expected);
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be(expected);
+    }
+
+    [Fact]
+    public void MergeRecord_DatePictureUsesRunLanguageForParsingAndNames()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD When \\@ \"dddd, d. MMMM yyyy\" ",
+                    "«When»",
+                    formatting: new RunFormatting { LanguageTag = "de-DE" })
+            }
+        });
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string> { ["When"] = "06.08.2026" });
+
+        merged.PlainText.Should().Be("Donnerstag, 6. August 2026");
+    }
+
+    [Fact]
+    public void NativeCompositeFields_AutoMapAndResolveInBothMergePaths()
+    {
+        var template = TextDocument.CreateEmpty();
+        template.Blocks.Clear();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(MailMerge.AddressBlockInstruction, "«AddressBlock»"),
+                new Run("|"),
+                Run.ComplexFieldRun(MailMerge.GreetingLineInstruction, "«GreetingLine»")
+            }
+        });
+        var rows = new[]
+        {
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Title"] = "Dr.", ["FirstName"] = "Ada", ["MiddleName"] = "M.",
+                ["LastName"] = "Lovelace", ["Suffix"] = "PhD", ["Company"] = "Analytical Engines",
+                ["Address1"] = "1 Algorithm Way", ["Address2"] = "Suite 2", ["City"] = "London",
+                ["State"] = "CA", ["PostalCode"] = "12345", ["Country"] = "United Kingdom"
+            },
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["FirstName"] = "Grace", ["LastName"] = "Hopper", ["Address1"] = "2 Compiler Rd",
+                ["City"] = "Arlington", ["State"] = "VA", ["PostalCode"] = "22201",
+                ["Country"] = "United States"
+            },
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Address1"] = "3 Anonymous Ave", ["City"] = "Nowhere", ["State"] = "NY",
+                ["PostalCode"] = "10000", ["Country"] = "United States"
+            }
+        };
+        var expected = new[]
+        {
+            "Dr. Ada Lovelace PhD\nAnalytical Engines\n1 Algorithm Way\nSuite 2\nLondon, CA 12345\nUnited Kingdom|Dear Dr. Lovelace,",
+            "Grace Hopper\n2 Compiler Rd\nArlington, VA 22201\nUnited States|Dear Grace Hopper,",
+            "\n3 Anonymous Ave\nNowhere, NY 10000\nUnited States|Dear Sir or Madam,"
+        };
+
+        for (var i = 0; i < rows.Length; i++)
+        {
+            MailMerge.MergeRecord(template, rows[i]).PlainText.Should().Be(expected[i]);
+            MailMerge.MergeRecordWithRules(template, rows[i], new MergeState(), recordIndex: i + 1)
+                .PlainText.Should().Be(expected[i]);
+        }
+    }
+
+    [Fact]
+    public void NativeCompositeFields_PreferExplicitSessionValues()
+    {
+        var template = TextDocument.CreateEmpty();
+        template.Blocks.Clear();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(MailMerge.AddressBlockInstruction, "«AddressBlock»"),
+                new Run("|"),
+                Run.ComplexFieldRun(MailMerge.GreetingLineInstruction, "«GreetingLine»")
+            }
+        });
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["FirstName"] = "Ignored",
+            ["AddressBlock"] = "Mapped address",
+            ["GreetingLine"] = "Hello mapped recipient!"
+        };
+
+        MailMerge.MergeRecord(template, row).PlainText
+            .Should().Be("Mapped address|Hello mapped recipient!");
+    }
+
+    [Theory]
+    [InlineData(" ADDRESSBLOCK \\f \"custom\" \\* MERGEFORMAT ", "«AddressBlock»")]
+    [InlineData(" GREETINGLINE \\f \"<<_BEFORE_ Hello >><<_LAST0_>>\" \\e \"Hello!\" \\l 1033 ", "«GreetingLine»")]
+    [InlineData(" GREETINGLINE \\f \"<<_BEFORE_ Dear >><<_TITLE0_ >><<_LAST0_>><<_AFTER_ ,>>\" \\e \"Dear Sir or Madam,\" \\l 1033 \\x extra ", "«GreetingLine»")]
+    [InlineData(" GREETINGLINE \\f \"<<_BEFORE_ DEAR >><<_TITLE0_ >><<_LAST0_>><<_AFTER_ ,>>\" \\e \"dear sir or madam,\" \\l 1033 ", "«GreetingLine»")]
+    public void NativeCompositeFields_PreserveUnsupportedCustomInstructions(
+        string instruction,
+        string cached)
+    {
+        var template = TextDocument.CreateEmpty();
+        template.Blocks.Clear();
+        template.Blocks.Add(new Paragraph { Runs = { Run.ComplexFieldRun(instruction, cached) } });
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string> { ["LastName"] = "Lovelace" });
+
+        var run = merged.Blocks.OfType<Paragraph>().Single().Runs.Single();
+        run.Text.Should().Be(cached);
+        run.ComplexField.Should().NotBeNull();
+    }
+
     [Fact]
     public void MergeRecordWithRules_ResolvesNativeMergeFieldAlongsideRules()
     {
@@ -923,6 +1333,19 @@ public class MailMergeTests
         var block = MailMerge.ComposeAddressBlock(row, mapping);
 
         block.Should().EndWith("\nFrance");
+    }
+
+    [Fact]
+    public void ComposeAddressBlock_DefaultWordLayoutOmitsMiddleName()
+    {
+        var mapping = MailMerge.AutoMatchFields(["Title", "FirstName", "MiddleName", "LastName", "Suffix"]);
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Title"] = "Dr.", ["FirstName"] = "Ada", ["MiddleName"] = "M.",
+            ["LastName"] = "Lovelace", ["Suffix"] = "PhD"
+        };
+
+        MailMerge.ComposeAddressBlock(row, mapping).Should().Be("Dr. Ada Lovelace PhD");
     }
 
     // ── ComposeGreetingLine ──────────────────────────────────────────────────────────────────────────

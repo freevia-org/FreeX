@@ -2476,17 +2476,65 @@
   <data name="Ribbon_Command_AnimationEmphasisBlink_KeyTip" xml:space="preserve">
     <value>B</value>
   </data>
+  <data name="Ribbon_Command_AnimationEmphasisFlashBulb_Label" xml:space="preserve">
+    <value>FlashBulb</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisFlashBulb_KeyTip" xml:space="preserve">
+    <value>FB</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisFlicker_Label" xml:space="preserve">
+    <value>Flicker</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisFlicker_KeyTip" xml:space="preserve">
+    <value>FK</value>
+  </data>
   <data name="Ribbon_Command_AnimationEmphasisColorPulse_Label" xml:space="preserve">
     <value>Color Pulse</value>
   </data>
   <data name="Ribbon_Command_AnimationEmphasisColorPulse_KeyTip" xml:space="preserve">
     <value>C</value>
   </data>
+  <data name="Ribbon_Command_AnimationEmphasisColorWave_Label" xml:space="preserve">
+    <value>Color Wave</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisColorWave_KeyTip" xml:space="preserve">
+    <value>CW</value>
+  </data>
   <data name="Ribbon_Command_AnimationEmphasisChangeColor_Label" xml:space="preserve">
     <value>Change Color</value>
   </data>
   <data name="Ribbon_Command_AnimationEmphasisChangeColor_KeyTip" xml:space="preserve">
     <value>H</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeFillColor_Label" xml:space="preserve">
+    <value>Change Fill Color</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeFillColor_KeyTip" xml:space="preserve">
+    <value>F</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeFontColor_Label" xml:space="preserve">
+    <value>Change Font Color</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeFontColor_KeyTip" xml:space="preserve">
+    <value>FC</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeFontSize_Label" xml:space="preserve">
+    <value>Change Font Size</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeFontSize_KeyTip" xml:space="preserve">
+    <value>FS</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeLineColor_Label" xml:space="preserve">
+    <value>Change Line Color</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeLineColor_KeyTip" xml:space="preserve">
+    <value>LC</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeFontStyle_Label" xml:space="preserve">
+    <value>Change Font Style</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeFontStyle_KeyTip" xml:space="preserve">
+    <value>FT</value>
   </data>
   <data name="Ribbon_Command_AnimationEmphasisGrowWithColor_Label" xml:space="preserve">
     <value>Grow With Color</value>

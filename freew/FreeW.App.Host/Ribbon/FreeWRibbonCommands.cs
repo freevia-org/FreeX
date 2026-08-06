@@ -6361,8 +6361,10 @@ internal static class FreeWRibbonCommands
         {
             var augmented = new Dictionary<string, string>(row, StringComparer.OrdinalIgnoreCase);
             var mapping = Mapping ?? new FieldMapping();
-            augmented["AddressBlock"] = MailMerge.ComposeAddressBlock(row, mapping);
-            augmented["GreetingLine"] = MailMerge.ComposeGreetingLine(row, mapping, greetingFormat);
+            if (!augmented.ContainsKey("AddressBlock"))
+                augmented["AddressBlock"] = MailMerge.ComposeAddressBlock(row, mapping);
+            if (!augmented.ContainsKey("GreetingLine"))
+                augmented["GreetingLine"] = MailMerge.ComposeGreetingLine(row, mapping, greetingFormat);
             return augmented;
         }
     }
@@ -6414,11 +6416,11 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Mailings > Insert Address Block: insert the «AddressBlock» composite placeholder at the caret.
+    // Mailings > Insert Address Block: insert a native ADDRESSBLOCK field at the caret.
     // The placeholder is resolved at preview/merge time via the session's FieldMapping (auto-matched or
     // user-customised via Match Fields). Opens Match Fields first if no data is loaded so the user can
     // configure the mapping before the placeholder lands in the document.
-    private sealed class InsertAddressBlockCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    internal sealed class InsertAddressBlockCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
@@ -6432,13 +6434,15 @@ internal static class FreeWRibbonCommands
             }
 
             editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}AddressBlock{MailMerge.FieldClose}");
+            editor.InsertComplexField(
+                MailMerge.AddressBlockInstruction,
+                $"{MailMerge.FieldOpen}AddressBlock{MailMerge.FieldClose}");
         }
     }
 
-    // Mailings > Insert Greeting Line: insert the «GreetingLine» composite placeholder at the caret.
+    // Mailings > Insert Greeting Line: insert a native default GREETINGLINE field at the caret.
     // Resolved per-record at preview/merge time using the session's FieldMapping.
-    private sealed class InsertGreetingLineCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    internal sealed class InsertGreetingLineCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
@@ -6452,7 +6456,9 @@ internal static class FreeWRibbonCommands
             }
 
             editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}GreetingLine{MailMerge.FieldClose}");
+            editor.InsertComplexField(
+                MailMerge.GreetingLineInstruction,
+                $"{MailMerge.FieldOpen}GreetingLine{MailMerge.FieldClose}");
         }
     }
 
@@ -7205,9 +7211,14 @@ internal static class FreeWRibbonCommands
             // Augment every row with the composed «AddressBlock» and «GreetingLine» values so composite
             // placeholders in the template resolve correctly across every record.
             var augmentedRows = finishPlan.RowIndexes.Select(index => session.AugmentRow(data.Rows[index])).ToList();
-            var augmentedData = new MergeData(data.Header,
+            var augmentedHeader = data.Header.ToList();
+            if (!augmentedHeader.Contains("AddressBlock", StringComparer.OrdinalIgnoreCase))
+                augmentedHeader.Add("AddressBlock");
+            if (!augmentedHeader.Contains("GreetingLine", StringComparer.OrdinalIgnoreCase))
+                augmentedHeader.Add("GreetingLine");
+            var augmentedData = new MergeData(augmentedHeader,
                 augmentedRows.Select(r =>
-                    (IReadOnlyList<string>)data.Header.Select(h => r.TryGetValue(h, out var v) ? v : string.Empty).ToList())
+                    (IReadOnlyList<string>)augmentedHeader.Select(h => r.TryGetValue(h, out var v) ? v : string.Empty).ToList())
                 .ToList());
 
             // Use the rules-aware merge path. Records flagged by «Skip Record If» are excluded.

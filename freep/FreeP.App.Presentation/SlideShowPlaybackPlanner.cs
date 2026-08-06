@@ -102,8 +102,15 @@ public enum SlideShowShapeAnimationEffectKind
     Spin,
     Teeter,
     Blink,
+    FlashBulb,
+    Flicker,
+    ChangeLineColor,
     ColorPulse,
+    ColorWave,
     ChangeColor,
+    ChangeFontStyle,
+    ChangeFontSize,
+    ChangeFillColor,
     GrowWithColor,
     Wave,
     Shimmer,
@@ -197,6 +204,13 @@ public sealed record SlideShowFallbackAnimationPlaybackPlan(
     double FromOpacity,
     double FlashOpacity);
 
+public sealed record SlideShowFontStylePlaybackPlan(
+    bool? Italic,
+    bool? Bold,
+    bool? Underline);
+
+public sealed record SlideShowFontSizePlaybackPlan(double Multiplier);
+
 /// <summary>
 /// Logical visibility behavior for an animation whose visual overlay could not be built.
 /// Hosts use this shared plan to preserve PowerPoint's step semantics without inventing
@@ -233,6 +247,82 @@ public static class SlideShowPlaybackPlanner
     public const double ConveyorTiltDegrees = 3.0;
     public const double WindowStartScale = 0.92;
     public const double WindowInitialOpenFactor = 0.18;
+
+    public static SlideShowFontStylePlaybackPlan ResolveFontStyleBehavior(ShapeAnimation animation)
+    {
+        if (string.IsNullOrWhiteSpace(animation.PreservedFontStyleBehaviorXml))
+            return new(null, null, null);
+
+        bool? italic = null;
+        bool? bold = null;
+        bool? underline = null;
+
+        try
+        {
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            var root = XElement.Parse(animation.PreservedFontStyleBehaviorXml, LoadOptions.PreserveWhitespace);
+            foreach (var setter in root.Descendants(p + "set"))
+            {
+                var attrName = setter.Descendants(p + "attrName")
+                    .Select(element => element.Value.Trim())
+                    .FirstOrDefault();
+                var value = setter.Descendants(p + "strVal")
+                    .Select(element => element.Attribute("val")?.Value.Trim())
+                    .FirstOrDefault();
+                if (string.IsNullOrWhiteSpace(attrName) || value is null)
+                    continue;
+
+                switch (attrName)
+                {
+                    case "style.fontStyle":
+                        italic = value.Equals("italic", StringComparison.OrdinalIgnoreCase);
+                        break;
+                    case "style.fontWeight":
+                        bold = value.Equals("bold", StringComparison.OrdinalIgnoreCase);
+                        break;
+                    case "style.textDecorationUnderline":
+                        underline = value.Equals("true", StringComparison.OrdinalIgnoreCase)
+                            || value == "1";
+                        break;
+                }
+            }
+        }
+        catch (XmlException)
+        {
+            return new(null, null, null);
+        }
+
+        return new(italic, bold, underline);
+    }
+
+    public static SlideShowFontSizePlaybackPlan? ResolveFontSizeBehavior(ShapeAnimation animation)
+    {
+        if (string.IsNullOrWhiteSpace(animation.PreservedNumericBehaviorXml))
+            return null;
+
+        try
+        {
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            var root = XElement.Parse(animation.PreservedNumericBehaviorXml, LoadOptions.PreserveWhitespace);
+            var target = root.Descendants(p + "attrName")
+                .Select(element => element.Value.Trim())
+                .FirstOrDefault();
+            var rawMultiplier = root.Attribute("to")?.Value.Trim();
+            if (!string.Equals(target, "style.fontSize", StringComparison.Ordinal)
+                || !double.TryParse(rawMultiplier, NumberStyles.Float, CultureInfo.InvariantCulture, out var multiplier)
+                || !double.IsFinite(multiplier)
+                || multiplier <= 0)
+            {
+                return null;
+            }
+
+            return new(multiplier);
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+    }
 
     public static SlideShowTransitionPlaybackPlan PlanTransition(SlideTransition transition)
     {
@@ -505,12 +595,21 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Crawl => SlideShowShapeAnimationEffectKind.Crawl,
             AnimationPreset.Zoom => SlideShowShapeAnimationEffectKind.Zoom,
             AnimationPreset.Pulse => SlideShowShapeAnimationEffectKind.Pulse,
+            AnimationPreset.Grow or AnimationPreset.Shrink
+                when ResolveFontSizeBehavior(animation) is not null
+                => SlideShowShapeAnimationEffectKind.ChangeFontSize,
             AnimationPreset.Grow or AnimationPreset.Shrink => SlideShowShapeAnimationEffectKind.GrowShrink,
             AnimationPreset.Spin => SlideShowShapeAnimationEffectKind.Spin,
             AnimationPreset.Teeter => SlideShowShapeAnimationEffectKind.Teeter,
             AnimationPreset.Blink => SlideShowShapeAnimationEffectKind.Blink,
+            AnimationPreset.FlashBulb => SlideShowShapeAnimationEffectKind.FlashBulb,
+            AnimationPreset.Flicker => SlideShowShapeAnimationEffectKind.Flicker,
             AnimationPreset.ColorPulse => SlideShowShapeAnimationEffectKind.ColorPulse,
+            AnimationPreset.ColorWave => SlideShowShapeAnimationEffectKind.ColorWave,
             AnimationPreset.ChangeColor => SlideShowShapeAnimationEffectKind.ChangeColor,
+            AnimationPreset.ChangeFontStyle => SlideShowShapeAnimationEffectKind.ChangeFontStyle,
+            AnimationPreset.ChangeLineColor => SlideShowShapeAnimationEffectKind.ChangeLineColor,
+            AnimationPreset.ChangeFillColor => SlideShowShapeAnimationEffectKind.ChangeFillColor,
             AnimationPreset.GrowWithColor => SlideShowShapeAnimationEffectKind.GrowWithColor,
             AnimationPreset.Wave => SlideShowShapeAnimationEffectKind.Wave,
             AnimationPreset.Shimmer => SlideShowShapeAnimationEffectKind.Shimmer,
@@ -526,7 +625,19 @@ public static class SlideShowPlaybackPlanner
         Presentation? presentation,
         IReadOnlyDictionary<string, string>? effectiveClrMap)
     {
+        if (effectKind == SlideShowShapeAnimationEffectKind.ChangeFillColor)
+            return ResolveFillColorBehavior(animation, presentation, effectiveClrMap);
+
+        if (effectKind == SlideShowShapeAnimationEffectKind.ChangeLineColor)
+        {
+            return ResolveColorBehaviorXml(
+                animation.PreservedLineBehaviorXml,
+                presentation,
+                effectiveClrMap);
+        }
+
         if (effectKind is not (SlideShowShapeAnimationEffectKind.ColorPulse
+            or SlideShowShapeAnimationEffectKind.ColorWave
             or SlideShowShapeAnimationEffectKind.ChangeColor
             or SlideShowShapeAnimationEffectKind.GrowWithColor
             or SlideShowShapeAnimationEffectKind.Shimmer)
@@ -535,19 +646,88 @@ public static class SlideShowPlaybackPlanner
             return (null, null);
         }
 
+        return ResolveColorBehaviorXml(
+            animation.PreservedColorBehaviorXml,
+            presentation,
+            effectiveClrMap);
+    }
+
+    private static (string? From, string? To) ResolveColorBehaviorXml(
+        string? behaviorXml,
+        Presentation? presentation,
+        IReadOnlyDictionary<string, string>? effectiveClrMap)
+    {
+        if (string.IsNullOrWhiteSpace(behaviorXml))
+            return (null, null);
+
         try
         {
             XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
             XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
-            var root = XElement.Parse(animation.PreservedColorBehaviorXml, LoadOptions.PreserveWhitespace);
+            var root = XElement.Parse(behaviorXml, LoadOptions.PreserveWhitespace);
             var from = ResolveAnimationColor(root.Element(p + "clrFrom"), presentation, effectiveClrMap, a);
-            var to = ResolveAnimationColor(root.Element(p + "clrTo"), presentation, effectiveClrMap, a);
+            var to = ResolveAnimationColor(
+                root.Element(p + "clrTo") ?? root.Descendants(p + "to").LastOrDefault(),
+                presentation,
+                effectiveClrMap,
+                a);
             return (from, to);
         }
         catch (XmlException)
         {
             return (null, null);
         }
+    }
+
+    private static (string? From, string? To) ResolveFillColorBehavior(
+        ShapeAnimation animation,
+        Presentation? presentation,
+        IReadOnlyDictionary<string, string>? effectiveClrMap)
+    {
+        if (presentation is null || string.IsNullOrWhiteSpace(animation.PreservedFillBehaviorXml))
+            return (null, null);
+
+        try
+        {
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            var root = XElement.Parse(animation.PreservedFillBehaviorXml, LoadOptions.PreserveWhitespace);
+            var animClr = root.Descendants(p + "animClr").FirstOrDefault();
+            var to = ResolveAnimationColor(animClr?.Element(p + "to"), presentation, effectiveClrMap, a);
+            var shape = FindSlideShape(presentation, animation.ShapeId);
+            var from = shape?.Fill is ShapeFill.Solid solid
+                ? solid.Color.Resolved.ToString().TrimStart('#')
+                : null;
+            return (from, to);
+        }
+        catch (XmlException)
+        {
+            return (null, null);
+        }
+    }
+
+    private static SlideShape? FindSlideShape(Presentation presentation, uint shapeId)
+    {
+        foreach (var slide in presentation.Slides)
+        {
+            if (FindSlideShape(slide.Shapes, shapeId) is { } shape)
+                return shape;
+        }
+
+        return null;
+    }
+
+    private static SlideShape? FindSlideShape(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+            if (FindSlideShape(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
     }
 
     private static string? ResolveAnimationColor(

@@ -2014,8 +2014,13 @@ public sealed class SlideShowPlaybackPlannerTests
         {
             [AnimationPreset.Teeter] = SlideShowShapeAnimationEffectKind.Teeter,
             [AnimationPreset.Blink] = SlideShowShapeAnimationEffectKind.Blink,
+            [AnimationPreset.FlashBulb] = SlideShowShapeAnimationEffectKind.FlashBulb,
+            [AnimationPreset.Flicker] = SlideShowShapeAnimationEffectKind.Flicker,
             [AnimationPreset.ColorPulse] = SlideShowShapeAnimationEffectKind.ColorPulse,
+            [AnimationPreset.ColorWave] = SlideShowShapeAnimationEffectKind.ColorWave,
             [AnimationPreset.ChangeColor] = SlideShowShapeAnimationEffectKind.ChangeColor,
+            [AnimationPreset.ChangeLineColor] = SlideShowShapeAnimationEffectKind.ChangeLineColor,
+            [AnimationPreset.ChangeFontStyle] = SlideShowShapeAnimationEffectKind.ChangeFontStyle,
             [AnimationPreset.GrowWithColor] = SlideShowShapeAnimationEffectKind.GrowWithColor,
             [AnimationPreset.Wave] = SlideShowShapeAnimationEffectKind.Wave,
             [AnimationPreset.Shimmer] = SlideShowShapeAnimationEffectKind.Shimmer,
@@ -2040,6 +2045,33 @@ public sealed class SlideShowPlaybackPlannerTests
         }
     }
 
+    [Fact]
+    public void DistinctEmphasisFamiliesExposeDistinctFrameContracts()
+    {
+        var flashBulb = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation { ShapeId = 71, Kind = AnimationKind.Emphasis, Preset = AnimationPreset.FlashBulb, DurationMs = 600 },
+            startDelayMs: 0);
+        var flicker = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation { ShapeId = 72, Kind = AnimationKind.Emphasis, Preset = AnimationPreset.Flicker, DurationMs = 600 },
+            startDelayMs: 0);
+        var colorWave = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation { ShapeId = 73, Kind = AnimationKind.Emphasis, Preset = AnimationPreset.ColorWave, DurationMs = 600 },
+            startDelayMs: 0);
+
+        var flashFrame = SlideShowPlaybackFramePlanner.PlanFrame(flashBulb, 60, 960, 540);
+        var flickerFrame = SlideShowPlaybackFramePlanner.PlanFrame(flicker, 300, 960, 540);
+        var colorWaveFrame = SlideShowPlaybackFramePlanner.PlanFrame(colorWave, 150, 960, 540);
+
+        flashFrame.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.FlashBulb);
+        flashFrame.TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Opacity);
+        flashFrame.Opacity.Should().BeApproximately(0.05, 0.0001);
+        flickerFrame.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Flicker);
+        flickerFrame.Opacity.Should().BeApproximately(0.15, 0.0001);
+        colorWaveFrame.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ColorWave);
+        colorWaveFrame.TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Emphasis);
+        colorWaveFrame.Opacity.Should().BeApproximately(0.65, 0.0001);
+    }
+
     [Theory]
     [InlineData(AnimationPreset.ChangeColor)]
     [InlineData(AnimationPreset.GrowWithColor)]
@@ -2062,6 +2094,88 @@ public sealed class SlideShowPlaybackPlannerTests
 
         plan.ColorFromHex.Should().Be("FF0000");
         plan.ColorToHex.Should().Be("00AAFF");
+    }
+
+    [Fact]
+    public void PlanShapeAnimation_ResolvesNativeStrokeColorBehavior()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 75,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.ChangeLineColor,
+                PreservedLineBehaviorXml = """
+                    <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                                  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                      <p:animClr>
+                        <p:cBhvr><p:attrNameLst><p:attrName>stroke.color</p:attrName></p:attrNameLst></p:cBhvr>
+                        <p:to><a:srgbClr val="00ff00" /></p:to>
+                      </p:animClr>
+                    </p:childTnLst>
+                    """
+            },
+            startDelayMs: 0);
+
+        plan.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ChangeLineColor);
+        plan.ColorFromHex.Should().BeNull();
+        plan.ColorToHex.Should().Be("00FF00");
+        SlideShowPlaybackFramePlanner.PlanFrame(plan, 250, 960, 540)
+            .TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Emphasis);
+    }
+
+    [Fact]
+    public void ResolveFontStyleBehavior_ResolvesNativeStyleSetters()
+    {
+        var values = SlideShowPlaybackPlanner.ResolveFontStyleBehavior(new ShapeAnimation
+        {
+            PreservedFontStyleBehaviorXml = """
+                <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+                  <p:set>
+                    <p:cBhvr><p:attrNameLst><p:attrName>style.fontStyle</p:attrName></p:attrNameLst></p:cBhvr>
+                    <p:to><p:strVal val="normal" /></p:to>
+                  </p:set>
+                  <p:set>
+                    <p:cBhvr><p:attrNameLst><p:attrName>style.fontWeight</p:attrName></p:attrNameLst></p:cBhvr>
+                    <p:to><p:strVal val="bold" /></p:to>
+                  </p:set>
+                  <p:set>
+                    <p:cBhvr><p:attrNameLst><p:attrName>style.textDecorationUnderline</p:attrName></p:attrNameLst></p:cBhvr>
+                    <p:to><p:strVal val="false" /></p:to>
+                  </p:set>
+                </p:childTnLst>
+                """
+        });
+
+        values.Italic.Should().BeFalse();
+        values.Bold.Should().BeTrue();
+        values.Underline.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ResolveFontSizeBehavior_SeparatesNativeTextSizeFromGrowShrink()
+    {
+        var animation = new ShapeAnimation
+        {
+            ShapeId = 76,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Grow,
+            ScaleBehavior = AnimationScaleBehavior.FromTo(1.5),
+            PreservedNumericBehaviorXml = """
+                <p:anim xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                        to="1.5" calcmode="lin" valueType="num">
+                  <p:cBhvr override="childStyle">
+                    <p:attrNameLst><p:attrName>style.fontSize</p:attrName></p:attrNameLst>
+                  </p:cBhvr>
+                </p:anim>
+                """
+        };
+
+        SlideShowPlaybackPlanner.ResolveFontSizeBehavior(animation)!.Multiplier.Should().Be(1.5);
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(animation, startDelayMs: 0);
+        plan.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ChangeFontSize);
+        SlideShowPlaybackFramePlanner.PlanFrame(plan, 0, 960, 540)
+            .TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Emphasis);
     }
 
     [Fact]

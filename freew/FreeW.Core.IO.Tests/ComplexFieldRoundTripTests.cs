@@ -279,22 +279,34 @@ public class ComplexFieldRoundTripTests
         paragraph.Runs.Add(Run.ComplexFieldRun(
             $" {MailMerge.MergeSequenceNumberInstruction} ",
             $"{MailMerge.FieldOpen}{MailMerge.MergeSequenceNumberField}{MailMerge.FieldClose}"));
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            MailMerge.AddressBlockInstruction,
+            $"{MailMerge.FieldOpen}AddressBlock{MailMerge.FieldClose}"));
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            MailMerge.GreetingLineInstruction,
+            $"{MailMerge.FieldOpen}GreetingLine{MailMerge.FieldClose}"));
         doc.Blocks.Add(paragraph);
 
         DocumentXml(doc).Descendants(W + "instrText").Select(element => element.Value).Should().Equal(
             " NEXT ",
             " MERGEREC ",
-            " MERGESEQ ");
+            " MERGESEQ ",
+            " ADDRESSBLOCK \\* MERGEFORMAT ",
+            " GREETINGLINE \\f \"<<_BEFORE_ Dear >><<_TITLE0_ >><<_LAST0_>><<_AFTER_ ,>>\" \\e \"Dear Sir or Madam,\" \\l 1033 \\* MERGEFORMAT ");
 
         var fields = RoundTrip(doc).Blocks.OfType<Paragraph>().Single().Runs;
         fields.Select(run => run.ComplexField!.Keyword).Should().Equal(
             MailMerge.NextRecordInstruction,
             MailMerge.MergeRecordNumberInstruction,
-            MailMerge.MergeSequenceNumberInstruction);
+            MailMerge.MergeSequenceNumberInstruction,
+            "ADDRESSBLOCK",
+            "GREETINGLINE");
         fields.Select(run => run.Text).Should().Equal(
             $"{MailMerge.FieldOpen}{MailMerge.NextRecordField}{MailMerge.FieldClose}",
             $"{MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose}",
-            $"{MailMerge.FieldOpen}{MailMerge.MergeSequenceNumberField}{MailMerge.FieldClose}");
+            $"{MailMerge.FieldOpen}{MailMerge.MergeSequenceNumberField}{MailMerge.FieldClose}",
+            $"{MailMerge.FieldOpen}AddressBlock{MailMerge.FieldClose}",
+            $"{MailMerge.FieldOpen}GreetingLine{MailMerge.FieldClose}");
     }
 
     [Fact]

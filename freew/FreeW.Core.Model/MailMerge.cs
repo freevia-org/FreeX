@@ -986,6 +986,14 @@ public static class MailMerge
     /// <summary>Native Word field-code instruction for <see cref="MergeSequenceNumberField"/>.</summary>
     public const string MergeSequenceNumberInstruction = "MERGESEQ";
 
+    /// <summary>Native Word field-code instruction for the default address block.</summary>
+    public const string AddressBlockInstruction = " ADDRESSBLOCK \\* MERGEFORMAT ";
+
+    /// <summary>Native Word field-code instruction for the default formal greeting line.</summary>
+    public const string GreetingLineInstruction =
+        " GREETINGLINE \\f \"<<_BEFORE_ Dear >><<_TITLE0_ >><<_LAST0_>><<_AFTER_ ,>>\" "
+        + "\\e \"Dear Sir or Madam,\" \\l 1033 \\* MERGEFORMAT ";
+
     /// <summary>Maps FreeW's visible special-field label to Word's native field instruction.</summary>
     public static bool TryGetNativeSpecialFieldInstruction(string fieldName, out string instruction)
     {
@@ -1160,15 +1168,15 @@ public static class MailMerge
     /// Compose a formatted postal address block from <paramref name="row"/> using the role bindings in
     /// <paramref name="mapping"/>. The format follows Word's default address-block layout:
     /// <code>
-    ///   [Title] FirstName [MiddleName] LastName [Suffix]
+    ///   [Title] FirstName LastName [Suffix]
     ///   [Company]
     ///   Address1
     ///   [Address2]
     ///   City, State PostalCode
     ///   [Country]
     /// </code>
-    /// Lines that contain only unmapped/empty values are omitted. Returns an empty string when no
-    /// address information is available. Pure and deterministic.
+    /// Empty optional lines are omitted. Word preserves the empty leading name line when address data
+    /// exists but every name role is blank. Returns an empty string when no address information is available.
     /// </summary>
     public static string ComposeAddressBlock(IReadOnlyDictionary<string, string> row, FieldMapping mapping)
     {
@@ -1177,16 +1185,14 @@ public static class MailMerge
 
         string Get(FieldRole role) => mapping[role] is { } col ? Lookup(row, col) : string.Empty;
 
-        // Name line: Title FirstName MiddleName LastName Suffix
+        // Word's default ADDRESSBLOCK name line omits the middle-name role.
         var nameParts = new List<string>();
         var title  = Get(FieldRole.Title);
         var first  = Get(FieldRole.FirstName);
-        var middle = Get(FieldRole.MiddleName);
         var last   = Get(FieldRole.LastName);
         var suffix = Get(FieldRole.Suffix);
         if (title.Length  > 0) nameParts.Add(title);
         if (first.Length  > 0) nameParts.Add(first);
-        if (middle.Length > 0) nameParts.Add(middle);
         if (last.Length   > 0) nameParts.Add(last);
         if (suffix.Length > 0) nameParts.Add(suffix);
 
@@ -1209,7 +1215,11 @@ public static class MailMerge
         var cityStateLine = string.Join(" ", cityStateParts);
 
         var lines = new List<string>();
-        if (nameParts.Count > 0)  lines.Add(string.Join(" ", nameParts));
+        if (nameParts.Count > 0)
+            lines.Add(string.Join(" ", nameParts));
+        else if (company.Length > 0 || address1.Length > 0 || address2.Length > 0
+                 || cityStateLine.Length > 0 || country.Length > 0)
+            lines.Add(string.Empty);
         if (company.Length  > 0)  lines.Add(company);
         if (address1.Length > 0)  lines.Add(address1);
         if (address2.Length > 0)  lines.Add(address2);
@@ -1940,12 +1950,23 @@ public static class MailMerge
 
         bool ResolveNativeMergeField(Run run)
         {
-            if (!TryGetMergeFieldName(run.ComplexField, out var fieldName))
-                return false;
-
-            run.Text = Lookup(row, fieldName);
-            run.ComplexField = null;
-            return true;
+            switch (run.ComplexField?.Keyword)
+            {
+                case "MERGEFIELD" when TryGetMergeFieldName(run.ComplexField, out var fieldName):
+                    run.Text = ResolveMergeFieldResult(run, fieldName, row);
+                    run.ComplexField = null;
+                    return true;
+                case "ADDRESSBLOCK" when IsSupportedCompositeMergeField(run.ComplexField):
+                case "GREETINGLINE" when IsSupportedCompositeMergeField(run.ComplexField):
+                    run.Text = ResolveCompositeMergeFieldResult(run.ComplexField.Keyword, row);
+                    run.ComplexField = null;
+                    return true;
+                case "ADDRESSBLOCK":
+                case "GREETINGLINE":
+                    return true;
+                default:
+                    return false;
+            }
         }
     }
 
@@ -1973,8 +1994,16 @@ public static class MailMerge
             switch (run.ComplexField?.Keyword)
             {
                 case "MERGEFIELD" when TryGetMergeFieldName(run.ComplexField, out var fieldName):
-                    run.Text = Lookup(row, fieldName);
+                    run.Text = ResolveMergeFieldResult(run, fieldName, row);
                     run.ComplexField = null;
+                    return true;
+                case "ADDRESSBLOCK" when IsSupportedCompositeMergeField(run.ComplexField):
+                case "GREETINGLINE" when IsSupportedCompositeMergeField(run.ComplexField):
+                    run.Text = ResolveCompositeMergeFieldResult(run.ComplexField.Keyword, row);
+                    run.ComplexField = null;
+                    return true;
+                case "ADDRESSBLOCK":
+                case "GREETINGLINE":
                     return true;
                 case NextRecordInstruction:
                     run.Text = string.Empty;
@@ -1990,6 +2019,479 @@ public static class MailMerge
                     return false;
             }
         }
+    }
+
+    private static string ResolveCompositeMergeFieldResult(
+        string keyword,
+        IReadOnlyDictionary<string, string> row)
+    {
+        var syntheticName = keyword == "ADDRESSBLOCK" ? "AddressBlock" : "GreetingLine";
+        foreach (var pair in row)
+        {
+            if (pair.Key.Equals(syntheticName, StringComparison.OrdinalIgnoreCase))
+                return pair.Value ?? string.Empty;
+        }
+
+        var mapping = AutoMatchFields(row.Keys.ToArray());
+        return keyword == "ADDRESSBLOCK"
+            ? ComposeAddressBlock(row, mapping)
+            : ComposeGreetingLine(row, mapping);
+    }
+
+    private static bool IsSupportedCompositeMergeField(ComplexField field)
+    {
+        if (field.Keyword == "ADDRESSBLOCK")
+        {
+            return Regex.IsMatch(
+                field.Instruction,
+                @"^\s*ADDRESSBLOCK\s*(?:\\\*\s+MERGEFORMAT\s*)?$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        return field.Keyword == "GREETINGLINE"
+            && Regex.IsMatch(
+                field.Instruction,
+                @"^\s*(?i:GREETINGLINE)\s+(?i:\\f)\s+""<<_BEFORE_ Dear >><<_TITLE0_ >><<_LAST0_>><<_AFTER_ ,>>""\s+(?i:\\e)\s+""Dear Sir or Madam,""\s+(?i:\\l)\s+1033\s*(?:(?i:\\\*\s+MERGEFORMAT)\s*)?$",
+                RegexOptions.CultureInvariant);
+    }
+
+    private static string ResolveMergeFieldResult(
+        Run run,
+        string fieldName,
+        IReadOnlyDictionary<string, string> row)
+    {
+        var field = run.ComplexField!;
+        var value = Lookup(row, fieldName);
+        if (value.Length == 0)
+            return string.Empty;
+
+        value = ApplyMergeFieldDatePicture(value, field.Instruction, MergeFieldCulture(run));
+        value = ApplyMergeFieldNumericPicture(value, field.Instruction);
+        var before = ComplexFieldEngine.SwitchValue(field.Instruction, 'b') ?? string.Empty;
+        var after = ComplexFieldEngine.SwitchValue(field.Instruction, 'f') ?? string.Empty;
+        return ApplyMergeFieldGeneralFormats(value, before, after, field.Instruction);
+    }
+
+    private static CultureInfo MergeFieldCulture(Run run)
+    {
+        if (run.Formatting.LanguageTag is { Length: > 0 } tag)
+        {
+            try
+            {
+                return CultureInfo.GetCultureInfo(tag);
+            }
+            catch (CultureNotFoundException)
+            {
+                // Fall through to the process culture for malformed/imported language tags.
+            }
+        }
+        return CultureInfo.CurrentCulture;
+    }
+
+    private static string ApplyMergeFieldDatePicture(
+        string value,
+        string instruction,
+        CultureInfo culture)
+    {
+        var picture = ComplexFieldEngine.SwitchValue(instruction, '@');
+        if (picture is null || !TryConvertWordDatePicture(picture, out var netPicture))
+            return value;
+
+        if (!DateTime.TryParse(value, culture, DateTimeStyles.AllowWhiteSpaces, out var moment)
+            && !DateTime.TryParse(
+                value,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces,
+                out moment))
+        {
+            return value;
+        }
+
+        return moment.ToString(netPicture, culture);
+    }
+
+    private static bool TryConvertWordDatePicture(
+        string picture,
+        out string netPicture)
+    {
+        var builder = new StringBuilder(picture.Length + 4);
+        for (var i = 0; i < picture.Length;)
+        {
+            if (picture.AsSpan(i).StartsWith("AM/PM", StringComparison.Ordinal))
+            {
+                builder.Append("tt");
+                i += 5;
+                continue;
+            }
+            if (picture.AsSpan(i).StartsWith("am/pm", StringComparison.Ordinal))
+            {
+                builder.Append("tt");
+                i += 5;
+                continue;
+            }
+
+            var ch = picture[i];
+            if (ch == '\'')
+            {
+                var closingQuote = picture.IndexOf('\'', i + 1);
+                if (closingQuote < 0)
+                {
+                    netPicture = string.Empty;
+                    return false;
+                }
+
+                builder.Append(picture, i, closingQuote - i + 1);
+                i = closingQuote + 1;
+                continue;
+            }
+            if (!char.IsLetter(ch))
+            {
+                if (ch is '/' or ':')
+                    builder.Append('\\');
+                builder.Append(ch);
+                i++;
+                continue;
+            }
+
+            var end = i + 1;
+            while (end < picture.Length && picture[end] == ch)
+                end++;
+            var length = end - i;
+            var valid = ch switch
+            {
+                'd' or 'M' => length is >= 1 and <= 4,
+                'y' => length is >= 1 and <= 4,
+                'h' or 'H' or 'm' or 's' => length is >= 1 and <= 2,
+                _ => false
+            };
+            if (!valid)
+            {
+                netPicture = string.Empty;
+                return false;
+            }
+
+            builder.Append(ch, length);
+            i = end;
+        }
+
+        netPicture = builder.Length == 1
+            ? "%" + builder.ToString()
+            : builder.ToString();
+        return netPicture.Length > 0;
+    }
+
+    private static string ApplyMergeFieldNumericPicture(string value, string instruction)
+    {
+        var picture = ComplexFieldEngine.SwitchValue(instruction, '#');
+        if (picture is not ("0"
+                or "0.00"
+                or "#,##0"
+                or "#,##0.00"
+                or "000000"
+                or "$#,##0.00"
+                or "$#,##0.00;($#,##0.00)"
+                or "0.00;-0.00;ZERO"
+                or "0.0%")
+            || !double.TryParse(
+                value,
+                NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.InvariantCulture,
+                out var number))
+        {
+            return value;
+        }
+
+        if (picture == "$#,##0.00" && number < 0)
+            return value;
+
+        // These common pictures are exact Word-calibrated signatures. Word's wider picture language has
+        // operators (including x and conditional signs) that are not .NET-compatible, so unknown pictures
+        // intentionally preserve the source value until their semantics are modeled separately. Word's
+        // percent sign is a literal suffix and does not multiply the input by 100.
+        var netPicture = picture.Replace("%", "\\%", StringComparison.Ordinal);
+        var formatted = TableFormulaEvaluator.Format(number, netPicture);
+        if (picture != "$#,##0.00")
+            return formatted;
+
+        var decimalIndex = formatted.IndexOf('.');
+        var integerEnd = decimalIndex >= 0 ? decimalIndex : formatted.Length;
+        var integerDigits = formatted[..integerEnd].Count(char.IsDigit);
+        var padding = Math.Max(0, 4 - integerDigits);
+        return "$" + new string(' ', padding) + formatted.TrimStart('$');
+    }
+
+    private const string MergeFieldNumberFormatError =
+        "Error! Number cannot be represented in specified format.";
+
+    private static string ApplyMergeFieldGeneralFormats(
+        string value,
+        string before,
+        string after,
+        string instruction)
+    {
+        var formats = ComplexFieldEngine.SwitchValues(instruction, '*')
+            .Where(format => !format.Equals("MERGEFORMAT", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var hasConditionalText = before.Length > 0 || after.Length > 0;
+        var input = before + value + after;
+
+        // Word's lone numeric result switch owns the complete non-empty merge result and suppresses
+        // conditional \b/\f text when the data is numeric. Multiple result switches instead process
+        // the assembled conditional result in order; a numeric switch then leaves nonnumeric text alone.
+        var conditionalTextIsPunctuationOnly = (before + after).All(character =>
+            !char.IsLetterOrDigit(character));
+        if (hasConditionalText
+            && formats.Length > 0
+            && IsMergeFieldNumericGeneralFormat(formats[0])
+            && TryParseMergeFieldNumber(value, out _)
+            && (formats.Length == 1 || conditionalTextIsPunctuationOnly))
+        {
+            input = value;
+        }
+
+        foreach (var format in formats)
+        {
+            input = format.ToUpperInvariant() switch
+            {
+                "UPPER" => input.ToUpperInvariant(),
+                "LOWER" => input.ToLowerInvariant(),
+                "FIRSTCAP" => CapitalizeFirstLetter(input),
+                "CAPS" => CapitalizeWordInitials(input),
+                _ => ApplyMergeFieldNumericGeneralFormat(input, format)
+            };
+        }
+        return input;
+    }
+
+    private static bool IsMergeFieldNumericGeneralFormat(string format) =>
+        format.ToUpperInvariant() is
+            "ARABIC" or "ROMAN" or "ALPHABETIC" or "HEX" or "ORDINAL"
+            or "ORDTEXT" or "CARDTEXT" or "DOLLARTEXT";
+
+    private static string ApplyMergeFieldNumericGeneralFormat(string value, string format)
+    {
+        if (!IsMergeFieldNumericGeneralFormat(format)
+            || !TryParseMergeFieldNumber(value, out var number))
+        {
+            return value;
+        }
+
+        var rounded = decimal.Round(number, 0, MidpointRounding.AwayFromZero);
+        return format.ToUpperInvariant() switch
+        {
+            "ARABIC" => rounded.ToString("0", CultureInfo.InvariantCulture),
+            "ROMAN" => FormatMergeFieldRoman(rounded, lower: format == "roman"),
+            "ALPHABETIC" => FormatMergeFieldAlphabetic(rounded, lower: format == "alphabetic"),
+            "HEX" => FormatMergeFieldHex(rounded),
+            "ORDINAL" => FormatMergeFieldOrdinal(rounded),
+            "ORDTEXT" => FormatMergeFieldNumberWords(rounded, ordinal: true),
+            "CARDTEXT" => FormatMergeFieldNumberWords(rounded, ordinal: false),
+            "DOLLARTEXT" => FormatMergeFieldDollarText(number),
+            _ => value
+        };
+    }
+
+    private static bool TryParseMergeFieldNumber(string value, out decimal number) =>
+        decimal.TryParse(
+            value,
+            NumberStyles.Float | NumberStyles.AllowThousands,
+            CultureInfo.InvariantCulture,
+            out number);
+
+    private static string FormatMergeFieldRoman(decimal rounded, bool lower)
+    {
+        if (rounded == 0)
+            return string.Empty;
+        if (rounded is < 1 or > 32767)
+            return MergeFieldNumberFormatError;
+
+        (int Value, string Symbol)[] map =
+        [
+            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+            (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+            (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")
+        ];
+        var remaining = decimal.ToInt32(rounded);
+        var result = new System.Text.StringBuilder();
+        foreach (var (amount, symbol) in map)
+        {
+            while (remaining >= amount)
+            {
+                result.Append(symbol);
+                remaining -= amount;
+            }
+        }
+        var text = result.ToString();
+        return lower ? text.ToLowerInvariant() : text;
+    }
+
+    private static string FormatMergeFieldAlphabetic(decimal rounded, bool lower)
+    {
+        if (rounded == 0)
+            return string.Empty;
+        if (rounded is < 1 or > 780)
+            return MergeFieldNumberFormatError;
+
+        var value = decimal.ToInt32(rounded);
+        var letter = (char)((lower ? 'a' : 'A') + (value - 1) % 26);
+        var count = (value - 1) / 26 + 1;
+        return new string(letter, count);
+    }
+
+    private static string FormatMergeFieldHex(decimal rounded)
+    {
+        if (rounded is < 0 or > 65535)
+            return MergeFieldNumberFormatError;
+        return decimal.ToInt32(rounded).ToString("X", CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatMergeFieldOrdinal(decimal rounded)
+    {
+        var absolute = decimal.Abs(rounded);
+        var lastTwo = decimal.ToInt32(absolute % 100);
+        var last = decimal.ToInt32(absolute % 10);
+        var suffix = lastTwo is >= 11 and <= 13
+            ? "th"
+            : last switch
+            {
+                1 => "st",
+                2 => "nd",
+                3 => "rd",
+                _ => "th"
+            };
+        return rounded.ToString("0", CultureInfo.InvariantCulture) + suffix;
+    }
+
+    private static string FormatMergeFieldNumberWords(decimal rounded, bool ordinal)
+    {
+        if (rounded is < 0 or > 999999)
+            return MergeFieldNumberFormatError;
+        var number = decimal.ToInt32(rounded);
+        return ordinal ? NumberToOrdinalWords(number) : NumberToCardinalWords(number);
+    }
+
+    private static string FormatMergeFieldDollarText(decimal number)
+    {
+        if (number < 0)
+            return MergeFieldNumberFormatError;
+
+        var whole = decimal.Truncate(number);
+        if (whole > 999999)
+            return MergeFieldNumberFormatError;
+
+        var cents = decimal.ToInt32(decimal.Round(
+            (number - whole) * 100,
+            0,
+            MidpointRounding.AwayFromZero)) % 100;
+        return $"{NumberToCardinalWords(decimal.ToInt32(whole))} and {cents:00}/100";
+    }
+
+    private static readonly string[] CardinalOnes =
+    [
+        "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+        "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+        "seventeen", "eighteen", "nineteen"
+    ];
+
+    private static readonly string[] CardinalTens =
+    [
+        "", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"
+    ];
+
+    private static readonly string[] OrdinalOnes =
+    [
+        "zeroth", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth",
+        "ninth", "tenth", "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth",
+        "sixteenth", "seventeenth", "eighteenth", "nineteenth"
+    ];
+
+    private static readonly string[] OrdinalTens =
+    [
+        "", "", "twentieth", "thirtieth", "fortieth", "fiftieth", "sixtieth",
+        "seventieth", "eightieth", "ninetieth"
+    ];
+
+    private static string NumberToCardinalWords(int value)
+    {
+        if (value < 20)
+            return CardinalOnes[value];
+        if (value < 100)
+        {
+            var remainder = value % 10;
+            return CardinalTens[value / 10]
+                + (remainder == 0 ? string.Empty : "-" + CardinalOnes[remainder]);
+        }
+        if (value < 1000)
+        {
+            var remainder = value % 100;
+            return CardinalOnes[value / 100] + " hundred"
+                + (remainder == 0 ? string.Empty : " " + NumberToCardinalWords(remainder));
+        }
+
+        var thousands = value / 1000;
+        var tail = value % 1000;
+        return NumberToCardinalWords(thousands) + " thousand"
+            + (tail == 0 ? string.Empty : " " + NumberToCardinalWords(tail));
+    }
+
+    private static string NumberToOrdinalWords(int value)
+    {
+        if (value < 20)
+            return OrdinalOnes[value];
+        if (value < 100)
+        {
+            var remainder = value % 10;
+            return remainder == 0
+                ? OrdinalTens[value / 10]
+                : CardinalTens[value / 10] + "-" + OrdinalOnes[remainder];
+        }
+        if (value < 1000)
+        {
+            var remainder = value % 100;
+            return remainder == 0
+                ? CardinalOnes[value / 100] + " hundredth"
+                : CardinalOnes[value / 100] + " hundred " + NumberToOrdinalWords(remainder);
+        }
+
+        var thousands = value / 1000;
+        var tail = value % 1000;
+        return tail == 0
+            ? NumberToCardinalWords(thousands) + " thousandth"
+            : NumberToCardinalWords(thousands) + " thousand " + NumberToOrdinalWords(tail);
+    }
+
+    private static string CapitalizeFirstLetter(string value)
+    {
+        var chars = value.ToCharArray();
+        for (var i = 0; i < chars.Length; i++)
+        {
+            if (!char.IsLetter(chars[i]))
+                continue;
+            chars[i] = char.ToUpperInvariant(chars[i]);
+            break;
+        }
+        return new string(chars);
+    }
+
+    private static string CapitalizeWordInitials(string value)
+    {
+        var chars = value.ToCharArray();
+        var atWordStart = true;
+        for (var i = 0; i < chars.Length; i++)
+        {
+            if (char.IsWhiteSpace(chars[i])
+                || char.IsPunctuation(chars[i]) && chars[i] is not '\'' and not '’')
+            {
+                atWordStart = true;
+            }
+            else if (char.IsLetter(chars[i]))
+            {
+                if (atWordStart)
+                    chars[i] = char.ToUpperInvariant(chars[i]);
+                atWordStart = false;
+            }
+        }
+        return new string(chars);
     }
 
     private static void TransformBlockText(

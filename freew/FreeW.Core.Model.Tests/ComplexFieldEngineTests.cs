@@ -43,6 +43,15 @@ public class ComplexFieldEngineTests
     }
 
     [Fact]
+    public void SwitchValues_ReturnsRepeatedGeneralFormatsInInstructionOrder()
+    {
+        ComplexFieldEngine.SwitchValues(
+                " MERGEFIELD Name \\* MERGEFORMAT \\* Upper \\b \"[\" ",
+                '*')
+            .Should().Equal("MERGEFORMAT", "Upper");
+    }
+
+    [Fact]
     public void Ref_ResolvesToBookmarkedParagraphText()
     {
         var doc = new TextDocument();
