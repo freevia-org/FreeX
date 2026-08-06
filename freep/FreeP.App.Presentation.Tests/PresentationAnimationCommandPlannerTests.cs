@@ -287,6 +287,38 @@ public sealed class PresentationAnimationCommandPlannerTests
             .Which.Preset.Should().Be(AnimationPreset.ChangeFontStyle);
     }
 
+    [Theory]
+    [InlineData("freep.anim.emphasis.bold", AnimationPreset.Bold, 15)]
+    [InlineData("freep.anim.emphasis.underline", AnimationPreset.Underline, 18)]
+    public void TryApply_FontEmphasisAuthorsNativePowerPointPreset(
+        string commandId,
+        AnimationPreset expectedPreset,
+        int expectedPresetId)
+    {
+        var editor = MakeSession(out _, out var shapeId);
+        PresentationAnimationCommandPlanner.TryPlan(commandId, out var plan)
+            .Should().BeTrue();
+
+        PresentationAnimationCommandPlanner.TryApply(editor, plan).Should().BeTrue();
+
+        var animation = editor.CurrentSlideAnimations.Should().ContainSingle().Subject;
+        animation.ShapeId.Should().Be(shapeId);
+        animation.Preset.Should().Be(expectedPreset);
+        animation.RawPresetClass.Should().Be("emph");
+        animation.RawPresetId.Should().Be(expectedPresetId);
+        animation.RawPresetSubtype.Should().Be("0");
+        animation.PreservedFontStyleBehaviorXml.Should().Contain("style.");
+        if (expectedPreset == AnimationPreset.Underline)
+            animation.PreservedIterationXml.Should().Contain("4000");
+
+        editor.Bus.CanUndo.Should().BeTrue();
+        editor.Bus.Undo();
+        editor.CurrentSlideAnimations.Should().BeEmpty();
+        editor.Bus.Redo();
+        editor.CurrentSlideAnimations.Should().ContainSingle()
+            .Which.Preset.Should().Be(expectedPreset);
+    }
+
     [Fact]
     public void TryApply_EffectCommand_RejectsMissingSelectionWithoutUndoEntry()
     {

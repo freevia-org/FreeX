@@ -6868,6 +6868,23 @@ public static class PptxPackageReader
             "style.fontWeight",
             "style.textDecorationUnderline",
         });
+        var boldBehavior = presetClass == "emph" && presetId == 15
+            ? buildPar.Descendants(P + "set")
+                .FirstOrDefault(element => element.Descendants(P + "attrName")
+                    .Any(attribute => attribute.Value == "style.fontWeight")
+                    && element.Descendants(P + "strVal")
+                        .Any(value => value.Attribute("val")?.Value == "bold"))
+            : null;
+        var underlineBehavior = presetClass == "emph" && presetId == 18
+            ? buildPar.Descendants(P + "set")
+                .FirstOrDefault(element => element.Descendants(P + "attrName")
+                    .Any(attribute => attribute.Value == "style.textDecorationUnderline")
+                    && element.Descendants(P + "strVal")
+                        .Any(value => value.Attribute("val")?.Value == "true"))
+            : null;
+        var isNativeBold = boldBehavior is not null;
+        var isNativeUnderline = underlineBehavior is not null;
+        var nativeFontBehavior = fontStyleBehavior ?? boldBehavior ?? underlineBehavior;
         var isNativeFillColor = presetClass == "emph"
             && presetId == 1
             && colorBehavior?.Descendants(P + "attrName")
@@ -6883,8 +6900,12 @@ public static class PptxPackageReader
         var preservedLineBehaviorXml = isNativeLineColor
             ? BuildPreservedFillBehaviorXml(lineColorBehavior!)
             : null;
-        var preservedFontStyleBehaviorXml = isNativeFontStyle
-            ? BuildPreservedFillBehaviorXml(fontStyleBehavior!)
+        var preservedFontStyleBehaviorXml = isNativeFontStyle || isNativeBold || isNativeUnderline
+            ? BuildPreservedFillBehaviorXml(nativeFontBehavior!)
+            : null;
+        var preservedIterationXml = isNativeBold || isNativeUnderline
+            ? buildPar.Descendants(P + "iterate").FirstOrDefault()
+                ?.ToString(SaveOptions.DisableFormatting)
             : null;
 
         var repeatInfo = ReadRepeat(cTn);
@@ -6903,6 +6924,10 @@ public static class PptxPackageReader
             preset = AnimationPreset.ChangeLineColor;
         else if (isNativeFontStyle)
             preset = AnimationPreset.ChangeFontStyle;
+        else if (isNativeBold)
+            preset = AnimationPreset.Bold;
+        else if (isNativeUnderline)
+            preset = AnimationPreset.Underline;
         if (presetClass == "emph" && presetId == 4 && scaleBehavior is null)
         {
             var numericTo = buildPar.Descendants(P + "anim")
@@ -6915,6 +6940,8 @@ public static class PptxPackageReader
             }
         }
         bool knownPreset = !isNativeFillColor
+            && !isNativeBold
+            && !isNativeUnderline
             && PptxAnimationMap.IsKnownOoxmlPreset(presetClass, presetId);
         if (preset == AnimationPreset.Grow)
             preset = AnimationAmountSemantics.ResolvePreset(preset, scaleBehavior);
@@ -6954,6 +6981,7 @@ public static class PptxPackageReader
             PreservedFillBehaviorXml = preservedFillBehaviorXml,
             PreservedLineBehaviorXml = preservedLineBehaviorXml,
             PreservedFontStyleBehaviorXml = preservedFontStyleBehaviorXml,
+            PreservedIterationXml = preservedIterationXml,
             TriggerShapeId = triggerShapeId,
             RawPresetClass = knownPreset ? null : presetClass,
             RawPresetId = knownPreset ? null : presetId,
