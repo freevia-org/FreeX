@@ -159,28 +159,38 @@ public sealed class R163_HeaderDoubleClickAutoFitTests
     }
 
     [Fact]
-    public void HiddenBoundaryFirstPress_DoesNotStartZeroSizeResizeCapture()
+    public void HiddenBoundaryResize_UsesNoOpClickAndAllowsPositiveDrag()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var rowHeader = source[
-            source.IndexOf("private Control CreateRowHeaderCell(", StringComparison.Ordinal)..
-            source.IndexOf("private uint ResolveRowResizeHandleTarget", StringComparison.Ordinal)];
         var rowHandle = source[
             source.IndexOf("private Control AddRowResizeHandle(", StringComparison.Ordinal)..
             source.IndexOf("private static Border CreateHeaderResizeHandle", StringComparison.Ordinal)];
+        var commitResize = source[
+            source.IndexOf("private void CommitHeaderResize(", StringComparison.Ordinal)..
+            source.IndexOf("private void PreviewHeaderResize(", StringComparison.Ordinal)];
 
-        var parentGuard = rowHeader.IndexOf("else if (resizeRow != row)", StringComparison.Ordinal);
-        var hiddenGuard = rowHandle.IndexOf("if (displayedHeight <= 0)", StringComparison.Ordinal);
-        var beginResize = rowHandle.IndexOf("BeginHeaderResize(", StringComparison.Ordinal);
+        rowHandle.Should().NotContain("if (displayedHeight <= 0)");
+        rowHandle.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Row, row, displayedHeight);");
+        commitResize.Should().Contain("GridResizeSizePlanner.IsMeaningfulDrag(drag.StartPointer, pointer)");
+        commitResize.Should().Contain("drag.Pointer.Capture(null);");
+        commitResize.Should().Contain("if (!meaningfulDrag)");
+        commitResize.Should().Contain("args.Handled = true;");
 
-        parentGuard.Should().BeGreaterThanOrEqualTo(0);
-        rowHeader[parentGuard..rowHeader.IndexOf("BeginHeaderResize(", StringComparison.Ordinal)]
-            .Should().Contain("args.Handled = true");
-        hiddenGuard.Should().BeGreaterThanOrEqualTo(0);
-        beginResize.Should().BeGreaterThan(hiddenGuard,
-            "a collapsed hidden-row boundary must not capture a zero-size first click");
-        rowHandle[hiddenGuard..beginResize].Should().Contain("args.Handled = true");
-        rowHandle[hiddenGuard..beginResize].Should().Contain("return;");
+        var noOpGuard = commitResize.IndexOf("if (!meaningfulDrag)", StringComparison.Ordinal);
+        var commandPath = commitResize.IndexOf(
+            "if (drag.Kind == HeaderResizeKind.Column)", noOpGuard, StringComparison.Ordinal);
+        commandPath.Should().BeGreaterThan(noOpGuard);
+        commitResize[noOpGuard..commandPath]
+            .Should().NotContain("new SetColumnWidthCommand(")
+            .And.NotContain("new SetRowHeightCommand(")
+            .And.NotContain("RefreshShell(")
+            .And.Contain("return;");
+        commitResize.IndexOf("drag.Pointer.Capture(null);", StringComparison.Ordinal)
+            .Should().BeLessThan(noOpGuard,
+                "a no-movement click must release capture before taking the no-op return");
+        var firstCommand = commitResize.IndexOf("new SetColumnWidthCommand(", StringComparison.Ordinal);
+        firstCommand.Should().BeGreaterThan(noOpGuard,
+            "a no-movement collapsed click must exit before issuing a resize command");
     }
 
     private static void InvokeAutoFitColumnFromHeader(MainWindow window, uint col) =>

@@ -18,7 +18,6 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("AddColumnResizeHandle(header, col, metric, zoomFactor)");
         source.Should().Contain("AddRowResizeHandle(header, resizeRow, resizeHeight)");
         source.Should().Contain("AutoFitRowFromHeader(resizeRow);");
-        source.Should().Contain("else if (resizeRow != row)");
         source.Should().Contain("GridResizePreviewPlanner.GetRowResizeRange(sheet, selectedRange: null, visibleRow + 1).Start");
         source.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Column");
         source.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Row");
@@ -37,6 +36,7 @@ public sealed class AvaloniaGridInputSourceTests
             source.IndexOf("private void PreviewHeaderResize(", StringComparison.Ordinal)];
         commitResize.Should().NotContain("SelectEntireColumn(");
         commitResize.Should().NotContain("SelectEntireRow(");
+        commitResize.Should().Contain("GridResizeSizePlanner.IsMeaningfulDrag(drag.StartPointer, pointer)");
     }
 
     [Fact]
@@ -63,16 +63,8 @@ public sealed class AvaloniaGridInputSourceTests
         rowHandle.Should().Contain("if (args.ClickCount >= 2)");
         rowHandle.IndexOf("if (args.ClickCount >= 2)", StringComparison.Ordinal)
             .Should().BeLessThan(rowHandle.IndexOf("BeginHeaderResize(", StringComparison.Ordinal));
-        rowHandle.Should().Contain("if (displayedHeight <= 0)");
-        rowHandle.IndexOf("if (displayedHeight <= 0)", StringComparison.Ordinal)
-            .Should().BeLessThan(rowHandle.IndexOf("BeginHeaderResize(", StringComparison.Ordinal));
-        rowHandle.Should().Contain("zero-size drag");
-
-        var rowHeader = source[
-            source.IndexOf("private Control CreateRowHeaderCell(", StringComparison.Ordinal)..
-            source.IndexOf("private uint ResolveRowResizeHandleTarget", StringComparison.Ordinal)];
-        rowHeader.IndexOf("else if (resizeRow != row)", StringComparison.Ordinal)
-            .Should().BeLessThan(rowHeader.IndexOf("BeginHeaderResize(", StringComparison.Ordinal));
+        rowHandle.Should().NotContain("if (displayedHeight <= 0)");
+        rowHandle.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Row, row, displayedHeight);");
     }
 
     [Fact]

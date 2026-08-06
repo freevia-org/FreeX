@@ -7555,13 +7555,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             {
                 if (args.ClickCount >= 2)
                     AutoFitRowFromHeader(resizeRow);
-                else if (resizeRow != row)
-                {
-                    // Keep a first press on a collapsed boundary from capturing a zero-size
-                    // resize through the header parent before the overlaid handle sees it.
-                    args.Handled = true;
-                    return;
-                }
                 else
                     BeginHeaderResize(args, header, HeaderResizeKind.Row, resizeRow, resizeHeight);
 
@@ -8160,17 +8153,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
-            // A handle immediately before a hidden run has no displayed row height. Do not start
-            // a zero-size drag on the first press: its no-movement release commits a zero-height
-            // command and rebuilds the grid before Avalonia can deliver the second press to this
-            // same boundary. Leaving the handle stable preserves ClickCount == 2 for the real
-            // contiguous hidden-row AutoFit gesture.
-            if (displayedHeight <= 0)
-            {
-                args.Handled = true;
-                return;
-            }
-
             BeginHeaderResize(args, handle, HeaderResizeKind.Row, row, displayedHeight);
         };
         handle.PointerMoved += (_, args) => ContinueHeaderResize(args);
@@ -8264,6 +8246,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var pointer = drag.Kind == HeaderResizeKind.Column
             ? args.GetPosition(this).X
             : args.GetPosition(this).Y;
+        if (!GridResizeSizePlanner.IsMeaningfulDrag(drag.StartPointer, pointer))
+        {
+            args.Handled = true;
+            return;
+        }
         var requestedSize = drag.StartSize + pointer - drag.StartPointer;
         var clampedSize = drag.Kind == HeaderResizeKind.Column
             ? GridResizeSizePlanner.ClampColumnSize(requestedSize)
@@ -8284,6 +8271,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var clampedSize = drag.Kind == HeaderResizeKind.Column
             ? GridResizeSizePlanner.ClampColumnSize(requestedSize)
             : GridResizeSizePlanner.ClampRowSize(requestedSize);
+        var meaningfulDrag = GridResizeSizePlanner.IsMeaningfulDrag(drag.StartPointer, pointer);
 
         RestoreHeaderResizeOriginal(drag);
         // Detach BEFORE releasing capture: drag.Pointer.Capture(null) synchronously raises
@@ -8292,6 +8280,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         DetachHeaderResizeCaptureHandlers();
         _headerResizeDrag = null;
         drag.Pointer.Capture(null);
+
+        if (!meaningfulDrag)
+        {
+            // A click on a resize boundary is also the first half of a possible double-click.
+            // Restore/detach/release it without a command or shell rebuild so the second press can
+            // reach AutoFit. A real drag crosses the threshold and continues to the command path.
+            args.Handled = true;
+            return;
+        }
 
         if (drag.Kind == HeaderResizeKind.Column)
         {
