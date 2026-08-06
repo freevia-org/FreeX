@@ -58,20 +58,14 @@ public sealed partial class MainWindow
     /// Routes to <see cref="FormControlInteractionService"/> and executes the resulting command
     /// through the session (undoable, triggers recalc), then refreshes the shell.
     /// </summary>
-    private void OnFormControlClicked(FormControlModel control, FormControlClickKind clickKind, int listItemIndex)
+    private void OnFormControlClicked(FormControlModel control, FormControlInteractionPlan interaction)
     {
         var sheet = _session.ActiveSheet;
         var sheetId = sheet.Id;
         var workbook = _session.Workbook;
 
-        var gesture = clickKind switch
-        {
-            FormControlClickKind.StepUp => FormControlGesture.StepUp,
-            FormControlClickKind.StepDown => FormControlGesture.StepDown,
-            _ => FormControlGesture.Body,
-        };
         var command = FormControlInteractionService.CreateCommand(
-            new FormControlInteractionRequest(control, gesture, listItemIndex),
+            new FormControlInteractionRequest(control, interaction.Gesture, interaction.ListItemIndex),
             sheet.FormControls,
             sheetId,
             workbook);
@@ -98,14 +92,6 @@ public sealed partial class MainWindow
 
 }
 
-/// <summary>What sub-region of a form control was clicked (Avalonia side).</summary>
-public enum FormControlClickKind
-{
-    Body,
-    StepUp,
-    StepDown,
-}
-
 /// <summary>Draws one legacy form control's static chrome, mirroring the WPF renderer's appearance.</summary>
 internal sealed class FormControlVisual : Control
 {
@@ -118,20 +104,19 @@ internal sealed class FormControlVisual : Control
 
     private readonly FormControlModel _control;
     private readonly double _zoom;
-    private readonly Action<FormControlModel, FormControlClickKind, int>? _clickCallback;
+    private readonly Action<FormControlModel, FormControlInteractionPlan>? _clickCallback;
 
     public FormControlVisual(
         FormControlModel control,
         double zoom,
-        Action<FormControlModel, FormControlClickKind, int>? clickCallback = null)
+        Action<FormControlModel, FormControlInteractionPlan>? clickCallback = null)
     {
         _control = control;
         _zoom = zoom <= 0 ? 1 : zoom;
         _clickCallback = clickCallback;
 
         // Enable hit-testing for interactive controls; GroupBox and Label have no interaction.
-        var isInteractive = control.Kind is not (FormControlKind.GroupBox or FormControlKind.Label)
-                            && clickCallback is not null;
+        var isInteractive = FormControlRenderPlanner.IsInteractive(control.Kind) && clickCallback is not null;
         IsHitTestVisible = isInteractive;
 
         if (isInteractive)
@@ -178,54 +163,14 @@ internal sealed class FormControlVisual : Control
         var point = e.GetPosition(this);
         var rect = new Rect(0, 0, Bounds.Width, Bounds.Height);
 
-        var clickKind = ClassifyClick(rect, point);
-        var listItemIndex = ClassifyListItem(rect, point);
-
-        _clickCallback(_control, clickKind, listItemIndex);
+        var interaction = FormControlRenderPlanner.PlanInteraction(
+            _control,
+            new LayoutRect(rect.X, rect.Y, rect.Width, rect.Height),
+            new LayoutPoint(point.X, point.Y),
+            rect.Width);
+        _clickCallback(_control, interaction);
         InvalidateVisual();
         e.Handled = true;
-    }
-
-    private FormControlClickKind ClassifyClick(Rect rect, Point pos)
-    {
-        switch (_control.Kind)
-        {
-            case FormControlKind.Spinner:
-            {
-                var half = rect.Height / 2;
-                var upRect = new Rect(rect.Left, rect.Top, rect.Width, half);
-                return upRect.Contains(pos) ? FormControlClickKind.StepUp : FormControlClickKind.StepDown;
-            }
-
-            case FormControlKind.ScrollBar:
-            {
-                if (rect.Width >= rect.Height)
-                {
-                    // Horizontal: left button = decrement, right = increment
-                    var size = Math.Min(rect.Height, rect.Width / 2);
-                    var leftRect = new Rect(rect.Left, rect.Top, size, rect.Height);
-                    return leftRect.Contains(pos) ? FormControlClickKind.StepUp : FormControlClickKind.StepDown;
-                }
-                else
-                {
-                    // Vertical: top button = decrement, bottom = increment
-                    var size = Math.Min(rect.Width, rect.Height / 2);
-                    var topRect = new Rect(rect.Left, rect.Top, rect.Width, size);
-                    return topRect.Contains(pos) ? FormControlClickKind.StepUp : FormControlClickKind.StepDown;
-                }
-            }
-
-            default:
-                return FormControlClickKind.Body;
-        }
-    }
-
-    private static int ClassifyListItem(Rect rect, Point pos)
-    {
-        const double rowHeight = 15;
-        var relativeY = pos.Y - rect.Top;
-        var row = (int)Math.Floor(relativeY / rowHeight);
-        return row + 1; // 1-based
     }
 
     // ── Drawing helpers ──────────────────────────────────────────────────────

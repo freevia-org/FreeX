@@ -1,7 +1,12 @@
 using FreeX.App.Presentation.Charts;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Drawing;
+
+public readonly record struct FormControlInteractionPlan(
+    FormControlGesture Gesture,
+    int ListItemIndex);
 
 /// <summary>
 /// Pure, framework-free layout/state helpers for rendering legacy Excel form controls
@@ -14,6 +19,8 @@ namespace FreeX.App.Presentation.Drawing;
 /// </summary>
 public static class FormControlRenderPlanner
 {
+    public const double ListItemRowHeight = 15;
+
     /// <summary>
     /// Converts the control's 1-based <see cref="GridRange"/> anchor into the 0-based
     /// <see cref="DrawingAnchorRange"/> the drawing-object anchor planner consumes. Returns
@@ -63,6 +70,35 @@ public static class FormControlRenderPlanner
             or FormControlKind.ListBox
             or FormControlKind.Button;
 
+    /// <summary>Whether the rendered control accepts a user gesture.</summary>
+    public static bool IsInteractive(FormControlKind kind) =>
+        IsRenderable(kind) && kind is not (FormControlKind.GroupBox or FormControlKind.Label);
+
+    /// <summary>
+    /// Classifies a native pointer position after the host converts its rectangle and point into
+    /// layout coordinates. The caller supplies the width of the spinner button chrome because the
+    /// two renderers intentionally retain their existing native hit extents.
+    /// </summary>
+    public static FormControlInteractionPlan PlanInteraction(
+        FormControlModel control,
+        LayoutRect rect,
+        LayoutPoint position,
+        double spinnerButtonWidth)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+
+        var gesture = control.Kind switch
+        {
+            FormControlKind.Spinner => PlanSpinnerGesture(rect, position, spinnerButtonWidth),
+            FormControlKind.ScrollBar => PlanScrollBarGesture(rect, position),
+            _ => FormControlGesture.Body,
+        };
+        var listItemIndex = control.Kind == FormControlKind.ListBox
+            ? Math.Max(1, (int)Math.Floor((position.Y - rect.Top) / ListItemRowHeight) + 1)
+            : 0;
+        return new FormControlInteractionPlan(gesture, listItemIndex);
+    }
+
     /// <summary>
     /// The square grey drop-down button rect for a <see cref="FormControlKind.DropDown"/> control:
     /// sized to the control height and flush against the right edge, but never wider than half the
@@ -102,4 +138,41 @@ public static class FormControlRenderPlanner
     /// </summary>
     public static string GetCaption(FormControlModel control)
         => string.IsNullOrWhiteSpace(control.Caption) ? string.Empty : control.Caption.Trim();
+
+    private static FormControlGesture PlanSpinnerGesture(
+        LayoutRect rect,
+        LayoutPoint position,
+        double spinnerButtonWidth)
+    {
+        var upperButton = new LayoutRect(
+            rect.Left,
+            rect.Top,
+            Math.Max(0, spinnerButtonWidth),
+            rect.Height / 2);
+        return Contains(upperButton, position)
+            ? FormControlGesture.StepUp
+            : FormControlGesture.StepDown;
+    }
+
+    private static FormControlGesture PlanScrollBarGesture(LayoutRect rect, LayoutPoint position)
+    {
+        if (rect.Width >= rect.Height)
+        {
+            var size = Math.Min(rect.Height, rect.Width / 2);
+            return Contains(new LayoutRect(rect.Left, rect.Top, size, rect.Height), position)
+                ? FormControlGesture.StepUp
+                : FormControlGesture.StepDown;
+        }
+
+        var verticalSize = Math.Min(rect.Width, rect.Height / 2);
+        return Contains(new LayoutRect(rect.Left, rect.Top, rect.Width, verticalSize), position)
+            ? FormControlGesture.StepUp
+            : FormControlGesture.StepDown;
+    }
+
+    private static bool Contains(LayoutRect rect, LayoutPoint point) =>
+        point.X >= rect.Left &&
+        point.X <= rect.Right &&
+        point.Y >= rect.Top &&
+        point.Y <= rect.Bottom;
 }

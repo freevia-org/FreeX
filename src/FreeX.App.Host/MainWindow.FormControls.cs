@@ -19,14 +19,8 @@ public partial class MainWindow
         if (sheet is null)
             return;
 
-        var gesture = e.Region switch
-        {
-            FormControlClickRegion.StepUp => FormControlGesture.StepUp,
-            FormControlClickRegion.StepDown => FormControlGesture.StepDown,
-            _ => FormControlGesture.Body,
-        };
         var command = FormControlInteractionService.CreateCommand(
-            new FormControlInteractionRequest(e.Control, gesture, e.ListItemIndex),
+            new FormControlInteractionRequest(e.Control, e.Gesture, e.ListItemIndex),
             sheet.FormControls,
             _currentSheetId,
             _workbook);

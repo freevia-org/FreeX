@@ -19,15 +19,15 @@ public sealed class FreeXBehaviorDedupSourceBoundaryTests
     }
 
     [Fact]
-    public void FormControlHostDispatch_UsesSharedRequestWhileKeepingNativeGestureTranslation()
+    public void FormControlHostDispatch_UsesSharedPortableGesturePlan()
     {
         var host = ReadHost("MainWindow.FormControls.cs");
         var avalonia = ReadAvalonia("MainWindow.FormControls.cs");
 
-        host.Should().Contain("new FormControlInteractionRequest(e.Control, gesture, e.ListItemIndex)");
-        avalonia.Should().Contain("new FormControlInteractionRequest(control, gesture, listItemIndex)");
-        host.Should().Contain("FormControlClickRegion.StepUp => FormControlGesture.StepUp");
-        avalonia.Should().Contain("FormControlClickKind.StepUp => FormControlGesture.StepUp");
+        host.Should().Contain("new FormControlInteractionRequest(e.Control, e.Gesture, e.ListItemIndex)");
+        avalonia.Should().Contain("new FormControlInteractionRequest(control, interaction.Gesture, interaction.ListItemIndex)");
+        host.Should().NotContain("FormControlClickRegion");
+        avalonia.Should().NotContain("FormControlClickKind");
         host.Should().Contain("FormControlInteractionService.CreateCommand(");
         avalonia.Should().Contain("FormControlInteractionService.CreateCommand(");
         host.Should().NotContain("CreateToggleCheckBoxCommand(");

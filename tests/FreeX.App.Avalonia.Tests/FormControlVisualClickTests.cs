@@ -168,19 +168,4 @@ public sealed class FormControlVisualClickTests
         sheet.GetCell(addr)!.Value.Should().Be(new NumberValue(4));
     }
 
-    // ── FormControlClickKind classification ──────────────────────────────────
-
-    [Fact]
-    public void FormControlClickKind_Body_IsDefaultForCheckBox()
-    {
-        // Smoke-test that the enum value round-trips correctly
-        var kind = FormControlClickKind.Body;
-        kind.Should().Be(FormControlClickKind.Body);
-    }
-
-    [Fact]
-    public void FormControlClickKind_StepUp_IsDistinctFromStepDown()
-    {
-        FormControlClickKind.StepUp.Should().NotBe(FormControlClickKind.StepDown);
-    }
 }
