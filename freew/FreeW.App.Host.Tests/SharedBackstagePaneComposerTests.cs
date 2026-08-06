@@ -192,7 +192,8 @@ public sealed class SharedBackstagePaneComposerTests
             exportXps: () => invoked.Add("xps"),
             saveAsFormat: (_, _) => invoked.Add("format"));
 
-        var pane = BackstagePaneRenderer.BuildActionPane(Kit, surface);
+        var pane = new BackstagePaneComposer(Kit, BackstagePaneSurfacePlanner.ComposerProfile)
+            .BuildExportActionPane(surface.ToPaneSpec());
         var buttons = Descendants<Button>(pane).ToArray();
 
         buttons.Select(button => button.Content).Should().Equal(
@@ -220,7 +221,8 @@ public sealed class SharedBackstagePaneComposerTests
                 @"C:\Users\Ada\AppData\Local\FreeW"),
             openOptions: () => openedOptions = true);
 
-        var pane = BackstagePaneRenderer.BuildAccountPane(Kit, surface);
+        var pane = new BackstagePaneComposer(Kit, BackstagePaneSurfacePlanner.ComposerProfile)
+            .BuildAccountPane(surface.ToPaneSpec());
         var heading = Descendants<TextBlock>(pane).Single(block => block.Text == "Account");
         heading.FontSize.Should().Be(surface.VisualMetrics.HeadingFontSize);
 
@@ -228,6 +230,7 @@ public sealed class SharedBackstagePaneComposerTests
             .Single(button => button.Content as string == "FreeW Options...");
         options.FontSize.Should().Be(surface.VisualMetrics.OptionsFontSize);
         options.Margin.Should().Be(new Thickness(0, 18, 0, 0));
+        AutomationProperties.GetAutomationId(options).Should().Be(surface.OptionsAction.AutomationId);
         options.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         openedOptions.Should().BeTrue();
     }
@@ -261,7 +264,7 @@ public sealed class SharedBackstagePaneComposerTests
     public void SisterBackstagePaneSpecPlanner_BuildsFreeWPaneSpecsFromPreset()
     {
         var edited = false;
-        var planner = new SisterBackstagePaneSpecPlanner(SisterBackstagePaneTextSpec.FreeW);
+        var planner = new SisterBackstagePaneSpecPlanner(FreeWBackstagePaneTextCatalog.BuildTextSpec());
 
         var recent = planner.BuildRecentPaneSpec(["C:/Docs/Budget.docx"], _ => { });
         var template = planner.BuildNewPaneSpec(() => { });
@@ -310,42 +313,33 @@ public sealed class SharedBackstagePaneComposerTests
     }
 
     [Fact]
-    public void SisterBackstagePaneTextDescriptorPlanner_ExposesResourceKeysAndFallbackText()
+    public void FreeWBackstagePaneTextCatalog_ExposesResourceKeysAndFallbackText()
     {
-        var freeW = SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW);
-        var freeP = SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeP);
+        var descriptor = FreeWBackstagePaneTextCatalog.Descriptor;
 
-        freeW.RecentEmptyText.Should().Be(new ResourceTextDescriptor(
-            SisterBackstagePaneResourceKeys.FreeWRecentEmptyText,
+        descriptor.RecentEmptyText.Should().Be(new ResourceTextDescriptor(
+            FreeWBackstagePaneResourceKeys.RecentEmptyText,
             "No recent documents."));
-        freeW.Export.XpsActionLabel.Should().Be(new ResourceTextDescriptor(
-            SisterBackstagePaneResourceKeys.FreeWExportXpsActionLabel,
+        descriptor.Export.XpsActionLabel.Should().Be(new ResourceTextDescriptor(
+            FreeWBackstagePaneResourceKeys.ExportXpsActionLabel,
             "Export to XPS"));
-        freeP.TemplateTileCaption.Should().Be(new ResourceTextDescriptor(
-            SisterBackstagePaneResourceKeys.FreePTemplateTileCaption,
-            "Blank presentation"));
-        freeP.Export.XpsActionLabel.Should().BeNull();
-
-        SisterBackstagePaneTextDescriptorPlanner.RequiredResourceKeys(SisterBackstageAppKind.FreeW)
+        FreeWBackstagePaneTextCatalog.RequiredResourceKeys
             .Should().OnlyHaveUniqueItems()
-            .And.Contain(SisterBackstagePaneResourceKeys.FreeWOptionsEditText);
-        SisterBackstagePaneTextDescriptorPlanner.RequiredResourceKeys(SisterBackstageAppKind.FreeP)
-            .Should().OnlyHaveUniqueItems()
-            .And.NotContain(SisterBackstagePaneResourceKeys.FreeWOptionsEditText);
+            .And.Contain(FreeWBackstagePaneResourceKeys.OptionsEditText);
     }
 
     [Fact]
     public void SisterBackstagePaneTextSpec_ResolvesDescriptorKeysWithFallbacks()
     {
         static string? Resolve(string key) =>
-            key == SisterBackstagePaneResourceKeys.FreeWTemplateTileCaption
+            key == FreeWBackstagePaneResourceKeys.TemplateTileCaption
                 ? "Localized blank document"
-                : key == SisterBackstagePaneResourceKeys.FreeWExportPdfActionLabel
+                : key == FreeWBackstagePaneResourceKeys.ExportPdfActionLabel
                     ? "[[" + key + "]]"
                 : null;
 
         var text = SisterBackstagePaneTextSpec.FromDescriptor(
-            SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW),
+            FreeWBackstagePaneTextCatalog.Descriptor,
             Resolve);
 
         text.RecentEmptyText.Should().Be("No recent documents.");
@@ -354,20 +348,33 @@ public sealed class SharedBackstagePaneComposerTests
     }
 
     [Fact]
-    public void SisterBackstagePaneTextSpec_TreatsEchoedResourceKeysAsMissing()
+    public void FreeWBackstagePaneTextSpec_TreatsEchoedResourceKeysAsMissing()
     {
         var text = SisterBackstagePaneTextSpec.FromDescriptor(
-            SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeP),
+            FreeWBackstagePaneTextCatalog.Descriptor,
             key => key);
 
-        text.RecentEmptyText.Should().Be("No recent presentations.");
-        text.Export.PdfActionLabel.Should().Be("Export to PDF...");
+        text.RecentEmptyText.Should().Be("No recent documents.");
+        text.Export.PdfActionLabel.Should().Be("Create PDF or XPS");
     }
 
     [Fact]
-    public void SisterBackstagePaneSpecPlanner_BuildsFreePPaneSpecsFromPreset()
+    public void SisterBackstagePaneSpecPlanner_BuildsSpecsFromInjectedAlternateText()
     {
-        var planner = new SisterBackstagePaneSpecPlanner(SisterBackstagePaneTextSpec.FreeP);
+        var planner = new SisterBackstagePaneSpecPlanner(new SisterBackstagePaneTextSpec(
+            "No recent presentations.",
+            "New",
+            "Blank presentation",
+            "More templates are not available in this build.",
+            "Presentation application settings. These persist between sessions.")
+        {
+            Export = new SisterBackstageExportPaneTextSpec(
+                "Export",
+                "Create a PDF copy of this presentation - one page per slide, with selectable text.",
+                "Create PDF Copy",
+                "Export to PDF...",
+                "Publish a fixed-layout copy.")
+        });
 
         var recent = planner.BuildRecentPaneSpec(Array.Empty<string>(), _ => { });
         var template = planner.BuildNewPaneSpec(() => { });
@@ -378,7 +385,7 @@ public sealed class SharedBackstagePaneComposerTests
 
         recent.EmptyText.Should().Be("No recent presentations.");
         template.TileCaption.Should().Be("Blank presentation");
-        options.Description.Should().Be("FreeP application settings. These persist between sessions.");
+        options.Description.Should().Be("Presentation application settings. These persist between sessions.");
         options.EditText.Should().BeNull();
         options.Edit.Should().BeNull();
         export.Heading.Should().Be("Export");
@@ -432,11 +439,12 @@ public sealed class SharedBackstagePaneComposerTests
     [Fact]
     public void SisterBackstagePaneResources_ComposesKitComposerAndSpecPlanner()
     {
-        var resources = SisterBackstagePaneResources.ForApp(
-            SisterBackstageAppKind.FreeW,
+        var resources = new SisterBackstagePaneResources(
             Color.FromRgb(0x0F, 0x6D, 0x8C),
             tileWidth: 150,
-            tileHeight: 190);
+            tileHeight: 190,
+            text: FreeWBackstagePaneTextCatalog.BuildTextSpec(),
+            profile: BackstagePaneSurfacePlanner.ComposerProfile);
 
         resources.Kit.Should().NotBeNull();
         resources.Panes.Should().NotBeNull();

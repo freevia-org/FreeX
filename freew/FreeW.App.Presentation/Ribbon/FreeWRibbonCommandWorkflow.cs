@@ -825,6 +825,36 @@ public static class FreeWRibbonCommandWorkflow
 
     public static IReadOnlyList<FreeWRibbonCommandRoute> Routes => RouteData;
 
+    public static FreeWRibbonCommandBuildResult Build(FreeWRibbonCommandBindingPorts bindings)
+    {
+        ArgumentNullException.ThrowIfNull(bindings);
+
+        var registry = new RibbonCommandRegistry();
+        var grouped = Enum.GetValues<FreeWRibbonCommandGroup>()
+            .ToDictionary(
+                static group => group,
+                static _ => new List<RibbonCommandId>());
+
+        foreach (var route in RouteData)
+        {
+            if (!bindings.CanonicalBindings.TryGetValue(route.Action, out var command))
+                continue;
+
+            registry.Register(route.CommandId, command);
+            grouped[FreeWRibbonCommandGroupCatalog.Resolve(route.Action)].Add(route.CommandId);
+        }
+
+        foreach (var (commandId, command) in bindings.AdapterBindings)
+            registry.Register(commandId, command);
+
+        return new FreeWRibbonCommandBuildResult(
+            registry,
+            grouped.ToDictionary(
+                static pair => pair.Key,
+                static pair => (IReadOnlyList<RibbonCommandId>)pair.Value.ToArray()),
+            bindings.AdapterBindings.Keys.ToArray());
+    }
+
     public static RibbonCommandId GetPrimaryCommandId(FreeWRibbonCommandAction action)
     {
         if (!RoutesByAction.TryGetValue(action, out var routes) || routes.Length == 0)

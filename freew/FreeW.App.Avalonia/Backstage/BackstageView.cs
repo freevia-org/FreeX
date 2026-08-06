@@ -46,14 +46,18 @@ internal sealed class BackstageView : Window
     private const double HomeActionRowBottomCompensation = 1;
     private static readonly AvaloniaBackstageChromeStyle BackstageChromeStyle = new(PrimaryInk, SecondaryInk)
     {
+        ActionInk = LinkBrush,
+        ScrollTrackBrush = WpfScrollTrackBrush,
+        ScrollThumbBrush = WpfScrollThumbBrush,
         SeparatorBrush = SeparatorBrush,
         DetailLabelVerticalAlignment = VerticalAlignment.Top,
     };
     private static readonly SisterBackstagePalette Palette = SisterBackstagePalette.FreeW;
-    private static readonly SisterBackstagePaneTextDescriptor PaneText =
-        SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW);
     private static readonly SisterBackstagePaneSpecPlanner PaneSpecs = new(
-        SisterBackstagePaneTextSpec.FromDescriptor(PaneText));
+        FreeWBackstagePaneTextCatalog.BuildTextSpec());
+    private static readonly AvaloniaBackstagePaneComposer Panes = new(
+        BackstageChromeStyle,
+        BackstagePaneSurfacePlanner.ComposerProfile);
 
     private readonly BackstageCallbacks _callbacks;
     private readonly FreeWBackstageSession _session;
@@ -434,7 +438,7 @@ internal sealed class BackstageView : Window
     {
         var surface = _session.BuildSharePane();
 
-        return BuildActionGroupContent(surface);
+        return Panes.BuildActionPane(surface.ToPaneSpec(), "BackstageAction");
     }
 
     // ── Export pane ───────────────────────────────────────────────────────────
@@ -443,7 +447,7 @@ internal sealed class BackstageView : Window
     {
         var surface = _session.BuildExportPane();
 
-        return BuildExportActionGroupContent(surface);
+        return Panes.BuildExportActionPane(surface.ToPaneSpec(), "BackstageAction");
 
     }
 
@@ -451,63 +455,7 @@ internal sealed class BackstageView : Window
 
     private Control BuildInfoPane()
     {
-        return BuildInfoPane(_session.BuildInfoPane());
-    }
-
-    private Control BuildInfoPane(BackstageInfoPaneSpec plan)
-    {
-        ArgumentNullException.ThrowIfNull(plan);
-
-        var content = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        content.Children.Add(CreateHeading(BackstageInfoPaneText.Title));
-
-        var documentGrid = CreateDetailGrid();
-        AddDetailRow(
-            documentGrid,
-            plan.DocumentKindLabel,
-            plan.DisplayName + (plan.IsDirty ? "  (unsaved changes)" : string.Empty),
-            "InfoDocumentName");
-        AddDetailRow(
-            documentGrid,
-            BackstageInfoPaneText.LocationLabel,
-            plan.Location ?? BackstageInfoPaneText.NotSavedYet,
-            "InfoDocumentPath");
-        content.Children.Add(documentGrid);
-
-        if (plan.Properties.Count > 0)
-        {
-            content.Children.Add(CreateSectionHeader(BackstageInfoPaneText.PropertiesHeading));
-            var propsGrid = CreateDetailGrid();
-            foreach (var field in plan.Properties)
-                AddDetailRow(propsGrid, field.Label, field.Value, $"InfoProperty_{field.Label}");
-            content.Children.Add(propsGrid);
-        }
-
-        if (!string.IsNullOrWhiteSpace(plan.EditPropertiesText) && plan.EditProperties is not null)
-        {
-            var editProperties = CreateLinkButton(plan.EditPropertiesText, plan.EditProperties);
-            AutomationProperties.SetAutomationId(editProperties, "BackstageEditDocumentProperties");
-            editProperties.Margin = new Thickness(0, 8, 0, 0);
-            content.Children.Add(editProperties);
-        }
-
-        if (plan.Statistics.Count > 0)
-        {
-            content.Children.Add(CreateSectionHeader(BackstageInfoPaneText.StatisticsHeading));
-            var statsGrid = CreateDetailGrid();
-            foreach (var field in plan.Statistics)
-                AddDetailRow(statsGrid, field.Label, field.Value, $"InfoStatistic_{field.Label}");
-            content.Children.Add(statsGrid);
-        }
-
-        foreach (var group in plan.ActionGroups ?? [])
-        {
-            content.Children.Add(CreateSectionHeader(group.Heading));
-            foreach (var action in group.Actions)
-                content.Children.Add(BuildActionRow(action));
-        }
-
-        return CreateScroll(content);
+        return Panes.BuildInfoPane(_session.BuildInfoPane());
     }
 
     // ── Account pane ─────────────────────────────────────────────────────────
@@ -515,63 +463,13 @@ internal sealed class BackstageView : Window
     private Control BuildAccountPane()
     {
         var surface = _session.BuildAccountPane(EntryAssemblyVersion.Resolve());
-
-        var metrics = surface.VisualMetrics;
-        var content = new StackPanel
-        {
-            MaxWidth = metrics.PaneMaxWidth,
-            HorizontalAlignment = HorizontalAlignment.Left,
-        };
-        content.Children.Add(BuildAccountPaneHeader(surface.Title, surface.Description, metrics));
-
-        foreach (var group in surface.Groups)
-        {
-            content.Children.Add(CreateAccountSectionHeader(group.Heading, metrics));
-            var fieldGrid = CreateAccountDetailGrid(metrics);
-            foreach (var field in group.Fields)
-                AddAccountDetailRow(
-                    fieldGrid,
-                    field.Label,
-                    field.Value,
-                    $"Account_{group.Heading}_{field.Label}",
-                    metrics);
-            content.Children.Add(fieldGrid);
-        }
-
-        var optionsBtn = CreateLinkButton(surface.OptionsAction.Label, surface.OptionsAction.Invoke);
-        optionsBtn.FontSize = metrics.OptionsFontSize;
-        optionsBtn.Margin = ToThickness(metrics.OptionsMargin);
-        optionsBtn.IsEnabled = surface.OptionsAction.IsEnabled;
-        AutomationProperties.SetAutomationId(optionsBtn, surface.OptionsAction.AutomationId);
-        content.Children.Add(optionsBtn);
-
-        return CreateScroll(content);
+        return Panes.BuildAccountPane(surface.ToPaneSpec(), surface.OptionsAction.AutomationId);
     }
 
     private Control BuildOptionsPane()
     {
         var spec = _session.BuildOptionsPaneSpec(PaneSpecs);
-        var content = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
-        content.Children.Add(CreateHeading("Options"));
-        content.Children.Add(new TextBlock
-        {
-            Text = spec.Description,
-            Foreground = SecondaryInk,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16),
-        });
-        var summaryGrid = CreateDetailGrid();
-        foreach (var field in spec.Fields)
-            AddDetailRow(summaryGrid, field.Label, field.Value, "Options_" + field.Label.Replace(' ', '_'));
-        content.Children.Add(summaryGrid);
-
-        var edit = CreateLinkButton(
-            spec.EditText ?? "Edit options\u2026",
-            spec.Edit);
-        edit.Margin = new Thickness(0, 14, 0, 0);
-        AutomationProperties.SetAutomationId(edit, "BackstageEditOptions");
-        content.Children.Add(edit);
-        return CreateScroll(content);
+        return Panes.BuildOptionsPane(spec);
     }
 
     // ── Generic action-group renderer ────────────────────────────────────────
@@ -596,114 +494,6 @@ internal sealed class BackstageView : Window
     private Control BuildActionGroupContent(BackstageHomePaneSurfaceSpec surface) =>
         BuildActionGroupContent(surface.Title, surface.Groups, surface.Description, surface.VisualMetrics);
 
-    private Control BuildActionGroupContent(BackstageActionPaneSurfaceSpec surface) =>
-        BuildActionPaneContent(surface);
-
-    private static Control BuildExportActionGroupContent(BackstageActionPaneSurfaceSpec surface) =>
-        BuildActionPaneContent(
-            surface,
-            useWpfTextContent: true,
-            matchWpfScrollBar: true);
-
-    private static Control BuildActionPaneContent(
-        BackstageActionPaneSurfaceSpec surface,
-        bool useWpfTextContent = false,
-        bool matchWpfScrollBar = false)
-    {
-        var metrics = surface.VisualMetrics;
-        var content = new StackPanel
-        {
-            MaxWidth = metrics.PaneMaxWidth,
-            HorizontalAlignment = HorizontalAlignment.Left,
-        };
-        content.Children.Add(BuildActionPaneHeader(surface.Title, surface.Description, metrics));
-        foreach (var group in surface.Groups)
-        {
-            content.Children.Add(BuildActionPaneSectionHeader(group.Heading, metrics));
-            foreach (var action in group.Actions)
-                content.Children.Add(BuildActionPaneRow(action, metrics, useWpfTextContent));
-        }
-
-        return CreateScroll(content, matchWpfScrollBar);
-    }
-
-    private static Control BuildActionPaneRow(
-        BackstageActionRow action,
-        BackstageActionPaneVisualMetrics metrics,
-        bool useWpfTextContent)
-    {
-        var stack = new StackPanel { Margin = ToThickness(metrics.ActionRowMargin) };
-        var button = CreateLinkButton(
-            action.Label,
-            action.Invoke,
-            fontSize: metrics.ActionFontSize,
-            automationId: $"BackstageAction_{action.Label.Replace(' ', '_')}");
-        if (useWpfTextContent)
-        {
-            // WPF's Button.Content string is realized as a TextBlock by its default template;
-            // supply the equivalent Avalonia content for the export capture path.
-            button.Content = new TextBlock
-            {
-                Text = action.Label,
-                Foreground = LinkBrush,
-                FontSize = metrics.ActionFontSize,
-            };
-        }
-        stack.Children.Add(button);
-        if (!string.IsNullOrWhiteSpace(action.Description))
-        {
-            stack.Children.Add(new TextBlock
-            {
-                Text = action.Description,
-                Foreground = SecondaryInk,
-                FontSize = metrics.DescriptionTextFontSize,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = ToThickness(metrics.ActionDescriptionMargin),
-            });
-        }
-        return stack;
-    }
-
-    private static Control BuildActionPaneHeader(
-        string title,
-        string description,
-        BackstageActionPaneVisualMetrics metrics)
-    {
-        var panel = new StackPanel();
-        panel.Children.Add(new TextBlock
-        {
-            Text = title,
-            FontSize = metrics.HeadingFontSize,
-            FontWeight = FontWeight.Light,
-            Foreground = PrimaryInk,
-            Margin = ToThickness(metrics.HeadingBottomMargin),
-        });
-        if (!string.IsNullOrWhiteSpace(description))
-        {
-            panel.Children.Add(new TextBlock
-            {
-                Text = description,
-                Foreground = SecondaryInk,
-                FontSize = metrics.DescriptionFontSize,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = ToThickness(metrics.DescriptionBottomMargin),
-            });
-        }
-
-        return panel;
-    }
-
-    private static TextBlock BuildActionPaneSectionHeader(
-        string text,
-        BackstageActionPaneVisualMetrics metrics) => new()
-        {
-            Text = text,
-            FontSize = metrics.SectionHeaderFontSize,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = PrimaryInk,
-            Margin = ToThickness(metrics.SectionHeaderMargin),
-        };
-
     private Control BuildActionGroup(BackstageActionGroup group, BackstageHomePaneVisualMetrics metrics)
     {
         var stack = new StackPanel();
@@ -717,9 +507,6 @@ internal sealed class BackstageView : Window
 
         return stack;
     }
-
-    private static Control BuildActionRow(BackstageActionRow action) =>
-        BuildActionRow(action, BackstagePaneSurfacePlanner.HomePaneVisualMetrics);
 
     private static Control BuildActionRow(BackstageActionRow action, BackstageHomePaneVisualMetrics metrics)
     {
@@ -865,88 +652,6 @@ internal sealed class BackstageView : Window
     };
 
     private static Color ToColor(BackstageRgb color) => Color.FromRgb(color.R, color.G, color.B);
-
-    private static Control BuildAccountPaneHeader(
-        string title,
-        string description,
-        BackstageAccountPaneVisualMetrics metrics)
-    {
-        var panel = new StackPanel();
-        panel.Children.Add(new TextBlock
-        {
-            Text = title,
-            FontSize = metrics.HeadingFontSize,
-            FontWeight = FontWeight.Light,
-            Foreground = PrimaryInk,
-            Margin = ToThickness(metrics.HeadingBottomMargin),
-        });
-        if (!string.IsNullOrWhiteSpace(description))
-        {
-            panel.Children.Add(new TextBlock
-            {
-                Text = description,
-                Foreground = SecondaryInk,
-                FontSize = metrics.DescriptionFontSize,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = ToThickness(metrics.DescriptionBottomMargin),
-            });
-        }
-
-        return panel;
-    }
-
-    private static TextBlock CreateAccountSectionHeader(
-        string text,
-        BackstageAccountPaneVisualMetrics metrics) => new()
-        {
-            Text = text,
-            FontSize = metrics.SectionHeaderFontSize,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = PrimaryInk,
-            Margin = ToThickness(metrics.SectionHeaderMargin),
-        };
-
-    private static AvaloniaGrid CreateAccountDetailGrid(BackstageAccountPaneVisualMetrics metrics) =>
-        new()
-        {
-            ColumnDefinitions = new ColumnDefinitions($"{metrics.FieldLabelColumnWidth},*"),
-        };
-
-    private static void AddAccountDetailRow(
-        AvaloniaGrid grid,
-        string label,
-        string value,
-        string automationId,
-        BackstageAccountPaneVisualMetrics metrics)
-    {
-        var row = grid.RowDefinitions.Count;
-        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        var margin = ToThickness(metrics.FieldRowMargin);
-
-        var labelBlock = new TextBlock
-        {
-            Text = label,
-            Foreground = SecondaryInk,
-            FontSize = metrics.FieldFontSize,
-            Margin = margin,
-        };
-        AvaloniaGrid.SetColumn(labelBlock, 0);
-        AvaloniaGrid.SetRow(labelBlock, row);
-        grid.Children.Add(labelBlock);
-
-        var valueBlock = new TextBlock
-        {
-            Text = value,
-            Foreground = PrimaryInk,
-            FontSize = metrics.FieldFontSize,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = margin,
-        };
-        AutomationProperties.SetAutomationId(valueBlock, automationId);
-        AvaloniaGrid.SetColumn(valueBlock, 1);
-        AvaloniaGrid.SetRow(valueBlock, row);
-        grid.Children.Add(valueBlock);
-    }
 
     private static Control BuildPaneHeader(
         string title,

@@ -92,6 +92,7 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().Contain("SisterBackstageEntryPlanner.Build(");
         source.Should().Contain("new AvaloniaBackstageFrame(");
         source.Should().Contain("SisterBackstagePalette.FreeW");
+        source.Should().Contain("FreeWBackstagePaneTextCatalog.BuildTextSpec()");
         source.Should().Contain("new FreeWBackstageSession(");
         source.Should().Contain("_session.BuildHomePane(");
         source.Should().Contain("_session.BuildOpenPane(");

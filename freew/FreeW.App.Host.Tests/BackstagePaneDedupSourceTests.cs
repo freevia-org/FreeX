@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 
 namespace FreeW.App.Host.Tests;
 
@@ -20,8 +21,7 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("BackstagePaneComposer");
         source.Should().Contain("SisterBackstageTheme.");
         source.Should().Contain("SisterBackstagePaneResources");
-        source.Should().Contain("SisterBackstagePaneResources.ForApp(");
-        source.Should().Contain($"SisterBackstageAppKind.{(appFolder == "freew" ? "FreeW" : "FreeP")}");
+        source.Should().Contain($"{(appFolder == "freew" ? "FreeW" : "FreeP")}BackstagePaneTextCatalog.BuildTextSpec(");
         source.Should().Contain("BackstageStrings.Current.Get");
         source.Should().Contain("SisterBackstageHostController");
         source.Should().Contain("new SisterBackstageHostSpec(");
@@ -74,10 +74,12 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("PrintEvidence_");
             source.Should().Contain("BuildAccountPane = BuildAccountPane");
             source.Should().Contain("_session.BuildAccountPane(");
-            source.Should().Contain("BackstagePaneRenderer.BuildAccountPane(Kit, surface)");
+            source.Should().Contain("Panes.BuildAccountPane(surface.ToPaneSpec())");
             source.Should().Contain("HideRecentPane = true");
-            source.Should().Contain("BackstagePaneRenderer.BuildActionPane(Kit, surface)");
+            source.Should().Contain("Panes.BuildActionPane(surface.ToPaneSpec())");
+            source.Should().Contain("Panes.BuildExportActionPane(surface.ToPaneSpec())");
             source.Should().Contain("_backstage.ShowPane(\"Open\")");
+            source.Should().NotContain("BackstagePaneRenderer.");
             source.Should().NotContain("BackstagePaneSurfacePlanner.Build");
             source.Should().NotContain("SisterBackstageInfoPanePlanner.Build(");
             source.Should().NotContain("PrintEvidenceKindLabel(");
@@ -117,6 +119,7 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().NotContain("new BackstageAccountPaneSpec(");
         source.Should().NotContain("SisterBackstagePaneTextSpec.FreeW");
         source.Should().NotContain("SisterBackstagePaneTextSpec.FreeP");
+        source.Should().NotContain("SisterBackstageAppKind.");
         source.Should().NotContain("SisterBackstageAccountPanePlanner.Build(");
         source.Should().NotContain("BackstagePrintPanePlanner.Build(");
         source.Should().NotContain("BackstageInfoSafetyPanePlanner.Build(");
@@ -142,6 +145,26 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().NotContain("TextTrimming = TextTrimming.CharacterEllipsis");
         source.Should().NotContain("Path.GetFileName(path)");
         source.Should().NotContain("var gallery = new WrapPanel");
+    }
+
+    [Fact]
+    public void SharedBackstageTextInfrastructure_IsProductNeutral()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var sharedFiles = new[]
+        {
+            Path.Combine(root, "shared", "Free.Shared.AppServices", "SisterBackstagePaneTextResources.cs"),
+            Path.Combine(root, "shared", "Free.Shared.Shell", "SisterBackstagePaneSpecPlanner.cs"),
+            Path.Combine(root, "shared", "Free.Shared.Shell.Wpf", "SisterBackstagePaneResources.cs"),
+        };
+
+        var source = string.Join(Environment.NewLine, sharedFiles.Select(File.ReadAllText));
+
+        source.Should().NotContain("FreeW_");
+        source.Should().NotContain("FreeP_");
+        source.Should().NotContain("FreeW application");
+        source.Should().NotContain("FreeP application");
+        source.Should().NotContain("SisterBackstageAppKind");
     }
 
     [Fact]

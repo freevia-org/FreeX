@@ -22,7 +22,10 @@ public sealed record BackstageAccountPaneSpec(
     string Description,
     IReadOnlyList<SisterBackstageAccountFieldGroup> Groups,
     string? OptionsText = null,
-    Action? OpenOptions = null);
+    Action? OpenOptions = null)
+{
+    public string? OptionsAutomationId { get; init; }
+}
 
 public sealed record BackstageActionPaneSpec(
     string Heading,

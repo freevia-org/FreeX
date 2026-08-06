@@ -23,12 +23,11 @@ internal sealed class BackstageView : UserControl
 {
     private static readonly SisterBackstageTheme Theme = SisterBackstageTheme.FreeP;
 
-    private static readonly SisterBackstagePaneResources BackstageResources = SisterBackstagePaneResources.ForApp(
-        SisterBackstageAppKind.FreeP,
+    private static readonly SisterBackstagePaneResources BackstageResources = new(
         WpfThemeApplier.ToColor(BrandThemes.FreeP.Colors.Accent),
         Theme.TileWidth,
         Theme.TileHeight,
-        BackstageStrings.Current.Get);
+        FreePBackstagePaneTextCatalog.BuildTextSpec(BackstageStrings.Current.Get));
     private static BackstageVisualKit Kit => BackstageResources.Kit;
     private static BackstagePaneComposer Panes => BackstageResources.Panes;
     private static readonly PresentationBackstagePanePlanner PanePlans = new(BackstageStrings.Current.Get);

@@ -427,8 +427,8 @@ public sealed class BackstagePaneSurfacePlannerTests
         var exportedXps = false;
         var savedExtension = "";
         var text = BackstageExportPaneSurfaceText.FromDescriptor(
-            SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW).Export,
-            key => key == SisterBackstagePaneResourceKeys.FreeWExportDescription ? "Localized export surface." : null);
+            FreeWBackstagePaneTextCatalog.Descriptor.Export,
+            key => key == FreeWBackstagePaneResourceKeys.ExportDescription ? "Localized export surface." : null);
 
         var surface = BackstagePaneSurfacePlanner.BuildExportPane(
             Formats(),
@@ -555,7 +555,7 @@ public sealed class BackstagePaneSurfacePlannerTests
     [Fact]
     public void BackstageExportPaneSurfaceText_FallsBackForUnresolvedDescriptorResources()
     {
-        var descriptor = SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW).Export;
+        var descriptor = FreeWBackstagePaneTextCatalog.Descriptor.Export;
         var text = BackstageExportPaneSurfaceText.FromDescriptor(descriptor, Resolve);
 
         text.Description.Should().Be(descriptor.Description.FallbackText);

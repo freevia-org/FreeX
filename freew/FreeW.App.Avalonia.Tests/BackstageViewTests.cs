@@ -508,6 +508,10 @@ public class BackstageViewTests
             "shared",
             "Free.Shared.Shell.Avalonia",
             "AvaloniaBackstageChrome.cs"));
+        var sharedPaneSource = File.ReadAllText(FindRepoFile(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "AvaloniaBackstagePaneComposer.cs"));
 
         project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
@@ -522,7 +526,10 @@ public class BackstageViewTests
         source.Should().Contain("_session.BuildExportPane(");
         source.Should().Contain("_session.BuildPrintPane(");
         source.Should().Contain("_session.BuildInfoPane(");
-        source.Should().Contain("BackstageInfoPaneSpec plan");
+        source.Should().Contain("Panes.BuildInfoPane(_session.BuildInfoPane())");
+        source.Should().Contain("Panes.BuildActionPane(surface.ToPaneSpec()");
+        source.Should().Contain("Panes.BuildAccountPane(surface.ToPaneSpec()");
+        source.Should().NotContain("BackstageInfoPaneSpec plan");
         source.Should().Contain("_session.BuildAccountPane(");
         source.Should().Contain("SisterBackstagePaneSpecPlanner");
         source.Should().Contain("_session.BuildNewPaneSpec(PaneSpecs)");
@@ -577,6 +584,9 @@ public class BackstageViewTests
         sharedSource.Should().Contain("public static class AvaloniaBackstageChrome");
         sharedSource.Should().Contain("public static Border CreateContentArea(");
         sharedSource.Should().Contain("public static Button CreateStackedActionButton(");
+        sharedPaneSource.Should().Contain("public Control BuildInfoPane(BackstageInfoPaneSpec spec)");
+        sharedPaneSource.Should().Contain("public Control BuildActionPane(BackstageActionPaneSpec spec");
+        sharedPaneSource.Should().Contain("public Control BuildAccountPane(");
     }
 
     [Fact]

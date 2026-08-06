@@ -179,6 +179,25 @@ public sealed class RibbonCommandIconAssetTests
         }
     }
 
+    [Fact]
+    public void FreeW_icon_wrapper_keeps_svg_resolution_and_delegates_geometry_fallback()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+            "freew",
+            "FreeW.App.Host",
+            "Ribbon",
+            "RibbonIconFactory.cs"));
+
+        source.Should().Contain("SvgCommandIconLoader");
+        source.Should().Contain("RibbonCommandIconSlugAliases.GetCandidates(slug)");
+        source.Should().Contain("SharedRibbonIconFactory.CreateIcon(fallbackIcon, size, glyphBrush)");
+        source.Should().NotContain("RibbonIconDefinitions.Resolve(");
+        source.Should().NotContain("DrawElement(");
+        source.Should().NotContain("Geometry.Parse(");
+        source.Should().NotContain("new Canvas");
+    }
+
     private static IEnumerable<string> WpfCommandIds() =>
         CommandIds(FreeWRibbon.Build())
             .Select(id => id.Value)

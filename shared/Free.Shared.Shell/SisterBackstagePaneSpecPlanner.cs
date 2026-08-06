@@ -19,12 +19,6 @@ public sealed record SisterBackstageExportPaneTextSpec(
         PdfActionLabel: "Export to PDF...",
         PdfActionDescription: "Publish a fixed-layout copy.");
 
-    public static SisterBackstageExportPaneTextSpec FreeW { get; } =
-        FromDescriptor(SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW).Export);
-
-    public static SisterBackstageExportPaneTextSpec FreeP { get; } =
-        FromDescriptor(SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeP).Export);
-
     public static SisterBackstageExportPaneTextSpec FromDescriptor(
         SisterBackstageExportPaneTextDescriptor descriptor,
         Func<string, string?>? getText = null)
@@ -60,12 +54,6 @@ public sealed record SisterBackstagePaneTextSpec(
     string OptionsDescription,
     string? OptionsEditText = null)
 {
-    public static SisterBackstagePaneTextSpec FreeW { get; } =
-        FromDescriptor(SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW));
-
-    public static SisterBackstagePaneTextSpec FreeP { get; } =
-        FromDescriptor(SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeP));
-
     public SisterBackstageAccountPaneTextSpec Account { get; init; } =
         SisterBackstageAccountPaneTextSpec.NeutralEnglish;
 

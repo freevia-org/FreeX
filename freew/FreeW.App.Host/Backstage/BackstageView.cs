@@ -31,12 +31,12 @@ internal sealed class BackstageView : UserControl
 
     // Link accent sourced from the design token (BrandThemes.FreeW.Colors.Accent = #0F6D8C).
     // Byte-identical to the previous hard-coded SisterBackstageTheme.FreeW.LinkColor (#0F6D8C).
-    private static readonly SisterBackstagePaneResources BackstageResources = SisterBackstagePaneResources.ForApp(
-        SisterBackstageAppKind.FreeW,
+    private static readonly SisterBackstagePaneResources BackstageResources = new(
         WpfThemeApplier.ToColor(BrandThemes.FreeW.Colors.Accent),
         Theme.TileWidth,
         Theme.TileHeight,
-        BackstageStrings.Current.Get);
+        FreeWBackstagePaneTextCatalog.BuildTextSpec(BackstageStrings.Current.Get),
+        BackstagePaneSurfacePlanner.ComposerProfile);
     private static BackstageVisualKit Kit => BackstageResources.Kit;
     private static BackstagePaneComposer Panes => BackstageResources.Panes;
     private static SisterBackstagePaneSpecPlanner PaneSpecs => BackstageResources.PaneSpecs;
@@ -127,11 +127,11 @@ internal sealed class BackstageView : UserControl
     private UIElement BuildExportPane()
     {
         var exportText = BackstageExportPaneSurfaceText.FromDescriptor(
-            SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW).Export,
+            FreeWBackstagePaneTextCatalog.Descriptor.Export,
             BackstageStrings.Current.Get);
         var surface = _session.BuildExportPane(exportText);
 
-        return BackstagePaneRenderer.BuildActionPane(Kit, surface);
+        return Panes.BuildExportActionPane(surface.ToPaneSpec());
     }
 
     private UIElement BuildPrintPane()
@@ -263,7 +263,7 @@ internal sealed class BackstageView : UserControl
     {
         var surface = _session.BuildSharePane();
 
-        return BackstagePaneRenderer.BuildActionPane(Kit, surface);
+        return Panes.BuildActionPane(surface.ToPaneSpec());
     }
 
     private UIElement BuildHomePane()
@@ -391,7 +391,7 @@ internal sealed class BackstageView : UserControl
     {
         var surface = _session.BuildAccountPane(EntryAssemblyVersion.Resolve());
 
-        return BackstagePaneRenderer.BuildAccountPane(Kit, surface);
+        return Panes.BuildAccountPane(surface.ToPaneSpec());
     }
 
     private BackstageOpenPaneSurfaceSpec BuildOpenSurface(string? filter) =>

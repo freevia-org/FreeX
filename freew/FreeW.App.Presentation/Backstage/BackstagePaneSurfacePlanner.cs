@@ -9,6 +9,27 @@ namespace FreeW.App.Presentation.Backstage;
 
 public static class BackstagePaneSurfacePlanner
 {
+    public static BackstagePaneComposerProfile ComposerProfile { get; } = new()
+    {
+        Metrics = new BackstagePaneMetrics(
+            HeadingFontSize: 26,
+            HeadingMargin: new BackstageVisualThickness(0, 0, 0, 18),
+            DescriptionFontSize: 12,
+            SectionHeaderFontSize: 15,
+            SectionHeaderMargin: new BackstageVisualThickness(0, 16, 0, 6),
+            DetailGridMargin: new BackstageVisualThickness(0, 2),
+            DetailLabelColumnWidth: 120,
+            DetailFontSize: 12,
+            ActionFontSize: 14,
+            ActionDescriptionFontSize: 11,
+            ActionRowMargin: new BackstageVisualThickness(0, 0, 0, 10),
+            ActionDescriptionMargin: new BackstageVisualThickness(0, 2, 0, 0)),
+        PaneSpacing = 0,
+        UseLinkActionRows = true,
+        UseTextBlockActionContent = true,
+        WrapPanesInScrollViewer = true,
+    };
+
     public static BackstageHomePaneVisualMetrics HomePaneVisualMetrics { get; } =
         new(
             PaneMaxWidth: 720,
@@ -352,7 +373,10 @@ public sealed record BackstageActionPaneSurfaceSpec(
     string Title,
     string Description,
     BackstageActionPaneVisualMetrics VisualMetrics,
-    IReadOnlyList<BackstageActionGroup> Groups);
+    IReadOnlyList<BackstageActionGroup> Groups)
+{
+    public BackstageActionPaneSpec ToPaneSpec() => new(Title, Description, Groups);
+}
 
 public sealed record BackstageHomePaneSurfaceSpec(
     string Title,
@@ -379,7 +403,18 @@ public sealed record BackstageAccountPaneSurfaceSpec(
     string Description,
     IReadOnlyList<SisterBackstageAccountFieldGroup> Groups,
     BackstageAccountPaneVisualMetrics VisualMetrics,
-    BackstageSurfaceActionRow OptionsAction);
+    BackstageSurfaceActionRow OptionsAction)
+{
+    public BackstageAccountPaneSpec ToPaneSpec() => new(
+        Title,
+        Description,
+        Groups,
+        OptionsAction.Label,
+        OptionsAction.Invoke)
+    {
+        OptionsAutomationId = OptionsAction.AutomationId,
+    };
+}
 
 public sealed record BackstageSurfaceActionGroup(
     string Heading,
@@ -497,7 +532,7 @@ public sealed record BackstageExportPaneSurfaceText(
     string PdfOnlyActionLabel = BackstageViewTextResources.CreatePdfLabel)
 {
     public static BackstageExportPaneSurfaceText FreeW { get; } =
-        FromDescriptor(SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW).Export);
+        FromDescriptor(FreeWBackstagePaneTextCatalog.Descriptor.Export);
 
     public static BackstageExportPaneSurfaceText FromDescriptor(
         SisterBackstageExportPaneTextDescriptor descriptor,

@@ -23,9 +23,7 @@ public sealed class PresentationBackstagePanePlanner
         bool usePresentationExportPlannerText = false)
     {
         _paneSpecs = new SisterBackstagePaneSpecPlanner(
-            SisterBackstagePaneTextSpec.FromDescriptor(
-                SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeP),
-                getText));
+            FreePBackstagePaneTextCatalog.BuildTextSpec(getText));
         _usePresentationExportPlannerText = usePresentationExportPlannerText;
     }
 

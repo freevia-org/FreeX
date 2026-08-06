@@ -7,6 +7,19 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class PresentationBackstagePanePlannerTests
 {
     [Fact]
+    public void FreePBackstagePaneTextCatalog_OwnsProductKeysAndFallbacks()
+    {
+        var descriptor = FreePBackstagePaneTextCatalog.Descriptor;
+
+        descriptor.RecentEmptyText.ResourceKey.Should().Be(FreePBackstagePaneResourceKeys.RecentEmptyText);
+        descriptor.RecentEmptyText.FallbackText.Should().Be("No recent presentations.");
+        descriptor.TemplateTileCaption.FallbackText.Should().Be("Blank presentation");
+        descriptor.Export.PdfActionLabel.FallbackText.Should().Be("Export to PDF...");
+        descriptor.Export.XpsActionLabel.Should().BeNull();
+        FreePBackstagePaneTextCatalog.RequiredResourceKeys.Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
     public void BuildStandardPanes_OwnsMetadataRecentOptionsAndAccountProjection()
     {
         var planner = new PresentationBackstagePanePlanner();
