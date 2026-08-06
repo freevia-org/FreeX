@@ -24,6 +24,8 @@ internal sealed class AvaloniaSlideShowMediaController
         public required IMediaPlaybackSession Session { get; init; }
         public required MediaInfo Media { get; init; }
         public required bool ShowWhenStopped { get; init; }
+        public required LayoutRect AuthoredBounds { get; init; }
+        public required bool PlayFullScreen { get; init; }
         public required int BaseVolumePercent { get; set; }
         public VideoView? VideoView { get; init; }
         public PresentationMediaTranscriptTrackDescriptor? CaptionTrack { get; init; }
@@ -116,6 +118,8 @@ internal sealed class AvaloniaSlideShowMediaController
                 slideDipH,
                 canvasW,
                 canvasH);
+            if (slot.PlayFullScreen && slot.Session.State == MediaPlaybackState.Playing)
+                bounds = FullScreenBounds();
             if (slot.VideoView is not null)
             {
                 slot.VideoView.Width = Math.Max(1, bounds.Width);
@@ -190,7 +194,10 @@ internal sealed class AvaloniaSlideShowMediaController
                 {
                     view = CreateVideoView(
                         (LibVlcMediaPlaybackSession)session,
-                        plan.Bounds);
+                        shape.Media.PlayFullScreen &&
+                        shape.Media.PlaybackStartMode == MediaPlaybackStartMode.Automatically
+                            ? FullScreenBounds()
+                            : plan.Bounds);
                 }
                 session.Ended += (_, _) =>
                 {
@@ -201,11 +208,15 @@ internal sealed class AvaloniaSlideShowMediaController
                         ApplyFade(session, shape.Media!, baseVolumePercent);
                         session.Pause();
                         if (view is not null)
+                        {
+                            ApplyVideoViewBounds(view, plan.Bounds);
                             view.IsVisible = shape.Media.ShowWhenStopped;
+                        }
                     }
                     else if (endAction == SlideShowMediaEndAction.Stop &&
                              view is not null && !shape.Media!.ShowWhenStopped)
                     {
+                        ApplyVideoViewBounds(view, plan.Bounds);
                         view.IsVisible = false;
                     }
                 };
@@ -235,6 +246,8 @@ internal sealed class AvaloniaSlideShowMediaController
                     Media = shape.Media,
                     ShowWhenStopped = shape.Media.ShowWhenStopped,
                     BaseVolumePercent = baseVolumePercent,
+                    AuthoredBounds = plan.Bounds,
+                    PlayFullScreen = shape.Media.PlayFullScreen,
                     VideoView = view,
                     CaptionTrack = captionTrack,
                     CaptionHost = captionHost,
@@ -295,11 +308,15 @@ internal sealed class AvaloniaSlideShowMediaController
         if (slot.Session.State == MediaPlaybackState.Playing)
         {
             slot.Session.Pause();
+            if (slot.VideoView is not null)
+                ApplyVideoViewBounds(slot.VideoView, slot.AuthoredBounds);
             if (slot.VideoView is not null && !slot.ShowWhenStopped)
                 slot.VideoView.IsVisible = false;
         }
         else
         {
+            if (slot.PlayFullScreen && slot.VideoView is not null)
+                ApplyVideoViewBounds(slot.VideoView, FullScreenBounds());
             StartPlayback(slot.Session, slot.Media, slot.BaseVolumePercent);
             if (slot.VideoView is not null)
                 slot.VideoView.IsVisible = true;
@@ -493,6 +510,8 @@ internal sealed class AvaloniaSlideShowMediaController
                     _slideDipH,
                     _canvasW,
                     _canvasH);
+                if (slot.PlayFullScreen && slot.Session.State == MediaPlaybackState.Playing)
+                    bounds = FullScreenBounds();
                 ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue);
             }
             slot.CaptionHost.IsVisible = cue is not null;
@@ -603,10 +622,15 @@ internal sealed class AvaloniaSlideShowMediaController
                     ApplyFade(slot.Session, slot.Media, slot.BaseVolumePercent);
                     slot.Session.Pause();
                     if (slot.VideoView is not null)
+                    {
+                        ApplyVideoViewBounds(slot.VideoView, slot.AuthoredBounds);
                         slot.VideoView.IsVisible = slot.ShowWhenStopped;
+                    }
                     break;
                 default:
                     slot.Session.Pause();
+                    if (slot.VideoView is not null)
+                        ApplyVideoViewBounds(slot.VideoView, slot.AuthoredBounds);
                     if (slot.VideoView is not null && !slot.ShowWhenStopped)
                         slot.VideoView.IsVisible = false;
                     break;
@@ -621,6 +645,17 @@ internal sealed class AvaloniaSlideShowMediaController
         HasPositiveTiming(media.FadeOutMilliseconds);
 
     private static bool HasPositiveTiming(double value) => value > 0 && double.IsFinite(value);
+
+    private LayoutRect FullScreenBounds() =>
+        new(0, 0, Math.Max(1, _canvasW), Math.Max(1, _canvasH));
+
+    private static void ApplyVideoViewBounds(VideoView view, LayoutRect bounds)
+    {
+        view.Width = Math.Max(1, bounds.Width);
+        view.Height = Math.Max(1, bounds.Height);
+        Canvas.SetLeft(view, bounds.X);
+        Canvas.SetTop(view, bounds.Y);
+    }
 
     private static void StartPlayback(IMediaPlaybackSession session, MediaInfo media, int baseVolumePercent)
     {

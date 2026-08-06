@@ -3235,8 +3235,11 @@ public static class PptxPackageWriter
         mediaFileRelId ??= "rIdVid1";
 
         bool isVideo = shape.Media?.IsVideo ?? true;
+        var mediaFileAttributes = new List<object>();
+        if (isVideo && shape.Media?.PlayFullScreen == true)
+            mediaFileAttributes.Add(new XAttribute("fullScrn", "1"));
         var mediaFileEl = isVideo
-            ? new XElement(A + "videoFile", new XAttribute(R + "link", mediaFileRelId))
+            ? new XElement(A + "videoFile", mediaFileAttributes.Concat(new object[] { new XAttribute(R + "link", mediaFileRelId) }))
             : new XElement(A + "audioFile", new XAttribute(R + "link", mediaFileRelId));
 
         // KK1: a:blipFill is REQUIRED by CT_Picture (minOccurs=1). When no poster image
