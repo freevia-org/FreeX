@@ -3099,7 +3099,7 @@ public sealed class MainWindow : Window
         if (choice is null)
             return;
 
-        _editor.ApplyInspectorRemovals(choice.Comments, choice.Revisions, choice.Properties, choice.Bookmarks);
+        _editor.ApplyInspectorRemovals(choice);
     }
 
     private void CheckAccessibility()

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using FreeW.App.Presentation.Editing;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Editing;
@@ -129,27 +130,19 @@ internal sealed class RejectAllRevisionsCommand : RevisionResolveCommandBase
 /// reading order. The index is resolved against a fresh enumeration at apply time, so the command stays
 /// valid as long as the list is not stale; out-of-range is a no-op.
 /// </summary>
-internal sealed class AcceptOneRevisionCommand(int revisionIndex) : RevisionResolveCommandBase
+internal sealed class AcceptOneRevisionCommand(RevisionTargetDecision target) : RevisionResolveCommandBase
 {
     public override string Label => "Accept Change";
-    protected override void Resolve(TextDocument document)
-    {
-        var entries = RevisionList.Enumerate(document);
-        if (revisionIndex >= 0 && revisionIndex < entries.Count)
-            RevisionList.Accept(document, entries[revisionIndex]);
-    }
+    protected override void Resolve(TextDocument document) =>
+        target.TryApply(document, RevisionResolutionAction.Accept);
 }
 
 /// <summary>Undoable reject of a single revision identified by its reading-order index (see accept).</summary>
-internal sealed class RejectOneRevisionCommand(int revisionIndex) : RevisionResolveCommandBase
+internal sealed class RejectOneRevisionCommand(RevisionTargetDecision target) : RevisionResolveCommandBase
 {
     public override string Label => "Reject Change";
-    protected override void Resolve(TextDocument document)
-    {
-        var entries = RevisionList.Enumerate(document);
-        if (revisionIndex >= 0 && revisionIndex < entries.Count)
-            RevisionList.Reject(document, entries[revisionIndex]);
-    }
+    protected override void Resolve(TextDocument document) =>
+        target.TryApply(document, RevisionResolutionAction.Reject);
 }
 
 /// <summary>

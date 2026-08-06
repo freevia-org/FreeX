@@ -1,4 +1,5 @@
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
@@ -8,6 +9,62 @@ public enum CommentTextNormalization
 {
     Preserve,
     Trim,
+}
+
+public enum RevisionResolutionAction
+{
+    Accept,
+    Reject,
+}
+
+public readonly record struct InspectorRemovalDecision(
+    bool Comments,
+    bool Revisions,
+    bool Properties,
+    bool Bookmarks)
+{
+    public bool Any => Comments || Revisions || Properties || Bookmarks;
+
+    public void Apply(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        if (Comments)
+            DocumentInspector.RemoveComments(document);
+        if (Revisions)
+            DocumentInspector.RemoveRevisions(document);
+        if (Properties)
+            DocumentInspector.RemoveProperties(document);
+        if (Bookmarks)
+            DocumentInspector.RemoveBookmarks(document);
+    }
+}
+
+public sealed record RevisionTargetDecision(
+    int RevisionIndex,
+    int TopLevelBlockIndex,
+    RevisionEntry Entry)
+{
+    public bool TryApply(TextDocument document, RevisionResolutionAction action)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var entries = RevisionList.Enumerate(document);
+        if (RevisionIndex < 0 || RevisionIndex >= entries.Count)
+            return false;
+
+        var current = entries[RevisionIndex];
+        if (!ReferenceEquals(current.Paragraph, Entry.Paragraph)
+            || !ReferenceEquals(current.Run, Entry.Run)
+            || current.Kind != Entry.Kind)
+        {
+            return false;
+        }
+
+        return action == RevisionResolutionAction.Accept
+            ? RevisionList.Accept(document, current)
+            : RevisionList.Reject(document, current);
+    }
 }
 
 /// <summary>
@@ -156,4 +213,81 @@ public sealed class DocumentReviewEditingSession
             BuildCommentList(),
             currentCommentId is { } id ? ResolveTopLevelCommentId(id) : null,
             direction);
+
+    public InspectorRemovalDecision PlanInspectorRemovals(InspectorRemovalChoice choice)
+    {
+        ArgumentNullException.ThrowIfNull(choice);
+        return new InspectorRemovalDecision(
+            choice.Comments,
+            choice.Revisions,
+            choice.Properties,
+            choice.Bookmarks);
+    }
+
+    public IReadOnlyList<RevisionEntry> ListRevisions() =>
+        RevisionList.Enumerate(_editingSession.Document);
+
+    public RevisionTargetDecision? ResolveRevisionTarget(RevisionEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        var entries = ListRevisions();
+        for (var index = 0; index < entries.Count; index++)
+        {
+            var current = entries[index];
+            if (ReferenceEquals(current.Paragraph, entry.Paragraph)
+                && ReferenceEquals(current.Run, entry.Run)
+                && current.Kind == entry.Kind)
+            {
+                return BuildRevisionTarget(index, current);
+            }
+        }
+
+        return null;
+    }
+
+    public RevisionTargetDecision? ResolveRevisionTargetAtOrAfterTopLevelBlock(int topLevelBlockIndex)
+    {
+        var entries = ListRevisions();
+        RevisionTargetDecision? first = null;
+        for (var index = 0; index < entries.Count; index++)
+        {
+            var target = BuildRevisionTarget(index, entries[index]);
+            if (target is null)
+                continue;
+
+            first ??= target;
+            if (target.TopLevelBlockIndex >= topLevelBlockIndex)
+                return target;
+        }
+
+        return first;
+    }
+
+    private RevisionTargetDecision? BuildRevisionTarget(int revisionIndex, RevisionEntry entry)
+    {
+        var topLevelBlockIndex = TopLevelBlockIndexOf(entry.Paragraph);
+        return topLevelBlockIndex >= 0
+            ? new RevisionTargetDecision(revisionIndex, topLevelBlockIndex, entry)
+            : null;
+    }
+
+    private int TopLevelBlockIndexOf(Paragraph target)
+    {
+        var blocks = _editingSession.Document.Blocks;
+        for (var index = 0; index < blocks.Count; index++)
+        {
+            if (ReferenceEquals(blocks[index], target))
+                return index;
+
+            if (blocks[index] is Table table
+                && table.Rows.Any(row => row.Cells.Any(cell =>
+                    cell.Paragraphs.Any(paragraph => ReferenceEquals(paragraph, target)))))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
 }

@@ -5050,7 +5050,7 @@ internal static class FreeWRibbonCommands
             if (choice is null)
                 return; // cancelled or nothing selected
 
-            editor.ApplyInspectorRemovals(choice.Comments, choice.Revisions, choice.Properties, choice.Bookmarks);
+            editor.ApplyInspectorRemovals(choice);
         }
     }
 

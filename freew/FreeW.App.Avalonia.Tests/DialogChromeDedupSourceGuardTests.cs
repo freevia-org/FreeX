@@ -135,7 +135,6 @@ public sealed class DialogChromeDedupSourceGuardTests
         source.Should().Contain("ContentPresenter.PaddingProperty, new Thickness(0)");
         source.Should().Contain("TabItem.MarginProperty, new Thickness(0, 0, -1, -1)");
         source.Should().Contain("TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)");
-        source.Should().Contain("Layoutable.MinHeightProperty, style.TabHeight ?? style.ControlHeight");
         source.Should().Contain("TabItem.PaddingProperty, new Thickness(6, 2)");
     }
 

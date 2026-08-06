@@ -292,6 +292,15 @@ public sealed class CommonDialogChromeParityTests
                 && setter.Value is Thickness margin
                 && margin == new Thickness(-11, 0, -11, 0));
         hasAuthorityPaneMargin.Should().BeTrue();
+        var hasAuthorityTabHeight = tabs.Styles
+            .OfType<Style>()
+            .SelectMany(style => style.Setters)
+            .OfType<Setter>()
+            .Any(setter => setter.Property == global::Avalonia.Layout.Layoutable.MinHeightProperty
+                && setter.Value is double height
+                && height == 21);
+        hasAuthorityTabHeight.Should().BeTrue(
+            "classic tab chrome owns the tab minimum height through its public style contract");
     }
 
     [Fact]

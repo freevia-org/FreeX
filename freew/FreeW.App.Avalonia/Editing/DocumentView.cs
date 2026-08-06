@@ -19664,44 +19664,20 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>Every tracked change in the committed document, in reading order — drives Previous/Next.</summary>
-    public IReadOnlyList<RevisionEntry> Revisions => RevisionList.Enumerate(_doc);
+    public IReadOnlyList<RevisionEntry> Revisions => _editingSession.Review.ListRevisions();
 
     /// <summary>Moves the caret to the top-level block owning a tracked change without mutating the document.</summary>
     public void NavigateToRevision(RevisionEntry entry)
     {
-        for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
-        {
-            if (ReferenceEquals(_doc.Blocks[blockIndex], entry.Paragraph))
-            {
-                _hfCaret = null;
-                MoveCaretToBlock(blockIndex, 0);
-                InvalidateVisual();
-                Focus();
-                CaretMoved?.Invoke();
-                ScrollToCaretRequested?.Invoke();
-                return;
-            }
+        if (_editingSession.Review.ResolveRevisionTarget(entry) is not { } target)
+            return;
 
-            if (_doc.Blocks[blockIndex] is not Table table)
-                continue;
-
-            for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
-            {
-                foreach (var cell in table.Rows[rowIndex].Cells)
-                {
-                    if (cell.Paragraphs.Any(paragraph => ReferenceEquals(paragraph, entry.Paragraph)))
-                    {
-                        _hfCaret = null;
-                        MoveCaretToBlock(blockIndex, 0);
-                        InvalidateVisual();
-                        Focus();
-                        CaretMoved?.Invoke();
-                        ScrollToCaretRequested?.Invoke();
-                        return;
-                    }
-                }
-            }
-        }
+        _hfCaret = null;
+        MoveCaretToBlock(target.TopLevelBlockIndex, 0);
+        InvalidateVisual();
+        Focus();
+        CaretMoved?.Invoke();
+        ScrollToCaretRequested?.Invoke();
     }
 
     /// <summary>True when the document carries any tracked change (insertion/deletion/formatting).</summary>
@@ -19721,25 +19697,13 @@ public sealed class DocumentView : Control
 
     private bool ResolveCurrentRevision(bool accept)
     {
-        var entries = RevisionList.Enumerate(_doc);
-        if (entries.Count == 0)
+        var target = _editingSession.Review.ResolveRevisionTargetAtOrAfterTopLevelBlock(_caret.Block);
+        if (target is null)
             return false;
 
-        // Prefer the first revision whose owning block index is at/after the caret block; else the first.
-        var caretBlock = _caret.Block;
-        var index = -1;
-        for (var i = 0; i < entries.Count; i++)
-        {
-            if (entries[i].BlockIndex >= caretBlock)
-            {
-                index = i;
-                break;
-            }
-        }
-        if (index < 0)
-            index = 0;
-
-        _bus.Execute(accept ? new AcceptOneRevisionCommand(index) : new RejectOneRevisionCommand(index));
+        _bus.Execute(accept
+            ? new AcceptOneRevisionCommand(target)
+            : new RejectOneRevisionCommand(target));
         return true;
     }
 
@@ -23693,17 +23657,9 @@ public sealed class DocumentView : Control
     /// Apply the Document Inspector's selected removal operations to the model and re-render.
     /// Direct mutations bypass undo/redo, matching the existing accept/reject review semantics.
     /// </summary>
-    public void ApplyInspectorRemovals(bool comments, bool revisions, bool properties, bool bookmarks)
+    public void ApplyInspectorRemovals(InspectorRemovalChoice choice)
     {
-        if (comments)
-            DocumentInspector.RemoveComments(_doc);
-        if (revisions)
-            DocumentInspector.RemoveRevisions(_doc);
-        if (properties)
-            DocumentInspector.RemoveProperties(_doc);
-        if (bookmarks)
-            DocumentInspector.RemoveBookmarks(_doc);
-
+        _editingSession.Review.PlanInspectorRemovals(choice).Apply(_doc);
         InvalidateAfterExternalMutation();
     }
 

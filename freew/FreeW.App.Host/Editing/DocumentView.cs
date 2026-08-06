@@ -1565,16 +1565,8 @@ public sealed class DocumentView : RichTextBox
     public void RefreshTableOfContents()
     {
         CommitToModel();
-        RefreshTableOfContentsFromModel();
+        ReferenceEdits.RefreshTableOfContents(BuildGeneratedPageTextResolver());
     }
-
-    private void RefreshTableOfContentsFromModel()
-        => ReferenceEdits.RefreshTableOfContents(BuildGeneratedPageTextResolver());
-
-    // Insert the freshly built TOC paragraphs starting at block index `at`, one reversible
-    // InsertParagraphCommand each (kept in order), then re-render. The bus's Changed event redraws.
-    private void InsertTocAt(int at)
-        => ReferenceEdits.InsertTableOfContents(at, BuildGeneratedPageTextResolver());
 
     /// <summary>
     /// Prepend a simple cover page (a Title paragraph, an optional author Subtitle, and a spacer) at the
@@ -7156,12 +7148,6 @@ public sealed class DocumentView : RichTextBox
         return root;
     }
 
-    private static double EstimateWordArtWidth(WordArt wordArt) =>
-        Math.Max(1, wordArt.Text.Length) * wordArt.FontSizePt * 0.62;
-
-    private static double EstimateWordArtHeight(WordArt wordArt) =>
-        wordArt.FontSizePt * 1.6;
-
     /// <summary>
     /// Builds a group visual from the shared drawing-object visual plan. The plan keeps child rects in
     /// page space for Avalonia and child offsets in group-local space for this nested WPF canvas.
@@ -12718,9 +12704,6 @@ public sealed class DocumentView : RichTextBox
         return frame;
     }
 
-    /// <summary>Backwards-compatible alias kept for callers that decode a known-PNG (e.g. embedded-object icons).</summary>
-    private static BitmapSource DecodePng(byte[] bytes) => DecodeRaster(bytes);
-
     /// <summary>
     /// Guarded raster decode for byte payloads that are nominally images but may be undecodable (e.g.
     /// embedded-object icons): returns null instead of throwing, mirroring <see cref="DecodeImage"/>, so a
@@ -16309,7 +16292,7 @@ public sealed class DocumentView : RichTextBox
     public IReadOnlyList<RevisionEntry> ListRevisions()
     {
         CommitToModel();
-        return RevisionList.Enumerate(_model);
+        return _editingSession.Review.ListRevisions();
     }
 
     /// <summary>
@@ -16319,7 +16302,8 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public bool AcceptRevision(RevisionEntry entry)
     {
-        var resolved = RevisionList.Accept(_model, entry);
+        var target = _editingSession.Review.ResolveRevisionTarget(entry);
+        var resolved = target?.TryApply(_model, RevisionResolutionAction.Accept) == true;
         if (resolved)
             Render();
         return resolved;
@@ -16332,7 +16316,8 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public bool RejectRevision(RevisionEntry entry)
     {
-        var resolved = RevisionList.Reject(_model, entry);
+        var target = _editingSession.Review.ResolveRevisionTarget(entry);
+        var resolved = target?.TryApply(_model, RevisionResolutionAction.Reject) == true;
         if (resolved)
             Render();
         return resolved;
@@ -16346,26 +16331,8 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void NavigateToRevision(RevisionEntry entry)
     {
-        var topLevelIndex = TopLevelBlockIndexOf(entry.Paragraph);
-        if (topLevelIndex >= 0)
-            BringBlockIntoView(topLevelIndex);
-    }
-
-    // The index, among the committed model's top-level blocks, of the block that owns paragraph
-    // <paramref name="target"/> — itself if it is a top-level paragraph, or the containing table. Returns
-    // -1 if it is not found. Matches the leaf-numbering BringBlockIntoView uses (a table is one leaf).
-    private int TopLevelBlockIndexOf(ModelParagraph target)
-    {
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            var block = _model.Blocks[i];
-            if (ReferenceEquals(block, target))
-                return i;
-            if (block is ModelTable table &&
-                table.Rows.Any(r => r.Cells.Any(c => c.Paragraphs.Any(p => ReferenceEquals(p, target)))))
-                return i;
-        }
-        return -1;
+        if (_editingSession.Review.ResolveRevisionTarget(entry) is { } target)
+            BringBlockIntoView(target.TopLevelBlockIndex);
     }
 
     /// <summary>
@@ -16374,17 +16341,10 @@ public sealed class DocumentView : RichTextBox
     /// is stripped via the pure <see cref="DocumentInspector"/> ops (which mutate the model in place),
     /// and the view re-renders so the cleaned document shows immediately.
     /// </summary>
-    public void ApplyInspectorRemovals(bool comments, bool revisions, bool properties, bool bookmarks)
+    public void ApplyInspectorRemovals(InspectorRemovalChoice choice)
     {
         CommitToModel();
-        if (comments)
-            DocumentInspector.RemoveComments(_model);
-        if (revisions)
-            DocumentInspector.RemoveRevisions(_model);
-        if (properties)
-            DocumentInspector.RemoveProperties(_model);
-        if (bookmarks)
-            DocumentInspector.RemoveBookmarks(_model);
+        _editingSession.Review.PlanInspectorRemovals(choice).Apply(_model);
         Render();
     }
 
@@ -16398,68 +16358,6 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         _editingSession.RemoveBookmark(name);
-    }
-
-    /// <summary>
-    /// Marks the model runs of <paramref name="paragraph"/> covering the character range
-    /// [<paramref name="startOffset"/>, <paramref name="endOffset"/>) as a tracked change of
-    /// <paramref name="kind"/>, splitting runs at the boundaries. Offsets are measured over the
-    /// paragraph's plain text. Mirrors <see cref="AddCommentCommand.MarkCommentRange"/>.
-    /// </summary>
-    private static void MarkRevisionRange(ModelParagraph paragraph, int startOffset, int endOffset, RevisionKind kind, string author, string? dateXml)
-    {
-        var pos = 0;
-        for (var i = 0; i < paragraph.Runs.Count; i++)
-        {
-            var run = paragraph.Runs[i];
-            var len = run.Text.Length;
-            var runStart = pos;
-            var runEnd = pos + len;
-            pos = runEnd;
-            if (len == 0)
-                continue;
-
-            var coverStart = Math.Max(runStart, startOffset);
-            var coverEnd = Math.Min(runEnd, endOffset);
-            if (coverStart >= coverEnd)
-                continue;
-
-            if (coverStart > runStart)
-            {
-                var head = new ModelRun(run.Text[..(coverStart - runStart)], run.Formatting)
-                {
-                    HyperlinkUrl = run.HyperlinkUrl,
-                    HyperlinkAnchor = run.HyperlinkAnchor,
-                    HyperlinkTooltip = run.HyperlinkTooltip,
-                    CommentId = run.CommentId,
-                    Revision = run.Revision,
-                    RevisionAuthor = run.RevisionAuthor,
-                    RevisionDateXml = run.RevisionDateXml
-                };
-                run.Text = run.Text[(coverStart - runStart)..];
-                paragraph.Runs.Insert(i, head);
-                i++;
-            }
-            if (coverEnd < runEnd)
-            {
-                var tail = new ModelRun(run.Text[(coverEnd - coverStart)..], run.Formatting)
-                {
-                    HyperlinkUrl = run.HyperlinkUrl,
-                    HyperlinkAnchor = run.HyperlinkAnchor,
-                    HyperlinkTooltip = run.HyperlinkTooltip,
-                    CommentId = run.CommentId,
-                    Revision = run.Revision,
-                    RevisionAuthor = run.RevisionAuthor,
-                    RevisionDateXml = run.RevisionDateXml
-                };
-                run.Text = run.Text[..(coverEnd - coverStart)];
-                paragraph.Runs.Insert(i + 1, tail);
-            }
-
-            run.Revision = kind;
-            run.RevisionAuthor = author;
-            run.RevisionDateXml = dateXml;
-        }
     }
 
     /// <summary>The plain-text character offset of <paramref name="position"/> from the paragraph's start.</summary>

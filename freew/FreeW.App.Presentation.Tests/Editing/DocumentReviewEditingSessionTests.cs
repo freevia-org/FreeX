@@ -1,4 +1,5 @@
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Editing;
 
 namespace FreeW.App.Presentation.Tests.Editing;
@@ -111,6 +112,93 @@ public sealed class DocumentReviewEditingSessionTests
         session.Review.SelectAdjacentComment(firstId, direction: -1)!.Id.Should().Be(secondId);
     }
 
+    public static IEnumerable<object[]> InspectorCategoryCombinations()
+    {
+        for (var mask = 0; mask < 16; mask++)
+        {
+            yield return
+            [
+                (mask & 1) != 0,
+                (mask & 2) != 0,
+                (mask & 4) != 0,
+                (mask & 8) != 0,
+            ];
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(InspectorCategoryCombinations))]
+    public void InspectorRemovalDecision_AppliesExactlyTheSelectedCategories(
+        bool comments,
+        bool revisions,
+        bool properties,
+        bool bookmarks)
+    {
+        var document = DocumentWithInspectableMetadata();
+        var session = DeterministicSession();
+        session.LoadDocument(document);
+
+        var decision = session.Review.PlanInspectorRemovals(
+            new InspectorRemovalChoice(comments, revisions, properties, bookmarks));
+        decision.Any.Should().Be(comments || revisions || properties || bookmarks);
+
+        decision.Apply(document);
+
+        var result = DocumentInspector.Inspect(document);
+        result.HasComments.Should().Be(!comments);
+        result.HasRevisions.Should().Be(!revisions);
+        result.HasProperties.Should().Be(!properties);
+        result.HasBookmarks.Should().Be(!bookmarks);
+    }
+
+    [Fact]
+    public void RevisionTargets_ResolveTopLevelAndTableCellOwners()
+    {
+        var document = new TextDocument();
+        var topLevel = RevisionParagraph("top");
+        var table = Table.Create(1, 1);
+        var tableParagraph = table.Rows[0].Cells[0].Paragraphs[0];
+        tableParagraph.Runs.Clear();
+        tableParagraph.Runs.Add(new Run("cell") { Revision = RevisionKind.Inserted });
+        var afterTable = RevisionParagraph("after");
+        document.Blocks.Add(topLevel);
+        document.Blocks.Add(table);
+        document.Blocks.Add(afterTable);
+        var session = DeterministicSession();
+        session.LoadDocument(document);
+
+        var revisions = session.Review.ListRevisions();
+        session.Review.ResolveRevisionTarget(revisions[0])!.TopLevelBlockIndex.Should().Be(0);
+        session.Review.ResolveRevisionTarget(revisions[1])!.TopLevelBlockIndex.Should().Be(1);
+        session.Review.ResolveRevisionTarget(revisions[2])!.TopLevelBlockIndex.Should().Be(2);
+
+        var tableTarget = session.Review.ResolveRevisionTargetAtOrAfterTopLevelBlock(1);
+        tableTarget.Should().NotBeNull();
+        tableTarget!.RevisionIndex.Should().Be(1);
+        tableTarget.TopLevelBlockIndex.Should().Be(1);
+
+        session.Review.ResolveRevisionTargetAtOrAfterTopLevelBlock(3)!.RevisionIndex.Should().Be(0,
+            "navigation wraps to the first revision after the final top-level block");
+    }
+
+    [Fact]
+    public void RevisionTarget_RejectsStaleIdentityInsteadOfResolvingTheReplacementAtItsIndex()
+    {
+        var document = DocumentWith("first", "second");
+        var first = (Paragraph)document.Blocks[0];
+        first.Runs[0].Revision = RevisionKind.Inserted;
+        var second = (Paragraph)document.Blocks[1];
+        second.Runs[0].Revision = RevisionKind.Inserted;
+        var session = DeterministicSession();
+        session.LoadDocument(document);
+        var target = session.Review.ResolveRevisionTarget(session.Review.ListRevisions()[0])!;
+
+        RevisionList.Accept(document, target.Entry).Should().BeTrue();
+
+        target.TryApply(document, RevisionResolutionAction.Accept).Should().BeFalse();
+        second.Runs[0].Revision.Should().Be(RevisionKind.Inserted);
+    }
+
     private static DocumentEditingSession DeterministicSession() =>
         new(revisionAuthor: null, revisionDateXml: () => "2026-08-05T10:20:30Z");
 
@@ -119,6 +207,26 @@ public sealed class DocumentReviewEditingSessionTests
         var document = new TextDocument();
         foreach (var text in paragraphs)
             document.Blocks.Add(new Paragraph(text));
+        return document;
+    }
+
+    private static Paragraph RevisionParagraph(string text)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(text) { Revision = RevisionKind.Inserted });
+        return paragraph;
+    }
+
+    private static TextDocument DocumentWithInspectableMetadata()
+    {
+        var document = new TextDocument();
+        var paragraph = new Paragraph { BookmarkName = "target" };
+        paragraph.Runs.Add(new Run("commented") { CommentId = 1 });
+        paragraph.Runs.Add(Run.CommentReference(1));
+        paragraph.Runs.Add(new Run(" revised") { Revision = RevisionKind.Inserted });
+        document.Blocks.Add(paragraph);
+        document.Comments[1] = new Comment(1, "note", "Reviewer", "R");
+        document.Properties.Title = "Inspectable";
         return document;
     }
 }
@@ -165,6 +273,38 @@ public sealed class DocumentReviewEditingSessionSourceOwnershipTests
         source.Should().NotContain("DocPosition");
         source.Should().NotContain("InvalidateVisual");
         source.Should().NotContain("Render()");
+    }
+
+    [Fact]
+    public void BothRenderersDelegateInspectorDispatchAndRevisionTargetResolution()
+    {
+        var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+        var revisionCommands = ReadSource(
+            "freew", "FreeW.App.Avalonia", "Editing", "RevisionCommands.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("_editingSession.Review.PlanInspectorRemovals(choice).Apply(");
+            source.Should().Contain("_editingSession.Review.ResolveRevisionTarget(entry)");
+            source.Should().NotContain("DocumentInspector.RemoveComments(");
+            source.Should().NotContain("DocumentInspector.RemoveRevisions(");
+            source.Should().NotContain("DocumentInspector.RemoveProperties(");
+            source.Should().NotContain("DocumentInspector.RemoveBookmarks(");
+        }
+
+        avalonia.Should().Contain("ResolveRevisionTargetAtOrAfterTopLevelBlock(_caret.Block)");
+        revisionCommands.Should().Contain("RevisionTargetDecision target");
+        revisionCommands.Should().Contain("target.TryApply(document, RevisionResolutionAction.Accept)");
+        revisionCommands.Should().Contain("target.TryApply(document, RevisionResolutionAction.Reject)");
+        revisionCommands.Should().NotContain("RevisionList.Enumerate(document)");
+
+        wpf.Should().NotContain("private int TopLevelBlockIndexOf(");
+        wpf.Should().NotContain("private static void MarkRevisionRange(");
+        wpf.Should().NotContain("private void InsertTocAt(");
+        wpf.Should().NotContain("private static double EstimateWordArtWidth(");
+        wpf.Should().NotContain("private static double EstimateWordArtHeight(");
+        wpf.Should().NotContain("private static BitmapSource DecodePng(");
     }
 
     private static string ReadSource(params string[] parts)

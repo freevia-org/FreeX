@@ -4316,7 +4316,7 @@ public sealed partial class MainWindow : Window
             return;
 
         if (choice.Any)
-            _editor.ApplyInspectorRemovals(choice.Comments, choice.Revisions, choice.Properties, choice.Bookmarks);
+            _editor.ApplyInspectorRemovals(choice);
 
         _status.Text = choice.Any
             ? "Selected document data removed."
