@@ -9,9 +9,13 @@ public sealed class MailMergeRichContentRoundTripTests
     public void NativeInteractiveFields_RoundTripDiscoverAndResolveWithCollectedAnswers()
     {
         var paragraph = new Paragraph();
-        paragraph.Runs.Add(Run.ComplexFieldRun(" FILLIN \"Department\" \\o ", "cached department"));
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            " FILLIN \"Department\" \\d \"Operations\" \\o ",
+            "cached department"));
         paragraph.Runs.Add(new Run(" | "));
-        paragraph.Runs.Add(Run.ComplexFieldRun(" ASK Manager \"Who is the manager?\" \\o ", "cached manager"));
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            " ASK Manager \"Who is the manager?\" \\d \"Alex\" \\o ",
+            "cached manager"));
         paragraph.Runs.Add(new Run(" | «Name»"));
         var template = new TextDocument { Blocks = { paragraph } };
         using var stream = new MemoryStream();
@@ -29,8 +33,16 @@ public sealed class MailMergeRichContentRoundTripTests
             state);
 
         prompts.Should().Equal(
-            new MailMergeInteractivePrompt(MailMergeInteractivePromptKind.FillIn, "Department", "Department"),
-            new MailMergeInteractivePrompt(MailMergeInteractivePromptKind.Ask, "Manager", "Who is the manager?"));
+            new MailMergeInteractivePrompt(
+                MailMergeInteractivePromptKind.FillIn,
+                "Department",
+                "Department",
+                "Operations"),
+            new MailMergeInteractivePrompt(
+                MailMergeInteractivePromptKind.Ask,
+                "Manager",
+                "Who is the manager?",
+                "Alex"));
         merged.Should().ContainSingle().Which.PlainText.Should().Be("Engineering | Margaret | Ada");
         merged[0].Paragraphs.Single().Runs.Should().AllSatisfy(run => run.ComplexField.Should().BeNull());
         state.Bookmarks["Manager"].Should().Be("Margaret");
