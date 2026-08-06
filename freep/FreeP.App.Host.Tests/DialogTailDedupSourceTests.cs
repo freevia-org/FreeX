@@ -10,11 +10,17 @@ public sealed class DialogTailDedupSourceTests
         var motion = ReadHostSource("MotionPathEditorDialog.cs");
         motion.Should().Contain("MotionPathEditorDialogSession");
         motion.Should().Contain("MotionPathEditorRowProjection");
+        motion.Should().Contain("_session.Surface");
+        motion.Should().Contain("AutomationProperties.SetName(");
+        motion.Should().Contain("AutomationProperties.SetAutomationId(");
         motion.Should().NotContain("MotionPathEditingPlanner.");
         motion.Should().NotContain("double.TryParse");
 
         var rotation = ReadHostSource("RotationOptionsDialog.cs");
         rotation.Should().Contain("RotationOptionsDialogSession");
+        rotation.Should().Contain("_session.Surface");
+        rotation.Should().Contain("AutomationProperties.SetName(");
+        rotation.Should().Contain("AutomationProperties.SetAutomationId(");
         rotation.Should().NotContain("SelectedShapeIds");
         rotation.Should().NotContain("SetSelectedRotation");
         rotation.Should().NotContain("RotationOptionsPlanner.");

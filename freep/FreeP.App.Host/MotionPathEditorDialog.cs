@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
@@ -21,19 +22,24 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Height = 500;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResize;
+        AutomationProperties.SetName(this, surface.Schema.AccessibleName);
+        AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
 
         foreach (var segment in _session.InitialSegments)
             _rows.Add(new Row(segment, surface));
 
-        var addLine = new Button { Content = surface.AddLineLabel, Margin = new Thickness(4), MinWidth = 80 };
-        addLine.Click += (_, _) => ApplyTransition(_session.AddLine(ReadRowInputs()));
-        var addCurve = new Button { Content = surface.AddCurveLabel, Margin = new Thickness(4), MinWidth = 80 };
-        addCurve.Click += (_, _) => ApplyTransition(_session.AddCurve(ReadRowInputs()));
-
-        var ok = new Button { Content = surface.AcceptLabel, IsDefault = true, Margin = new Thickness(4), MinWidth = 80 };
-        ok.Click += (_, _) => ApplyTransition(_session.Submit(ReadRowInputs()));
-        var cancel = new Button { Content = surface.CancelLabel, IsCancel = true, Margin = new Thickness(4), MinWidth = 80 };
-        cancel.Click += (_, _) => Close();
+        var addLine = MakeActionButton(
+            surface.Action(MotionPathEditorDialogAction.AddLine),
+            () => ApplyTransition(_session.AddLine(ReadRowInputs())));
+        var addCurve = MakeActionButton(
+            surface.Action(MotionPathEditorDialogAction.AddCurve),
+            () => ApplyTransition(_session.AddCurve(ReadRowInputs())));
+        var ok = MakeActionButton(
+            surface.Action(MotionPathEditorDialogAction.Accept),
+            () => ApplyTransition(_session.Submit(ReadRowInputs())));
+        var cancel = MakeActionButton(
+            surface.Action(MotionPathEditorDialogAction.Cancel),
+            Close);
 
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         actions.Children.Add(addLine);
@@ -48,6 +54,7 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8),
         };
+        ApplySemantic(intro, surface.Field(MotionPathEditorDialogField.Introduction));
         DockPanel.SetDock(intro, Dock.Top);
         DockPanel.SetDock(actions, Dock.Bottom);
         root.Children.Add(intro);
@@ -64,7 +71,7 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             var row = _rows[index];
             var rowIndex = index;
-            row.Build(index == 0, () =>
+            row.Build(index, () =>
                 ApplyTransition(_session.Remove(ReadRowInputs(), rowIndex)));
             _rowsPanel.Children.Add(row.Control!);
         }
@@ -98,6 +105,50 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             DialogResult = true;
     }
 
+    private static Button MakeActionButton(
+        PresentationDialogActionPlan<MotionPathEditorDialogAction> action,
+        Action handler,
+        string? automationSuffix = null)
+    {
+        var button = new Button
+        {
+            Content = action.Label,
+            IsDefault = action.IsDefault,
+            IsCancel = action.IsCancel,
+            Margin = new Thickness(4),
+            MinWidth = action.Id == MotionPathEditorDialogAction.Delete ? 58 : 80,
+        };
+        ApplyAction(button, action, automationSuffix);
+        button.Click += (_, _) => handler();
+        return button;
+    }
+
+    private static void ApplySemantic(
+        DependencyObject control,
+        PresentationDialogFieldPlan<MotionPathEditorDialogField> field,
+        string? automationSuffix = null)
+    {
+        AutomationProperties.SetName(control, field.AccessibleName);
+        AutomationProperties.SetAutomationId(
+            control,
+            automationSuffix is null
+                ? field.AutomationId
+                : $"{field.AutomationId}.{automationSuffix}");
+    }
+
+    private static void ApplyAction(
+        DependencyObject control,
+        PresentationDialogActionPlan<MotionPathEditorDialogAction> action,
+        string? automationSuffix = null)
+    {
+        AutomationProperties.SetName(control, action.AccessibleName);
+        AutomationProperties.SetAutomationId(
+            control,
+            automationSuffix is null
+                ? action.AutomationId
+                : $"{action.AutomationId}.{automationSuffix}");
+    }
+
     private sealed class Row
     {
         private readonly MotionPathEditorDialogSurfacePlan _surface;
@@ -120,8 +171,9 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             _surface = surface;
         }
 
-        public void Build(bool first, Action remove)
+        public void Build(int rowIndex, Action remove)
         {
+            var first = rowIndex == 0;
             _isFirst = first;
             _kind.ItemsSource = _surface.SegmentKinds;
             _kind.SelectedItem = _value.Kind;
@@ -131,12 +183,22 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             _kind.Width = 76;
             _kind.Margin = new Thickness(2);
             _kind.SelectionChanged += (_, _) => UpdateControlState();
+            ApplySemantic(
+                _kind,
+                _surface.Field(MotionPathEditorDialogField.SegmentKind),
+                rowIndex.ToString());
             Set(_x, _value.X);
             Set(_y, _value.Y);
             Set(_x1, _value.X1);
             Set(_y1, _value.Y1);
             Set(_x2, _value.X2);
             Set(_y2, _value.Y2);
+            ApplySemantic(_x, _surface.Field(MotionPathEditorDialogField.X), rowIndex.ToString());
+            ApplySemantic(_y, _surface.Field(MotionPathEditorDialogField.Y), rowIndex.ToString());
+            ApplySemantic(_x1, _surface.Field(MotionPathEditorDialogField.X1), rowIndex.ToString());
+            ApplySemantic(_y1, _surface.Field(MotionPathEditorDialogField.Y1), rowIndex.ToString());
+            ApplySemantic(_x2, _surface.Field(MotionPathEditorDialogField.X2), rowIndex.ToString());
+            ApplySemantic(_y2, _surface.Field(MotionPathEditorDialogField.Y2), rowIndex.ToString());
 
             var grid = new Grid { Margin = new Thickness(2) };
             foreach (var width in new[] { 76.0, 78.0, 78.0, 78.0, 78.0, 78.0, 78.0, 52.0, 58.0 })
@@ -149,15 +211,14 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Add(grid, Labeled(_surface.Y1Label, _y1), 5);
             Add(grid, Labeled(_surface.X2Label, _x2), 6);
             Add(grid, Labeled(_surface.Y2Label, _y2), 7);
-            var removeButton = new Button
-            {
-                Content = _surface.DeleteLabel,
-                Margin = new Thickness(2),
-                IsEnabled = MotionPathEditorRowProjection
-                    .BuildEnablement(_value.Kind, first)
-                    .DeleteEnabled,
-            };
-            removeButton.Click += (_, _) => remove();
+            var removeButton = MakeActionButton(
+                _surface.Action(MotionPathEditorDialogAction.Delete),
+                remove,
+                rowIndex.ToString());
+            removeButton.Margin = new Thickness(2);
+            removeButton.IsEnabled = MotionPathEditorRowProjection
+                .BuildEnablement(_value.Kind, first)
+                .DeleteEnabled;
             Grid.SetColumn(removeButton, 8);
             grid.Children.Add(removeButton);
             Control = new Border { BorderBrush = System.Windows.Media.Brushes.LightGray, BorderThickness = new Thickness(0, 0, 0, 1), Child = grid };

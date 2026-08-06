@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Free.Shared.Ribbon.Wpf;
@@ -22,26 +23,40 @@ public sealed class RotationOptionsDialog : DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        AutomationProperties.SetName(this, surface.Schema.AccessibleName);
+        AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
 
+        var rotationField = surface.Field(RotationOptionsDialogField.Rotation);
         _rotationBox = new TextBox
         {
             Text = _session.InitialRotationText,
             MinWidth = 160,
             Margin = new Thickness(4),
         };
+        ApplySemantic(_rotationBox, rotationField);
 
         var buttons = DialogButtonRowFactory.Create(OnOk, buttonWidth: 80,
-            rowMargin: new Thickness(4, 8, 8, 8));
+            rowMargin: new Thickness(4, 8, 8, 8),
+            acceptContent: surface.OkLabel,
+            cancelContent: surface.CancelLabel);
+        ApplyAction(
+            (Button)buttons.Children[0],
+            surface.Action(RotationOptionsDialogAction.Accept));
+        ApplyAction(
+            (Button)buttons.Children[1],
+            surface.Action(RotationOptionsDialogAction.Cancel));
         var panel = new StackPanel { Margin = new Thickness(14) };
-        panel.Children.Add(new Label { Content = surface.RotationLabel });
+        panel.Children.Add(new Label { Content = rotationField.Label });
         panel.Children.Add(_rotationBox);
-        panel.Children.Add(new TextBlock
+        var hint = new TextBlock
         {
             Text = surface.Hint,
             TextWrapping = TextWrapping.Wrap,
             Opacity = 0.7,
             Margin = new Thickness(4, 4, 4, 0),
-        });
+        };
+        ApplySemantic(hint, surface.Field(RotationOptionsDialogField.Hint));
+        panel.Children.Add(hint);
         panel.Children.Add(buttons);
         Content = panel;
     }
@@ -69,5 +84,23 @@ public sealed class RotationOptionsDialog : DialogWindow
             return false;
         }
         return true;
+    }
+
+    private static void ApplySemantic(
+        DependencyObject control,
+        PresentationDialogFieldPlan<RotationOptionsDialogField> field)
+    {
+        AutomationProperties.SetName(control, field.AccessibleName);
+        AutomationProperties.SetAutomationId(control, field.AutomationId);
+        if (!string.IsNullOrWhiteSpace(field.HelpText))
+            AutomationProperties.SetHelpText(control, field.HelpText);
+    }
+
+    private static void ApplyAction(
+        DependencyObject control,
+        PresentationDialogActionPlan<RotationOptionsDialogAction> action)
+    {
+        AutomationProperties.SetName(control, action.AccessibleName);
+        AutomationProperties.SetAutomationId(control, action.AutomationId);
     }
 }

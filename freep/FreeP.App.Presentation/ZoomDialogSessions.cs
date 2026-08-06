@@ -323,7 +323,14 @@ public sealed record ZoomObjectPropertiesDialogControlPlan(
     IReadOnlyList<object> Options,
     string? PlaceholderText = null,
     string? ToolTipText = null,
-    bool SummaryOnly = false);
+    bool SummaryOnly = false)
+{
+    public string AccessibleName => Label.TrimEnd(':');
+
+    public string AutomationId => $"FreeP.ZoomFormat.{Field}";
+
+    public string? HelpText => ToolTipText ?? PlaceholderText;
+}
 
 public sealed record ZoomObjectPropertiesDialogFieldState(
     ZoomObjectPropertiesDialogField Field,

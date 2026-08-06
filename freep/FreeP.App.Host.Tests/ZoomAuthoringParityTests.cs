@@ -22,6 +22,8 @@ public sealed class ZoomAuthoringParityTests
         source.Should().Contain("ApplyState(_session.State)");
         source.Should().Contain("FocusValidationField(validation.Field)");
         source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("AutomationProperties.SetName(");
+        source.Should().Contain("AutomationProperties.SetAutomationId(");
 
         source.Should().NotContain("new ZoomObjectPropertiesDialogInput(");
         source.Should().NotContain("ZoomObjectPropertiesDialogSurfacePlanner.BuildSurfacePlan()");
@@ -61,11 +63,13 @@ public sealed class ZoomAuthoringParityTests
             "FreeP.App.Host",
             "SummaryZoomDialog.cs"));
 
-        source.Should().Contain("Move Up");
-        source.Should().Contain("Move Down");
+        source.Should().Contain("surface.Action(ZoomTargetDialogAction.MoveUp)");
+        source.Should().Contain("surface.Action(ZoomTargetDialogAction.MoveDown)");
         source.Should().Contain("SummaryZoomDialogSession");
         source.Should().Contain("TryMoveSelected");
         source.Should().Contain("TryAccept(selectedIds)");
+        source.Should().NotContain("\"Move Up\"");
+        source.Should().NotContain("\"Move Down\"");
         source.Should().NotContain("SelectOrderedTargets");
     }
 

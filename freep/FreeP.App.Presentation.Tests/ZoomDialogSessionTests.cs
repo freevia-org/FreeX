@@ -449,6 +449,13 @@ public sealed class ZoomDialogSessionTests
             surface.ImageTypeOptions.Should().Equal("preview", "cover");
             surface.FieldCatalog.Should().HaveCount(44);
             surface.FieldCatalog.Select(control => control.Field).Should().OnlyHaveUniqueItems();
+            surface.FieldCatalog.Select(control => control.AutomationId).Should().OnlyHaveUniqueItems();
+            surface.FieldCatalog.Should().OnlyContain(control =>
+                !string.IsNullOrWhiteSpace(control.AccessibleName));
+            surface.Chrome.Action(ZoomObjectPropertiesDialogChromeAction.Accept)
+                .IsDefault.Should().BeTrue();
+            surface.Chrome.Action(ZoomObjectPropertiesDialogChromeAction.Cancel)
+                .IsCancel.Should().BeTrue();
             surface.FieldCatalog.First().Field.Should().Be(ZoomObjectPropertiesDialogField.ImageType);
             surface.FieldCatalog.Last().Field.Should().Be(ZoomObjectPropertiesDialogField.ShowBackground);
             surface.FieldCatalog.Single(control =>

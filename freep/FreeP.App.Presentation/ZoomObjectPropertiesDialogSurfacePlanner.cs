@@ -2,11 +2,40 @@ using FreeP.App.Localization;
 
 namespace FreeP.App.Compositor;
 
+public enum ZoomObjectPropertiesDialogChromeAction
+{
+    Accept,
+    Cancel,
+}
+
 public sealed record PresentationDialogChromePlan(
     string Title,
     string AcceptLabel,
     string CancelLabel,
-    double Width);
+    double Width)
+{
+    public string AccessibleName => $"{Title} dialog";
+
+    public string AutomationId => "FreeP.ZoomFormat.Window";
+
+    public PresentationDialogActionPlan<ZoomObjectPropertiesDialogChromeAction> Action(
+        ZoomObjectPropertiesDialogChromeAction action) => action switch
+        {
+            ZoomObjectPropertiesDialogChromeAction.Accept => new(
+                action,
+                AcceptLabel,
+                "Apply Zoom formatting",
+                "FreeP.ZoomFormat.Accept",
+                IsDefault: true),
+            ZoomObjectPropertiesDialogChromeAction.Cancel => new(
+                action,
+                CancelLabel,
+                "Cancel Zoom formatting",
+                "FreeP.ZoomFormat.Cancel",
+                IsCancel: true),
+            _ => throw new ArgumentOutOfRangeException(nameof(action), action, null),
+        };
+}
 
 public sealed record ZoomObjectPropertiesDialogLayoutPlan(
     double ContentMargin,

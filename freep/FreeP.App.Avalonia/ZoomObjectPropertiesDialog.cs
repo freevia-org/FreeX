@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Free.Shared.Shell.Avalonia;
@@ -35,6 +36,8 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ZoomDialogChrome.Apply(this);
+        AutomationProperties.SetName(this, _surface.Chrome.AccessibleName);
+        AutomationProperties.SetAutomationId(this, _surface.Chrome.AutomationId);
 
         foreach (var plan in _session.FieldCatalog)
             _controls.Add(plan.Field, CreateControl(plan, layout.InputMinWidth));
@@ -48,7 +51,16 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                 : Row(plan.Label, control, layout.LabelWidth));
         }
 
-        var ok = ZoomDialogChrome.MakeButton(_surface.Chrome.AcceptLabel, true, Apply);
+        var okAction = _surface.Chrome.Action(ZoomObjectPropertiesDialogChromeAction.Accept);
+        var cancelAction = _surface.Chrome.Action(ZoomObjectPropertiesDialogChromeAction.Cancel);
+        var ok = ZoomDialogChrome.MakeButton(okAction.Label, okAction.IsDefault, Apply);
+        ApplyAction(ok, okAction);
+        var cancel = ZoomDialogChrome.MakeButton(
+            cancelAction.Label,
+            cancelAction.IsDefault,
+            () => Close(false));
+        cancel.IsCancel = cancelAction.IsCancel;
+        ApplyAction(cancel, cancelAction);
         children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -57,10 +69,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             Children =
             {
                 ok,
-                ZoomDialogChrome.MakeButton(
-                    _surface.Chrome.CancelLabel,
-                    false,
-                    () => Close(false)),
+                cancel,
             },
         });
         var content = new StackPanel
@@ -90,6 +99,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                             ? new Thickness(0, 4, 0, 0)
                             : default,
                 };
+                ApplySemantic(checkBox, plan);
                 checkBox.IsCheckedChanged += (_, _) =>
                     Dispatch(plan.Field, checkBox.IsChecked == true);
                 return checkBox;
@@ -101,6 +111,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                     MinWidth = inputMinWidth,
                     PlaceholderText = plan.PlaceholderText,
                 };
+                ApplySemantic(textBox, plan);
                 textBox.TextChanged += (_, _) => Dispatch(plan.Field, textBox.Text);
                 return textBox;
             }
@@ -111,6 +122,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                     ItemsSource = plan.Options,
                     MinWidth = inputMinWidth,
                 };
+                ApplySemantic(comboBox, plan);
                 comboBox.SelectionChanged += (_, _) => Dispatch(plan.Field, comboBox.SelectedItem);
                 return comboBox;
             }
@@ -203,5 +215,23 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         control.Focus();
         if (control is TextBox textBox)
             textBox.SelectAll();
+    }
+
+    private static void ApplySemantic(
+        Control control,
+        ZoomObjectPropertiesDialogControlPlan plan)
+    {
+        AutomationProperties.SetName(control, plan.AccessibleName);
+        AutomationProperties.SetAutomationId(control, plan.AutomationId);
+        if (!string.IsNullOrWhiteSpace(plan.HelpText))
+            AutomationProperties.SetHelpText(control, plan.HelpText);
+    }
+
+    private static void ApplyAction(
+        Control control,
+        PresentationDialogActionPlan<ZoomObjectPropertiesDialogChromeAction> action)
+    {
+        AutomationProperties.SetName(control, action.AccessibleName);
+        AutomationProperties.SetAutomationId(control, action.AutomationId);
     }
 }

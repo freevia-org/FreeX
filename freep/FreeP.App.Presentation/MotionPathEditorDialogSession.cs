@@ -9,23 +9,66 @@ public sealed record MotionPathEditorRowEnablement(
     bool EndpointEnabled,
     bool ControlPointsEnabled);
 
+public enum MotionPathEditorDialogField
+{
+    Introduction,
+    SegmentKind,
+    X,
+    Y,
+    X1,
+    Y1,
+    X2,
+    Y2,
+    Validation,
+}
+
+public enum MotionPathEditorDialogAction
+{
+    AddLine,
+    AddCurve,
+    Delete,
+    Accept,
+    Cancel,
+}
+
 public sealed record MotionPathEditorDialogSurfacePlan(
-    string Title,
-    string Introduction,
-    string AddLineLabel,
-    string AddCurveLabel,
-    string AcceptLabel,
-    string CancelLabel,
+    PresentationDialogSurfacePlan<MotionPathEditorDialogField, MotionPathEditorDialogAction> Schema,
     string StartRowLabel,
     string SegmentRowLabel,
-    string XLabel,
-    string YLabel,
-    string X1Label,
-    string Y1Label,
-    string X2Label,
-    string Y2Label,
-    string DeleteLabel,
-    IReadOnlyList<MotionPathSegmentKind> SegmentKinds);
+    IReadOnlyList<MotionPathSegmentKind> SegmentKinds)
+{
+    public string Title => Schema.Title;
+
+    public string Introduction => Field(MotionPathEditorDialogField.Introduction).Label;
+
+    public string AddLineLabel => Action(MotionPathEditorDialogAction.AddLine).Label;
+
+    public string AddCurveLabel => Action(MotionPathEditorDialogAction.AddCurve).Label;
+
+    public string AcceptLabel => Action(MotionPathEditorDialogAction.Accept).Label;
+
+    public string CancelLabel => Action(MotionPathEditorDialogAction.Cancel).Label;
+
+    public string XLabel => Field(MotionPathEditorDialogField.X).Label;
+
+    public string YLabel => Field(MotionPathEditorDialogField.Y).Label;
+
+    public string X1Label => Field(MotionPathEditorDialogField.X1).Label;
+
+    public string Y1Label => Field(MotionPathEditorDialogField.Y1).Label;
+
+    public string X2Label => Field(MotionPathEditorDialogField.X2).Label;
+
+    public string Y2Label => Field(MotionPathEditorDialogField.Y2).Label;
+
+    public string DeleteLabel => Action(MotionPathEditorDialogAction.Delete).Label;
+
+    public PresentationDialogFieldPlan<MotionPathEditorDialogField> Field(
+        MotionPathEditorDialogField field) => Schema.Field(field);
+
+    public PresentationDialogActionPlan<MotionPathEditorDialogAction> Action(
+        MotionPathEditorDialogAction action) => Schema.Action(action);
+}
 
 public sealed record MotionPathEditorRowInput(
     MotionPathSegmentKind? Kind,
@@ -271,20 +314,56 @@ public sealed class MotionPathEditorDialogSession
 
     private static MotionPathEditorDialogSurfacePlan BuildSurfacePlan() =>
         new(
-            Title: "Edit Motion Path",
-            Introduction: "Coordinates are relative to the animated shape. Edit endpoints and curve control points, then press OK.",
-            AddLineLabel: "Add line",
-            AddCurveLabel: "Add curve",
-            AcceptLabel: "OK",
-            CancelLabel: "Cancel",
+            new PresentationDialogSurfacePlan<MotionPathEditorDialogField, MotionPathEditorDialogAction>(
+                "Edit Motion Path",
+                "Edit Motion Path dialog",
+                "FreeP.MotionPath.Window",
+                [
+                    Field(MotionPathEditorDialogField.Introduction,
+                        PresentationDialogControlKind.Label,
+                        "Coordinates are relative to the animated shape. Edit endpoints and curve control points, then press OK.",
+                        "Motion path editing guidance"),
+                    Field(MotionPathEditorDialogField.SegmentKind,
+                        PresentationDialogControlKind.Choice, "Type", "Motion path segment type"),
+                    Field(MotionPathEditorDialogField.X,
+                        PresentationDialogControlKind.Text, "X", "Segment endpoint X"),
+                    Field(MotionPathEditorDialogField.Y,
+                        PresentationDialogControlKind.Text, "Y", "Segment endpoint Y"),
+                    Field(MotionPathEditorDialogField.X1,
+                        PresentationDialogControlKind.Text, "X1", "First control point X"),
+                    Field(MotionPathEditorDialogField.Y1,
+                        PresentationDialogControlKind.Text, "Y1", "First control point Y"),
+                    Field(MotionPathEditorDialogField.X2,
+                        PresentationDialogControlKind.Text, "X2", "Second control point X"),
+                    Field(MotionPathEditorDialogField.Y2,
+                        PresentationDialogControlKind.Text, "Y2", "Second control point Y"),
+                    Field(MotionPathEditorDialogField.Validation,
+                        PresentationDialogControlKind.Status, string.Empty, "Motion path validation status"),
+                ],
+                [
+                    Action(MotionPathEditorDialogAction.AddLine, "Add line", "Add line segment"),
+                    Action(MotionPathEditorDialogAction.AddCurve, "Add curve", "Add curve segment"),
+                    Action(MotionPathEditorDialogAction.Delete, "Delete", "Delete segment"),
+                    Action(MotionPathEditorDialogAction.Accept, "OK", "Apply motion path", isDefault: true),
+                    Action(MotionPathEditorDialogAction.Cancel, "Cancel", "Cancel motion path", isCancel: true),
+                ]),
             StartRowLabel: "Start",
             SegmentRowLabel: "Segment",
-            XLabel: "X",
-            YLabel: "Y",
-            X1Label: "X1",
-            Y1Label: "Y1",
-            X2Label: "X2",
-            Y2Label: "Y2",
-            DeleteLabel: "Delete",
             SegmentKinds: Enum.GetValues<MotionPathSegmentKind>());
+
+    private static PresentationDialogFieldPlan<MotionPathEditorDialogField> Field(
+        MotionPathEditorDialogField id,
+        PresentationDialogControlKind kind,
+        string label,
+        string accessibleName) =>
+        new(id, kind, label, accessibleName, $"FreeP.MotionPath.{id}");
+
+    private static PresentationDialogActionPlan<MotionPathEditorDialogAction> Action(
+        MotionPathEditorDialogAction id,
+        string label,
+        string accessibleName,
+        bool isDefault = false,
+        bool isCancel = false) =>
+        new(id, label, accessibleName, $"FreeP.MotionPath.{id}",
+            IsDefault: isDefault, IsCancel: isCancel);
 }

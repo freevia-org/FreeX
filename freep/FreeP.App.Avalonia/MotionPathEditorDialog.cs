@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -32,6 +33,11 @@ internal sealed class MotionPathEditorDialog : Window
         CanResize = true;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        AutomationProperties.SetName(this, surface.Schema.AccessibleName);
+        AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
+        ApplySemantic(
+            _validationText,
+            surface.Field(MotionPathEditorDialogField.Validation));
         foreach (var segment in _session.InitialSegments)
             _rows.Add(new Row(segment, surface));
 
@@ -56,18 +62,19 @@ internal sealed class MotionPathEditorDialog : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8),
         };
+        ApplySemantic(intro, surface.Field(MotionPathEditorDialogField.Introduction));
         DockPanel.SetDock(intro, Dock.Top);
         root.Children.Add(intro);
 
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         DockPanel.SetDock(actions, Dock.Bottom);
-        var addLine = Button(surface.AddLineLabel, 82);
+        var addLine = Button(surface.Action(MotionPathEditorDialogAction.AddLine), 82);
         addLine.Click += (_, _) => ApplyTransition(_session.AddLine(ReadRowInputs()));
-        var addCurve = Button(surface.AddCurveLabel, 82);
+        var addCurve = Button(surface.Action(MotionPathEditorDialogAction.AddCurve), 82);
         addCurve.Click += (_, _) => ApplyTransition(_session.AddCurve(ReadRowInputs()));
-        var ok = Button(surface.AcceptLabel, 80);
+        var ok = Button(surface.Action(MotionPathEditorDialogAction.Accept), 80);
         ok.Click += (_, _) => ApplyTransition(_session.Submit(ReadRowInputs()));
-        var cancel = Button(surface.CancelLabel, 80);
+        var cancel = Button(surface.Action(MotionPathEditorDialogAction.Cancel), 80);
         cancel.Click += (_, _) => Close(false);
         actions.Children.Add(addLine);
         actions.Children.Add(addCurve);
@@ -93,7 +100,7 @@ internal sealed class MotionPathEditorDialog : Window
         {
             var row = _rows[index];
             var rowIndex = index;
-            row.Build(index == 0, () =>
+            row.Build(index, () =>
                 ApplyTransition(_session.Remove(ReadRowInputs(), rowIndex)));
             _rowsPanel.Children.Add(row.Control!);
         }
@@ -117,11 +124,52 @@ internal sealed class MotionPathEditorDialog : Window
             Close(true);
     }
 
-    private static Button Button(string text, double minWidth)
+    private static Button Button(
+        PresentationDialogActionPlan<MotionPathEditorDialogAction> action,
+        double minWidth,
+        string? automationSuffix = null)
     {
-        var button = new Button { Content = text, Margin = new Thickness(4), MinWidth = minWidth };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: minWidth);
+        var button = new Button
+        {
+            Content = action.Label,
+            IsDefault = action.IsDefault,
+            IsCancel = action.IsCancel,
+            Margin = new Thickness(4),
+            MinWidth = minWidth,
+        };
+        ApplyAction(button, action, automationSuffix);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DialogChromeStyle,
+            minWidth: minWidth,
+            isDefault: action.IsDefault);
         return button;
+    }
+
+    private static void ApplySemantic(
+        Control control,
+        PresentationDialogFieldPlan<MotionPathEditorDialogField> field,
+        string? automationSuffix = null)
+    {
+        AutomationProperties.SetName(control, field.AccessibleName);
+        AutomationProperties.SetAutomationId(
+            control,
+            automationSuffix is null
+                ? field.AutomationId
+                : $"{field.AutomationId}.{automationSuffix}");
+    }
+
+    private static void ApplyAction(
+        Control control,
+        PresentationDialogActionPlan<MotionPathEditorDialogAction> action,
+        string? automationSuffix = null)
+    {
+        AutomationProperties.SetName(control, action.AccessibleName);
+        AutomationProperties.SetAutomationId(
+            control,
+            automationSuffix is null
+                ? action.AutomationId
+                : $"{action.AutomationId}.{automationSuffix}");
     }
 
     private sealed class Row
@@ -146,8 +194,9 @@ internal sealed class MotionPathEditorDialog : Window
             _surface = surface;
         }
 
-        public void Build(bool first, Action remove)
+        public void Build(int rowIndex, Action remove)
         {
+            var first = rowIndex == 0;
             _isFirst = first;
             _kind.ItemsSource = _surface.SegmentKinds;
             _kind.SelectedItem = _value.Kind;
@@ -157,12 +206,22 @@ internal sealed class MotionPathEditorDialog : Window
             _kind.Width = 78;
             _kind.Margin = new Thickness(2);
             _kind.SelectionChanged += (_, _) => UpdateControlState();
+            ApplySemantic(
+                _kind,
+                _surface.Field(MotionPathEditorDialogField.SegmentKind),
+                rowIndex.ToString());
             Set(_x, _value.X);
             Set(_y, _value.Y);
             Set(_x1, _value.X1);
             Set(_y1, _value.Y1);
             Set(_x2, _value.X2);
             Set(_y2, _value.Y2);
+            ApplySemantic(_x, _surface.Field(MotionPathEditorDialogField.X), rowIndex.ToString());
+            ApplySemantic(_y, _surface.Field(MotionPathEditorDialogField.Y), rowIndex.ToString());
+            ApplySemantic(_x1, _surface.Field(MotionPathEditorDialogField.X1), rowIndex.ToString());
+            ApplySemantic(_y1, _surface.Field(MotionPathEditorDialogField.Y1), rowIndex.ToString());
+            ApplySemantic(_x2, _surface.Field(MotionPathEditorDialogField.X2), rowIndex.ToString());
+            ApplySemantic(_y2, _surface.Field(MotionPathEditorDialogField.Y2), rowIndex.ToString());
 
             var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2) };
             panel.Children.Add(new TextBlock { Text = first ? _surface.StartRowLabel : _surface.SegmentRowLabel, Width = 62, VerticalAlignment = VerticalAlignment.Center });
@@ -173,7 +232,10 @@ internal sealed class MotionPathEditorDialog : Window
             panel.Children.Add(Labeled(_surface.Y1Label, _y1));
             panel.Children.Add(Labeled(_surface.X2Label, _x2));
             panel.Children.Add(Labeled(_surface.Y2Label, _y2));
-            var delete = Button(_surface.DeleteLabel, 58);
+            var delete = Button(
+                _surface.Action(MotionPathEditorDialogAction.Delete),
+                58,
+                rowIndex.ToString());
             delete.IsEnabled = MotionPathEditorRowProjection
                 .BuildEnablement(_value.Kind, first)
                 .DeleteEnabled;

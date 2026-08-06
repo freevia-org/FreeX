@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -22,8 +23,12 @@ internal sealed class RotationOptionsDialog : Window
         Height = 190;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        AutomationProperties.SetName(this, surface.Schema.AccessibleName);
+        AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
 
+        var rotationField = surface.Field(RotationOptionsDialogField.Rotation);
         _rotationBox = new TextBox { Text = _session.InitialRotationText, MinWidth = 160 };
+        ApplySemantic(_rotationBox, rotationField);
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -32,8 +37,8 @@ internal sealed class RotationOptionsDialog : Window
             Margin = new Thickness(0, 12, 0, 0),
             Children =
             {
-                MakeButton(surface.OkLabel, true, OnOk),
-                MakeButton(surface.CancelLabel, false, () => Close(false)),
+                MakeButton(surface.Action(RotationOptionsDialogAction.Accept), OnOk),
+                MakeButton(surface.Action(RotationOptionsDialogAction.Cancel), () => Close(false)),
             },
         };
         Content = new StackPanel
@@ -42,8 +47,8 @@ internal sealed class RotationOptionsDialog : Window
             Spacing = 8,
             Children =
             {
-                MakeRow(surface.RotationLabel, _rotationBox),
-                new TextBlock { Text = surface.Hint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7 },
+                MakeRow(rotationField.Label, _rotationBox),
+                MakeHint(surface),
                 buttons,
             },
         };
@@ -75,11 +80,47 @@ internal sealed class RotationOptionsDialog : Window
         return row;
     }
 
-    private static Button MakeButton(string label, bool isDefault, Action action)
+    private static TextBlock MakeHint(RotationOptionsSurfacePlan surface)
     {
-        var button = new Button { Content = label, IsDefault = isDefault, MinWidth = 80 };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
+        var hint = new TextBlock
+        {
+            Text = surface.Hint,
+            TextWrapping = TextWrapping.Wrap,
+            Opacity = 0.7,
+        };
+        ApplySemantic(hint, surface.Field(RotationOptionsDialogField.Hint));
+        return hint;
+    }
+
+    private static Button MakeButton(
+        PresentationDialogActionPlan<RotationOptionsDialogAction> plan,
+        Action action)
+    {
+        var button = new Button
+        {
+            Content = plan.Label,
+            IsDefault = plan.IsDefault,
+            IsCancel = plan.IsCancel,
+            MinWidth = 80,
+        };
+        AutomationProperties.SetName(button, plan.AccessibleName);
+        AutomationProperties.SetAutomationId(button, plan.AutomationId);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DialogChromeStyle,
+            minWidth: 80,
+            isDefault: plan.IsDefault);
         button.Click += (_, _) => action();
         return button;
+    }
+
+    private static void ApplySemantic(
+        Control control,
+        PresentationDialogFieldPlan<RotationOptionsDialogField> field)
+    {
+        AutomationProperties.SetName(control, field.AccessibleName);
+        AutomationProperties.SetAutomationId(control, field.AutomationId);
+        if (!string.IsNullOrWhiteSpace(field.HelpText))
+            AutomationProperties.SetHelpText(control, field.HelpText);
     }
 }

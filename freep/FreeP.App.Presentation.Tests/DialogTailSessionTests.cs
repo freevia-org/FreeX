@@ -42,6 +42,12 @@ public sealed class DialogTailSessionTests
 
         session.Surface.Title.Should().Be("Edit Motion Path");
         session.Surface.SegmentKinds.Should().Equal(Enum.GetValues<MotionPathSegmentKind>());
+        session.Surface.Schema.Fields.Select(field => field.AutomationId)
+            .Should().OnlyHaveUniqueItems();
+        session.Surface.Schema.Actions.Select(action => action.AutomationId)
+            .Should().OnlyHaveUniqueItems();
+        session.Surface.Action(MotionPathEditorDialogAction.Accept).IsDefault.Should().BeTrue();
+        session.Surface.Action(MotionPathEditorDialogAction.Cancel).IsCancel.Should().BeTrue();
 
         var initialRows = session.InitialSegments.Select(ToRowInput).ToArray();
         var invalidRows = initialRows.ToArray();
@@ -129,6 +135,11 @@ public sealed class DialogTailSessionTests
         var session = new RotationOptionsDialogSession(editor);
 
         session.InitialRotation.Should().Be(30);
+        session.Surface.Should().BeSameAs(RotationOptionsPlanner.Surface);
+        session.Surface.Action(RotationOptionsDialogAction.Accept).IsDefault.Should().BeTrue();
+        session.Surface.Action(RotationOptionsDialogAction.Cancel).IsCancel.Should().BeTrue();
+        session.Surface.Field(RotationOptionsDialogField.Rotation).HelpText.Should()
+            .Be("Enter a finite angle from -360 to 360 degrees.");
         session.TryApply("-90").Should().BeTrue();
         SlideShapeTraversal.FindById(presentation.Slides[0], 7)!
             .RotationDeg.Should().Be(270);
