@@ -121,11 +121,17 @@ public sealed class FileCommandsSourceTests
     [Fact]
     public void WpfMainWindow_RoutesPlatformOnlyCommandResidualsThroughShellCommands()
     {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            root,
             "freep",
             "FreeP.App.Host",
             "MainWindow.cs"));
+        var endpoint = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Host",
+            "MainWindow.WorkareaEndpoint.cs"));
 
         source.Should().Contain("InstallSharedKeyboardShortcuts();");
         source.Should().Contain("New: () => _file.New(),");
@@ -136,10 +142,12 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("Open: () => _file.Open()");
         source.Should().Contain("Save: () => _file.Save()");
         source.Should().Contain("SaveAs: () => _file.SaveAs()");
-        source.Should().Contain("new PresentationApplicationCommandCallbacks(");
-        source.Should().Contain("Undo: () => Editor.Undo(),");
-        source.Should().Contain("Redo: () => Editor.Redo(),");
-        source.Should().Contain("(_, _) => _applicationFrameSession!.ExecuteCommand(command)");
+        source.Should().Contain("_workareaSession = new PresentationWorkareaSession(this);");
+        source.Should().Contain("_workareaSession.ExecuteCommand(FreePKeyboardCommand.Undo)");
+        source.Should().Contain("_workareaSession.ExecuteCommand(FreePKeyboardCommand.Redo)");
+        source.Should().Contain("(_, _) => _workareaSession.ExecuteCommand(command)");
+        endpoint.Should().Contain("PresentationWorkareaNativeCommand.NewPresentation => () => _file.New()");
+        endpoint.Should().Contain("PresentationWorkareaNativeCommand.SavePresentation => () => _file.Save()");
         source.Should().NotContain("private void ExecuteKeyboardCommand(");
         source.Should().NotContain("case FreePKeyboardCommand.");
         source.Should().Contain("foreach (var shortcut in FreePKeyboardShortcutCatalog.All)");

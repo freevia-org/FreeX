@@ -38,7 +38,7 @@ namespace FreeP.App.Host;
 ///   │  Status bar                              │
 ///   └──────────────────────────────────────────┘
 /// </summary>
-public sealed partial class MainWindow : Window
+public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 {
     // Identity/palette for the shared window shell (PowerPoint-style brick title bar; "P" badge).
     private static ShellChromeOptions BuildChromeOptions() => new()
@@ -75,7 +75,8 @@ public sealed partial class MainWindow : Window
 
     // ── Model ─────────────────────────────────────────────────────────────────────
 
-    private Presentation _presentation = Presentation.CreateEmpty();
+    private readonly PresentationWorkareaSession _workareaSession;
+    private Presentation _presentation => _workareaSession.Presentation;
 
     // ── Editing session (Wave 3A) ─────────────────────────────────────────────────
 
@@ -83,8 +84,7 @@ public sealed partial class MainWindow : Window
     /// The active editing session. 3B (thumbnail pane) and 3C (canvas interaction) consume this.
     /// Rebuilt on every file new/open — subscribers re-attach after LoadModel.
     /// </summary>
-    internal EditingSession Editor { get; private set; } = null!;
-    private PresentationApplicationFrameSession? _applicationFrameSession;
+    internal EditingSession Editor => _workareaSession.Editor;
 
     // ── Shell chrome ──────────────────────────────────────────────────────────────
 
@@ -480,8 +480,7 @@ public sealed partial class MainWindow : Window
         var chromeOptions = BuildChromeOptions();
         ShellChrome.ConfigureWindow(this, chromeOptions);
 
-        // Initialise the editing session (and command bus inside it).
-        RebuildEditor();
+        _workareaSession = new PresentationWorkareaSession(this);
         _reviewWorkflowSession = new(
             () => Editor,
             new PresentationReviewWorkflowSessionCallbacks(
@@ -553,51 +552,6 @@ public sealed partial class MainWindow : Window
             getImageExportRange: () => PresentationExportPlanner.BuildCurrentSlideRangeRequest(Editor.CurrentSlideIndex),
             getPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1,
             nativePrintCapability: nativePrintCapability);
-
-        _applicationFrameSession = new PresentationApplicationFrameSession(
-            new PresentationApplicationFrameCallbacks
-            {
-                MarkDirty = () => _file.MarkDirty(),
-                RefreshCanvas = RefreshCanvas,
-                RefreshNotesPane = RefreshNotesPane,
-                RefreshDocumentStatusBeforeReview = () =>
-                {
-                    UpdateSlideCount();
-                    UpdateTitle();
-                },
-                RefreshReviewWorkflowPlans = RefreshReviewWorkflowPlans,
-                IsSmartArtPaneVisible = () => IsSmartArtTextPaneVisible,
-                RefreshSmartArtPane = () => ShowSmartArtTextPane(),
-                RefreshSelectionPane = () => _selectionPane?.Refresh(),
-                RefreshAccessibilityMetadata = RefreshPaneAccessibilityMetadata,
-                ClearReviewSelection = () => _reviewWorkflowSession.SelectedCommentIndex = null,
-                ClearMediaSelection = _mediaPaneSession.ClearCaptionSelection,
-                RefreshReviewPaneBeforePlans = RefreshCommentPane,
-                RefreshVisibleMediaPane = RefreshVisibleMediaCaptionPaneFromFields,
-                RefreshAltTextRequest = RefreshAltTextRequestPlan,
-                RefreshReadingOrder = () => _reviewWorkflowSession.RefreshReadingOrderPlan(),
-                IsAltTextPaneVisible = () => IsAltTextPaneVisible,
-                RefreshAltTextPane = () => ShowAltTextPane(),
-            },
-            new PresentationApplicationCommandCallbacks(
-                NewPresentation: () => _file.New(),
-                OpenPresentation: () => _file.Open(),
-                SavePresentation: () => _file.Save(),
-                SavePresentationAs: () => _file.SaveAs(),
-                PrintPresentation: ShowPrintBackstage,
-                Undo: () => Editor.Undo(),
-                Redo: () => Editor.Redo(),
-                DeleteSelectedShapes: () => Editor.DeleteSelected(),
-                DuplicateCurrentSlide: () => Editor.DuplicateCurrentSlide(),
-                StartSlideShowFromBeginning: () => StartSlideShow(fromStart: true),
-                StartSlideShowFromCurrentSlide: () => StartSlideShow(fromStart: false),
-                Copy: () => WpfClipboardCommands.Copy(Editor, _osClipboard),
-                Cut: () => WpfClipboardCommands.Cut(Editor, _osClipboard),
-                Paste: () => _osClipboard.Paste(Editor, preferOsClipboard: true),
-                Find: OpenFindDialog,
-                Replace: OpenFindReplaceDialog,
-                SelectAll: () => Editor.SelectAll()));
-        _applicationFrameSession.Attach(Editor);
 
         // Title bar.
         var titleBar = ShellChrome.BuildTitleBar(this, chromeOptions);
@@ -730,35 +684,17 @@ public sealed partial class MainWindow : Window
         var frame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(_titleBar, root, _backstage));
         Content = frame.Root;
 
-        UpdateTitle();
-        RefreshCanvas();
-        RefreshNotesPane();
-        RefreshCommentPane();
-        RefreshReviewWorkflowPlans();
-        UpdateSlideCount();
+        Closed += (_, _) => _workareaSession.Dispose();
+        _workareaSession.Initialize();
     }
 
     // ── Editor construction ───────────────────────────────────────────────────────
-
-    private void RebuildEditor()
-    {
-        var bus = new PresentationCommandBus(_presentation);
-        Editor  = new EditingSession(_presentation, bus);
-        _selectionPane?.SetEditor(Editor);
-        _applicationFrameSession?.Attach(Editor);
-
-        // Re-attach editing layer whenever the editor is rebuilt (file open/new).
-        // Guard: SlideCanvas is null during initial construction; BuildBody calls
-        // AttachCanvasEditing() itself after creating the canvas.
-        if (SlideCanvas is not null)
-            AttachCanvasEditing();
-    }
 
     // ── 3C SEAM: canvas editing attachment ───────────────────────────────────────
 
     /// <summary>
     /// Wires the gesture handler and in-canvas text editor to the current Editor.
-    /// Called once from BuildBody (initial) and then on every file new/open from RebuildEditor.
+    /// Called once from BuildBody and again when the workarea session replaces its editor.
     ///
     /// 3C SEAM LINE: this single call to <see cref="SlideCanvas.AttachEditing"/> is the
     /// only change to MainWindow needed for Wave 3C.
@@ -894,20 +830,7 @@ public sealed partial class MainWindow : Window
 
     private void LoadModel(Presentation presentation)
     {
-        _findReplaceDialog?.Close();
-        _presentation = presentation;
-        RebuildEditor(); // also calls AttachCanvasEditing()
-        // 3B: re-bind slide pane to the new Editor on file open/new.
-        SlidePaneHost.Child = new SlidePane(Editor);
-        HideLayoutPicker();
-        HideTablePicker();
-        RefreshCanvas();
-        UpdateSlideCount();
-        RefreshNotesPane();
-        RefreshCommentPane();
-        RefreshReviewWorkflowPlans();
-        // 16B: rebuild animation pane for new editor (only if the pane is currently shown).
-        RebuildAnimationPaneIfVisible();
+        _workareaSession.ReplacePresentation(presentation);
     }
 
     // ── Body layout ───────────────────────────────────────────────────────────────
@@ -973,7 +896,7 @@ public sealed partial class MainWindow : Window
         };
 
         // 3C SEAM: attach gesture handler and text editor.
-        // Called here (after canvas is created) and again in RebuildEditor/LoadModel.
+        // Called here after canvas construction and by the workarea endpoint after New/Open.
         AttachCanvasEditing();
 
         // Notes pane — a slim strip below the slide canvas.
@@ -3866,10 +3789,7 @@ public sealed partial class MainWindow : Window
     }
 
     private void UpdateSlideCount() =>
-        _slideCountText.Text = SisterAppStatusBarTextPlanner.FormatPresentationSlideStatus(
-            Editor.CurrentSlideIndex,
-            _presentation.Slides.Count,
-            ResolveDataFolderLabel());
+        _slideCountText.Text = _workareaSession.BuildStatusPlan(ResolveDataFolderLabel()).Text;
 
     // ── Quick-access + title ──────────────────────────────────────────────────────
 
@@ -3878,9 +3798,9 @@ public sealed partial class MainWindow : Window
             host,
             this,
             new SisterQuickAccessToolbarActions(
-                Save: () => _file.Save(),
-                Undo: () => Editor.Undo(),
-                Redo: () => Editor.Redo()));
+                Save: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.SavePresentation),
+                Undo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Undo),
+                Redo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Redo)));
 
     private void UpdateTitle()
     {
@@ -3905,7 +3825,7 @@ public sealed partial class MainWindow : Window
         {
             CommandBindings.Add(new CommandBinding(
                 routedCommand,
-                (_, _) => _applicationFrameSession!.ExecuteCommand(command)));
+                (_, _) => _workareaSession.ExecuteCommand(command)));
         }
 
         foreach (var shortcut in FreePKeyboardShortcutCatalog.All)

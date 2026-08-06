@@ -27,16 +27,24 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
         var mainWindowPath = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory,
             "../../../../FreeP.App.Avalonia/MainWindow.cs"));
-        var frameSessionPath = Path.GetFullPath(Path.Combine(
+        var endpointPath = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory,
-            "../../../../FreeP.App.Presentation/PresentationApplicationFrameSession.cs"));
+            "../../../../FreeP.App.Avalonia/MainWindow.WorkareaEndpoint.cs"));
+        var workareaSessionPath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../FreeP.App.Presentation/PresentationWorkareaSession.cs"));
         var mainWindow = File.ReadAllText(mainWindowPath);
-        var frameSession = File.ReadAllText(frameSessionPath);
+        var endpoint = File.ReadAllText(endpointPath);
+        var workareaSession = File.ReadAllText(workareaSessionPath);
 
-        mainWindow.Should().Contain("IsSmartArtPaneVisible = () => IsSmartArtTextPaneVisible");
-        mainWindow.Should().Contain("RefreshSmartArtPane = () => ShowSmartArtTextPane()");
-        frameSession.Should().Contain("if (_frame.IsSmartArtPaneVisible())");
-        frameSession.Should().Contain("_frame.RefreshSmartArtPane();");
+        mainWindow.Should().Contain("_workareaSession = new PresentationWorkareaSession(this);");
+        endpoint.Should().Contain("PresentationWorkareaPane.SmartArtText => IsSmartArtTextPaneVisible");
+        endpoint.Should().Contain(
+            "PresentationWorkareaOperation.RefreshSmartArtPane => () => ShowSmartArtTextPane()");
+        workareaSession.Should().Contain(
+            "_endpoint.IsPaneVisible(PresentationWorkareaPane.SmartArtText)");
+        workareaSession.Should().Contain(
+            "operations.Add(PresentationWorkareaOperation.RefreshSmartArtPane);");
     }
 
     [Fact]
@@ -51,7 +59,7 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
             "../../../../FreeP.App.Presentation/Ribbon/FreePRibbonCommandWorkflow.cs")));
 
         workflow.Should().Contain("SmartArtEditingPlanner.OpenTextPaneCommandId");
-        source.Should().Contain("case FreePRibbonHostActionKind.OpenSmartArtTextPane: ShowSmartArtTextPane(); break;");
+        source.Should().Contain("OpenSmartArtTextPane = () => ShowSmartArtTextPane(),");
     }
 
     [Fact]

@@ -63,7 +63,7 @@ namespace FreeP.App.Avalonia;
 ///
 /// Deferred to later Avalonia parity: transitions, animations, and full platform dialogs.
 /// </summary>
-public sealed partial class MainWindow : Window
+public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 {
     // Avalonia text metrics place the action row two pixels above WPF without this compensation.
     private const double ReadingOrderActionTopCompensation = 2;
@@ -102,7 +102,8 @@ public sealed partial class MainWindow : Window
 
     // ── Presentation model ─────────────────────────────────────────────────────
 
-    private Presentation _presentation = Presentation.CreateEmpty();
+    private readonly PresentationWorkareaSession _workareaSession;
+    private Presentation _presentation => _workareaSession.Presentation;
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
     private readonly PresentationFileCommandSession _fileSession;
     private readonly StartupDirtyTrace? _startupDirtyTrace;
@@ -132,8 +133,7 @@ public sealed partial class MainWindow : Window
 
     // ── Editing session ────────────────────────────────────────────────────────
 
-    internal EditingSession Editor { get; private set; } = null!;
-    private PresentationApplicationFrameSession? _applicationFrameSession;
+    internal EditingSession Editor => _workareaSession.Editor;
 
     // ── UI elements ────────────────────────────────────────────────────────────
 
@@ -768,8 +768,7 @@ public sealed partial class MainWindow : Window
                 () => TopLevel.GetTopLevel(this)?.Clipboard),
             clipboardRenderer ?? new AvaloniaClipboardShapeRenderer());
 
-        // Build editing session around the initial empty presentation.
-        RebuildEditor();
+        _workareaSession = new PresentationWorkareaSession(this);
         // ── Core UI elements ──────────────────────────────────────────────────
 
         _slideCanvas = new SlideCanvas
@@ -909,67 +908,6 @@ public sealed partial class MainWindow : Window
         _animationPaneSession = new(() => Editor);
         _customShowSession = new(() => Editor);
 
-        _applicationFrameSession = new PresentationApplicationFrameSession(
-            new PresentationApplicationFrameCallbacks
-            {
-                BeforeEditorChanged = () =>
-                    _startupDirtyTrace?.Record("editor-changed-before-mark", _fileWorkflow),
-                MarkDirty = () => _fileWorkflow.MarkDirty(),
-                AfterEditorMarkedDirty = () =>
-                    _startupDirtyTrace?.Record("editor-changed", _fileWorkflow),
-                RefreshCommandStates = SyncRibbonCommandStates,
-                RefreshSlidePane = RefreshSlidePane,
-                RefreshCanvas = RefreshCanvas,
-                RefreshNotesPane = RefreshNotesPane,
-                RefreshReviewWorkflowPlans = RefreshReviewWorkflowPlans,
-                IsSmartArtPaneVisible = () => IsSmartArtTextPaneVisible,
-                RefreshSmartArtPane = () => ShowSmartArtTextPane(),
-                RefreshAnimationPaneAfterEditorChanged = () =>
-                    RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex),
-                RefreshAnimationPaneAfterNavigation = () => RefreshVisibleAnimationPane(),
-                RefreshAnimationPaneAfterSelection = () => RefreshVisibleAnimationPane(),
-                RefreshSelectionPane = () => _selectionPane?.Refresh(),
-                RefreshAccessibilityMetadata = RefreshPaneAccessibilityMetadata,
-                RefreshDocumentStatusAfterReview = UpdateStatus,
-                BeforeCurrentSlideChanged = () =>
-                {
-                    _startupDirtyTrace?.Record("current-slide-changed", _fileWorkflow);
-                    _slidePaneSessionState = SlidePanePlanner.SetSelectedSlide(
-                        _slidePaneSessionState,
-                        Editor.CurrentSlideIndex);
-                },
-                ClearReviewSelection = () => _reviewWorkflowSession.SelectedCommentIndex = null,
-                ResetAnimationSelection = _animationPaneSession.ResetSelection,
-                ClearMediaSelection = _mediaPaneSession.ClearCaptionSelection,
-                SyncSlidePaneSelection = SyncSlidePaneSelectionFromEditor,
-                RefreshSlidePaneChrome = UpdateSlidePaneItemChrome,
-                RefreshReviewPaneAfterPlans = RefreshVisibleReviewCommentsPane,
-                RefreshVisibleMediaPane = RefreshVisibleMediaCaptionPaneFromFields,
-                RefreshCurrentSlideStatus = UpdateStatus,
-                RefreshAltTextRequest = RefreshAltTextRequestPlan,
-                RefreshReadingOrder = () => _reviewWorkflowSession.RefreshReadingOrderPlan(),
-                IsAltTextPaneVisible = () => IsAltTextPaneVisible,
-                RefreshAltTextPane = () => ShowAltTextPane(),
-            },
-            new PresentationApplicationCommandCallbacks(
-                NewPresentation: FileNew,
-                OpenPresentation: () => _ = FileOpenAsync(),
-                SavePresentation: () => _ = FileSaveAsync(),
-                SavePresentationAs: () => _ = FileSaveAsAsync(),
-                PrintPresentation: ShowPrintBackstage,
-                Undo: () => Editor.Undo(),
-                Redo: () => Editor.Redo(),
-                DeleteSelectedShapes: () => Editor.DeleteSelected(),
-                DuplicateCurrentSlide: () => Editor.DuplicateCurrentSlide(),
-                StartSlideShowFromBeginning: () => StartSlideShow(fromStart: true),
-                StartSlideShowFromCurrentSlide: () => StartSlideShow(fromStart: false),
-                Copy: QueueClipboardCopy,
-                Cut: QueueClipboardCut,
-                Paste: QueueClipboardPaste,
-                Find: OpenFindDialog,
-                Replace: OpenFindReplaceDialog,
-                SelectAll: () => Editor.SelectAll()));
-        _applicationFrameSession.Attach(Editor);
 
         // ── Root layout ───────────────────────────────────────────────────────
 
@@ -1000,9 +938,9 @@ public sealed partial class MainWindow : Window
         _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
             windowFrame.QatHost,
             new SisterQuickAccessToolbarActions(
-                Save: () => _ = FileSaveAsync(),
-                Undo: () => Editor.Undo(),
-                Redo: () => Editor.Redo()),
+                Save: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.SavePresentation),
+                Undo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Undo),
+                Redo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Redo)),
             ResolveThemeBrush("FreePWhiteBrush", Brushes.White));
 
         // ── Keyboard shortcuts ────────────────────────────────────────────────
@@ -1044,6 +982,7 @@ public sealed partial class MainWindow : Window
             _closeCoordinator.ShouldCancelClosing();
         Closed += (_, _) =>
         {
+            _workareaSession.Dispose();
             CloseActiveOleHost();
             _findReplaceDialog?.Close();
             _slideSizeDialog?.Close(false);
@@ -1270,30 +1209,6 @@ public sealed partial class MainWindow : Window
     }
 
     // ── Editor construction ────────────────────────────────────────────────────
-
-    private void RebuildEditor()
-    {
-        var bus = new PresentationCommandBus(_presentation);
-        Editor  = new EditingSession(_presentation, bus);
-        if (_ribbonCommandRegistry is not null)
-        {
-            FreePRibbonHostRegistryComposer.BindInto(
-                _ribbonCommandRegistry,
-                Editor,
-                _ribbonStateStore,
-                CreateRibbonHostProfile());
-        }
-        _selectionPane?.SetEditor(Editor);
-        _applicationFrameSession?.Attach(Editor);
-    }
-
-    private void RebuildEditorAndRewireInteraction()
-    {
-        RebuildEditor();
-        // Only re-wire if the interaction layer has already been built (BuildBody sets it up).
-        if (_adorner is not null)
-            RewireInteractionToEditor();
-    }
 
     // ── Body layout ────────────────────────────────────────────────────────────
 
@@ -7285,22 +7200,7 @@ public sealed partial class MainWindow : Window
 
     private void LoadPresentationContent(Presentation presentation)
     {
-        _findReplaceDialog?.Close();
-        _presentation = presentation;
-
-        RebuildEditorAndRewireInteraction();
-        // A visible pane is a projection of the active editor. Rebind it after New/Open so
-        // rows and playback state cannot remain attached to the previous presentation.
-        _animationPaneSession.Reset();
-        HideLayoutPicker();
-        HideTablePicker();
-        RefreshSlidePane();
-        RefreshCanvas();
-        RefreshNotesPane();
-        RefreshReviewWorkflowPlans();
-        RefreshVisibleReviewCommentsPane();
-        RefreshVisibleAnimationPane();
-        UpdateStatus();
+        _workareaSession.ReplacePresentation(presentation);
     }
 
     // ── Canvas refresh ─────────────────────────────────────────────────────────
@@ -8203,12 +8103,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateStatus()
     {
-        var count   = _presentation.Slides.Count;
-        var current = Editor.CurrentSlideIndex;
-        _statusText.Text = SisterAppStatusBarTextPlanner.FormatPresentationSlideStatus(
-            current,
-            count,
-            ResolveDataFolderLabel());
+        _statusText.Text = _workareaSession.BuildStatusPlan(ResolveDataFolderLabel()).Text;
     }
 
     // ── Keyboard shortcuts ─────────────────────────────────────────────────────
@@ -8229,7 +8124,7 @@ public sealed partial class MainWindow : Window
             FreePKeyboardShortcutCatalog.TryDispatch(
                 key,
                 ToKeyboardModifiers(e.KeyModifiers),
-                _applicationFrameSession!.ExecuteCommand))
+                _workareaSession.ExecuteCommand))
         {
             e.Handled = true;
             return;
