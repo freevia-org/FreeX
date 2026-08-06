@@ -60,7 +60,7 @@ namespace FreeP.Core.IO;
 /// Spin            | emph        | 3
 /// Pulse           | emph        | 14
 /// ColorPulse      | emph        | 6
-/// Teeter          | emph        | 4
+/// Teeter          | emph        | 32
 /// Blink           | emph        | 15
 /// Bold            | emph        | 1
 /// Wave            | emph        | 13
@@ -268,7 +268,7 @@ internal static class PptxAnimationMap
                 AnimationPreset.Bold          => 1,
                 AnimationPreset.Underline      => 2,
                 AnimationPreset.Spin           => 3,
-                AnimationPreset.Teeter         => 4,
+                AnimationPreset.Teeter         => 32,
                 AnimationPreset.Grow           => 5,
                 AnimationPreset.Shrink         => 5,
                 AnimationPreset.ColorPulse     => 6,
@@ -334,7 +334,7 @@ internal static class PptxAnimationMap
                 1  => AnimationPreset.Bold,
                 2  => AnimationPreset.Underline,
                 3  => AnimationPreset.Spin,
-                4  => AnimationPreset.Teeter,
+                32 => AnimationPreset.Teeter,
                 5  => AnimationPreset.Grow,
                 6  => AnimationPreset.ColorPulse,
                 7  => AnimationPreset.ChangeColor,
@@ -392,7 +392,7 @@ internal static class PptxAnimationMap
             return false;
 
         if (presetClass == "emph")
-            return presetId is 1 or 2 or 3 or 4 or 5 or 6 or 7 or 11 or 12 or 13 or 14 or 15;
+            return presetId is 1 or 2 or 3 or 5 or 6 or 7 or 11 or 12 or 13 or 14 or 15 or 32;
 
         return presetId is 1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10 or 11 or
             13 or 14 or 16 or 17 or 18 or 19 or 21 or 22 or 23 or 24 or 25 or 26 or 27 or 28 or 29;

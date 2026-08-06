@@ -50,6 +50,11 @@ public class ComplexFieldRoundTripTests
     [InlineData(" DATE \\@ \"M/d/yyyy\" ", "6/19/2026")]
     [InlineData(" FILENAME ", "Report.docx")]
     [InlineData(" AUTHOR ", "Ada Lovelace")]
+    [InlineData(" SEQ Figure \\r 14 \\* ROMAN ", "XIV")]
+    [InlineData(" SEQ Figure \\r 14 \\* roman ", "xiv")]
+    [InlineData(" SEQ Figure \\r 27 \\* ALPHABETIC ", "AA")]
+    [InlineData(" SEQ Figure \\r 27 \\* alphabetic ", "aa")]
+    [InlineData(" SEQ Figure \\r 14 \\* MERGEFORMAT \\* ROMAN ", "XIV")]
     public void ComplexField_SurvivesRoundTrip(string instruction, string cached)
     {
         var run = RoundTrip(WithComplexField(instruction, cached))

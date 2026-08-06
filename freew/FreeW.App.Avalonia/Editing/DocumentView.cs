@@ -22259,8 +22259,28 @@ public sealed class DocumentView : Control
     /// </summary>
     public void UpdateFields()
     {
-        var crossReferencePageResolver = _doc.Blocks
-            .OfType<Paragraph>()
+        static IEnumerable<(int BlockIndex, Paragraph Paragraph)> EnumerateFieldParagraphs(
+            IReadOnlyList<Block> bodyBlocks)
+        {
+            for (var blockIndex = 0; blockIndex < bodyBlocks.Count; blockIndex++)
+            {
+                if (bodyBlocks[blockIndex] is Paragraph paragraph)
+                {
+                    yield return (blockIndex, paragraph);
+                }
+                else if (bodyBlocks[blockIndex] is Table table)
+                {
+                    foreach (var row in table.Rows)
+                        foreach (var cell in row.Cells)
+                            foreach (var cellParagraph in cell.Paragraphs)
+                                yield return (blockIndex, cellParagraph);
+                }
+            }
+        }
+
+        var fieldParagraphs = EnumerateFieldParagraphs(_doc.Blocks).ToList();
+        var crossReferencePageResolver = fieldParagraphs
+            .Select(item => item.Paragraph)
             .SelectMany(paragraph => paragraph.Runs)
             .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef
                 || run.ComplexField?.Keyword == "PAGEREF")
@@ -22271,11 +22291,8 @@ public sealed class DocumentView : Control
             : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
                 _doc,
                 crossReferencePageResolver);
-        for (var b = 0; b < _doc.Blocks.Count; b++)
+        foreach (var (b, paragraph) in fieldParagraphs)
         {
-            if (_doc.Blocks[b] is not Paragraph paragraph)
-                continue;
-
             for (var r = 0; r < paragraph.Runs.Count; r++)
             {
                 var run = paragraph.Runs[r];
@@ -22301,11 +22318,11 @@ public sealed class DocumentView : Control
                         ? ComplexFieldEngine.Recompute(
                             _doc,
                             b,
-                            r,
+                            run,
                             crossReferencePageResolver,
                             crossReferencePageTextResolver)
                         : ResolveComplexField(complexField, run.Text);
-                    if (!string.IsNullOrEmpty(resolved))
+                    if (ComplexFieldEngine.CanRecompute(complexField) || !string.IsNullOrEmpty(resolved))
                         run.Text = resolved;
                 }
                 else if (run.FieldKind != RunFieldKind.None)
