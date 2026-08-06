@@ -4,16 +4,29 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>Command to duplicate a worksheet immediately after the source sheet.</summary>
-public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcCommand
+public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcCommand, IEstimatesMemory
 {
+    // R125-commands-undo-byte-budget: Undo of a Duplicate Sheet removes the ENTIRE cloned sheet
+    // (every cell, style, drawing, etc.) -- mirrors RemoveSheetCommand's IEstimatesMemory, which
+    // uses the same 200 bytes/occupied-cell estimate for the same "whole sheet" retention shape.
+    private const int BytesPerCell = 200;
+
     private readonly SheetId _sourceSheetId;
     private readonly string? _requestedName;
     private SheetId? _copySheetId;
     private int _insertIndex;
     private List<SlicerModel>? _clonedSlicers;
     private List<TimelineModel>? _clonedTimelines;
+    private int _copyOccupiedCellCount;
 
     public string Label => "Duplicate Sheet";
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Estimated from the cloned sheet's occupied-cell count captured once Apply has run (0
+    /// before that, in which case CommandBus never actually queries this).
+    /// </remarks>
+    public int EstimatedBytes => (int)Math.Min((long)_copyOccupiedCellCount * BytesPerCell, int.MaxValue);
 
     public DuplicateSheetCommand(SheetId sourceSheetId, string? name = null)
     {
@@ -85,6 +98,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
 
         _insertIndex = sourceIndex + 1;
         _copySheetId = copyId;
+        _copyOccupiedCellCount = copy.GetOccupiedCells().Count;
         ctx.Workbook.InsertSheet(_insertIndex, copy);
         CopyScopedNamedRangesAndFormulas(ctx.Workbook, _sourceSheetId, copyId, source.Name, copy.Name, tableRenames);
         return new CommandOutcome(true);

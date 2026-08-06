@@ -2,7 +2,7 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
-public sealed class SubtotalCommand : IWorkbookCommand
+public sealed class SubtotalCommand : IWorkbookCommand, IEstimatesMemory
 {
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
@@ -17,6 +17,25 @@ public sealed class SubtotalCommand : IWorkbookCommand
     private bool _outlineSummaryBelowChanged;
 
     public string Label => "Subtotal";
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// R125-commands-undo-byte-budget: Subtotal inserts one row (via InsertRowsCommand) and
+    /// writes one aggregate formula (via EditCellsCommand) per detected group, so for a large
+    /// range with many groups _appliedCommands can hold dozens/hundreds of sub-commands, each
+    /// already retaining its own undo snapshot. Sum their estimates instead of the flat 200-byte
+    /// default so a big Subtotal actually counts against CommandBus's byte budget.
+    /// </remarks>
+    public int EstimatedBytes
+    {
+        get
+        {
+            long bytes = 0;
+            foreach (var command in _appliedCommands)
+                bytes += command is IEstimatesMemory mem ? mem.EstimatedBytes : 200;
+            return (int)Math.Min(bytes, int.MaxValue);
+        }
+    }
 
     public SubtotalCommand(
         SheetId sheetId,

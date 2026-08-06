@@ -1,3 +1,12 @@
+<!--
+  Deliberately manual only: no CI workflow runs this solution automatically. It scopes the build
+  to the ribbon UI lane (tests/FreeX.App.Host.Tests plus tests/Free.Shared.Ribbon.Wpf.Tests,
+  filtered to Category=RibbonUiLane/RibbonUiLanePerf) for fast, targeted local iteration on the
+  declarative ribbon; see docs/ribbon-ui-test-lane.md. It is not a substitute for the merge gate
+  lanes: every *.Tests.csproj referenced here also ships fully in FreeX.DefaultTests.slnx and/or
+  FreeX.UiTests.slnx, both of which are wired into ci.yml, so nothing in this solution runs only
+  here (tests/FreeX.Core.Model.Tests/TestLaneSolutionTests.cs enforces that).
+-->
 <Solution>
   <Folder Name="/tests/">
     <Project Path="tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj" />

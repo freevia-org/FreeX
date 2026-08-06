@@ -1401,6 +1401,9 @@
   <data name="SelectionPane_HideAll" xml:space="preserve">
     <value>Hide All</value>
   </data>
+  <data name="SelectionPane_Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
   <data name="SelectionPane_NoObjects" xml:space="preserve">
     <value>There are no objects on this sheet.</value>
   </data>
@@ -10712,6 +10715,9 @@ Saved PDF file:&#xD;
   <data name="SelectionPane_HideAllButton" xml:space="preserve">
     <value>_Hide All</value>
   </data>
+  <data name="SelectionPane_DeleteButton" xml:space="preserve">
+    <value>_Delete</value>
+  </data>
   <data name="MainWindow_Header_MergeAcross" xml:space="preserve">
     <value>Merge Across</value>
   </data>
@@ -18231,6 +18237,9 @@ and {0} more.</value>
   <data name="SelectionPane_HideAllHelpText" xml:space="preserve">
     <value>Mark every listed object hidden.</value>
   </data>
+  <data name="SelectionPane_DeleteHelpText" xml:space="preserve">
+    <value>Delete the selected object from the sheet when OK is clicked.</value>
+  </data>
   <data name="DataValidation_ShowErrorAlertAfterInvalidDataIsEntered" xml:space="preserve">
     <value>Show error _alert after invalid data is entered</value>
   </data>
@@ -18596,6 +18605,9 @@ and {0} more.</value>
   </data>
   <data name="SelectionPane_HideAllAutomationName" xml:space="preserve">
     <value>Hide all objects</value>
+  </data>
+  <data name="SelectionPane_DeleteAutomationName" xml:space="preserve">
+    <value>Delete selected object</value>
   </data>
   <data name="NameDefinition_EditNameTitle" xml:space="preserve">
     <value>Edit Name</value>

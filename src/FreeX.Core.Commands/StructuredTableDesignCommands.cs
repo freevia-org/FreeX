@@ -241,6 +241,14 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
     }
 }
 
+// R125-commands-undo-byte-budget-further: evaluated for IEstimatesMemory ("table resize" is
+// explicitly one of the flagged categories) but deliberately NOT given one. _previousCells below
+// only ever holds the table's totals-row relocation and grown-calculated-column formula cells,
+// both bounded by the table's COLUMN count, not its full row*column extent -- shrinking a table
+// does not blank or snapshot the dropped rows' cell contents at all (that data is simply left
+// behind on the sheet, outside the new table Range, entirely untouched by this command). So there
+// is no real per-cell retention here for an estimator to report; the flat 200-byte
+// IEstimatesMemory default already fits.
 public sealed class ResizeStructuredTableCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;

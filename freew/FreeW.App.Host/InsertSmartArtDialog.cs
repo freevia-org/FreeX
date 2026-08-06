@@ -112,8 +112,7 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             var idx = _nodeList.Items.Add("New Item");
             _nodeList.SelectedIndex = idx;
-            _nodeTextBox.Focus();
-            _nodeTextBox.SelectAll();
+            DialogFocus.FocusAndSelect(_nodeTextBox);
         };
         removeBtn.Click += (_, _) =>
         {

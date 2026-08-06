@@ -145,6 +145,9 @@ public sealed partial class MainWindow
         var hideAllButton = new Button { Content = UiText.Get("SelectionPane_HideAll"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
         ApplySelectionPaneButtonChrome(hideAllButton, 82);
         AutomationProperties.SetAutomationId(hideAllButton, "SelectionPaneHideAllButton");
+        var deleteButton = new Button { Content = UiText.Get("SelectionPane_Delete"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
+        ApplySelectionPaneButtonChrome(deleteButton, 82);
+        AutomationProperties.SetAutomationId(deleteButton, "SelectionPaneDeleteButton");
 
         void Rebind(Guid? preferredSelection)
         {
@@ -187,6 +190,7 @@ public sealed partial class MainWindow
                 renameBox.Text = string.Empty;
                 renameButton.IsEnabled = false;
                 toggleVisibilityButton.IsEnabled = false;
+                deleteButton.IsEnabled = false;
                 return;
             }
 
@@ -198,11 +202,33 @@ public sealed partial class MainWindow
                 renameBox.Text = selected.Name;
             renameButton.IsEnabled = true;
             toggleVisibilityButton.IsEnabled = true;
+            deleteButton.IsEnabled = true;
         }
 
         // Pending move changes accumulate across button presses (z-order is applied as a sequence of one-step
         // moves so it round-trips through the existing MoveSelectionPaneObjectCommand and undo/redo).
         var moveChanges = new List<SelectionPaneMoveChange>();
+
+        // R125-selection-pane-delete-wiring: pending deletes accumulate the same way -- nothing is
+        // actually removed from the sheet until OK is clicked, at which point ApplySelectionPaneChanges
+        // folds them into the SAME DeleteDrawingObjectCommand the sheet grid's own Delete key uses (see
+        // DrawingObjectCommandPlanner.BuildDeleteCommand / SelectionPanePlanner.CreateCommand), not a
+        // second deletion path.
+        var deleteChanges = new List<SelectionPaneDeleteChange>();
+
+        void Delete()
+        {
+            if (listBox.SelectedItem is not SelectionPaneRow selected)
+                return;
+
+            deleteChanges.Add(new SelectionPaneDeleteChange(selected.Kind, selected.Id));
+            rows.Remove(selected);
+            // A delete supersedes any pending move for the same object -- it's about to stop
+            // existing, so there is nothing left to reorder.
+            moveChanges.RemoveAll(change => change.Id == selected.Id);
+            Rebind(null);
+            UpdateMoveButtons();
+        }
 
         void Move(bool forward)
         {
@@ -264,6 +290,7 @@ public sealed partial class MainWindow
                 row.IsVisible = false;
             Rebind(null);
         };
+        deleteButton.Click += (_, _) => Delete();
         searchBox.TextChanged += (_, _) => Rebind(null);
         filterBox.SelectionChanged += (_, _) => Rebind(null);
 
@@ -293,6 +320,10 @@ public sealed partial class MainWindow
                     break;
                 case SelectionPaneKeyboardAction.ToggleVisibility:
                     ToggleSelectedVisibility();
+                    e.Handled = true;
+                    break;
+                case SelectionPaneKeyboardAction.Delete:
+                    Delete();
                     e.Handled = true;
                     break;
             }
@@ -593,7 +624,7 @@ public sealed partial class MainWindow
         {
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(0, 0, 0, 4),
-            Children = { showAllButton, hideAllButton, moveUpButton, moveDownButton },
+            Children = { showAllButton, hideAllButton, moveUpButton, moveDownButton, deleteButton },
         };
 
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);
@@ -623,7 +654,7 @@ public sealed partial class MainWindow
         if (!confirmed)
             return;
 
-        ApplySelectionPaneChanges(originals, rows, moveChanges);
+        ApplySelectionPaneChanges(originals, rows, moveChanges, deleteChanges);
     }
 
     private static void AddGridChild(Grid grid, Control child, int index, bool isRow = false)
@@ -733,7 +764,8 @@ public sealed partial class MainWindow
     private void ApplySelectionPaneChanges(
         IReadOnlyList<SelectionPaneItem> originals,
         IReadOnlyList<SelectionPaneRow> rows,
-        IReadOnlyList<SelectionPaneMoveChange> moveChanges)
+        IReadOnlyList<SelectionPaneMoveChange> moveChanges,
+        IReadOnlyList<SelectionPaneDeleteChange> deleteChanges)
     {
         var current = ToItemStates(rows);
         var visibilityChanges = SelectionPanePlanner.CreateVisibilityChanges(originals, current);
@@ -742,7 +774,8 @@ public sealed partial class MainWindow
             _session.ActiveSheet.Id,
             visibilityChanges,
             renameChanges,
-            moveChanges);
+            moveChanges,
+            deleteChanges);
         if (command is null)
         {
             RefreshShell(UiText.Get("SelectionPane_NoChanges"));
@@ -791,6 +824,7 @@ public sealed partial class MainWindow
             Key.Space => SelectionPaneKeyboardKey.Space,
             Key.Up => SelectionPaneKeyboardKey.Up,
             Key.Down => SelectionPaneKeyboardKey.Down,
+            Key.Delete => SelectionPaneKeyboardKey.Delete,
             _ => SelectionPaneKeyboardKey.Other,
         };
 }

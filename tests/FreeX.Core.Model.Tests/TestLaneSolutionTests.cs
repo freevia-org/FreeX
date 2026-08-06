@@ -35,6 +35,7 @@ public sealed class TestLaneSolutionTests
             "tests/FreeX.ParityCompare.Tests/FreeX.ParityCompare.Tests.csproj",
             "tests/Free.Shared.Pdf.Tests/Free.Shared.Pdf.Tests.csproj",
             "tests/Free.Shared.Ribbon.Tests/Free.Shared.Ribbon.Tests.csproj",
+            "tests/Free.Shared.Shell.Avalonia.Tests/Free.Shared.Shell.Avalonia.Tests.csproj",
             "tests/Free.Shared.Theme.Tests/Free.Shared.Theme.Tests.csproj",
             "freep/FreeP.Ribbon.Definitions.Tests/FreeP.Ribbon.Definitions.Tests.csproj",
             "freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj",
@@ -48,8 +49,44 @@ public sealed class TestLaneSolutionTests
         uiLaneProjects.Should().BeEquivalentTo(new[]
         {
             "tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj",
-            "tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj"
+            "tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj",
+            "tests/Free.Shared.Ribbon.Wpf.Tests/Free.Shared.Ribbon.Wpf.Tests.csproj"
         });
+    }
+
+    // R125: the two pinned lists above are a deliberate "must update me on purpose" guard for the
+    // *shape* of each lane, but neither one ever asked whether a tests/-directory project is
+    // reachable from EITHER automatic lane at all. Free.Shared.Shell.Avalonia.Tests.csproj (built
+    // by FreeX.slnx, referenced by neither FreeX.DefaultTests.slnx nor FreeX.UiTests.slnx) and
+    // Free.Shared.Ribbon.Wpf.Tests.csproj (referenced only by the manual-only FreeX.RibbonTests.slnx)
+    // both compiled cleanly and both were silently never executed by ci.yml. This test derives the
+    // "should run automatically" set from FreeX.slnx itself (not a hard-coded list) so a future
+    // tests/-directory project that isn't wired into either automatic lane fails loudly instead of
+    // accruing unnoticed, the same way R118 does this for freep/ test projects against FreeP.slnx.
+    [Fact]
+    public void R125_EveryFreeXTestsDirectoryTestProjectRunsInAnAutomaticLane()
+    {
+        var freeXSolutionProjects = ReadSolutionProjects(TestWorkspaceFileLocator.FindFromWorkspaceRoot(
+            "FreeX.slnx"));
+        var testsDirectoryTestProjects = freeXSolutionProjects
+            .Where(path => path.StartsWith("tests/", StringComparison.Ordinal)
+                && path.EndsWith(".Tests.csproj", StringComparison.Ordinal))
+            .ToArray();
+
+        testsDirectoryTestProjects.Should().NotBeEmpty("FreeX.slnx should register at least its known tests/ test projects");
+
+        var defaultLaneProjects = ReadSolutionProjects(TestWorkspaceFileLocator.FindFromWorkspaceRoot(
+            "FreeX.DefaultTests.slnx"));
+        var uiLaneProjects = ReadSolutionProjects(TestWorkspaceFileLocator.FindFromWorkspaceRoot(
+            "FreeX.UiTests.slnx"));
+        var automaticLaneProjects = defaultLaneProjects.Concat(uiLaneProjects).ToHashSet(StringComparer.Ordinal);
+
+        var missing = testsDirectoryTestProjects.Where(path => !automaticLaneProjects.Contains(path)).ToArray();
+
+        missing.Should().BeEmpty(
+            "every tests/-directory test project registered in FreeX.slnx must run under an automatic lane " +
+            "(FreeX.DefaultTests.slnx or FreeX.UiTests.slnx, both wired into ci.yml) -- FreeX.RibbonTests.slnx " +
+            "is documented as a manual-only focused lane (docs/ribbon-ui-test-lane.md) and does not count");
     }
 
     [Fact]

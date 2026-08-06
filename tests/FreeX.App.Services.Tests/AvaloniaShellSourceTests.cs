@@ -2697,7 +2697,14 @@ public sealed class AvaloniaShellSourceTests
         selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(toggleVisibilityButton, \"SelectionPaneToggleVisibilityButton\")");
         selectionPaneSource.Should().Contain("ApplySelectionPaneListStyle(listBox)");
         selectionPaneSource.Should().Contain("x.OfType<ListBoxItem>().Class(\":selected\")");
-        selectionPaneSource.Should().Contain("Children = { showAllButton, hideAllButton, moveUpButton, moveDownButton }");
+        // R125: the Selection Pane gained a Delete button that routes to the SAME
+        // DeleteDrawingObjectCommand the sheet-grid Delete key uses (r121), rather than a second
+        // deletion path. Pin the button's presence in the row, its AutomationId, and the shared
+        // chrome call -- pinning only the row composition would let a future change drop the
+        // automation id or the chrome and still pass.
+        selectionPaneSource.Should().Contain("Children = { showAllButton, hideAllButton, moveUpButton, moveDownButton, deleteButton }");
+        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(deleteButton, \"SelectionPaneDeleteButton\")");
+        selectionPaneSource.Should().Contain("ApplySelectionPaneButtonChrome(deleteButton, 82)");
         selectionPaneSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);");
         selectionPaneSource.Should().Contain("CreateSelectionPaneEyeIcon()");
         selectionPaneSource.Should().NotContain("SelectionPane_Hint");

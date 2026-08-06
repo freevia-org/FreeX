@@ -17,8 +17,14 @@ public enum ConsolidateFunction
     Varp
 }
 
-public sealed class ConsolidateCommand : IWorkbookCommand
+public sealed class ConsolidateCommand : IWorkbookCommand, IEstimatesMemory
 {
+    // R125-commands-undo-byte-budget: _snapshot below captures a (Cell?, StyleId?) pair for every
+    // destination cell written by the consolidation, the same shape MoveRangeCommand/CopyRangeCommand
+    // use 400 bytes/cell for. Consolidating many source ranges into a large destination should
+    // count proportionally, not the flat 200-byte default.
+    private const int BytesPerCell = 400;
+
     private const string SourceBoundsMessage = "Consolidate source ranges must stay inside the worksheet bounds.";
     private const string DestinationBoundsMessage = "Consolidate destination range is outside the worksheet bounds.";
 
@@ -31,6 +37,8 @@ public sealed class ConsolidateCommand : IWorkbookCommand
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
 
     public string Label => "Consolidate";
+
+    public int EstimatedBytes => (int)Math.Min((long)(_snapshot?.Count ?? 0) * BytesPerCell, int.MaxValue);
 
     public ConsolidateCommand(
         IReadOnlyList<GridRange> sourceRanges,

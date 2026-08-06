@@ -294,7 +294,7 @@ public sealed record StructuredTableStyleBanding(
     }
 }
 
-public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
+public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand, IEstimatesMemory
 {
     private readonly SheetId _sheetId;
     private readonly int _tableId;
@@ -311,6 +311,27 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
     private readonly List<IWorkbookCommand> _appliedStyleCommands = [];
 
     public string Label => "Apply Table Style";
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// R125-commands-undo-byte-budget: applying a table style re-styles every cell in the
+    /// table's range via one or more ApplyStyleCommand sub-commands, so a large table's style
+    /// change should count proportionally to its size, not the flat 200-byte default. Sum the
+    /// sub-commands' own estimates (they already scale by cell count).
+    /// </remarks>
+    public int EstimatedBytes
+    {
+        get
+        {
+            long bytes = 0;
+            foreach (var command in _appliedStyleCommands)
+                bytes += command is IEstimatesMemory mem ? mem.EstimatedBytes : 200;
+            // _configureCommand (ConfigureStructuredTableStyleOptionsCommand) doesn't implement
+            // IEstimatesMemory -- it only flips boolean table-style flags, no per-cell retention
+            // -- so it correctly falls back to the flat default via CommandBus, not summed here.
+            return (int)Math.Min(bytes, int.MaxValue);
+        }
+    }
 
     public ApplyStructuredTableStyleCommand(
         SheetId sheetId,

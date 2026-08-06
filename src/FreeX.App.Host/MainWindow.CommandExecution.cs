@@ -773,7 +773,18 @@ public partial class MainWindow
 
     private void RecalculateAfterCommandOutcome(CommandOutcome outcome)
     {
-        if (outcome.AffectedCells is { Count: > 0 } affectedCells)
+        // R125-app-host-requiresfullrecalc-defensive: mirror FreeX.App.Services.WorkbookCellEditService
+        // .ApplyHistoryOutcome's decision exactly -- it branches on outcome.RequiresFullRecalc FIRST,
+        // falling back to a targeted recalc of AffectedCells only when the flag is clear. This method
+        // used to infer "needs a full recalc" purely from AffectedCells being empty, which today happens
+        // to agree with RequiresFullRecalc for every IWholeWorkbookRecalcCommand (AddSheetCommand,
+        // RenameSheetCommand, RemoveSheetCommand, MoveSheetCommand, MoveSheetsCommand,
+        // DuplicateSheetCommand -- none of which report a non-empty AffectedCells on Undo/Redo, see
+        // CommandBus.Undo/Redo) -- but nothing enforces that agreement. A future IWholeWorkbookRecalcCommand
+        // that also reports a non-empty AffectedCells would silently fall through to a TARGETED recalc
+        // here while the shared service correctly forces a full one, leaving stale values on this shell
+        // only. Checking the flag explicitly closes that gap regardless of what AffectedCells reports.
+        if (!outcome.RequiresFullRecalc && outcome.AffectedCells is { Count: > 0 } affectedCells)
             RecalculateIfAutomatic(affectedCells);
         else
             RecalculateWorkbook();

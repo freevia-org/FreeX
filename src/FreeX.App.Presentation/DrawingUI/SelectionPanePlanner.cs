@@ -24,6 +24,16 @@ public sealed record SelectionPaneRenameChange(SelectionPaneObjectKind Kind, Gui
 
 public sealed record SelectionPaneMoveChange(SelectionPaneObjectKind Kind, Guid Id, bool Forward);
 
+/// <summary>
+/// R125-selection-pane-delete-wiring: an object the user removed via the Selection Pane's own
+/// Delete affordance (button or Delete key), pending until the dialog's OK is accepted. Carries
+/// exactly what <see cref="FreeX.Core.Commands.DeleteDrawingObjectCommand"/> needs -- the SAME
+/// command the Delete key / context menu on the sheet grid itself already uses (see
+/// DrawingObjectCommandPlanner.BuildDeleteCommand) -- so the Selection Pane never grows a second,
+/// divergent deletion path.
+/// </summary>
+public sealed record SelectionPaneDeleteChange(SelectionPaneObjectKind Kind, Guid Id);
+
 public sealed record SelectionPaneReorderPlan(
     IReadOnlyList<Guid> OrderedIds,
     IReadOnlyList<SelectionPaneMoveChange> MoveChanges);
@@ -52,7 +62,8 @@ public enum SelectionPaneKeyboardKey
     F2,
     Space,
     Up,
-    Down
+    Down,
+    Delete
 }
 
 public enum SelectionPaneKeyboardAction
@@ -61,7 +72,8 @@ public enum SelectionPaneKeyboardAction
     MoveUp,
     MoveDown,
     FocusRename,
-    ToggleVisibility
+    ToggleVisibility,
+    Delete
 }
 
 public sealed record SelectionPaneDialogResult(
@@ -69,7 +81,8 @@ public sealed record SelectionPaneDialogResult(
     SelectionPaneItem? Target,
     IReadOnlyList<SelectionPaneVisibilityChange> VisibilityChanges,
     IReadOnlyList<SelectionPaneRenameChange> RenameChanges,
-    IReadOnlyList<SelectionPaneMoveChange> MoveChanges);
+    IReadOnlyList<SelectionPaneMoveChange> MoveChanges,
+    IReadOnlyList<SelectionPaneDeleteChange> DeleteChanges);
 
 public sealed record SelectionPanePlannerText(
     string DefaultChartNameFormat,
@@ -198,6 +211,7 @@ public static class SelectionPanePlanner
             SelectionPaneKeyboardKey.Down when hasControlModifier => SelectionPaneKeyboardAction.MoveDown,
             SelectionPaneKeyboardKey.F2 => SelectionPaneKeyboardAction.FocusRename,
             SelectionPaneKeyboardKey.Space => SelectionPaneKeyboardAction.ToggleVisibility,
+            SelectionPaneKeyboardKey.Delete => SelectionPaneKeyboardAction.Delete,
             _ => SelectionPaneKeyboardAction.None
         };
 
@@ -260,36 +274,49 @@ public static class SelectionPanePlanner
         SelectionPaneItem? target,
         IReadOnlyList<SelectionPaneItem> originalItems,
         IReadOnlyList<SelectionPaneItemState> currentStates,
-        IReadOnlyList<SelectionPaneMoveChange> moveChanges) =>
+        IReadOnlyList<SelectionPaneMoveChange> moveChanges,
+        IReadOnlyList<SelectionPaneDeleteChange>? deleteChanges = null) =>
         new(
             action,
             target,
             CreateVisibilityChanges(originalItems, currentStates),
             CreateRenameChanges(originalItems, currentStates),
-            moveChanges);
+            moveChanges,
+            deleteChanges ?? []);
 
     public static bool HasChanges(
         IReadOnlyList<SelectionPaneVisibilityChange> visibility,
         IReadOnlyList<SelectionPaneRenameChange> rename,
-        IReadOnlyList<SelectionPaneMoveChange> moves) =>
-        visibility.Count > 0 || rename.Count > 0 || moves.Count > 0;
+        IReadOnlyList<SelectionPaneMoveChange> moves,
+        IReadOnlyList<SelectionPaneDeleteChange>? deletes = null) =>
+        visibility.Count > 0 || rename.Count > 0 || moves.Count > 0 || (deletes?.Count ?? 0) > 0;
 
     public static IWorkbookCommand? CreateCommand(
         SheetId sheetId,
         IReadOnlyList<SelectionPaneVisibilityChange> visibility,
         IReadOnlyList<SelectionPaneRenameChange> rename,
-        IReadOnlyList<SelectionPaneMoveChange> moves)
+        IReadOnlyList<SelectionPaneMoveChange> moves,
+        IReadOnlyList<SelectionPaneDeleteChange>? deletes = null)
     {
-        if (!HasChanges(visibility, rename, moves))
+        deletes ??= [];
+        if (!HasChanges(visibility, rename, moves, deletes))
             return null;
 
-        var commands = new List<IWorkbookCommand>(rename.Count + visibility.Count + moves.Count);
+        var commands = new List<IWorkbookCommand>(rename.Count + visibility.Count + moves.Count + deletes.Count);
         foreach (var change in rename)
             commands.Add(new RenameSelectionPaneObjectCommand(sheetId, change.Kind, change.Id, change.Name));
         foreach (var change in visibility)
             commands.Add(new SetSelectionPaneObjectVisibilityCommand(sheetId, change.Kind, change.Id, change.IsVisible));
         foreach (var change in moves)
             commands.Add(new MoveSelectionPaneObjectCommand(sheetId, change.Kind, change.Id, change.Forward));
+        // R125-selection-pane-delete-wiring: same DeleteDrawingObjectCommand the sheet grid's
+        // Delete key / context menu use (DrawingObjectCommandPlanner.BuildDeleteCommand) --
+        // applied last so a rename/visibility/move on an object also being deleted in the same
+        // OK still lands on the object before it's removed (matches Excel's Selection Pane,
+        // which never lets you delete AND rename the same object in one apply anyway, since
+        // deleting immediately removes it from the editable list).
+        foreach (var change in deletes)
+            commands.Add(new DeleteDrawingObjectCommand(sheetId, change.Kind, change.Id));
 
         return new CompositeWorkbookCommand("Selection Pane", commands);
     }
