@@ -112,6 +112,7 @@ internal static class PptxChartWriter
                 var preserved = XDocument.Parse(chart.PreservedChartExXml, LoadOptions.PreserveWhitespace);
                 UpdateChartExTitle(preserved, chart);
                 UpdateChartExLegend(preserved, chart);
+                UpdateChartExAreaFormatting(preserved, chart);
                 UpdateChartExSeriesLayouts(preserved, chart);
                 UpdateChartExSeriesShapeProperties(preserved, chart);
                 UpdateChartExValueColorScales(preserved, chart);
@@ -189,6 +190,60 @@ internal static class PptxChartWriter
             document.Root?.Element(cx + "chart")?.Add(BuildChartExLegend(
                 position, chart.LegendOverlay, chart.LegendTextStyle, cx));
         return document;
+    }
+
+    private static void UpdateChartExAreaFormatting(XDocument document, ChartShape chart)
+    {
+        XNamespace cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+
+        if (chart.ChartExChartAreaEditRequested)
+            UpdateChartExShapeProperties(document.Root, chart.ChartAreaFill, chart.ChartAreaOutline, cx);
+
+        if (!chart.ChartExPlotAreaEditRequested)
+            return;
+
+        var plotSurface = document.Root?.Element(cx + "chart")?
+            .Element(cx + "plotArea")?
+            .Element(cx + "plotAreaRegion")?
+            .Element(cx + "plotSurface");
+        if (plotSurface is null)
+            return;
+
+        UpdateChartExShapeProperties(plotSurface, chart.PlotAreaFill, chart.PlotAreaOutline, cx);
+    }
+
+    private static void UpdateChartExShapeProperties(
+        XElement? owner,
+        ShapeFill? fill,
+        ShapeOutline? outline,
+        XNamespace cx)
+    {
+        if (owner is null)
+            return;
+
+        var spPr = owner.Element(cx + "spPr");
+        if (spPr is null)
+        {
+            if (fill is null && outline is null)
+                return;
+
+            spPr = new XElement(cx + "spPr");
+            owner.Add(spPr);
+        }
+
+        foreach (var fillName in new[] { "noFill", "solidFill", "gradFill", "pattFill", "blipFill" })
+            spPr.Element(A + fillName)?.Remove();
+        spPr.Element(A + "ln")?.Remove();
+
+        var fillElement = BuildChartAreaFillEl(fill);
+        var lineElement = BuildChartAreaOutlineEl(outline);
+        if (fillElement is not null)
+            spPr.AddFirst(fillElement);
+        if (lineElement is not null)
+            spPr.Add(lineElement);
+
+        if (spPr.IsEmpty && !spPr.HasAttributes)
+            spPr.Remove();
     }
 
     private static XElement BuildChartExLegend(

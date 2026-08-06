@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Xml.Linq;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -110,6 +112,93 @@ public sealed class ChartAreaOptionsTests
         bus.Undo();
         ((ShapeFill.Solid)chart.PlotAreaFill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xEEEEEE));
         chart.PlotAreaOutline.Should().BeNull();
+    }
+
+    [Fact]
+    public void ChartExAreaOptions_ReadAndWriteNativeChartAndPlotSurfaceProperties()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cx = chartExUri;
+        var chart = new ChartShape
+        {
+            IsChartEx = true,
+            PreservedChartExXml = new XDocument(
+                new XElement(cx + "chartSpace",
+                    new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                    new XElement(cx + "chart",
+                        new XElement(cx + "plotArea",
+                            new XElement(cx + "plotAreaRegion",
+                                new XElement(cx + "plotSurface",
+                                    new XElement(cx + "spPr",
+                                        new XElement(PptxColorReader.A + "solidFill",
+                                            new XElement(PptxColorReader.A + "srgbClr", new XAttribute("val", "CCF2FF"))))),
+                                new XElement(cx + "series", new XAttribute("layoutId", "waterfall"))))),
+                    new XElement(cx + "spPr",
+                        new XElement(PptxColorReader.A + "solidFill",
+                            new XElement(PptxColorReader.A + "srgbClr", new XAttribute("val", "FFF2E6"))))))
+                .ToString(SaveOptions.DisableFormatting),
+        };
+
+        using var source = new MemoryStream();
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Create, leaveOpen: true))
+            PptxChartWriter.WriteChartExPart(archive, chart, 1);
+
+        source.Position = 0;
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var reopened = PptxChartReader.ReadChartExPart(
+                archive,
+                "ppt/charts/chartEx1.xml",
+                PresentationColorScheme.CreateDefault());
+
+            ((ShapeFill.Solid)reopened!.ChartAreaFill!).Color.Resolved
+                .Should().Be(SrgbColor.FromRgb(0xFFF2E6));
+            ((ShapeFill.Solid)reopened.PlotAreaFill!).Color.Resolved
+                .Should().Be(SrgbColor.FromRgb(0xCCF2FF));
+        }
+
+        chart.ChartAreaFill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0xD9E2F3)));
+        chart.ChartExChartAreaEditRequested = true;
+        chart.PlotAreaFill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0xF2F2F2)));
+        chart.ChartExPlotAreaEditRequested = true;
+
+        using var edited = new MemoryStream();
+        using (var archive = new ZipArchive(edited, ZipArchiveMode.Create, leaveOpen: true))
+            PptxChartWriter.WriteChartExPart(archive, chart, 1);
+
+        edited.Position = 0;
+        using var editedArchive = new ZipArchive(edited, ZipArchiveMode.Read);
+        using var reader = new StreamReader(editedArchive.GetEntry("ppt/charts/chartEx1.xml")!.Open());
+        var xml = reader.ReadToEnd();
+        xml.Should().Contain("D9E2F3");
+        xml.Should().Contain("F2F2F2");
+        xml.Should().Contain("plotSurface");
+    }
+
+    [Fact]
+    public void ChartExAreaCommandTracksOnlyTheEditedOwnerAndUndoRestoresMarkers()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        var chart = new ChartShape { IsChartEx = true };
+        var shape = new SlideShape { Id = 1, Kind = SlideShapeKind.Chart, Chart = chart };
+        slide.Shapes.Add(shape);
+        presentation.Slides.Add(slide);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetChartAreaOptionsCommand(
+            0,
+            shape.Id,
+            new ChartAreaOptions(
+                ChartAreaFormattingTarget.ChartArea,
+                ShapeFill.None.Instance,
+                null)));
+
+        chart.ChartExChartAreaEditRequested.Should().BeTrue();
+        chart.ChartExPlotAreaEditRequested.Should().BeFalse();
+        bus.Undo();
+        chart.ChartExChartAreaEditRequested.Should().BeFalse();
+        chart.ChartExPlotAreaEditRequested.Should().BeFalse();
     }
 
     [Fact]
