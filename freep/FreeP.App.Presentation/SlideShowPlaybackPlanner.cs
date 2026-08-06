@@ -324,6 +324,43 @@ public static class SlideShowPlaybackPlanner
         }
     }
 
+    public static string? RewriteFontSizeBehavior(
+        ShapeAnimation animation,
+        double multiplier)
+    {
+        ArgumentNullException.ThrowIfNull(animation);
+        if (!double.IsFinite(multiplier) || multiplier <= 0
+            || string.IsNullOrWhiteSpace(animation.PreservedNumericBehaviorXml))
+        {
+            return null;
+        }
+
+        try
+        {
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            var root = XElement.Parse(animation.PreservedNumericBehaviorXml, LoadOptions.PreserveWhitespace);
+            var numericAnimation = root.DescendantsAndSelf(p + "anim")
+                .FirstOrDefault(element =>
+                    string.Equals(
+                        element.Descendants(p + "attrName").FirstOrDefault()?.Value.Trim(),
+                        "style.fontSize",
+                        StringComparison.Ordinal)
+                    && string.Equals(
+                        element.Attribute("valueType")?.Value,
+                        "num",
+                        StringComparison.Ordinal));
+            if (numericAnimation?.Attribute("to") is not { } to)
+                return null;
+
+            to.Value = multiplier.ToString("0.######", CultureInfo.InvariantCulture);
+            return root.ToString(SaveOptions.DisableFormatting);
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+    }
+
     public static SlideShowTransitionPlaybackPlan PlanTransition(SlideTransition transition)
     {
         ArgumentNullException.ThrowIfNull(transition);
