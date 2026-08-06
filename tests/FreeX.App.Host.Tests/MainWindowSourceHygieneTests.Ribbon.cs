@@ -517,6 +517,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookUiState.cs");
         var qatSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAccessToolbar.cs");
         var qatStateSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("QuickAccessCommandState.cs");
+        var applicationRouterSource = DialogSourceTestSupport.ReadPresentationSources("Shell", "WorkbookApplicationCommandRouter.cs");
         var toolbarSource = DialogSourceTestSupport.ReadHostSources("ToolbarVisualState.cs");
         var cacheSource = DialogSourceTestSupport.ReadHostSources("ToolbarVisualStateCache.cs");
 
@@ -541,8 +542,9 @@ public sealed partial class MainWindowSourceHygieneTests
         qatSource.Should().Contain("QuickAccessToolbarCommandIds.Undo => ExecuteUndo()");
         qatSource.Should().Contain("QuickAccessToolbarCommandIds.Redo => ExecuteRedo()");
         qatStateSource.Should().Contain("WithSelectionContext(bool hasActiveWorksheet, bool hasSelection)");
-        qatStateSource.Should().Contain("QuickAccessToolbarCommandIds.Undo => QuickAccessCommandAvailability.Undo");
-        qatStateSource.Should().Contain("QuickAccessToolbarCommandIds.Redo => QuickAccessCommandAvailability.Redo");
+        qatStateSource.Should().Contain("WorkbookApplicationCommandRouter.TryRouteQuickAccess");
+        applicationRouterSource.Should().Contain("\"Undo\", WorkbookApplicationCommandIntent.Undo, WorkbookApplicationCommandAvailability.Undo");
+        applicationRouterSource.Should().Contain("\"Redo\", WorkbookApplicationCommandIntent.Redo, WorkbookApplicationCommandAvailability.Redo");
         toolbarSource.Should().NotContain("bool CanUndo");
         toolbarSource.Should().NotContain("bool CanRedo");
         cacheSource.Should().Contain("private readonly record struct Source(WorkbookId WorkbookId, StyleId StyleId);");

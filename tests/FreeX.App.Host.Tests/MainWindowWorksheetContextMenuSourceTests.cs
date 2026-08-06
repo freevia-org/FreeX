@@ -8,24 +8,24 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
     [Fact]
     public void InsertDeleteContextMenuActionsRouteToExistingWorksheetMutationCommands()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
 
-        source.Should().Contain("case WorksheetContextMenuAction.InsertCells:");
-        source.Should().Contain("InsertCellsMenuItem_Click(this, new RoutedEventArgs());");
-        source.Should().Contain("case WorksheetContextMenuAction.InsertRowAbove:");
-        source.Should().Contain("InsertRows(address.Row);");
-        source.Should().Contain("case WorksheetContextMenuAction.InsertRowBelow:");
-        source.Should().Contain("InsertRows(address.Row + 1);");
-        source.Should().Contain("case WorksheetContextMenuAction.InsertColumnLeft:");
-        source.Should().Contain("InsertColumns(address.Col);");
-        source.Should().Contain("case WorksheetContextMenuAction.InsertColumnRight:");
-        source.Should().Contain("InsertColumns(address.Col + 1);");
-        source.Should().Contain("case WorksheetContextMenuAction.DeleteCells:");
-        source.Should().Contain("DeleteCellsMenuItem_Click(this, new RoutedEventArgs());");
-        source.Should().Contain("case WorksheetContextMenuAction.DeleteRows:");
-        source.Should().Contain("DeleteSelectedRows();");
-        source.Should().Contain("case WorksheetContextMenuAction.DeleteColumns:");
-        source.Should().Contain("DeleteSelectedColumns();");
+        source.Should().Contain("WorkbookApplicationCommandIntent.InsertCells");
+        source.Should().Contain("InsertCellsMenuItem_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("WorkbookApplicationCommandIntent.InsertRowAbove");
+        source.Should().Contain("InsertRows(TargetAddress(invocation).Row)");
+        source.Should().Contain("WorkbookApplicationCommandIntent.InsertRowBelow");
+        source.Should().Contain("InsertRows(TargetAddress(invocation).Row + 1)");
+        source.Should().Contain("WorkbookApplicationCommandIntent.InsertColumnLeft");
+        source.Should().Contain("InsertColumns(TargetAddress(invocation).Col)");
+        source.Should().Contain("WorkbookApplicationCommandIntent.InsertColumnRight");
+        source.Should().Contain("InsertColumns(TargetAddress(invocation).Col + 1)");
+        source.Should().Contain("WorkbookApplicationCommandIntent.DeleteCells");
+        source.Should().Contain("DeleteCellsMenuItem_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("WorkbookApplicationCommandIntent.DeleteRows");
+        source.Should().Contain("DeleteSelectedRows()");
+        source.Should().Contain("WorkbookApplicationCommandIntent.DeleteColumns");
+        source.Should().Contain("DeleteSelectedColumns()");
     }
 
     [Fact]
@@ -150,11 +150,11 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
     [Fact]
     public void PivotTableOptionsContextMenuActionRoutesToClickedPivotDialog()
     {
-        var contextSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var contextSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
         var designSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotDesignCommands.cs");
 
-        contextSource.Should().Contain("case WorksheetContextMenuAction.PivotTableOptions:");
-        contextSource.Should().Contain("ShowPivotTableOptionsDialog(address);");
+        contextSource.Should().Contain("WorkbookApplicationCommandIntent.PivotTableOptions");
+        contextSource.Should().Contain("ShowPivotTableOptionsDialog(TargetAddress(invocation))");
         designSource.Should().Contain("private void ShowPivotTableOptionsDialog(CellAddress address)");
         designSource.Should().Contain("PivotUiPlanner.FindPivotTableContainingCell(sheet, address)");
         designSource.Should().Contain("private void ShowPivotTableOptionsDialog(PivotTableModel pivotTable)");

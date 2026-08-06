@@ -1,3 +1,5 @@
+using FreeX.App.Presentation.Shell;
+
 namespace FreeX.App.Services.Ribbon;
 
 public readonly record struct QuickAccessCommandState(
@@ -23,63 +25,43 @@ public enum QuickAccessCommandAvailability
 public static class QuickAccessCommandStateResolver
 {
     public static bool CanExecute(string commandId, QuickAccessCommandState state) =>
-        CanExecute(GetAvailability(commandId), state);
+        WorkbookApplicationCommandRouter.TryRouteQuickAccess(commandId, out var route) &&
+        WorkbookApplicationCommandRouter.CanExecute(route, ToApplicationContext(state));
 
     public static bool CanExecute(QuickAccessCommandAvailability availability, QuickAccessCommandState state) =>
-        availability switch
-        {
-            QuickAccessCommandAvailability.Always => true,
-            QuickAccessCommandAvailability.Undo => state.CanUndo,
-            QuickAccessCommandAvailability.Redo => state.CanRedo,
-            QuickAccessCommandAvailability.Worksheet => state.HasActiveWorksheet,
-            QuickAccessCommandAvailability.Selection => state.HasActiveWorksheet && state.HasSelection,
-            _ => false
-        };
+        WorkbookApplicationCommandRouter.CanExecute(
+            ToApplicationAvailability(availability),
+            ToApplicationContext(state));
 
     public static QuickAccessCommandAvailability GetAvailability(string commandId) =>
-        commandId switch
+        WorkbookApplicationCommandRouter.TryRouteQuickAccess(commandId, out var route)
+            ? ToQuickAccessAvailability(route.Availability)
+            : QuickAccessCommandAvailability.Never;
+
+    private static WorkbookApplicationCommandContext ToApplicationContext(QuickAccessCommandState state) =>
+        new(state.CanUndo, state.CanRedo, state.HasActiveWorksheet, state.HasSelection);
+
+    private static QuickAccessCommandAvailability ToQuickAccessAvailability(
+        WorkbookApplicationCommandAvailability availability) =>
+        availability switch
         {
-            QuickAccessToolbarCommandIds.Undo => QuickAccessCommandAvailability.Undo,
-            QuickAccessToolbarCommandIds.Redo => QuickAccessCommandAvailability.Redo,
-
-            QuickAccessToolbarCommandIds.New or
-            QuickAccessToolbarCommandIds.Open or
-            QuickAccessToolbarCommandIds.Save or
-            QuickAccessToolbarCommandIds.SaveAs or
-            QuickAccessToolbarCommandIds.CalculateNow or
-            QuickAccessToolbarCommandIds.RefreshAll or
-            QuickAccessToolbarCommandIds.NameManager or
-            QuickAccessToolbarCommandIds.InsertSheet => QuickAccessCommandAvailability.Always,
-
-            QuickAccessToolbarCommandIds.Print or
-            QuickAccessToolbarCommandIds.ExportPdfXps or
-            QuickAccessToolbarCommandIds.CalculateSheet or
-            QuickAccessToolbarCommandIds.Spelling or
-            QuickAccessToolbarCommandIds.CheckAccessibility or
-            QuickAccessToolbarCommandIds.ShareWorkbook or
-            QuickAccessToolbarCommandIds.Zoom100 or
-            QuickAccessToolbarCommandIds.FindSelect or
-            QuickAccessToolbarCommandIds.SelectionPane => QuickAccessCommandAvailability.Worksheet,
-
-            QuickAccessToolbarCommandIds.Cut or
-            QuickAccessToolbarCommandIds.Copy or
-            QuickAccessToolbarCommandIds.Paste or
-            QuickAccessToolbarCommandIds.FormatPainter or
-            QuickAccessToolbarCommandIds.Bold or
-            QuickAccessToolbarCommandIds.Italic or
-            QuickAccessToolbarCommandIds.Underline or
-            QuickAccessToolbarCommandIds.FillColor or
-            QuickAccessToolbarCommandIds.FontColor or
-            QuickAccessToolbarCommandIds.FormatCells or
-            QuickAccessToolbarCommandIds.InsertFunction or
-            QuickAccessToolbarCommandIds.AutoSum or
-            QuickAccessToolbarCommandIds.SortAscending or
-            QuickAccessToolbarCommandIds.SortDescending or
-            QuickAccessToolbarCommandIds.Filter or
-            QuickAccessToolbarCommandIds.DataValidation or
-            QuickAccessToolbarCommandIds.ZoomSelection or
-            QuickAccessToolbarCommandIds.FreezePanes => QuickAccessCommandAvailability.Selection,
-
+            WorkbookApplicationCommandAvailability.Always => QuickAccessCommandAvailability.Always,
+            WorkbookApplicationCommandAvailability.Undo => QuickAccessCommandAvailability.Undo,
+            WorkbookApplicationCommandAvailability.Redo => QuickAccessCommandAvailability.Redo,
+            WorkbookApplicationCommandAvailability.Worksheet => QuickAccessCommandAvailability.Worksheet,
+            WorkbookApplicationCommandAvailability.Selection => QuickAccessCommandAvailability.Selection,
             _ => QuickAccessCommandAvailability.Never
+        };
+
+    private static WorkbookApplicationCommandAvailability ToApplicationAvailability(
+        QuickAccessCommandAvailability availability) =>
+        availability switch
+        {
+            QuickAccessCommandAvailability.Always => WorkbookApplicationCommandAvailability.Always,
+            QuickAccessCommandAvailability.Undo => WorkbookApplicationCommandAvailability.Undo,
+            QuickAccessCommandAvailability.Redo => WorkbookApplicationCommandAvailability.Redo,
+            QuickAccessCommandAvailability.Worksheet => WorkbookApplicationCommandAvailability.Worksheet,
+            QuickAccessCommandAvailability.Selection => WorkbookApplicationCommandAvailability.Selection,
+            _ => WorkbookApplicationCommandAvailability.Never
         };
 }

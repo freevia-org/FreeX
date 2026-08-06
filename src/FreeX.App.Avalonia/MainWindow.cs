@@ -12066,196 +12066,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// drawing object) via <see cref="DispatchDrawingObjectContextMenuCommand"/>, so they do not appear
     /// in this worksheet cell menu.
     /// </summary>
-    private void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId)
+    private async void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId)
     {
         if (!Enum.TryParse<WorksheetContextMenuAction>(commandId.Value, out var action))
             return;
 
-        switch (action)
-        {
-            case WorksheetContextMenuAction.Cut:
-                _ = CutSelectedRangeToClipboardAsync();
-                break;
-            case WorksheetContextMenuAction.Copy:
-                _ = CopySelectedRangeToClipboardAsync();
-                break;
-            case WorksheetContextMenuAction.Paste:
-                _ = PasteClipboardTextAsync();
-                break;
-            case WorksheetContextMenuAction.ClearContents:
-                ClearSelectedRangeContents();
-                break;
-            case WorksheetContextMenuAction.ClearAll:
-                ClearSelectedRangeAll();
-                break;
-            case WorksheetContextMenuAction.ClearFormats:
-                ClearSelectedRangeFormats();
-                break;
-            case WorksheetContextMenuAction.ClearComments:
-                ClearSelectedRangeComments();
-                break;
-            case WorksheetContextMenuAction.ClearHyperlinks:
-                RemoveSelectedRangeHyperlinks();
-                break;
-            case WorksheetContextMenuAction.HideRows:
-                HideSelectedRows();
-                break;
-            case WorksheetContextMenuAction.UnhideRows:
-                UnhideSelectedRows();
-                break;
-            case WorksheetContextMenuAction.HideColumns:
-                HideSelectedColumns();
-                break;
-            case WorksheetContextMenuAction.UnhideColumns:
-                UnhideSelectedColumns();
-                break;
-            case WorksheetContextMenuAction.RowHeight:
-                _ = ShowRowHeightDialogAsync();
-                break;
-            case WorksheetContextMenuAction.AutoFitRowHeight:
-                AutoFitSelectedRowHeight();
-                break;
-            case WorksheetContextMenuAction.ColumnWidth:
-                _ = ShowColumnWidthDialogAsync();
-                break;
-            case WorksheetContextMenuAction.AutoFitColumnWidth:
-                AutoFitSelectedColumnWidth();
-                break;
-            case WorksheetContextMenuAction.InsertRowAbove:
-                InsertContextRow(_session.ActiveCell.Row);
-                break;
-            case WorksheetContextMenuAction.InsertRowBelow:
-                InsertContextRow(_session.ActiveCell.Row + 1);
-                break;
-            case WorksheetContextMenuAction.InsertColumnLeft:
-                InsertContextColumn(_session.ActiveCell.Col);
-                break;
-            case WorksheetContextMenuAction.InsertColumnRight:
-                InsertContextColumn(_session.ActiveCell.Col + 1);
-                break;
-            case WorksheetContextMenuAction.InsertCells:
-            case WorksheetContextMenuAction.InsertCopiedCells:
-                _ = ShowInsertCellsDialogAsync();
-                break;
-            case WorksheetContextMenuAction.DeleteRows:
-                DeleteSheetRows();
-                break;
-            case WorksheetContextMenuAction.DeleteColumns:
-                DeleteSheetColumns();
-                break;
-            case WorksheetContextMenuAction.DeleteCells:
-                _ = ShowDeleteCellsDialogAsync();
-                break;
-            case WorksheetContextMenuAction.PasteSpecial:
-                _ = ShowPasteSpecialDialogAsync();
-                break;
-            // Sort & Filter submenu → existing sort/filter handlers (same ones the ribbon Data tab uses).
-            case WorksheetContextMenuAction.SortAscending:
-                SortSelectedRange(ascending: true);
-                break;
-            case WorksheetContextMenuAction.SortDescending:
-                SortSelectedRange(ascending: false);
-                break;
-            case WorksheetContextMenuAction.CustomSort:
-                _ = ShowSortDialogAsync();
-                break;
-            case WorksheetContextMenuAction.Filter:
-                ToggleAutoFilter();
-                break;
-            case WorksheetContextMenuAction.ClearFilter:
-                ClearActiveSheetFilters();
-                break;
-            case WorksheetContextMenuAction.ReapplyFilter:
-                ReapplyCurrentFilterSort();
-                break;
-            case WorksheetContextMenuAction.QuickAnalysis:
-                _ = ShowQuickAnalysisDialogAsync();
-                break;
-            // Data Tools submenu → existing data-tools dialogs/handlers.
-            case WorksheetContextMenuAction.DefineName:
-                DefineName();
-                break;
-            case WorksheetContextMenuAction.CreateTable:
-            case WorksheetContextMenuAction.FormatAsTable:
-                _ = InsertTableFromSelectionAsync();
-                break;
-            case WorksheetContextMenuAction.TextToColumns:
-                TextToColumns();
-                break;
-            case WorksheetContextMenuAction.RemoveDuplicates:
-                _ = ShowRemoveDuplicatesDialogAsync();
-                break;
-            case WorksheetContextMenuAction.DataValidation:
-                _ = ShowDataValidationDialogAsync();
-                break;
-            // Outline grouping (Rows-and-Columns submenu on row/column selections).
-            case WorksheetContextMenuAction.Group:
-                GroupSelectedRows();
-                break;
-            case WorksheetContextMenuAction.Ungroup:
-                UngroupSelection();
-                break;
-            // Comments and Notes submenu (create/edit/delete/resolve/show route through WorkbookSession
-            // comment APIs; SetThreadedCommentCommand / UpdateThreadedCommentTextCommand /
-            // ResolveThreadedCommentCommand / SetCommentCommand all carry undo/redo).
-            case WorksheetContextMenuAction.NewComment:
-                _ = ShowNewThreadedCommentDialogAsync();
-                break;
-            case WorksheetContextMenuAction.NewNote:
-                _ = ShowNewNoteDialogAsync();
-                break;
-            case WorksheetContextMenuAction.EditComment:
-                _ = ShowEditThreadedCommentDialogAsync();
-                break;
-            case WorksheetContextMenuAction.EditNote:
-                _ = ShowEditNoteDialogAsync();
-                break;
-            case WorksheetContextMenuAction.ResolveComment:
-                ResolveActiveCellThreadedComment(resolved: true);
-                break;
-            case WorksheetContextMenuAction.UnresolveComment:
-                ResolveActiveCellThreadedComment(resolved: false);
-                break;
-            case WorksheetContextMenuAction.DeleteComment:
-                DeleteActiveCellThreadedComment();
-                break;
-            case WorksheetContextMenuAction.DeleteNote:
-                DeleteActiveCellNote();
-                break;
-            case WorksheetContextMenuAction.ShowNotes:
-                ToggleAllNotesVisibility();
-                break;
-            case WorksheetContextMenuAction.ShowHideNote:
-                ToggleActiveCellNoteVisibility();
-                break;
-            case WorksheetContextMenuAction.ShowAllNotes:
-                ToggleAllNotesVisibility();
-                break;
-            // Hyperlink submenu → existing hyperlink handlers.
-            case WorksheetContextMenuAction.Hyperlink:
-                _ = ShowInsertHyperlinkDialogAsync();
-                break;
-            case WorksheetContextMenuAction.OpenHyperlink:
-                _ = OpenSelectedHyperlinkAsync();
-                break;
-            case WorksheetContextMenuAction.RemoveHyperlinks:
-                ClearSelectedRangeHyperlinks();
-                break;
-            case WorksheetContextMenuAction.PivotTableOptions:
-                OpenPivotTableOptions();
-                break;
-            case WorksheetContextMenuAction.FormatCells:
-                _ = ShowFormatCellsDialogAsync();
-                break;
-            case WorksheetContextMenuAction.PickFromDropDown:
-                if (!OpenActiveDropdown())
-                    RefreshShell(UiText.Get("DrawingInteract_PickListNoList"));
-                break;
-            default:
-                // The generic worksheet planner emits only the actions handled above. Drawing-only
-                // actions are dispatched by the selected-object context menus in DrawingObjectInteraction.
-                break;
-        }
+        if (!WorkbookApplicationCommandRouter.TryRouteWorksheetContextMenu(action.ToString(), out var route))
+            return;
+
+        await WorkbookApplicationCommands.TryExecuteAsync(
+            route,
+            targetAddress: _session.ActiveCell);
     }
 
     private static Border CreateCellBorder(
@@ -27456,23 +27277,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private static bool IsOpenActiveDropdownShortcut(KeyEventArgs args) =>
         args.Key == Key.Down && args.KeyModifiers == KeyModifiers.Alt;
 
-    private static bool TryGetNumberFormatShortcut(WorkbookShortcutRoute route, out NumberFormatShortcut shortcut)
-    {
-        shortcut = route switch
-        {
-            WorkbookShortcutRoute.NumberFormatGeneral => NumberFormatShortcut.General,
-            WorkbookShortcutRoute.NumberFormatNumber => NumberFormatShortcut.Number,
-            WorkbookShortcutRoute.NumberFormatTime => NumberFormatShortcut.Time,
-            WorkbookShortcutRoute.NumberFormatDate => NumberFormatShortcut.Date,
-            WorkbookShortcutRoute.NumberFormatCurrency => NumberFormatShortcut.Currency,
-            WorkbookShortcutRoute.NumberFormatPercentage => NumberFormatShortcut.Percentage,
-            WorkbookShortcutRoute.NumberFormatScientific => NumberFormatShortcut.Scientific,
-            _ => default
-        };
-
-        return WorkbookKeyboardShortcutCatalog.IsNumberFormatRoute(route);
-    }
-
     private static bool TryGetWorkbookShortcutRoute(
         Key key,
         KeyModifiers modifiers,
@@ -27946,142 +27750,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryGetWorkbookShortcutRoute(e.Key, e.KeyModifiers, out var route))
             return false;
 
-        switch (route)
-        {
-            case WorkbookShortcutRoute.NewWorkbook:
-                e.Handled = true;
-                await CreateNewWorkbookAsync();
-                return true;
-            case WorkbookShortcutRoute.OpenWorkbook:
-                e.Handled = true;
-                await OpenWorkbookAsync();
-                return true;
-            case WorkbookShortcutRoute.SaveWorkbook:
-                e.Handled = true;
-                await SaveCurrentWorkbookAsync();
-                return true;
-            case WorkbookShortcutRoute.PrintWorkbook:
-                e.Handled = true;
-                ShowBackstagePrintPane();
-                return true;
-            case WorkbookShortcutRoute.Copy:
-                e.Handled = true;
-                await CopySelectedRangeToClipboardAsync();
-                return true;
-            case WorkbookShortcutRoute.Cut:
-                e.Handled = true;
-                await CutSelectedRangeToClipboardAsync();
-                return true;
-            case WorkbookShortcutRoute.Paste:
-                e.Handled = true;
-                await PasteClipboardTextAsync();
-                return true;
-            case WorkbookShortcutRoute.PasteSpecial:
-                e.Handled = true;
-                await ShowPasteSpecialDialogAsync();
-                return true;
-            case WorkbookShortcutRoute.Undo:
-                e.Handled = true;
-                UndoLastEdit();
-                return true;
-            case WorkbookShortcutRoute.Redo:
-                e.Handled = true;
-                RedoLastEdit();
-                return true;
-            case WorkbookShortcutRoute.ToggleBold:
-                e.Handled = true;
-                ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: e.Key == Key.B);
-                return true;
-            case WorkbookShortcutRoute.ToggleItalic:
-                e.Handled = true;
-                ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: e.Key == Key.I);
-                return true;
-            case WorkbookShortcutRoute.ToggleUnderline:
-                e.Handled = true;
-                ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: e.Key == Key.U);
-                return true;
-            case WorkbookShortcutRoute.ToggleStrikethrough:
-                e.Handled = true;
-                ToggleSelectedRangeStrikethrough();
-                return true;
-            case WorkbookShortcutRoute.FillDown:
-                e.Handled = true;
-                FillSelectedRange(FillCellsDirection.Down);
-                return true;
-            case WorkbookShortcutRoute.FillRight:
-                e.Handled = true;
-                FillSelectedRange(FillCellsDirection.Right);
-                return true;
-            case WorkbookShortcutRoute.FlashFill:
-                e.Handled = true;
-                FlashFillSelectedRange();
-                return true;
-            case WorkbookShortcutRoute.ToggleShowFormulas:
-                e.Handled = true;
-                ToggleShowFormulas();
-                return true;
-            case WorkbookShortcutRoute.ActivatePreviousSheet:
-                e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: false);
-                return true;
-            case WorkbookShortcutRoute.ActivateNextSheet:
-                e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false);
-                return true;
-            case WorkbookShortcutRoute.SelectPreviousSheetGroup:
-                e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true);
-                return true;
-            case WorkbookShortcutRoute.SelectNextSheetGroup:
-                e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true);
-                return true;
-            case WorkbookShortcutRoute.OpenFormatCells:
-                e.Handled = true;
-                await ShowFormatCellsDialogAsync();
-                return true;
-            case WorkbookShortcutRoute.Find:
-                e.Handled = true;
-                await ShowFindDialogAsync();
-                return true;
-            case WorkbookShortcutRoute.Replace:
-                e.Handled = true;
-                await ShowReplaceDialogAsync();
-                return true;
-            case WorkbookShortcutRoute.GoTo:
-                e.Handled = true;
-                await ShowGoToDialogAsync();
-                return true;
-            case WorkbookShortcutRoute.InsertFunction:
-                e.Handled = true;
-                InsertFunction();
-                return true;
-            case WorkbookShortcutRoute.AutoSum:
-                e.Handled = true;
-                InsertAutoSumFormula("SUM");
-                return true;
-            case WorkbookShortcutRoute.WorkbookStatistics:
-                e.Handled = true;
-                await ShowWorkbookStatisticsDialogAsync();
-                return true;
-            case WorkbookShortcutRoute.InsertWorksheet:
-                e.Handled = true;
-                AddNewSheet();
-                return true;
-            case WorkbookShortcutRoute.ApplyOutlineBorder:
-                e.Handled = true;
-                ApplySelectedRangeBorderPreset(CellBorderPreset.Outside);
-                return true;
-            case WorkbookShortcutRoute.ClearOutlineBorder:
-                e.Handled = true;
-                ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder);
-                return true;
-        }
+        if (!WorkbookApplicationCommandRouter.TryRouteShortcut(route, out var applicationRoute))
+            return false;
 
-        if (TryGetNumberFormatShortcut(route, out var numberFormatShortcut))
-        {
-            e.Handled = true;
-            ApplySelectedRangeNumberFormatShortcut(numberFormatShortcut);
-            return true;
-        }
+        var execution = await WorkbookApplicationCommands.TryExecuteAsync(
+            applicationRoute,
+            nativeSource: e.Source,
+            nativeEventArgs: e);
+        if (!execution.IsBound)
+            return false;
 
-        return false;
+        e.Handled = execution.Handled;
+        return true;
     }
 
     private bool IsTextEditingEventSource(KeyEventArgs args) =>

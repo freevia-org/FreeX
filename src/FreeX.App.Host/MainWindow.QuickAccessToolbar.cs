@@ -5,6 +5,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Shell;
 using FreeX.App.Services.Ribbon;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Commands;
 using SharedQat = Free.Shared.Ribbon.Wpf.QuickAccessToolbarRenderer;
 using SharedQatItem = Free.Shared.Ribbon.Wpf.QuickAccessToolbarItem;
@@ -470,120 +471,13 @@ public partial class MainWindow
 
     private async void ExecuteQuickAccessToolbarCommand(string commandId, object sender, RoutedEventArgs args)
     {
-        switch (commandId)
-        {
-            case QuickAccessToolbarCommandIds.Save:
-                SaveButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Undo:
-                ExecuteUndo();
-                break;
-            case QuickAccessToolbarCommandIds.Redo:
-                ExecuteRedo();
-                break;
-            case QuickAccessToolbarCommandIds.New:
-                await RequestNewWorkbookAsync();
-                break;
-            case QuickAccessToolbarCommandIds.Open:
-                OpenButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.SaveAs:
-                SaveAsButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Print:
-                PrintButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.ExportPdfXps:
-                ExportPdfButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Cut:
-                CutBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Copy:
-                CopyBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Paste:
-                PasteBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.FormatPainter:
-                FormatPainterBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Bold:
-                ExecuteToggleQuickAccessCommand("Bold", BoldButton_Click);
-                break;
-            case QuickAccessToolbarCommandIds.Italic:
-                ExecuteToggleQuickAccessCommand("Italic", ItalicButton_Click);
-                break;
-            case QuickAccessToolbarCommandIds.Underline:
-                ExecuteToggleQuickAccessCommand("Underline", UnderlineButton_Click);
-                break;
-            case QuickAccessToolbarCommandIds.FillColor:
-                FillColorBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.FontColor:
-                FontColorBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.FormatCells:
-                OpenFormatCellsDialog();
-                break;
-            case QuickAccessToolbarCommandIds.InsertFunction:
-                InsertFunctionBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.AutoSum:
-                InsertAutoSumFormula("SUM");
-                break;
-            case QuickAccessToolbarCommandIds.CalculateNow:
-                CalcNowBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.CalculateSheet:
-                CalcSheetBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.RefreshAll:
-                RefreshAllBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.SortAscending:
-                SortAscButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.SortDescending:
-                SortDescButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Filter:
-                FilterButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.DataValidation:
-                ValidationButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.NameManager:
-                NamedRangesButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Spelling:
-                SpellCheckBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.CheckAccessibility:
-                AccessibilityCheckerBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.ShareWorkbook:
-                ShareWorkbookBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Zoom100:
-                Zoom100Btn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.ZoomSelection:
-                ZoomSelectionBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.FreezePanes:
-                FreezeAtSelectionMenuItem_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.InsertSheet:
-                AddSheetButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.FindSelect:
-                FindButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.SelectionPane:
-                SelectionPaneBtn_Click(sender, args);
-                break;
-        }
+        if (!WorkbookApplicationCommandRouter.TryRouteQuickAccess(commandId, out var route))
+            return;
+
+        await WorkbookApplicationCommands.TryExecuteAsync(
+            route,
+            nativeSource: sender,
+            nativeEventArgs: args);
     }
 
     // The QAT runs a ribbon toggle command without the toggle's own Click: flip the command's checked

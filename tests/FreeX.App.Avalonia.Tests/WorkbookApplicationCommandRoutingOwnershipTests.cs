@@ -1,0 +1,39 @@
+using System.IO;
+using FluentAssertions;
+
+namespace FreeX.App.Avalonia.Tests;
+
+public sealed class WorkbookApplicationCommandRoutingOwnershipTests
+{
+    [Fact]
+    public void AvaloniaQuickAccessWorksheetAndShortcutRoutesDelegateToPresentationRouter()
+    {
+        var quickAccess = File.ReadAllText(RepoFile("MainWindow.CatalogContextMenus.cs"));
+        var mainWindow = File.ReadAllText(RepoFile("MainWindow.cs"));
+        var bindings = File.ReadAllText(RepoFile("MainWindow.ApplicationCommandRouting.cs"));
+
+        quickAccess.Should().Contain("WorkbookApplicationCommandRouter.TryRouteQuickAccess");
+        quickAccess.Should().NotContain("case QuickAccessToolbarCommandIds.");
+        mainWindow.Should().Contain("WorkbookApplicationCommandRouter.TryRouteWorksheetContextMenu");
+        mainWindow.Should().Contain("WorkbookApplicationCommandRouter.TryRouteShortcut");
+        mainWindow.Should().NotContain("case WorksheetContextMenuAction.Cut:");
+        mainWindow.Should().NotContain("case WorkbookShortcutRoute.");
+        bindings.Should().Contain("WorkbookApplicationCommandIntent.Copy");
+        bindings.Should().Contain("WorkbookApplicationCommandIntent.ClearContents");
+    }
+
+    private static string RepoFile(string fileName)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, "src", "FreeX.App.Avalonia", fileName);
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(fileName);
+    }
+}

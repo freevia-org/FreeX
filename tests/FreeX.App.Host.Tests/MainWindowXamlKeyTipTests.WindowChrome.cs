@@ -45,6 +45,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         var catalogSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("QuickAccessToolbarCatalog.cs");
         var qatSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAccessToolbar.cs");
+        var applicationRoutingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
         var keyTipSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyTips.cs");
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
         var lifecycleSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookLifecycle.cs");
@@ -91,10 +92,11 @@ public sealed partial class MainWindowXamlKeyTipTests
         backstageSource.Should().Contain("MarkWorkbookSaved()");
         backstageSource.Should().Contain("UpdateTitleBar()");
 
-        qatSource.Should().Contain("case QuickAccessToolbarCommandIds.Undo:");
-        qatSource.Should().Contain("ExecuteUndo();");
-        qatSource.Should().Contain("case QuickAccessToolbarCommandIds.Redo:");
-        qatSource.Should().Contain("ExecuteRedo();");
+        qatSource.Should().Contain("WorkbookApplicationCommandRouter.TryRouteQuickAccess(commandId, out var route)");
+        applicationRoutingSource.Should().Contain("WorkbookApplicationCommandIntent.Undo");
+        applicationRoutingSource.Should().Contain("ExecuteUndo()");
+        applicationRoutingSource.Should().Contain("WorkbookApplicationCommandIntent.Redo");
+        applicationRoutingSource.Should().Contain("ExecuteRedo()");
         commandSource.Should().Contain("_session.UndoLastEdit()");
         commandSource.Should().Contain("_session.RedoLastEdit()");
         commandSource.Should().Contain("RefreshToolbar()");

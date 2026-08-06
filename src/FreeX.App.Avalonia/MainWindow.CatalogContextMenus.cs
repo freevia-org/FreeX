@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 
@@ -334,119 +335,13 @@ public sealed partial class MainWindow
         object sender,
         RoutedEventArgs args)
     {
-        switch (command.Id)
+        if (WorkbookApplicationCommandRouter.TryRouteQuickAccess(command.Id, out var route))
         {
-            case QuickAccessToolbarCommandIds.Save:
-                await SaveCurrentWorkbookAsync();
-                return;
-            case QuickAccessToolbarCommandIds.Undo:
-                UndoLastEdit();
-                return;
-            case QuickAccessToolbarCommandIds.Redo:
-                RedoLastEdit();
-                return;
-            case QuickAccessToolbarCommandIds.New:
-                await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);
-                return;
-            case QuickAccessToolbarCommandIds.Open:
-                await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open);
-                return;
-            case QuickAccessToolbarCommandIds.SaveAs:
-                await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs);
-                return;
-            case QuickAccessToolbarCommandIds.Print:
-                await ShowPrintDialogAsync();
-                return;
-            case QuickAccessToolbarCommandIds.ExportPdfXps:
-                await ShowBackstageExportDialogAsync();
-                return;
-            case QuickAccessToolbarCommandIds.Cut:
-                await CutSelectedRangeToClipboardAsync();
-                return;
-            case QuickAccessToolbarCommandIds.Copy:
-                await CopySelectedRangeToClipboardAsync();
-                return;
-            case QuickAccessToolbarCommandIds.Paste:
-                await PasteClipboardTextAsync();
-                return;
-            case QuickAccessToolbarCommandIds.FormatPainter:
-                FormatPainterButton_Click(sender, args);
-                return;
-            case QuickAccessToolbarCommandIds.Bold:
-                ToggleSelectedRangeBold();
-                return;
-            case QuickAccessToolbarCommandIds.Italic:
-                ToggleSelectedRangeItalic();
-                return;
-            case QuickAccessToolbarCommandIds.Underline:
-                ToggleSelectedRangeUnderline();
-                return;
-            case QuickAccessToolbarCommandIds.FillColor:
-                _fillColorButton.Flyout?.ShowAt(sender as Control ?? _fillColorButton);
-                return;
-            case QuickAccessToolbarCommandIds.FontColor:
-                _fontColorButton.Flyout?.ShowAt(sender as Control ?? _fontColorButton);
-                return;
-            case QuickAccessToolbarCommandIds.FormatCells:
-                await ShowFormatCellsDialogAsync();
-                return;
-            case QuickAccessToolbarCommandIds.InsertFunction:
-                InsertFunction();
-                return;
-            case QuickAccessToolbarCommandIds.AutoSum:
-                InsertAutoSumFormula("SUM");
-                return;
-            case QuickAccessToolbarCommandIds.CalculateNow:
-                CalculateNow();
-                return;
-            case QuickAccessToolbarCommandIds.CalculateSheet:
-                CalculateActiveSheet();
-                return;
-            case QuickAccessToolbarCommandIds.RefreshAll:
-                RefreshImportedData();
-                return;
-            case QuickAccessToolbarCommandIds.SortAscending:
-                SortSelectedRange(ascending: true);
-                return;
-            case QuickAccessToolbarCommandIds.SortDescending:
-                SortSelectedRange(ascending: false);
-                return;
-            case QuickAccessToolbarCommandIds.Filter:
-                ToggleAutoFilter();
-                return;
-            case QuickAccessToolbarCommandIds.DataValidation:
-                await ShowDataValidationDialogAsync();
-                return;
-            case QuickAccessToolbarCommandIds.NameManager:
-                NameManager();
-                return;
-            case QuickAccessToolbarCommandIds.Spelling:
-                await ShowSpellingDialogAsync();
-                return;
-            case QuickAccessToolbarCommandIds.CheckAccessibility:
-                await ShowAccessibilityCheckerDialogAsync();
-                return;
-            case QuickAccessToolbarCommandIds.ShareWorkbook:
-                await ShareWorkbookAsync();
-                return;
-            case QuickAccessToolbarCommandIds.Zoom100:
-                ZoomTo100Percent();
-                return;
-            case QuickAccessToolbarCommandIds.ZoomSelection:
-                ZoomToSelection();
-                return;
-            case QuickAccessToolbarCommandIds.FreezePanes:
-                FreezePanesAtActiveCell();
-                return;
-            case QuickAccessToolbarCommandIds.InsertSheet:
-                AddNewSheet();
-                return;
-            case QuickAccessToolbarCommandIds.FindSelect:
-                await ShowFindDialogAsync();
-                return;
-            case QuickAccessToolbarCommandIds.SelectionPane:
-                await OpenSelectionPaneDialogAsync();
-                return;
+            await WorkbookApplicationCommands.TryExecuteAsync(
+                route,
+                nativeSource: sender,
+                nativeEventArgs: args);
+            return;
         }
 
         if (_ribbonControl is null)

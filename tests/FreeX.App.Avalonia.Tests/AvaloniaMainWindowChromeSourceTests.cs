@@ -20,27 +20,32 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     public void WorkbookShortcuts_RouteThroughSharedCatalog()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var routingSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.ApplicationCommandRouting.cs"));
 
         source.Should().Contain("TryHandleWorkbookShortcutRouteAsync(e)");
         source.Should().Contain("TryGetWorkbookShortcutRoute(e.Key, e.KeyModifiers, out var route)");
         source.Should().Contain("TryGetWorkbookShortcutRoute(shortcutKey, ToWorkbookShortcutModifiers(modifiers), out route)");
         source.Should().Contain("WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(key, modifiers, out route)");
         source.Should().Contain("WorkbookKeyboardShortcutCatalog.TryGetNativeMenuRoute(key, modifiers, out route)");
-        source.Should().Contain("WorkbookKeyboardShortcutCatalog.IsNumberFormatRoute(route)");
-        source.Should().Contain("case WorkbookShortcutRoute.Find:");
-        source.Should().Contain("case WorkbookShortcutRoute.PrintWorkbook:");
-        source.Should().Contain("ShowBackstagePrintPane();");
-        source.Should().Contain("case WorkbookShortcutRoute.ToggleBold:");
-        source.Should().Contain("case WorkbookShortcutRoute.ActivatePreviousSheet:");
-        source.Should().Contain("case WorkbookShortcutRoute.SelectNextSheetGroup:");
+        source.Should().Contain("WorkbookApplicationCommandRouter.TryRouteShortcut(route, out var applicationRoute)");
+        source.Should().NotContain("case WorkbookShortcutRoute.");
+        routingSource.Should().Contain("WorkbookApplicationCommandIntent.Find");
+        routingSource.Should().Contain("WorkbookApplicationCommandIntent.PrintWorkbook");
+        routingSource.Should().Contain("ShowBackstagePrintPane();");
+        routingSource.Should().Contain("WorkbookApplicationCommandIntent.ToggleBold");
+        routingSource.Should().Contain("WorkbookApplicationCommandIntent.ActivatePreviousSheet");
+        routingSource.Should().Contain("WorkbookApplicationCommandIntent.SelectNextSheetGroup");
         source.Should().Contain("Key.D7 => WorkbookShortcutKey.D7");
         source.Should().Contain("Key.OemMinus => WorkbookShortcutKey.OemMinus");
         source.Should().Contain("Key.PageUp => WorkbookShortcutKey.PageUp");
         source.Should().Contain("Key.PageDown => WorkbookShortcutKey.PageDown");
-        source.Should().Contain("WorkbookShortcutRoute.ApplyOutlineBorder");
-        source.Should().Contain("WorkbookShortcutRoute.ClearOutlineBorder");
-        source.Should().Contain("CellBorderPreset.Outside");
-        source.Should().Contain("CellBorderPreset.NoBorder");
+        routingSource.Should().Contain("WorkbookApplicationCommandIntent.ApplyOutlineBorder");
+        routingSource.Should().Contain("WorkbookApplicationCommandIntent.ClearOutlineBorder");
+        routingSource.Should().Contain("CellBorderPreset.Outside");
+        routingSource.Should().Contain("CellBorderPreset.NoBorder");
         source.Should().NotContain("else if (e.Key == Key.F && HasOnlyCommandModifier");
         source.Should().NotContain("else if (e.Key == Key.P && HasOnlyCommandModifier");
         source.Should().NotContain("else if (e.Key == Key.B && HasOnlyCommandModifier");

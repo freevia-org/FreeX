@@ -56,11 +56,11 @@ public sealed partial class MainWindowSourceHygieneTests
         var contextMenuSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         mainSource.Should().NotContain("private void OnGridContextMenuRequested(");
-        mainSource.Should().NotContain("private void ExecuteWorksheetContextMenuAction(");
+        mainSource.Should().NotContain("private async void ExecuteWorksheetContextMenuAction(");
         mainSource.Should().NotContain("private void OpenKeyboardContextMenu(");
 
         contextMenuSource.Should().Contain("private void OnGridContextMenuRequested(");
-        contextMenuSource.Should().Contain("private void ExecuteWorksheetContextMenuAction(");
+        contextMenuSource.Should().Contain("private async void ExecuteWorksheetContextMenuAction(");
         contextMenuSource.Should().Contain("private void OpenKeyboardContextMenu(");
         contextMenuSource.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)");
         contextMenuSource.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips");
@@ -407,20 +407,20 @@ public sealed partial class MainWindowSourceHygieneTests
     public void WorksheetContextMenuPickFromDropDown_ReusesActiveDropdownPath()
     {
         var source =
-            DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs") +
+            DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs") +
             ReadEditingSource();
 
-        source.Should().Contain("case WorksheetContextMenuAction.PickFromDropDown:");
-        source.Should().Contain("OpenActiveDropdown();");
+        source.Should().Contain("WorkbookApplicationCommandIntent.PickFromDropDown");
+        source.Should().Contain("OpenActiveDropdown()");
     }
 
     [Fact]
     public void WorksheetContextMenuQuickAnalysis_ReusesCtrlQPath()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
 
-        source.Should().Contain("case WorksheetContextMenuAction.QuickAnalysis:");
-        source.Should().Contain("ShowQuickAnalysisMenu();");
+        source.Should().Contain("WorkbookApplicationCommandIntent.QuickAnalysis");
+        source.Should().Contain("ShowQuickAnalysisMenu()");
     }
 
     [Fact]
@@ -868,21 +868,21 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenuNewComment_ReusesThreadedCommentWorkflow()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
 
-        source.Should().Contain("case WorksheetContextMenuAction.NewComment:");
-        source.Should().Contain("ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs());");
+        source.Should().Contain("WorkbookApplicationCommandIntent.NewThreadedComment");
+        source.Should().Contain("ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs())");
     }
 
     [Fact]
     public void WorksheetContextMenuEditAndDeleteComment_UseThreadedCommentWorkflow()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
         var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
-        source.Should().Contain("case WorksheetContextMenuAction.EditComment:");
-        source.Should().Contain("case WorksheetContextMenuAction.DeleteComment:");
-        source.Should().Contain("ReviewDeleteThreadedCommentBtn_Click(this, new RoutedEventArgs());");
+        source.Should().Contain("WorkbookApplicationCommandIntent.EditThreadedComment");
+        source.Should().Contain("WorkbookApplicationCommandIntent.DeleteThreadedComment");
+        source.Should().Contain("ReviewDeleteThreadedCommentBtn_Click(this, new RoutedEventArgs())");
         reviewSource.Should().Contain("private void ReviewDeleteThreadedCommentBtn_Click(");
         // Commit 52ebe84d9f moved the actual DeleteThreadedCommentCommand construction into the
         // shared PresentationCommentMutationService; ReviewCommands.cs now delegates to
@@ -895,10 +895,12 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenuResolveComment_UsesThreadedCommentResolveCommand()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var source =
+            DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs") +
+            DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
-        source.Should().Contain("case WorksheetContextMenuAction.ResolveComment:");
-        source.Should().Contain("case WorksheetContextMenuAction.UnresolveComment:");
+        source.Should().Contain("WorkbookApplicationCommandIntent.ResolveThreadedComment");
+        source.Should().Contain("WorkbookApplicationCommandIntent.UnresolveThreadedComment");
         source.Should().Contain("TryExecuteRepeatableCurrentRangeCommand(");
         source.Should().Contain("range => new ResolveThreadedCommentCommand(_currentSheetId, range.Start, resolved)");
         source.Should().Contain("sheet.ThreadedComments.TryGetValue(address, out var threadedComment)");
@@ -908,13 +910,13 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenuShowNotes_UsesNoteOnlyWorkflow()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
         var plannerSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("WorksheetContextMenuPlanner.cs");
 
-        source.Should().Contain("case WorksheetContextMenuAction.ShowHideNote:");
-        source.Should().Contain("ExecuteShowHideNote(address);");
-        source.Should().Contain("case WorksheetContextMenuAction.ShowAllNotes:");
-        source.Should().Contain("ExecuteShowAllNotes();");
+        source.Should().Contain("WorkbookApplicationCommandIntent.ShowHideNote");
+        source.Should().Contain("ExecuteShowHideNote(TargetAddress(invocation))");
+        source.Should().Contain("WorkbookApplicationCommandIntent.ShowAllNotes");
+        source.Should().Contain("ExecuteShowAllNotes()");
         source.Should().NotContain("ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());");
         plannerSource.Should().Contain("\"Show Notes\", WorksheetContextMenuAction.ShowAllNotes, AccessHeader: \"_Show Notes\"");
         plannerSource.Should().Contain("WorksheetContextMenuAction.ShowHideNote, AccessHeader: state.NoteIsShown ? \"_Hide Note\" : \"S_how Note\", IsEnabled: state.HasNote");
