@@ -506,7 +506,8 @@ internal sealed class FileCommands
             capability.CanEncodeMp4,
             capability.CanCaptureNarration,
             capability.CanCaptureCameraAndMedia,
-            capability.Reason);
+            capability.Reason,
+            capability.CanMuxTimedCaptions);
 
     /// <summary>Save-before-close gate, called from the window's Closing handler.</summary>
     public bool ConfirmCloseAllowed() => _workflow.ConfirmCloseAllowed();

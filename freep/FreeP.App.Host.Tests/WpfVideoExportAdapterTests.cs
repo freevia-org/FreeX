@@ -63,6 +63,7 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
         capability.CanCaptureCameraAndMedia.Should().BeFalse();
         capability.Reason.Should().Contain("narration capture");
         capability.Reason.Should().Contain("no camera device");
+        capability.CanMuxTimedCaptions.Should().Be(WindowsNativeVideoExportAdapter.CanUseCaptionFallback);
     }
 
     [Fact]
