@@ -149,6 +149,58 @@ public sealed class DrawingObjectFormatCommandPolicyTests
     }
 
     [Fact]
+    public void BuildPictureFormatCommand_ComposesAllPictureChangesAsOneCommand()
+    {
+        var workbook = new Workbook("drawing");
+        var sheet = workbook.AddSheet("Sheet1");
+        var picture = new PictureModel
+        {
+            Kind = PictureKind.Image,
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Width = 120,
+            Height = 80,
+        };
+        sheet.Pictures.Add(picture);
+        var result = new FormatPicturePlanner.PictureFormatResult(
+            new FormatPicturePlanner.FormatObjectResult(240, 160, 30, true, "Updated"),
+            new PictureCropDialogPlanner.CropResult(0.10, 0.05, 0.20, 0));
+
+        var command = DrawingObjectFormatCommandPolicy.BuildPictureFormatCommand(
+            sheet.Id,
+            picture,
+            result,
+            "Format Picture",
+            "Picture missing");
+
+        command.Should().BeOfType<CompositeWorkbookCommand>();
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+        picture.Width.Should().Be(240);
+        picture.Height.Should().Be(160);
+        picture.CropLeft.Should().Be(0.10);
+    }
+
+    [Fact]
+    public void BuildPictureFormatCommand_ReturnsFailureWhenGroupedTargetIsMissing()
+    {
+        var workbook = new Workbook("drawing");
+        var sheet = workbook.AddSheet("Sheet1");
+        var result = new FormatPicturePlanner.PictureFormatResult(
+            new FormatPicturePlanner.FormatObjectResult(240, 160, 30, true, "Updated"),
+            new PictureCropDialogPlanner.CropResult(0, 0, 0, 0));
+
+        var command = DrawingObjectFormatCommandPolicy.BuildPictureFormatCommand(
+            sheet.Id,
+            picture: null,
+            result,
+            "Format Picture",
+            "Picture missing");
+
+        command.Label.Should().Be("Unavailable");
+        command.Apply(new TestCommandContext(workbook))
+            .Should().Be(new CommandOutcome(false, "Picture missing"));
+    }
+
+    [Fact]
     public void StandaloneBuilders_NormalizeDialogResultsForResizeRotationAndAltText()
     {
         var workbook = new Workbook("drawing");

@@ -12,6 +12,8 @@ public sealed class DrawingRendererOwnershipSourceGuardTests
         "new SetDrawingShapeEffectCommand(",
         "new SetTextBoxTextCommand(",
         "new DuplicateDrawingObjectCommand(",
+        "new FailedWorkbookCommand(",
+        "new CompositeWorkbookCommand(",
     ];
 
     [Fact]

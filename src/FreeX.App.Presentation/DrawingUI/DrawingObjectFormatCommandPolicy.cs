@@ -100,6 +100,22 @@ public static class DrawingObjectFormatCommandPolicy
         return commands;
     }
 
+    public static IWorkbookCommand BuildPictureFormatCommand(
+        SheetId sheetId,
+        PictureModel? picture,
+        FormatPicturePlanner.PictureFormatResult result,
+        string commandTitle,
+        string missingPictureMessage)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandTitle);
+        ArgumentException.ThrowIfNullOrWhiteSpace(missingPictureMessage);
+
+        return picture is null
+            ? new MissingPictureFormatTargetCommand(missingPictureMessage)
+            : new CompositeWorkbookCommand(commandTitle, BuildPictureFormatCommands(sheetId, picture, result));
+    }
+
     public static IWorkbookCommand BuildResizeCommand(
         SheetId sheetId,
         DrawingObjectFormatTarget target,
@@ -229,5 +245,16 @@ public static class DrawingObjectFormatCommandPolicy
             return DrawingObjectSelectionResult<DrawingObjectFormatTarget>.Found(mapper(target));
 
         return new DrawingObjectSelectionResult<DrawingObjectFormatTarget>(null, result.Failure);
+    }
+
+    private sealed class MissingPictureFormatTargetCommand(string message) : IWorkbookCommand
+    {
+        public string Label => "Unavailable";
+
+        public CommandOutcome Apply(ICommandContext context) => new(false, message);
+
+        public void Revert(ICommandContext context)
+        {
+        }
     }
 }

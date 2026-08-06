@@ -105,9 +105,6 @@ public partial class MainWindow
         PictureModel? picture,
         FormatPictureDialogResult result)
     {
-        if (picture is null)
-            return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_PictureWasNotFound"));
-
         var formatResult = new FormatPicturePlanner.FormatObjectResult(
             result.Width,
             result.Height,
@@ -121,9 +118,12 @@ public partial class MainWindow
                 result.CropTop,
                 result.CropRight,
                 result.CropBottom));
-        var commands = DrawingObjectFormatCommandPolicy.BuildPictureFormatCommands(sheetId, picture, pictureResult);
-
-        return new CompositeWorkbookCommand("Format Picture", commands);
+        return DrawingObjectFormatCommandPolicy.BuildPictureFormatCommand(
+            sheetId,
+            picture,
+            pictureResult,
+            "Format Picture",
+            UiText.Get("MainWindowMessage_PictureWasNotFound"));
     }
 
     private void PictureRotateBtn_Click(object sender, RoutedEventArgs e)
