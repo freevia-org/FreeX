@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Panes;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
@@ -20,11 +21,8 @@ namespace FreeW.App.Avalonia;
 /// <see cref="DocumentView.DocumentChanged"/> to call <see cref="Refresh"/>. Toggle
 /// <see cref="IsVisible"/> via the Review ribbon command (<c>freew.reviewingpane</c>); defaults to hidden.
 ///
-/// Accept/reject are fully wired: each entry row has Accept and Reject buttons that call
-/// <see cref="RevisionList.Accept"/> / <see cref="RevisionList.Reject"/> directly, then raise
-/// <see cref="DocumentView.DocumentChanged"/> so the editor re-renders and the pane re-populates.
-/// The Accept-All / Reject-All header buttons call <see cref="TrackChanges.AcceptAll"/> /
-/// <see cref="TrackChanges.RejectAll"/> then do the same.
+/// Accept/reject and bulk actions delegate portable targeting and transitions to
+/// <see cref="ReviewingPaneSession"/>; the renderer only invalidates and projects native controls.
 /// </summary>
 public sealed class ReviewingPane : SidePaneBase
 {
@@ -35,14 +33,21 @@ public sealed class ReviewingPane : SidePaneBase
     private readonly ComboBox _sortCombo;
     private readonly Button _acceptAllButton;
     private readonly Button _rejectAllButton;
-    private IReadOnlyList<RevisionEntry> _revisions = Array.Empty<RevisionEntry>();
-    private ReviewRevisionSortOrder _sortOrder = ReviewRevisionSortOrder.Sequence;
+    private readonly ReviewingPaneSession _session;
 
     // ── Construction ──────────────────────────────────────────────────────────
 
     public ReviewingPane(DocumentView editor)
         : base(editor, "Tracked Changes", width: 280, chromeBorderThickness: new Thickness(1, 0, 0, 0), includeSeparator: true)
     {
+        _session = new ReviewingPaneSession(
+            () => ReviewingPaneSession.Enumerate(editor.Document),
+            new ReviewingPaneMutationActions(
+                entry => ResolveEntry(entry, accept: true),
+                entry => ResolveEntry(entry, accept: false),
+                editor.AcceptAllRevisions,
+                editor.RejectAllRevisions));
+
         // --- Accept-All / Reject-All buttons ------------------------------------
         _acceptAllButton = new Button
         {
@@ -91,10 +96,7 @@ public sealed class ReviewingPane : SidePaneBase
         _sortCombo.SelectionChanged += (_, _) =>
         {
             if (_sortCombo.SelectedItem is ComboBoxItem { Tag: ReviewRevisionSortOrder order })
-            {
-                _sortOrder = order;
-                Refresh();
-            }
+                Render(_session.SetSortOrder(order));
         };
 
         var sortRow = new StackPanel
@@ -116,13 +118,7 @@ public sealed class ReviewingPane : SidePaneBase
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent,
         };
-        _revisionList.SelectionChanged += (_, _) =>
-        {
-            if (_revisionList.SelectedItem is RevisionItemView item)
-            {
-                _editor.NavigateToRevision(item.Entry);
-            }
-        };
+        _revisionList.SelectionChanged += OnRevisionSelected;
 
         // Dock bulk row and count label into InnerLayout (base added header + separator already).
         //   [bulkRow]      Dock.Top
@@ -145,69 +141,63 @@ public sealed class ReviewingPane : SidePaneBase
     /// </summary>
     public override void Refresh()
     {
-        var revisions = ReviewRevisionSortPlanner.Sort(RevisionList.Enumerate(_editor.Document), _sortOrder);
-        var previousIndex = _revisionList.SelectedIndex;
-        _revisions = revisions;
-        var hasRevisions = revisions.Count > 0;
+        Render(_session.Refresh());
+    }
 
-        _acceptAllButton.IsEnabled = hasRevisions;
-        _rejectAllButton.IsEnabled = hasRevisions;
-        _countLabel.Text = hasRevisions
-            ? $"{revisions.Count} tracked change{(revisions.Count == 1 ? "" : "s")}"
+    private void Render(ReviewingPaneOutcome outcome)
+    {
+        var state = outcome.State;
+        _acceptAllButton.IsEnabled = state.HasRevisions;
+        _rejectAllButton.IsEnabled = state.HasRevisions;
+        _countLabel.Text = state.HasRevisions
+            ? $"{state.Entries.Count} tracked change{(state.Entries.Count == 1 ? "" : "s")}"
             : "No tracked changes";
 
-        var items = revisions.Select(r => new RevisionItemView(r, this)).ToArray();
+        var items = state.Entries.Select(revision => new RevisionItemView(revision, this)).ToArray();
+        _revisionList.SelectionChanged -= OnRevisionSelected;
         _revisionList.ItemsSource = items;
-        _revisionList.SelectedIndex = revisions.Count == 0
-            ? -1
-            : Math.Clamp(previousIndex < 0 ? 0 : previousIndex, 0, revisions.Count - 1);
+        _revisionList.SelectedIndex = state.SelectedIndex;
+        _revisionList.SelectionChanged += OnRevisionSelected;
+
+        if (outcome.NavigateToRevision is { } target)
+            _editor.NavigateToRevision(target);
+    }
+
+    private void OnRevisionSelected(object? sender, SelectionChangedEventArgs e)
+    {
+        Render(_session.SelectIndex(_revisionList.SelectedIndex));
     }
 
     /// <summary>Steps through tracked changes using WPF's open, refresh, and wrapping semantics.</summary>
     internal bool StepRevision(int direction, bool refresh = true)
     {
-        if (direction == 0)
-            throw new ArgumentOutOfRangeException(nameof(direction));
-
-        if (refresh)
-            Refresh();
-        if (_revisions.Count == 0)
-            return false;
-
-        var current = _revisionList.SelectedIndex;
-        var next = current < 0
-            ? (direction < 0 ? _revisions.Count - 1 : 0)
-            : (current + Math.Sign(direction) + _revisions.Count) % _revisions.Count;
-        _revisionList.SelectedIndex = next;
-        return true;
+        var outcome = _session.Step(direction, refresh);
+        Render(outcome);
+        return outcome.NavigateToRevision is not null;
     }
 
     // ── Accept / Reject per-entry (called from item rows) ────────────────────
 
     internal void AcceptEntry(RevisionEntry entry)
     {
-        RevisionList.Accept(_editor.Document, entry);
-        NotifyDocumentMutated();
+        Render(_session.Accept(entry));
     }
 
     internal void RejectEntry(RevisionEntry entry)
     {
-        RevisionList.Reject(_editor.Document, entry);
-        NotifyDocumentMutated();
+        Render(_session.Reject(entry));
     }
 
     // ── Bulk handlers ─────────────────────────────────────────────────────────
 
     private void OnAcceptAll(object? sender, RoutedEventArgs e)
     {
-        TrackChanges.AcceptAll(_editor.Document);
-        NotifyDocumentMutated();
+        Render(_session.AcceptAll());
     }
 
     private void OnRejectAll(object? sender, RoutedEventArgs e)
     {
-        TrackChanges.RejectAll(_editor.Document);
-        NotifyDocumentMutated();
+        Render(_session.RejectAll());
     }
 
     // ── Document refresh ──────────────────────────────────────────────────────
@@ -218,19 +208,24 @@ public sealed class ReviewingPane : SidePaneBase
     /// <see cref="DocumentView.DocumentChanged"/>, which re-triggers <see cref="Refresh"/> via the
     /// <see cref="MainWindow"/> wiring.
     /// </summary>
-    private void NotifyDocumentMutated()
+    private bool ResolveEntry(RevisionEntry entry, bool accept)
     {
-        _editor.InvalidateAfterExternalMutation();
+        var applied = accept
+            ? ReviewingPaneSession.Accept(_editor.Document, entry)
+            : ReviewingPaneSession.Reject(_editor.Document, entry);
+        if (applied)
+            _editor.InvalidateAfterExternalMutation();
+        return applied;
     }
 
     // ── Test-support ──────────────────────────────────────────────────────────
 
     /// <summary>Number of revision rows currently shown in the list (for headless testing).</summary>
-    internal int RevisionItemCount => (_revisionList.ItemsSource as RevisionItemView[])?.Length ?? 0;
-    internal int SelectedRevisionIndexForTest => _revisionList.SelectedIndex;
-    internal RevisionEntry? SelectedRevision => (_revisionList.SelectedItem as RevisionItemView)?.Entry;
+    internal int RevisionItemCount => _session.State.Entries.Count;
+    internal int SelectedRevisionIndexForTest => _session.State.SelectedIndex;
+    internal RevisionEntry? SelectedRevision => _session.State.SelectedRevision;
     internal RevisionEntry? SelectedRevisionForTest => SelectedRevision;
-    internal ReviewRevisionSortOrder SortOrderForTest => _sortOrder;
+    internal ReviewRevisionSortOrder SortOrderForTest => _session.State.SortOrder;
 
     internal void SetSortOrderForTest(ReviewRevisionSortOrder order)
     {
@@ -250,7 +245,7 @@ public sealed class ReviewingPane : SidePaneBase
     /// list the pane would show. Exposed for headless tests only.
     /// </summary>
     internal static IReadOnlyList<RevisionEntry> EnumerateRevisions(TextDocument doc) =>
-        RevisionList.Enumerate(doc);
+        ReviewingPaneSession.Enumerate(doc);
 
     // ── Row item ──────────────────────────────────────────────────────────────
 

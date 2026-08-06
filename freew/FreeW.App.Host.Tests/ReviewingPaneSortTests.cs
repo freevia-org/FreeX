@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
-using FreeW.App.Host;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -8,7 +8,7 @@ namespace FreeW.App.Host.Tests;
 
 /// <summary>
 /// Pure (non-STA) tests for the Reviewing Pane sort comparator
-/// (<see cref="RevisionSortComparer"/>). Sort operates on <see cref="RevisionEntry"/> values and
+/// (<see cref="ReviewRevisionSortPlanner"/>). Sort operates on <see cref="RevisionEntry"/> values and
 /// is independent of any WPF surface.
 /// </summary>
 public sealed class ReviewingPaneSortTests
@@ -40,7 +40,7 @@ public sealed class ReviewingPaneSortTests
     public void Sort_Sequence_ReturnsSameOrder()
     {
         var entries = MakeEntries();
-        var sorted = RevisionSortComparer.Sort(entries, RevisionSortOrder.Sequence);
+        var sorted = ReviewRevisionSortPlanner.Sort(entries, ReviewRevisionSortOrder.Sequence);
         Assert.Same(entries, sorted); // no-copy for Sequence
         Assert.Equal([2, 0, 1, 3], sorted.Select(e => e.BlockIndex).ToArray());
     }
@@ -48,7 +48,7 @@ public sealed class ReviewingPaneSortTests
     [Fact]
     public void Sort_Author_OrdersAlphabeticallyThenByBlock()
     {
-        var sorted = RevisionSortComparer.Sort(MakeEntries(), RevisionSortOrder.Author);
+        var sorted = ReviewRevisionSortPlanner.Sort(MakeEntries(), ReviewRevisionSortOrder.Author);
         // Alice(0), Alice(3), Bob(1), Carol(2)
         sorted.Select(e => e.Author).Should().Equal("Alice", "Alice", "Bob", "Carol");
         // Within same author, stable by block index
@@ -59,7 +59,7 @@ public sealed class ReviewingPaneSortTests
     public void Sort_Kind_OrdersByKindEnumThenBlock()
     {
         // Enum order: Insertion=0, Deletion=1, Formatting=2
-        var sorted = RevisionSortComparer.Sort(MakeEntries(), RevisionSortOrder.Kind);
+        var sorted = ReviewRevisionSortPlanner.Sort(MakeEntries(), ReviewRevisionSortOrder.Kind);
         Assert.Equal(
             [RevisionEntryKind.Insertion, RevisionEntryKind.Insertion, RevisionEntryKind.Deletion, RevisionEntryKind.Formatting],
             sorted.Select(e => e.Kind).ToArray());
@@ -70,7 +70,7 @@ public sealed class ReviewingPaneSortTests
     [Fact]
     public void Sort_Date_OrdersChronologicallyThenByBlock()
     {
-        var sorted = RevisionSortComparer.Sort(MakeEntries(), RevisionSortOrder.Date);
+        var sorted = ReviewRevisionSortPlanner.Sort(MakeEntries(), ReviewRevisionSortOrder.Date);
         // Lexicographic ISO-8601 sort (which equals chronological for zero-padded dates)
         sorted.Select(e => e.DateXml).Should().Equal(
             "2026-06-19T10:00:00Z", "2026-06-19T11:00:00Z", "2026-06-20T09:00:00Z", "2026-06-21T08:00:00Z");
@@ -84,14 +84,14 @@ public sealed class ReviewingPaneSortTests
             Entry(1, RevisionEntryKind.Insertion, "Bob",  "2026-06-19T10:00:00Z"),
             Entry(0, RevisionEntryKind.Insertion, "Alice", null),
         };
-        var sorted = RevisionSortComparer.Sort(entries, RevisionSortOrder.Date);
+        var sorted = ReviewRevisionSortPlanner.Sort(entries, ReviewRevisionSortOrder.Date);
         Assert.Null(sorted[0].DateXml); // null sorts before any real date string
     }
 
     [Fact]
     public void Sort_EmptyList_ReturnsEmpty()
     {
-        var result = RevisionSortComparer.Sort([], RevisionSortOrder.Author);
+        var result = ReviewRevisionSortPlanner.Sort([], ReviewRevisionSortOrder.Author);
         Assert.Empty(result);
     }
 
@@ -99,7 +99,7 @@ public sealed class ReviewingPaneSortTests
     public void Sort_SingleEntry_ReturnsSingleEntry()
     {
         var entry = Entry(0, RevisionEntryKind.Insertion, "Alice", "2026-01-01T00:00:00Z");
-        var result = RevisionSortComparer.Sort([entry], RevisionSortOrder.Author);
+        var result = ReviewRevisionSortPlanner.Sort([entry], ReviewRevisionSortOrder.Author);
         Assert.Single(result);
         Assert.Same(entry, result[0]);
     }

@@ -21,9 +21,9 @@ using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
+using FreeW.App.Presentation.Panes;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
-using TextSearch = FreeW.Core.Model.TextSearch;
 
 namespace FreeW.App.Host;
 
@@ -54,6 +54,7 @@ public sealed class MainWindow : Window
     private Border _navPane = null!;
     private ListBox _navList = null!;
     private bool _navPaneVisible;
+    private NavigationPaneSession _navigationPaneSession = null!;
 
     // Reveal Formatting pane (Word's Shift+F1): a read-only side pane, docked on the right (Word's side),
     // that mirrors the effective FONT / PARAGRAPH / SECTION formatting of the current selection. It updates
@@ -71,11 +72,12 @@ public sealed class MainWindow : Window
     private Border _reviewPane = null!;
     private ListBox _reviewList = null!;
     private TextBlock _reviewStatus = null!;
+    private Button _reviewAcceptButton = null!;
+    private Button _reviewRejectButton = null!;
+    private Button _reviewPreviousButton = null!;
+    private Button _reviewNextButton = null!;
     private bool _reviewPaneVisible;
-    // The revisions currently shown in the pane (the live snapshot the list items index into).
-    private System.Collections.Generic.IReadOnlyList<RevisionEntry> _reviewEntries = System.Array.Empty<RevisionEntry>();
-    // Active sort order for the Reviewing Pane. Default: reading order (sequence/date).
-    private RevisionSortOrder _reviewSortOrder = RevisionSortOrder.Sequence;
+    private ReviewingPaneSession _reviewingPaneSession = null!;
 
     // Thesaurus Pane (Review > Proofing > Thesaurus, Shift+F7): a docked right pane showing senses +
     // synonyms for the word at the caret, backed by the bundled compact synonym dictionary. Insert replaces
@@ -99,8 +101,7 @@ public sealed class MainWindow : Window
     private Button _notesApplyButton = null!;
     private Button _notesDeleteButton = null!;
     private bool _notesPaneVisible;
-    // The note currently loaded in the sub-editor (null = nothing selected).
-    private (bool IsFootnote, int Id)? _activeNote;
+    private DocumentNotesPaneSession _documentNotesPaneSession = null!;
 
     // Header/Footer Pane (replaces plain-text HeaderFooterSlotDialog): a docked pane with a slot
     // selector (header/footer/even/first × header/footer) and a DocumentView sub-editor so run
@@ -120,8 +121,6 @@ public sealed class MainWindow : Window
     private TextBlock _navSearchStatus = null!;
     private Button _navSearchPrev = null!;
     private Button _navSearchNext = null!;
-    private readonly List<int> _navSearchHits = new(); // model block indices with a match, in order
-    private int _navSearchHitIndex = -1;                // current position within _navSearchHits
 
     // Identity/palette for the shared window shell.  Colors are resolved from the active theme tokens
     // (FreeWTitleBarBrush / FreeWAccentBrush) registered by WpfThemeApplier at startup, with literal
@@ -291,6 +290,60 @@ public sealed class MainWindow : Window
         // rules honour the user's toggles from the first keystroke (re-applied when Options is saved).
         ApplyAutoFormatOptions();
         editor.LoadModel(CreateSampleDocument());
+        _navigationPaneSession = new NavigationPaneSession(
+            CurrentPaneDocument,
+            new NavigationPaneMutationActions(
+                editor.MoveHeading,
+                editor.PromoteHeading,
+                editor.DemoteHeading,
+                editor.CollapseHeading,
+                editor.ExpandHeading,
+                editor.IsHeadingCollapsed));
+        _reviewingPaneSession = new ReviewingPaneSession(
+            editor.ListRevisions,
+            new ReviewingPaneMutationActions(
+                editor.AcceptRevision,
+                editor.RejectRevision,
+                () =>
+                {
+                    if (!editor.HasRevisions())
+                        return false;
+                    editor.AcceptAllRevisions();
+                    return true;
+                },
+                () =>
+                {
+                    if (!editor.HasRevisions())
+                        return false;
+                    editor.RejectAllRevisions();
+                    return true;
+                }));
+        _documentNotesPaneSession = new DocumentNotesPaneSession(
+            CurrentPaneDocument,
+            new DocumentNotesPaneMutationActions(
+                (id, footnote, paragraphs) =>
+                {
+                    var exists = footnote
+                        ? editor.Model.Footnotes.ContainsKey(id)
+                        : editor.Model.Endnotes.ContainsKey(id);
+                    if (!exists)
+                        return false;
+                    editor.ReplaceNoteContent(id, footnote, paragraphs);
+                    return true;
+                },
+                (id, footnote) =>
+                {
+                    var exists = footnote
+                        ? editor.Model.Footnotes.ContainsKey(id)
+                        : editor.Model.Endnotes.ContainsKey(id);
+                    if (!exists)
+                        return false;
+                    if (footnote)
+                        editor.DeleteFootnote(id);
+                    else
+                        editor.DeleteEndnote(id);
+                    return true;
+                }));
         var stateStore = new RibbonStateStore();
         _stateStore = stateStore;
         var commands = FreeWRibbonCommands.Build(
@@ -1138,42 +1191,14 @@ public sealed class MainWindow : Window
     // An empty term clears the search and shows the full outline again.
     private void RunNavSearch()
     {
-        _navSearchHits.Clear();
-        _navSearchHitIndex = -1;
-
-        var term = _navSearch?.Text ?? string.Empty;
-        if (!string.IsNullOrEmpty(term))
-        {
-            _editor.CommitToModel();
-            var blocks = _editor.Model.Blocks;
-            for (var i = 0; i < blocks.Count; i++)
-            {
-                if (BlockMatches(blocks[i], term))
-                    _navSearchHits.Add(i);
-            }
-
-            if (_navSearchHits.Count > 0)
-            {
-                _navSearchHitIndex = 0;
-                _editor.BringBlockIntoView(_navSearchHits[0]);
-            }
-        }
-
-        RefreshOutline();
-        UpdateNavSearchStatus();
+        RenderNavigationOutcome(_navigationPaneSession.SetQuery(_navSearch?.Text));
     }
 
     // Move to the next/previous document match (wrapping at the ends) and bring it into view. No-op when
     // there are no matches.
     private void StepNavSearch(bool forward)
     {
-        if (_navSearchHits.Count == 0)
-            return;
-        _navSearchHitIndex = forward
-            ? (_navSearchHitIndex + 1) % _navSearchHits.Count
-            : (_navSearchHitIndex - 1 + _navSearchHits.Count) % _navSearchHits.Count;
-        _editor.BringBlockIntoView(_navSearchHits[_navSearchHitIndex]);
-        UpdateNavSearchStatus();
+        RenderNavigationOutcome(_navigationPaneSession.StepSearch(forward ? 1 : -1));
     }
 
     // Update the "n of m" / "No matches" status label and enable the Prev/Next buttons accordingly.
@@ -1182,33 +1207,18 @@ public sealed class MainWindow : Window
         if (_navSearchStatus is null)
             return;
 
-        var hasTerm = !string.IsNullOrEmpty(_navSearch?.Text);
-        var hasHits = _navSearchHits.Count > 0;
-        _navSearchStatus.Text = !hasTerm
-            ? string.Empty
-            : hasHits
-                ? $"{_navSearchHitIndex + 1} of {_navSearchHits.Count}"
-                : "No matches";
-        _navSearchPrev.IsEnabled = hasHits;
-        _navSearchNext.IsEnabled = hasHits;
+        var state = _navigationPaneSession.State;
+        _navSearchStatus.Text = state.SearchStatusText;
+        _navSearchPrev.IsEnabled = state.CanStepSearch;
+        _navSearchNext.IsEnabled = state.CanStepSearch;
     }
 
-    // Whether a model block's plain text contains at least one match for the term (case-insensitive,
-    // whole-word off — the live "search as you type" behaviour), via the shared TextSearch helper.
-    private static bool BlockMatches(Block block, string term)
+    // WPF's model is committed before a portable pane session projects it.
+    private TextDocument CurrentPaneDocument()
     {
-        var text = block switch
-        {
-            Paragraph paragraph => paragraph.PlainText,
-            Table table => TableText(table),
-            _ => string.Empty
-        };
-        return TextSearch.FindAll(text, term, matchCase: false, wholeWord: false).Any();
+        _editor.CommitToModel();
+        return _editor.Model;
     }
-
-    // Flatten a table's cell text so a search term inside a table cell still registers as a hit.
-    private static string TableText(Table table) =>
-        string.Join(" ", table.Rows.SelectMany(row => row.Cells).Select(cell => cell.PlainText));
 
     // Show/hide the navigation pane and push the new checked-state into the ribbon state store so the
     // View > Navigation Pane toggle button stays in sync. Refreshes the outline when the pane appears.
@@ -1409,10 +1419,14 @@ public sealed class MainWindow : Window
         }
 
         var toolbar = new WrapPanel { Margin = new Thickness(10, 0, 10, 6) };
-        toolbar.Children.Add(MakeButton("Accept", "Accept the selected change", AcceptSelectedRevision));
-        toolbar.Children.Add(MakeButton("Reject", "Reject the selected change", RejectSelectedRevision));
-        toolbar.Children.Add(MakeButton("▲", "Previous change (jump up)", () => StepRevision(-1)));
-        toolbar.Children.Add(MakeButton("▼", "Next change (jump down)", () => StepRevision(+1)));
+        _reviewAcceptButton = MakeButton("Accept", "Accept the selected change", AcceptSelectedRevision);
+        _reviewRejectButton = MakeButton("Reject", "Reject the selected change", RejectSelectedRevision);
+        _reviewPreviousButton = MakeButton("▲", "Previous change (jump up)", () => StepRevision(-1));
+        _reviewNextButton = MakeButton("▼", "Next change (jump down)", () => StepRevision(+1));
+        toolbar.Children.Add(_reviewAcceptButton);
+        toolbar.Children.Add(_reviewRejectButton);
+        toolbar.Children.Add(_reviewPreviousButton);
+        toolbar.Children.Add(_reviewNextButton);
 
         // Sort control: reorders the Reviewing Pane without touching the document model.
         var sortRow = new StackPanel
@@ -1427,18 +1441,15 @@ public sealed class MainWindow : Window
             Margin = new Thickness(0, 0, 6, 0)
         });
         var sortCombo = new ComboBox { MinWidth = 130 };
-        sortCombo.Items.Add(new ComboBoxItem { Content = "By Sequence", Tag = RevisionSortOrder.Sequence });
-        sortCombo.Items.Add(new ComboBoxItem { Content = "By Author", Tag = RevisionSortOrder.Author });
-        sortCombo.Items.Add(new ComboBoxItem { Content = "By Type", Tag = RevisionSortOrder.Kind });
-        sortCombo.Items.Add(new ComboBoxItem { Content = "By Date", Tag = RevisionSortOrder.Date });
+        sortCombo.Items.Add(new ComboBoxItem { Content = "By Sequence", Tag = ReviewRevisionSortOrder.Sequence });
+        sortCombo.Items.Add(new ComboBoxItem { Content = "By Author", Tag = ReviewRevisionSortOrder.Author });
+        sortCombo.Items.Add(new ComboBoxItem { Content = "By Type", Tag = ReviewRevisionSortOrder.Kind });
+        sortCombo.Items.Add(new ComboBoxItem { Content = "By Date", Tag = ReviewRevisionSortOrder.Date });
         sortCombo.SelectedIndex = 0;
         sortCombo.SelectionChanged += (_, _) =>
         {
-            if (sortCombo.SelectedItem is ComboBoxItem { Tag: RevisionSortOrder order })
-            {
-                _reviewSortOrder = order;
-                RefreshReviewPane();
-            }
+            if (sortCombo.SelectedItem is ComboBoxItem { Tag: ReviewRevisionSortOrder order })
+                RenderReviewOutcome(_reviewingPaneSession.SetSortOrder(order));
         };
         sortRow.Children.Add(sortCombo);
 
@@ -1455,12 +1466,7 @@ public sealed class MainWindow : Window
             Margin = new Thickness(4, 0, 4, 8)
         };
         // Selecting an entry navigates the editor to that change (click-to-navigate).
-        _reviewList.SelectionChanged += (_, _) =>
-        {
-            var index = _reviewList.SelectedIndex;
-            if (index >= 0 && index < _reviewEntries.Count)
-                _editor.NavigateToRevision(_reviewEntries[index]);
-        };
+        _reviewList.SelectionChanged += OnReviewSelectionChanged;
 
         var layout = new DockPanel { Width = 270 };
         DockPanel.SetDock(header, Dock.Top);
@@ -1504,25 +1510,42 @@ public sealed class MainWindow : Window
         if (_reviewList is null || !_reviewPaneVisible)
             return;
 
-        var previousIndex = _reviewList.SelectedIndex;
-        _reviewEntries = RevisionSortComparer.Sort(_editor.ListRevisions(), _reviewSortOrder);
+        RenderReviewOutcome(_reviewingPaneSession.Refresh());
+    }
 
+    private void RenderReviewOutcome(ReviewingPaneOutcome outcome)
+    {
+        var state = outcome.State;
+        _reviewList.SelectionChanged -= OnReviewSelectionChanged;
         _reviewList.Items.Clear();
-        foreach (var entry in _reviewEntries)
+        foreach (var entry in state.Entries)
             _reviewList.Items.Add(BuildRevisionItem(entry));
 
-        _reviewStatus.Text = _reviewEntries.Count switch
+        _reviewStatus.Text = state.Entries.Count switch
         {
             0 => "No tracked changes",
             1 => "1 change",
             var n => $"{n} changes"
         };
+        _reviewAcceptButton.IsEnabled = state.CanResolveSelected;
+        _reviewRejectButton.IsEnabled = state.CanResolveSelected;
+        _reviewPreviousButton.IsEnabled = state.HasRevisions;
+        _reviewNextButton.IsEnabled = state.HasRevisions;
+        _reviewList.SelectedIndex = state.SelectedIndex;
+        _reviewList.SelectionChanged += OnReviewSelectionChanged;
 
-        if (_reviewEntries.Count == 0)
-            return;
-        // Keep the cursor near where it was (the change that slid into the resolved slot, or the last one).
-        var next = previousIndex < 0 ? 0 : System.Math.Min(previousIndex, _reviewEntries.Count - 1);
-        _reviewList.SelectedIndex = next;
+        if (outcome.NavigateToRevision is { } target)
+        {
+            _editor.NavigateToRevision(target);
+            _reviewList.ScrollIntoView(_reviewList.SelectedItem);
+        }
+    }
+
+    private void OnReviewSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var outcome = _reviewingPaneSession.SelectIndex(_reviewList.SelectedIndex);
+        if (outcome.NavigateToRevision is { } target)
+            _editor.NavigateToRevision(target);
     }
 
     // One reviewing-pane row: a bold "Author • Type" caption over the affected text (wrapped, dimmed).
@@ -1558,29 +1581,25 @@ public sealed class MainWindow : Window
     // selection onto the next pending change). No-op when nothing is selected.
     private void AcceptSelectedRevision()
     {
-        var index = _reviewList.SelectedIndex;
-        if (index < 0 || index >= _reviewEntries.Count)
-            return;
-        if (_editor.AcceptRevision(_reviewEntries[index]))
+        var outcome = _reviewingPaneSession.AcceptSelected();
+        if (outcome.MutationApplied)
         {
             _file.MarkDirty();
             UpdateCounts();
         }
-        RefreshReviewPane();
+        RenderReviewOutcome(outcome);
     }
 
     // Reject the single revision selected in the Reviewing Pane, then rebuild the list.
     private void RejectSelectedRevision()
     {
-        var index = _reviewList.SelectedIndex;
-        if (index < 0 || index >= _reviewEntries.Count)
-            return;
-        if (_editor.RejectRevision(_reviewEntries[index]))
+        var outcome = _reviewingPaneSession.RejectSelected();
+        if (outcome.MutationApplied)
         {
             _file.MarkDirty();
             UpdateCounts();
         }
-        RefreshReviewPane();
+        RenderReviewOutcome(outcome);
     }
 
     // Previous/Next change: step the selection through the list (and so navigate the editor, via the list's
@@ -1589,17 +1608,7 @@ public sealed class MainWindow : Window
     {
         if (!_reviewPaneVisible)
             ToggleReviewPane();
-        else
-            RefreshReviewPane();
-        if (_reviewEntries.Count == 0)
-            return;
-
-        var current = _reviewList.SelectedIndex;
-        var next = current < 0
-            ? (direction > 0 ? 0 : _reviewEntries.Count - 1)
-            : (current + direction + _reviewEntries.Count) % _reviewEntries.Count;
-        _reviewList.SelectedIndex = next;
-        _reviewList.ScrollIntoView(_reviewList.SelectedItem);
+        RenderReviewOutcome(_reviewingPaneSession.Step(direction));
     }
 
     // ── Thesaurus Pane ──────────────────────────────────────────────────────────────────────────────
@@ -1690,7 +1699,7 @@ public sealed class MainWindow : Window
         toolbar.Children.Add(_notesDeleteButton);
 
         // Selecting a stub loads the note's content into the sub-editor.
-        _notesList.SelectionChanged += (_, _) => LoadSelectedNote();
+        _notesList.SelectionChanged += OnNoteSelectionChanged;
 
         var layout = new DockPanel();
         DockPanel.SetDock(header, Dock.Top);
@@ -1731,105 +1740,53 @@ public sealed class MainWindow : Window
         if (_notesList is null || !_notesPaneVisible)
             return;
 
-        var prevIndex = _notesList.SelectedIndex;
-        _notesList.Items.Clear();
-        foreach (var note in _editor.Model.Footnotes.Values.OrderBy(n => n.Id))
-            _notesList.Items.Add(new NoteStub(IsFootnote: true,  Id: note.Id, Label: $"Footnote {note.Id}", Preview: note.PlainText));
-        foreach (var note in _editor.Model.Endnotes.Values.OrderBy(n => n.Id))
-            _notesList.Items.Add(new NoteStub(IsFootnote: false, Id: note.Id, Label: $"Endnote {note.Id}",  Preview: note.PlainText));
-
-        if (_notesList.Items.Count > 0)
-            _notesList.SelectedIndex = System.Math.Min(System.Math.Max(prevIndex, 0), _notesList.Items.Count - 1);
+        RenderNotesOutcome(_documentNotesPaneSession.Refresh());
     }
 
     // Load the note selected in the stub list into the sub-editor.
-    private void LoadSelectedNote()
+    private void OnNoteSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_notesList.SelectedItem is not NoteStub stub)
-        {
-            _notesSelectedLabel.Visibility = Visibility.Collapsed;
-            _notesSubEditor.Visibility     = Visibility.Collapsed;
-            _notesApplyButton.Visibility   = Visibility.Collapsed;
-            _notesDeleteButton.Visibility  = Visibility.Collapsed;
-            _activeNote = null;
-            return;
-        }
+        RenderNotesOutcome(_documentNotesPaneSession.SelectIndex(_notesList.SelectedIndex));
+    }
 
-        _activeNote = (stub.IsFootnote, stub.Id);
-        _notesSelectedLabel.Text       = stub.Label;
-        _notesSelectedLabel.Visibility = Visibility.Visible;
-        _notesApplyButton.Visibility   = Visibility.Visible;
-        _notesDeleteButton.Visibility  = Visibility.Visible;
-        _notesSubEditor.Visibility     = Visibility.Visible;
+    private void RenderNotesOutcome(DocumentNotesPaneOutcome outcome)
+    {
+        var state = outcome.State;
+        _notesList.SelectionChanged -= OnNoteSelectionChanged;
+        _notesList.ItemsSource = state.Items;
+        _notesList.SelectedIndex = state.SelectedIndex;
+        _notesList.SelectionChanged += OnNoteSelectionChanged;
 
-        // Build a wrapper TextDocument seeded with the main doc's DefaultRun/Styles so fonts match.
-        var wrapper = TextDocument.CreateEmpty();
-        wrapper.DefaultRun       = _editor.Model.DefaultRun;
-        wrapper.DefaultParagraph = _editor.Model.DefaultParagraph;
-        wrapper.Blocks.Clear();
-
-        var content = stub.IsFootnote
-            ? (_editor.Model.Footnotes.TryGetValue(stub.Id, out var fn) ? fn.Content : null)
-            : (_editor.Model.Endnotes.TryGetValue(stub.Id, out var en) ? en.Content : null);
-
-        if (content is not null)
-        {
-            foreach (var para in content)
-                wrapper.Blocks.Add(DocumentMerge.CloneBlock(para));
-        }
-        if (wrapper.Blocks.Count == 0)
-            wrapper.Blocks.Add(new Paragraph());
-
-        _notesSubEditor.LoadModel(wrapper);
+        _notesSelectedLabel.Text = state.SelectedNote?.Label ?? string.Empty;
+        _notesSelectedLabel.Visibility = state.HasSelection ? Visibility.Visible : Visibility.Collapsed;
+        _notesSubEditor.Visibility = state.HasSelection ? Visibility.Visible : Visibility.Collapsed;
+        _notesApplyButton.Visibility = state.CanApply ? Visibility.Visible : Visibility.Collapsed;
+        _notesDeleteButton.Visibility = state.CanDelete ? Visibility.Visible : Visibility.Collapsed;
+        if (state.EditorDocument is { } editorDocument)
+            _notesSubEditor.LoadModel(editorDocument);
     }
 
     // Apply edits from the sub-editor back to the selected note's Content, then re-render the main editor
     // so marker tooltips (which show the note's plain text) refresh.
     private void ApplySelectedNote()
     {
-        if (_activeNote is not { } active)
-            return;
-
         _notesSubEditor.CommitToModel();
-
-        var paragraphs = _notesSubEditor.Model.Blocks.OfType<Paragraph>()
-            .Select(paragraph => (Paragraph)DocumentMerge.CloneBlock(paragraph))
-            .ToArray();
-        _editor.ReplaceNoteContent(active.Id, active.IsFootnote, paragraphs);
-        _file.MarkDirty();
-        RefreshNotesPane();
+        var outcome = _documentNotesPaneSession.Apply(_notesSubEditor.Model.Blocks);
+        if (outcome.MutationApplied)
+            _file.MarkDirty();
+        RenderNotesOutcome(outcome);
     }
 
     // Delete the selected note from the model and strip its marker run from the body, then refresh.
     private void DeleteSelectedNote()
     {
-        if (_activeNote is not { } active)
-            return;
-
-        if (active.IsFootnote)
-            _editor.DeleteFootnote(active.Id);
-        else
-            _editor.DeleteEndnote(active.Id);
-
-        _activeNote = null;
-        _file.MarkDirty();
-        RefreshNotesPane();
-        // Clear the sub-editor so the deleted note's content is not accidentally re-applied.
-        _notesSubEditor.Visibility    = Visibility.Collapsed;
-        _notesApplyButton.Visibility  = Visibility.Collapsed;
-        _notesDeleteButton.Visibility = Visibility.Collapsed;
-        _notesSelectedLabel.Visibility = Visibility.Collapsed;
+        var outcome = _documentNotesPaneSession.DeleteSelected();
+        if (outcome.MutationApplied)
+            _file.MarkDirty();
+        RenderNotesOutcome(outcome);
     }
 
     // Lightweight stub for the Notes pane's list. Carries enough for display + selection → load.
-    private sealed record NoteStub(bool IsFootnote, int Id, string Label, string Preview)
-    {
-        public override string ToString() =>
-            string.IsNullOrWhiteSpace(Preview)
-                ? Label
-                : $"{Label}: {(Preview.Length > 60 ? Preview[..57] + "…" : Preview)}";
-    }
-
     // ── Header/Footer Pane (Feature 2A) ─────────────────────────────────────────────────────────────
 
     // Build the Header/Footer pane: a slot-label, a DocumentView sub-editor for rich editing
@@ -2762,41 +2719,24 @@ public sealed class MainWindow : Window
         if (_navList is null || !_navPaneVisible)
             return;
 
-        _editor.CommitToModel();
-        var outline = DocumentOutline.Of(_editor.Model);
-
-        // When a search term is active, narrow the outline to headings that are themselves a match or
-        // that own a matching block in their subtree, so the list doubles as a "results in this document"
-        // view (Word's navigation-pane search behaviour). With no term the full outline is shown.
-        var term = _navSearch?.Text ?? string.Empty;
-        if (!string.IsNullOrEmpty(term) && outline.Count > 0)
-            outline = FilterOutlineToMatches(outline, term);
-
-        // Repopulate without triggering a navigation jump from the resulting selection reset.
-        _navList.SelectionChanged -= OnOutlineSelected;
-        _navList.Items.Clear();
-        foreach (var entry in outline)
-            _navList.Items.Add(new OutlineItem(entry));
-        _navList.SelectionChanged += OnOutlineSelected;
+        RenderNavigationOutcome(_navigationPaneSession.Refresh());
     }
 
-    // Keep only the outline entries relevant to the active search: a heading whose own text matches, or
-    // one that owns a matching block anywhere in its subtree (OutlineTools.SubtreeRange). Reuses the same
-    // TextSearch matching as the document scan so the filtered headings and the Next/Prev hits agree.
-    private IReadOnlyList<OutlineEntry> FilterOutlineToMatches(IReadOnlyList<OutlineEntry> outline, string term)
+    private void RenderNavigationOutcome(NavigationPaneOutcome outcome)
     {
-        var blocks = _editor.Model.Blocks;
-        var kept = new List<OutlineEntry>(outline.Count);
-        foreach (var entry in outline)
-        {
-            var (start, end) = OutlineTools.SubtreeRange(blocks, entry.BlockIndex);
-            var matched = false;
-            for (var i = start; i < end && !matched; i++)
-                matched = BlockMatches(blocks[i], term);
-            if (matched)
-                kept.Add(entry);
-        }
-        return kept;
+        var state = outcome.State;
+        _navList.SelectionChanged -= OnOutlineSelected;
+        _navList.Items.Clear();
+        foreach (var heading in state.Headings)
+            _navList.Items.Add(new OutlineItem(heading));
+        _navList.SelectedIndex = state.SelectedHeadingBlockIndex is { } blockIndex
+            ? state.Headings.ToList().FindIndex(heading => heading.BlockIndex == blockIndex)
+            : -1;
+        _navList.SelectionChanged += OnOutlineSelected;
+        UpdateNavSearchStatus();
+
+        if (outcome.NavigateToBlockIndex is { } target)
+            _editor.BringBlockIntoView(target);
     }
 
     // Clicking an outline entry scrolls the matching heading into view and moves the caret there by
@@ -2804,7 +2744,7 @@ public sealed class MainWindow : Window
     private void OnOutlineSelected(object sender, SelectionChangedEventArgs e)
     {
         if (_navList.SelectedItem is OutlineItem item)
-            _editor.BringBlockIntoView(item.Entry.BlockIndex);
+            RenderNavigationOutcome(_navigationPaneSession.SelectHeading(item.Entry.BlockIndex));
     }
 
     // The outline-entry context menu (Promote / Demote / Collapse / Expand). Each item acts on the
@@ -2819,11 +2759,7 @@ public sealed class MainWindow : Window
 
     private void PopulateOutlineContextMenu(ContextMenu menu)
     {
-        var blockIndex = _navList.SelectedItem is OutlineItem selected ? selected.Entry.BlockIndex : -1;
-        var plan = FreeWContextMenuPlanner.BuildOutline(
-            _editor.Model.Blocks,
-            blockIndex,
-            blockIndex >= 0 && _editor.IsHeadingCollapsed(blockIndex));
+        var plan = _navigationPaneSession.BuildOutlineMenu();
 
         menu.Items.Clear();
         foreach (var planned in plan.Items)
@@ -2836,58 +2772,21 @@ public sealed class MainWindow : Window
 
             var item = new MenuItem { Header = planned.Header, IsEnabled = planned.IsEnabled };
             if (planned.CommandId is { } commandId)
-                item.Click += (_, _) => ExecuteOutlineContextCommand(commandId.Value, blockIndex);
+                item.Click += (_, _) => ExecuteOutlineContextCommand(commandId);
             menu.Items.Add(item);
         }
     }
 
-    private void ExecuteOutlineContextCommand(string commandId, int blockIndex)
+    private void ExecuteOutlineContextCommand(RibbonCommandId commandId)
     {
-        var newIndex = blockIndex;
-        switch (commandId)
-        {
-            case FreeWContextMenuPlanner.OutlineMoveUp:
-                newIndex = _editor.MoveHeading(blockIndex, moveUp: true);
-                break;
-            case FreeWContextMenuPlanner.OutlineMoveDown:
-                newIndex = _editor.MoveHeading(blockIndex, moveUp: false);
-                break;
-            case FreeWContextMenuPlanner.OutlinePromote:
-                _editor.PromoteHeading(blockIndex);
-                break;
-            case FreeWContextMenuPlanner.OutlineDemote:
-                _editor.DemoteHeading(blockIndex);
-                break;
-            case FreeWContextMenuPlanner.OutlineCollapse:
-                _editor.CollapseHeading(blockIndex);
-                break;
-            case FreeWContextMenuPlanner.OutlineExpand:
-                _editor.ExpandHeading(blockIndex);
-                break;
-        }
-        RefreshOutline();
-        SelectOutlineEntry(newIndex);
-    }
-
-    // Select the nav-list row whose entry maps to model block index `blockIndex` (no jump beyond the one
-    // the selection already triggers). A no-op when no row matches (e.g. it was filtered out by a search).
-    private void SelectOutlineEntry(int blockIndex)
-    {
-        foreach (var listItem in _navList.Items)
-        {
-            if (listItem is OutlineItem outlineItem && outlineItem.Entry.BlockIndex == blockIndex)
-            {
-                _navList.SelectedItem = listItem;
-                return;
-            }
-        }
+        RenderNavigationOutcome(_navigationPaneSession.ExecuteOutlineCommand(commandId));
     }
 
     // A nav-list row: indents the heading text by its outline level and remembers the source entry
     // (so a click can map back to the model block index). ToString drives the default ListBox display.
-    private sealed class OutlineItem(OutlineEntry entry)
+    private sealed class OutlineItem(NavigationHeadingProjection entry)
     {
-        public OutlineEntry Entry { get; } = entry;
+        public NavigationHeadingProjection Entry { get; } = entry;
 
         public override string ToString()
         {
