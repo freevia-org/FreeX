@@ -355,7 +355,7 @@ public sealed partial class MainWindow
                 ParitySurfaceKind.Dialog,
                 opener,
                 render: !interactionOnly));
-            ReleaseCompletedDialogCaptureResources();
+            await ReleaseCompletedDialogCaptureResourcesAsync();
         }
 
         // ── Multi-tab / multi-category dialogs: open once, render the default surface plus one
@@ -383,7 +383,7 @@ public sealed partial class MainWindow
                 opener,
                 tabNames,
                 render: !interactionOnly));
-            ReleaseCompletedDialogCaptureResources();
+            await ReleaseCompletedDialogCaptureResourcesAsync();
         }
 
         // The original 57 logical routes above intentionally retain their stable ids and tab expansion.
@@ -422,7 +422,7 @@ public sealed partial class MainWindow
                     ParitySurfaceKind.Dialog,
                     opener,
                     render: !interactionOnly));
-                ReleaseCompletedDialogCaptureResources();
+                await ReleaseCompletedDialogCaptureResourcesAsync();
             }
 
             var missingRoutes = ParityInteractionDialogRoutes.Where(route => route.IsMissing);
@@ -453,14 +453,19 @@ public sealed partial class MainWindow
         return results;
     }
 
-    private static void ReleaseCompletedDialogCaptureResources()
+    private static Task ReleaseCompletedDialogCaptureResourcesAsync()
     {
         // Closed Avalonia windows can retain sizeable visual/native graphs until a full collection.
         // Exhaustive capture creates 120 of them in one process, so reclaim each completed unit before
         // opening the next rather than allowing the Docker memory ceiling to become the collector trigger.
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: false);
-        GC.WaitForPendingFinalizers();
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: false);
+        // Finalizers can require the Avalonia dispatcher. Run the blocking drain off-thread so the
+        // dispatcher remains available while finalized render resources release their UI references.
+        return Task.Run(() =>
+        {
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: false);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: false);
+        });
     }
 
     /// <summary>The canonical dialog surfaces and the shell method that opens each. Ordered for stable output.</summary>

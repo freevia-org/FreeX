@@ -9,11 +9,10 @@ using Avalonia.Threading;
 
 namespace FreeX.App.Avalonia.Tests;
 
-[Collection("AvaloniaHeadless")]
+[Collection(AvaloniaHeadlessCollectionOrderer.ParityCaptureCollectionName)]
 public sealed class ChartFormatDialogLifecycleRegressionTests
 {
-    private static readonly HeadlessUnitTestSession Session =
-        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
+    private static readonly HeadlessUnitTestSession Session = AvaloniaParityCaptureSession.Session;
 
     private static readonly IReadOnlyDictionary<string, string> ExpectedInitialFocus =
         new Dictionary<string, string>(StringComparer.Ordinal)

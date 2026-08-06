@@ -5,11 +5,10 @@ using Avalonia.Headless;
 
 namespace FreeX.App.Avalonia.Tests;
 
-[Collection("AvaloniaHeadless")]
+[Collection(AvaloniaHeadlessCollectionOrderer.ParityCaptureCollectionName)]
 public sealed class MissingParityDialogsTests
 {
-    private static readonly HeadlessUnitTestSession Session =
-        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
+    private static readonly HeadlessUnitTestSession Session = AvaloniaParityCaptureSession.Session;
 
     [Fact]
     public void DialogRoutes_ResolveFormerlyMissingSurfacesToProductionOpeners()

@@ -12,11 +12,10 @@ using Avalonia.VisualTree;
 
 namespace FreeX.App.Avalonia.Tests;
 
-[Collection("AvaloniaHeadless")]
+[Collection(AvaloniaHeadlessCollectionOrderer.ParityCaptureCollectionName)]
 public sealed class TextToColumnsDialogLifecycleRegressionTests
 {
-    private static readonly HeadlessUnitTestSession Session =
-        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
+    private static readonly HeadlessUnitTestSession Session = AvaloniaParityCaptureSession.Session;
 
     [Fact]
     public async Task TextToColumnsWizard_MatchesWpfFocusTargetsAcrossStepsAndBackNavigation()

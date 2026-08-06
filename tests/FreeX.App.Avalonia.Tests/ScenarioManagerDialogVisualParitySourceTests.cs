@@ -46,6 +46,43 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
         source.Should().Contain("owner.AttachDialogRangePicker(dialog, picker, target, targetId);");
     }
 
+    [Fact]
+    public void ParityCapture_FinalizerDrainDoesNotBlockTheAvaloniaUiThread()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var methodStart = source.IndexOf(
+            "private static Task ReleaseCompletedDialogCaptureResourcesAsync()",
+            StringComparison.Ordinal);
+        var methodEnd = source.IndexOf("/// <summary>", methodStart, StringComparison.Ordinal);
+
+        methodStart.Should().BeGreaterThanOrEqualTo(0);
+        methodEnd.Should().BeGreaterThan(methodStart);
+        source[methodStart..methodEnd]
+            .Should().Contain("return Task.Run(() =>")
+            .And.Contain("GC.WaitForPendingFinalizers();");
+        source.Should().Contain("await ReleaseCompletedDialogCaptureResourcesAsync();");
+    }
+
+    [Fact]
+    public void ParityCaptureRoutes_UseTheOwnedLastRunningHeadlessSession()
+    {
+        var testDirectory = Path.GetDirectoryName(RepoFile(
+            "tests",
+            "FreeX.App.Avalonia.Tests",
+            "ParityCaptureTests.cs"))!;
+        var captureSources = Directory.GetFiles(testDirectory, "*.cs")
+            .Select(path => (Path: path, Source: File.ReadAllText(path)))
+            .Where(file => file.Source.Contains("CaptureParitySurfacesAsync", StringComparison.Ordinal))
+            .ToArray();
+
+        captureSources.Should().NotBeEmpty();
+        captureSources.Should().OnlyContain(file =>
+            file.Source.Contains(
+                "[Collection(AvaloniaHeadlessCollectionOrderer.ParityCaptureCollectionName)]",
+                StringComparison.Ordinal) &&
+            file.Source.Contains("AvaloniaParityCaptureSession.Session", StringComparison.Ordinal));
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

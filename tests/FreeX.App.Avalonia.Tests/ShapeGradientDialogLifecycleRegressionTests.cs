@@ -4,11 +4,10 @@ using FluentAssertions;
 
 namespace FreeX.App.Avalonia.Tests;
 
-[Collection("AvaloniaHeadless")]
+[Collection(AvaloniaHeadlessCollectionOrderer.ParityCaptureCollectionName)]
 public sealed class ShapeGradientDialogLifecycleRegressionTests
 {
-    private static readonly HeadlessUnitTestSession Session =
-        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
+    private static readonly HeadlessUnitTestSession Session = AvaloniaParityCaptureSession.Session;
 
     [Fact]
     public async Task ShapeGradientDialog_UsesWpfStartColorFocusAndOwnedEscapeLifecycle()

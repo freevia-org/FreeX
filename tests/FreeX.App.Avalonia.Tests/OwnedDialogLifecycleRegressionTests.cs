@@ -8,11 +8,10 @@ using Avalonia.Threading;
 
 namespace FreeX.App.Avalonia.Tests;
 
-[Collection("AvaloniaHeadless")]
+[Collection(AvaloniaHeadlessCollectionOrderer.ParityCaptureCollectionName)]
 public sealed class OwnedDialogLifecycleRegressionTests
 {
-    private static readonly HeadlessUnitTestSession Session =
-        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
+    private static readonly HeadlessUnitTestSession Session = AvaloniaParityCaptureSession.Session;
 
     private static readonly string[] MissingFocusTabAndEscapeIds =
     [
@@ -198,51 +197,6 @@ public sealed class OwnedDialogLifecycleRegressionTests
     }
 
     [Fact]
-    public async Task DirectlyOwnedModelessWindow_ReceivesFocusTabCycleAndEscapeLifecycle()
-    {
-        await Session.Dispatch(() =>
-        {
-            var owner = new MainWindow([]);
-            Window? dialog = null;
-            try
-            {
-                owner.Show();
-                var first = new TextBox { Text = "First" };
-                var second = new TextBox { Text = "Second" };
-                dialog = new Window
-                {
-                    Width = 280,
-                    Height = 160,
-                    Content = new StackPanel { Children = { first, second } },
-                };
-
-                dialog.Show(owner);
-                dialog.UpdateLayout();
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Background);
-
-                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(first);
-                MainWindow.SendDialogKeyForTest(dialog, Key.Tab, RawInputModifiers.None, out var tabError)
-                    .Should().BeTrue(tabError);
-                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(second);
-                MainWindow.SendDialogKeyForTest(dialog, Key.Tab, RawInputModifiers.None, out tabError)
-                    .Should().BeTrue(tabError);
-                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(first);
-
-                MainWindow.SendDialogKeyForTest(dialog, Key.Escape, RawInputModifiers.None, out var escapeError)
-                    .Should().BeTrue(escapeError);
-                dialog.IsVisible.Should().BeFalse();
-            }
-            finally
-            {
-                if (dialog?.IsVisible == true)
-                    dialog.Close();
-                if (owner.IsVisible)
-                    owner.Close();
-            }
-        }, CancellationToken.None);
-    }
-
-    [Fact]
     public async Task AdvancedFilterOwnedModal_ClosesThroughEscapeContract()
     {
         var outputDirectory = Path.Combine(
@@ -368,5 +322,58 @@ public sealed class OwnedDialogLifecycleRegressionTests
                 // Test cleanup must not hide interaction lifecycle regressions.
             }
         }
+    }
+}
+
+[Collection(AvaloniaHeadlessCollectionOrderer.PostCaptureCollectionName)]
+public sealed class PostCaptureOwnedDialogLifecycleRegressionTests
+{
+    private static readonly HeadlessUnitTestSession Session = AvaloniaParityCaptureSession.Session;
+
+    [Fact]
+    public async Task DirectlyOwnedModelessWindow_ReceivesFocusTabCycleAndEscapeLifecycle()
+    {
+        await Session.Dispatch(() =>
+        {
+            var owner = new MainWindow([]);
+            Window? dialog = null;
+            try
+            {
+                owner.Show();
+                var first = new TextBox { Text = "First" };
+                var second = new TextBox { Text = "Second" };
+                dialog = new Window
+                {
+                    Width = 280,
+                    Height = 160,
+                    Content = new StackPanel { Children = { first, second } },
+                };
+
+                dialog.Show(owner);
+                dialog.Activate();
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Background);
+
+                first.Focus(NavigationMethod.Tab).Should().BeTrue();
+                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(first);
+                MainWindow.SendDialogKeyForTest(dialog, Key.Tab, RawInputModifiers.None, out var tabError)
+                    .Should().BeTrue(tabError);
+                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(second);
+                MainWindow.SendDialogKeyForTest(dialog, Key.Tab, RawInputModifiers.None, out tabError)
+                    .Should().BeTrue(tabError);
+                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(first);
+
+                MainWindow.SendDialogKeyForTest(dialog, Key.Escape, RawInputModifiers.None, out var escapeError)
+                    .Should().BeTrue(escapeError);
+                dialog.IsVisible.Should().BeFalse();
+            }
+            finally
+            {
+                if (dialog?.IsVisible == true)
+                    dialog.Close();
+                if (owner.IsVisible)
+                    owner.Close();
+            }
+        }, CancellationToken.None);
     }
 }

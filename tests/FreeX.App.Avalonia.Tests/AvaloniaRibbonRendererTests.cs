@@ -20,6 +20,7 @@ using AvaloniaPath = Avalonia.Controls.Shapes.Path;
 using SelectionPaneObjectKind = FreeX.Core.Model.SelectionPaneObjectKind;
 
 [assembly: AvaloniaTestApplication(typeof(FreeX.App.Avalonia.Tests.RibbonHeadlessApp))]
+[assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerAssembly)]
 [assembly: Xunit.CollectionBehavior(DisableTestParallelization = true)]
 
 namespace FreeX.App.Avalonia.Tests;
