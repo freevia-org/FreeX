@@ -73,7 +73,8 @@ public sealed record LinuxVideoExportResult(
     string? EncoderName,
     long ByteCount,
     int MuxedNarrationTrackCount = 0,
-    int MuxedCameraTrackCount = 0)
+    int MuxedCameraTrackCount = 0,
+    int MuxedCaptionTrackCount = 0)
 {
     public static LinuxVideoExportResult Failed(string reason, string outputPath = "") =>
         new(false, false, "Linux video export failed", reason, outputPath, null, 0);
@@ -86,22 +87,24 @@ public sealed record LinuxVideoExportResult(
         string encoderName,
         long byteCount,
         int muxedNarrationTrackCount = 0,
-        int muxedCameraTrackCount = 0) =>
+        int muxedCameraTrackCount = 0,
+        int muxedCaptionTrackCount = 0) =>
         new(
             true,
             false,
-            BuildVideoSuccessText(muxedNarrationTrackCount, muxedCameraTrackCount),
+            BuildVideoSuccessText(muxedNarrationTrackCount, muxedCameraTrackCount, muxedCaptionTrackCount),
             null,
             outputPath,
             encoderName,
             byteCount,
             muxedNarrationTrackCount,
-            muxedCameraTrackCount);
+            muxedCameraTrackCount,
+            muxedCaptionTrackCount);
 
-    private static string BuildVideoSuccessText(int narrationCount, int cameraCount) =>
-        narrationCount == 0 && cameraCount == 0
+    private static string BuildVideoSuccessText(int narrationCount, int cameraCount, int captionCount) =>
+        narrationCount == 0 && cameraCount == 0 && captionCount == 0
             ? "Linux video export completed (video-only)"
-            : $"Linux video export completed with {narrationCount} narration track(s) and {cameraCount} camera track(s)";
+            : $"Linux video export completed with {narrationCount} narration track(s), {cameraCount} camera track(s), and {captionCount} caption track(s)";
 }
 
 public sealed class LinuxNativeOutputCapabilityDetector
@@ -516,7 +519,8 @@ public sealed class LinuxVideoExportAdapter : ILinuxVideoExportAdapter
                 _capability.EncoderName!,
                 bytes.LongLength,
                 mediaPlan.MuxedNarrationTrackCount,
-                mediaPlan.MuxedCameraTrackCount);
+                mediaPlan.MuxedCameraTrackCount,
+                mediaPlan.MuxedCaptionTrackCount);
         }
         catch (OperationCanceledException)
         {

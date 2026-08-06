@@ -33,7 +33,8 @@ internal sealed record WpfVideoExportResult(
     string? EncoderName,
     long ByteCount,
     int MuxedNarrationTrackCount,
-    int MuxedCameraTrackCount = 0)
+    int MuxedCameraTrackCount = 0,
+    int MuxedCaptionTrackCount = 0)
 {
     public static WpfVideoExportResult Failed(string reason, string outputPath = "") =>
         new(false, false, "Video export failed", reason, outputPath, null, 0, 0);
@@ -46,22 +47,24 @@ internal sealed record WpfVideoExportResult(
         string encoderName,
         long byteCount,
         int muxedNarrationTrackCount,
-        int muxedCameraTrackCount = 0) =>
+        int muxedCameraTrackCount = 0,
+        int muxedCaptionTrackCount = 0) =>
         new(
             true,
             false,
-            BuildSuccessText(muxedNarrationTrackCount, muxedCameraTrackCount),
+            BuildSuccessText(muxedNarrationTrackCount, muxedCameraTrackCount, muxedCaptionTrackCount),
             null,
             outputPath,
             encoderName,
             byteCount,
             muxedNarrationTrackCount,
-            muxedCameraTrackCount);
+            muxedCameraTrackCount,
+            muxedCaptionTrackCount);
 
-    private static string BuildSuccessText(int narrationCount, int cameraCount) =>
-        narrationCount == 0 && cameraCount == 0
+    private static string BuildSuccessText(int narrationCount, int cameraCount, int captionCount) =>
+        narrationCount == 0 && cameraCount == 0 && captionCount == 0
             ? "Video export completed (video-only)"
-            : $"Video export completed with {narrationCount} narration track(s) and {cameraCount} camera track(s)";
+            : $"Video export completed with {narrationCount} narration track(s), {cameraCount} camera track(s), and {captionCount} caption track(s)";
 }
 
 internal sealed record WpfVideoProcessResult(
@@ -269,7 +272,8 @@ internal sealed class WpfVideoExportAdapter : IWpfVideoProcessRunner
                         nativeResult.EncoderName ?? _capability.EncoderName,
                         nativeResult.ByteCount,
                         nativeResult.MuxedNarrationTrackCount,
-                        nativeResult.MuxedCameraTrackCount)
+                        nativeResult.MuxedCameraTrackCount,
+                        nativeResult.MuxedCaptionTrackCount)
                     : WpfVideoExportResult.Failed(
                         nativeResult.FailureReason ?? nativeResult.StatusText,
                         outputPath);
@@ -323,7 +327,8 @@ internal sealed class WpfVideoExportAdapter : IWpfVideoProcessRunner
                 _capability.EncoderName,
                 bytes.LongLength,
                 mediaPlan.MuxedNarrationTrackCount,
-                mediaPlan.MuxedCameraTrackCount);
+                mediaPlan.MuxedCameraTrackCount,
+                mediaPlan.MuxedCaptionTrackCount);
         }
         catch (OperationCanceledException)
         {
