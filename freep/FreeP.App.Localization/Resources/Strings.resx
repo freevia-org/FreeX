@@ -2473,11 +2473,29 @@
   <data name="Ribbon_Command_AnimationEmphasisBlink_KeyTip" xml:space="preserve">
     <value>B</value>
   </data>
+  <data name="Ribbon_Command_AnimationEmphasisFlashBulb_Label" xml:space="preserve">
+    <value>FlashBulb</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisFlashBulb_KeyTip" xml:space="preserve">
+    <value>FB</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisFlicker_Label" xml:space="preserve">
+    <value>Flicker</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisFlicker_KeyTip" xml:space="preserve">
+    <value>FK</value>
+  </data>
   <data name="Ribbon_Command_AnimationEmphasisColorPulse_Label" xml:space="preserve">
     <value>Color Pulse</value>
   </data>
   <data name="Ribbon_Command_AnimationEmphasisColorPulse_KeyTip" xml:space="preserve">
     <value>C</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisColorWave_Label" xml:space="preserve">
+    <value>Color Wave</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisColorWave_KeyTip" xml:space="preserve">
+    <value>CW</value>
   </data>
   <data name="Ribbon_Command_AnimationEmphasisChangeColor_Label" xml:space="preserve">
     <value>Change Color</value>
