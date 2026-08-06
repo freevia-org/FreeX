@@ -2365,6 +2365,47 @@ probe_grid_drag_parity() {
     fi
 }
 
+probe_grid_autofit() {
+    local seeded_text="Long deterministic X11 AutoFit text for column growth"
+    local before_width=0 after_width=0 boundary_x boundary_y
+    local grown=false
+    local artifacts="grid-autofit-before.png;grid-autofit-after.png;grid-autofit-postcondition.txt"
+
+    if ! set_cell_text_without_save 0 0 A1 "$seeded_text" ||
+       ! select_cell 0 0 A1 ||
+       ! capture_selection "grid-autofit-before.png"; then
+        write_artifact "grid-autofit-postcondition.txt" "seeded=$seeded_text\nbefore-width=unavailable\nafter-width=unavailable\nwidth-grew=false\n"
+        record "grid-header-double-click-autofit-column-physical" "failed" "grid-autofit-before.png; grid-autofit-after.png; grid-autofit-postcondition.txt" "Could not seed A1 or capture the pre-AutoFit selection." "$artifacts"
+        return
+    fi
+
+    before_width="$observed_width"
+    # The selection outline includes a few pixels outside the cell. Use the calibrated
+    # A1-to-B1 pitch for the physical boundary, rather than the outline width.
+    boundary_x=$((a1_x + cell_width - 1))
+    boundary_y=$((a1_y - cell_height / 2))
+    focus_app
+    xdotool_mousemove_sync "$boundary_x" "$boundary_y"
+    xdotool click --repeat 2 --delay 180 1
+    sleep "$settle_seconds"
+
+    select_cell 0 0 A1 || true
+    if capture_selection "grid-autofit-after.png"; then
+        after_width="$observed_width"
+    fi
+    if [[ "$after_width" =~ ^[0-9]+$ ]] && (( after_width > before_width )); then
+        grown=true
+    fi
+
+    write_artifact "grid-autofit-postcondition.txt" \
+        "seeded=$seeded_text\nbefore-width=$before_width\nafter-width=$after_width\nboundary-x=$boundary_x\nboundary-y=$boundary_y\nwidth-grew=$grown\n"
+    if $grown; then
+        record "grid-header-double-click-autofit-column-physical" "passed" "grid-autofit-before.png; grid-autofit-after.png; before-width=$before_width; after-width=$after_width" "A real X11 double-click on the first column boundary widened the seeded long-text column." "$artifacts"
+    else
+        record "grid-header-double-click-autofit-column-physical" "failed" "grid-autofit-before.png; grid-autofit-after.png; grid-autofit-postcondition.txt" "The real X11 column-boundary double-click did not produce deterministic column growth." "$artifacts"
+    fi
+}
+
 probe_split_pane_pointer() {
     local split_before="split-pane-before.png" split_after="split-pane-open.png"
     local divider_before="split-pane-divider-before.png" divider_after="split-pane-divider-after.png"
@@ -4455,6 +4496,19 @@ if [[ "$probe_selector" == "grid-drag" ]]; then
     probe_grid_drag_parity
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused grid-drag probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "grid-autofit" ]]; then
+    # Focused iteration mode for physical header-boundary double-click AutoFit.
+    probe_grid_autofit
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused grid-autofit probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then

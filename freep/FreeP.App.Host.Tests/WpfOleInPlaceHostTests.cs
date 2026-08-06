@@ -1,11 +1,70 @@
 using System.Windows;
 using System.Windows.Controls;
+using FreeP.App.Compositor;
 using FreeP.App.Rendering.Wpf;
+using Free.Shared.Drawing;
 
 namespace FreeP.App.Host.Tests;
 
 public sealed class WpfOleInPlaceHostTests
 {
+    [StaFact]
+    public void OleDoubleClick_UsesExternalRouteWhenInPlaceDeclines()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.Ole,
+            OleObject = new OleObjectInfo { EmbeddedBytes = [1, 2, 3], FileName = "Book.xlsx" },
+        };
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var externalCalls = 0;
+
+        using var handler = new CanvasGestureHandler(
+            new SlideCanvas(),
+            editor,
+            tryOpenOleInPlace: _ => false,
+            tryActivateOleExternally: ole =>
+            {
+                ole.Should().BeSameAs(shape.OleObject);
+                externalCalls++;
+                return true;
+            });
+
+        handler.HandleOleDoubleClickForTests(shape).Should().BeTrue();
+        externalCalls.Should().Be(1);
+    }
+
+    [StaFact]
+    public void OleDoubleClick_StopsAtInPlaceRoute()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var shape = new SlideShape
+        {
+            Id = 8,
+            Kind = SlideShapeKind.Ole,
+            OleObject = new OleObjectInfo { EmbeddedBytes = [4, 5, 6] },
+        };
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var externalCalls = 0;
+
+        using var handler = new CanvasGestureHandler(
+            new SlideCanvas(),
+            editor,
+            tryOpenOleInPlace: _ => true,
+            tryActivateOleExternally: _ =>
+            {
+                externalCalls++;
+                return true;
+            });
+
+        handler.HandleOleDoubleClickForTests(shape).Should().BeTrue();
+        externalCalls.Should().Be(0);
+    }
+
     [StaFact]
     public void EmptyPayloadFallsBackWithoutAddingAHost()
     {

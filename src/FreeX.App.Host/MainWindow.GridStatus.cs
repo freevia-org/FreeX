@@ -424,7 +424,11 @@ public partial class MainWindow
 
     private void OnColumnAutoFitRequested(uint col)
     {
-        var (startCol, endCol) = GetSelectedColRange(col);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        var (startCol, endCol) = GetColumnResizeRange(sheet, col);
         var range = new GridRange(
             new CellAddress(_currentSheetId, 1, startCol),
             new CellAddress(_currentSheetId, CellAddress.MaxRow, endCol));
@@ -451,7 +455,11 @@ public partial class MainWindow
 
     private void OnRowAutoFitRequested(uint row)
     {
-        var (startRow, endRow) = GetSelectedRowRange(row);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        var (startRow, endRow) = GetRowResizeRange(sheet, row);
         var range = new GridRange(
             new CellAddress(_currentSheetId, startRow, 1),
             new CellAddress(_currentSheetId, endRow, CellAddress.MaxCol));
