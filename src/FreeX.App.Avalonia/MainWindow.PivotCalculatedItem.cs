@@ -42,18 +42,22 @@ public sealed partial class MainWindow
             return;
 
         var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
-        var fields = PivotCalculatedItemPlanner.AvailableFields(pivot, headers);
-        if (fields.Count == 0)
+        var workflowText = PivotCalculatedItemSessionText.Default with
         {
-            ShowEditIssue(UiText.Get("PivotCalcItem_NoField"));
+            NoSourceFieldMessage = UiText.Get("PivotCalcItem_NoField"),
+            SavedStatusFormat = UiText.Get("PivotCalcItem_Saved"),
+            DeletedStatusFormat = UiText.Get("PivotCalcItem_Deleted")
+        };
+        var calculatedItemSession = PivotCalculatedItemSession.Create(pivot, headers, workflowText);
+        if (calculatedItemSession.OpenIssue is { } openIssue)
+        {
+            ShowEditIssue(openIssue.Message);
             return;
         }
 
-        var references = PivotCalculatedItemPlanner.AvailableFieldReferences(headers);
-
         var fieldBox = new ComboBox { MinWidth = 260 };
         ApplyPivotComboBoxChrome(fieldBox);
-        foreach (var field in fields)
+        foreach (var field in calculatedItemSession.Fields)
             fieldBox.Items.Add(field.Caption);
         fieldBox.SelectedIndex = 0;
         AutomationProperties.SetAutomationId(fieldBox, "PivotCalcItemFieldBox");
@@ -82,12 +86,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(existingBox, "PivotCalcItemExistingBox");
         AutomationProperties.SetName(existingBox, UiText.Get("PivotCalcItem_ExistingLabel"));
 
-        int CurrentFieldIndex() => fields[Math.Max(0, fieldBox.SelectedIndex)].SourceFieldIndex;
-
         IReadOnlyList<string> existingNames = [];
         void ReloadExistingNames()
         {
-            existingNames = PivotCalculatedItemPlanner.ExistingItemNames(pivot, CurrentFieldIndex());
+            existingNames = calculatedItemSession.ExistingNames;
             existingBox.Items.Clear();
             existingBox.Items.Add(UiText.Get("PivotCalcItem_ExistingNone"));
             foreach (var name in existingNames)
@@ -98,34 +100,30 @@ public sealed partial class MainWindow
         ReloadExistingNames();
         fieldBox.SelectionChanged += (_, _) =>
         {
+            var selectedField = calculatedItemSession.Fields[Math.Max(0, fieldBox.SelectedIndex)];
+            var draft = calculatedItemSession.SelectSourceField(
+                selectedField.SourceFieldIndex,
+                startNew: true);
             ReloadExistingNames();
-            nameBox.Text = string.Empty;
-            formulaBox.Text = "= ";
+            nameBox.Text = draft.Name;
+            formulaBox.Text = draft.Formula;
         };
 
         existingBox.SelectionChanged += (_, _) =>
         {
-            if (existingBox.SelectedIndex <= 0)
-            {
-                nameBox.Text = string.Empty;
-                formulaBox.Text = "= ";
-                return;
-            }
-
-            var match = PivotCalculatedItemPlanner.FindByName(
-                pivot, CurrentFieldIndex(), existingNames[existingBox.SelectedIndex - 1]);
-            if (match is not null)
-            {
-                nameBox.Text = match.Name;
-                formulaBox.Text = match.Formula;
-            }
+            var selectedName = existingBox.SelectedIndex > 0
+                ? existingNames[existingBox.SelectedIndex - 1]
+                : null;
+            var draft = calculatedItemSession.SelectExisting(selectedName);
+            nameBox.Text = draft.Name;
+            formulaBox.Text = draft.Formula;
         };
 
         var fieldsList = new ListBox { Height = 96 };
         ApplyPivotListBoxChrome(fieldsList);
-        foreach (var reference in references)
+        foreach (var reference in calculatedItemSession.FieldReferences)
             fieldsList.Items.Add(reference);
-        if (references.Count > 0)
+        if (calculatedItemSession.FieldReferences.Count > 0)
             fieldsList.SelectedIndex = 0;
         AutomationProperties.SetAutomationId(fieldsList, "PivotCalcItemReferenceList");
         AutomationProperties.SetName(fieldsList, UiText.Get("PivotCalcItem_FieldsAutomation"));
@@ -138,8 +136,11 @@ public sealed partial class MainWindow
             if (fieldsList.SelectedItem is not string reference)
                 return;
 
-            var (text, caret) = PivotCalculatedItemPlanner.InsertReference(
-                formulaBox.Text, reference, formulaBox.SelectionStart, SelectionLength(formulaBox));
+            calculatedItemSession.UpdateDraft(nameBox.Text, formulaBox.Text);
+            var (text, caret) = calculatedItemSession.InsertReference(
+                reference,
+                formulaBox.SelectionStart,
+                SelectionLength(formulaBox));
             formulaBox.Text = text;
             formulaBox.Focus();
             formulaBox.SelectionStart = caret;
@@ -170,32 +171,31 @@ public sealed partial class MainWindow
         ApplyPivotButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "PivotCalcItemCancelButton");
 
-        // Outcome carried out of the dialog: Save (upsert) or Delete; null means cancel.
-        PivotCalcItemOutcome? outcome = null;
+        PivotCalculatedItemSubmission? submission = null;
 
         cancel.Click += (_, _) => dialog.Close(false);
         save.Click += (_, _) =>
         {
-            if (!PivotCalculatedItemPlanner.TryCreateResult(
-                    CurrentFieldIndex(), nameBox.Text, formulaBox.Text, out var result, out var error))
+            var plan = calculatedItemSession.PlanSave(nameBox.Text, formulaBox.Text);
+            if (!plan.Success)
             {
-                ShowEditIssue(error ?? PivotCalculatedItemPlanner.EmptyNameMessage);
+                ShowEditIssue(plan.Issue!.Message);
                 return;
             }
 
-            outcome = new PivotCalcItemOutcome(IsDelete: false, result, CurrentFieldIndex(), result!.Name);
+            submission = plan.Submission;
             dialog.Close(true);
         };
         delete.Click += (_, _) =>
         {
-            var name = (nameBox.Text ?? string.Empty).Trim();
-            if (name.Length == 0)
+            var plan = calculatedItemSession.PlanDelete(nameBox.Text);
+            if (!plan.Success)
             {
-                ShowEditIssue(PivotCalculatedItemPlanner.NoItemToDeleteMessage);
+                ShowEditIssue(plan.Issue!.Message);
                 return;
             }
 
-            outcome = new PivotCalcItemOutcome(IsDelete: true, null, CurrentFieldIndex(), name);
+            submission = plan.Submission;
             dialog.Close(true);
         };
 
@@ -222,24 +222,17 @@ public sealed partial class MainWindow
         ConfigurePivotDialogLifecycle(dialog, nameBox, selectAllText: true);
 
         var confirmed = await dialog.ShowDialog<bool>(this);
-        if (!confirmed || outcome is null)
+        if (!confirmed || submission is null)
             return;
 
-        if (outcome.IsDelete)
+        var commit = calculatedItemSession.Commit(submission);
+        if (!commit.Success)
         {
-            if (!PivotCalculatedItemPlanner.TryRemove(
-                    pivot, outcome.SourceFieldIndex, outcome.Name, out var remaining, out var removeError))
-            {
-                ShowEditIssue(removeError ?? PivotCalculatedItemPlanner.NoItemToDeleteMessage);
-                return;
-            }
-
-            ApplyPivotCalculatedItems(pivot, remaining, UiText.Format("PivotCalcItem_Deleted", outcome.Name));
+            ShowEditIssue(commit.Issue!.Message);
             return;
         }
 
-        var updated = PivotCalculatedItemPlanner.Upsert(pivot, outcome.Result!);
-        ApplyPivotCalculatedItems(pivot, updated, UiText.Format("PivotCalcItem_Saved", outcome.Name));
+        ApplyPivotCalculatedItems(pivot, commit.CalculatedItems, commit.Status ?? string.Empty);
     }
 
     private void ApplyPivotCalculatedItems(
@@ -257,10 +250,4 @@ public sealed partial class MainWindow
             calculatedItems);
         ExecutePivotTabCommand(command, status);
     }
-
-    private sealed record PivotCalcItemOutcome(
-        bool IsDelete,
-        PivotCalculatedItemPlanner.PivotCalculatedItemResult? Result,
-        int SourceFieldIndex,
-        string Name);
 }

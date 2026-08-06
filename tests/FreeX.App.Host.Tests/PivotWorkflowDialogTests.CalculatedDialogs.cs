@@ -67,9 +67,11 @@ public sealed partial class PivotWorkflowDialogTests
             "public sealed class PivotCalculatedFieldDialog",
             "public sealed record PivotCalculatedItemDialogResult");
 
-        source.Should().Contain("if (!ValidateInputs())");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotCalculated_EnterCalculatedFieldName\"), _nameBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotCalculated_EnterCalculatedFieldFormula\"), _formulaBox);");
+        source.Should().Contain("PivotCalculatedFieldSession.CreateDraft(");
+        source.Should().Contain("EmptyNameMessage = UiText.Get(\"PivotCalculated_EnterCalculatedFieldName\")");
+        source.Should().Contain("EmptyFormulaMessage = UiText.Get(\"PivotCalculated_EnterCalculatedFieldFormula\")");
+        source.Should().Contain("var plan = _session.PlanSave(");
+        source.Should().Contain("issue.Target == PivotCalculatedInputTarget.Formula ? _formulaBox : _nameBox");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
@@ -154,9 +156,11 @@ public sealed partial class PivotWorkflowDialogTests
             "public sealed class PivotCalculatedItemDialog",
             "");
 
-        source.Should().Contain("if (!ValidateInputs())");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotCalculated_EnterCalculatedItemName\"), _nameBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotCalculated_EnterCalculatedItemFormula\"), _formulaBox);");
+        source.Should().Contain("PivotCalculatedItemSession.CreateDraft(");
+        source.Should().Contain("EmptyNameMessage = UiText.Get(\"PivotCalculated_EnterCalculatedItemName\")");
+        source.Should().Contain("EmptyFormulaMessage = UiText.Get(\"PivotCalculated_EnterCalculatedItemFormula\")");
+        source.Should().Contain("var plan = _session.PlanSave(");
+        source.Should().Contain("issue.Target == PivotCalculatedInputTarget.Formula ? _formulaBox : _nameBox");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
