@@ -669,20 +669,23 @@ public sealed class DocumentView : RichTextBox
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
-        var isCtrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
-        if (isCtrl && e.Key == Key.Z && !AllowsCurrentUndoHistory())
+        var input = DocumentEditorInteractionSession.PlanBodyKey(
+            ToEditorInputKey(e.Key),
+            ToEditorInputModifiers(Keyboard.Modifiers));
+        if (input.Intent == DocumentEditorInputIntent.Undo && !AllowsCurrentUndoHistory())
         {
             e.Handled = true;
             return;
         }
 
-        if (isCtrl && e.Key == Key.Y && !AllowsCurrentRedoHistory())
+        if (input.Intent == DocumentEditorInputIntent.Redo && !AllowsCurrentRedoHistory())
         {
             e.Handled = true;
             return;
         }
 
-        if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.Enter
+        if (Keyboard.Modifiers == ModifierKeys.None
+            && input.Intent == DocumentEditorInputIntent.InsertParagraphBreak
             && TryApplyBodyParagraphBreak())
         {
             e.Handled = true;
@@ -690,9 +693,10 @@ public sealed class DocumentView : RichTextBox
         }
 
         if (Keyboard.Modifiers == ModifierKeys.None
-            && (e.Key == Key.Back || e.Key == Key.Delete))
+            && input.Intent is DocumentEditorInputIntent.DeleteBackward
+                or DocumentEditorInputIntent.DeleteForward)
         {
-            var handled = e.Key == Key.Back
+            var handled = input.Intent == DocumentEditorInputIntent.DeleteBackward
                 ? TryApplyBodyBackspace()
                 : TryApplyBodyDeleteForward();
             if (handled)
@@ -703,6 +707,38 @@ public sealed class DocumentView : RichTextBox
         }
 
         base.OnPreviewKeyDown(e);
+    }
+
+    private static DocumentEditorInputKey ToEditorInputKey(Key key) => key switch
+    {
+        Key.Back => DocumentEditorInputKey.Backspace,
+        Key.Delete => DocumentEditorInputKey.Delete,
+        Key.Enter => DocumentEditorInputKey.Enter,
+        Key.Tab => DocumentEditorInputKey.Tab,
+        Key.Left => DocumentEditorInputKey.Left,
+        Key.Right => DocumentEditorInputKey.Right,
+        Key.Up => DocumentEditorInputKey.Up,
+        Key.Down => DocumentEditorInputKey.Down,
+        Key.Home => DocumentEditorInputKey.Home,
+        Key.End => DocumentEditorInputKey.End,
+        Key.B => DocumentEditorInputKey.B,
+        Key.I => DocumentEditorInputKey.I,
+        Key.U => DocumentEditorInputKey.U,
+        Key.Y => DocumentEditorInputKey.Y,
+        Key.Z => DocumentEditorInputKey.Z,
+        _ => DocumentEditorInputKey.None,
+    };
+
+    private static DocumentEditorInputModifiers ToEditorInputModifiers(ModifierKeys modifiers)
+    {
+        var result = DocumentEditorInputModifiers.None;
+        if ((modifiers & ModifierKeys.Control) != 0)
+            result |= DocumentEditorInputModifiers.Control;
+        if ((modifiers & ModifierKeys.Shift) != 0)
+            result |= DocumentEditorInputModifiers.Shift;
+        if ((modifiers & ModifierKeys.Alt) != 0)
+            result |= DocumentEditorInputModifiers.Alt;
+        return result;
     }
 
     /// <summary>
@@ -1487,7 +1523,7 @@ public sealed class DocumentView : RichTextBox
             return;
         }
 
-        PasteFromClipboard();
+        PasteFromClipboard(DocumentPasteTextKind.MergeFormatting);
     }
 
     /// <summary>
@@ -14230,10 +14266,6 @@ public sealed class DocumentView : RichTextBox
     public (int Current, int Total) SectionInfo()
     {
         CommitToModel();
-        var total = Math.Max(1, _model.Sections.Count);
-        if (total == 1)
-            return (1, 1);
-
         // Find the caret's containing top-level WPF paragraph ordinal, then count model section breaks
         // at or before the model block at that ordinal (model + WPF top-level blocks stay aligned for the
         // simple paragraph/table flow these documents use).
@@ -14252,14 +14284,8 @@ public sealed class DocumentView : RichTextBox
                 ordinal++;
             }
         }
-        if (caretOrdinal < 0)
-            return (total, total); // caret position unknown: report the last (body) section
-
-        var current = 1;
-        for (var i = 0; i < _model.Blocks.Count && i <= caretOrdinal; i++)
-            if (_model.Blocks[i] is FreeW.Core.Model.Paragraph { SectionBreak: not null } && i < caretOrdinal)
-                current++;
-        return (Math.Clamp(current, 1, total), total);
+        var position = _editingSession.Interaction.SectionPosition(caretOrdinal);
+        return (position.Current, position.Total);
     }
 
     /// <summary>
@@ -14503,7 +14529,7 @@ public sealed class DocumentView : RichTextBox
     /// the clipboard holds no usable text. Reads <see cref="System.Windows.Clipboard"/> directly — no model
     /// or docx changes.
     /// </summary>
-    public void PastePlainText() => PasteFromClipboard();
+    public void PastePlainText() => PasteFromClipboard(DocumentPasteTextKind.TextOnly);
 
     /// <summary>
     /// Paste the clipboard's text and merge it into the destination's formatting ("Merge Formatting"). In
@@ -14513,13 +14539,13 @@ public sealed class DocumentView : RichTextBox
     /// and inserted via <see cref="InsertText"/> so it is undoable. A no-op when the clipboard holds no
     /// usable text.
     /// </summary>
-    public void PasteMergeFormatting() => PasteFromClipboard();
+    public void PasteMergeFormatting() => PasteFromClipboard(DocumentPasteTextKind.MergeFormatting);
 
     // Shared body for the paste-special commands: read the clipboard's text (guarding the absent/empty
     // case and the rare clipboard-access failure), normalize it, and insert it at the caret. Both
     // "Paste Text Only" and "Merge Formatting" resolve to match-destination insertion in FreeW, so they
     // share one implementation.
-    private void PasteFromClipboard()
+    private void PasteFromClipboard(DocumentPasteTextKind kind)
     {
         string raw;
         try
@@ -14534,11 +14560,11 @@ public sealed class DocumentView : RichTextBox
             return;
         }
 
-        var text = PasteText.Normalize(raw);
-        if (text.Length == 0)
+        var plan = _editingSession.Interaction.PlanPasteText(raw, kind);
+        if (!plan.HasText)
             return;
 
-        InsertText(text);
+        InsertText(plan.Text);
     }
 
     /// <summary>

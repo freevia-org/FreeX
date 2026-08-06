@@ -771,18 +771,8 @@ public sealed class DocumentView : Control
     /// <summary>Best-effort one-based section position for the shell status bar.</summary>
     public (int Current, int Total) SectionInfo()
     {
-        var total = Math.Max(1, _doc.Sections.Count);
-        if (total == 1)
-            return (1, 1);
-
-        var current = 1;
-        for (var i = 0; i < _doc.Blocks.Count && i < _caret.Block; i++)
-        {
-            if (_doc.Blocks[i] is Paragraph { SectionBreak: not null })
-                current++;
-        }
-
-        return (Math.Clamp(current, 1, total), total);
+        var position = _editingSession.Interaction.SectionPosition(_caret.Block);
+        return (position.Current, position.Total);
     }
 
     /// <summary>Top of the current caret in control coordinates (0 when not resolvable).</summary>
@@ -17317,6 +17307,9 @@ public sealed class DocumentView : Control
         base.OnKeyDown(e);
         var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
         var ctrl = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+        var input = DocumentEditorInteractionSession.PlanBodyKey(
+            ToEditorInputKey(e.Key),
+            ToEditorInputModifiers(e.KeyModifiers));
 
         if (e.Key == Key.Apps || e.Key == Key.F10 && e.KeyModifiers == KeyModifiers.Shift)
         {
@@ -17326,7 +17319,7 @@ public sealed class DocumentView : Control
             return;
         }
 
-        if (IsEditingLocked && IsEditingKey(e.Key, ctrl))
+        if (IsEditingLocked && input.IsEditingMutation)
         {
             e.Handled = true;
             return;
@@ -17522,37 +17515,37 @@ public sealed class DocumentView : Control
             // All other keys fall through to default handling below.
         }
 
-        switch (e.Key)
+        switch (input.Intent)
         {
-            case Key.Z when ctrl: Undo(); e.Handled = true; break;
-            case Key.Y when ctrl: Redo(); e.Handled = true; break;
-            case Key.B when ctrl: ToggleBold(); e.Handled = true; break;
-            case Key.I when ctrl: ToggleItalic(); e.Handled = true; break;
-            case Key.U when ctrl: ToggleUnderline(); e.Handled = true; break;
-            case Key.Back: Backspace(); e.Handled = true; break;
-            case Key.Delete: DeleteForward(); e.Handled = true; break;
-            case Key.Enter: InsertParagraphBreak(); e.Handled = true; break;
-            case Key.Left: MoveCaret(-1, shift); e.Handled = true; break;
-            case Key.Right: MoveCaret(+1, shift); e.Handled = true; break;
-            case Key.Home: MoveToLineEdge(toStart: true, shift); e.Handled = true; break;
-            case Key.End: MoveToLineEdge(toStart: false, shift); e.Handled = true; break;
-            case Key.Up: MoveCaretVertical(-1, shift); e.Handled = true; break;
-            case Key.Down: MoveCaretVertical(+1, shift); e.Handled = true; break;
+            case DocumentEditorInputIntent.Undo: Undo(); e.Handled = true; break;
+            case DocumentEditorInputIntent.Redo: Redo(); e.Handled = true; break;
+            case DocumentEditorInputIntent.ToggleBold: ToggleBold(); e.Handled = true; break;
+            case DocumentEditorInputIntent.ToggleItalic: ToggleItalic(); e.Handled = true; break;
+            case DocumentEditorInputIntent.ToggleUnderline: ToggleUnderline(); e.Handled = true; break;
+            case DocumentEditorInputIntent.DeleteBackward: Backspace(); e.Handled = true; break;
+            case DocumentEditorInputIntent.DeleteForward: DeleteForward(); e.Handled = true; break;
+            case DocumentEditorInputIntent.InsertParagraphBreak: InsertParagraphBreak(); e.Handled = true; break;
+            case DocumentEditorInputIntent.MovePrevious: MoveCaret(-1, input.ExtendSelection); e.Handled = true; break;
+            case DocumentEditorInputIntent.MoveNext: MoveCaret(+1, input.ExtendSelection); e.Handled = true; break;
+            case DocumentEditorInputIntent.MoveLineStart: MoveToLineEdge(toStart: true, input.ExtendSelection); e.Handled = true; break;
+            case DocumentEditorInputIntent.MoveLineEnd: MoveToLineEdge(toStart: false, input.ExtendSelection); e.Handled = true; break;
+            case DocumentEditorInputIntent.MoveLineUp: MoveCaretVertical(-1, input.ExtendSelection); e.Handled = true; break;
+            case DocumentEditorInputIntent.MoveLineDown: MoveCaretVertical(+1, input.ExtendSelection); e.Handled = true; break;
             // AV-TBL3: Tab navigates between cells when the caret is in a table; outside a table
             // it handles list demote/promote at item start, or inserts a literal tab character
             // (body-paragraph behaviour, same as before).
-            case Key.Tab:
+            case DocumentEditorInputIntent.NavigateTab:
                 if (_cellCaret is not null)
                 {
-                    TabNavigateCell(forward: !shift);
+                    TabNavigateCell(forward: !input.ExtendSelection);
                     e.Handled = true;
                 }
-                else if (ListTabAtItemStart(shift))
+                else if (ListTabAtItemStart(input.ExtendSelection))
                 {
                     // AV-LIST: Tab/Shift+Tab at the start of a list item demotes/promotes.
                     e.Handled = true;
                 }
-                else if (!shift)
+                else if (!input.ExtendSelection)
                 {
                     InsertText("\t");
                     e.Handled = true;
@@ -17561,9 +17554,37 @@ public sealed class DocumentView : Control
         }
     }
 
-    private static bool IsEditingKey(Key key, bool ctrl) =>
-        key is Key.Back or Key.Delete or Key.Enter or Key.Tab ||
-        (ctrl && key is (Key.B or Key.I or Key.U or Key.Z or Key.Y));
+    private static DocumentEditorInputKey ToEditorInputKey(Key key) => key switch
+    {
+        Key.Back => DocumentEditorInputKey.Backspace,
+        Key.Delete => DocumentEditorInputKey.Delete,
+        Key.Enter => DocumentEditorInputKey.Enter,
+        Key.Tab => DocumentEditorInputKey.Tab,
+        Key.Left => DocumentEditorInputKey.Left,
+        Key.Right => DocumentEditorInputKey.Right,
+        Key.Up => DocumentEditorInputKey.Up,
+        Key.Down => DocumentEditorInputKey.Down,
+        Key.Home => DocumentEditorInputKey.Home,
+        Key.End => DocumentEditorInputKey.End,
+        Key.B => DocumentEditorInputKey.B,
+        Key.I => DocumentEditorInputKey.I,
+        Key.U => DocumentEditorInputKey.U,
+        Key.Y => DocumentEditorInputKey.Y,
+        Key.Z => DocumentEditorInputKey.Z,
+        _ => DocumentEditorInputKey.None,
+    };
+
+    private static DocumentEditorInputModifiers ToEditorInputModifiers(KeyModifiers modifiers)
+    {
+        var result = DocumentEditorInputModifiers.None;
+        if ((modifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
+            result |= DocumentEditorInputModifiers.Control;
+        if ((modifiers & KeyModifiers.Shift) != 0)
+            result |= DocumentEditorInputModifiers.Shift;
+        if ((modifiers & KeyModifiers.Alt) != 0)
+            result |= DocumentEditorInputModifiers.Alt;
+        return result;
+    }
 
     // ---- Editing operations (all via the command bus) -------------------------------------------
 
@@ -22490,28 +22511,9 @@ public sealed class DocumentView : Control
     /// <summary>Text spanning the current selection (empty when there is no selection).</summary>
     public string SelectedText
     {
-        get
-        {
-            if (NormalizedSelection() is not { } sel)
-                return string.Empty;
-            if (sel.Start.Block == sel.End.Block && _doc.Blocks[sel.Start.Block] is Paragraph p && IsEditable(p))
-            {
-                var cells = ParaCells(p);
-                var a = Math.Clamp(sel.Start.Offset, 0, cells.Count);
-                var b = Math.Clamp(sel.End.Offset, 0, cells.Count);
-                return new string(cells.Skip(a).Take(b - a).Select(c => c.Ch).ToArray());
-            }
-
-            var sb = new StringBuilder();
-            for (var bi = sel.Start.Block; bi <= sel.End.Block && bi < _doc.Blocks.Count; bi++)
-            {
-                if (bi > sel.Start.Block)
-                    sb.Append('\n');
-                sb.Append(_doc.Blocks[bi] is Paragraph para ? para.PlainText : string.Empty);
-            }
-
-            return sb.ToString();
-        }
+        get => NormalizedSelection() is null
+            ? string.Empty
+            : _editingSession.Interaction.ProjectSelectionText(CurrentBodyTextRange());
     }
 
     public bool TryDeleteSelection()
@@ -22541,10 +22543,10 @@ public sealed class DocumentView : Control
     }
 
     public bool PastePlainText(string? clipboardText) =>
-        PasteNormalizedText(clipboardText, "Paste Text Only");
+        PasteNormalizedText(clipboardText, DocumentPasteTextKind.TextOnly);
 
     public bool PasteMergeFormatting(string? clipboardText) =>
-        PasteNormalizedText(clipboardText, "Merge Formatting");
+        PasteNormalizedText(clipboardText, DocumentPasteTextKind.MergeFormatting);
 
     /// <summary>
     /// Replaces one empty editable body paragraph with parsed source blocks. Partial-paragraph and
@@ -22594,28 +22596,27 @@ public sealed class DocumentView : Control
         Focus();
     }
 
-    private bool PasteNormalizedText(string? clipboardText, string undoLabel)
+    private bool PasteNormalizedText(string? clipboardText, DocumentPasteTextKind kind)
     {
         if (IsEditingLocked)
             return false;
 
-        var normalized = PasteText.Normalize(clipboardText);
-        if (normalized.Length == 0)
+        var plan = _editingSession.Interaction.PlanPasteText(clipboardText, kind);
+        if (!plan.HasText)
             return false;
 
-        var lines = normalized.Split('\n');
         _bus.BeginUndoGroup();
         try
         {
-            InsertText(lines[0]);
-            for (var i = 1; i < lines.Length; i++)
+            InsertText(plan.Lines[0]);
+            for (var i = 1; i < plan.Lines.Count; i++)
             {
                 InsertParagraphBreak();
-                if (lines[i].Length > 0)
-                    InsertText(lines[i]);
+                if (plan.Lines[i].Length > 0)
+                    InsertText(plan.Lines[i]);
             }
 
-            _bus.CommitUndoGroup(undoLabel);
+            _bus.CommitUndoGroup(plan.UndoLabel);
         }
         catch
         {
