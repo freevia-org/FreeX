@@ -26,10 +26,11 @@ public sealed record PresentationVideoExportHandoffHostCapabilities(
     bool CanEncodeMp4,
     bool CanCaptureNarration,
     bool CanCaptureCameraAndMedia,
-    string UnavailableReason)
+    string UnavailableReason,
+    bool CanMuxTimedCaptions = false)
 {
     public static PresentationVideoExportHandoffHostCapabilities Deferred(string hostName, string unavailableReason) =>
-        new(hostName, CanEncodeMp4: false, CanCaptureNarration: false, CanCaptureCameraAndMedia: false, unavailableReason);
+        new(hostName, CanEncodeMp4: false, CanCaptureNarration: false, CanCaptureCameraAndMedia: false, unavailableReason, CanMuxTimedCaptions: false);
 }
 
 public sealed record PresentationVideoExportCapabilityPlan(
@@ -417,6 +418,10 @@ public static class PresentationVideoFramePackageExecutor
             BuildHostCapability("MP4 encoder", hostCapabilities.CanEncodeMp4, hostCapabilities.UnavailableReason),
             BuildHostCapability("Narration capture", hostCapabilities.CanCaptureNarration, hostCapabilities.UnavailableReason),
             BuildHostCapability("Camera and media capture", hostCapabilities.CanCaptureCameraAndMedia, hostCapabilities.UnavailableReason),
+            BuildHostCapability(
+                "Timed captions",
+                hostCapabilities.CanMuxTimedCaptions,
+                "This host cannot mux timed captions; install ffmpeg or use a host with mov_text support."),
         ];
     }
 

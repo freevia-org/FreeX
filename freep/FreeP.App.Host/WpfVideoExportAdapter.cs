@@ -16,7 +16,8 @@ internal sealed record WpfVideoEncoderCapability(
     string? EncoderName,
     string Reason,
     bool CanCaptureNarration = false,
-    bool CanCaptureCameraAndMedia = false)
+    bool CanCaptureCameraAndMedia = false,
+    bool CanMuxTimedCaptions = false)
 {
     public static WpfVideoEncoderCapability Unavailable(string reason) =>
         new(false, null, null, string.IsNullOrWhiteSpace(reason)
@@ -132,7 +133,8 @@ internal static class WpfVideoEncoderCapabilityDetector
                     true,
                     executable,
                     encoder,
-                    $"WPF video export can use ffmpeg encoder '{encoder}'.");
+                    $"WPF video export can use ffmpeg encoder '{encoder}'.",
+                    CanMuxTimedCaptions: true);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -160,9 +162,10 @@ internal static class WpfVideoEncoderCapabilityDetector
                 true,
                 WindowsNativeVideoExportAdapter.ExecutablePath,
                 "Windows MediaComposition",
-                BuildWindowsCapabilityReason(hasMicrophone, hasCamera),
+                BuildWindowsCapabilityReason(hasMicrophone, hasCamera, WindowsNativeVideoExportAdapter.CanUseCaptionFallback),
                 CanCaptureNarration: hasMicrophone,
-                CanCaptureCameraAndMedia: hasCamera);
+                CanCaptureCameraAndMedia: hasCamera,
+                CanMuxTimedCaptions: WindowsNativeVideoExportAdapter.CanUseCaptionFallback);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -174,14 +177,19 @@ internal static class WpfVideoEncoderCapabilityDetector
         }
     }
 
-    private static string BuildWindowsCapabilityReason(bool hasMicrophone, bool hasCamera) =>
+    private static string BuildWindowsCapabilityReason(bool hasMicrophone, bool hasCamera, bool canMuxTimedCaptions) =>
         (hasMicrophone, hasCamera) switch
         {
-            (true, true) => "Windows MediaComposition video export, delayed multi-track narration, and captured camera PIP are available.",
-            (true, false) => "Windows MediaComposition video export and narration capture are available; no camera device is currently available for camera PIP.",
-            (false, true) => "Windows MediaComposition video export and camera PIP are available; no microphone device is currently available for narration.",
-            _ => "Windows MediaComposition video export is available; no microphone device is currently available for narration, and no camera device is currently available for camera PIP."
+            (true, true) => AppendTimedCaptionReason("Windows MediaComposition video export, delayed multi-track narration, and captured camera PIP are available.", canMuxTimedCaptions),
+            (true, false) => AppendTimedCaptionReason("Windows MediaComposition video export and narration capture are available; no camera device is currently available for camera PIP.", canMuxTimedCaptions),
+            (false, true) => AppendTimedCaptionReason("Windows MediaComposition video export and camera PIP are available; no microphone device is currently available for narration.", canMuxTimedCaptions),
+            _ => AppendTimedCaptionReason("Windows MediaComposition video export is available; no microphone device is currently available for narration, and no camera device is currently available for camera PIP.", canMuxTimedCaptions)
         };
+
+    private static string AppendTimedCaptionReason(string reason, bool canMuxTimedCaptions) =>
+        canMuxTimedCaptions
+            ? $"{reason} Timed captions use the available ffmpeg mov_text fallback."
+            : $"{reason} Timed captions require ffmpeg because MediaComposition has no timed-text stream API.";
 
     internal static string? SelectSoftwareEncoder(string output)
     {
@@ -261,7 +269,9 @@ internal sealed class WpfVideoExportAdapter : IWpfVideoProcessRunner
                         ExecutablePath: WindowsNativeVideoExportAdapter.ExecutablePath,
                         EncoderName: _capability.EncoderName,
                         CanCaptureNarration: _capability.CanCaptureNarration,
-                        Reason: _capability.Reason))
+                        Reason: _capability.Reason,
+                        CanCaptureCameraAndMedia: _capability.CanCaptureCameraAndMedia,
+                        CanMuxTimedCaptions: _capability.CanMuxTimedCaptions))
                 .ExportAsync(package, outputPath, cancellationToken, mediaArtifacts)
                 .ConfigureAwait(false);
             return nativeResult.Canceled

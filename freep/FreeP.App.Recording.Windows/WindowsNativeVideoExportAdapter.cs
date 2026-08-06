@@ -16,6 +16,7 @@ namespace FreeP.App.Recording.Windows;
 public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
 {
     public const string ExecutablePath = "windows-media-composition";
+    public static bool CanUseCaptionFallback => FindExecutable("ffmpeg") is not null;
 
     private readonly LinuxVideoEncoderCapability _capability;
     private readonly ILinuxVideoExportAdapter? _captionFallback;
@@ -248,7 +249,8 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
                     ExecutablePath: executable,
                     EncoderName: "mpeg4",
                     CanCaptureNarration: false,
-                    Reason: "ffmpeg caption fallback for Windows video export."));
+                    Reason: "ffmpeg caption fallback for Windows video export.",
+                    CanMuxTimedCaptions: true));
     }
 
     private static string? FindExecutable(string name)
