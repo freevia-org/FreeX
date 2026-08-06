@@ -964,32 +964,41 @@ public sealed class SlideCanvas : Control
             double reflectionScale = Math.Abs(plan.ReflectionScaleY) < 0.001
                 ? -1.0
                 : plan.ReflectionScaleY;
-            double pivotY = dest.Bottom + plan.ReflectionDistDip / 2.0;
-            var reflectionStops = new GradientStops
+            foreach (var blurPass in plan.ReflectionBlurPasses)
             {
-                new AvGradientStop(
-                    Color.FromArgb(plan.ReflectionAlpha, 255, 255, 255), 0),
-                new AvGradientStop(
-                    Color.FromArgb(0, 255, 255, 255),
-                    Math.Clamp(plan.ReflectionEndPos, 0.001, 1.0)),
-            };
-            if (plan.ReflectionEndPos < 0.999)
-                reflectionStops.Add(new AvGradientStop(Color.FromArgb(0, 255, 255, 255), 1));
-            var reflectionMask = new LinearGradientBrush
-            {
-                StartPoint = new RelativePoint(0.5, 0, RelativeUnit.Relative),
-                EndPoint = new RelativePoint(0.5, 1, RelativeUnit.Relative),
-                GradientStops = reflectionStops,
-            };
-            using var transformScope = dc.PushTransform(
-                Matrix.CreateTranslation(-(dest.Left + dest.Width / 2), -pivotY)
-                * Matrix.CreateScale(1, reflectionScale)
-                * Matrix.CreateTranslation(dest.Left + dest.Width / 2, pivotY));
-            using var maskScope = dc.PushOpacityMask(
-                reflectionMask,
-                new Rect(dest.Left, dest.Bottom + plan.ReflectionDistDip,
-                    dest.Width, dest.Height * Math.Abs(reflectionScale)));
-            dc.DrawImage(renderBitmap, dest);
+                var reflectionDest = new Rect(
+                    dest.X + blurPass.OffsetXDip,
+                    dest.Y + blurPass.OffsetYDip,
+                    dest.Width,
+                    dest.Height);
+                double pivotY = dest.Bottom + plan.ReflectionDistDip / 2.0;
+                var reflectionStops = new GradientStops
+                {
+                    new AvGradientStop(
+                        Color.FromArgb(plan.ReflectionAlpha, 255, 255, 255), 0),
+                    new AvGradientStop(
+                        Color.FromArgb(0, 255, 255, 255),
+                        Math.Clamp(plan.ReflectionEndPos, 0.001, 1.0)),
+                };
+                if (plan.ReflectionEndPos < 0.999)
+                    reflectionStops.Add(new AvGradientStop(Color.FromArgb(0, 255, 255, 255), 1));
+                var reflectionMask = new LinearGradientBrush
+                {
+                    StartPoint = new RelativePoint(0.5, 0, RelativeUnit.Relative),
+                    EndPoint = new RelativePoint(0.5, 1, RelativeUnit.Relative),
+                    GradientStops = reflectionStops,
+                };
+                using var transformScope = dc.PushTransform(
+                    Matrix.CreateTranslation(-(dest.Left + dest.Width / 2), -pivotY)
+                    * Matrix.CreateScale(1, reflectionScale)
+                    * Matrix.CreateTranslation(dest.Left + dest.Width / 2, pivotY));
+                using var maskScope = dc.PushOpacityMask(
+                    reflectionMask,
+                    new Rect(reflectionDest.Left, reflectionDest.Bottom + plan.ReflectionDistDip,
+                        reflectionDest.Width, reflectionDest.Height * Math.Abs(reflectionScale)));
+                using var opacityScope = dc.PushOpacity(blurPass.Opacity);
+                dc.DrawImage(renderBitmap, reflectionDest);
+            }
         }
 
         // 18A: alpha opacity

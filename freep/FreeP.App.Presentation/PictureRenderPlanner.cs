@@ -35,8 +35,11 @@ public sealed record PictureRenderPlan(
     public bool HasReflection { get; init; }
     public byte ReflectionAlpha { get; init; }
     public double ReflectionDistDip { get; init; }
+    public double ReflectionBlurDip { get; init; }
     public double ReflectionScaleY { get; init; } = -1;
     public double ReflectionEndPos { get; init; } = 1;
+    public IReadOnlyList<PictureReflectionBlurPass> ReflectionBlurPasses { get; init; } =
+        [new PictureReflectionBlurPass(0, 0, 1)];
 
     public bool AlphaAppliesToImageBody { get; init; } = true;
 }
@@ -72,8 +75,11 @@ public static class PictureRenderPlanner
             HasReflection = picture.Effects?.HasReflection == true,
             ReflectionAlpha = picture.Effects?.ReflectionAlpha ?? 0,
             ReflectionDistDip = picture.Effects?.ReflectionDistDip ?? 0,
+            ReflectionBlurDip = picture.Effects?.ReflectionBlurDip ?? 0,
             ReflectionScaleY = picture.Effects?.ReflectionScaleY ?? -1,
-            ReflectionEndPos = picture.Effects?.ReflectionEndPos ?? 1
+            ReflectionEndPos = picture.Effects?.ReflectionEndPos ?? 1,
+            ReflectionBlurPasses = PictureReflectionRenderPlanner.PlanBlurPasses(
+                picture.Effects?.ReflectionBlurDip ?? 0)
         };
     }
 

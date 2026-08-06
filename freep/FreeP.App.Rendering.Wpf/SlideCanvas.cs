@@ -915,25 +915,35 @@ public sealed class SlideCanvas : FrameworkElement
             double reflectionScale = Math.Abs(plan.ReflectionScaleY) < 0.001
                 ? -1.0
                 : plan.ReflectionScaleY;
-            double pivotY = dest.Bottom + plan.ReflectionDistDip / 2.0;
-            var reflectionMask = new LinearGradientBrush
+            foreach (var blurPass in plan.ReflectionBlurPasses)
             {
-                StartPoint = new System.Windows.Point(0.5, 0),
-                EndPoint = new System.Windows.Point(0.5, 1),
-            };
-            reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
-                Color.FromArgb(plan.ReflectionAlpha, 255, 255, 255), 0));
-            reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
-                Color.FromArgb(0, 255, 255, 255),
-                Math.Clamp(plan.ReflectionEndPos, 0.001, 1.0)));
-            if (plan.ReflectionEndPos < 0.999)
+                var reflectionDest = new Rect(
+                    dest.X + blurPass.OffsetXDip,
+                    dest.Y + blurPass.OffsetYDip,
+                    dest.Width,
+                    dest.Height);
+                double pivotY = dest.Bottom + plan.ReflectionDistDip / 2.0;
+                var reflectionMask = new LinearGradientBrush
+                {
+                    StartPoint = new System.Windows.Point(0.5, 0),
+                    EndPoint = new System.Windows.Point(0.5, 1),
+                };
                 reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
-                    Color.FromArgb(0, 255, 255, 255), 1));
-            dc.PushTransform(new ScaleTransform(1, reflectionScale, dest.Left + dest.Width / 2, pivotY));
-            dc.PushOpacityMask(reflectionMask);
-            dc.DrawImage(bitmap, dest);
-            dc.Pop();
-            dc.Pop();
+                    Color.FromArgb(plan.ReflectionAlpha, 255, 255, 255), 0));
+                reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
+                    Color.FromArgb(0, 255, 255, 255),
+                    Math.Clamp(plan.ReflectionEndPos, 0.001, 1.0)));
+                if (plan.ReflectionEndPos < 0.999)
+                    reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
+                        Color.FromArgb(0, 255, 255, 255), 1));
+                dc.PushTransform(new ScaleTransform(1, reflectionScale, dest.Left + dest.Width / 2, pivotY));
+                dc.PushOpacityMask(reflectionMask);
+                dc.PushOpacity(blurPass.Opacity);
+                dc.DrawImage(bitmap, reflectionDest);
+                dc.Pop();
+                dc.Pop();
+                dc.Pop();
+            }
         }
 
         // 18A: apply alpha opacity layer if needed

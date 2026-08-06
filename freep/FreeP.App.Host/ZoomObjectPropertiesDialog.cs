@@ -33,6 +33,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private readonly TextBox _frameBorderGlowRadius;
     private readonly TextBox _frameBorderSoftEdgeRadius;
     private readonly TextBox _frameBorderReflectionAlpha;
+    private readonly TextBox _frameBorderReflectionBlur;
     private readonly TextBox _frameBorderReflectionDistance;
     private readonly TextBox _frameBorderReflectionDirection;
     private readonly TextBox _frameBorderReflectionScale;
@@ -293,6 +294,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderReflectionEnabled(current),
         };
         _frameBorderReflectionAlpha = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionAlpha(current), MinWidth = 180 };
+        _frameBorderReflectionBlur = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionBlur(current), MinWidth = 180 };
         _frameBorderReflectionDistance = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(current), MinWidth = 180 };
         _frameBorderReflectionDirection = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(current), MinWidth = 180 };
         _frameBorderReflectionScale = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(current), MinWidth = 180 };
@@ -380,6 +382,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         Grid.SetColumnSpan(_frameBorderReflectionEnabled, 2);
         grid.Children.Add(_frameBorderReflectionEnabled);
         AddRow(grid, row++, "Reflection alpha (%):", _frameBorderReflectionAlpha);
+        AddRow(grid, row++, "Reflection blur (pt):", _frameBorderReflectionBlur);
         AddRow(grid, row++, "Reflection distance (pt):", _frameBorderReflectionDistance);
         AddRow(grid, row++, "Reflection direction (deg):", _frameBorderReflectionDirection);
         AddRow(grid, row++, "Reflection scale (%):", _frameBorderReflectionScale);
@@ -612,6 +615,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                 _frameBorderReflectionDistance.Text,
                 _frameBorderReflectionDirection.Text,
                 _frameBorderReflectionScale.Text,
+                _frameBorderReflectionBlur.Text,
                 _frameBorderReflectionEnabled.IsChecked == true,
                 out var frameBorderReflection))
         {
@@ -744,6 +748,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _frameBorderSoftEdgeRadius.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderSoftEdgeRadius(properties);
         _frameBorderReflectionEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderReflectionEnabled(properties);
         _frameBorderReflectionAlpha.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionAlpha(properties);
+        _frameBorderReflectionBlur.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionBlur(properties);
         _frameBorderReflectionDistance.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(properties);
         _frameBorderReflectionDirection.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(properties);
         _frameBorderReflectionScale.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(properties);
@@ -798,6 +803,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         _frameBorderSoftEdgeRadius.IsEnabled = enabled && _frameBorderSoftEdgeEnabled.IsChecked == true;
         _frameBorderReflectionEnabled.IsEnabled = enabled;
         _frameBorderReflectionAlpha.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
+        _frameBorderReflectionBlur.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
         _frameBorderReflectionDistance.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
         _frameBorderReflectionDirection.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
         _frameBorderReflectionScale.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
