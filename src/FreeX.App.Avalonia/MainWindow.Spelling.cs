@@ -1,19 +1,14 @@
 using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Threading;
 using Free.Shared.Shell.Avalonia;
-using FreeX.Core.Model;
-using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
 
@@ -21,29 +16,28 @@ public sealed partial class MainWindow
 {
     private static AvaloniaCompactDialogChromeStyle SpellingDialogChromeStyle => new(FormulaBarFontFamily);
 
-    // Review ▸ Spelling (parity gap: the ribbon button was a no-op). Scans the text content of the
-    // active sheet — the current selection when it spans more than one cell, otherwise the used range —
-    // tokenizes each text-bearing cell into words and flags any not present in the built-in word list
-    // (see SpellingWordList). For each misspelled word a modal dialog offers the word in context
-    // (cell reference + cell text), naive suggestions, and Ignore / Ignore All / Change / Change All /
-    // Close. "Change" rewrites the offending cell's text through the same commit path the formula bar
-    // uses (SelectCell + CommitCellText).
-    //
-    // This relies on the lightweight, self-contained checker in SpellingWordList — there is no real
-    // spell engine in this repository.
-
-    private sealed record SpellingFinding(CellAddress Address, string CellText, string Word, int Start, int Length);
-
     private async Task ShowSpellingDialogAsync()
     {
-        var sheet = _session.ActiveSheet;
-        var selection = _session.SelectedRange;
-        var scanWholeUsedRange = selection.CellCount <= 1;
+        if (_isOpening || _isSaving)
+            return;
 
-        // Collect text-bearing cells in scan order (row-major).
-        var findings = CollectSpellingFindings(sheet, selection, scanWholeUsedRange);
+        var options = AppOptionsStore.Load();
+        var controller = new SpellCheckSessionController(new SpellCheckSessionAdapter(
+            () => _session.Workbook,
+            () => _session.ActiveSheet.Id,
+            () => options.SpellCheckCustomDictionaryWords,
+            command =>
+            {
+                var result = _session.ExecuteReviewCommand(command);
+                return new SpellCheckCommandExecutionResult(
+                    result.Success,
+                    result.ErrorMessage,
+                    result.IsNoOp);
+            },
+            () => AppOptionsStore.Save(options)));
+        var transition = controller.Start();
 
-        if (findings.Count == 0)
+        if (transition.Status == SpellCheckSessionStatus.Complete)
         {
             await ShowSpellingMessageDialogAsync(
                 UiText.Get("ShellLoc_SpellingTitle"),
@@ -52,188 +46,35 @@ public sealed partial class MainWindow
             return;
         }
 
-        var ignoreAll = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        // Maps an original (lowercased) word to its agreed replacement for "Change All".
-        var changeAll = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var corrections = 0;
-
-        for (var index = 0; index < findings.Count; index++)
+        while (transition.RequiresReview)
         {
-            var finding = findings[index];
+            var issue = transition.Issue!;
+            _session.SelectCell(issue.Address);
+            RefreshShell(string.Empty);
 
-            // The cell text may have been edited by an earlier correction in the same cell; re-read it
-            // and re-locate the word so positions stay valid.
-            var liveText = ReadCellText(finding.Address);
-            var located = LocateWord(liveText, finding.Word);
-            if (located is null)
-                continue;
+            var decision = await PromptSpellingDecisionAsync(issue);
+            transition = controller.Apply(decision);
 
-            var (start, length) = located.Value;
-            var actualWord = liveText.Substring(start, length);
-
-            if (ignoreAll.Contains(actualWord))
-                continue;
-
-            if (changeAll.TryGetValue(actualWord, out var queuedReplacement))
+            if (transition.Status == SpellCheckSessionStatus.Failed)
             {
-                if (ApplySpellingCorrection(finding.Address, liveText, start, length, queuedReplacement))
-                    corrections++;
-                continue;
+                RefreshShell(transition.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotUpdateCell"));
+                return;
             }
 
-            var decision = await PromptSpellingDecisionAsync(
-                finding.Address, liveText, start, length, actualWord);
-
-            switch (decision.Action)
+            if (transition.Status == SpellCheckSessionStatus.Stopped)
             {
-                case SpellingAction.Close:
-                    RefreshShell(FormatSpellingSummary(corrections, completed: false));
-                    return;
-
-                case SpellingAction.Ignore:
-                    break;
-
-                case SpellingAction.IgnoreAll:
-                    ignoreAll.Add(actualWord);
-                    break;
-
-                case SpellingAction.Change:
-                    if (!string.IsNullOrEmpty(decision.Replacement) &&
-                        ApplySpellingCorrection(finding.Address, liveText, start, length, decision.Replacement!))
-                    {
-                        corrections++;
-                    }
-                    break;
-
-                case SpellingAction.ChangeAll:
-                    if (!string.IsNullOrEmpty(decision.Replacement))
-                    {
-                        changeAll[actualWord] = decision.Replacement!;
-                        if (ApplySpellingCorrection(finding.Address, liveText, start, length, decision.Replacement!))
-                            corrections++;
-                    }
-                    break;
+                RefreshShell(FormatSpellingSummary(transition.CorrectionsApplied, completed: false));
+                return;
             }
         }
 
-        await ShowSpellingMessageDialogAsync(
-            UiText.Get("ShellLoc_SpellingTitle"),
-            FormatSpellingSummary(corrections, completed: true));
-        RefreshShell(FormatSpellingSummary(corrections, completed: true));
+        var summary = FormatSpellingSummary(transition.CorrectionsApplied, completed: true);
+        await ShowSpellingMessageDialogAsync(UiText.Get("ShellLoc_SpellingTitle"), summary);
+        RefreshShell(summary);
     }
 
-    private List<SpellingFinding> CollectSpellingFindings(Sheet sheet, GridRange selection, bool scanWholeUsedRange)
-    {
-        var findings = new List<SpellingFinding>();
-
-        foreach (var (address, cell) in sheet.EnumerateCells())
-        {
-            if (!scanWholeUsedRange && !selection.Contains(address))
-                continue;
-
-            // Only literal text cells are checked. Formulas, numbers, booleans, errors and blanks are skipped.
-            if (cell.HasFormula)
-                continue;
-            if (cell.Value is not TextValue text || string.IsNullOrWhiteSpace(text.Value))
-                continue;
-
-            foreach (var (word, start, length) in TokenizeWords(text.Value))
-            {
-                if (!SpellingWordList.IsKnown(word))
-                    findings.Add(new SpellingFinding(address, text.Value, word, start, length));
-            }
-        }
-
-        // Deterministic order: top-to-bottom, left-to-right, then by position within the cell.
-        findings.Sort(static (a, b) =>
-        {
-            var byRow = a.Address.Row.CompareTo(b.Address.Row);
-            if (byRow != 0)
-                return byRow;
-            var byCol = a.Address.Col.CompareTo(b.Address.Col);
-            if (byCol != 0)
-                return byCol;
-            return a.Start.CompareTo(b.Start);
-        });
-
-        return findings;
-    }
-
-    // Tokenize into words made of letters and intra-word apostrophes (e.g. "don't", "Customer's").
-    private static IEnumerable<(string Word, int Start, int Length)> TokenizeWords(string text)
-    {
-        var i = 0;
-        while (i < text.Length)
-        {
-            if (!char.IsLetter(text[i]))
-            {
-                i++;
-                continue;
-            }
-
-            var start = i;
-            while (i < text.Length &&
-                   (char.IsLetter(text[i]) ||
-                    (text[i] == '\'' && i + 1 < text.Length && char.IsLetter(text[i + 1]))))
-            {
-                i++;
-            }
-
-            yield return (text.Substring(start, i - start), start, i - start);
-        }
-    }
-
-    private string ReadCellText(CellAddress address)
-    {
-        var cell = _session.ActiveSheet.GetCell(address);
-        return FormatEditText(cell, address);
-    }
-
-    // Find the given word in the (possibly edited) cell text, preferring an exact match; fall back to a
-    // case-insensitive match. Returns null when the word is no longer present.
-    private static (int Start, int Length)? LocateWord(string text, string word)
-    {
-        if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(word))
-            return null;
-
-        foreach (var (token, start, length) in TokenizeWords(text))
-        {
-            if (string.Equals(token, word, StringComparison.Ordinal))
-                return (start, length);
-        }
-
-        foreach (var (token, start, length) in TokenizeWords(text))
-        {
-            if (string.Equals(token, word, StringComparison.OrdinalIgnoreCase))
-                return (start, length);
-        }
-
-        return null;
-    }
-
-    private bool ApplySpellingCorrection(CellAddress address, string currentText, int start, int length, string replacement)
-    {
-        var corrected = currentText[..start] + replacement + currentText[(start + length)..];
-
-        // Commit through the same path the formula bar uses: select the cell, then commit its text.
-        _session.SelectCell(address);
-        var result = _session.CommitCellText(corrected);
-        return result.Success;
-    }
-
-    private enum SpellingAction
-    {
-        Close,
-        Ignore,
-        IgnoreAll,
-        Change,
-        ChangeAll,
-    }
-
-    private sealed record SpellingDecision(SpellingAction Action, string? Replacement);
-
-    private async Task<SpellingDecision> PromptSpellingDecisionAsync(
-        CellAddress address, string cellText, int start, int length, string word)
+    private async Task<SpellCheckSessionDecision> PromptSpellingDecisionAsync(
+        SpellCheckIssueDisplayModel issue)
     {
         var dialog = new Window
         {
@@ -245,8 +86,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "SpellCheckDialog");
 
-        var decision = new SpellingDecision(SpellingAction.Close, null);
-
+        var decision = new SpellCheckSessionDecision(SpellCheckSessionAction.Stop);
         var layout = new StackPanel
         {
             Margin = new Thickness(16),
@@ -258,16 +98,12 @@ public sealed partial class MainWindow
             Text = UiText.Get("ShellLoc_SpellingNotInDictionary"),
             FontWeight = FontWeight.SemiBold,
         });
-
-        // Show the word in context with the offending token wrapped in brackets.
-        var context = cellText[..start] + "[" + cellText.Substring(start, length) + "]" + cellText[(start + length)..];
         layout.Children.Add(new SelectableTextBlock
         {
-            Text = $"{_session.ActiveSheet.Name}!{FormatCellReference(address)}:  {context}",
+            Text = $"{issue.SheetName}!{issue.CellReference}:  {issue.ContextText}",
             TextWrapping = TextWrapping.Wrap,
             FontFamily = new FontFamily("Consolas, Menlo, Monospace"),
         });
-
         layout.Children.Add(new TextBlock
         {
             Text = UiText.Get("ShellLoc_SpellingSuggestions"),
@@ -275,7 +111,9 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 6, 0, 0),
         });
 
-        var suggestions = SpellingWordList.Suggest(word);
+        var suggestions = string.IsNullOrWhiteSpace(issue.Suggestion)
+            ? Array.Empty<string>()
+            : new[] { issue.Suggestion };
         var suggestionList = new ListBox
         {
             Height = 110,
@@ -286,16 +124,15 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyListBox(suggestionList, SpellingDialogChromeStyle);
         foreach (var suggestion in suggestions)
             suggestionList.Items.Add(suggestion);
-        if (suggestions.Count == 0)
+        if (suggestions.Length == 0)
             suggestionList.Items.Add(UiText.Get("ShellLoc_SpellingNoSuggestions"));
         else
             suggestionList.SelectedIndex = 0;
         layout.Children.Add(suggestionList);
 
-        // Editable replacement box, prefilled with the top suggestion when available.
         var replacementBox = new TextBox
         {
-            Text = suggestions.Count > 0 ? suggestions[0] : word,
+            Text = suggestions.Length > 0 ? suggestions[0] : issue.Word,
         };
         AutomationProperties.SetAutomationId(replacementBox, "SpellCheckReplacementBox");
         AvaloniaCompactDialogChrome.ApplyTextBox(replacementBox, SpellingDialogChromeStyle);
@@ -304,37 +141,65 @@ public sealed partial class MainWindow
 
         suggestionList.SelectionChanged += (_, _) =>
         {
-            if (suggestionList.SelectedItem is string picked && picked != UiText.Get("ShellLoc_SpellingNoSuggestions"))
+            if (suggestionList.SelectedItem is string picked &&
+                picked != UiText.Get("ShellLoc_SpellingNoSuggestions"))
+            {
                 replacementBox.Text = picked;
+            }
         };
 
         var ignoreButton = new Button { Content = UiText.Get("ShellLoc_SpellingIgnore") };
         var ignoreAllButton = new Button { Content = UiText.Get("ShellLoc_SpellingIgnoreAll") };
         var changeButton = new Button { Content = UiText.Get("ShellLoc_SpellingChange"), IsDefault = true };
         var changeAllButton = new Button { Content = UiText.Get("ShellLoc_SpellingChangeAll") };
+        var addButton = new Button { Content = UiText.Get("SpellCheck_AddToDictionary") };
         var closeButton = new Button { Content = UiText.Get("Common_Close"), IsCancel = true };
+        AutomationProperties.SetAutomationId(addButton, "SpellCheckAddToDictionaryButton");
         AutomationProperties.SetAutomationId(closeButton, "SpellCheckCancelButton");
         AvaloniaCompactDialogChrome.ApplyButton(ignoreButton, SpellingDialogChromeStyle, 96);
         AvaloniaCompactDialogChrome.ApplyButton(ignoreAllButton, SpellingDialogChromeStyle, 96);
         AvaloniaCompactDialogChrome.ApplyButton(changeButton, SpellingDialogChromeStyle, 96, isDefault: true);
         AvaloniaCompactDialogChrome.ApplyButton(changeAllButton, SpellingDialogChromeStyle, 96);
+        AvaloniaCompactDialogChrome.ApplyButton(addButton, SpellingDialogChromeStyle, 118);
         AvaloniaCompactDialogChrome.ApplyButton(closeButton, SpellingDialogChromeStyle, 96);
 
-        ignoreButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.Ignore, null); dialog.Close(); };
-        ignoreAllButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.IgnoreAll, null); dialog.Close(); };
-        changeButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.Change, replacementBox.Text); dialog.Close(); };
-        changeAllButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.ChangeAll, replacementBox.Text); dialog.Close(); };
-        closeButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.Close, null); dialog.Close(); };
+        ignoreButton.Click += (_, _) =>
+        {
+            decision = new(SpellCheckSessionAction.IgnoreOnce);
+            dialog.Close();
+        };
+        ignoreAllButton.Click += (_, _) =>
+        {
+            decision = new(SpellCheckSessionAction.IgnoreAll);
+            dialog.Close();
+        };
+        changeButton.Click += (_, _) =>
+        {
+            decision = new(SpellCheckSessionAction.Change, replacementBox.Text);
+            dialog.Close();
+        };
+        changeAllButton.Click += (_, _) =>
+        {
+            decision = new(SpellCheckSessionAction.ChangeAll, replacementBox.Text);
+            dialog.Close();
+        };
+        addButton.Click += (_, _) =>
+        {
+            decision = new(SpellCheckSessionAction.AddToDictionary);
+            dialog.Close();
+        };
+        closeButton.Click += (_, _) =>
+        {
+            decision = new(SpellCheckSessionAction.Stop);
+            dialog.Close();
+        };
 
-        var buttonRowTop = AvaloniaCompactDialogChrome.CreateActionRow(
+        layout.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
             [ignoreButton, ignoreAllButton, changeButton],
-            new Thickness(0, 10, 0, 0));
-        var buttonRowBottom = AvaloniaCompactDialogChrome.CreateActionRow(
-            [changeAllButton, closeButton],
-            new Thickness(0, 6, 0, 0));
-
-        layout.Children.Add(buttonRowTop);
-        layout.Children.Add(buttonRowBottom);
+            new Thickness(0, 10, 0, 0)));
+        layout.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
+            [changeAllButton, addButton, closeButton],
+            new Thickness(0, 6, 0, 0)));
 
         dialog.Content = new ScrollViewer
         {
@@ -342,7 +207,7 @@ public sealed partial class MainWindow
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = layout,
         };
-        var initialFocus = suggestions.Count > 0 ? (Control)suggestionList : replacementBox;
+        var initialFocus = suggestions.Length > 0 ? (Control)suggestionList : replacementBox;
         ConfigureNativeDialogInitialFocus(dialog, layout, initialFocus);
         ConfigureDeferredDialogCancel(dialog, closeButton);
 

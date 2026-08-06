@@ -26,28 +26,24 @@ public partial class MainWindow
         if (!TryCommitPendingSpellCheckEdit())
             return;
 
-        var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(_options.SpellCheckCustomDictionaryWords);
-        var ignoredWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var ignoredIssues = new HashSet<SpellingIssueKey>();
-
-        while (true)
-        {
-            var scan = SpellCheckWorkflowPlanner.ScanWorksheet(
-                _workbook,
-                _currentSheetId,
-                customDictionary,
-                ignoredWords,
-                ignoredIssues);
-            if (scan.IsComplete)
+        var controller = new SpellCheckSessionController(new SpellCheckSessionAdapter(
+            () => _workbook,
+            () => _currentSheetId,
+            () => _options.SpellCheckCustomDictionaryWords,
+            command =>
             {
-                _messageService.ShowInfo(
-                    UiText.Get("MainWindowMessage_SpellCheckComplete"),
-                    UiText.Get("MainWindowMessage_SpellCheckTitle"));
-                return;
-            }
+                var success = TryExecuteCommand(command, "Spell Check", out var outcome);
+                return new SpellCheckCommandExecutionResult(
+                    success,
+                    outcome.ErrorMessage,
+                    outcome.IsNoOp);
+            },
+            () => AppOptionsStore.Save(_options)));
+        var transition = controller.Start();
 
-            var issues = scan.Issues;
-            var issue = issues[0];
+        while (transition.RequiresReview)
+        {
+            var issue = transition.Issue!;
             SetActiveCell(issue.Address);
             EnsureCellVisible(issue.Address);
             UpdateViewport();
@@ -55,56 +51,28 @@ public partial class MainWindow
 
             var dialog = new SpellCheckDialog(issue.Word, issue.Suggestion) { Owner = this };
             if (dialog.ShowDialog() != true)
+            {
+                controller.Apply(new(SpellCheckSessionAction.Stop));
                 return;
-
-            if (dialog.Result.Action == SpellCheckDialogAction.Ignore)
-            {
-                ignoredIssues.Add(SpellCheckWorkflowPlanner.CreateIssueKey(issue));
-                continue;
             }
 
-            if (dialog.Result.Action == SpellCheckDialogAction.IgnoreAll)
+            transition = controller.Apply(dialog.Result);
+            if (dialog.Result.Action is SpellCheckSessionAction.Change or SpellCheckSessionAction.ChangeAll &&
+                transition.Status != SpellCheckSessionStatus.Failed)
             {
-                ignoredWords.Add(issue.Word);
-                continue;
-            }
-
-            if (dialog.Result.Action == SpellCheckDialogAction.Add)
-            {
-                if (SpellCheckWorkflowPlanner.AddCustomDictionaryWord(
-                        _options.SpellCheckCustomDictionaryWords,
-                        customDictionary,
-                        issue.Word))
-                    AppOptionsStore.Save(_options);
-
-                continue;
-            }
-
-            var replacement = dialog.Result.Replacement ?? issue.Suggestion;
-
-            if (dialog.Result.Action == SpellCheckDialogAction.ReplaceAll)
-            {
-                var command = SpellCheckWorkflowPlanner.BuildReplaceAllCommand(issues, issue.Word, replacement);
-                if (command is not null && !TryExecuteSpellCheckCommand(command))
-                    return;
-
                 RefreshSpellCheckEditorState(issue.Address);
                 UpdateViewport();
                 RefreshStatusBar();
-                continue;
             }
+        }
 
-            if (!TryExecuteSpellCheckCommand(SpellCheckWorkflowPlanner.BuildReplacementCommand(issue, replacement)))
-                return;
-
-            RefreshSpellCheckEditorState(issue.Address);
-            UpdateViewport();
-            RefreshStatusBar();
+        if (transition.Status == SpellCheckSessionStatus.Complete)
+        {
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_SpellCheckComplete"),
+                UiText.Get("MainWindowMessage_SpellCheckTitle"));
         }
     }
-
-    private bool TryExecuteSpellCheckCommand(IWorkbookCommand command) =>
-        TryExecuteCommand(command, "Spell Check");
 
     private void RefreshSpellCheckEditorState(CellAddress address)
     {

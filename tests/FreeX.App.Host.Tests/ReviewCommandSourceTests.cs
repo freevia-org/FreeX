@@ -41,9 +41,11 @@ public sealed class ReviewCommandSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
         var controllerSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewSessionController.cs");
 
-        source.Should().Contain("SpellCheckWorkflowPlanner.ScanWorksheet(");
-        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllCommand(");
-        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplacementCommand(");
+        source.Should().Contain("new SpellCheckSessionController(new SpellCheckSessionAdapter(");
+        source.Should().Contain("transition = controller.Apply(dialog.Result);");
+        source.Should().NotContain("SpellCheckWorkflowPlanner.ScanWorksheet(");
+        source.Should().NotContain("SpellCheckWorkflowPlanner.BuildReplaceAllCommand(");
+        source.Should().NotContain("SpellCheckWorkflowPlanner.BuildReplacementCommand(");
         source.Should().Contain("WorkbookStatisticsService.GetStatistics(_workbook)");
         source.Should().Contain("AccessibilityCheckerService.FindIssues(_workbook)");
         source.Should().Contain("DrawingTargetResolver.GetTargetAltTextObject(sheet, SheetGrid.SelectedRange?.Start, preferredKind)");
@@ -80,7 +82,7 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("ProtectionSession.ExecuteSheet(sheet, options)");
         source.Should().Contain("ProtectSheetOptions.FromCorePermissions(");
         source.Should().Contain("string? unprotectPassword = null;");
-        source.Should().Contain("sheet.IsProtected && !TryConfirmSheetUnprotectPassword(sheet, out unprotectPassword)");
+        source.Should().Contain("state.IsProtected && !TryConfirmSheetUnprotectPassword(sheet, out unprotectPassword)");
         source.Should().Contain("private bool TryConfirmSheetUnprotectPassword(Sheet sheet, out string? password)");
         source.Should().Contain("ProtectionSession.ProjectWorkbook()");
         source.Should().Contain("TryConfirmWorkbookUnprotectPassword(out pwd)");

@@ -12,7 +12,7 @@ public sealed partial class RemainingDialogTests
     {
         SpellCheckDialog.CreateReplaceResult("mispelled", "misspelled")
             .Should()
-            .Be(new SpellCheckDialogResult(SpellCheckDialogAction.Replace, "misspelled"));
+            .Be(new SpellCheckSessionDecision(SpellCheckSessionAction.Change, "misspelled"));
     }
 
     [Fact]
@@ -20,7 +20,7 @@ public sealed partial class RemainingDialogTests
     {
         SpellCheckDialog.CreateReplaceAllResult("mispelled", "misspelled")
             .Should()
-            .Be(new SpellCheckDialogResult(SpellCheckDialogAction.ReplaceAll, "misspelled"));
+            .Be(new SpellCheckSessionDecision(SpellCheckSessionAction.ChangeAll, "misspelled"));
     }
 
     [Fact]
@@ -28,7 +28,7 @@ public sealed partial class RemainingDialogTests
     {
         SpellCheckDialog.CreateIgnoreAllResult()
             .Should()
-            .Be(new SpellCheckDialogResult(SpellCheckDialogAction.IgnoreAll, null));
+            .Be(new SpellCheckSessionDecision(SpellCheckSessionAction.IgnoreAll));
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public sealed partial class RemainingDialogTests
     {
         var source = ReadRemainingDialogSources();
 
-        source.Should().Contain("SpellCheckDialogAction.Add");
+        source.Should().Contain("SpellCheckSessionAction.AddToDictionary");
         source.Should().Contain("Content = UiText.Get(\"SpellCheck_IgnoreOnce\")");
         source.Should().Contain("Content = UiText.Get(\"SpellCheck_Change\")");
         source.Should().Contain("Content = UiText.Get(\"SpellCheck_Change\"), Width = 90, IsDefault = true");
@@ -184,7 +184,7 @@ public sealed partial class RemainingDialogTests
             }, DispatcherPriority.ApplicationIdle);
 
             dialog.ShowDialog().Should().BeTrue();
-            dialog.Result.Should().Be(new SpellCheckDialogResult(SpellCheckDialogAction.Replace, "misspelled"));
+            dialog.Result.Should().Be(new SpellCheckSessionDecision(SpellCheckSessionAction.Change, "misspelled"));
         });
     }
 
@@ -203,7 +203,7 @@ public sealed partial class RemainingDialogTests
 
             doubleClick.Handled.Should().BeFalse();
             dialog.DialogResult.Should().BeNull();
-            dialog.Result.Should().Be(new SpellCheckDialogResult(SpellCheckDialogAction.Replace, "misspelled"));
+            dialog.Result.Should().Be(new SpellCheckSessionDecision(SpellCheckSessionAction.Change, "misspelled"));
         });
     }
 }

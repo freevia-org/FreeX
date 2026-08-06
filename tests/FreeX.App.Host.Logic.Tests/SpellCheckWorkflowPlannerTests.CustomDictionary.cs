@@ -82,13 +82,13 @@ public sealed partial class SpellCheckWorkflowPlannerTests
     public void SpellCheckWorkflow_RoutesAddToDictionaryThroughPersistedCustomDictionaryScan()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
+        var controllerSource = DialogSourceTestSupport.ReadAppServicesSource("SpellCheckSessionController.cs");
 
-        source.Should().Contain("var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(_options.SpellCheckCustomDictionaryWords);");
-        source.Should().Contain("SpellCheckWorkflowPlanner.ScanWorksheet(");
-        source.Should().Contain("customDictionary,");
-        source.Should().Contain("dialog.Result.Action == SpellCheckDialogAction.Add");
-        source.Should().Contain("SpellCheckWorkflowPlanner.AddCustomDictionaryWord(");
-        source.Should().Contain("_options.SpellCheckCustomDictionaryWords,");
-        source.Should().Contain("AppOptionsStore.Save(_options);");
+        source.Should().Contain("new SpellCheckSessionController(new SpellCheckSessionAdapter(");
+        source.Should().Contain("() => _options.SpellCheckCustomDictionaryWords");
+        source.Should().Contain("() => AppOptionsStore.Save(_options)");
+        controllerSource.Should().Contain("case SpellCheckSessionAction.AddToDictionary:");
+        controllerSource.Should().Contain("SpellCheckWorkflowPlanner.AddCustomDictionaryWord(");
+        controllerSource.Should().Contain("_adapter.PersistCustomDictionary();");
     }
 }

@@ -240,25 +240,25 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
-        source.Should().Contain("SpellCheckDialogAction.ReplaceAll");
-        source.Should().Contain("SpellCheckDialogAction.IgnoreAll");
-        source.Should().Contain("SpellCheckDialogAction.Ignore");
-        source.Should().Contain("SpellCheckDialogAction.Add");
-        source.Should().Contain("while (true)");
-        source.Should().Contain("SpellCheckWorkflowPlanner.ScanWorksheet(");
-        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllCommand(issues, issue.Word, replacement)");
-        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplacementCommand(issue, replacement)");
+        source.Should().Contain("SpellCheckSessionAction.ChangeAll");
+        source.Should().Contain("SpellCheckSessionAction.Stop");
+        source.Should().Contain("while (transition.RequiresReview)");
+        source.Should().Contain("new SpellCheckSessionController(new SpellCheckSessionAdapter(");
+        source.Should().Contain("transition = controller.Apply(dialog.Result);");
         source.Should().NotContain("BuildSpellCheckEdits");
-        source.Should().Contain("TryExecuteSpellCheckCommand");
-        source.Should().Contain("TryExecuteCommand(command, \"Spell Check\")");
+        source.Should().Contain("TryExecuteCommand(command, \"Spell Check\", out var outcome)");
+        source.Should().NotContain("TryExecuteSpellCheckCommand");
         source.Should().NotContain("TryExecuteEditCells(edits, \"Spell Check\")");
 
         var plannerSource = DialogSourceTestSupport.ReadAppServicesSource("SpellCheckWorkflowPlanner.cs");
+        var controllerSource = DialogSourceTestSupport.ReadAppServicesSource("SpellCheckSessionController.cs");
         plannerSource.Should().Contain("ContainsIgnoredWord(ignoredWords, issue.Word)");
         plannerSource.Should().Contain("ignoredIssues.Contains(CreateIssueKey(issue))");
         plannerSource.Should().Contain("new(FilterIssues(");
         plannerSource.Should().Contain("SpellCheckService.ApplyCorrection(issue, replacement)");
         plannerSource.Should().Contain("SpellingIssueSource.ThreadedCommentReply");
+        controllerSource.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllCommand(");
+        controllerSource.Should().Contain("SpellCheckWorkflowPlanner.BuildReplacementCommand(");
     }
 
     [Fact]

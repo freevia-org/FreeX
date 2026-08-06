@@ -3,19 +3,9 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
-
-public enum SpellCheckDialogAction
-{
-    Replace,
-    ReplaceAll,
-    Ignore,
-    IgnoreAll,
-    Add
-}
-
-public sealed record SpellCheckDialogResult(SpellCheckDialogAction Action, string? Replacement);
 
 public sealed class SpellCheckDialog : Window
 {
@@ -25,7 +15,7 @@ public sealed class SpellCheckDialog : Window
     private readonly Button _changeButton = new() { Content = UiText.Get("SpellCheck_Change"), Width = 90, IsDefault = true };
     private readonly Button _changeAllButton = new() { Content = UiText.Get("SpellCheck_ChangeAll"), Width = 90 };
 
-    public SpellCheckDialogResult Result { get; private set; }
+    public SpellCheckSessionDecision Result { get; private set; }
 
     public SpellCheckDialog(string word, string suggestion)
     {
@@ -71,20 +61,20 @@ public sealed class SpellCheckDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static SpellCheckDialogResult CreateReplaceResult(string word, string replacement) =>
-        new(SpellCheckDialogAction.Replace, string.IsNullOrWhiteSpace(replacement) ? word : replacement.Trim());
+    public static SpellCheckSessionDecision CreateReplaceResult(string word, string replacement) =>
+        new(SpellCheckSessionAction.Change, string.IsNullOrWhiteSpace(replacement) ? word : replacement.Trim());
 
-    public static SpellCheckDialogResult CreateReplaceAllResult(string word, string replacement) =>
-        new(SpellCheckDialogAction.ReplaceAll, string.IsNullOrWhiteSpace(replacement) ? word : replacement.Trim());
+    public static SpellCheckSessionDecision CreateReplaceAllResult(string word, string replacement) =>
+        new(SpellCheckSessionAction.ChangeAll, string.IsNullOrWhiteSpace(replacement) ? word : replacement.Trim());
 
-    public static SpellCheckDialogResult CreateIgnoreResult() =>
-        new(SpellCheckDialogAction.Ignore, null);
+    public static SpellCheckSessionDecision CreateIgnoreResult() =>
+        new(SpellCheckSessionAction.IgnoreOnce);
 
-    public static SpellCheckDialogResult CreateIgnoreAllResult() =>
-        new(SpellCheckDialogAction.IgnoreAll, null);
+    public static SpellCheckSessionDecision CreateIgnoreAllResult() =>
+        new(SpellCheckSessionAction.IgnoreAll);
 
-    public static SpellCheckDialogResult CreateAddResult(string word) =>
-        new(SpellCheckDialogAction.Add, word.Trim());
+    public static SpellCheckSessionDecision CreateAddResult() =>
+        new(SpellCheckSessionAction.AddToDictionary);
 
     private void SuggestionsBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
@@ -95,7 +85,7 @@ public sealed class SpellCheckDialog : Window
         e.Handled = true;
     }
 
-    private void Accept(SpellCheckDialogResult result)
+    private void Accept(SpellCheckSessionDecision result)
     {
         Result = result;
         DialogResult = true;
@@ -141,7 +131,7 @@ public sealed class SpellCheckDialog : Window
         actionButtons.Children.Add(CreateSpellingButton(new Button { Content = UiText.Get("SpellCheck_IgnoreAll"), Width = 90 }, "SpellCheckIgnoreAllButton", UiText.Get("SpellCheck_IgnoreAllOccurrencesHelpText"), (_, _) => Accept(CreateIgnoreAllResult())));
         actionButtons.Children.Add(CreateSpellingButton(_changeButton, "SpellCheckChangeButton", UiText.Get("SpellCheck_ReplaceThisOccurrenceHelpText"), (_, _) => Accept(CreateReplaceResult(word, _replacementBox.Text))));
         actionButtons.Children.Add(CreateSpellingButton(_changeAllButton, "SpellCheckChangeAllButton", UiText.Get("SpellCheck_ReplaceAllOccurrencesHelpText"), (_, _) => Accept(CreateReplaceAllResult(word, _replacementBox.Text))));
-        actionButtons.Children.Add(CreateSpellingButton(new Button { Content = UiText.Get("SpellCheck_AddToDictionary"), Width = 118 }, "SpellCheckAddToDictionaryButton", UiText.Get("SpellCheck_AddTheWordToTheCustomDictionaryHelpText"), (_, _) => Accept(CreateAddResult(word))));
+        actionButtons.Children.Add(CreateSpellingButton(new Button { Content = UiText.Get("SpellCheck_AddToDictionary"), Width = 118 }, "SpellCheckAddToDictionaryButton", UiText.Get("SpellCheck_AddTheWordToTheCustomDictionaryHelpText"), (_, _) => Accept(CreateAddResult())));
         var cancelButton = new Button { Content = UiText.Get("SpellCheck_Cancel"), Width = 90, IsCancel = true, Margin = new Thickness(0, 8, 0, 0) };
         AutomationProperties.SetName(cancelButton, UiText.Get("SpellCheck_CancelSpelling"));
         AutomationProperties.SetAutomationId(cancelButton, "SpellCheckCancelButton");
