@@ -212,6 +212,27 @@ public static class ComplexFieldEngine
         return null;
     }
 
+    /// <summary>
+    /// Every value following repeated occurrences of switch <paramref name="letter"/>, in instruction
+    /// order. This is required for Word's repeatable general-format switch (<c>\*</c>), where
+    /// <c>MERGEFORMAT</c> can coexist with a text or numeric result format.
+    /// </summary>
+    public static IReadOnlyList<string> SwitchValues(string instruction, char letter)
+    {
+        var target = char.ToUpperInvariant(letter);
+        var tokens = Tokenize(instruction).ToList();
+        var values = new List<string>();
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            if (tokens[i].Length == 2 && tokens[i][0] == '\\' && char.ToUpperInvariant(tokens[i][1]) == target)
+            {
+                if (i + 1 < tokens.Count && !tokens[i + 1].StartsWith('\\'))
+                    values.Add(tokens[i + 1]);
+            }
+        }
+        return values;
+    }
+
     // REF: the text of the paragraph that carries the referenced bookmark, trimmed of trailing blanks.
     // Unresolvable (no such bookmark) falls back to the cached text so the field never blanks.
     private static string ResolveRef(TextDocument document, ComplexField field, string cached)

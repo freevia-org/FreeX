@@ -2003,7 +2003,57 @@ public static class MailMerge
 
         var before = ComplexFieldEngine.SwitchValue(field.Instruction, 'b') ?? string.Empty;
         var after = ComplexFieldEngine.SwitchValue(field.Instruction, 'f') ?? string.Empty;
-        return before + value + after;
+        return ApplyMergeFieldGeneralFormats(before + value + after, field.Instruction);
+    }
+
+    private static string ApplyMergeFieldGeneralFormats(string value, string instruction)
+    {
+        foreach (var format in ComplexFieldEngine.SwitchValues(instruction, '*'))
+        {
+            value = format.ToUpperInvariant() switch
+            {
+                "UPPER" => value.ToUpperInvariant(),
+                "LOWER" => value.ToLowerInvariant(),
+                "FIRSTCAP" => CapitalizeFirstLetter(value),
+                "CAPS" => CapitalizeWordInitials(value),
+                _ => value
+            };
+        }
+        return value;
+    }
+
+    private static string CapitalizeFirstLetter(string value)
+    {
+        var chars = value.ToCharArray();
+        for (var i = 0; i < chars.Length; i++)
+        {
+            if (!char.IsLetter(chars[i]))
+                continue;
+            chars[i] = char.ToUpperInvariant(chars[i]);
+            break;
+        }
+        return new string(chars);
+    }
+
+    private static string CapitalizeWordInitials(string value)
+    {
+        var chars = value.ToCharArray();
+        var atWordStart = true;
+        for (var i = 0; i < chars.Length; i++)
+        {
+            if (char.IsWhiteSpace(chars[i])
+                || char.IsPunctuation(chars[i]) && chars[i] is not '\'' and not '’')
+            {
+                atWordStart = true;
+            }
+            else if (char.IsLetter(chars[i]))
+            {
+                if (atWordStart)
+                    chars[i] = char.ToUpperInvariant(chars[i]);
+                atWordStart = false;
+            }
+        }
+        return new string(chars);
     }
 
     private static void TransformBlockText(

@@ -236,6 +236,70 @@ public class MailMergeTests
             .PlainText.Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("Upper", "ADA LOVELACE")]
+    [InlineData("Lower", "ada lovelace")]
+    [InlineData("FirstCap", "Ada LOVELACE")]
+    [InlineData("Caps", "Ada LOVELACE")]
+    public void MergeRecord_AppliesNativeGeneralTextFormat(string format, string expected)
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    $" MERGEFIELD Name \\* {format} \\* MERGEFORMAT ",
+                    "«Name»")
+            }
+        });
+        var row = new Dictionary<string, string> { ["Name"] = "ada LOVELACE" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be(expected);
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be(expected);
+    }
+
+    [Fact]
+    public void MergeRecord_GeneralFormatIncludesConditionalText()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD Name \\b \"pre-\" \\f \"-post\" \\* Upper \\* MERGEFORMAT ",
+                    "«Name»")
+            }
+        });
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string> { ["Name"] = "ada LOVELACE" });
+
+        merged.PlainText.Should().Be("PRE-ADA LOVELACE-POST");
+    }
+
+    [Fact]
+    public void MergeRecord_CapsUsesWordPunctuationBoundariesButKeepsApostrophesInternal()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" MERGEFIELD Name \\* Caps ", "«Name»") }
+        });
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string>
+            {
+                ["Name"] = "ada-lovelace ada/lovelace o'connor"
+            });
+
+        merged.PlainText.Should().Be("Ada-Lovelace Ada/Lovelace O'connor");
+    }
+
     [Fact]
     public void MergeRecordWithRules_ResolvesNativeMergeFieldAlongsideRules()
     {
