@@ -135,10 +135,13 @@ public sealed class DialogLifecycleParityTests
             repositoryRoot, "freep", "FreeP.App.Host", "FindReplaceDialog.cs"));
         var mainWindowSource = File.ReadAllText(Path.Combine(
             repositoryRoot, "freep", "FreeP.App.Host", "MainWindow.cs"));
+        var workareaEndpointSource = File.ReadAllText(Path.Combine(
+            repositoryRoot, "freep", "FreeP.App.Host", "MainWindow.WorkareaEndpoint.cs"));
 
         dialogSource.Should().Contain("e.Key != Key.Escape");
         dialogSource.Should().Contain("Close();");
-        mainWindowSource.Should().Contain("_findReplaceDialog?.Close();");
+        mainWindowSource.Should().Contain("_findReplaceDialog.Closed += (_, _) => _findReplaceDialog = null;");
+        workareaEndpointSource.Should().Contain("BeforePresentationReplaced => () => _findReplaceDialog?.Close()");
     }
 
     private static EditingSession MakeSession()

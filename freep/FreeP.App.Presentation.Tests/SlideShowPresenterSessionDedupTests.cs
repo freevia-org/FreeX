@@ -369,7 +369,7 @@ public sealed class SlideShowPresenterSessionDedupTests
             source.Should().Contain("_runtime.HandleKeyboardInput(");
             source.Should().Contain("_runtime.HandlePointerInput(");
             source.Should().Contain("_runtime.ActivateHyperlink(");
-            source.Should().Contain("_runtime.BuildDisplayPlan(");
+            source.Should().Contain("_runtime.DisplayCurrentSlide(");
             source.Should().Contain("_runtime.DisplaySlide");
             source.Should().Contain("_runtime.CreatePresenterViewOperations(_setSlideNotesText)");
             source.Should().Contain("var windowPlan = _runtime.WindowPlan;");
