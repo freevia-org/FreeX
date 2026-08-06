@@ -1277,11 +1277,11 @@ public sealed partial class MainWindow : Window
         Editor  = new EditingSession(_presentation, bus);
         if (_ribbonCommandRegistry is not null)
         {
-            FreePRibbonCommandWorkflow.BindInto(
+            FreePRibbonHostRegistryComposer.BindInto(
                 _ribbonCommandRegistry,
                 Editor,
                 _ribbonStateStore,
-                CreateRibbonCommandHostAdapter());
+                CreateRibbonHostProfile());
         }
         _selectionPane?.SetEditor(Editor);
         _applicationFrameSession?.Attach(Editor);
@@ -2710,55 +2710,59 @@ public sealed partial class MainWindow : Window
 
     internal RibbonCommandRegistry BuildCommandRegistry()
     {
-        var host = CreateRibbonCommandHostAdapter();
-        var registry = FreePRibbonCommandWorkflow.Build(Editor, _ribbonStateStore, host).Registry;
-
-        // File workflows and native export/print surfaces are renderer-owned.
-        registry.Register("freep.file.new", new ActionRibbonCommand(FileNew));
-        registry.Register("freep.file.open", new ActionRibbonCommand(() => _ = FileOpenAsync()));
-        registry.Register("freep.file.save", new ActionRibbonCommand(() => _ = FileSaveAsync()));
-        registry.Register("freep.file.save-as", new ActionRibbonCommand(() => _ = FileSaveAsAsync()));
-        registry.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
-        registry.Register(PresentationExportPlanner.NotesPagePdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportNotesPagePdfAsync()));
-        registry.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
-        registry.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() =>
-        {
-            RefreshHandoutLayoutPlan();
-            ShowPrintBackstage();
-        }));
-        registry.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => _ = FileExportVideoAsync()));
-
-        // OLE activation remains native and outside the portable ribbon workflow.
-        registry.Register(
-            OleInsertionPlanner.InsertEmbeddedObjectCommandId,
-            new ActionRibbonCommand(() => _ = InsertEmbeddedObjectFromFileAsync()));
-        registry.Register(
-            OleActivationPlanner.OpenEmbeddedObjectCommandId,
-            new ActionRibbonCommand(() =>
-            {
-                OleActivationPlanner.TryOpenInlineFirst(
-                    () => _textEditor?.TryActivateInlineOleObject() == true,
-                    () =>
-                    {
-                        if (Editor.SelectedOleObject is not { } ole)
-                            return false;
-                        OleActivationService.TryActivate(ole);
-                        return true;
-                    });
-            }));
-
-        return registry;
+        return FreePRibbonHostRegistryComposer.Build(
+            Editor,
+            _ribbonStateStore,
+            CreateRibbonHostProfile()).Registry;
     }
 
-    private FreePRibbonCommandHostAdapter CreateRibbonCommandHostAdapter() => new()
+    private FreePRibbonHostProfile CreateRibbonHostProfile() => new()
     {
-        ExecuteAction = ExecuteRibbonHostAction,
-        QueryState = QueryRibbonHostState,
+        ActionEndpoints = GetRibbonHostActionEndpoints(),
+        QueryEndpoints = new FreePRibbonHostQueryEndpoints
+        {
+            BeginFormatPainter = () => _gestureHandler?.BeginFormatPainter() == true,
+            CanMergeTableCells = () =>
+                _domainContextMenuSession.CanExecuteCurrentTableAction(
+                    PresentationDomainContextActionKind.MergeTableCell),
+            CanSplitTableCell = () =>
+                _domainContextMenuSession.CanExecuteCurrentTableAction(
+                    PresentationDomainContextActionKind.SplitTableCell),
+            EditPointsEnabled = () => _slideCanvas.EditPointsEnabled,
+            AnimationPaneVisible = () => IsAnimationPaneVisible,
+            ViewShowState = () => _viewShowState,
+            ViewZoomState = () => _viewZoomState,
+        },
         TryHandleTextAction = TryHandleRibbonTextAction,
+        FileCommands = new FreePRibbonFileCommandEndpoints
+        {
+            New = FileNew,
+            Open = () => _ = FileOpenAsync(),
+            Save = () => _ = FileSaveAsync(),
+            SaveAs = () => _ = FileSaveAsAsync(),
+            ExportPdf = () => _ = FileExportPdfAsync(),
+            ExportNotesPagePdf = () => _ = FileExportNotesPagePdfAsync(),
+            ExportImages = () => _ = FileExportImagesAsync(),
+            Print = () =>
+            {
+                RefreshHandoutLayoutPlan();
+                ShowPrintBackstage();
+            },
+            ExportVideo = () => _ = FileExportVideoAsync(),
+        },
+        OleCommands = new FreePRibbonOleCommandEndpoints
+        {
+            InsertEmbeddedObject = () => _ = InsertEmbeddedObjectFromFileAsync(),
+            TryOpenInlineEmbeddedObject = () => _textEditor?.TryActivateInlineOleObject() == true,
+            TryOpenSelectedEmbeddedObject = ole =>
+            {
+                OleActivationService.TryActivate(ole);
+                return true;
+            },
+        },
     };
 
-    private void ExecuteRibbonHostAction(FreePRibbonHostAction action)
-    {
+    private FreePRibbonHostActionEndpoints GetRibbonHostActionEndpoints() =>
         _ribbonHostActionEndpoints ??= new FreePRibbonHostActionEndpoints
         {
             Copy = QueueClipboardCopy,
@@ -2841,24 +2845,6 @@ public sealed partial class MainWindow : Window
             OpenCustomShows = OpenCustomShowDialog,
             OpenSlideShowSettings = OpenSlideShowSettingsDialog,
         };
-        FreePRibbonHostActionDispatcher.Dispatch(action, _ribbonHostActionEndpoints);
-    }
-
-    private object? QueryRibbonHostState(FreePRibbonHostQuery query) => query.Kind switch
-    {
-        FreePRibbonHostQueryKind.BeginFormatPainter => _gestureHandler?.BeginFormatPainter() == true,
-        FreePRibbonHostQueryKind.CanMergeTableCells =>
-            _domainContextMenuSession.CanExecuteCurrentTableAction(
-                PresentationDomainContextActionKind.MergeTableCell),
-        FreePRibbonHostQueryKind.CanSplitTableCell =>
-            _domainContextMenuSession.CanExecuteCurrentTableAction(
-                PresentationDomainContextActionKind.SplitTableCell),
-        FreePRibbonHostQueryKind.EditPointsEnabled => _slideCanvas.EditPointsEnabled,
-        FreePRibbonHostQueryKind.AnimationPaneVisible => IsAnimationPaneVisible,
-        FreePRibbonHostQueryKind.ViewShowState => _viewShowState,
-        FreePRibbonHostQueryKind.ViewZoomState => _viewZoomState,
-        _ => null,
-    };
 
     private bool TryHandleRibbonTextAction(FreePRibbonTextAction action)
     {

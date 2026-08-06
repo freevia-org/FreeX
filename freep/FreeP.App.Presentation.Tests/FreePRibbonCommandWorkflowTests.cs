@@ -109,16 +109,24 @@ public sealed class FreePRibbonCommandWorkflowTests
         var avaloniaRegistry = Slice(
             avalonia,
             "internal RibbonCommandRegistry BuildCommandRegistry()",
-            "private void ExecuteRibbonHostAction");
+            "private bool TryHandleRibbonTextAction");
 
-        wpf.Should().Contain("FreePRibbonCommandWorkflow.Build(editor, stateStore, host)");
-        Count(wpf, "registry.Register(").Should().Be(2, "only native OLE insertion and activation remain local");
-        avaloniaRegistry.Should().Contain("FreePRibbonCommandWorkflow.Build(Editor, _ribbonStateStore, host)");
+        wpf.Should().Contain("FreePRibbonHostRegistryComposer.Build(editor, stateStore, profile)")
+            .And.Contain("new FreePRibbonHostProfile")
+            .And.Contain("new FreePRibbonOleCommandEndpoints");
+        wpf.Should().NotContain("registry.Register(")
+            .And.NotContain("new FreePRibbonCommandHostAdapter")
+            .And.NotContain("FreePRibbonHostActionDispatcher.Dispatch(");
+        avaloniaRegistry.Should().Contain("FreePRibbonHostRegistryComposer.Build(")
+            .And.Contain("new FreePRibbonFileCommandEndpoints")
+            .And.Contain("new FreePRibbonOleCommandEndpoints")
+            .And.Contain("new FreePRibbonHostQueryEndpoints");
         avaloniaRegistry.Should().NotContain("freep.bold")
             .And.NotContain("SmartArtAuthoringPlanner.ThemeAccentsCommandId")
-            .And.NotContain("PresentationTransitionCommandPlanner.BuiltInPlans");
-        Count(avaloniaRegistry, "registry.Register(").Should().Be(11, "only file/export and native OLE commands remain local");
-        avalonia.Should().Contain("FreePRibbonCommandWorkflow.BindInto(");
+            .And.NotContain("PresentationTransitionCommandPlanner.BuiltInPlans")
+            .And.NotContain("registry.Register(")
+            .And.NotContain("FreePRibbonHostActionDispatcher.Dispatch(");
+        avalonia.Should().Contain("FreePRibbonHostRegistryComposer.BindInto(");
         avalonia.Should().NotContain("TransitionAdvanceOnClickToggleCommand")
             .And.NotContain("AnimationPaneToggleCommand")
             .And.NotContain("ViewShowToggleCommand")
@@ -137,9 +145,6 @@ public sealed class FreePRibbonCommandWorkflowTests
         registry.TryGet(commandId, out var command).Should().BeTrue();
         command!.Execute(RibbonCommandContext.Empty);
     }
-
-    private static int Count(string source, string value) =>
-        source.Split(value, StringSplitOptions.None).Length - 1;
 
     private static string Slice(string source, string startMarker, string endMarker)
     {

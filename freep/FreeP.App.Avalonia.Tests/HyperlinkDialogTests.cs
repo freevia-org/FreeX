@@ -128,8 +128,8 @@ public sealed class HyperlinkDialogTests
         source.Should().Contain("PresentationHyperlinkWorkflowSession _hyperlinkWorkflowSession");
         source.Should().Contain("_hyperlinkWorkflowSession.BuildRequest(");
         source.Should().Contain("_hyperlinkWorkflowSession.Apply(");
-        source.Should().Contain("FreePRibbonCommandWorkflow.Build(Editor, _ribbonStateStore, host).Registry");
-        source.Should().Contain("case FreePRibbonHostActionKind.OpenHyperlink: OpenHyperlinkDialog(); break;");
+        source.Should().Contain("FreePRibbonHostRegistryComposer.Build(");
+        source.Should().Contain("OpenHyperlink = OpenHyperlinkDialog");
         source.Should().NotContain("Editor.SetShapeHyperlink(");
         source.Should().NotContain("r.Register(\"freep.insert-link\"");
     }

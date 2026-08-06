@@ -23,6 +23,12 @@ public sealed class FilePickerPlannerSourceTests
             "freep",
             "FreeP.App.Presentation",
             "PresentationFileCommandSession.cs"));
+        var ribbonProfile = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "Ribbon",
+            "FreePRibbonHostProfile.cs"));
         var project = File.ReadAllText(Path.Combine(
             root,
             "freep",
@@ -34,12 +40,14 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("_fileSession.SaveAsync()");
         source.Should().Contain("_fileSession.ExportPdfAsync()");
         source.Should().Contain("_fileSession.ExportImagesAsync()");
-        source.Should().Contain("PresentationExportPlanner.PdfExportCommandId");
-        source.Should().Contain("PresentationExportPlanner.NotesPagePdfExportCommandId");
-        source.Should().Contain("PresentationExportPlanner.ImageExportCommandId");
-        source.Should().Contain("PresentationExportPlanner.VideoExportCommandId");
-        source.Should().Contain("new ActionRibbonCommand(() => _ = FileExportVideoAsync())");
-        source.Should().Contain("PresentationExportPlanner.PrintCommandId");
+        source.Should().Contain("new FreePRibbonFileCommandEndpoints")
+            .And.Contain("ExportVideo = () => _ = FileExportVideoAsync()")
+            .And.Contain("Print = () =>");
+        ribbonProfile.Should().Contain("PresentationExportPlanner.PdfExportCommandId")
+            .And.Contain("PresentationExportPlanner.NotesPagePdfExportCommandId")
+            .And.Contain("PresentationExportPlanner.ImageExportCommandId")
+            .And.Contain("PresentationExportPlanner.VideoExportCommandId")
+            .And.Contain("PresentationExportPlanner.PrintCommandId");
         session.Should().Contain("PresentationFileDialogPlanner.BuildOpenPickerPlan()");
         session.Should().Contain("PresentationFileDialogPlanner.BuildSavePickerPlan(");
         session.Should().Contain("PresentationExportPlanner.BuildPdfExportPickerPlan(");
@@ -84,7 +92,7 @@ public sealed class FilePickerPlannerSourceTests
         session.Should().Contain("LastVideoExecutionDescriptor = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(");
         source.Should().Contain("_fileSession.LastVideoExecutionDescriptor");
         source.Should().Contain("LastVideoExportHandoffPlan");
-        source.Should().Contain("PresentationExportPlanner.PrintCommandId");
+        ribbonProfile.Should().Contain("PresentationExportPlanner.PrintCommandId");
         session.Should().Contain("PresentationExportPlanner.BuildPdfExportPickerPlan(");
         session.Should().Contain("PresentationExportPlanner.BuildHandoutLayoutPlan(");
         session.Should().Contain("PresentationImageExportExecutor.Export(");
