@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia;
 
@@ -15,8 +16,8 @@ internal sealed class HeaderFooterTextDialog : FreeWDialogWindow
 
     private HeaderFooterTextDialog(bool footer, string initial)
     {
-        var label = footer ? "Footer" : "Header";
-        Title = $"Edit {label}";
+        var plan = HeaderFooterTextDialogPlanner.Build(footer, initial);
+        Title = plan.Title;
         Width = 390;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -25,7 +26,7 @@ internal sealed class HeaderFooterTextDialog : FreeWDialogWindow
 
         _text = new TextBox
         {
-            Text = initial,
+            Text = plan.InitialText,
             Width = 340,
             AcceptsReturn = false,
         };
@@ -38,7 +39,7 @@ internal sealed class HeaderFooterTextDialog : FreeWDialogWindow
             MinWidth = 78,
         };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 78, isDefault: true);
-        ok.Click += (_, _) => Close(_text.Text ?? string.Empty);
+        ok.Click += (_, _) => Close(HeaderFooterTextDialogPlanner.BuildResult(_text.Text));
 
         var cancel = new Button
         {
@@ -58,7 +59,7 @@ internal sealed class HeaderFooterTextDialog : FreeWDialogWindow
             Spacing = 6,
             Children =
             {
-                new TextBlock { Text = $"{label} text:" },
+                new TextBlock { Text = plan.PromptLabel },
                 _text,
                 buttons,
             },

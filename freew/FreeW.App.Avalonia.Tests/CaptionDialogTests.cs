@@ -1,5 +1,6 @@
 using Avalonia.Headless;
 using FluentAssertions;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests;
