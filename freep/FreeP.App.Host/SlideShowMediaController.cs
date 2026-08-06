@@ -157,7 +157,8 @@ public sealed class SlideShowMediaController
         PresentationMediaTranscriptTrackDescriptor? CaptionTrack = null,
         Border? CaptionHost = null,
         TextBlock? CaptionText = null,
-        int RemainingSlides = 1);
+        int RemainingSlides = 1,
+        TimeSpan? PendingSeekPosition = null);
     private readonly List<MediaSlot> _slots = new();
     private readonly DispatcherTimer _captionTimer;
 
@@ -582,6 +583,9 @@ public sealed class SlideShowMediaController
             {
                 LoadedBehavior   = MediaState.Manual,
                 UnloadedBehavior = MediaState.Stop,
+                // PowerPoint lets a bookmark seek land while media is paused. WPF
+                // otherwise ignores Position assignments made before playback starts.
+                ScrubbingEnabled = true,
                 Source           = source,
                 Volume           = baseVolumePercent / 100d,
                 // For audio: collapse the visual (no video frame to show).
@@ -604,8 +608,20 @@ public sealed class SlideShowMediaController
 
             element.MediaOpened += (_, _) =>
             {
-                SeekToTrimStart(element, media);
-                ApplyFade(element, media, baseVolumePercent);
+                var pendingIndex = _slots.FindIndex(candidate => candidate.ShapeId == shapeId);
+                var pending = pendingIndex >= 0 ? _slots[pendingIndex].PendingSeekPosition : null;
+                if (pending is TimeSpan pendingPosition)
+                {
+                    if (pendingIndex >= 0)
+                        _slots[pendingIndex] = _slots[pendingIndex] with { PendingSeekPosition = null };
+
+                    ApplySeekPosition(element, media, pendingPosition, baseVolumePercent);
+                }
+                else
+                {
+                    SeekToTrimStart(element, media);
+                    ApplyFade(element, media, baseVolumePercent);
+                }
             };
 
             element.MediaEnded += (_, _) =>
@@ -709,29 +725,18 @@ public sealed class SlideShowMediaController
         if (position < TimeSpan.Zero)
             return false;
 
-        var slot = _slots.FirstOrDefault(candidate => candidate.ShapeId == shapeId);
-        if (slot?.Element is not { } element)
+        var slotIndex = _slots.FindIndex(candidate => candidate.ShapeId == shapeId);
+        if (slotIndex < 0 || _slots[slotIndex].Element is not { } element)
             return false;
 
         try
         {
-            var media = slot.Media;
-            if (media is null)
-            {
-                element.Position = position;
-            }
-            else
-            {
-                var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
-                    media,
-                    element.NaturalDuration.HasTimeSpan
-                        ? element.NaturalDuration.TimeSpan
-                        : TimeSpan.Zero);
-                element.Position = window.End != TimeSpan.MaxValue && position > window.End
-                    ? window.End
-                    : SlideShowMediaInteractionPlanner.ClampToTrimStart(media, position);
-            }
-            ApplyFade(element, media, slot.BaseVolumePercent);
+            var slot = _slots[slotIndex];
+            ApplySeekPosition(element, slot.Media, position, slot.BaseVolumePercent);
+            if (slot.Media is not null && !element.NaturalDuration.HasTimeSpan)
+                _slots[slotIndex] = slot with { PendingSeekPosition = position };
+            else if (slot.PendingSeekPosition is not null)
+                _slots[slotIndex] = slot with { PendingSeekPosition = null };
             return true;
         }
         catch (InvalidOperationException)
@@ -757,6 +762,31 @@ public sealed class SlideShowMediaController
         // Reuse the established WPF seek path so unopened MediaElement instances
         // receive the same dispatcher/trim handling as ordinary scrubbing.
         return TrySeek(shapeId, position);
+    }
+
+    private static void ApplySeekPosition(
+        MediaElement element,
+        MediaInfo? media,
+        TimeSpan position,
+        int baseVolumePercent)
+    {
+        if (media is null)
+        {
+            element.Position = position;
+        }
+        else
+        {
+            var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
+                media,
+                element.NaturalDuration.HasTimeSpan
+                    ? element.NaturalDuration.TimeSpan
+                    : TimeSpan.Zero);
+            element.Position = window.End != TimeSpan.MaxValue && position > window.End
+                ? window.End
+                : SlideShowMediaInteractionPlanner.ClampToTrimStart(media, position);
+        }
+
+        ApplyFade(element, media, baseVolumePercent);
     }
 
     /// <summary>Sets the active media volume using the shared 0-100 volume convention.</summary>
