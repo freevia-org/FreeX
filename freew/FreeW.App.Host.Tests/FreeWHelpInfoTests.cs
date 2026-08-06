@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -13,12 +14,26 @@ public sealed class FreeWHelpInfoTests
     [Fact]
     public void AppInfo_UsesFreeWBrandingAndHonestLocalUrls()
     {
-        FreeWAppInfo.ProductName.Should().Be("FreeW");
-        FreeWAppInfo.HelpUrl.Should().Contain("/freew");
-        FreeWAppInfo.FeedbackUrl.Should().Contain("FreeW%20feedback");
-        FreeWAppInfo.LatestReleaseUrl.Should().Contain("freew-release.yml");
+        FreeWProductInfo.ProductName.Should().Be("FreeW");
+        FreeWProductInfo.HelpUrl.Should().Contain("/freew");
+        FreeWProductInfo.FeedbackUrl.Should().Contain("FreeW%20feedback");
+        FreeWProductInfo.LatestReleaseUrl.Should().Contain("freew-release.yml");
         FreeWAppInfo.AboutText.Should().Contain("FreeW");
         FreeWAppInfo.AboutText.Should().NotContain("Microsoft 365");
+    }
+
+    [Fact]
+    public void AppInfo_IsOnlyTheWpfAssemblyContextAdapter()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "FreeWAppInfo.cs"));
+
+        source.Should().Contain("typeof(FreeWAppInfo).Assembly");
+        source.Should().Contain("FreeWAboutDialogPresentation.Create");
+        source.Should().Contain("FreeWProductInfo.CreateDiagnosticsText");
+        source.Should().NotContain("public const string");
+        source.Should().NotContain("AppVersionFormatter");
+        source.Should().NotContain("GetVersionText(Assembly");
     }
 
     [Fact]
