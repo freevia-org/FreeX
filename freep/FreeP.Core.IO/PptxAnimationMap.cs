@@ -63,11 +63,11 @@ namespace FreeP.Core.IO;
 /// Teeter          | emph        | 32
 /// Blink           | emph        | 15
 /// Bold            | emph        | 1
-/// Wave            | emph        | 13
+/// Wave            | emph        | 34
 /// Underline       | emph        | 2
 /// GrowWithColor   | emph        | 12
 /// ChangeColor     | emph        | 7
-/// Shimmer         | emph        | 11
+/// Shimmer         | emph        | 36
 ///
 /// Exit effects share the same presetIDs as Entrance (presetClass = "exit").
 /// </summary>
@@ -273,9 +273,9 @@ internal static class PptxAnimationMap
                 AnimationPreset.Shrink         => 5,
                 AnimationPreset.ColorPulse     => 6,
                 AnimationPreset.ChangeColor    => 7,
-                AnimationPreset.Shimmer        => 11,
+                AnimationPreset.Shimmer        => 36,
                 AnimationPreset.GrowWithColor  => 12,
-                AnimationPreset.Wave           => 13,
+                AnimationPreset.Wave           => 34,
                 AnimationPreset.Pulse          => 14,
                 AnimationPreset.Blink          => 15,
                 _                              => 14  // default to pulse
@@ -338,9 +338,9 @@ internal static class PptxAnimationMap
                 5  => AnimationPreset.Grow,
                 6  => AnimationPreset.ColorPulse,
                 7  => AnimationPreset.ChangeColor,
-                11 => AnimationPreset.Shimmer,
+                36 => AnimationPreset.Shimmer,
                 12 => AnimationPreset.GrowWithColor,
-                13 => AnimationPreset.Wave,
+                34 => AnimationPreset.Wave,
                 14 => AnimationPreset.Pulse,
                 15 => AnimationPreset.Blink,
                 _  => AnimationPreset.Pulse
@@ -392,7 +392,7 @@ internal static class PptxAnimationMap
             return false;
 
         if (presetClass == "emph")
-            return presetId is 1 or 2 or 5 or 6 or 7 or 8 or 11 or 12 or 13 or 14 or 15 or 32;
+            return presetId is 1 or 2 or 5 or 6 or 7 or 8 or 12 or 14 or 15 or 32 or 34 or 36;
 
         return presetId is 1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10 or 11 or
             13 or 14 or 16 or 17 or 18 or 19 or 21 or 22 or 23 or 24 or 25 or 26 or 27 or 28 or 29;

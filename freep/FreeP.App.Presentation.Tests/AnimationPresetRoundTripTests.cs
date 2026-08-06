@@ -302,9 +302,10 @@ public sealed class AnimationPresetRoundTripTests
     }
 
     [Theory]
-    [InlineData(AnimationPreset.ChangeColor)]
-    [InlineData(AnimationPreset.GrowWithColor)]
-    public void ColorEffectBehaviorSurvivesReadCloneAndWrite(AnimationPreset preset)
+    [InlineData(AnimationPreset.ChangeColor, 7)]
+    [InlineData(AnimationPreset.GrowWithColor, 12)]
+    [InlineData(AnimationPreset.Shimmer, 36)]
+    public void ColorEffectBehaviorSurvivesReadCloneAndWrite(AnimationPreset preset, int expectedPresetId)
     {
         var presentation = Presentation.CreateEmpty();
         presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
@@ -340,6 +341,8 @@ public sealed class AnimationPresetRoundTripTests
         var slideXml = XDocument.Parse(reader.ReadToEnd());
         XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
         var colorBehavior = slideXml.Descendants(p + "animClr").Single();
+        slideXml.Descendants(p + "cTn").Single(element => element.Attribute("presetClass")?.Value == "emph")
+            .Attribute("presetID")!.Value.Should().Be(expectedPresetId.ToString());
         colorBehavior.Element(p + "clrFrom")!.Element(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "srgbClr")!
             .Attribute("val")!.Value.Should().Be("FF0000");
         colorBehavior.Descendants(p + "cTn").Single().Attribute("id")!.Value.Should().NotBe("77");
@@ -657,7 +660,7 @@ public sealed class AnimationPresetRoundTripTests
         XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
         var cTn = slideXml.Descendants(p + "cTn")
             .Single(element => element.Attribute("presetClass")?.Value == "emph"
-                && element.Attribute("presetID")?.Value == "13");
+                && element.Attribute("presetID")?.Value == "34");
         cTn.Attribute("presetSubtype")!.Value.Should().Be(expectedSubtype);
     }
 }
