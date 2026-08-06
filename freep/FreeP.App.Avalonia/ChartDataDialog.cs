@@ -1,5 +1,6 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
@@ -14,7 +15,7 @@ internal sealed class ChartDataDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private readonly ChartDataDialogSession _session;
-    private readonly ChartDataDialogSurfacePlan _surface;
+    private readonly ChartDataDialogPlan _plan;
     private readonly CultureInfo _culture;
     private readonly Grid _tableGrid = new();
     private readonly List<IndexedTextBox> _seriesNameBoxes = new();
@@ -32,22 +33,23 @@ internal sealed class ChartDataDialog : Window
     {
         _culture = culture ?? throw new ArgumentNullException(nameof(culture));
         _session = new ChartDataDialogSession(editor);
-        _surface = _session.Surface;
+        _plan = _session.BuildDialogPlan();
         _chartTypeCombo = new ComboBox
         {
-            ItemsSource = _session.ChartTypeOptions.Select(option => option.Label).ToArray(),
-            SelectedIndex = _session.SelectedChartTypeIndex,
+            ItemsSource = _plan.ChartType.Choices,
+            SelectedIndex = _plan.ChartType.SelectedIndex,
             MinWidth = 170,
         };
+        SetAutomation(_chartTypeCombo, _plan.ChartType.AccessibleName, _plan.ChartType.AutomationId);
         _chartTypeCombo.SelectionChanged += (_, _) =>
             _session.SelectChartType(_chartTypeCombo.SelectedIndex);
 
-        Title = _surface.Title;
-        Width = 625.3333333333334;
-        Height = 402.6666666666667;
-        MinWidth = 520;
-        MinHeight = 320;
-        CanResize = true;
+        Title = _plan.Title;
+        Width = _plan.Width;
+        Height = _plan.Height;
+        MinWidth = _plan.MinimumWidth;
+        MinHeight = _plan.MinimumHeight;
+        CanResize = _plan.IsResizable;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
         _tableGrid.MinWidth = 616;
@@ -123,27 +125,22 @@ internal sealed class ChartDataDialog : Window
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(4, 4, 4, 2),
             Spacing = 4,
-            Children =
-            {
-                MakeToolbarButton(_surface.AddSeriesLabel, OnAddSeries),
-                MakeToolbarButton(_surface.RemoveSeriesLabel, OnRemoveSeries),
-                MakeToolbarButton(_surface.MoveSeriesUpLabel, OnMoveSeriesUp),
-                MakeToolbarButton(_surface.MoveSeriesDownLabel, OnMoveSeriesDown),
-                new Border { Width = 12 },
-                MakeToolbarButton(_surface.AddCategoryLabel, OnAddCategory),
-                MakeToolbarButton(_surface.RemoveCategoryLabel, OnRemoveCategory),
-                MakeToolbarButton(_surface.MoveCategoryLeftLabel, OnMoveCategoryLeft),
-                MakeToolbarButton(_surface.MoveCategoryRightLabel, OnMoveCategoryRight),
-                MakeToolbarButton(_surface.SwitchRowsAndColumnsLabel, OnSwitchRowsAndColumns),
-                new TextBlock
-                {
-                    Text = _surface.ChartTypeLabel,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(8, 0, 0, 0),
-                },
-                _chartTypeCombo,
-            },
         };
+        var actionHandlers = BuildActionHandlers();
+        for (var groupIndex = 0; groupIndex < _plan.ToolbarGroups.Count; groupIndex++)
+        {
+            if (groupIndex > 0)
+                toolbar.Children.Add(new Border { Width = 12 });
+            foreach (var action in _plan.ToolbarGroups[groupIndex].Actions)
+                toolbar.Children.Add(MakeToolbarButton(action, actionHandlers[action.Id]));
+        }
+        toolbar.Children.Add(new TextBlock
+        {
+            Text = _plan.ChartType.Label,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0),
+        });
+        toolbar.Children.Add(_chartTypeCombo);
 
         var scroller = new ScrollViewer
         {
@@ -168,13 +165,15 @@ internal sealed class ChartDataDialog : Window
             Spacing = 8,
             Children =
             {
-                MakeDialogButton(_surface.OkLabel, isDefault: true, OnOk),
-                MakeDialogButton(_surface.CancelLabel, isDefault: false, () => Close(false)),
+                MakeDialogButton(_plan.AcceptAction, isDefault: true, OnOk),
+                MakeDialogButton(_plan.CancelAction, isDefault: false, () => Close(false)),
             },
         };
         _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
         _validationText.Margin = new Thickness(12, 2, 12, 2);
         _validationText.TextWrapping = TextWrapping.Wrap;
+        SetAutomation(_tableGrid, _plan.Table.AccessibleName, _plan.Table.AutomationId);
+        SetAutomation(_validationText, _plan.Table.ValidationAccessibleName, _plan.Table.ValidationAutomationId);
 
         Grid.SetRow(toolbar, 0);
         Grid.SetRow(tableBorder, 1);
@@ -421,29 +420,51 @@ internal sealed class ChartDataDialog : Window
     private void TrackCategoryFocus(TextBox textBox, int categoryIndex) =>
         textBox.GotFocus += (_, _) => _session.SelectCategory(categoryIndex);
 
-    private static Button MakeToolbarButton(string label, Action onClick)
+    private IReadOnlyDictionary<ChartDataDialogActionId, Action> BuildActionHandlers() =>
+        new Dictionary<ChartDataDialogActionId, Action>
+        {
+            [ChartDataDialogActionId.AddSeries] = OnAddSeries,
+            [ChartDataDialogActionId.RemoveSeries] = OnRemoveSeries,
+            [ChartDataDialogActionId.MoveSeriesUp] = OnMoveSeriesUp,
+            [ChartDataDialogActionId.MoveSeriesDown] = OnMoveSeriesDown,
+            [ChartDataDialogActionId.AddCategory] = OnAddCategory,
+            [ChartDataDialogActionId.RemoveCategory] = OnRemoveCategory,
+            [ChartDataDialogActionId.MoveCategoryLeft] = OnMoveCategoryLeft,
+            [ChartDataDialogActionId.MoveCategoryRight] = OnMoveCategoryRight,
+            [ChartDataDialogActionId.SwitchRowsAndColumns] = OnSwitchRowsAndColumns,
+        };
+
+    private static Button MakeToolbarButton(ChartDataDialogActionPlan action, Action onClick)
     {
         var button = new Button
         {
-            Content = label,
+            Content = action.Label,
             Padding = new Thickness(8, 3),
         };
+        SetAutomation(button, action.AccessibleName, action.AutomationId);
         AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 0);
         button.Click += (_, _) => onClick();
         return button;
     }
 
-    private static Button MakeDialogButton(string label, bool isDefault, Action onClick)
+    private static Button MakeDialogButton(ChartDataDialogActionPlan action, bool isDefault, Action onClick)
     {
         var button = new Button
         {
-            Content = label,
+            Content = action.Label,
             IsDefault = isDefault,
             IsCancel = !isDefault,
         };
+        SetAutomation(button, action.AccessibleName, action.AutomationId);
         AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
         button.Click += (_, _) => onClick();
         return button;
+    }
+
+    private static void SetAutomation(Control control, string name, string automationId)
+    {
+        AutomationProperties.SetName(control, name);
+        AutomationProperties.SetAutomationId(control, automationId);
     }
 
     private sealed record IndexedTextBox(int Index, TextBox TextBox);

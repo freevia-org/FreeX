@@ -29,6 +29,36 @@ public sealed class ChartDataDialogSessionTests
     }
 
     [Fact]
+    public void DialogPlanOwnsToolbarGroupsChoicesAndAccessibilityMetadata()
+    {
+        var session = CreateSession(out _);
+
+        var plan = session.BuildDialogPlan();
+
+        plan.CommandId.Should().Be(ChartDataDialogPlanner.EditDataCommandId);
+        plan.ToolbarGroups.Select(group => group.Id).Should().Equal("series", "category", "table");
+        plan.ToolbarGroups.SelectMany(group => group.Actions).Select(action => action.Id).Should().Equal(
+            ChartDataDialogActionId.AddSeries,
+            ChartDataDialogActionId.RemoveSeries,
+            ChartDataDialogActionId.MoveSeriesUp,
+            ChartDataDialogActionId.MoveSeriesDown,
+            ChartDataDialogActionId.AddCategory,
+            ChartDataDialogActionId.RemoveCategory,
+            ChartDataDialogActionId.MoveCategoryLeft,
+            ChartDataDialogActionId.MoveCategoryRight,
+            ChartDataDialogActionId.SwitchRowsAndColumns);
+        plan.ChartType.Choices.Should().Equal(session.ChartTypeOptions.Select(option => option.Label));
+        plan.ChartType.SelectedIndex.Should().Be(session.SelectedChartTypeIndex);
+        plan.ToolbarGroups.SelectMany(group => group.Actions)
+            .Append(plan.AcceptAction)
+            .Append(plan.CancelAction)
+            .Should().OnlyContain(action =>
+                !string.IsNullOrWhiteSpace(action.AccessibleName)
+                && action.AutomationId.StartsWith("FreeP.ChartData.", StringComparison.Ordinal));
+        plan.Table.AutomationId.Should().Be("FreeP.ChartData.Table");
+    }
+
+    [Fact]
     public void SelectionTransitions_MoveAndRemoveActiveSeriesAndCategory()
     {
         var session = CreateSession(out _);

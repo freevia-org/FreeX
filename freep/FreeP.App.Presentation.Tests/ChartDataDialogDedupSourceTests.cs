@@ -8,9 +8,12 @@ public sealed class ChartDataDialogDedupSourceTests
         foreach (var source in RendererSources())
         {
             source.Should().Contain("new ChartDataDialogSession(editor)");
-            source.Should().Contain("_session.Surface");
-            source.Should().Contain("_session.ChartTypeOptions");
-            source.Should().Contain("_session.SelectedChartTypeIndex");
+            source.Should().Contain("_session.BuildDialogPlan()");
+            source.Should().Contain(".ChartType.Choices");
+            source.Should().Contain(".ChartType.SelectedIndex");
+            source.Should().Contain(".ToolbarGroups");
+            source.Should().Contain("actionHandlers[action.Id]");
+            source.Should().Contain("SetAutomation(");
             source.Should().Contain("_session.SelectChartType(");
             source.Should().Contain("_session.BuildTableProjection()");
             source.Should().Contain("_session.TryApplyEdits(");
@@ -24,6 +27,10 @@ public sealed class ChartDataDialogDedupSourceTests
             source.Should().NotContain("ChartDataDialogPlanner.FromChart(");
             source.Should().NotContain("ChartDataDialogPlanner.BuildSurfacePlan(");
             source.Should().NotContain("ChartDataDialogPlanner.ChartTypeOptions");
+            source.Should().NotContain("AddSeriesLabel");
+            source.Should().NotContain("RemoveSeriesLabel");
+            source.Should().NotContain("MoveSeriesUpLabel");
+            source.Should().NotContain("MoveCategoryRightLabel");
             source.Should().NotContain("_planner.");
             source.Should().NotContain("ReplaceChartData(");
             source.Should().NotContain("double.TryParse(");

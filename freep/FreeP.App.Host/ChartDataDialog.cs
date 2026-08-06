@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
@@ -41,15 +42,6 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     // ── Controls ──────────────────────────────────────────────────────────────────
 
     private readonly DataGrid _grid;
-    private readonly Button   _addSeriesBtn;
-    private readonly Button   _removeSeriesBtn;
-    private readonly Button   _moveSeriesUpBtn;
-    private readonly Button   _moveSeriesDownBtn;
-    private readonly Button   _addCatBtn;
-    private readonly Button   _removeCatBtn;
-    private readonly Button   _moveCatLeftBtn;
-    private readonly Button   _moveCatRightBtn;
-    private readonly Button   _switchRowsAndColumnsBtn;
     private readonly ComboBox _chartTypeCombo;
     private readonly TextBlock _validationText = new();
 
@@ -62,53 +54,44 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     public ChartDataDialog(EditingSession editor)
     {
         _session = new ChartDataDialogSession(editor);
-        var surface = _session.Surface;
+        var plan = _session.BuildDialogPlan();
 
         // ── Window chrome ─────────────────────────────────────────────────────────
-        Title          = surface.Title;
-        Width          = surface.Width;
-        Height         = surface.Height;
+        Title          = plan.Title;
+        Width          = plan.Width;
+        Height         = plan.Height;
+        MinWidth       = plan.MinimumWidth;
+        MinHeight      = plan.MinimumHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ResizeMode     = ResizeMode.CanResize;
+        ResizeMode     = plan.IsResizable ? ResizeMode.CanResize : ResizeMode.NoResize;
         Background     = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         // ── Toolbar ───────────────────────────────────────────────────────────────
-        _addSeriesBtn    = MakeToolbarButton(surface.AddSeriesLabel, OnAddSeries);
-        _removeSeriesBtn = MakeToolbarButton(surface.RemoveSeriesLabel, OnRemoveSeries);
-        _moveSeriesUpBtn = MakeToolbarButton(surface.MoveSeriesUpLabel, OnMoveSeriesUp);
-        _moveSeriesDownBtn = MakeToolbarButton(surface.MoveSeriesDownLabel, OnMoveSeriesDown);
-        _addCatBtn       = MakeToolbarButton(surface.AddCategoryLabel, OnAddCategory);
-        _removeCatBtn    = MakeToolbarButton(surface.RemoveCategoryLabel, OnRemoveCategory);
-        _moveCatLeftBtn  = MakeToolbarButton(surface.MoveCategoryLeftLabel, OnMoveCategoryLeft);
-        _moveCatRightBtn = MakeToolbarButton(surface.MoveCategoryRightLabel, OnMoveCategoryRight);
-        _switchRowsAndColumnsBtn = MakeToolbarButton(surface.SwitchRowsAndColumnsLabel, OnSwitchRowsAndColumns);
         _chartTypeCombo = new ComboBox
         {
-            ItemsSource = _session.ChartTypeOptions,
-            DisplayMemberPath = nameof(ChartDataDialogChartTypeOption.Label),
-            SelectedIndex = _session.SelectedChartTypeIndex,
+            ItemsSource = plan.ChartType.Choices,
+            SelectedIndex = plan.ChartType.SelectedIndex,
             Width = 170,
             Margin = new Thickness(8, 0, 4, 0),
         };
+        SetAutomation(_chartTypeCombo, plan.ChartType.AccessibleName, plan.ChartType.AutomationId);
         _chartTypeCombo.SelectionChanged += (_, _) =>
         {
             _session.SelectChartType(_chartTypeCombo.SelectedIndex);
         };
 
         var toolbar = new WrapPanel { Margin = new Thickness(4, 4, 4, 2) };
-        toolbar.Children.Add(_addSeriesBtn);
-        toolbar.Children.Add(_removeSeriesBtn);
-        toolbar.Children.Add(_moveSeriesUpBtn);
-        toolbar.Children.Add(_moveSeriesDownBtn);
-        toolbar.Children.Add(new Separator { Width = 12, Visibility = Visibility.Hidden });
-        toolbar.Children.Add(_addCatBtn);
-        toolbar.Children.Add(_removeCatBtn);
-        toolbar.Children.Add(_moveCatLeftBtn);
-        toolbar.Children.Add(_moveCatRightBtn);
-        toolbar.Children.Add(_switchRowsAndColumnsBtn);
+        var actionHandlers = BuildActionHandlers();
+        for (var groupIndex = 0; groupIndex < plan.ToolbarGroups.Count; groupIndex++)
+        {
+            if (groupIndex > 0)
+                toolbar.Children.Add(new Separator { Width = 12, Visibility = Visibility.Hidden });
+            foreach (var action in plan.ToolbarGroups[groupIndex].Actions)
+                toolbar.Children.Add(MakeToolbarButton(action, actionHandlers[action.Id]));
+        }
         toolbar.Children.Add(new TextBlock
         {
-            Text = surface.ChartTypeLabel,
+            Text = plan.ChartType.Label,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 2, 0),
         });
@@ -129,15 +112,21 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
             Margin                    = new Thickness(4, 2, 4, 4),
         };
+        SetAutomation(_grid, plan.Table.AccessibleName, plan.Table.AutomationId);
         _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
         _validationText.Margin = new Thickness(8, 2, 8, 2);
         _validationText.TextWrapping = TextWrapping.Wrap;
+        SetAutomation(_validationText, plan.Table.ValidationAccessibleName, plan.Table.ValidationAutomationId);
 
         // ── OK / Cancel ───────────────────────────────────────────────────────────
         var btnRow = DialogButtonRowFactory.Create(
             OnOk,
             buttonWidth: 80,
-            rowMargin: new Thickness(4, 4, 8, 8));
+            rowMargin: new Thickness(4, 4, 8, 8),
+            acceptContent: plan.AcceptAction.Label,
+            cancelContent: plan.CancelAction.Label);
+        SetAutomation((Button)btnRow.Children[0], plan.AcceptAction.AccessibleName, plan.AcceptAction.AutomationId);
+        SetAutomation((Button)btnRow.Children[1], plan.CancelAction.AccessibleName, plan.CancelAction.AutomationId);
 
         // ── Layout ────────────────────────────────────────────────────────────────
         var root = new Grid();
@@ -441,16 +430,37 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         return ChartDataDialogEdits.Empty;
     }
 
-    private static Button MakeToolbarButton(string label, Action onClick)
+    private IReadOnlyDictionary<ChartDataDialogActionId, Action> BuildActionHandlers() =>
+        new Dictionary<ChartDataDialogActionId, Action>
+        {
+            [ChartDataDialogActionId.AddSeries] = OnAddSeries,
+            [ChartDataDialogActionId.RemoveSeries] = OnRemoveSeries,
+            [ChartDataDialogActionId.MoveSeriesUp] = OnMoveSeriesUp,
+            [ChartDataDialogActionId.MoveSeriesDown] = OnMoveSeriesDown,
+            [ChartDataDialogActionId.AddCategory] = OnAddCategory,
+            [ChartDataDialogActionId.RemoveCategory] = OnRemoveCategory,
+            [ChartDataDialogActionId.MoveCategoryLeft] = OnMoveCategoryLeft,
+            [ChartDataDialogActionId.MoveCategoryRight] = OnMoveCategoryRight,
+            [ChartDataDialogActionId.SwitchRowsAndColumns] = OnSwitchRowsAndColumns,
+        };
+
+    private static Button MakeToolbarButton(ChartDataDialogActionPlan action, Action onClick)
     {
         var btn = new Button
         {
-            Content = label,
+            Content = action.Label,
             Padding = new Thickness(8, 3, 8, 3),
             Margin  = new Thickness(0, 0, 4, 0),
         };
+        SetAutomation(btn, action.AccessibleName, action.AutomationId);
         btn.Click += (_, _) => onClick();
         return btn;
+    }
+
+    private static void SetAutomation(DependencyObject control, string name, string automationId)
+    {
+        AutomationProperties.SetName(control, name);
+        AutomationProperties.SetAutomationId(control, automationId);
     }
 
     // ── Inner view-model types ────────────────────────────────────────────────────
