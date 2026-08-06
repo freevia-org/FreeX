@@ -13,6 +13,16 @@ public sealed class FileLifecycleWorkflowSourceTests
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
+        var ports = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Avalonia",
+            "MainWindow.FileCommandPorts.cs"));
+        var session = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationFileCommandSession.cs"));
         var project = File.ReadAllText(Path.Combine(
             root,
             "freep",
@@ -25,24 +35,27 @@ public sealed class FileLifecycleWorkflowSourceTests
             "SisterAvaloniaFileCommandWorkflow.cs"));
 
         source.Should().Contain("private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;");
+        source.Should().Contain("private readonly PresentationFileCommandSession _fileSession;");
         source.Should().Contain("new SisterAvaloniaFileCommandWorkflow(");
+        source.Should().Contain("new PresentationFileCommandSession(");
         source.Should().Contain("new SisterAvaloniaFileTitleSpec(");
-        source.Should().Contain("_fileWorkflow.NewAsync(");
-        source.Should().Contain("_fileWorkflow.OpenAsync(");
-        source.Should().Contain("_fileWorkflow.SaveAsync(");
-        source.Should().Contain("_fileWorkflow.ConfirmCloseAllowedAsync(");
+        source.Should().Contain("_fileSession.NewAsync()");
+        source.Should().Contain("_fileSession.OpenAsync()");
+        source.Should().Contain("_fileSession.SaveAsync()");
+        source.Should().Contain("_fileSession.ConfirmCloseAllowedAsync()");
         source.Should().Contain("SisterAvaloniaAsyncWindowCloseCoordinator");
         source.Should().Contain("Closing += (_, e) => e.Cancel =");
         source.Should().Contain("_closeCoordinator.ShouldCancelClosing();");
-        source.Should().Contain("_fileWorkflow.ShowFileCommandErrorAsync(\"Could not open the presentation\"");
-        source.Should().Contain("_fileWorkflow.ShowFileCommandErrorAsync(\"Could not save the presentation\"");
-        source.Should().Contain("_fileWorkflow.MarkSavedWithoutPath()");
-        source.Should().Contain("_fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles)");
-        source.Should().Contain("_fileWorkflow.MarkDirty();");
-        source.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
-        source.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _presentation)");
-        source.Should().Contain("PresentationFileDialogPlanner.BuildOpenPickerPlan()");
-        source.Should().Contain("PresentationFileDialogPlanner.BuildSavePickerPlan(");
+        ports.Should().Contain("_workflow.MarkSavedWithoutPath()");
+        ports.Should().Contain("_workflow.MarkSavedWithPath(path, suppressRecentFiles)");
+        ports.Should().Contain("_workflow.MarkDirty();");
+        ports.Should().Contain("_workflow.NewAsync(action, loadNewPresentationAsync)");
+        ports.Should().Contain("_workflow.OpenAsync(action, pickPathAsync, openPathAsync)");
+        ports.Should().Contain("_workflow.SaveAsync(saveToCurrentPathAsync, saveAsAsync)");
+        session.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
+        session.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _getPresentation())");
+        session.Should().Contain("PresentationFileDialogPlanner.BuildOpenPickerPlan()");
+        session.Should().Contain("PresentationFileDialogPlanner.BuildSavePickerPlan(");
         sharedShellWorkflow.Should().Contain("new FileCommandWorkflow(");
         sharedShellWorkflow.Should().Contain("WindowTitlePlanner.Compose(");
         sharedShellWorkflow.Should().Contain("AvaloniaSaveChangesDialog.ShowAsync(");
@@ -58,6 +71,10 @@ public sealed class FileLifecycleWorkflowSourceTests
         source.Should().NotContain("Content = \"Don't save\"");
         source.Should().NotContain("FileLifecyclePlanner.PlanSave(");
         source.Should().NotContain("new FileCommandSession");
+        source.Should().Contain("PresentationFilePersistenceWorkflow.Open(startupPresentation)");
+        source.Should().Contain("PresentationFilePersistenceWorkflow.IsSupportedPresentationPath(path)");
+        source.Should().NotContain("PresentationFilePersistenceWorkflow.Save(");
+        source.Should().NotContain("PresentationFileDialogPlanner.");
         source.Should().NotContain("v1: proceed without a save-changes dialog");
         project.Should().Contain(@"..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj");
         project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");

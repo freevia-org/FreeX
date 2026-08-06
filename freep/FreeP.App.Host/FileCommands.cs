@@ -1,56 +1,25 @@
 using System.IO;
 using System.Windows;
 using Free.Shared.AppServices;
-using Free.Shared.IO;
-using Free.Shared.Pdf.Wpf;
 using Free.Shared.Pdf.Skia;
+using Free.Shared.Pdf.Wpf;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
 using FreeP.App.Recording.Windows;
-using FreeP.Core.IO;
 using FreeP.Core.Model;
 using Microsoft.Win32;
 
 namespace FreeP.App.Host;
 
 /// <summary>
-/// FreeP's File lifecycle: New / Open / Save / Save As / Close over native <c>.pptx</c> packages.
-///
-/// <para>
-/// The file-lifecycle <em>ceremony</em> — the dirty-gate before destructive actions, the Save-vs-Save-As
-/// resolution, and recent-files registration — is decided by the shared, neutral
-/// <see cref="FileLifecyclePlanner"/>. FreeP supplies only the thin host side: the native
-/// <see cref="OpenFileDialog"/>/<see cref="SaveFileDialog"/> for <c>.pptx</c> plus legacy <c>.fxp</c> compatibility
-/// (via the shared <see cref="FileDialogRequestPlanner"/>), the actual read/write, and the message prompts. Dirty/path
-/// state and lifecycle ceremony live in the shared <see cref="FileCommandWorkflow"/>; recent files in the
-/// shared <see cref="RecentFilesStore"/>. Mirrors FreeW.FileCommands exactly (FreeW already adopted these seams).
-/// </para>
-///
-/// <para>
-/// FreeP has no live editor surface yet, so the host exposes the current model through a getter and accepts a
-/// freshly loaded model through a loader callback (the placeholder canvas re-renders on change). The next
-/// session swaps these seams for a real slide editor.
-/// </para>
+/// WPF compatibility facade over the portable presentation file command session.
+/// Native dialogs, rendering, printing, encoding, and message boxes stay in the ports below.
 /// </summary>
 internal sealed class FileCommands
 {
-    private readonly Window _window;
-    private readonly Func<Presentation> _getModel;
-    private readonly Action<Presentation> _loadModel;
-    private readonly SisterWpfFileCommandWorkflow _workflow;
-    private readonly FreePOptions _options;
-    private readonly Func<PresentationSlideRangeRequest?> _getImageExportRange;
-    private readonly Func<int?> _getPrintCurrentSlideNumber;
-    private readonly Func<IReadOnlyList<int>?> _getPrintSelectedSlideNumbers;
-
-    private readonly PresentationNativePrintHandoffHostCapabilities _nativePrintHostCapabilities;
-
-    private readonly WpfVideoExportAdapter _videoExportAdapter;
-    private readonly PresentationVideoExportHandoffHostCapabilities _videoExportHostCapabilities;
-
-    private static readonly FileOpenDialogPlan OpenDialogPlan =
-        PresentationFileDialogPlanner.BuildOpenDialogPlan();
+    private readonly PresentationFileCommandSession _session;
+    private readonly WpfPresentationVideoPort _videoPort;
 
     public FileCommands(
         Window window,
@@ -67,435 +36,130 @@ internal sealed class FileCommands
         WpfVideoExportAdapter? videoExportAdapter = null,
         WpfNativePrintCapability? nativePrintCapability = null)
     {
-        _window = window;
-        _getModel = getModel;
-        _loadModel = loadModel;
-        _options = options ?? new FreePOptions();
-        _getImageExportRange = getImageExportRange ?? (() => null);
-        _getPrintCurrentSlideNumber = getPrintCurrentSlideNumber ?? (() => null);
-        _getPrintSelectedSlideNumbers = getPrintSelectedSlideNumbers ?? (() => null);
-        var resolvedPrintCapability = nativePrintCapability ?? WpfNativePrintCapabilityDetector.Detect();
-        _nativePrintHostCapabilities = resolvedPrintCapability.CanPrint
-            ? PresentationNativePrintHandoffHostCapabilities.Available("WPF print host")
-            : PresentationNativePrintHandoffHostCapabilities.Deferred(
-                "WPF print host",
-                resolvedPrintCapability.Reason);
+        ArgumentNullException.ThrowIfNull(window);
+        ArgumentNullException.ThrowIfNull(getModel);
+        ArgumentNullException.ThrowIfNull(loadModel);
+        ArgumentNullException.ThrowIfNull(onChanged);
+
+        var resolvedOptions = options ?? new FreePOptions();
+        PresentationFileCommandSession? session = null;
+        var workflow = new SisterWpfFileCommandWorkflow(
+            "FreeP",
+            () => resolvedOptions.RecentFilesCap,
+            onChanged,
+            () => session?.SaveAsync().GetAwaiter().GetResult().Succeeded == true,
+            loadRecentFilesStore,
+            messageService);
+        var lifecycle = new WpfPresentationFileLifecyclePort(workflow);
+        var picker = new WpfPresentationFilePickerPort(window);
+        var render = new WpfPresentationFileRenderPort();
+        var print = new WpfPresentationPrintPort(
+            window,
+            nativePrintCapability ?? WpfNativePrintCapabilityDetector.Detect());
         var resolvedVideoCapability = videoEncoderCapability ??
             videoExportAdapter?.Capability ??
             WpfVideoEncoderCapabilityDetector.Detect();
-        _videoExportAdapter = videoExportAdapter ?? new WpfVideoExportAdapter(resolvedVideoCapability);
-        _videoExportHostCapabilities = BuildVideoExportHostCapabilities(resolvedVideoCapability);
-        _workflow = new SisterWpfFileCommandWorkflow(
-            "FreeP",
-            () => _options.RecentFilesCap,
-            onChanged,
-            Save,
-            loadRecentFilesStore,
-            messageService);
+        _videoPort = new WpfPresentationVideoPort(
+            videoExportAdapter ?? new WpfVideoExportAdapter(resolvedVideoCapability),
+            BuildVideoExportHostCapabilities(resolvedVideoCapability));
+        session = new PresentationFileCommandSession(
+            getModel,
+            loadModel,
+            lifecycle,
+            picker,
+            render,
+            print,
+            _videoPort,
+            new WpfPresentationFileFeedbackPort(workflow),
+            getImageExportRange,
+            getPrintCurrentSlideNumber,
+            getPrintSelectedSlideNumbers);
+        _session = session;
     }
 
-    public bool IsDirty => _workflow.IsDirty;
+    public bool IsDirty => _session.IsDirty;
+    public string? CurrentPath => _session.CurrentPath;
+    public string DisplayName => _session.DisplayName;
+    public IReadOnlyList<RecentFileEntry> RecentEntries => _session.RecentEntries;
+    public bool CanPrint => _session.CanPrint;
+    public bool CanExportVideo => _session.CanExportVideo;
+    public PresentationPrintOutputPackage? LastPrintOutputPackage => _session.LastPrintOutputPackage;
+    public PresentationPrintBackstagePlan? LastPrintBackstagePlan => _session.LastPrintBackstagePlan;
+    public PresentationNativePrintHandoffPlan? LastNativePrintHandoffPlan => _session.LastNativePrintHandoffPlan;
+    public PresentationPrintOutputPackageExecutionDescriptor? LastPrintExecutionDescriptor =>
+        _session.LastPrintExecutionDescriptor;
+    public PresentationVideoFramePackage? LastVideoFramePackage => _session.LastVideoFramePackage;
+    public PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan => _session.LastVideoExportHandoffPlan;
+    public WpfVideoExportResult? LastVideoExportResult => _videoPort.LastResult;
+    public PresentationVideoFramePackageExecutionDescriptor? LastVideoExecutionDescriptor =>
+        _session.LastVideoExecutionDescriptor;
 
-    public string? CurrentPath => _workflow.CurrentPath;
+    public void MarkDirty() => _session.MarkDirty();
+    public bool New() => Run(_session.NewAsync());
+    public bool Open() => Run(_session.OpenAsync());
 
-    public string DisplayName => _workflow.DisplayName;
+    /// <summary>Loads a recent/startup path without adding a second dirty gate.</summary>
+    public bool OpenPath(string path) => Run(_session.OpenPathAsync(path));
 
-    public PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
+    public bool Save() => Run(_session.SaveAsync());
+    public bool SaveAs() => Run(_session.SaveAsAsync());
+    public bool ExportPdf() => Run(_session.ExportPdfAsync());
 
-    public PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
+    public bool ExportNotesPagePdf(PresentationSlideRangeRequest? range = null) =>
+        Run(_session.ExportNotesPagePdfAsync(range));
 
-    public PresentationNativePrintHandoffPlan? LastNativePrintHandoffPlan { get; private set; }
+    public bool ExportImages() => Run(_session.ExportImagesAsync());
 
-    public PresentationPrintOutputPackageExecutionDescriptor? LastPrintExecutionDescriptor { get; private set; }
+    public bool ExportImagesToFolder(
+        string outputDirectory,
+        PresentationSlideRangeRequest? range = null) =>
+        Run(_session.ExportImagesToFolderAsync(outputDirectory, range));
 
-    public bool CanPrint => _nativePrintHostCapabilities.CanOpenNativePrintDialog;
-
-    public PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
-
-    public PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
-
-    public WpfVideoExportResult? LastVideoExportResult { get; private set; }
-
-    public bool CanExportVideo => _videoExportHostCapabilities.CanEncodeMp4;
-
-    public PresentationVideoFramePackageExecutionDescriptor? LastVideoExecutionDescriptor { get; private set; }
-
-    public void MarkDirty()
-    {
-        _workflow.MarkDirty();
-    }
-
-    /// <summary>File &gt; New. Dirty-gates so unsaved work is not silently lost. Returns false on cancel.</summary>
-    public bool New() =>
-        _workflow.New("creating a new presentation", () => _loadModel(Presentation.CreateEmpty()));
-
-    /// <summary>File &gt; Open. Dirty-gates, then shows the open dialog and loads the chosen file.</summary>
-    public bool Open() =>
-        _workflow.Open("opening another presentation", PromptOpenPath, OpenPath);
-
-    /// <summary>Loads a specific path (recent-files click / startup). Does NOT dirty-gate.</summary>
-    public bool OpenPath(string path) => OpenPath(path, suppressRecentFiles: false);
-
-    private bool OpenPath(string path, bool suppressRecentFiles)
-    {
-        try
-        {
-            var result = PresentationFilePersistenceWorkflow.Open(path);
-            _loadModel(result.Presentation);
-            SetSaved(result.SavedPath, suppressRecentFiles || result.SuppressRecentFiles);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            ShowError("Could not open the presentation", ex);
-            return false;
-        }
-    }
-
-    /// <summary>Recent files (most recent first) from the shared store; never throws.</summary>
-    public IReadOnlyList<RecentFileEntry> RecentEntries => _workflow.RecentEntries;
-
-    /// <summary>File &gt; Save. Resolves Save-vs-Save-As via the shared planner.</summary>
-    public bool Save() => _workflow.Save(SaveTo, SaveAs);
-
-    /// <summary>File &gt; Save As. Always prompts for a target.</summary>
-    public bool SaveAs()
-    {
-        var plan = PresentationFileDialogPlanner.BuildSaveAsDialogPlan(_workflow.CurrentFileName);
-        var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
-        if (!result.Chosen)
-            return false;
-
-        if (!PresentationFileDialogPlanner.TryResolveSavePickerPath(result.FileName!, out var resolvedPath))
-        {
-            ShowError(
-                "Could not save the presentation",
-                new InvalidDataException(PresentationFileDialogPlanner.UnsupportedSavePathMessage));
-            return false;
-        }
-
-        return SaveTo(resolvedPath);
-    }
-
-    /// <summary>
-    /// File &gt; Export to PDF. Prompts for a target and writes a fixed-layout PDF (one raster page per slide)
-    /// through the shared raster export route. Does not change the dirty/saved state (the presentation document is the source of record).
-    /// </summary>
-    public bool ExportPdf()
-    {
-        var plan = PresentationExportPlanner.BuildPdfExportDialogPlan(_workflow.CurrentFileName);
-        var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
-        if (!result.Chosen)
-            return false;
-
-        try
-        {
-            var bytes = PresentationRasterPdfExporter.ExportToBytes(
-                _getModel(),
-                request: null,
-                WpfPresentationSlideImageRenderer.RenderSlideToPng,
-                WpfRasterPdfWriter.WriteToBytes);
-            ExportAtomicWriter.WriteAllBytes(result.FileName!, bytes);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            ShowError("Could not export the presentation to PDF", ex);
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// File &gt; Export &gt; Notes Page PDF. Prompts for a target and writes one speaker-notes page per selected slide.
-    /// </summary>
-    public bool ExportNotesPagePdf(PresentationSlideRangeRequest? range = null)
-    {
-        var presentation = _getModel();
-        var exportPlan = PresentationExportPlanner.BuildNotesPagePdfExportPlan(range, presentation.Slides.Count);
-        if (!exportPlan.CanExecute)
-            return false;
-
-        var savePlan = PresentationExportPlanner.BuildNotesPagePdfExportDialogPlan(_workflow.CurrentFileName);
-        var result = WpfFileDialogService.ShowSaveDialog(_window, savePlan);
-        if (!result.Chosen)
-            return false;
-
-        try
-        {
-            var request = new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
-                PresentationPrintLayoutKind.NotesPages,
-                range));
-            var bytes = PresentationNotesPagePdfExporter.ExportToBytes(
-                presentation,
-                request,
-                SkiaPdfWriter.WriteToBytesWithPortableFallback);
-            ExportAtomicWriter.WriteAllBytes(result.FileName!, bytes);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            ShowError("Could not export the presentation notes pages to PDF", ex);
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// File &gt; Export &gt; Images. Prompts for a folder, then exports the host-selected slide range.
-    /// </summary>
-    public bool ExportImages()
-    {
-        var outputDirectory = PromptImageExportFolder();
-        return outputDirectory is not null && ExportImagesToFolder(outputDirectory, _getImageExportRange());
-    }
-
-    /// <summary>
-    /// Exports one PNG per requested slide to an already chosen folder. The host owns folder picking;
-    /// shared code owns PowerPoint-style range policy, naming, and atomic writes.
-    /// </summary>
-    public bool ExportImagesToFolder(string outputDirectory, PresentationSlideRangeRequest? range = null)
-    {
-        try
-        {
-            PresentationImageExportExecutor.Export(
-                _getModel(),
-                new PresentationImageExportRequest(
-                    outputDirectory,
-                    BaseFileName: Path.GetFileNameWithoutExtension(_workflow.CurrentFileName),
-                    SlideRange: range),
-                WpfPresentationSlideImageRenderer.RenderSlideToPng);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            ShowError("Could not export the presentation slides to images", ex);
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Builds the shared PowerPoint-style handout page plan. WPF owns native print/preview UI later;
-    /// page slots and range policy stay in the shared presentation planner.
-    /// </summary>
     public PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(
         int? slidesPerPage = null,
-        PresentationSlideRangeRequest? range = null)
-    {
-        var presentation = _getModel();
-        return PresentationExportPlanner.BuildHandoutLayoutPlan(
-            new PresentationPrintRequest(
-                PresentationPrintLayoutKind.Handouts,
-                range,
-                HandoutSlidesPerPage: slidesPerPage),
-            presentation,
-            presentation.SlideSizeCxEmu,
-            presentation.SlideSizeCyEmu);
-    }
+        PresentationSlideRangeRequest? range = null) =>
+        _session.BuildHandoutLayoutPlan(slidesPerPage, range);
 
-    /// <summary>
-    /// Builds the shared notes-page PDF render plan. WPF owns native print/export UI later;
-    /// notes-page range, geometry, slide thumbnail placement, and speaker-note drawing stay shared.
-    /// </summary>
     public PresentationNotesPagePdfRenderPlan BuildNotesPagePdfRenderPlan(
-        PresentationSlideRangeRequest? range = null)
-    {
-        var presentation = _getModel();
-        return PresentationNotesPagePdfExporter.BuildRenderPlan(
-            presentation,
-            new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
-                PresentationPrintLayoutKind.NotesPages,
-                range)));
-    }
+        PresentationSlideRangeRequest? range = null) =>
+        _session.BuildNotesPagePdfRenderPlan(range);
 
-    /// <summary>
-    /// Builds the shared printable PDF package. WPF native print dialog handoff remains a later host shell step.
-    /// </summary>
-    public PresentationPrintOutputPackage BuildPrintOutputPackage(PresentationPrintRequest? request = null)
-    {
-        LastPrintOutputPackage = PresentationPrintOutputPackageExecutor.BuildPackage(
-            _getModel(),
-            request,
-            WpfPresentationSlideImageRenderer.RenderSlideToPng,
-            WpfRasterPdfWriter.WriteToBytes,
-            SkiaPdfWriter.WriteToBytesWithPortableFallback,
-            WpfPresentationSlideImageRenderer.RenderSlideToPngWithPrintMarkup);
-        LastPrintExecutionDescriptor = PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(
-            LastPrintOutputPackage,
-            _nativePrintHostCapabilities,
-            _workflow.CurrentFileName);
-        LastNativePrintHandoffPlan = LastPrintExecutionDescriptor.HandoffPlan;
-        return LastPrintOutputPackage;
-    }
+    public PresentationPrintOutputPackage BuildPrintOutputPackage(PresentationPrintRequest? request = null) =>
+        _session.BuildPrintOutputPackage(request);
 
-    /// <summary>
-    /// Builds the shared native print handoff state over an already planned/created printable package.
-    /// </summary>
     public PresentationNativePrintHandoffPlan BuildNativePrintHandoffPlan(
         PresentationPrintOutputPackagePlan packagePlan,
-        PresentationNativePrintHandoffHostCapabilities? hostCapabilities = null)
-    {
-        LastNativePrintHandoffPlan = PresentationPrintOutputPackageExecutor.BuildNativePrintHandoffPlan(
-            packagePlan,
-            hostCapabilities ?? _nativePrintHostCapabilities,
-            _workflow.CurrentFileName);
-        return LastNativePrintHandoffPlan;
-    }
+        PresentationNativePrintHandoffHostCapabilities? hostCapabilities = null) =>
+        _session.BuildNativePrintHandoffPlan(packagePlan, hostCapabilities);
 
-    /// <summary>
-    /// Produces the shared printable package and records the native host handoff state without opening a print dialog.
-    /// </summary>
-    public PresentationNativePrintHandoffPlan ExecuteNativePrintHandoff(PresentationPrintRequest? request = null)
-    {
-        BuildPrintOutputPackage(request);
-        return LastPrintExecutionDescriptor!.HandoffPlan;
-    }
+    public PresentationNativePrintHandoffPlan ExecuteNativePrintHandoff(
+        PresentationPrintRequest? request = null) =>
+        _session.ExecuteNativePrintHandoff(request);
 
-    /// <summary>
-    /// Builds the shared PowerPoint-style Backstage Print pane model without opening a native print dialog.
-    /// </summary>
-    public PresentationPrintBackstagePlan BuildPrintBackstagePlan(PresentationPrintRequest? request = null)
-    {
-        var presentation = _getModel();
-        LastPrintBackstagePlan = PresentationPrintBackstagePlanner.Build(
-            request,
-            presentation,
-            _getPrintCurrentSlideNumber(),
-            _getPrintSelectedSlideNumbers(),
-            _nativePrintHostCapabilities,
-            _workflow.CurrentFileName);
-        return LastPrintBackstagePlan;
-    }
+    public PresentationPrintBackstagePlan BuildPrintBackstagePlan(PresentationPrintRequest? request = null) =>
+        _session.BuildPrintBackstagePlan(request);
 
-    /// <summary>
-    /// Executes the selected PowerPoint-style print layout through the WPF native printer dialog.
-    /// The shared layout plan owns page selection; WPF owns only raster-page preparation and printer submission.
-    /// </summary>
-    public bool Print(PresentationPrintRequest? request = null)
-    {
-        if (!CanPrint)
-        {
-            ShowError(
-                "Could not print the presentation",
-                new InvalidOperationException(_nativePrintHostCapabilities.UnavailableReason ??
-                    "No native WPF printer is available."));
-            return false;
-        }
+    public bool Print(PresentationPrintRequest? request = null) => Run(_session.PrintAsync(request));
 
-        var normalizedRequest = request ?? new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides);
-        try
-        {
-            BuildPrintOutputPackage(normalizedRequest);
-            if (LastPrintExecutionDescriptor?.Validation.IsValid != true)
-                throw new InvalidOperationException(
-                    LastPrintExecutionDescriptor?.DisabledReason ??
-                    PresentationPrintOutputPackageExecutor.InvalidPackageReason);
-
-            return WpfPresentationPrintService.ShowPrintDialogAndPrint(
-                _getModel(),
-                normalizedRequest,
-                _window);
-        }
-        catch (Exception ex)
-        {
-            ShowError("Could not print the presentation", ex);
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Builds the shared PowerPoint-style video frame package. WPF supplies the slide raster callback;
-    /// native MP4 execution is performed by <see cref="ExportVideoAsync"/> through the detected host adapter.
-    /// </summary>
-    public PresentationVideoFramePackage BuildVideoFramePackage(PresentationVideoExportRequest? request = null)
-    {
-        LastVideoFramePackage = PresentationVideoFramePackageExecutor.BuildPackage(
-            _getModel(),
-            request,
-            WpfPresentationSlideImageRenderer.RenderSlideToPng,
-            _videoExportHostCapabilities);
-        LastVideoExecutionDescriptor = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(
-            LastVideoFramePackage,
-            _videoExportHostCapabilities,
-            _workflow.CurrentFileName);
-        LastVideoExportHandoffPlan = LastVideoExecutionDescriptor.HandoffPlan;
-        return LastVideoFramePackage;
-    }
+    public PresentationVideoFramePackage BuildVideoFramePackage(PresentationVideoExportRequest? request = null) =>
+        _session.BuildVideoFramePackage(request);
 
     public PresentationVideoExportHandoffPlan BuildVideoExportHandoffPlan(
         PresentationVideoFramePackagePlan packagePlan,
-        PresentationVideoExportHandoffHostCapabilities? hostCapabilities = null)
-    {
-        LastVideoExportHandoffPlan = PresentationVideoFramePackageExecutor.BuildHandoffPlan(
-            packagePlan,
-            hostCapabilities ?? _videoExportHostCapabilities);
-        return LastVideoExportHandoffPlan;
-    }
+        PresentationVideoExportHandoffHostCapabilities? hostCapabilities = null) =>
+        _session.BuildVideoExportHandoffPlan(packagePlan, hostCapabilities);
 
-    /// <summary>
-    /// Builds the shared PowerPoint-style video export workflow plan without rendering frames.
-    /// </summary>
-    public PresentationVideoExportPlan BuildVideoExportPlan(PresentationVideoExportRequest? request = null)
-    {
-        var presentation = _getModel();
-        return PresentationExportPlanner.BuildVideoExportPlan(
-            request,
-            presentation,
-            _videoExportHostCapabilities);
-    }
+    public PresentationVideoExportPlan BuildVideoExportPlan(PresentationVideoExportRequest? request = null) =>
+        _session.BuildVideoExportPlan(request);
 
-    /// <summary>
-    /// Executes the WPF video export command: checks the shared plan, prompts for an MP4 target,
-    /// materializes the shared frame package, and invokes the host ffmpeg adapter.
-    /// </summary>
-    public async Task<bool> ExportVideoAsync(PresentationVideoExportRequest? request = null)
-    {
-        if (!_videoExportHostCapabilities.CanEncodeMp4)
-        {
-            ShowError(
-                "Could not export the presentation video",
-                new InvalidOperationException(_videoExportHostCapabilities.UnavailableReason ??
-                    "No WPF MP4 encoder is available."));
-            return false;
-        }
+    public async Task<bool> ExportVideoAsync(PresentationVideoExportRequest? request = null) =>
+        (await _session.ExportVideoAsync(request).ConfigureAwait(true)).Succeeded;
 
-        var storyboard = PresentationExportPlanner.BuildVideoStoryboardPlan(request, _getModel());
-        if (storyboard.Segments.Count == 0)
-        {
-            ShowError(
-                "Could not export the presentation video",
-                new InvalidOperationException("Video export requires at least one slide."));
-            return false;
-        }
+    public bool ConfirmCloseAllowed() =>
+        _session.ConfirmCloseAllowedAsync().GetAwaiter().GetResult();
 
-        var savePlan = PresentationExportPlanner.BuildVideoExportDialogPlan(_workflow.CurrentFileName);
-        var result = WpfFileDialogService.ShowSaveDialog(_window, savePlan);
-        if (!result.Chosen || string.IsNullOrWhiteSpace(result.FileName))
-            return false;
-
-        try
-        {
-            BuildVideoFramePackage(request);
-            LastVideoExportResult = await _videoExportAdapter.ExportAsync(
-                LastVideoFramePackage!,
-                result.FileName,
-                CancellationToken.None,
-                _getModel().RecordingMediaArtifacts).ConfigureAwait(true);
-            if (!LastVideoExportResult.Succeeded && !LastVideoExportResult.Canceled &&
-                LastVideoExportResult.FailureReason is not null)
-            {
-                ShowError(
-                    "Could not export the presentation video",
-                    new InvalidOperationException(LastVideoExportResult.FailureReason));
-            }
-
-            return LastVideoExportResult.Succeeded;
-        }
-        catch (Exception ex)
-        {
-            LastVideoExportResult = WpfVideoExportResult.Failed(ex.Message, result.FileName);
-            ShowError("Could not export the presentation video", ex);
-            return false;
-        }
-    }
+    private static bool Run(Task<PresentationFileCommandResult> operation) =>
+        operation.GetAwaiter().GetResult().Succeeded;
 
     private static PresentationVideoExportHandoffHostCapabilities BuildVideoExportHostCapabilities(
         WpfVideoEncoderCapability capability) =>
@@ -507,59 +171,195 @@ internal sealed class FileCommands
             capability.CanCaptureNarration,
             capability.CanCaptureCameraAndMedia,
             capability.Reason);
+}
 
-    /// <summary>Save-before-close gate, called from the window's Closing handler.</summary>
-    public bool ConfirmCloseAllowed() => _workflow.ConfirmCloseAllowed();
+internal sealed class WpfPresentationFileLifecyclePort : IPresentationFileLifecyclePort
+{
+    private readonly SisterWpfFileCommandWorkflow _workflow;
 
-    private bool SaveTo(string path)
+    public WpfPresentationFileLifecyclePort(SisterWpfFileCommandWorkflow workflow) =>
+        _workflow = workflow ?? throw new ArgumentNullException(nameof(workflow));
+
+    public bool IsDirty => _workflow.IsDirty;
+    public int DirtyGeneration => _workflow.DirtyGeneration;
+    public string? CurrentPath => _workflow.CurrentPath;
+    public string? CurrentFileName => _workflow.CurrentFileName;
+    public string DisplayName => _workflow.DisplayName;
+    public IReadOnlyList<RecentFileEntry> RecentEntries => _workflow.RecentEntries;
+    public void MarkDirty() => _workflow.MarkDirty();
+    public void MarkSavedWithoutPath() => _workflow.MarkSavedWithoutPath();
+    public void MarkSavedWithPath(string path, bool suppressRecentFiles) =>
+        _workflow.MarkSavedWithPath(path, suppressRecentFiles);
+
+    public Task<bool> NewAsync(string action, Func<Task> loadNewPresentationAsync) =>
+        Task.FromResult(_workflow.New(
+            action,
+            () => loadNewPresentationAsync().GetAwaiter().GetResult()));
+
+    public Task<bool> OpenAsync(
+        string action,
+        Func<Task<string?>> pickPathAsync,
+        Func<string, Task<bool>> openPathAsync) =>
+        Task.FromResult(_workflow.Open(
+            action,
+            () => pickPathAsync().GetAwaiter().GetResult(),
+            path => openPathAsync(path).GetAwaiter().GetResult()));
+
+    public Task<bool> SaveAsync(
+        Func<string, Task<bool>> saveToCurrentPathAsync,
+        Func<Task<bool>> saveAsAsync) =>
+        Task.FromResult(_workflow.Save(
+            path => saveToCurrentPathAsync(path).GetAwaiter().GetResult(),
+            () => saveAsAsync().GetAwaiter().GetResult()));
+
+    public Task<bool> ConfirmCloseAllowedAsync(string action) =>
+        Task.FromResult(_workflow.ConfirmCloseAllowed(action));
+}
+
+internal sealed class WpfPresentationFilePickerPort : IPresentationFilePickerPort
+{
+    private readonly Window _owner;
+
+    public WpfPresentationFilePickerPort(Window owner) => _owner = owner;
+
+    public Task<PresentationFilePickerResult> PickOpenFileAsync(
+        PresentationFileOpenPickerRequest request,
+        CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = PresentationFilePersistenceWorkflow.Save(path, _getModel());
-            SetSaved(result.SavedPath, result.SuppressRecentFiles);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            ShowError("Could not save the presentation", ex);
-            return false;
-        }
+        cancellationToken.ThrowIfCancellationRequested();
+        var result = WpfFileDialogService.ShowOpenDialog(_owner, request.DialogPlan, title: request.Title);
+        return Task.FromResult(result.Chosen
+            ? PresentationFilePickerResult.Selected(result.FileName!)
+            : PresentationFilePickerResult.Cancelled);
     }
 
-    private void SetSaved(string? path, bool suppressRecentFiles)
+    public Task<PresentationFilePickerResult> PickSaveFileAsync(
+        PresentationFileSavePickerRequest request,
+        CancellationToken cancellationToken)
     {
-        if (path is null)
-            _workflow.MarkSavedWithoutPath();
-        else
-            _workflow.MarkSavedWithPath(path, suppressRecentFiles);
+        cancellationToken.ThrowIfCancellationRequested();
+        var result = WpfFileDialogService.ShowSaveDialog(_owner, request.DialogPlan, request.Title);
+        return Task.FromResult(result.Chosen
+            ? PresentationFilePickerResult.Selected(result.FileName!)
+            : PresentationFilePickerResult.Cancelled);
     }
 
-    private string? PromptOpenPath()
+    public Task<PresentationFilePickerResult> PickFolderAsync(
+        PresentationFolderPickerRequest request,
+        CancellationToken cancellationToken)
     {
-        var result = WpfFileDialogService.ShowOpenDialog(_window, OpenDialogPlan);
-        return result.Chosen ? result.FileName : null;
-    }
-
-    private string? PromptImageExportFolder()
-    {
+        cancellationToken.ThrowIfCancellationRequested();
         var dialog = new OpenFolderDialog
         {
-            Title = PresentationExportPlanner.ImageExportPickerTitle,
+            Title = request.Title,
             Multiselect = false,
         };
+        if (!string.IsNullOrWhiteSpace(request.InitialDirectory) && Directory.Exists(request.InitialDirectory))
+            dialog.InitialDirectory = request.InitialDirectory;
 
-        var currentDirectory = _workflow.CurrentPath is null
-            ? null
-            : Path.GetDirectoryName(_workflow.CurrentPath);
-        if (!string.IsNullOrWhiteSpace(currentDirectory) && Directory.Exists(currentDirectory))
-            dialog.InitialDirectory = currentDirectory;
+        return Task.FromResult(
+            dialog.ShowDialog(_owner) == true && !string.IsNullOrWhiteSpace(dialog.FolderName)
+                ? PresentationFilePickerResult.Selected(dialog.FolderName)
+                : PresentationFilePickerResult.Cancelled);
+    }
+}
 
-        return dialog.ShowDialog(_window) == true && !string.IsNullOrWhiteSpace(dialog.FolderName)
-            ? dialog.FolderName
-            : null;
+internal sealed class WpfPresentationFileRenderPort : IPresentationFileRenderPort
+{
+    public PresentationSlideImageRenderer RenderSlideToPng =>
+        WpfPresentationSlideImageRenderer.RenderSlideToPng;
+    public PresentationSlideImageRendererWithPrintMarkup RenderSlideToPngWithPrintMarkup =>
+        WpfPresentationSlideImageRenderer.RenderSlideToPngWithPrintMarkup;
+    public PresentationRasterPdfWriter WriteRasterPdf => WpfRasterPdfWriter.WriteToBytes;
+    public PresentationPdfContentWriter WriteVectorPdf => SkiaPdfWriter.WriteToBytesWithPortableFallback;
+}
+
+internal sealed class WpfPresentationPrintPort : IPresentationPrintPort
+{
+    private readonly Window _owner;
+
+    public WpfPresentationPrintPort(Window owner, WpfNativePrintCapability capability)
+    {
+        _owner = owner;
+        Capabilities = capability.CanPrint
+            ? PresentationNativePrintHandoffHostCapabilities.Available("WPF print host")
+            : PresentationNativePrintHandoffHostCapabilities.Deferred("WPF print host", capability.Reason);
     }
 
-    // ── Host seams (WPF) ─────────────────────────────────────────────────────
-    private void ShowError(string summary, Exception ex) =>
-        _workflow.ShowError(summary, ex);
+    public PresentationNativePrintHandoffHostCapabilities Capabilities { get; }
+
+    public Task<PresentationNativeCommandResult> PrintAsync(
+        Presentation presentation,
+        PresentationPrintRequest request,
+        Func<PresentationPrintRequest, PresentationPrintOutputPackage> buildPackage,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var package = buildPackage(request);
+        var validation = PresentationPrintOutputPackageExecutor.ValidatePackage(package);
+        if (!validation.IsValid)
+        {
+            return Task.FromResult(PresentationNativeCommandResult.Failure(
+                "Print failed",
+                validation.FailureReason ?? PresentationPrintOutputPackageExecutor.InvalidPackageReason));
+        }
+
+        var printed = WpfPresentationPrintService.ShowPrintDialogAndPrint(presentation, request, _owner);
+        return Task.FromResult(printed
+            ? PresentationNativeCommandResult.Success("Printed presentation")
+            : PresentationNativeCommandResult.Cancel("Print cancelled"));
+    }
+}
+
+internal sealed class WpfPresentationVideoPort : IPresentationVideoPort
+{
+    private readonly WpfVideoExportAdapter _adapter;
+
+    public WpfPresentationVideoPort(
+        WpfVideoExportAdapter adapter,
+        PresentationVideoExportHandoffHostCapabilities capabilities)
+    {
+        _adapter = adapter;
+        Capabilities = capabilities;
+    }
+
+    public PresentationVideoExportHandoffHostCapabilities Capabilities { get; }
+    public WpfVideoExportResult? LastResult { get; private set; }
+
+    public async Task<PresentationNativeCommandResult> ExportAsync(
+        PresentationVideoFramePackage package,
+        string outputPath,
+        IReadOnlyList<PresentationRecordingMediaArtifact> recordingMediaArtifacts,
+        CancellationToken cancellationToken)
+    {
+        LastResult = await _adapter.ExportAsync(
+            package,
+            outputPath,
+            cancellationToken,
+            recordingMediaArtifacts).ConfigureAwait(true);
+        return LastResult.Succeeded
+            ? PresentationNativeCommandResult.Success(LastResult.StatusText)
+            : LastResult.Canceled
+                ? PresentationNativeCommandResult.Cancel(LastResult.StatusText)
+                : PresentationNativeCommandResult.Failure(
+                    LastResult.StatusText,
+                    LastResult.FailureReason ?? "Video export failed.");
+    }
+}
+
+internal sealed class WpfPresentationFileFeedbackPort : IPresentationFileCommandFeedbackPort
+{
+    private readonly SisterWpfFileCommandWorkflow _workflow;
+
+    public WpfPresentationFileFeedbackPort(SisterWpfFileCommandWorkflow workflow) => _workflow = workflow;
+
+    public Task ReportAsync(PresentationFileCommandResult result, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (result.Error is { } error)
+            _workflow.ShowError(error.Summary, error.Exception);
+        else if (result.Status == PresentationFileCommandStatus.Unavailable)
+            _workflow.ShowError("Could not complete the presentation command", new InvalidOperationException(result.Message));
+        return Task.CompletedTask;
+    }
 }

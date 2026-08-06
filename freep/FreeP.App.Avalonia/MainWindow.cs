@@ -69,7 +69,7 @@ public sealed partial class MainWindow : Window
     private const double ReadingOrderActionTopCompensation = 2;
 
     private const string DefaultTitle = "FreeP";
-    private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Presentation;
+    private static readonly SisterAppFileTextSpec FileText = PresentationFileTextResources.Presentation;
     private static readonly FilePickerFileType PictureFileType =
         AvaloniaFilePickerTypeAdapter.CreateFileType(
             PresentationFileTextResources.PictureFileTypeName,
@@ -104,6 +104,7 @@ public sealed partial class MainWindow : Window
 
     private Presentation _presentation = Presentation.CreateEmpty();
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
+    private readonly PresentationFileCommandSession _fileSession;
     private readonly StartupDirtyTrace? _startupDirtyTrace;
     private readonly SisterAvaloniaAsyncWindowCloseCoordinator _closeCoordinator;
     private readonly AvaloniaPresentationClipboardService _clipboardService;
@@ -828,9 +829,22 @@ public sealed partial class MainWindow : Window
             promptSaveChangesAsync: promptSaveChangesAsync,
             showFileCommandErrorAsync: showFileCommandErrorAsync,
             restoreOwnerFocus: RestoreOwnerFocus);
+        _fileSession = new PresentationFileCommandSession(
+            () => _presentation,
+            LoadPresentationContent,
+            new AvaloniaPresentationFileLifecyclePort(_fileWorkflow),
+            new AvaloniaPresentationFilePickerPort(this),
+            new AvaloniaPresentationFileRenderPort(),
+            new AvaloniaPresentationPrintPort(this),
+            new AvaloniaPresentationVideoPort(this),
+            new AvaloniaPresentationFileFeedbackPort(this),
+            getImageExportRange: () => PresentationExportPlanner.BuildCurrentSlideRangeRequest(Editor.CurrentSlideIndex),
+            getPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1,
+            printPackageFactory: _printOutputPackageFactory,
+            videoPackageFactory: _videoFramePackageFactory);
         _startupDirtyTrace?.Record("file-workflow-created", _fileWorkflow);
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
-            confirmCloseAllowedAsync: () => _fileWorkflow.ConfirmCloseAllowedAsync("closing"),
+            confirmCloseAllowedAsync: () => _fileSession.ConfirmCloseAllowedAsync(),
             requestClose: Close,
             restoreOwnerFocus: RestoreOwnerFocus);
 
@@ -1053,7 +1067,7 @@ public sealed partial class MainWindow : Window
                 var result = PresentationFilePersistenceWorkflow.Open(startupPresentation);
                 LoadPresentationAsSaved(result.Presentation, result.SavedPath, result.SuppressRecentFiles);
                 _startupDirtyTrace?.Record("startup-load-saved", _fileWorkflow);
-                _statusText.Text = SisterAppFileTextPlanner.FormatOpened(Path.GetFileName(startupPresentation));
+                _statusText.Text = SisterAppFileTextPlanner.FormatOpened(FileText, Path.GetFileName(startupPresentation));
             }
             catch (Exception ex)
             {
@@ -1061,7 +1075,8 @@ public sealed partial class MainWindow : Window
                 LoadPresentationAsSaved(_presentation, path: null);
                 _startupDirtyTrace?.Record("startup-load-failed-fallback-saved", _fileWorkflow);
                 _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                    SisterAppFileTextPlanner.OpenCommand,
+                    FileText,
+                    FileText.OpenCommand,
                     ex.Message);
             }
         }
@@ -3264,14 +3279,14 @@ public sealed partial class MainWindow : Window
     {
         if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.InsertPictureCommand);
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(FileText, FileText.InsertPictureCommand);
             return;
         }
 
         var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
             StorageProvider,
             AvaloniaFilePickerOpenRequest.FromFileTypes(
-                SisterAppFileTextPlanner.InsertPicturePickerTitle,
+                FileText.InsertPicturePickerTitle,
                 [PictureFileType]));
 
         if (file is null)
@@ -3290,11 +3305,11 @@ public sealed partial class MainWindow : Window
                 payload);
 
             if (added is not null)
-                _statusText.Text = SisterAppFileTextPlanner.FormatInserted(file.Name);
+                _statusText.Text = SisterAppFileTextPlanner.FormatInserted(FileText, file.Name);
         }
         catch (Exception ex)
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.InsertPictureCommand, ex.Message);
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, FileText.InsertPictureCommand, ex.Message);
         }
     }
 
@@ -3309,7 +3324,7 @@ public sealed partial class MainWindow : Window
 
         if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(command);
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(FileText, command);
             return;
         }
 
@@ -3338,11 +3353,11 @@ public sealed partial class MainWindow : Window
                 mediaPayload: payload);
 
             if (added is not null)
-                _statusText.Text = SisterAppFileTextPlanner.FormatInserted(file.Name);
+                _statusText.Text = SisterAppFileTextPlanner.FormatInserted(FileText, file.Name);
         }
         catch (Exception ex)
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(command, ex.Message);
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, command, ex.Message);
         }
     }
 
@@ -3351,6 +3366,7 @@ public sealed partial class MainWindow : Window
         if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
+                FileText,
                 OleInsertionPlanner.PickerTitle);
             return;
         }
@@ -3370,11 +3386,12 @@ public sealed partial class MainWindow : Window
             using var memory = new MemoryStream();
             await source.CopyToAsync(memory);
             Editor.InsertEmbeddedObject(memory.ToArray(), file.Name);
-            _statusText.Text = SisterAppFileTextPlanner.FormatInserted(file.Name);
+            _statusText.Text = SisterAppFileTextPlanner.FormatInserted(FileText, file.Name);
         }
         catch (Exception ex)
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
                 OleInsertionPlanner.PickerTitle,
                 ex.Message);
         }
@@ -3385,6 +3402,7 @@ public sealed partial class MainWindow : Window
         if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
+                FileText,
                 PresentationFileTextResources.InsertAudioCommand);
             return;
         }
@@ -3412,11 +3430,12 @@ public sealed partial class MainWindow : Window
                 ContentType = SlideObjectInsertionPlanner.InferMediaContentType(file.Name, isVideo: false),
                 IsBuiltIn = false,
             });
-            _statusText.Text = SisterAppFileTextPlanner.FormatInserted(file.Name);
+            _statusText.Text = SisterAppFileTextPlanner.FormatInserted(FileText, file.Name);
         }
         catch (Exception ex)
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
                 PresentationFileTextResources.InsertAudioCommand,
                 ex.Message);
         }
@@ -3454,7 +3473,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed("Picture Bullet", ex.Message);
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, "Picture Bullet", ex.Message);
         }
     }
 
@@ -3462,7 +3481,7 @@ public sealed partial class MainWindow : Window
     {
         if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable("Picture Bullet");
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(FileText, "Picture Bullet");
             return null;
         }
 
@@ -3927,6 +3946,7 @@ public sealed partial class MainWindow : Window
         if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
+                FileText,
                 ZoomCoverImagePlanner.DialogTitle);
             return;
         }
@@ -3954,6 +3974,7 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
                 ZoomCoverImagePlanner.DialogTitle,
                 ex.Message);
         }
@@ -4046,14 +4067,8 @@ public sealed partial class MainWindow : Window
 
     internal Task<bool> FileNewAsyncForTests() => FileNewAsync();
 
-    private Task<bool> FileNewAsync() =>
-        _fileWorkflow.NewAsync(
-            FileText.NewAction,
-            () =>
-            {
-                LoadPresentationContent(Presentation.CreateEmpty());
-                return Task.CompletedTask;
-            });
+    private async Task<bool> FileNewAsync() =>
+        (await _fileSession.NewAsync()).Succeeded;
 
     private BackstageCallbacks BuildBackstageCallbacks() => new(
         GetPresentation: () => _presentation,
@@ -4108,17 +4123,11 @@ public sealed partial class MainWindow : Window
 
     private void OpenRecentPath(string path) => _ = OpenRecentPathAsync(path);
 
-    private Task<bool> OpenRecentPathAsync(string path) =>
-        _fileWorkflow.OpenAsync(
-            FileText.OpenAction,
-            () => Task.FromResult<string?>(path),
-            TryLoadPresentationFileAsync);
+    private async Task<bool> OpenRecentPathAsync(string path) =>
+        (await _fileSession.OpenRecentPathAsync(path)).Succeeded;
 
-    private Task<bool> FileOpenAsync() =>
-        _fileWorkflow.OpenAsync(
-            FileText.OpenAction,
-            PromptOpenPathAsync,
-            TryLoadPresentationFileAsync);
+    private async Task<bool> FileOpenAsync() =>
+        (await _fileSession.OpenAsync()).Succeeded;
 
     internal Task<bool> FileOpenAsyncForTests() => FileOpenAsync();
     internal Task<bool> FileSaveAsAsyncForTests() => FileSaveAsAsync();
@@ -4134,74 +4143,25 @@ public sealed partial class MainWindow : Window
     private static string ResolveDataFolderLabel() =>
         AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
 
-    private async Task<string?> PromptOpenPathAsync()
+    private async Task<bool> FileSaveAsync()
     {
-        var plan = PresentationFileDialogPlanner.BuildOpenPickerPlan();
-        if (_openPickerOverrideForTests is { } pickerOverride)
-            return await pickerOverride(plan);
-
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
+        var opensSaveAsPicker = _fileSession.CurrentPath is null;
+        try
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.OpenCommand);
-            return null;
+            return (await _fileSession.SaveAsync()).Succeeded;
         }
-
-        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromDescriptors(FileText.OpenPickerTitle, plan.FileTypes));
-
-        if (file is null)
-            return null;
-
-        var path = file.LocalPath;
-        if (path is null)
-            _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(SisterAppFileTextPlanner.OpenCommand);
-
-        return path;
+        finally
+        {
+            if (opensSaveAsPicker)
+                RestoreOwnerFocus();
+        }
     }
-
-    private Task<bool> FileSaveAsync() =>
-        _fileWorkflow.SaveAsync(
-            TrySavePresentationFileAsync,
-            FileSaveAsAsync);
 
     private async Task<bool> FileSaveAsAsync()
     {
         try
         {
-            var plan = PresentationFileDialogPlanner.BuildSavePickerPlan(_fileWorkflow.CurrentFileName);
-            if (_savePickerOverrideForTests is { } pickerOverride)
-            {
-                var overriddenPath = await pickerOverride(plan);
-                if (overriddenPath is null)
-                    return false;
-
-                return await TrySavePickerPathAsync(overriddenPath);
-            }
-
-            if (!AvaloniaFilePickerService.CanSave(StorageProvider))
-            {
-                _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.SaveCommand);
-                return false;
-            }
-
-            using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-                StorageProvider,
-                AvaloniaFilePickerSaveRequest.FromSavePlan(
-                    FileText.SavePickerTitle,
-                    plan,
-                    showOverwritePrompt: true));
-
-            var path = file?.LocalPath;
-            if (path is null)
-            {
-                if (file is not null)
-                    _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(SisterAppFileTextPlanner.SaveCommand);
-
-                return false;
-            }
-
-            return await TrySavePickerPathAsync(path);
+            return (await _fileSession.SaveAsAsync()).Succeeded;
         }
         finally
         {
@@ -4209,259 +4169,67 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task<bool> TrySavePickerPathAsync(string path)
-    {
-        if (!PresentationFileDialogPlanner.TryResolveSavePickerPath(path, out var resolvedPath))
-        {
-            var error = new InvalidDataException(PresentationFileDialogPlanner.UnsupportedSavePathMessage);
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                SisterAppFileTextPlanner.SaveCommand,
-                error.Message);
-            await _fileWorkflow.ShowFileCommandErrorAsync("Could not save the presentation", error);
-            return false;
-        }
-
-        return await TrySavePresentationFileAsync(resolvedPath);
-    }
-
-    private async Task<bool> FileExportPdfAsync()
-    {
-        if (!AvaloniaFilePickerService.CanSave(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
-                FileText,
-                PresentationExportPlanner.PdfExportCommandText);
-            return false;
-        }
-
-        var plan = PresentationExportPlanner.BuildPdfExportPickerPlan(_fileWorkflow.CurrentFileName);
-
-        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerSaveRequest.FromSavePlan(PresentationExportPlanner.PdfExportPickerTitle, plan));
-
-        var path = file?.LocalPath;
-        if (path is null)
-        {
-            if (file is not null)
-            {
-                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
-                    FileText,
-                    PresentationExportPlanner.PdfExportCommandText);
-            }
-
-            return false;
-        }
-
-        try
-        {
-            var bytes = PresentationRasterPdfExporter.ExportToBytes(
-                _presentation,
-                request: null,
-                SlideRenderer.RenderToBytes,
-                SkiaRasterPdfWriter.WriteToBytes);
-            ExportAtomicWriter.WriteAllBytes(path, bytes);
-            _statusText.Text = $"Exported {Path.GetFileName(path)}";
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FileText,
-                PresentationExportPlanner.PdfExportCommandText,
-                ex.Message);
-            return false;
-        }
-    }
+    private async Task<bool> FileExportPdfAsync() =>
+        (await _fileSession.ExportPdfAsync()).Succeeded;
 
     private async Task<bool> FileExportNotesPagePdfAsync()
     {
-        if (!AvaloniaFilePickerService.CanSave(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
-                FileText,
-                PresentationExportPlanner.NotesPagePdfExportCommandText);
-            return false;
-        }
-
-        // Notes-page PDF exports the whole deck (one notes page per slide), matching the WPF
-        // host (FreeP.App.Host/FileCommands.cs ExportNotesPagePdf, range: null -> AllSlides) and
-        // this shell's own slides-PDF export (FileExportPdfAsync above, which also exports the
-        // full deck). Do not narrow this to the current slide only.
         var range = new PresentationSlideRangeRequest(PresentationSlideRangeKind.AllSlides);
-        var exportPlan = PresentationExportPlanner.BuildNotesPagePdfExportPlan(range, _presentation.Slides.Count);
-        var request = new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
-            PresentationPrintLayoutKind.NotesPages,
-            range));
-        LastNotesPagePdfRenderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(
-            _presentation,
-            request);
-        if (!exportPlan.CanExecute)
-        {
-            _statusText.Text = exportPlan.DisabledReason ?? PresentationExportPlanner.NotesPagePdfExportCommandText;
-            return false;
-        }
-
-        var plan = PresentationExportPlanner.BuildNotesPagePdfExportPickerPlan(_fileWorkflow.CurrentFileName);
-
-        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerSaveRequest.FromSavePlan(PresentationExportPlanner.NotesPagePdfExportPickerTitle, plan));
-
-        var path = file?.LocalPath;
-        if (path is null)
-        {
-            if (file is not null)
-            {
-                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
-                    FileText,
-                    PresentationExportPlanner.NotesPagePdfExportCommandText);
-            }
-
-            return false;
-        }
-
-        try
-        {
-            ExportAtomicWriter.WriteAllBytes(
-                path,
-                PresentationNotesPagePdfExporter.ExportToBytes(
-                    _presentation,
-                    request,
-                    SkiaPdfWriter.WriteToBytesWithPortableFallback));
-            _statusText.Text = $"Exported {Path.GetFileName(path)}";
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FileText,
-                PresentationExportPlanner.NotesPagePdfExportCommandText,
-                ex.Message);
-            return false;
-        }
+        var result = await _fileSession.ExportNotesPagePdfAsync(range);
+        LastNotesPagePdfRenderPlan = _fileSession.LastNotesPagePdfRenderPlan;
+        return result.Succeeded;
     }
 
-    internal PresentationImageExportResult FileExportImagesToFolder(
+    internal async Task<PresentationImageExportResult> FileExportImagesToFolder(
         string outputDirectory,
-        PresentationSlideRangeRequest? range = null) =>
-        PresentationImageExportExecutor.Export(
-            _presentation,
-            new PresentationImageExportRequest(
-                outputDirectory,
-                BaseFileName: Path.GetFileNameWithoutExtension(_fileWorkflow.CurrentFileName),
-                SlideRange: range),
-            SlideRenderer.RenderToBytes);
-
-    private async Task<bool> FileExportImagesAsync()
+        PresentationSlideRangeRequest? range = null)
     {
-        if (!StorageProvider.CanPickFolder)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
-                FileText,
-                PresentationExportPlanner.ImageExportCommandText);
-            return false;
-        }
-
-        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = PresentationExportPlanner.ImageExportPickerTitle,
-            AllowMultiple = false,
-        });
-
-        var folder = folders.Count == 0 ? null : folders[0];
-        var path = folder?.TryGetLocalPath();
-        if (path is null)
-        {
-            if (folder is not null)
-            {
-                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
-                    FileText,
-                    PresentationExportPlanner.ImageExportCommandText);
-            }
-
-            return false;
-        }
-
-        try
-        {
-            FileExportImagesToFolder(
-                path,
-                PresentationExportPlanner.BuildCurrentSlideRangeRequest(Editor.CurrentSlideIndex));
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FileText,
-                PresentationExportPlanner.ImageExportCommandText,
-                ex.Message);
-            return false;
-        }
+        var result = await _fileSession.ExportImagesToFolderAsync(outputDirectory, range);
+        if (!result.Succeeded || _fileSession.LastImageExportResult is null)
+            throw result.Error?.Exception ?? new InvalidOperationException(result.Message);
+        return _fileSession.LastImageExportResult;
     }
+
+    private async Task<bool> FileExportImagesAsync() =>
+        (await _fileSession.ExportImagesAsync()).Succeeded;
 
     internal PresentationHandoutLayoutPlan RefreshHandoutLayoutPlan(int? slidesPerPage = null)
     {
-        LastHandoutLayoutPlan = PresentationExportPlanner.BuildHandoutLayoutPlan(
-            new PresentationPrintRequest(
-                PresentationPrintLayoutKind.Handouts,
-                HandoutSlidesPerPage: slidesPerPage),
-            _presentation,
-            _presentation.SlideSizeCxEmu,
-            _presentation.SlideSizeCyEmu);
+        LastHandoutLayoutPlan = _fileSession.BuildHandoutLayoutPlan(slidesPerPage);
         _statusText.Text = "Print handout layout planned";
         return LastHandoutLayoutPlan;
     }
 
     internal PresentationNotesPagePdfRenderPlan RefreshNotesPagePdfRenderPlan(PresentationSlideRangeRequest? range = null)
     {
-        LastNotesPagePdfRenderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(
-            _presentation,
-            new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
-                PresentationPrintLayoutKind.NotesPages,
-                range)));
+        LastNotesPagePdfRenderPlan = _fileSession.BuildNotesPagePdfRenderPlan(range);
         _statusText.Text = "Notes page PDF planned";
         return LastNotesPagePdfRenderPlan;
     }
 
     internal PresentationPrintOutputPackage RefreshPrintOutputPackage(PresentationPrintRequest? request = null)
     {
-        LastPrintOutputPackage = _printOutputPackageFactory?.Invoke(request) ??
-            PresentationPrintOutputPackageExecutor.BuildPackage(
-                _presentation,
-                request,
-                SlideRenderer.RenderToBytes,
-                SkiaRasterPdfWriter.WriteToBytes,
-                SkiaPdfWriter.WriteToBytesWithPortableFallback,
-                SlideRenderer.RenderToBytesWithPrintMarkup);
-        LastPrintExecutionDescriptor = PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(
-            LastPrintOutputPackage,
-            _nativePrintHostCapabilities,
-            suggestedBaseFileName: _fileWorkflow.CurrentFileName);
-        LastNativePrintHandoffPlan = LastPrintExecutionDescriptor.HandoffPlan;
+        LastPrintOutputPackage = _fileSession.BuildPrintOutputPackage(request);
+        LastPrintExecutionDescriptor = _fileSession.LastPrintExecutionDescriptor;
+        LastNativePrintHandoffPlan = _fileSession.LastNativePrintHandoffPlan;
         _statusText.Text = LastPrintOutputPackage.Plan.DisabledReason ??
-            LastNativePrintHandoffPlan.Reason;
+            LastNativePrintHandoffPlan!.Reason;
         return LastPrintOutputPackage;
     }
 
     internal PresentationNativePrintHandoffPlan RefreshNativePrintHandoffPlan(PresentationPrintRequest? request = null)
     {
-        RefreshPrintOutputPackage(request);
-        LastNativePrintHandoffPlan = LastPrintExecutionDescriptor!.HandoffPlan;
+        LastNativePrintHandoffPlan = _fileSession.ExecuteNativePrintHandoff(request);
+        LastPrintOutputPackage = _fileSession.LastPrintOutputPackage;
+        LastPrintExecutionDescriptor = _fileSession.LastPrintExecutionDescriptor;
         _statusText.Text = LastNativePrintHandoffPlan.Reason;
         return LastNativePrintHandoffPlan;
     }
 
     internal PresentationPrintBackstagePlan RefreshPrintBackstagePlan(PresentationPrintRequest? request = null)
     {
-        LastPrintBackstagePlan = PresentationPrintBackstagePlanner.Build(
-            request,
-            _presentation,
-            Editor.CurrentSlideIndex + 1,
-            request?.SlideRange?.SelectedSlideNumbers,
-            _nativePrintHostCapabilities,
-            _fileWorkflow.CurrentFileName);
-        LastNativePrintHandoffPlan = LastPrintBackstagePlan.NativePrintHandoff;
+        LastPrintBackstagePlan = _fileSession.BuildPrintBackstagePlan(request);
+        LastNativePrintHandoffPlan = _fileSession.LastNativePrintHandoffPlan;
         _statusText.Text = LastPrintBackstagePlan.DisabledReason ??
             LastPrintBackstagePlan.NativePrintHandoff.Reason;
         return LastPrintBackstagePlan;
@@ -4485,10 +4253,19 @@ public sealed partial class MainWindow : Window
         PresentationPrintRequest? request = null,
         CancellationToken cancellationToken = default)
     {
-        if (!_portablePrintWorkflowEnabled || OperatingSystem.IsWindows())
-            return await ExecuteNativePrintHandoffAsync(request, cancellationToken).ConfigureAwait(true);
+        await _fileSession.PrintAsync(request, cancellationToken).ConfigureAwait(true);
+        return LastNativePrintResult ?? LinuxNativePrintResult.CanceledResult();
+    }
 
-        var requestedRequest = request ?? new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides);
+    private async Task<LinuxNativePrintResult> ExecutePrintWorkflowCoreAsync(
+        PresentationPrintRequest request,
+        Func<PresentationPrintRequest, PresentationPrintOutputPackage> buildPackage,
+        CancellationToken cancellationToken)
+    {
+        if (!_portablePrintWorkflowEnabled || OperatingSystem.IsWindows())
+            return await ExecuteNativePrintHandoffCoreAsync(request, buildPackage, cancellationToken).ConfigureAwait(true);
+
+        var requestedRequest = request;
         try
         {
             _latestPrinterDiscovery = await _printService.DiscoverAsync(cancellationToken).ConfigureAwait(true);
@@ -4517,8 +4294,10 @@ public sealed partial class MainWindow : Window
                 Copies = selection.Copies,
                 Collate = selection.Collate,
             };
-            RefreshPrintOutputPackage(effectiveRequest);
-            var package = LastPrintOutputPackage;
+            var package = buildPackage(effectiveRequest);
+            LastPrintOutputPackage = package;
+            LastPrintExecutionDescriptor = _fileSession.LastPrintExecutionDescriptor;
+            LastNativePrintHandoffPlan = _fileSession.LastNativePrintHandoffPlan;
             if (package is null || !package.Plan.CanBuildPackage)
             {
                 LastNativePrintResult = LinuxNativePrintResult.Failed(
@@ -4589,12 +4368,23 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal async Task<LinuxNativePrintResult> ExecuteNativePrintHandoffAsync(
+    internal Task<LinuxNativePrintResult> ExecuteNativePrintHandoffAsync(
         PresentationPrintRequest? request = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        ExecuteNativePrintHandoffCoreAsync(
+            request ?? new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides),
+            _fileSession.BuildPrintOutputPackage,
+            cancellationToken);
+
+    private async Task<LinuxNativePrintResult> ExecuteNativePrintHandoffCoreAsync(
+        PresentationPrintRequest request,
+        Func<PresentationPrintRequest, PresentationPrintOutputPackage> buildPackage,
+        CancellationToken cancellationToken)
     {
-        RefreshPrintOutputPackage(request);
-        var package = LastPrintOutputPackage;
+        var package = buildPackage(request);
+        LastPrintOutputPackage = package;
+        LastPrintExecutionDescriptor = _fileSession.LastPrintExecutionDescriptor;
+        LastNativePrintHandoffPlan = _fileSession.LastNativePrintHandoffPlan;
         if (package is null)
         {
             LastNativePrintResult = LinuxNativePrintResult.Failed("Printable package was not built.");
@@ -4883,10 +4673,7 @@ public sealed partial class MainWindow : Window
 
     internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)
     {
-        LastVideoExportPlan = PresentationExportPlanner.BuildVideoExportPlan(
-            request,
-            _presentation,
-            _videoExportHostCapabilities);
+        LastVideoExportPlan = _fileSession.BuildVideoExportPlan(request);
 
         _statusText.Text = LastVideoExportPlan.DisabledReason ?? "Video export planned";
         return LastVideoExportPlan;
@@ -4894,72 +4681,16 @@ public sealed partial class MainWindow : Window
 
     internal Task<bool> FileExportVideoAsyncForTests() => FileExportVideoAsync();
 
-    private async Task<bool> FileExportVideoAsync()
-    {
-        if (!_nativeOutputCapabilities.Video.CanEncodeMp4)
-        {
-            _statusText.Text = _nativeOutputCapabilities.Video.Reason;
-            return false;
-        }
-
-        if (VideoPickerOverrideForTests is null && !AvaloniaFilePickerService.CanSave(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
-                FileText,
-                PresentationExportPlanner.VideoExportCommandText);
-            return false;
-        }
-
-        var plan = PresentationExportPlanner.BuildVideoExportPickerPlan(_fileWorkflow.CurrentFileName);
-        string? path;
-        var wasSelected = false;
-        if (VideoPickerOverrideForTests is { } pickerOverride)
-        {
-            var selection = await pickerOverride(plan);
-            if (selection is null)
-                return false;
-            wasSelected = true;
-            path = selection.LocalPath;
-        }
-        else
-        {
-            using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-                StorageProvider,
-                AvaloniaFilePickerSaveRequest.FromSavePlan(
-                    PresentationExportPlanner.VideoExportPickerTitle,
-                    plan,
-                    showOverwritePrompt: true));
-            wasSelected = file is not null;
-            path = file?.LocalPath;
-        }
-        if (path is null)
-        {
-            if (wasSelected)
-                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
-                    FileText,
-                    PresentationExportPlanner.VideoExportCommandText);
-            return false;
-        }
-
-        var result = await ExecuteVideoExportAsync(path);
-        return result.Succeeded;
-    }
+    private async Task<bool> FileExportVideoAsync() =>
+        (await _fileSession.ExportVideoAsync()).Succeeded;
 
     internal PresentationVideoFramePackage RefreshVideoFramePackage(PresentationVideoExportRequest? request = null)
     {
-        LastVideoFramePackage = _videoFramePackageFactory?.Invoke(request) ??
-            PresentationVideoFramePackageExecutor.BuildPackage(
-                _presentation,
-                request,
-                SlideRenderer.RenderToBytes,
-                _videoExportHostCapabilities);
-        LastVideoExportPlan = LastVideoFramePackage.Plan.ExportPlan;
-        LastVideoExecutionDescriptor = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(
-            LastVideoFramePackage,
-            _videoExportHostCapabilities,
-            _fileWorkflow.CurrentFileName);
-        LastVideoExportHandoffPlan = LastVideoExecutionDescriptor.HandoffPlan;
-        _statusText.Text = LastVideoExportHandoffPlan.StatusText;
+        LastVideoFramePackage = _fileSession.BuildVideoFramePackage(request);
+        LastVideoExportPlan = _fileSession.LastVideoExportPlan;
+        LastVideoExecutionDescriptor = _fileSession.LastVideoExecutionDescriptor;
+        LastVideoExportHandoffPlan = _fileSession.LastVideoExportHandoffPlan;
+        _statusText.Text = LastVideoExportHandoffPlan!.StatusText;
         return LastVideoFramePackage;
     }
 
@@ -4968,38 +4699,14 @@ public sealed partial class MainWindow : Window
         PresentationVideoExportRequest? request = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
-        RefreshVideoFramePackage(request);
-        var package = LastVideoFramePackage;
-        if (package is null)
-        {
-            LastVideoExportResult = LinuxVideoExportResult.Failed("Video frame package was not built.", outputPath);
-            return LastVideoExportResult;
-        }
-
-        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _nativeOutputCancellation = linkedCancellation;
-        try
-        {
-            LastVideoExportResult = await _videoExportAdapter.ExportAsync(
-                package,
-                outputPath,
-                linkedCancellation.Token,
-                _presentation.RecordingMediaArtifacts).ConfigureAwait(true);
-        }
-        finally
-        {
-            if (ReferenceEquals(_nativeOutputCancellation, linkedCancellation))
-                _nativeOutputCancellation = null;
-        }
-        _statusText.Text = LastVideoExportResult.StatusText;
-        if (!LastVideoExportResult.Succeeded && !LastVideoExportResult.Canceled &&
-            LastVideoExportResult.FailureReason is not null)
-        {
-            _statusText.Text = $"{LastVideoExportResult.StatusText}: {LastVideoExportResult.FailureReason}";
-        }
-
-        return LastVideoExportResult;
+        var result = await _fileSession.ExportVideoToPathAsync(outputPath, request, cancellationToken);
+        LastVideoFramePackage = _fileSession.LastVideoFramePackage;
+        LastVideoExportPlan = _fileSession.LastVideoExportPlan;
+        LastVideoExecutionDescriptor = _fileSession.LastVideoExecutionDescriptor;
+        LastVideoExportHandoffPlan = _fileSession.LastVideoExportHandoffPlan;
+        return LastVideoExportResult ?? LinuxVideoExportResult.Failed(
+            result.Message ?? "Video export failed.",
+            outputPath);
     }
 
     internal void CancelNativeOutputForTests()
@@ -6690,7 +6397,7 @@ public sealed partial class MainWindow : Window
     {
         if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable("Replace SmartArt picture");
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(FileText, "Replace SmartArt picture");
             return;
         }
 
@@ -6714,6 +6421,7 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
                 "Replace SmartArt picture",
                 ex.Message);
         }
@@ -7583,39 +7291,8 @@ public sealed partial class MainWindow : Window
         return border;
     }
 
-    private async Task<bool> TryLoadPresentationFileAsync(string path)
-    {
-        try
-        {
-            var result = PresentationFilePersistenceWorkflow.Open(path);
-            LoadPresentationAsSaved(result.Presentation, result.SavedPath, result.SuppressRecentFiles);
-            _statusText.Text = SisterAppFileTextPlanner.FormatOpened(Path.GetFileName(path));
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.OpenCommand, ex.Message);
-            await _fileWorkflow.ShowFileCommandErrorAsync("Could not open the presentation", ex);
-            return false;
-        }
-    }
-
-    private async Task<bool> TrySavePresentationFileAsync(string path)
-    {
-        try
-        {
-            var result = PresentationFilePersistenceWorkflow.Save(path, _presentation);
-            _fileWorkflow.MarkSavedWithPath(result.SavedPath, result.SuppressRecentFiles);
-            _statusText.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(result.SavedPath));
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.SaveCommand, ex.Message);
-            await _fileWorkflow.ShowFileCommandErrorAsync("Could not save the presentation", ex);
-            return false;
-        }
-    }
+    private async Task<bool> TrySavePresentationFileAsync(string path) =>
+        (await _fileSession.SavePathAsync(path)).Succeeded;
 
     internal Task<bool> TrySavePresentationFileAsyncForTests(string path) =>
         TrySavePresentationFileAsync(path);

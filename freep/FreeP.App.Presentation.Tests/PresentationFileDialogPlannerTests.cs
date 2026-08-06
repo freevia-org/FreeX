@@ -195,7 +195,5 @@ public sealed class PresentationFileDialogPlannerTests
         SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(presentationText, presentationText.OpenCommand)
             .Should().Be("Open failed: selected file is not available as a local path.");
         SisterAppFileTextPlanner.FormatSaved(presentationText, "Deck.pptx").Should().Be("Saved Deck.pptx");
-        SisterAppFileTextPlanner.Presentation.OpenPickerTitle.Should().Be(presentationText.OpenPickerTitle);
-        SisterAppFileTextPlanner.FormatSaved("Deck.pptx").Should().Be("Saved Deck.pptx");
     }
 }
