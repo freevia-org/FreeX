@@ -24,14 +24,11 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind)");
 
         pivotSource.Should().Contain("private void PivotTableBtn_Click(object sender, RoutedEventArgs e)");
-        pivotSource.Should().Contain("PivotCreatePlanner.CreateSourceRangePlan(sheet, SheetGrid.SelectedRange)");
-        pivotSource.Should().Contain("ShowPivotTableSourceRangeError(sourcePlan.Error)");
+        pivotSource.Should().Contain("PivotApplication.PrepareCreate(_currentSheetId, SheetGrid.SelectedRange)");
         pivotSource.Should().Contain("new PivotTableDialog(");
-        pivotSource.Should().Contain("PivotCreatePlanner.CreateDefaultLayout(sourceSheet, dialogSourceRange)");
-        pivotSource.Should().Contain("PivotCreatePlanner.SuggestName(_workbook)");
-        pivotSource.Should().Contain("PivotCreatePlanner.BuildInPlaceCommand(");
-        pivotSource.Should().Contain("PivotCreatePlanner.BuildNewWorksheetCommand(");
-        pivotSource.Should().Contain("ActivateNewWorksheetAtA1(createdSheetId)");
+        pivotSource.Should().Contain("PivotApplication.PlanCreate(");
+        pivotSource.Should().Contain("new PivotCreateSubmission(");
+        pivotSource.Should().NotContain("PivotCreatePlanner.BuildCommand(");
         pivotSource.Should().Contain("private void PivotInsertSlicerBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("new InsertSlicerDialog(headers, fieldName)");
         pivotSource.Should().Contain("new AddSlicerCommand(dialog.Result.SlicerName, pivotTable.Name, dialog.Result.FieldName)");

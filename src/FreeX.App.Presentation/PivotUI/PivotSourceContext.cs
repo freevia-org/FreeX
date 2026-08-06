@@ -1,4 +1,5 @@
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PivotUI;
@@ -75,6 +76,24 @@ public static class PivotSourceContext
         return sourceSheet is not null &&
                sourceFieldIndex >= 0 &&
                PivotUiPlanner.IsNumericSourceField(sourceSheet, pivotTable, sourceFieldIndex);
+    }
+
+    public static IReadOnlyList<string> ReadItems(
+        Workbook workbook,
+        Sheet fallbackSheet,
+        PivotTableModel pivotTable,
+        int sourceFieldIndex)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(fallbackSheet);
+        ArgumentNullException.ThrowIfNull(pivotTable);
+
+        var sourceSheet = workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? fallbackSheet;
+        return PivotFieldItemsReader.ReadItems(
+            sourceSheet,
+            pivotTable,
+            sourceFieldIndex,
+            value => SpreadsheetDisplayFormatter.FormatCellValue(value).Trim());
     }
 
     private static bool RangeContains(GridRange range, CellAddress addr) =>

@@ -28,17 +28,9 @@ public sealed partial class MainWindowXamlKeyTipTests
             source.IndexOf("private bool TryShowPivotTableDetails", StringComparison.Ordinal)..
             source.IndexOf("private void RefreshPivotFieldListPane", StringComparison.Ordinal)];
 
-        handlerSource.Should().Contain("PivotUiPlanner.ResolveShowDetailsTarget(sheet, SheetGrid.SelectedRange)");
-        handlerSource.Should().Contain("new DrillDownPivotTableCommand(_currentSheetId, target.PivotTableName, target.PivotCell)");
-        handlerSource.Should().Contain("\"Show PivotTable Details\"");
-        handlerSource.Should().Contain("out var outcome");
-        handlerSource.Should().Contain("FindAffectedCellAnchor(outcome)");
-        source.Should().Contain("private static CellAddress? FindAffectedCellAnchor(CommandOutcome outcome)");
-        source.Should().Contain("outcome.AffectedCells is { } affectedCells");
-        source.Should().Contain("affectedCells.Count == 0 ? default : affectedCells[0]");
-        handlerSource.Should().Contain("_currentSheetId = detailAnchor.Sheet;");
-        handlerSource.Should().Contain("RefreshSheetTabs();");
-        handlerSource.Should().Contain("UpdateViewport();");
+        handlerSource.Should().Contain("PivotApplication.PlanShowDetails(_currentSheetId, SheetGrid.SelectedRange)");
+        handlerSource.Should().Contain("ApplyPivotApplicationPlan(plan, title)");
+        handlerSource.Should().NotContain("new DrillDownPivotTableCommand(");
         handlerSource.Should().NotContain("new AddSheetCommand");
         handlerSource.Should().NotContain("_workbook.Sheets.LastOrDefault()");
         handlerSource.Should().NotContain("PivotTableRefreshService.Refresh");
@@ -366,7 +358,8 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Should()
             .Be("PivotAvailableFieldCheckBox_Click");
 
-        source.Should().Contain("PivotFieldListItem");
+        source.Should().Contain("PivotAvailableFieldItemModel");
+        source.Should().Contain("PivotFieldListPaneBuilder.BuildAvailableFields");
         source.Should().Contain("PivotAvailableFieldCheckBox_Click");
         source.Should().Contain("TogglePivotAvailableField");
     }
@@ -504,7 +497,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     {
         var source = ReadPivotCommandSource();
 
-        source.Should().Contain("new ChangePivotTableSourceCommand");
+        source.Should().Contain("PivotApplication.PlanChangeDataSource(target, dialog.Result.SourceRangeText)");
         source.Should().Contain("TryParseWorkbookRange");
         source.Should().NotContain("Rebinding a loaded PivotTable cache to a different source range is still tracked as a parity gap.");
     }

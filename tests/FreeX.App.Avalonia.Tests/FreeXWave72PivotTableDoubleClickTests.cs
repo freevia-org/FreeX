@@ -62,9 +62,10 @@ public sealed class FreeXWave72PivotTableDoubleClickTests
 
         wpfSelectionSource.Should().Contain("if (!TryShowPivotTableDetails(showMessage: false))");
         avaloniaPivotSource.Should().Contain(
-            "PivotUiPlanner.ResolveShowDetailsTarget(_session.ActiveSheet, _session.SelectedRange)");
+            "PivotApplication.PlanShowDetails(");
         avaloniaPivotSource.Should().Contain(
-            "new DrillDownPivotTableCommand(_session.ActiveSheet.Id, target.PivotTableName, target.PivotCell)");
+            "var outcome = PivotApplication.Execute(plan)");
+        avaloniaPivotSource.Should().NotContain("new DrillDownPivotTableCommand(");
         avaloniaGridSource.Should().Contain("if (!TryShowPivotTableDetailsFromDoubleClick(address))");
         avaloniaGridSource.Should().Contain("ConsumePivotDetailsDoubleClickSuppression(address)");
 

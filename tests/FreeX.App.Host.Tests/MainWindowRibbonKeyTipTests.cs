@@ -431,7 +431,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
         public IReadOnlyList<string> PivotListItems(string listName) =>
             (_window.FindName(listName) as ListBox)?.Items
                 .Cast<object>()
-                .Select(item => PivotUiHostHelpers.GetFieldListCaption(item) ?? item.ToString() ?? string.Empty)
+                .Select(item => PivotFieldListPaneBuilder.GetItemCaption(item) ?? item.ToString() ?? string.Empty)
                 .Where(item => item.Length > 0)
                 .ToList() ?? [];
 

@@ -606,7 +606,8 @@ public sealed partial class MainWindow
             "dialog.MergeCellsContentWarningDialog" => ShowMergeCellsWarningParityDialogAsync,
             "dialog.MoveChartDialog" => () => ShowWithSelectedParityChartAsync(ShowMoveChartDialog),
             "dialog.MoveOrCopySheetDialog" => ShowMoveOrCopySheetDialogAsync,
-            "dialog.MovePivotTableDialog" => () => ShowWithParityPivotAsync(OpenPivotMoveDialogAsync),
+            "dialog.MovePivotTableDialog" => () => ShowWithParityPivotAsync(
+                pivot => OpenPivotMoveDialogAsync(new PivotApplicationTarget(_session.ActiveSheet, pivot))),
             "dialog.NameDefinitionDialog" => async () => { await ShowDefineNameDialogAsync(seed: null); },
             "dialog.NamedRangeDialog" => ShowNameManagerDialogAsync,
             "dialog.ObjectSizeDialog" => () => ShowWithSelectedParityShapeAsync(ResizeSelectedDrawingObjectAsync),
@@ -623,9 +624,11 @@ public sealed partial class MainWindow
             "dialog.PivotLabelFilterDialog" => () => ShowWithParityPivotTargetAsync(OpenPivotLabelFilterDialogAsync),
             "dialog.PivotSortOptionsDialog" => ShowPivotSortOptionsParityDialogAsync,
             "dialog.PivotStyleGalleryDialog" => () => ShowWithParityPivotAsync(OpenPivotStyleGalleryDialogAsync),
-            "dialog.PivotTableDataSourceDialog" => () => ShowWithParityPivotAsync(OpenPivotDataSourceDialogAsync),
+            "dialog.PivotTableDataSourceDialog" => () => ShowWithParityPivotAsync(
+                pivot => OpenPivotDataSourceDialogAsync(new PivotApplicationTarget(_session.ActiveSheet, pivot))),
             "dialog.PivotTableDialog" => ShowPivotTableCreateParityDialogAsync,
-            "dialog.PivotTableNameDialog" => () => ShowWithParityPivotAsync(OpenPivotNameDialogAsync),
+            "dialog.PivotTableNameDialog" => () => ShowWithParityPivotAsync(
+                pivot => OpenPivotNameDialogAsync(new PivotApplicationTarget(_session.ActiveSheet, pivot))),
             "dialog.PivotValueFilterDialog" => () => ShowWithParityPivotTargetAsync(OpenPivotValueFilterDialogAsync),
             "dialog.RotationDialog" => () => ShowWithSelectedParityShapeAsync(RotateSelectedDrawingObjectAsync),
             "dialog.RowHeightDialog" => ShowRowHeightDialogAsync,

@@ -67,16 +67,25 @@ public sealed class PivotFieldDragValidator
         PivotFieldDropRequest request)
     {
         ArgumentNullException.ThrowIfNull(pivotTable);
+        return Validate(PivotFieldLayoutPlanner.Capture(pivotTable), headers, request);
+    }
+
+    public PivotFieldDropResult Validate(
+        PivotFieldAreas areas,
+        IReadOnlyList<string> headers,
+        PivotFieldDropRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(areas);
         ArgumentNullException.ThrowIfNull(headers);
         ArgumentNullException.ThrowIfNull(request);
 
         if (request.SourceFieldIndex < 0 || request.SourceFieldIndex >= headers.Count)
             return PivotFieldDropResult.Rejected(request, "Source field is out of range.");
 
-        if (!IsDragAllowed(pivotTable, request.SourceFieldIndex, request.TargetBucket))
+        if (!IsDragAllowed(areas, request.SourceFieldIndex, request.TargetBucket))
             return PivotFieldDropResult.Rejected(request, $"Field cannot be placed in {request.TargetBucket}.");
 
-        var layout = ApplyMove(pivotTable, request);
+        var layout = ApplyMove(areas, request);
         var defaultSummary = request.TargetBucket == PivotFieldBucket.Values
             ? DefaultSummaryFunction(request.SourceFieldIndex)
             : null;
@@ -93,12 +102,12 @@ public sealed class PivotFieldDragValidator
             ? PivotAggregationFunctions.Sum.FunctionCode
             : PivotAggregationFunctions.Count.FunctionCode;
 
-    private bool IsDragAllowed(PivotTableModel pivotTable, int sourceFieldIndex, PivotFieldBucket bucket)
+    private bool IsDragAllowed(PivotFieldAreas areas, int sourceFieldIndex, PivotFieldBucket bucket)
     {
         if (bucket == PivotFieldBucket.Available)
             return true;
 
-        var field = FindLayoutField(pivotTable, sourceFieldIndex);
+        var field = FindLayoutField(areas, sourceFieldIndex);
         if (field is null)
             return true;
 
@@ -112,10 +121,10 @@ public sealed class PivotFieldDragValidator
         };
     }
 
-    private static PivotFieldModel? FindLayoutField(PivotTableModel pivotTable, int sourceFieldIndex) =>
-        FindIn(pivotTable.RowFields, sourceFieldIndex)
-        ?? FindIn(pivotTable.ColumnFields, sourceFieldIndex)
-        ?? FindIn(pivotTable.PageFields, sourceFieldIndex);
+    private static PivotFieldModel? FindLayoutField(PivotFieldAreas areas, int sourceFieldIndex) =>
+        FindIn(areas.RowFields, sourceFieldIndex)
+        ?? FindIn(areas.ColumnFields, sourceFieldIndex)
+        ?? FindIn(areas.PageFields, sourceFieldIndex);
 
     private static PivotFieldModel? FindIn(IReadOnlyList<PivotFieldModel> fields, int sourceFieldIndex)
     {
@@ -128,12 +137,12 @@ public sealed class PivotFieldDragValidator
         return null;
     }
 
-    private static PivotLayoutPlan ApplyMove(PivotTableModel pivotTable, PivotFieldDropRequest request)
+    private static PivotLayoutPlan ApplyMove(PivotFieldAreas areas, PivotFieldDropRequest request)
     {
-        var rows = pivotTable.RowFields.Select(field => field.SourceFieldIndex).ToList();
-        var columns = pivotTable.ColumnFields.Select(field => field.SourceFieldIndex).ToList();
-        var filters = pivotTable.PageFields.Select(field => field.SourceFieldIndex).ToList();
-        var values = pivotTable.DataFields.Select(field => field.SourceFieldIndex).ToList();
+        var rows = areas.RowFields.Select(field => field.SourceFieldIndex).ToList();
+        var columns = areas.ColumnFields.Select(field => field.SourceFieldIndex).ToList();
+        var filters = areas.PageFields.Select(field => field.SourceFieldIndex).ToList();
+        var values = areas.DataFields.Select(field => field.SourceFieldIndex).ToList();
 
         var index = request.SourceFieldIndex;
 

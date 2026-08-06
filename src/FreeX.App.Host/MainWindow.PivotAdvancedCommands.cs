@@ -14,7 +14,7 @@ public partial class MainWindow
         if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
             return;
 
-        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var headers = PivotSourceContext.ReadHeaders(_workbook, pivotTable, sheet);
         var sourceIndex = ResolveSelectedPivotSourceField(headers, pivotTable);
         if (sourceIndex is null)
             return;
@@ -32,7 +32,7 @@ public partial class MainWindow
         if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
             return;
 
-        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var headers = PivotSourceContext.ReadHeaders(_workbook, pivotTable, sheet);
         var sourceIndex = ResolveSelectedPivotSourceField(headers, pivotTable);
         if (sourceIndex is null)
             return;
@@ -81,7 +81,7 @@ public partial class MainWindow
         if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
             return;
 
-        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var headers = PivotSourceContext.ReadHeaders(_workbook, pivotTable, sheet);
         var sourceIndex = ResolveSelectedPivotSourceField(headers, pivotTable) ?? 0;
         var dialog = new PivotCalculatedItemDialog(headers, sourceIndex) { Owner = this };
         if (dialog.ShowDialog() != true ||

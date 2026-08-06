@@ -251,7 +251,9 @@ public partial class MainWindow
         PivotFieldListContextTourContext context)
     {
         var selectedItems = new[] { "Coffee", "Tea" };
-        var dialog = new PivotFieldFilterDialog(ReadPivotFieldItems(context.Sheet, context.PivotTable, sourceFieldIndex: 1), selectedItems)
+        var dialog = new PivotFieldFilterDialog(
+            PivotSourceContext.ReadItems(_workbook, context.Sheet, context.PivotTable, sourceFieldIndex: 1),
+            selectedItems)
         {
             Owner = this,
             Title = UiText.Format("MainWindowMessage_PivotFieldFilterTitle", "Product")

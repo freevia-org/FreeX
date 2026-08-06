@@ -140,7 +140,7 @@ public partial class MainWindow
         if (pivotTable is null)
             return;
 
-        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var headers = PivotSourceContext.ReadHeaders(_workbook, pivotTable, sheet);
         _pivotFieldMenuContextCaption = PivotUiPlanner.ResolvePivotChartFieldButtonCaption(pivotTable, headers, fieldButton);
         if (string.IsNullOrWhiteSpace(_pivotFieldMenuContextCaption))
             return;
@@ -217,7 +217,7 @@ public partial class MainWindow
                 context.PivotTable,
                 sourceIndex,
                 PivotUiPlanner.FieldCaption(context.Headers, sourceIndex),
-                ReadPivotFieldItems(context.Sheet, context.PivotTable, sourceIndex))
+                PivotSourceContext.ReadItems(_workbook, context.Sheet, context.PivotTable, sourceIndex))
             : null;
         var valueFieldIndex = context is null
             ? null

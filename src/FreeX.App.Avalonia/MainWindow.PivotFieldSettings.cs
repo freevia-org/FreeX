@@ -407,14 +407,14 @@ public sealed partial class MainWindow
         var dataFields = pivot.DataFields.ToList();
         dataFields[dataFieldIndex.Value] = result;
 
-        var command = new ConfigurePivotTableLayoutCommand(
-            _session.ActiveSheet.Id,
-            pivot.Name,
-            pivot.RowFields.ToList(),
-            pivot.ColumnFields.ToList(),
-            pivot.PageFields.ToList(),
-            dataFields);
-        ExecutePivotCommand(command);
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanLayout(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                new PivotFieldAreas(
+                    pivot.RowFields.ToList(),
+                    pivot.ColumnFields.ToList(),
+                    pivot.PageFields.ToList(),
+                    dataFields)));
     }
 
     internal static void FocusInvalidShowValuesAsInput(
@@ -564,7 +564,10 @@ public sealed partial class MainWindow
             pivot.LabelFilters.ToList(),
             pivot.ValueFilters.ToList(),
             sorts);
-        ExecutePivotCommand(command);
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanMutation(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                command));
     }
 
     // The pane chip carries the value-area data-field index directly; fall back to a source-field match.

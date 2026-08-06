@@ -529,21 +529,27 @@ public sealed partial class MainWindow
             return;
 
         var validator = BuildPivotDragValidator(pivot);
-        var result = validator.Validate(pivot, headers, request);
-        if (!result.IsAllowed)
+        var dropPlan = PivotFieldLayoutPlanner.PlanDrop(
+            PivotFieldLayoutPlanner.Capture(pivot),
+            headers,
+            request,
+            validator);
+        if (!dropPlan.Result.IsAllowed)
         {
-            ShowEditIssue(result.RejectionReason ?? UiText.Get("PivotLoc_FieldMoveNotAllowed"));
+            ShowEditIssue(dropPlan.Result.RejectionReason ?? UiText.Get("PivotLoc_FieldMoveNotAllowed"));
             return;
         }
 
-        var command = PivotFieldLayoutPlanner.TryCreateCommand(_session.ActiveSheet.Id, pivot, headers, result);
-        if (command is null)
+        if (dropPlan.Areas is not { } areas)
         {
             ShowEditIssue(UiText.Get("PivotLoc_NeedsValueField"));
             return;
         }
 
-        ExecutePivotCommand(command);
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanLayout(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                areas));
     }
 
     // ── Header dropdown menu ──────────────────────────────────────────────────
@@ -668,7 +674,10 @@ public sealed partial class MainWindow
         if (result.IsNoOp || result.Command is null)
             return;
 
-        ExecutePivotCommand(result.Command);
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanHeaderCommand(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                result));
     }
 
     // The pane chip carries a layout-area bucket; map it to the header-target the menu builder expects.
@@ -699,20 +708,6 @@ public sealed partial class MainWindow
 
     private PivotFieldDragValidator BuildPivotDragValidator(PivotTableModel pivot) =>
         new(sourceFieldIndex => PivotSourceContext.IsNumericSourceColumn(_session.Workbook, pivot, sourceFieldIndex));
-
-    private void ExecutePivotCommand(IWorkbookCommand command)
-    {
-        var result = _session.ExecuteReviewCommand(command);
-        if (!result.Success)
-        {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("PivotLoc_UpdateFailed"));
-            return;
-        }
-
-        // Force a pane rebuild on the next refresh regardless of signature drift timing.
-        _pivotPaneSignature = null;
-        RefreshShell(command.Label);
-    }
 
     private sealed record PivotPaneDragItem(
         int SourceFieldIndex,

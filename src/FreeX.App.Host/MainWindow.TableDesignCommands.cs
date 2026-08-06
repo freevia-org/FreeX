@@ -158,7 +158,7 @@ public partial class MainWindow
         var sourceSheet = _workbook.GetSheet(dialogSourceRange.Start.Sheet) ?? sheet;
         var layout = PivotCreatePlanner.CreateDefaultLayout(sourceSheet, dialogSourceRange);
         var name = PivotCreatePlanner.SuggestName(_workbook);
-        if (dialog.Result.DestinationKind == PivotTableDestinationKind.NewWorksheet)
+        if (dialog.Result.DestinationKind == PivotDestinationKind.NewWorksheet)
         {
             var command = PivotCreatePlanner.BuildNewWorksheetCommand(
                 dialogSourceRange,

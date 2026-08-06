@@ -28,17 +28,18 @@ public sealed partial class MainWindow
     /// </summary>
     private void OpenPivotName()
     {
-        if (!TryBeginPivotOption(out var pivot))
+        if (!TryResolvePivotApplicationTarget(out var target))
             return;
 
-        _ = OpenPivotNameDialogAsync(pivot!);
+        _ = OpenPivotNameDialogAsync(target);
     }
 
-    private async Task OpenPivotNameDialogAsync(PivotTableModel pivot)
+    private async Task OpenPivotNameDialogAsync(PivotApplicationTarget target)
     {
         if (_isOpening || _isSaving)
             return;
 
+        var pivot = target.PivotTable;
         var nameBox = new TextBox
         {
             Text = PivotNamePlanner.Capture(pivot),
@@ -67,15 +68,12 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(cancel, "PivotNameCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
 
-        // Collision check over every PivotTable in the workbook except the one being renamed (excluded by
-        // reference so a case-only rename of the active pivot is not flagged as a duplicate of itself).
-        bool IsNameInUse(string candidate) => IsPivotNameInUseByOther(pivot, candidate);
-
         ok.Click += (_, _) =>
         {
-            if (!PivotNamePlanner.TryCreateResult(pivot, nameBox.Text, IsNameInUse, out _, out var error))
+            var plan = PivotApplication.PlanRename(target, nameBox.Text);
+            if (!plan.CanApply)
             {
-                ShowEditIssue(error ?? PivotNamePlanner.EmptyNameMessage);
+                ShowPivotApplicationIssue(plan.Message);
                 return;
             }
 
@@ -99,32 +97,6 @@ public sealed partial class MainWindow
         if (!confirmed)
             return;
 
-        if (!PivotNamePlanner.TryCreateResult(pivot, nameBox.Text, IsNameInUse, out var result, out var lateError))
-        {
-            ShowEditIssue(lateError ?? PivotNamePlanner.EmptyNameMessage);
-            return;
-        }
-
-        ExecutePivotTabCommand(
-            new RenamePivotTableCommand(_session.ActiveSheet.Id, pivot.Name, result!.Name),
-            UiText.Format("PivotName_Renamed", result.Name));
-    }
-
-    // True when a PivotTable other than <paramref name="target"/> already uses <paramref name="candidate"/>.
-    private bool IsPivotNameInUseByOther(PivotTableModel target, string candidate)
-    {
-        foreach (var sheet in _session.Workbook.Sheets)
-        {
-            foreach (var pivot in sheet.PivotTables)
-            {
-                if (!ReferenceEquals(pivot, target) &&
-                    string.Equals(pivot.Name, candidate, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        ApplyPivotApplicationPlan(PivotApplication.PlanRename(target, nameBox.Text));
     }
 }

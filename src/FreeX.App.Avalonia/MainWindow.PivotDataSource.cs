@@ -29,17 +29,18 @@ public sealed partial class MainWindow
     /// </summary>
     private void OpenPivotDataSource()
     {
-        if (!TryBeginPivotOption(out var pivot))
+        if (!TryResolvePivotApplicationTarget(out var target))
             return;
 
-        _ = OpenPivotDataSourceDialogAsync(pivot!);
+        _ = OpenPivotDataSourceDialogAsync(target);
     }
 
-    private async Task OpenPivotDataSourceDialogAsync(PivotTableModel pivot)
+    private async Task OpenPivotDataSourceDialogAsync(PivotApplicationTarget target)
     {
         if (_isOpening || _isSaving)
             return;
 
+        var pivot = target.PivotTable;
         var sourceBox = new TextBox
         {
             Text = PivotDataSourcePlanner.Capture(pivot),
@@ -80,10 +81,10 @@ public sealed partial class MainWindow
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
         {
-            if (!PivotDataSourcePlanner.TryCreateChange(
-                    sourceBox.Text, _session.TryResolveReferenceRange, out _, out var error))
+            var plan = PivotApplication.PlanChangeDataSource(target, sourceBox.Text);
+            if (!plan.CanApply)
             {
-                ShowEditIssue(error ?? PivotDataSourcePlanner.InvalidReferenceMessage);
+                ShowPivotApplicationIssue(plan.Message);
                 return;
             }
 
@@ -122,15 +123,6 @@ public sealed partial class MainWindow
         if (!confirmed)
             return;
 
-        if (!PivotDataSourcePlanner.TryCreateChange(
-                sourceBox.Text, _session.TryResolveReferenceRange, out var change, out var lateError))
-        {
-            ShowEditIssue(lateError ?? PivotDataSourcePlanner.InvalidReferenceMessage);
-            return;
-        }
-
-        ExecutePivotTabCommand(
-            new ChangePivotTableSourceCommand(_session.ActiveSheet.Id, pivot.Name, change!.SourceRange),
-            UiText.Format("PivotDataSource_Changed", change.SourceRangeText));
+        ApplyPivotApplicationPlan(PivotApplication.PlanChangeDataSource(target, sourceBox.Text));
     }
 }

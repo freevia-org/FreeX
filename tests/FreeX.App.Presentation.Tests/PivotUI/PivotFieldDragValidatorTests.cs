@@ -206,4 +206,69 @@ public sealed class PivotFieldDragValidatorTests
         validator.DefaultSummaryFunction(5).Should().Be("sum");
         validator.DefaultSummaryFunction(4).Should().Be("count");
     }
+
+    [Fact]
+    public void PlanDrop_ReordersTheExactDuplicateValueFieldAndPreservesItsSettings()
+    {
+        var sum = new PivotDataFieldModel(3, "Sum of Amount", "sum", NumberFormatCode: "$0");
+        var average = new PivotDataFieldModel(3, "Average of Amount", "average", NumberFormatCode: "0.00");
+        var areas = new PivotFieldAreas([], [], [], [sum, average]);
+
+        var plan = PivotFieldLayoutPlanner.PlanDrop(
+            areas,
+            Headers,
+            new PivotFieldDropRequest(
+                3,
+                PivotFieldBucket.Values,
+                TargetIndex: 0,
+                SourceBucket: PivotFieldBucket.Values,
+                SourceItemIndex: 1),
+            new PivotFieldDragValidator(index => index == 3));
+
+        plan.CanApply.Should().BeTrue();
+        plan.Areas!.DataFields.Should().Equal(average, sum);
+    }
+
+    [Fact]
+    public void PlanDrop_RejectsAConcreteLayoutWithNoValueField()
+    {
+        var areas = new PivotFieldAreas(
+            [new PivotFieldModel(0)],
+            [],
+            [],
+            [new PivotDataFieldModel(3, "Sum of Amount", "sum")]);
+
+        var plan = PivotFieldLayoutPlanner.PlanDrop(
+            areas,
+            Headers,
+            new PivotFieldDropRequest(
+                3,
+                PivotFieldBucket.Available,
+                SourceBucket: PivotFieldBucket.Values,
+                SourceItemIndex: 0),
+            new PivotFieldDragValidator());
+
+        plan.Result.IsAllowed.Should().BeTrue();
+        plan.CanApply.Should().BeFalse();
+        plan.Areas.Should().BeNull();
+    }
+
+    [Fact]
+    public void ResolveSourceFieldIndex_PrefersTheConcreteBucketPositionOverCaption()
+    {
+        var areas = new PivotFieldAreas(
+            [new PivotFieldModel(0)],
+            [],
+            [],
+            [new PivotDataFieldModel(3, "Renamed Value", "sum")]);
+
+        PivotFieldLayoutPlanner.ResolveSourceFieldIndex(
+                areas,
+                Headers,
+                "unrelated caption",
+                PivotFieldBucket.Values,
+                sourceItemIndex: 0)
+            .Should()
+            .Be(3);
+    }
 }

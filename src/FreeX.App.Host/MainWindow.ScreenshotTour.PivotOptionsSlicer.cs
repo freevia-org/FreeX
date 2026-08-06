@@ -375,7 +375,7 @@ public partial class MainWindow
         string outputDir,
         PivotOptionsSlicerTourContext context)
     {
-        var headers = ReadPivotSourceHeaders(context.Sheet, context.PivotTable);
+        var headers = PivotSourceContext.ReadHeaders(_workbook, context.PivotTable, context.Sheet);
         _pivotFieldMenuContextCaption = PivotUiPlanner.ResolvePivotChartFieldButtonCaption(context.PivotTable, headers, "Axis Fields");
         var menu = CreatePivotFieldContextMenu();
         try

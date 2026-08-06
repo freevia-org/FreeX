@@ -16,6 +16,71 @@ namespace FreeX.App.Presentation.PivotUI;
 /// </summary>
 public static class PivotFieldLayoutPlanner
 {
+    public static PivotFieldAreas Capture(PivotTableModel pivotTable)
+    {
+        ArgumentNullException.ThrowIfNull(pivotTable);
+        return new PivotFieldAreas(
+            pivotTable.RowFields.ToList(),
+            pivotTable.ColumnFields.ToList(),
+            pivotTable.PageFields.ToList(),
+            pivotTable.DataFields.ToList());
+    }
+
+    public static PivotFieldLayoutDropPlan PlanDrop(
+        PivotFieldAreas current,
+        IReadOnlyList<string> headers,
+        PivotFieldDropRequest request,
+        PivotFieldDragValidator validator)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(headers);
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(validator);
+
+        var result = validator.Validate(current, headers, request);
+        if (!result.IsAllowed || result.ResultingLayout is null)
+            return new PivotFieldLayoutDropPlan(result, null);
+
+        var areas = ApplyConcreteDrop(current, headers, request, result.DefaultSummaryFunction);
+        return new PivotFieldLayoutDropPlan(result, areas.DataFields.Count == 0 ? null : areas);
+    }
+
+    public static int? ResolveSourceFieldIndex(
+        PivotFieldAreas areas,
+        IReadOnlyList<string> headers,
+        string? caption,
+        PivotFieldBucket? sourceBucket = null,
+        int sourceItemIndex = -1)
+    {
+        ArgumentNullException.ThrowIfNull(areas);
+        ArgumentNullException.ThrowIfNull(headers);
+
+        var indexed = sourceBucket switch
+        {
+            PivotFieldBucket.Rows => SourceIndexAt(areas.RowFields, sourceItemIndex),
+            PivotFieldBucket.Columns => SourceIndexAt(areas.ColumnFields, sourceItemIndex),
+            PivotFieldBucket.Filters => SourceIndexAt(areas.PageFields, sourceItemIndex),
+            PivotFieldBucket.Values => SourceIndexAt(areas.DataFields, sourceItemIndex),
+            _ => null,
+        };
+        if (indexed is not null)
+            return indexed;
+
+        var sourceIndex = PivotUiPlanner.FindSourceFieldIndex(headers, caption);
+        if (sourceIndex is not null)
+            return sourceIndex;
+
+        if (string.IsNullOrWhiteSpace(caption))
+            return null;
+
+        return areas.DataFields
+            .FirstOrDefault(field => string.Equals(
+                field.Name,
+                caption,
+                StringComparison.CurrentCultureIgnoreCase))
+            ?.SourceFieldIndex;
+    }
+
     /// <summary>
     /// Builds the layout command for an allowed drop. Returns null when the result is not allowed, carries no
     /// resulting layout, or the move would leave the values area empty (the layout command rejects a pivot
@@ -56,18 +121,128 @@ public static class PivotFieldLayoutPlanner
         PivotLayoutPlan layout,
         string? defaultSummaryFunction)
     {
+        return BuildAreas(Capture(pivotTable), headers, layout, defaultSummaryFunction);
+    }
+
+    public static PivotFieldAreas BuildAreas(
+        PivotFieldAreas current,
+        IReadOnlyList<string> headers,
+        PivotLayoutPlan layout,
+        string? defaultSummaryFunction)
+    {
         var existingFields = new Dictionary<int, PivotFieldModel>();
-        StashFields(pivotTable.RowFields, existingFields);
-        StashFields(pivotTable.ColumnFields, existingFields);
-        StashFields(pivotTable.PageFields, existingFields);
+        StashFields(current.RowFields, existingFields);
+        StashFields(current.ColumnFields, existingFields);
+        StashFields(current.PageFields, existingFields);
 
         var rows = BuildAxis(layout.Rows, existingFields);
         var columns = BuildAxis(layout.Columns, existingFields);
         var pages = BuildAxis(layout.Filters, existingFields);
-        var data = BuildData(layout.Values, pivotTable.DataFields, headers, defaultSummaryFunction);
+        var data = BuildData(layout.Values, current.DataFields, headers, defaultSummaryFunction);
 
         return new PivotFieldAreas(rows, columns, pages, data);
     }
+
+    private static PivotFieldAreas ApplyConcreteDrop(
+        PivotFieldAreas current,
+        IReadOnlyList<string> headers,
+        PivotFieldDropRequest request,
+        string? defaultSummaryFunction)
+    {
+        var rows = current.RowFields.ToList();
+        var columns = current.ColumnFields.ToList();
+        var pages = current.PageFields.ToList();
+        var data = current.DataFields.ToList();
+        var sourceIndex = request.SourceFieldIndex;
+        var axisField = FindAxisField(current, sourceIndex) ?? new PivotFieldModel(sourceIndex);
+        PivotDataFieldModel? dataField = null;
+
+        rows.RemoveAll(field => field.SourceFieldIndex == sourceIndex);
+        columns.RemoveAll(field => field.SourceFieldIndex == sourceIndex);
+        pages.RemoveAll(field => field.SourceFieldIndex == sourceIndex);
+
+        if (request.SourceBucket == PivotFieldBucket.Values)
+        {
+            dataField = RemoveDataField(data, sourceIndex, request.SourceItemIndex);
+        }
+        else if (request.TargetBucket == PivotFieldBucket.Available)
+        {
+            data.RemoveAll(field => field.SourceFieldIndex == sourceIndex);
+        }
+
+        switch (request.TargetBucket)
+        {
+            case PivotFieldBucket.Rows:
+                Insert(rows, axisField, request.TargetIndex);
+                break;
+            case PivotFieldBucket.Columns:
+                Insert(columns, axisField, request.TargetIndex);
+                break;
+            case PivotFieldBucket.Filters:
+                Insert(pages, axisField, request.TargetIndex);
+                break;
+            case PivotFieldBucket.Values:
+                dataField ??= CreateDataField(headers, sourceIndex, defaultSummaryFunction);
+                Insert(data, dataField, request.TargetIndex);
+                break;
+        }
+
+        return new PivotFieldAreas(rows, columns, pages, data);
+    }
+
+    private static PivotFieldModel? FindAxisField(PivotFieldAreas areas, int sourceIndex) =>
+        areas.RowFields
+            .Concat(areas.ColumnFields)
+            .Concat(areas.PageFields)
+            .FirstOrDefault(field => field.SourceFieldIndex == sourceIndex);
+
+    private static PivotDataFieldModel? RemoveDataField(
+        List<PivotDataFieldModel> fields,
+        int sourceIndex,
+        int sourceItemIndex)
+    {
+        if ((uint)sourceItemIndex < (uint)fields.Count &&
+            fields[sourceItemIndex].SourceFieldIndex == sourceIndex)
+        {
+            var exact = fields[sourceItemIndex];
+            fields.RemoveAt(sourceItemIndex);
+            return exact;
+        }
+
+        var index = fields.FindIndex(field => field.SourceFieldIndex == sourceIndex);
+        if (index < 0)
+            return null;
+
+        var first = fields[index];
+        fields.RemoveAt(index);
+        return first;
+    }
+
+    private static PivotDataFieldModel CreateDataField(
+        IReadOnlyList<string> headers,
+        int sourceIndex,
+        string? defaultSummaryFunction)
+    {
+        var summary = string.IsNullOrWhiteSpace(defaultSummaryFunction)
+            ? PivotAggregationFunctions.Count.FunctionCode
+            : defaultSummaryFunction;
+        var caption = PivotFieldListPaneBuilder.FieldCaption(headers, sourceIndex);
+        return new PivotDataFieldModel(sourceIndex, DefaultDataFieldName(summary, caption), summary);
+    }
+
+    private static void Insert<T>(List<T> fields, T field, int index)
+    {
+        if (index < 0 || index > fields.Count)
+            fields.Add(field);
+        else
+            fields.Insert(index, field);
+    }
+
+    private static int? SourceIndexAt(IReadOnlyList<PivotFieldModel> fields, int index) =>
+        (uint)index < (uint)fields.Count ? fields[index].SourceFieldIndex : null;
+
+    private static int? SourceIndexAt(IReadOnlyList<PivotDataFieldModel> fields, int index) =>
+        (uint)index < (uint)fields.Count ? fields[index].SourceFieldIndex : null;
 
     private static void StashFields(
         IReadOnlyList<PivotFieldModel> fields,
@@ -150,3 +325,20 @@ public sealed record PivotFieldAreas(
     IReadOnlyList<PivotFieldModel> ColumnFields,
     IReadOnlyList<PivotFieldModel> PageFields,
     IReadOnlyList<PivotDataFieldModel> DataFields);
+
+public sealed record PivotFieldLayoutDropPlan(
+    PivotFieldDropResult Result,
+    PivotFieldAreas? Areas)
+{
+    public bool CanApply => Result.IsAllowed && Areas is not null;
+}
+
+public sealed record PivotFieldLayoutDraft(
+    string PivotTableName,
+    PivotFieldAreas Areas)
+{
+    public IReadOnlyList<PivotFieldModel> RowFields => Areas.RowFields;
+    public IReadOnlyList<PivotFieldModel> ColumnFields => Areas.ColumnFields;
+    public IReadOnlyList<PivotFieldModel> PageFields => Areas.PageFields;
+    public IReadOnlyList<PivotDataFieldModel> DataFields => Areas.DataFields;
+}

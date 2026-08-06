@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -24,17 +25,18 @@ public sealed partial class MainWindow
     /// <summary>Analyze ▸ Move PivotTable — opens the destination dialog for the active pivot.</summary>
     private void OpenPivotMove()
     {
-        if (!TryBeginPivotOption(out var pivot))
+        if (!TryResolvePivotApplicationTarget(out var target))
             return;
 
-        _ = OpenPivotMoveDialogAsync(pivot!);
+        _ = OpenPivotMoveDialogAsync(target);
     }
 
-    private async Task OpenPivotMoveDialogAsync(PivotTableModel pivot)
+    private async Task OpenPivotMoveDialogAsync(PivotApplicationTarget target)
     {
         if (_isOpening || _isSaving)
             return;
 
+        var pivot = target.PivotTable;
         var destinationBox = new TextBox
         {
             Text = FormatCellReference(pivot.TargetRange.Start),
@@ -78,9 +80,10 @@ public sealed partial class MainWindow
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
         {
-            if (!TryResolveMoveDestination(destinationBox.Text, out _, out var error))
+            var plan = PivotApplication.PlanMove(target, destinationBox.Text);
+            if (!plan.CanApply)
             {
-                ShowEditIssue(error);
+                ShowPivotApplicationIssue(plan.Message);
                 return;
             }
 
@@ -118,36 +121,6 @@ public sealed partial class MainWindow
         if (!confirmed)
             return;
 
-        if (!TryResolveMoveDestination(destinationBox.Text, out var targetStart, out var lateError))
-        {
-            ShowEditIssue(lateError);
-            return;
-        }
-
-        ExecutePivotTabCommand(
-            new MovePivotTableCommand(_session.ActiveSheet.Id, pivot.Name, targetStart),
-            UiText.Format("MovePivot_Moved", FormatCellReference(targetStart)));
-    }
-
-    /// <summary>
-    /// Resolves the typed destination text into a single top-left cell on the active sheet, rejecting empty
-    /// input, unparseable references, and cells on a different sheet (matching the WPF host's restriction).
-    /// </summary>
-    private bool TryResolveMoveDestination(string? text, out CellAddress targetStart, out string error)
-    {
-        targetStart = default;
-        error = UiText.Get("MovePivot_InvalidDestination");
-
-        if (string.IsNullOrWhiteSpace(text) || !_session.TryResolveReferenceRange(text, out var range))
-            return false;
-
-        if (!range.Start.Sheet.Equals(_session.ActiveSheet.Id))
-        {
-            error = UiText.Get("MovePivot_CurrentSheetOnly");
-            return false;
-        }
-
-        targetStart = range.Start;
-        return true;
+        ApplyPivotApplicationPlan(PivotApplication.PlanMove(target, destinationBox.Text));
     }
 }

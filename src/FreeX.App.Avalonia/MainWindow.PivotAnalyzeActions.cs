@@ -29,10 +29,11 @@ public sealed partial class MainWindow
     /// </summary>
     private void OpenActivePivotFieldSettings()
     {
-        if (!TryBeginPivotOption(out var pivot))
+        if (!TryResolvePivotApplicationTarget(out var applicationTarget))
             return;
 
-        if (pivot!.DataFields.Count == 0)
+        var pivot = applicationTarget.PivotTable;
+        if (pivot.DataFields.Count == 0)
         {
             RefreshShell(UiText.Get("PivotAnalyze_FieldSettingsNoValueField"));
             return;
@@ -60,29 +61,19 @@ public sealed partial class MainWindow
     /// <summary>Clear — empties the active pivot's rendered layout via <see cref="ClearPivotTableViewCommand"/>.</summary>
     private void ClearActivePivotTable()
     {
-        if (!TryBeginPivotOption(out var pivot))
+        if (!TryResolvePivotApplicationTarget(out var target))
             return;
 
-        ExecutePivotTabCommand(
-            new ClearPivotTableViewCommand(_session.ActiveSheet.Id, pivot!.Name),
-            UiText.Format("PivotAnalyze_Cleared", pivot.Name));
+        ApplyPivotApplicationPlan(PivotApplication.PlanClear(target));
     }
 
     /// <summary>Select — moves the selection onto the active pivot's full target range.</summary>
     private void SelectActivePivotTable()
     {
-        if (!TryBeginPivotOption(out var pivot))
+        if (!TryResolvePivotApplicationTarget(out var target))
             return;
 
-        var source = pivot!.LastRenderedRange ?? pivot.TargetRange;
-        // Re-anchor onto the active sheet id: a loaded pivot range may carry a placeholder sheet id.
-        var sheetId = _session.ActiveSheet.Id;
-        var range = new GridRange(
-            new CellAddress(sheetId, source.Start.Row, source.Start.Col),
-            new CellAddress(sheetId, source.End.Row, source.End.Col));
-        _session.SelectRange(range);
-        _pivotPaneSignature = null;
-        RefreshShell(UiText.Format("PivotAnalyze_Selected", pivot.Name));
+        ApplyPivotApplicationPlan(PivotApplication.PlanSelect(target));
     }
 
     // ── Analyze ▸ Active Field ▸ Show Details ────────────────────────────────────
@@ -97,16 +88,16 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
 
-        var pivot = PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell);
-        if (pivot is null)
+        var plan = PivotApplication.PlanShowDetails(
+            _session.ActiveSheet.Id,
+            _session.SelectedRange);
+        if (!plan.CanApply)
         {
             RefreshShell(UiText.Get("PivotAnalyze_ShowDetailsPrompt"));
             return;
         }
 
-        ExecutePivotTabCommand(
-            new DrillDownPivotTableCommand(_session.ActiveSheet.Id, pivot.Name, _session.ActiveCell),
-            UiText.Format("PivotAnalyze_ShowDetailsDone", pivot.Name));
+        ApplyPivotApplicationPlan(plan);
     }
 
     /// <summary>
@@ -119,15 +110,16 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return false;
 
-        var target = PivotUiPlanner.ResolveShowDetailsTarget(_session.ActiveSheet, _session.SelectedRange);
-        if (target is null)
+        var plan = PivotApplication.PlanShowDetails(
+            _session.ActiveSheet.Id,
+            _session.SelectedRange);
+        if (!plan.CanApply)
             return false;
 
-        var result = _session.ExecuteReviewCommand(
-            new DrillDownPivotTableCommand(_session.ActiveSheet.Id, target.PivotTableName, target.PivotCell));
-        if (!result.Success)
+        var outcome = PivotApplication.Execute(plan);
+        if (!outcome.Success)
         {
-            RefreshShell(result.ErrorMessage ?? UiText.Get("PivotLoc_UpdateFailed"));
+            RefreshShell(outcome.Message?.Detail ?? UiText.Get("PivotLoc_UpdateFailed"));
             return false;
         }
 
@@ -137,8 +129,7 @@ public sealed partial class MainWindow
             _pivotDetailsDoubleClickHandledTimestamp = Stopwatch.GetTimestamp();
         }
 
-        _pivotPaneSignature = null;
-        RefreshShell(UiText.Format("PivotAnalyze_ShowDetailsDone", target.PivotTableName));
+        ApplyPivotApplicationOutcome(outcome);
         return true;
     }
 

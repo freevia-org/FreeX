@@ -10,9 +10,10 @@ public sealed class PivotCreateDialogSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotCreate.cs"));
 
         source.Should().Contain("using FreeX.App.Presentation.PivotUI;");
-        source.Should().Contain("PivotCreatePlanner.ReadFields(_session.ActiveSheet, source)");
-        source.Should().Contain("PivotCreatePlanner.DefaultRoles(fields)");
-        source.Should().Contain("PivotCreatePlanner.BuildCommand(");
+        source.Should().Contain("PivotApplication.PrepareCreate(");
+        source.Should().Contain("PivotApplication.PlanCreate(");
+        source.Should().Contain("new PivotCreateSubmission(");
+        source.Should().NotContain("PivotCreatePlanner.BuildCommand(");
         source.Should().NotContain("using FreeX.App.Avalonia.Pivot;");
         File.Exists(RepoFileAllowMissing("src", "FreeX.App.Avalonia", "Pivot", "PivotCreatePlanner.cs")).Should().BeFalse();
     }

@@ -427,7 +427,7 @@ public partial class MainWindow
         string outputDir,
         PivotAdvancedWorkflowsTourContext context)
     {
-        var headers = ReadPivotSourceHeaders(context.Sheet, context.PivotTable);
+        var headers = PivotSourceContext.ReadHeaders(_workbook, context.PivotTable, context.Sheet);
         var dialog = new PivotValueFieldSettingsDialog(context.PivotTable.DataFields.First(), headers) { Owner = this };
         try
         {
@@ -458,7 +458,7 @@ public partial class MainWindow
         string outputDir,
         PivotAdvancedWorkflowsTourContext context)
     {
-        var headers = ReadPivotSourceHeaders(context.Sheet, context.PivotTable);
+        var headers = PivotSourceContext.ReadHeaders(_workbook, context.PivotTable, context.Sheet);
         _pivotFieldMenuContextCaption = PivotUiPlanner.ResolvePivotChartFieldButtonCaption(context.PivotTable, headers, "Axis Fields");
         var menu = CreatePivotFieldContextMenu();
         try
@@ -560,7 +560,7 @@ public partial class MainWindow
         PivotTableModel pivotTable,
         IReadOnlyList<PivotFieldModel> fields)
     {
-        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var headers = PivotSourceContext.ReadHeaders(_workbook, pivotTable, sheet);
         return fields.Select(field => PivotUiPlanner.FieldCaption(headers, field.SourceFieldIndex)).ToArray();
     }
 
