@@ -1,0 +1,485 @@
+using System.IO;
+using FreeW.App.Presentation.Editing;
+
+namespace FreeW.App.Presentation.Tests.Editing;
+
+public sealed class DocumentTableEditingCoordinatorTests
+{
+    [Fact]
+    public void AddressesNormalizeCellAndGridCoordinatesAcrossMergedCells()
+    {
+        var table = Table.Create(1, 3);
+        table.Rows[0].Cells[0].GridSpan = 2;
+        table.Rows[0].Cells.RemoveAt(1);
+        var session = SessionWith(table);
+
+        session.Tables.AddressFromCellIndex(0, 0, 1)
+            .Should().Be(new DocumentTableCellAddress(0, 0, 2));
+        session.Tables.AddressFromGridColumn(0, 0, 1)
+            .Should().Be(new DocumentTableCellAddress(0, 0, 1));
+        session.Tables.AddressFromGridColumn(0, 0, 3).Should().BeNull();
+    }
+
+    [Fact]
+    public void RowAndColumnStructureEditsReportPortableCaretAndUndo()
+    {
+        var table = Table.Create(2, 2);
+        var session = SessionWith(table);
+        var address = new DocumentTableCellAddress(0, 0, 0);
+
+        var rowResult = session.Tables.InsertRow(address, after: true);
+
+        rowResult.Applied.Should().BeTrue();
+        rowResult.InvalidatesNativeSelection.Should().BeTrue();
+        rowResult.Caret.RowIndex.Should().Be(1);
+        table.Rows.Should().HaveCount(3);
+        session.Commands.Undo().Should().BeTrue();
+        table.Rows.Should().HaveCount(2);
+
+        var columnResult = session.Tables.InsertColumn(address, after: true);
+
+        columnResult.Caret.GridColumn.Should().Be(1);
+        table.Rows.Should().OnlyContain(row => row.Cells.Count == 3);
+        session.Commands.Undo().Should().BeTrue();
+        table.Rows.Should().OnlyContain(row => row.Cells.Count == 2);
+    }
+
+    [Fact]
+    public void MergeSplitAndEraseUseGridCoordinatesWithSingleUndoEntries()
+    {
+        var table = Table.Create(1, 3);
+        var session = SessionWith(table);
+
+        session.Tables.MergeCells(
+                new DocumentTableCellAddress(0, 0, 0),
+                new DocumentTableCellAddress(0, 0, 2))
+            .Applied.Should().BeTrue();
+        table.Rows[0].Cells.Should().ContainSingle();
+        table.Rows[0].Cells[0].GridSpan.Should().Be(3);
+
+        session.Tables.SplitCell(new DocumentTableCellAddress(0, 0, 0))
+            .Applied.Should().BeTrue();
+        table.Rows[0].Cells.Should().HaveCount(3);
+        session.Commands.Undo().Should().BeTrue();
+        table.Rows[0].Cells.Should().ContainSingle();
+        session.Commands.Undo().Should().BeTrue();
+        table.Rows[0].Cells.Should().HaveCount(3);
+
+        session.Tables.EraseBorderAt(new DocumentTableCellAddress(0, 0, 0))
+            .Applied.Should().BeTrue();
+        table.Rows[0].Cells.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void MultiCellFormattingIsOneUndoableOperation()
+    {
+        var table = Table.Create(1, 2);
+        var session = SessionWith(table);
+        var addresses = new[]
+        {
+            new DocumentTableCellAddress(0, 0, 0),
+            new DocumentTableCellAddress(0, 0, 1),
+        };
+
+        session.Tables.SetCellShading(addresses, "#ABCDEF").Applied.Should().BeTrue();
+
+        table.Rows[0].Cells.Should().OnlyContain(cell => cell.ShadingColorHex == "#ABCDEF");
+        session.Commands.Undo().Should().BeTrue();
+        table.Rows[0].Cells.Should().OnlyContain(cell => cell.ShadingColorHex == null);
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MergedCellGridAddressesAreDeduplicatedAndBorderEditsAreGrouped()
+    {
+        var table = Table.Create(1, 3);
+        table.Rows[0].Cells[0].GridSpan = 2;
+        table.Rows[0].Cells.RemoveAt(1);
+        var session = SessionWith(table);
+
+        session.Tables.SetCellShading(
+            [
+                new DocumentTableCellAddress(0, 0, 0),
+                new DocumentTableCellAddress(0, 0, 1),
+            ],
+            "#ABCDEF");
+
+        session.Commands.Undo().Should().BeTrue();
+        session.Commands.CanUndo.Should().BeFalse();
+
+        session.Tables.SetCellBorderEdges(
+            [
+                new DocumentTableCellBorderEdit(
+                    new DocumentTableCellAddress(0, 0, 0),
+                    CellBorderEdges.Top),
+                new DocumentTableCellBorderEdit(
+                    new DocumentTableCellAddress(0, 0, 2),
+                    CellBorderEdges.Bottom),
+            ],
+            BorderLineStyle.Single,
+            "#123456",
+            1,
+            clearEdges: false);
+
+        table.Rows[0].Cells[0].Borders!.Top!.ColorHex.Should().Be("#123456");
+        table.Rows[0].Cells[1].Borders!.Bottom!.ColorHex.Should().Be("#123456");
+        session.Commands.Undo().Should().BeTrue();
+        table.Rows[0].Cells.Should().OnlyContain(cell => cell.Borders == null);
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SortAndConvertTableReturnPortablePostEditTargets()
+    {
+        var table = Table.Create(2, 1);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("b"));
+        table.Rows[1].Cells[0].Paragraphs[0].Runs.Add(new Run("a"));
+        var session = SessionWith(table);
+        var address = new DocumentTableCellAddress(0, 0, 0);
+
+        session.Tables.SortRows(
+                address,
+                SortKind.Text,
+                ascending: true,
+                caseSensitive: false,
+                hasHeaderRow: false)
+            .Applied.Should().BeTrue();
+        table = (Table)session.Document.Blocks[0];
+        table.Rows.Select(row => row.Cells[0].PlainText).Should().Equal("a", "b");
+
+        var result = session.Tables.ConvertToText(address, ',');
+
+        result.Applied.Should().BeTrue();
+        result.InvalidatesNativeSelection.Should().BeTrue();
+        session.Document.Blocks.Cast<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().Equal("a", "b");
+    }
+
+    [Fact]
+    public void TableStyleAndFormulaConstructionAreCoordinatorOwned()
+    {
+        var table = Table.Create(1, 1);
+        var session = SessionWith(table);
+        var address = new DocumentTableCellAddress(0, 0, 0);
+
+        session.Tables.ApplyStyle(address, DocumentTableStyle.Catalog[0]).Applied.Should().BeTrue();
+        table.TableStyleId.Should().Be(DocumentTableStyle.Catalog[0].WordStyleId);
+
+        var result = session.Tables.InsertFormula(
+            address,
+            paragraphIndex: 0,
+            textOffset: 0,
+            new TableFormulaField("=SUM(ABOVE)"));
+
+        result.Applied.Should().BeTrue();
+        result.TextOffset.Should().BeGreaterThan(0);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Should()
+            .Contain(run => run.TableFormula != null);
+    }
+
+    private static DocumentEditingSession SessionWith(Block block)
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(block);
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+        return session;
+    }
+}
+
+public sealed class DocumentEditingSessionWorkflowTests
+{
+    [Fact]
+    public void ParagraphFormattingAndStylesAreGroupedAcrossTargets()
+    {
+        var document = DocumentWith("one", "two");
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.FormatParagraphs(
+                [0, 1],
+                formatting => formatting with { KeepWithNext = true })
+            .Should().BeTrue();
+        document.Blocks.Cast<Paragraph>()
+            .Should().OnlyContain(paragraph => paragraph.Formatting.KeepWithNext);
+        session.Commands.Undo().Should().BeTrue();
+        session.Commands.CanUndo.Should().BeFalse();
+
+        session.SetParagraphStyles([0, 1], "Heading1").Should().BeTrue();
+        document.Blocks.Cast<Paragraph>().Should().OnlyContain(paragraph => paragraph.StyleId == "Heading1");
+        session.Commands.Undo().Should().BeTrue();
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SortParagraphSpanPreservesInterleavedTableSlots()
+    {
+        var document = DocumentWith("b", "a");
+        var table = Table.Create(1, 1);
+        document.Blocks.Insert(1, table);
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.SortParagraphSpan(
+                0,
+                2,
+                SortKind.Text,
+                ascending: true,
+                caseSensitive: false,
+                hasHeaderRow: false)
+            .Should().BeTrue();
+
+        ((Paragraph)document.Blocks[0]).PlainText.Should().Be("a");
+        document.Blocks[1].Should().BeSameAs(table);
+        ((Paragraph)document.Blocks[2]).PlainText.Should().Be("b");
+        session.Commands.Undo().Should().BeTrue();
+        ((Paragraph)document.Blocks[0]).PlainText.Should().Be("b");
+    }
+
+    [Fact]
+    public void ParagraphConversionAndSourcePasteAreSessionOwned()
+    {
+        var document = DocumentWith("a,b", "c,d");
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.ConvertParagraphsToTable([0, 1], ',', showBorders: true).Should().Be(0);
+        document.Blocks.Should().ContainSingle().Which.Should().BeOfType<Table>();
+        ((Table)document.Blocks[0]).Formatting.Borders.Should().BeTrue();
+        session.Commands.Undo().Should().BeTrue();
+
+        var target = DocumentWith(string.Empty);
+        var source = DocumentWith("source one", "source two");
+        session.LoadDocument(target);
+        session.ReplaceEmptyParagraphWithDocument(0, source).Should().BeTrue();
+        target.Blocks.Cast<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().Equal("source one", "source two");
+    }
+
+    [Fact]
+    public void StyleCatalogCreationAppliesTargetsAndUndoesAtomically()
+    {
+        var document = DocumentWith("one", "two");
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var created = session.CreateParagraphStyleAndApply(
+            [0, 1],
+            "Custom",
+            "Normal",
+            RunFormatting.Default with { Bold = true },
+            ParagraphFormatting.Default,
+            "Normal");
+
+        created.Should().NotBeNull();
+        document.Blocks.Cast<Paragraph>().Should().OnlyContain(paragraph => paragraph.StyleId == created!.Id);
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Cast<Paragraph>().Should().OnlyContain(paragraph => paragraph.StyleId == null);
+    }
+
+    [Fact]
+    public void CharacterFormattingHyphenationAndOutlineMovesAreSessionOwned()
+    {
+        var document = DocumentWith("Heading", "body", "Next");
+        ((Paragraph)document.Blocks[0]).StyleId = "Heading1";
+        ((Paragraph)document.Blocks[2]).StyleId = "Heading1";
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.FormatParagraphRuns([0, 1], formatting => formatting with { Bold = true });
+        document.Blocks.OfType<Paragraph>().Take(2)
+            .Should().OnlyContain(paragraph => paragraph.Runs.All(run => run.Formatting.Bold));
+        session.Commands.Undo().Should().BeTrue();
+        session.Commands.CanUndo.Should().BeFalse();
+
+        var bodyRun = ((Paragraph)document.Blocks[1]).Runs[0];
+        session.ApplyManualHyphenation([new ManualHyphenationEdit(bodyRun, 2)]).Should().BeTrue();
+        bodyRun.Text.Should().Contain(Hyphenator.SoftHyphen.ToString());
+        session.Commands.Undo().Should().BeTrue();
+
+        session.MoveHeadingSubtree(2, moveUp: true).Should().Be(0);
+        ((Paragraph)document.Blocks[0]).PlainText.Should().Be("Next");
+
+        session.ApplyDropCap(
+            0,
+            DropCapPosition.Dropped,
+            DropCap.DefaultSizePt,
+            DropCap.DefaultLineSpan,
+            DropCap.DefaultDistanceFromTextPt).Should().BeTrue();
+        ((Paragraph)document.Blocks[0]).DropCap.Should().NotBeNull();
+        session.ClearDropCap(0).Should().BeTrue();
+        ((Paragraph)document.Blocks[0]).Runs.Should()
+            .OnlyContain(run => run.Formatting == RunFormatting.Default);
+    }
+
+    private static TextDocument DocumentWith(params string[] paragraphs)
+    {
+        var document = new TextDocument();
+        foreach (var text in paragraphs)
+            document.Blocks.Add(new Paragraph(text));
+        return document;
+    }
+}
+
+public sealed class DocumentReferenceEditingCoordinatorTests
+{
+    [Fact]
+    public void TocInsertAndRefreshAreAtomicGeneratedRegionEdits()
+    {
+        var heading = new Paragraph("Old heading") { StyleId = "Heading1" };
+        var document = new TextDocument();
+        document.Blocks.Add(heading);
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.References.InsertTableOfContents(0, pageTextResolver: null).Applied.Should().BeTrue();
+        document.Blocks.Any(TableOfContents.IsTocParagraph).Should().BeTrue();
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Should().ContainSingle().Which.Should().BeSameAs(heading);
+
+        session.References.InsertTableOfContents(0, pageTextResolver: null);
+        heading.Runs.Clear();
+        heading.Runs.Add(new Run("New heading"));
+        session.References.RefreshTableOfContents(pageTextResolver: null).Applied.Should().BeTrue();
+        document.Blocks.OfType<Paragraph>()
+            .Where(TableOfContents.IsTocParagraph)
+            .Should().Contain(paragraph => paragraph.PlainText.Contains("New heading", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CaptionAndCrossReferenceConstructionArePortable()
+    {
+        var target = new Paragraph("Chapter") { StyleId = "Heading1" };
+        var host = new Paragraph("See ");
+        var document = new TextDocument();
+        document.Blocks.Add(target);
+        document.Blocks.Add(host);
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var crossReference = session.References.InsertCrossReference(
+            sourceBlockIndex: 1,
+            preferredHostBlockIndex: 1,
+            CrossRefType.Heading,
+            new CrossRefTarget("Chapter", Anchor: null, BlockIndex: 0),
+            CrossRefInsertAs.Text,
+            hyperlink: true);
+
+        crossReference.HostBlockIndex.Should().Be(1);
+        host.Runs.Should().Contain(run => run.CrossReference != null);
+
+        var caption = session.References.InsertCaption(1, "Figure", "Diagram");
+        caption.InsertedBlockIndex.Should().Be(2);
+        ((Paragraph)document.Blocks[2]).PlainText.Should().Contain("Figure 1");
+    }
+
+    [Fact]
+    public void NotesBookmarksAndCitationSettingsAreCoordinatorOwned()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("Host"));
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var note = session.References.InsertNote(0, 2, "note", footnote: true);
+
+        note.Applied.Should().BeTrue();
+        document.Footnotes.Should().ContainKey(note.NoteId);
+        session.Commands.Undo().Should().BeTrue();
+        document.Footnotes.Should().NotContainKey(note.NoteId);
+
+        session.References.SetBookmark(0, " Target ").Should().BeTrue();
+        ((Paragraph)document.Blocks[0]).BookmarkNames.Should().Contain("Target");
+        session.References.ApplyCitationStyle(CitationStyle.Ieee).Should().BeTrue();
+        document.BibliographyStyle.Should().Be(CitationStyle.Ieee);
+
+        session.References.InsertIndexEntry(0, 0, new IndexMark("Host"))
+            .Applied.Should().BeTrue();
+        ((Paragraph)document.Blocks[0]).Runs.Should()
+            .Contain(run => DocumentIndex.MarkedEntry(run) != null);
+        session.References.InsertAuthorityCitation(0, 0, new Citation("Case"))
+            .Applied.Should().BeTrue();
+        ((Paragraph)document.Blocks[0]).Runs.Should()
+            .Contain(run => run.Citation != null);
+    }
+}
+
+public sealed class DocumentPortableEditingOwnershipTests
+{
+    [Fact]
+    public void RenderersDelegateMigratedTableParagraphAndReferenceCommands()
+    {
+        var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+        var forbidden = new[]
+        {
+            "new InsertTableRowCommand(",
+            "new DeleteTableRowCommand(",
+            "new InsertTableColumnCommand(",
+            "new DeleteTableColumnCommand(",
+            "new MergeCellsHorizontalCommand(",
+            "new MergeCellsVerticalCommand(",
+            "new SplitCellCommand(",
+            "new SetCellShadingCommand(",
+            "new SetCellAlignmentCommand(",
+            "new SetCellBordersCommand(",
+            "new SetTableFormattingCommand(",
+            "new SetTableAutoFitCommand(",
+            "new ApplyTableStyleCommand(",
+            "new ApplyTablePropertiesCommand(",
+            "new InsertTableCellFormulaCommand(",
+            "new InsertTableCellNoteCommand(",
+            "new SetParagraphStyleCommand(",
+            "new DeleteParagraphCommand(",
+            "new InsertCrossReferenceCommand(",
+            "new ApplyManualHyphenationCommand(",
+            "new FormatParagraphRunsCommand(",
+            "new ReorderBlocksCommand(",
+            "new InsertNoteCommand(",
+            "new DeleteNoteCommand(",
+            "new ReplaceNoteContentCommand(",
+            "new ApplyCitationStyleCommand(",
+            "new ReplaceSourcesCommand(",
+            "new SetParagraphBookmarkNameCommand(",
+            "new SetBookmarkNameCommand(",
+            "new ReplaceContentControlRunCommand(",
+        };
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("DocumentTableEditingCoordinator TableEdits");
+            source.Should().Contain("DocumentReferenceEditingCoordinator ReferenceEdits");
+            source.Should().Contain("_editingSession.FormatParagraphs(");
+            source.Should().Contain("_editingSession.SetParagraphStyles(");
+            source.Should().Contain("_editingSession.ApplyDropCap(");
+            source.Should().Contain("ReferenceEdits.InsertIndexEntry(");
+            source.Should().Contain("ReferenceEdits.MarkAllIndexEntries(");
+            foreach (var constructor in forbidden)
+                source.Should().NotContain(constructor);
+        }
+    }
+
+    [Fact]
+    public void PortableCoordinatorsHaveNoRendererDependencies()
+    {
+        foreach (var file in new[]
+        {
+            "DocumentTableEditingCoordinator.cs",
+            "DocumentReferenceEditingCoordinator.cs",
+        })
+        {
+            var source = ReadSource("freew", "FreeW.App.Presentation", "Editing", file);
+            source.Should().NotContain("using Avalonia");
+            source.Should().NotContain("using System.Windows");
+            source.Should().NotContain("DocumentView");
+            source.Should().NotContain("TextPointer");
+            source.Should().NotContain("DocPosition");
+        }
+    }
+
+    private static string ReadSource(params string[] parts)
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        return File.ReadAllText(Path.Combine(new[] { root }.Concat(parts).ToArray()));
+    }
+}
