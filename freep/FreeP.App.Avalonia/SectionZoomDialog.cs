@@ -17,13 +17,18 @@ internal sealed class SectionZoomDialog : Window
         string? title = null,
         string? selectedTargetId = null)
     {
-        _session = new ZoomSingleTargetDialogSession(options, selectedTargetId);
-        Title = title ?? SectionZoomInsertionPlanner.DialogTitle;
+        _session = new ZoomSingleTargetDialogSession(
+            ZoomTargetDialogKind.Section,
+            options,
+            selectedTargetId,
+            title);
+        var surface = _session.Surface;
+        Title = surface.Title;
         Width = 420;
         Height = 160;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ZoomDialogChrome.Apply(this);
+        ZoomDialogChrome.Apply(this, surface);
 
         _targetCombo = new ComboBox
         {
@@ -31,9 +36,12 @@ internal sealed class SectionZoomDialog : Window
             SelectedIndex = _session.InitialSelectedIndex,
             MinWidth = 260,
         };
+        ZoomDialogChrome.ApplyField(_targetCombo, surface.Field(ZoomTargetDialogField.Target));
 
-        var ok = ZoomDialogChrome.MakeButton("OK", true, Apply);
-        ok.IsEnabled = _session.CanAccept;
+        var ok = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.Accept),
+            Apply,
+            _session.CanAccept);
         Content = new StackPanel
         {
             Margin = new Thickness(14),
@@ -45,7 +53,11 @@ internal sealed class SectionZoomDialog : Window
                     ColumnDefinitions = new ColumnDefinitions("115, *"),
                     Children =
                     {
-                        new TextBlock { Text = "Target section:", VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock
+                        {
+                            Text = surface.Field(ZoomTargetDialogField.Target).Label,
+                            VerticalAlignment = VerticalAlignment.Center,
+                        },
                         _targetCombo,
                     },
                 },
@@ -54,7 +66,13 @@ internal sealed class SectionZoomDialog : Window
                     Orientation = Orientation.Horizontal,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     Spacing = 8,
-                    Children = { ok, ZoomDialogChrome.MakeButton("Cancel", false, () => Close(false)) },
+                    Children =
+                    {
+                        ok,
+                        ZoomDialogChrome.MakeButton(
+                            surface.Action(ZoomTargetDialogAction.Cancel),
+                            () => Close(false)),
+                    },
                 },
             },
         };

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using FreeP.App.Compositor;
 using FreeP.App.Localization;
 using FreeP.Core.Model;
@@ -62,6 +63,83 @@ public sealed class ZoomDialogSessionTests
         session.TryMoveSelected(["section-a", "section-b"], 1, out _).Should().BeFalse();
         session.TryMoveSelected(["section-a"], -1, out _).Should().BeFalse();
         session.TryAccept(["section-a"]).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(ZoomTargetDialogKind.Slide, "Insert Slide Zoom", "Target slide:", 2)]
+    [InlineData(ZoomTargetDialogKind.Section, "Insert Section Zoom", "Target section:", 2)]
+    [InlineData(ZoomTargetDialogKind.Summary, "Insert Summary Zoom", "Target sections (select at least two):", 4)]
+    [InlineData(ZoomTargetDialogKind.SummaryCoverImage, "Set Zoom Cover Image", "Summary Zoom tile:", 2)]
+    public void Target_surface_catalog_owns_kind_specific_schema_and_accessibility(
+        ZoomTargetDialogKind kind,
+        string expectedTitle,
+        string expectedTargetLabel,
+        int expectedActionCount)
+    {
+        var surface = ZoomTargetDialogSurfaceCatalog.Build(kind);
+
+        surface.Title.Should().Be(expectedTitle);
+        surface.Field(ZoomTargetDialogField.Target).Label.Should().Be(expectedTargetLabel);
+        surface.Field(ZoomTargetDialogField.Target).AccessibleName.Should().NotBeNullOrWhiteSpace();
+        surface.Field(ZoomTargetDialogField.Target).HelpText.Should().NotBeNullOrWhiteSpace();
+        surface.Actions.Should().HaveCount(expectedActionCount);
+        surface.Actions.Select(action => action.AutomationId).Should().OnlyHaveUniqueItems();
+        surface.Action(ZoomTargetDialogAction.Accept).IsDefault.Should().BeTrue();
+        surface.Action(ZoomTargetDialogAction.Cancel).IsCancel.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Target_sessions_own_custom_titles_and_surface_kind()
+    {
+        var single = new ZoomSingleTargetDialogSession(
+            ZoomTargetDialogKind.Section,
+            TargetOptions,
+            selectedTargetId: "section-b",
+            title: "Choose destination section");
+        var summary = new SummaryZoomDialogSession(
+            TargetOptions,
+            title: "Choose summary sections");
+
+        single.Kind.Should().Be(ZoomTargetDialogKind.Section);
+        single.Surface.Title.Should().Be("Choose destination section");
+        single.Surface.Field(ZoomTargetDialogField.Target).AccessibleName
+            .Should().Be("Target section");
+        summary.Surface.Title.Should().Be("Choose summary sections");
+        summary.Surface.Actions.Select(action => action.Id).Should().Equal(
+            ZoomTargetDialogAction.MoveUp,
+            ZoomTargetDialogAction.MoveDown,
+            ZoomTargetDialogAction.Accept,
+            ZoomTargetDialogAction.Cancel);
+    }
+
+    [Fact]
+    public void CompactZoomRenderers_OnlyTranslateSharedTargetSchemasToNativeControls()
+    {
+        foreach (var fileName in new[]
+                 {
+                     "SectionZoomDialog.cs",
+                     "SlideZoomDialog.cs",
+                     "SummaryZoomDialog.cs",
+                     "SummaryZoomCoverImageTargetDialog.cs",
+                 })
+        {
+            foreach (var source in RendererSources(fileName))
+            {
+                source.Should().Contain("_session.Surface");
+                source.Should().Contain("ZoomDialogChrome.ApplyField(");
+                source.Should().Contain("surface.Action(ZoomTargetDialogAction.");
+                source.Should().NotContain("SectionZoomInsertionPlanner.DialogTitle");
+                source.Should().NotContain("SlideZoomInsertionPlanner.DialogTitle");
+                source.Should().NotContain("SummaryZoomInsertionPlanner.DialogTitle");
+                source.Should().NotContain("ZoomCoverImagePlanner.DialogTitle");
+                source.Should().NotContain("\"Target section:\"");
+                source.Should().NotContain("\"Target slide:\"");
+                source.Should().NotContain("\"Target sections (select at least two):\"");
+                source.Should().NotContain("\"Summary Zoom tile:\"");
+                source.Should().NotContain("Content = \"OK\"");
+                source.Should().NotContain("Content = \"Cancel\"");
+            }
+        }
     }
 
     [Fact]
@@ -398,6 +476,13 @@ public sealed class ZoomDialogSessionTests
         int scaleX = 100000,
         int scaleY = 100000) =>
         new("section-a", "Section A", string.Empty, offsetX, offsetY, scaleX, scaleY);
+
+    private static IEnumerable<string> RendererSources(string fileName)
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        yield return File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", fileName));
+        yield return File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", fileName));
+    }
 
     private static ZoomObjectPropertiesDialogInput ValidInput() =>
         new(

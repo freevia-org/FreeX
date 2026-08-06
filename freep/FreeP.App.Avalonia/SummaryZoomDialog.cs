@@ -19,13 +19,14 @@ internal sealed class SummaryZoomDialog : Window
         string? title = null,
         IReadOnlyCollection<string>? selectedTargetIds = null)
     {
-        _session = new SummaryZoomDialogSession(options, selectedTargetIds);
-        Title = title ?? SummaryZoomInsertionPlanner.DialogTitle;
+        _session = new SummaryZoomDialogSession(options, selectedTargetIds, title);
+        var surface = _session.Surface;
+        Title = surface.Title;
         Width = 460;
         Height = 360;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ZoomDialogChrome.Apply(this);
+        ZoomDialogChrome.Apply(this, surface);
 
         _items = new ObservableCollection<ZoomTargetOption>(_session.Options);
         _targetList = new ListBox
@@ -34,21 +35,28 @@ internal sealed class SummaryZoomDialog : Window
             SelectionMode = SelectionMode.Multiple,
             Height = 210,
         };
+        ZoomDialogChrome.ApplyField(_targetList, surface.Field(ZoomTargetDialogField.Target));
         foreach (var item in _items)
             if (_session.InitialSelectedTargetIds.Contains(item.Id, StringComparer.OrdinalIgnoreCase))
                 _targetList.SelectedItems?.Add(item);
 
-        var moveUp = ZoomDialogChrome.MakeButton("Move Up", false, () => MoveSelected(_items, -1));
-        var moveDown = ZoomDialogChrome.MakeButton("Move Down", false, () => MoveSelected(_items, 1));
-        var ok = ZoomDialogChrome.MakeButton("OK", true, Apply);
-        ok.IsEnabled = _session.CanAccept;
+        var moveUp = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.MoveUp),
+            () => MoveSelected(_items, -1));
+        var moveDown = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.MoveDown),
+            () => MoveSelected(_items, 1));
+        var ok = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.Accept),
+            Apply,
+            _session.CanAccept);
         Content = new StackPanel
         {
             Margin = new Thickness(14),
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = "Target sections (select at least two):" },
+                new TextBlock { Text = surface.Field(ZoomTargetDialogField.Target).Label },
                 _targetList,
                 new StackPanel
                 {
@@ -61,7 +69,13 @@ internal sealed class SummaryZoomDialog : Window
                     Orientation = Orientation.Horizontal,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     Spacing = 8,
-                    Children = { ok, ZoomDialogChrome.MakeButton("Cancel", false, () => Close(false)) },
+                    Children =
+                    {
+                        ok,
+                        ZoomDialogChrome.MakeButton(
+                            surface.Action(ZoomTargetDialogAction.Cancel),
+                            () => Close(false)),
+                    },
                 },
             },
         };

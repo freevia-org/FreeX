@@ -17,13 +17,18 @@ internal sealed class SlideZoomDialog : Window
         string? title = null,
         string? selectedTargetId = null)
     {
-        _session = new ZoomSingleTargetDialogSession(options, selectedTargetId);
-        Title = title ?? SlideZoomInsertionPlanner.DialogTitle;
+        _session = new ZoomSingleTargetDialogSession(
+            ZoomTargetDialogKind.Slide,
+            options,
+            selectedTargetId,
+            title);
+        var surface = _session.Surface;
+        Title = surface.Title;
         Width = 420;
         Height = 160;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ZoomDialogChrome.Apply(this);
+        ZoomDialogChrome.Apply(this, surface);
 
         _targetCombo = new ComboBox
         {
@@ -31,10 +36,15 @@ internal sealed class SlideZoomDialog : Window
             SelectedIndex = _session.InitialSelectedIndex,
             MinWidth = 260,
         };
+        ZoomDialogChrome.ApplyField(_targetCombo, surface.Field(ZoomTargetDialogField.Target));
 
-        var ok = ZoomDialogChrome.MakeButton("OK", true, Apply);
-        ok.IsEnabled = _session.CanAccept;
-        var cancel = ZoomDialogChrome.MakeButton("Cancel", false, () => Close(false));
+        var ok = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.Accept),
+            Apply,
+            _session.CanAccept);
+        var cancel = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.Cancel),
+            () => Close(false));
         Content = new StackPanel
         {
             Margin = new Thickness(14),
@@ -46,7 +56,11 @@ internal sealed class SlideZoomDialog : Window
                     ColumnDefinitions = new ColumnDefinitions("115, *"),
                     Children =
                     {
-                        new TextBlock { Text = "Target slide:", VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock
+                        {
+                            Text = surface.Field(ZoomTargetDialogField.Target).Label,
+                            VerticalAlignment = VerticalAlignment.Center,
+                        },
                         _targetCombo,
                     },
                 },

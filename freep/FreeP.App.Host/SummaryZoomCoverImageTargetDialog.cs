@@ -14,12 +14,16 @@ internal sealed class SummaryZoomCoverImageTargetDialog : DialogWindow
 
     internal SummaryZoomCoverImageTargetDialog(IReadOnlyList<(string Id, string DisplayName)> options)
     {
-        _session = new ZoomSingleTargetDialogSession(options);
-        Title = ZoomCoverImagePlanner.DialogTitle;
+        _session = new ZoomSingleTargetDialogSession(
+            ZoomTargetDialogKind.SummaryCoverImage,
+            options);
+        var surface = _session.Surface;
+        Title = surface.Title;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ZoomDialogChrome.Apply(this, surface);
 
         _target = new ComboBox
         {
@@ -28,12 +32,13 @@ internal sealed class SummaryZoomCoverImageTargetDialog : DialogWindow
             SelectedIndex = _session.InitialSelectedIndex,
             MinWidth = 230,
         };
+        ZoomDialogChrome.ApplyField(_target, surface.Field(ZoomTargetDialogField.Target));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var label = new Label { Content = "Summary Zoom tile:" };
+        var label = new Label { Content = surface.Field(ZoomTargetDialogField.Target).Label };
         Grid.SetRow(label, 0);
         grid.Children.Add(label);
         Grid.SetRow(_target, 1);
@@ -45,10 +50,15 @@ internal sealed class SummaryZoomCoverImageTargetDialog : DialogWindow
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 14, 0, 0),
         };
-        var ok = new Button { Content = "OK", IsDefault = true, IsEnabled = _session.CanAccept, MinWidth = 75, Margin = new Thickness(0, 0, 8, 0) };
-        ok.Click += (_, _) => Apply();
+        var ok = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.Accept),
+            Apply,
+            _session.CanAccept);
+        ok.Margin = new Thickness(0, 0, 8, 0);
         buttons.Children.Add(ok);
-        buttons.Children.Add(new Button { Content = "Cancel", IsCancel = true, MinWidth = 75 });
+        buttons.Children.Add(ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.Cancel),
+            () => DialogResult = false));
         Grid.SetRow(buttons, 2);
         grid.Children.Add(buttons);
         Content = grid;

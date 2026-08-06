@@ -14,12 +14,15 @@ internal sealed class SummaryZoomCoverImageTargetDialog : Window
 
     internal SummaryZoomCoverImageTargetDialog(IReadOnlyList<(string Id, string DisplayName)> options)
     {
-        _session = new ZoomSingleTargetDialogSession(options);
-        Title = ZoomCoverImagePlanner.DialogTitle;
+        _session = new ZoomSingleTargetDialogSession(
+            ZoomTargetDialogKind.SummaryCoverImage,
+            options);
+        var surface = _session.Surface;
+        Title = surface.Title;
         Width = 420;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ZoomDialogChrome.Apply(this);
+        ZoomDialogChrome.Apply(this, surface);
 
         _target = new ComboBox
         {
@@ -27,22 +30,31 @@ internal sealed class SummaryZoomCoverImageTargetDialog : Window
             SelectedIndex = _session.InitialSelectedIndex,
             MinWidth = 230,
         };
-        var ok = ZoomDialogChrome.MakeButton("OK", true, Apply);
-        ok.IsEnabled = _session.CanAccept;
+        ZoomDialogChrome.ApplyField(_target, surface.Field(ZoomTargetDialogField.Target));
+        var ok = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.Accept),
+            Apply,
+            _session.CanAccept);
         Content = new StackPanel
         {
             Margin = new Thickness(14),
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = "Summary Zoom tile:" },
+                new TextBlock { Text = surface.Field(ZoomTargetDialogField.Target).Label },
                 _target,
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     Spacing = 8,
-                    Children = { ok, ZoomDialogChrome.MakeButton("Cancel", false, () => Close(false)) },
+                    Children =
+                    {
+                        ok,
+                        ZoomDialogChrome.MakeButton(
+                            surface.Action(ZoomTargetDialogAction.Cancel),
+                            () => Close(false)),
+                    },
                 },
             },
         };

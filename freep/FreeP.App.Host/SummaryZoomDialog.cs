@@ -18,12 +18,14 @@ internal sealed class SummaryZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         string? title = null,
         IReadOnlyCollection<string>? selectedTargetIds = null)
     {
-        _session = new SummaryZoomDialogSession(options, selectedTargetIds);
-        Title = title ?? SummaryZoomInsertionPlanner.DialogTitle;
+        _session = new SummaryZoomDialogSession(options, selectedTargetIds, title);
+        var surface = _session.Surface;
+        Title = surface.Title;
         Width = 460;
         Height = 360;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ZoomDialogChrome.Apply(this, surface);
 
         _items = new ObservableCollection<ZoomTargetOption>(_session.Options);
         _targetList = new ListBox
@@ -32,14 +34,20 @@ internal sealed class SummaryZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             SelectionMode = SelectionMode.Extended,
             MinHeight = 180,
         };
+        ZoomDialogChrome.ApplyField(_targetList, surface.Field(ZoomTargetDialogField.Target));
         foreach (var item in _items)
             if (_session.InitialSelectedTargetIds.Contains(item.Id, StringComparer.OrdinalIgnoreCase))
                 _targetList.SelectedItems.Add(item);
 
-        var moveUp = new Button { Content = "Move Up", MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
-        moveUp.Click += (_, _) => MoveSelected(_items, -1);
-        var moveDown = new Button { Content = "Move Down", MinWidth = 80 };
-        moveDown.Click += (_, _) => MoveSelected(_items, 1);
+        var moveUp = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.MoveUp),
+            () => MoveSelected(_items, -1));
+        moveUp.MinWidth = 80;
+        moveUp.Margin = new Thickness(0, 0, 8, 0);
+        var moveDown = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.MoveDown),
+            () => MoveSelected(_items, 1));
+        moveDown.MinWidth = 80;
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -47,7 +55,7 @@ internal sealed class SummaryZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var label = new Label { Content = "Target sections (select at least two):" };
+        var label = new Label { Content = surface.Field(ZoomTargetDialogField.Target).Label };
         Grid.SetRow(label, 0);
         grid.Children.Add(label);
         Grid.SetRow(_targetList, 1);
@@ -69,10 +77,15 @@ internal sealed class SummaryZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 14, 0, 0),
         };
-        var ok = new Button { Content = "OK", IsDefault = true, IsEnabled = _session.CanAccept, MinWidth = 75, Margin = new Thickness(0, 0, 8, 0) };
-        ok.Click += (_, _) => Apply();
+        var ok = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.Accept),
+            Apply,
+            _session.CanAccept);
+        ok.Margin = new Thickness(0, 0, 8, 0);
         buttons.Children.Add(ok);
-        buttons.Children.Add(new Button { Content = "Cancel", IsCancel = true, MinWidth = 75 });
+        buttons.Children.Add(ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.Cancel),
+            () => DialogResult = false));
         Grid.SetRow(buttons, 3);
         grid.Children.Add(buttons);
         Content = grid;

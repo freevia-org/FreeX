@@ -2,6 +2,123 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
+public enum ZoomTargetDialogKind
+{
+    Slide,
+    Section,
+    Summary,
+    SummaryCoverImage,
+}
+
+public enum ZoomTargetDialogField
+{
+    Target,
+}
+
+public enum ZoomTargetDialogAction
+{
+    MoveUp,
+    MoveDown,
+    Accept,
+    Cancel,
+}
+
+public static class ZoomTargetDialogSurfaceCatalog
+{
+    public static PresentationDialogSurfacePlan<ZoomTargetDialogField, ZoomTargetDialogAction> Build(
+        ZoomTargetDialogKind kind,
+        string? title = null)
+    {
+        var prefix = $"FreeP.ZoomTarget.{kind}";
+        return new(
+            title ?? DefaultTitle(kind),
+            AccessibleName(kind),
+            $"{prefix}.Dialog",
+            [
+                new PresentationDialogFieldPlan<ZoomTargetDialogField>(
+                    ZoomTargetDialogField.Target,
+                    kind == ZoomTargetDialogKind.Summary
+                        ? PresentationDialogControlKind.List
+                        : PresentationDialogControlKind.Choice,
+                    TargetLabel(kind),
+                    TargetAccessibleName(kind),
+                    $"{prefix}.Target",
+                    TargetHelpText(kind)),
+            ],
+            Actions(kind, prefix));
+    }
+
+    private static IReadOnlyList<PresentationDialogActionPlan<ZoomTargetDialogAction>> Actions(
+        ZoomTargetDialogKind kind,
+        string prefix)
+    {
+        var actions = new List<PresentationDialogActionPlan<ZoomTargetDialogAction>>();
+        if (kind == ZoomTargetDialogKind.Summary)
+        {
+            actions.Add(Action(ZoomTargetDialogAction.MoveUp, "Move Up",
+                "Move selected section up", prefix));
+            actions.Add(Action(ZoomTargetDialogAction.MoveDown, "Move Down",
+                "Move selected section down", prefix));
+        }
+
+        actions.Add(Action(ZoomTargetDialogAction.Accept, "OK",
+            "Accept zoom target selection", prefix, isDefault: true));
+        actions.Add(Action(ZoomTargetDialogAction.Cancel, "Cancel",
+            "Cancel zoom target selection", prefix, isCancel: true));
+        return actions;
+    }
+
+    private static PresentationDialogActionPlan<ZoomTargetDialogAction> Action(
+        ZoomTargetDialogAction id,
+        string label,
+        string accessibleName,
+        string prefix,
+        bool isDefault = false,
+        bool isCancel = false) =>
+        new(id, label, accessibleName, $"{prefix}.{id}", isDefault, isCancel);
+
+    private static string DefaultTitle(ZoomTargetDialogKind kind) => kind switch
+    {
+        ZoomTargetDialogKind.Section => SectionZoomInsertionPlanner.DialogTitle,
+        ZoomTargetDialogKind.Summary => SummaryZoomInsertionPlanner.DialogTitle,
+        ZoomTargetDialogKind.SummaryCoverImage => ZoomCoverImagePlanner.DialogTitle,
+        _ => SlideZoomInsertionPlanner.DialogTitle,
+    };
+
+    private static string AccessibleName(ZoomTargetDialogKind kind) => kind switch
+    {
+        ZoomTargetDialogKind.Section => "Insert Section Zoom",
+        ZoomTargetDialogKind.Summary => "Insert Summary Zoom",
+        ZoomTargetDialogKind.SummaryCoverImage => "Set Summary Zoom cover image",
+        _ => "Insert Slide Zoom",
+    };
+
+    private static string TargetLabel(ZoomTargetDialogKind kind) => kind switch
+    {
+        ZoomTargetDialogKind.Section => "Target section:",
+        ZoomTargetDialogKind.Summary => "Target sections (select at least two):",
+        ZoomTargetDialogKind.SummaryCoverImage => "Summary Zoom tile:",
+        _ => "Target slide:",
+    };
+
+    private static string TargetAccessibleName(ZoomTargetDialogKind kind) => kind switch
+    {
+        ZoomTargetDialogKind.Section => "Target section",
+        ZoomTargetDialogKind.Summary => "Target sections",
+        ZoomTargetDialogKind.SummaryCoverImage => "Summary Zoom tile",
+        _ => "Target slide",
+    };
+
+    private static string TargetHelpText(ZoomTargetDialogKind kind) => kind switch
+    {
+        ZoomTargetDialogKind.Summary =>
+            "Select at least two sections. Their list order becomes the Summary Zoom order.",
+        ZoomTargetDialogKind.SummaryCoverImage =>
+            "Choose the Summary Zoom tile whose preview image will be used.",
+        _ => "Choose the destination for the Zoom object.",
+    };
+}
+
 public sealed record ZoomTargetOption(string Id, string DisplayName)
 {
     public override string ToString() => DisplayName;
@@ -16,9 +133,20 @@ public sealed class ZoomSingleTargetDialogSession
     public ZoomSingleTargetDialogSession(
         IReadOnlyList<(string Id, string DisplayName)> options,
         string? selectedTargetId = null)
+        : this(ZoomTargetDialogKind.Slide, options, selectedTargetId)
+    {
+    }
+
+    public ZoomSingleTargetDialogSession(
+        ZoomTargetDialogKind kind,
+        IReadOnlyList<(string Id, string DisplayName)> options,
+        string? selectedTargetId = null,
+        string? title = null)
     {
         ArgumentNullException.ThrowIfNull(options);
 
+        Kind = kind;
+        Surface = ZoomTargetDialogSurfaceCatalog.Build(kind, title);
         _options = options
             .Select(option => new ZoomTargetOption(option.Id, option.DisplayName))
             .ToArray();
@@ -26,6 +154,10 @@ public sealed class ZoomSingleTargetDialogSession
     }
 
     public IReadOnlyList<ZoomTargetOption> Options => _options;
+
+    public ZoomTargetDialogKind Kind { get; }
+
+    public PresentationDialogSurfacePlan<ZoomTargetDialogField, ZoomTargetDialogAction> Surface { get; }
 
     public int InitialSelectedIndex { get; }
 
@@ -69,19 +201,23 @@ public sealed class SummaryZoomDialogSession
 
     public SummaryZoomDialogSession(
         IReadOnlyList<(string Id, string DisplayName)> options,
-        IReadOnlyCollection<string>? selectedTargetIds = null)
+        IReadOnlyCollection<string>? selectedTargetIds = null,
+        string? title = null)
     {
         ArgumentNullException.ThrowIfNull(options);
 
         _options = options
             .Select(option => new ZoomTargetOption(option.Id, option.DisplayName))
             .ToList();
+        Surface = ZoomTargetDialogSurfaceCatalog.Build(ZoomTargetDialogKind.Summary, title);
         InitialSelectedTargetIds = SummaryZoomTargetPlanner.SelectOrderedTargets(
             _options.Select(option => option.Id),
             selectedTargetIds ?? Array.Empty<string>());
     }
 
     public IReadOnlyList<ZoomTargetOption> Options => _options;
+
+    public PresentationDialogSurfacePlan<ZoomTargetDialogField, ZoomTargetDialogAction> Surface { get; }
 
     public IReadOnlyList<string> InitialSelectedTargetIds { get; }
 
