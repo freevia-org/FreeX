@@ -924,6 +924,38 @@ public static class MailMerge
     /// <summary>The closing merge-field delimiter (right guillemet, U+00BB).</summary>
     public const char FieldClose = '»';
 
+    /// <summary>Build Word's native field-code instruction for an ordinary recipient column.</summary>
+    public static string BuildMergeFieldInstruction(string fieldName)
+    {
+        ArgumentNullException.ThrowIfNull(fieldName);
+        var normalized = NormalizeMergeFieldName(fieldName);
+        if (normalized.Length == 0)
+            return string.Empty;
+
+        var serializedName = normalized.Any(char.IsWhiteSpace) || normalized.Contains('"')
+            ? "\"" + normalized.Replace("\"", "\\\"", StringComparison.Ordinal) + "\""
+            : normalized;
+        return $" MERGEFIELD {serializedName} \\* MERGEFORMAT ";
+    }
+
+    /// <summary>Extract the recipient column name from an imported or authored native MERGEFIELD.</summary>
+    public static bool TryGetMergeFieldName(ComplexField? field, out string fieldName)
+    {
+        fieldName = string.Empty;
+        if (field?.Keyword != "MERGEFIELD")
+            return false;
+
+        fieldName = ComplexFieldEngine.Argument(field.Instruction).Trim();
+        return fieldName.Length > 0;
+    }
+
+    /// <summary>Normalize a merge-field name accepted from a dialog or existing guillemet label.</summary>
+    public static string NormalizeMergeFieldName(string fieldName)
+    {
+        ArgumentNullException.ThrowIfNull(fieldName);
+        return fieldName.Trim().Trim(FieldOpen, FieldClose).Trim();
+    }
+
     /// <summary>
     /// The placeholder text (without guillemets) for the «Next Record» special field. During
     /// <see cref="SubstituteSpecial"/> this causes the record index to advance by one so a single
@@ -1805,14 +1837,18 @@ public static class MailMerge
 
     private static void ScanRun(Run run, Action<string> scan)
     {
-        if (run.Ruby is { } ruby)
+        var isNativeMergeField = TryGetMergeFieldName(run.ComplexField, out var mergeFieldName);
+        if (isNativeMergeField)
+            scan($"{FieldOpen}{mergeFieldName}{FieldClose}");
+
+        if (!isNativeMergeField && run.Ruby is { } ruby)
         {
             foreach (var fragment in ruby.BaseFragments)
                 scan(fragment.Text);
             foreach (var fragment in ruby.PhoneticFragments)
                 scan(fragment.Text);
         }
-        else
+        else if (!isNativeMergeField)
         {
             scan(run.Text);
         }
@@ -1899,8 +1935,18 @@ public static class MailMerge
     private static Block CloneBlock(Block block, IReadOnlyDictionary<string, string> row)
     {
         var clone = DocumentMerge.CloneBlock(block);
-        TransformBlockText(clone, text => Substitute(text, row));
+        TransformBlockText(clone, text => Substitute(text, row), ResolveNativeMergeField);
         return clone;
+
+        bool ResolveNativeMergeField(Run run)
+        {
+            if (!TryGetMergeFieldName(run.ComplexField, out var fieldName))
+                return false;
+
+            run.Text = Lookup(row, fieldName);
+            run.ComplexField = null;
+            return true;
+        }
     }
 
     private static Block CloneBlockWithRules(
@@ -1922,20 +1968,26 @@ public static class MailMerge
             return resolved;
         }
 
-        void ResolveNativeSpecialField(Run run)
+        bool ResolveNativeSpecialField(Run run)
         {
             switch (run.ComplexField?.Keyword)
             {
+                case "MERGEFIELD" when TryGetMergeFieldName(run.ComplexField, out var fieldName):
+                    run.Text = Lookup(row, fieldName);
+                    run.ComplexField = null;
+                    return true;
                 case NextRecordInstruction:
                     run.Text = string.Empty;
                     state.AdvanceRecordRequested = true;
-                    break;
+                    return true;
                 case MergeRecordNumberInstruction:
                     run.Text = recordIndex.ToString(CultureInfo.InvariantCulture);
-                    break;
+                    return true;
                 case MergeSequenceNumberInstruction:
                     run.Text = state.SequenceNumber.ToString(CultureInfo.InvariantCulture);
-                    break;
+                    return true;
+                default:
+                    return false;
             }
         }
     }
@@ -1943,7 +1995,7 @@ public static class MailMerge
     private static void TransformBlockText(
         Block block,
         Func<string, string> transform,
-        Action<Run>? transformRun = null)
+        Func<Run, bool>? transformRun = null)
     {
         switch (block)
         {
@@ -1962,7 +2014,7 @@ public static class MailMerge
     private static void TransformParagraphText(
         Paragraph paragraph,
         Func<string, string> transform,
-        Action<Run>? transformRun = null)
+        Func<Run, bool>? transformRun = null)
     {
         foreach (var run in paragraph.Runs)
             TransformRunText(run, transform, transformRun);
@@ -1974,15 +2026,15 @@ public static class MailMerge
     private static void TransformRunText(
         Run run,
         Func<string, string> transform,
-        Action<Run>? transformRun = null)
+        Func<Run, bool>? transformRun = null)
     {
-        transformRun?.Invoke(run);
-        if (run.Ruby is { } ruby)
+        var textWasMaterialized = transformRun?.Invoke(run) == true;
+        if (!textWasMaterialized && run.Ruby is { } ruby)
         {
             TransformRubyFragments(ruby.BaseFragments, transform);
             TransformRubyFragments(ruby.PhoneticFragments, transform);
         }
-        else
+        else if (!textWasMaterialized)
         {
             run.Text = transform(run.Text);
         }
@@ -2010,7 +2062,7 @@ public static class MailMerge
     private static void TransformShapeText(
         Shape shape,
         Func<string, string> transform,
-        Action<Run>? transformRun = null)
+        Func<Run, bool>? transformRun = null)
     {
         foreach (var paragraph in shape.TextParagraphs)
             TransformParagraphText(paragraph, transform, transformRun);
@@ -2047,7 +2099,7 @@ public static class MailMerge
     private static void TransformDrawingGroupText(
         DrawingGroup group,
         Func<string, string> transform,
-        Action<Run>? transformRun = null)
+        Func<Run, bool>? transformRun = null)
     {
         foreach (var child in group.Children)
         {
@@ -2075,7 +2127,7 @@ public static class MailMerge
     private static void TransformSectionHeadersFootersText(
         SectionHeadersFooters headersFooters,
         Func<string, string> transform,
-        Action<Run>? transformRun = null)
+        Func<Run, bool>? transformRun = null)
     {
         foreach (var headerFooter in new[]
                  {
