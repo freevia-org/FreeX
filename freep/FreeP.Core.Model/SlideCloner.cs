@@ -761,6 +761,7 @@ public static class SlideCloner
             ScaleBehavior = a.ScaleBehavior?.Clone(),
             PreservedColorBehaviorXml = a.PreservedColorBehaviorXml,
             PreservedNumericBehaviorXml = a.PreservedNumericBehaviorXml,
+            PreservedFillBehaviorXml = a.PreservedFillBehaviorXml,
             TriggerShapeId = a.TriggerShapeId,
             RawPresetClass = a.RawPresetClass,
             RawPresetId = a.RawPresetId,

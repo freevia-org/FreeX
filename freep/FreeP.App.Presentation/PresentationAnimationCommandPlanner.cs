@@ -372,6 +372,7 @@ public static class PresentationAnimationCommandPlanner
             ScaleBehavior = animation.ScaleBehavior?.Clone(),
             PreservedColorBehaviorXml = animation.PreservedColorBehaviorXml,
             PreservedNumericBehaviorXml = animation.PreservedNumericBehaviorXml,
+            PreservedFillBehaviorXml = animation.PreservedFillBehaviorXml,
             RawPresetClass = animation.RawPresetClass,
             RawPresetId = animation.RawPresetId,
             RawPresetSubtype = animation.RawPresetSubtype,

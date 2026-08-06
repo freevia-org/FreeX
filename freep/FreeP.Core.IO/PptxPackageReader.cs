@@ -6842,9 +6842,18 @@ public static class PptxPackageReader
                 .FirstOrDefault(element => element.Attribute("valueType")?.Value == "num")
                 ?.ToString(SaveOptions.DisableFormatting)
             : null;
-        var preservedColorBehaviorXml = buildPar.Descendants(P + "animClr")
-            .FirstOrDefault()
-            ?.ToString(SaveOptions.DisableFormatting);
+        var colorBehavior = buildPar.Descendants(P + "animClr")
+            .FirstOrDefault();
+        var isNativeFillColor = presetClass == "emph"
+            && presetId == 1
+            && colorBehavior?.Descendants(P + "attrName")
+                .Any(element => element.Value == "fillcolor") == true;
+        var preservedColorBehaviorXml = isNativeFillColor
+            ? null
+            : colorBehavior?.ToString(SaveOptions.DisableFormatting);
+        var preservedFillBehaviorXml = isNativeFillColor
+            ? BuildPreservedFillBehaviorXml(colorBehavior!)
+            : null;
 
         var repeatInfo = ReadRepeat(cTn);
         var autoReverse = ReadBoolean(cTn.Attribute("autoRev")?.Value);
@@ -6856,6 +6865,8 @@ public static class PptxPackageReader
         if (!uint.TryParse(spTgt.Attribute("spid")?.Value, out var shapeId)) return null;
 
         var (kind, preset) = PptxAnimationMap.OoxmlToAnimationPreset(presetClass, presetId);
+        if (isNativeFillColor)
+            preset = AnimationPreset.ChangeColor;
         if (presetClass == "emph" && presetId == 4 && scaleBehavior is null)
         {
             var numericTo = buildPar.Descendants(P + "anim")
@@ -6867,7 +6878,8 @@ public static class PptxPackageReader
                 scaleBehavior = AnimationScaleBehavior.FromTo(scale);
             }
         }
-        bool knownPreset = PptxAnimationMap.IsKnownOoxmlPreset(presetClass, presetId);
+        bool knownPreset = !isNativeFillColor
+            && PptxAnimationMap.IsKnownOoxmlPreset(presetClass, presetId);
         if (preset == AnimationPreset.Grow)
             preset = AnimationAmountSemantics.ResolvePreset(preset, scaleBehavior);
         var direction = AnimationAmountSemantics.IsGrowShrink(preset)
@@ -6903,11 +6915,24 @@ public static class PptxPackageReader
             ScaleBehavior = scaleBehavior,
             PreservedColorBehaviorXml = preservedColorBehaviorXml,
             PreservedNumericBehaviorXml = preservedNumericBehaviorXml,
+            PreservedFillBehaviorXml = preservedFillBehaviorXml,
             TriggerShapeId = triggerShapeId,
             RawPresetClass = knownPreset ? null : presetClass,
             RawPresetId = knownPreset ? null : presetId,
             RawPresetSubtype = knownPreset ? null : presetSubtype,
         };
+    }
+
+    private static string? BuildPreservedFillBehaviorXml(XElement colorBehavior)
+    {
+        var behaviorList = colorBehavior.AncestorsAndSelf(P + "childTnLst").FirstOrDefault();
+        if (behaviorList is null)
+            return colorBehavior.ToString(SaveOptions.DisableFormatting);
+
+        return new XElement(
+            P + "childTnLst",
+            behaviorList.Elements().Select(element => new XElement(element)))
+            .ToString(SaveOptions.DisableFormatting);
     }
 
     private static AnimationScaleBehavior? ReadScaleBehavior(XElement? animScale)

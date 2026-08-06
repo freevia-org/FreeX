@@ -83,6 +83,13 @@ public sealed class ShapeAnimation
     public string? PreservedNumericBehaviorXml { get; set; }
 
     /// <summary>
+    /// Preserves a native color-target behavior group whose auxiliary setters
+    /// are not represented by the renderer-neutral model (for example
+    /// PowerPoint's <c>fill.type</c> and <c>fill.on</c> setters).
+    /// </summary>
+    public string? PreservedFillBehaviorXml { get; set; }
+
+    /// <summary>
     /// Preserves an animation preset that is not represented by the current
     /// <see cref="AnimationPreset"/> enum. Playback still uses the mapped
     /// fallback, but package save can re-emit the authored PowerPoint token.

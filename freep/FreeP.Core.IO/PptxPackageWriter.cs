@@ -2424,6 +2424,8 @@ public static class PptxPackageWriter
         var numericBehavior = BuildPreservedNumericBehaviorEl(anim, ref nodeId);
         if (numericBehavior is not null)
             childTimingItems.Add(numericBehavior);
+        foreach (var fillBehavior in BuildPreservedFillBehaviorEls(anim, ref nodeId))
+            childTimingItems.Add(fillBehavior);
         if (anim.Preset is AnimationPreset.ColorPulse
             or AnimationPreset.ChangeColor
             or AnimationPreset.GrowWithColor
@@ -2481,6 +2483,36 @@ public static class PptxPackageWriter
         !string.IsNullOrWhiteSpace(anim.PreservedNumericBehaviorXml)
         && string.Equals(anim.RawPresetClass, "emph", StringComparison.Ordinal)
         && anim.RawPresetId == 4;
+
+    private static IReadOnlyList<XElement> BuildPreservedFillBehaviorEls(ShapeAnimation anim, ref uint nodeId)
+    {
+        if (string.IsNullOrWhiteSpace(anim.PreservedFillBehaviorXml)
+            || !string.Equals(anim.RawPresetClass, "emph", StringComparison.Ordinal)
+            || anim.RawPresetId != 1)
+        {
+            return Array.Empty<XElement>();
+        }
+
+        XElement behaviorList;
+        try
+        {
+            behaviorList = XElement.Parse(anim.PreservedFillBehaviorXml, LoadOptions.PreserveWhitespace);
+        }
+        catch (XmlException)
+        {
+            return Array.Empty<XElement>();
+        }
+
+        var result = new List<XElement>();
+        foreach (var behavior in behaviorList.Elements().Select(element => new XElement(element)))
+        {
+            foreach (var timingNode in behavior.Descendants(P + "cTn"))
+                timingNode.SetAttributeValue("id", nodeId++);
+            result.Add(behavior);
+        }
+
+        return result;
+    }
 
     private static XElement? BuildPreservedNumericBehaviorEl(ShapeAnimation anim, ref uint nodeId)
     {
