@@ -29,6 +29,80 @@ public sealed class CrossReferenceCommandTests
         host.Runs.Should().Contain(field);
     }
 
+    [Fact]
+    public void InsertCrossReference_WrapsOnlyNoteMarkerAndRestoresBoundariesOnUndo()
+    {
+        var target = new Paragraph();
+        target.Runs.Add(new Run("Before"));
+        target.Runs.Add(Run.FootnoteReference(3));
+        target.Runs.Add(new Run("After"));
+        target.BookmarkNames.Add("existing");
+        target.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "existing", BookmarkBoundaryKind.Start, 0, "existing"));
+        target.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "existing", BookmarkBoundaryKind.End, 3));
+        var host = new Paragraph("See ");
+        var document = new TextDocument();
+        document.Blocks.Add(target);
+        document.Blocks.Add(host);
+        var bus = new DocumentCommandBus(new TestContext(document));
+        var field = Run.CrossReferenceFieldRun(
+            new CrossReferenceField(CrossRefFieldKind.NoteRef, "_Ref1", CrossRefInsertAs.Text, true),
+            "1");
+
+        bus.Execute(new InsertCrossReferenceCommand(1, field, 0, "_Ref1", targetRunIndex: 1));
+
+        target.BookmarkNames.Should().Equal("existing", "_Ref1");
+        target.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.Start, 1, "_Ref1"));
+        target.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.End, 2));
+
+        bus.Undo().Should().BeTrue();
+        target.BookmarkNames.Should().Equal("existing");
+        target.BookmarkBoundaries.Should().Equal(
+            new BookmarkBoundary("existing", BookmarkBoundaryKind.Start, 0, "existing"),
+            new BookmarkBoundary("existing", BookmarkBoundaryKind.End, 3));
+
+        bus.Redo().Should().BeTrue();
+        target.BookmarkBoundaries.Should().Contain(boundary => boundary.PairKey == "auto:_Ref1");
+    }
+
+    [Fact]
+    public void InsertCrossReference_WrapsTableCellNoteMarker()
+    {
+        var marker = new Paragraph();
+        marker.Runs.Add(new Run("Cell"));
+        marker.Runs.Add(Run.EndnoteReference(2));
+        var cell = new TableCell();
+        cell.Paragraphs.Add(marker);
+        var row = new TableRow();
+        row.Cells.Add(cell);
+        var table = new Table();
+        table.Rows.Add(row);
+        var host = new Paragraph("See ");
+        var document = new TextDocument();
+        document.Blocks.Add(table);
+        document.Blocks.Add(host);
+        var bus = new DocumentCommandBus(new TestContext(document));
+        var field = Run.CrossReferenceFieldRun(
+            new CrossReferenceField(CrossRefFieldKind.NoteRef, "_Ref1", CrossRefInsertAs.Text, true),
+            "1");
+
+        bus.Execute(new InsertCrossReferenceCommand(
+            1, field, 0, "_Ref1", targetRunIndex: 1, targetNoteId: 2, targetIsFootnote: false));
+
+        marker.BookmarkNames.Should().Contain("_Ref1");
+        marker.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.Start, 1, "_Ref1"));
+        marker.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.End, 2));
+
+        bus.Undo().Should().BeTrue();
+        marker.BookmarkNames.Should().BeEmpty();
+        marker.BookmarkBoundaries.Should().BeEmpty();
+    }
+
     private sealed class TestContext(TextDocument document) : IDocumentCommandContext
     {
         public TextDocument Document { get; } = document;

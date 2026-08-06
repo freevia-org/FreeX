@@ -10,7 +10,7 @@ namespace FreeW.App.Host.Tests;
 /// Cross-reference). Runs on STA because it drives the real WPF <see cref="DocumentView"/>. An inserted
 /// cross-reference must materialise as a model <see cref="Run.CrossReference"/> field carrying the chosen
 /// kind/insert-as/hyperlink, must auto-bookmark a body target that lacks an anchor (so REF/PAGEREF
-/// resolves), and must point a NOTEREF at the note id for foot/endnotes.
+/// resolves), and must point a NOTEREF at a bookmark around the physical foot/endnote marker.
 /// </summary>
 public sealed class CrossReferenceEditorTests
 {
@@ -97,11 +97,14 @@ public sealed class CrossReferenceEditorTests
     }
 
     [StaFact]
-    public void InsertCrossReference_Footnote_WritesNoteRefOverNoteId()
+    public void InsertCrossReference_Footnote_WritesNoteRefOverMarkerBookmark()
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
-        doc.Blocks.Add(new Paragraph("Body."));
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Body"));
+        paragraph.Runs.Add(Run.FootnoteReference(1));
+        doc.Blocks.Add(paragraph);
         doc.Footnotes[1] = new Footnote(1, "the note");
 
         var view = new DocumentView();
@@ -113,7 +116,16 @@ public sealed class CrossReferenceEditorTests
 
         var field = InsertedField(view).CrossReference!;
         field.Kind.Should().Be(CrossRefFieldKind.NoteRef);
-        field.Target.Should().Be("1");
+        field.Target.Should().Be("_Ref1");
+        var targetParagraph = (Paragraph)view.Model.Blocks[0];
+        targetParagraph.BookmarkNames.Should().Contain("_Ref1");
+        targetParagraph.BookmarkBoundaries.Should().Contain(boundary =>
+            boundary.Kind == BookmarkBoundaryKind.Start
+            && boundary.Name == "_Ref1"
+            && boundary.RunIndex == 1);
+        targetParagraph.BookmarkBoundaries.Should().Contain(boundary =>
+            boundary.Kind == BookmarkBoundaryKind.End
+            && boundary.RunIndex == 2);
     }
 
     [StaFact]

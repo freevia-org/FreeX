@@ -131,25 +131,105 @@ public class CrossReferencesTests
     public void Targets_Footnote_EnumeratesByAscendingIdWithNoteId()
     {
         var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Text"));
+        paragraph.Runs.Add(Run.FootnoteReference(1));
+        paragraph.Runs.Add(Run.FootnoteReference(2));
+        paragraph.BookmarkNames.Add("_RefExisting");
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "note-1", BookmarkBoundaryKind.Start, 1, "_RefExisting"));
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "note-1", BookmarkBoundaryKind.End, 2));
+        doc.Blocks.Add(paragraph);
         doc.Footnotes[2] = new Footnote(2, "second");
         doc.Footnotes[1] = new Footnote(1, "first");
 
         var targets = CrossReferences.Targets(doc, CrossRefType.Footnote);
 
         targets.Should().Equal(
-            new CrossRefTarget("Footnote 1", null, null, 1),
-            new CrossRefTarget("Footnote 2", null, null, 2));
+            new CrossRefTarget("Footnote 1", "_RefExisting", 0, 1, 1),
+            new CrossRefTarget("Footnote 2", null, 0, 2, 2));
     }
 
     [Fact]
     public void Targets_Endnote_EnumeratesByAscendingIdWithNoteId()
     {
         var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.EndnoteReference(1));
+        doc.Blocks.Add(paragraph);
         doc.Endnotes[1] = new Endnote(1, "note one");
 
         CrossReferences.Targets(doc, CrossRefType.Endnote)
             .Should().ContainSingle()
-            .Which.Should().Be(new CrossRefTarget("Endnote 1", null, null, 1));
+            .Which.Should().Be(new CrossRefTarget("Endnote 1", null, 0, 1, 0));
+    }
+
+    [Fact]
+    public void Targets_ImportedBookmarkSpanningTwoMarkersIsNotReused()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FootnoteReference(1));
+        paragraph.Runs.Add(new Run(" and "));
+        paragraph.Runs.Add(Run.FootnoteReference(2));
+        paragraph.BookmarkNames.Add("broad");
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "broad", BookmarkBoundaryKind.Start, 0, "broad"));
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "broad", BookmarkBoundaryKind.End, 3));
+        doc.Blocks.Add(paragraph);
+        doc.Footnotes[1] = new Footnote(1, "one");
+        doc.Footnotes[2] = new Footnote(2, "two");
+
+        CrossReferences.Targets(doc, CrossRefType.Footnote)
+            .Should().OnlyContain(target => target.Anchor == null);
+    }
+
+    [Fact]
+    public void Targets_NonPublicMarkerBoundaryIsNotReused()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FootnoteReference(1));
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "hidden", BookmarkBoundaryKind.Start, 0, "not-public"));
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "hidden", BookmarkBoundaryKind.End, 1));
+        doc.Blocks.Add(paragraph);
+        doc.Footnotes[1] = new Footnote(1, "one");
+
+        CrossReferences.Targets(doc, CrossRefType.Footnote)
+            .Should().ContainSingle().Which.Anchor.Should().BeNull();
+    }
+
+    [Fact]
+    public void Targets_TableCellNoteCarriesOwningTopLevelBlockAndMarkerRun()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Cell"));
+        paragraph.Runs.Add(Run.FootnoteReference(4));
+        paragraph.BookmarkNames.Add("_Ref1");
+        var cell = new TableCell();
+        cell.Paragraphs.Add(paragraph);
+        var row = new TableRow();
+        row.Cells.Add(cell);
+        var table = new Table();
+        table.Rows.Add(row);
+        doc.Blocks.Add(table);
+        doc.Footnotes[4] = new Footnote(4, "note");
+
+        var target = CrossReferences.Targets(doc, CrossRefType.Footnote)
+            .Should().ContainSingle().Which;
+        target.Should().Be(new CrossRefTarget("Footnote 4", null, 0, 4, 1));
+
+        var plan = CrossReferences.PlanInsertion(
+            doc, CrossRefType.Footnote, target, CrossRefInsertAs.Text, true, sourceBlockIndex: 1);
+        plan.TargetNoteId.Should().Be(4);
+        plan.TargetIsFootnote.Should().BeTrue();
+        plan.TargetRunIndex.Should().Be(1);
+        plan.FieldRun.CrossReference!.Target.Should().Be("_Ref2");
     }
 
     [Fact]
@@ -180,6 +260,7 @@ public class CrossReferencesTests
     [InlineData(CrossRefType.Heading, CrossRefInsertAs.PageNumber, CrossRefFieldKind.PageRef)]
     [InlineData(CrossRefType.Footnote, CrossRefInsertAs.Text, CrossRefFieldKind.NoteRef)]
     [InlineData(CrossRefType.Footnote, CrossRefInsertAs.PageNumber, CrossRefFieldKind.PageRef)]
+    [InlineData(CrossRefType.Footnote, CrossRefInsertAs.AboveBelow, CrossRefFieldKind.NoteRef)]
     public void FieldKindFor_MapsTypeAndInsertAsToFieldKeyword(
         CrossRefType type, CrossRefInsertAs insertAs, CrossRefFieldKind expected)
     {
@@ -197,13 +278,19 @@ public class CrossReferencesTests
     }
 
     [Fact]
-    public void BuildField_NoteTarget_UsesNoteIdAsTarget()
+    public void BuildField_NoteTarget_UsesBookmarkAndRetainsNumericLegacyFallback()
     {
-        var target = new CrossRefTarget("Footnote 3", null, null, 3);
+        var target = new CrossRefTarget("Footnote 3", "_RefNote", 0, 3, 1);
 
         var field = CrossReferences.BuildField(CrossRefType.Footnote, target, CrossRefInsertAs.Text, hyperlink: false);
 
-        field.Should().Be(new CrossReferenceField(CrossRefFieldKind.NoteRef, "3", CrossRefInsertAs.Text, Hyperlink: false));
+        field.Should().Be(new CrossReferenceField(CrossRefFieldKind.NoteRef, "_RefNote", CrossRefInsertAs.Text, Hyperlink: false));
+        CrossReferences.BuildField(
+                CrossRefType.Footnote,
+                new CrossRefTarget("Footnote 3", null, null, 3),
+                CrossRefInsertAs.Text,
+                hyperlink: false)
+            .Target.Should().Be("3");
     }
 
     [Fact]
@@ -361,6 +448,56 @@ public class CrossReferencesTests
     }
 
     [Fact]
+    public void ResolveField_BookmarkedNoteRef_UsesMarkerAndSupportsAboveBelow()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Text"));
+        paragraph.Runs.Add(Run.FootnoteReference(20));
+        paragraph.BookmarkNames.Add("_RefNote");
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "note", BookmarkBoundaryKind.Start, 1, "_RefNote"));
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "note", BookmarkBoundaryKind.End, 2));
+        doc.Blocks.Add(paragraph);
+        doc.Blocks.Add(new Paragraph("Reference"));
+        doc.Footnotes[10] = new Footnote(10, "first");
+        doc.Footnotes[20] = new Footnote(20, "second");
+
+        CrossReferences.ResolveField(
+                doc,
+                new CrossReferenceField(CrossRefFieldKind.NoteRef, "_RefNote", CrossRefInsertAs.Text, true),
+                "stale",
+                sourceBlockIndex: 1)
+            .Should().Be("2");
+        CrossReferences.ResolveField(
+                doc,
+                new CrossReferenceField(CrossRefFieldKind.NoteRef, "_RefNote", CrossRefInsertAs.AboveBelow, false),
+                "stale",
+                sourceBlockIndex: 1)
+            .Should().Be("2 above");
+    }
+
+    [Fact]
+    public void ResolveField_LegacyNumericNoteRefPositionUsesPhysicalMarkerAndRunOrder()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("before"));
+        paragraph.Runs.Add(Run.FootnoteReference(7));
+        paragraph.Runs.Add(new Run("after"));
+        doc.Blocks.Add(paragraph);
+        doc.Footnotes[7] = new Footnote(7, "note");
+        var field = new CrossReferenceField(
+            CrossRefFieldKind.NoteRef, "7", CrossRefInsertAs.AboveBelow, false);
+
+        CrossReferences.ResolveField(doc, field, "stale", 0, sourceRunIndex: 0)
+            .Should().Be("1 below");
+        CrossReferences.ResolveField(doc, field, "stale", 0, sourceRunIndex: 2)
+            .Should().Be("1 above");
+    }
+
+    [Fact]
     public void ReferenceText_ReturnsDisplayForEachTarget()
     {
         CrossReferences.ReferenceText(new CrossRefTarget("Chapter One", "ch1", 0))
@@ -458,24 +595,54 @@ public class CrossReferencesTests
     }
 
     [Fact]
-    public void PlanInsertion_NoteTargetBuildsNoteFieldWithoutBodyAnchor()
+    public void PlanInsertion_NoteTargetBuildsBookmarkBasedNoteFieldAroundMarker()
     {
         var doc = new TextDocument();
-        doc.Blocks.Add(new Paragraph("Body"));
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Body"));
+        paragraph.Runs.Add(Run.FootnoteReference(7));
+        doc.Blocks.Add(paragraph);
         doc.Footnotes[7] = new Footnote(7, "note");
+
+        var target = CrossReferences.Targets(doc, CrossRefType.Footnote).Single();
 
         var plan = CrossReferences.PlanInsertion(
             doc,
             CrossRefType.Footnote,
-            new CrossRefTarget("Footnote 7", null, null, 7),
+            target,
             CrossRefInsertAs.Text,
             hyperlink: true,
             sourceBlockIndex: 0);
 
-        plan.BookmarkNameToAdd.Should().BeNull();
+        plan.BookmarkNameToAdd.Should().Be("_Ref1");
+        plan.TargetRunIndex.Should().Be(1);
         plan.FieldRun.CrossReference!.Kind.Should().Be(CrossRefFieldKind.NoteRef);
-        plan.FieldRun.CrossReference.Target.Should().Be("7");
-        plan.FieldRun.Text.Should().Be("Footnote 7");
+        plan.FieldRun.CrossReference.Target.Should().Be("_Ref1");
+        plan.FieldRun.Text.Should().Be("1");
+        paragraph.BookmarkNames.Should().BeEmpty("planning must not mutate the marker paragraph");
+    }
+
+    [Fact]
+    public void PlanInsertion_NotePageAndPositionUseMarkerBookmark()
+    {
+        var doc = new TextDocument();
+        var marker = new Paragraph();
+        marker.Runs.Add(Run.EndnoteReference(4));
+        doc.Blocks.Add(marker);
+        doc.Blocks.Add(new Paragraph("Reference"));
+        doc.Endnotes[4] = new Endnote(4, "note");
+        var target = CrossReferences.Targets(doc, CrossRefType.Endnote).Single();
+
+        var page = CrossReferences.PlanInsertion(
+            doc, CrossRefType.Endnote, target, CrossRefInsertAs.PageNumber, false, 1);
+        var position = CrossReferences.PlanInsertion(
+            doc, CrossRefType.Endnote, target, CrossRefInsertAs.AboveBelow, false, 1);
+
+        page.FieldRun.CrossReference.Should().Be(
+            new CrossReferenceField(CrossRefFieldKind.PageRef, "_Ref1", CrossRefInsertAs.PageNumber, false));
+        position.FieldRun.CrossReference.Should().Be(
+            new CrossReferenceField(CrossRefFieldKind.NoteRef, "_Ref1", CrossRefInsertAs.AboveBelow, false));
+        position.FieldRun.Text.Should().Be("1 above");
     }
 
     [Fact]
