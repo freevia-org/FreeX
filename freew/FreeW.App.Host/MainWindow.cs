@@ -3060,7 +3060,22 @@ public sealed class MainWindow : Window
                 (int)dialog.PageRange.PageTo);
         }
 
-        dialog.PrintDocument(paginator, description);
+        // A printer failure here (offline/removed printer, stopped spooler, driver fault,
+        // invalid PrintTicket/PageMediaSize the driver rejects, access-denied on a network
+        // queue) must never crash the whole app -- match the ExportToPdf/ExportToXps pattern
+        // above of catching and showing an owned error dialog instead of letting the exception
+        // reach the WPF dispatcher unhandled (AppCrashHandlers never marks it Handled).
+        try
+        {
+            dialog.PrintDocument(paginator, description);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            DialogMessageHelper.ShowError(
+                this,
+                "The document could not be printed.\n\n" + ex.Message,
+                "Print");
+        }
     }
 
     private void OpenPrintPreview()

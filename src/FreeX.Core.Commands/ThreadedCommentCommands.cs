@@ -32,6 +32,15 @@ public sealed class SetThreadedCommentCommand : IWorkbookCommand
         if (CommentCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
+        // R124: symmetric to SetCommentCommand's guard -- a cell that already carries a legacy
+        // Note must never also get a threaded comment. Editing an EXISTING thread (the cell
+        // already has a ThreadedComments entry) is still allowed even if the invariant was
+        // somehow already violated by older data, since that path does not create the
+        // double-annotation state.
+        if (!sheet.ThreadedComments.ContainsKey(_address)
+            && CommentCommandGuards.RejectIfCellHasNote(sheet, _address) is { } noteOutcome)
+            return noteOutcome;
+
         _hadPrevious = sheet.ThreadedComments.TryGetValue(_address, out _previousComment);
         sheet.ThreadedComments[_address] = _comment;
         return new CommandOutcome(true, AffectedCells: [_address]);

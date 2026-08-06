@@ -56,7 +56,18 @@ public static partial class BuiltInFunctions
         // reading the cell's own (stale/mid-evaluation) value; RecalcEngine's per-cell evaluation
         // loop recognizes it and routes the cell through the same non-iterative circular-reference
         // handling a statically-detected cycle gets.
-        if (IsIndirectSelfReference(ctx, sheetName, row, col))
+        //
+        // R124-calc-indirect-iterative: EXCEPT while ctx.IsIterativeCalculationPass is true --
+        // RecalcEngine.RunIterativeCalc is actively fixed-point iterating this same address as part
+        // of Iterative Calculation (Workbook.IterativeCalculation on), and it reads whatever
+        // ctx.GetCellValue below returns as the previous iterate. That is exactly the read Excel's
+        // own iterative calculation performs for a dynamic self-reference (it reads the cell's
+        // current stored value, not some "mid-evaluation" garbage -- RunIterativeCalc never mutates
+        // cell.Value until after this call returns), so the sentinel must NOT fire here: doing so
+        // would make INDIRECT("A1")+1 permanently re-seed to 0 and never converge even with
+        // iterative calc on and Max Iterations/Max Change configured, unlike the equivalent direct
+        // A1=A1+1 self-loop which already iterates correctly through this same loop.
+        if (IsIndirectSelfReference(ctx, sheetName, row, col) && !ctx.IsIterativeCalculationPass)
             return ErrorValue.RuntimeCircularSelfReference;
 
         return unwrapSingleCell

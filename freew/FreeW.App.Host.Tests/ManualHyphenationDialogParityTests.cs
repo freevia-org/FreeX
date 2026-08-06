@@ -23,7 +23,12 @@ public sealed class ManualHyphenationDialogParityTests
             var content = (StackPanel)dialog.Content!;
             var buttons = content.Children.OfType<StackPanel>().Single().Children.OfType<Button>().ToArray();
             buttons.Should().ContainSingle(button => button.IsDefault && button.Content != null && button.Content.ToString() == "_Yes");
-            buttons.Should().ContainSingle(button => button.IsCancel && button.Content != null && button.Content.ToString() == "Cancel");
+            // Cancel is routed through the shared Free.Shared.Shell.ShellStrings pipeline (same
+            // ambient source DialogButtonRowFactory reads) rather than a hardcoded English literal,
+            // so a French-locale build shows "_Annuler" here instead of "Cancel". See R124_*
+            // in ManualHyphenationDialogLocalizationTests.cs for the localized-content proof.
+            buttons.Should().ContainSingle(button => button.IsCancel && button.Content != null
+                && button.Content.ToString() == Free.Shared.Shell.ShellStrings.Current.Cancel);
         }
         finally
         {

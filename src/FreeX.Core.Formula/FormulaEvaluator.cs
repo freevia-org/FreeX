@@ -118,13 +118,14 @@ public sealed partial class FormulaEvaluator
         FormulaNode ast,
         Sheet sheet,
         FreeX.Core.Model.Workbook? workbook = null,
-        FreeX.Core.Model.CellAddress? currentCell = null)
+        FreeX.Core.Model.CellAddress? currentCell = null,
+        bool isIterativeCalculationPass = false)
     {
         try
         {
-            var context = workbook is null && currentCell is null
+            var context = workbook is null && currentCell is null && !isIterativeCalculationPass
                 ? GetSingleSheetEvalContext(sheet)
-                : new SheetEvalContext(sheet, workbook, this, currentCell);
+                : new SheetEvalContext(sheet, workbook, this, currentCell, isIterativeCalculationPass);
             _effectiveMaxEvalDepth = MaxEvalDepth;
             _evalDepth = 0;
             return NormalizeTopLevelResult(EvaluateNode(ast, context));
@@ -147,13 +148,14 @@ public sealed partial class FormulaEvaluator
         FormulaNode ast,
         Sheet sheet,
         FreeX.Core.Model.Workbook? workbook = null,
-        FreeX.Core.Model.CellAddress? currentCell = null)
+        FreeX.Core.Model.CellAddress? currentCell = null,
+        bool isIterativeCalculationPass = false)
     {
         try
         {
-            var context = workbook is null && currentCell is null
+            var context = workbook is null && currentCell is null && !isIterativeCalculationPass
                 ? GetSingleSheetEvalContext(sheet)
-                : new SheetEvalContext(sheet, workbook, this, currentCell);
+                : new SheetEvalContext(sheet, workbook, this, currentCell, isIterativeCalculationPass);
 
             _effectiveMaxEvalDepth = MaxEvalDepth;
             _evalDepth = 0;

@@ -118,7 +118,13 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
             // the only way Undo can observe it (Revert returns void, so there is no fresh outcome to
             // read the way Redo reads Apply's outcome).
             AffectedCells: GetAffectedCells(command) ?? entry.Payload,
-            RequiresFullRecalc: command is IWholeWorkbookRecalcCommand);
+            RequiresFullRecalc: command is IWholeWorkbookRecalcCommand,
+            // R124-app-drawing-undo-selection-1: Revert just ran, so a deleted drawing object is
+            // back in the model -- tell the shells to re-select it (Exists: true) instead of only
+            // landing a plain cell-range selection on its anchor. See IDrawingObjectDeletionCommand.
+            DrawingObjectSelection: command is IDrawingObjectDeletionCommand deletion
+                ? new DrawingObjectSelectionHint(deletion.DrawingObjectKind, deletion.DrawingObjectId, Exists: true)
+                : null);
     }
 
     public CommandOutcome Redo(WorkbookId workbookId)
@@ -161,6 +167,14 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
         {
             AffectedCells = affectedCells,
             RequiresFullRecalc = command is IWholeWorkbookRecalcCommand,
+            // R124-app-drawing-undo-selection-1: Apply just re-ran, so a re-deleted drawing object is
+            // gone from the model again -- tell the shells to clear a stale selection still pointing
+            // at it (Exists: false), the mirror of the Undo case above. Only set on success: a
+            // rejected redo (e.g. protection) leaves the object exactly as it was, so any existing
+            // selection referencing it is still valid and must not be cleared.
+            DrawingObjectSelection = outcome.Success && command is IDrawingObjectDeletionCommand deletion
+                ? new DrawingObjectSelectionHint(deletion.DrawingObjectKind, deletion.DrawingObjectId, Exists: false)
+                : null,
         };
     }
 

@@ -454,6 +454,9 @@ public sealed partial class FormulaEvaluator
         BinaryOpNode bin => ReferencesCell(bin.Left, current) || ReferencesCell(bin.Right, current),
         UnaryOpNode un => ReferencesCell(un.Operand, current),
         FunctionCallNode fn => ReferencesCellInAny(fn.Arguments, current),
+        UnionNode union => ReferencesCellInAny(union.Areas, current),
+        IntersectionNode ix => ReferencesCell(ix.Left, current) || ReferencesCell(ix.Right, current),
+        NamedRangeEndpointNode nre => ReferencesCell(nre.Start, current) || ReferencesCell(nre.End, current),
         _ => false
     };
 

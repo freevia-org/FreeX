@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Free.Shared.Shell;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -91,32 +92,12 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             VerticalAlignment = VerticalAlignment.Center
         };
 
-        var okButton = new Button
-        {
-            Content = "OK",
-            IsDefault = true,
-            MinWidth = 72,
-            Padding = new Thickness(8, 2, 8, 2),
-            Margin = new Thickness(0, 0, 6, 0)
-        };
-        okButton.Click += (_, _) => Accept();
-
-        var cancelButton = new Button
-        {
-            Content = "Cancel",
-            IsCancel = true,
-            MinWidth = 72,
-            Padding = new Thickness(8, 2, 8, 2)
-        };
+        // Reuse the shared OK/Cancel button row (localized content, accelerators, automation
+        // names; Cancel is IsCancel so Esc/Cancel closes). Single source of truth shared with
+        // FreeX/FreeW dialogs -- see DialogSharedHelperDedupTests.
+        var btnPanel = DialogButtonRowFactory.Create(Accept, buttonWidth: 72);
 
         var bottomRow = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
-        var btnPanel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right
-        };
-        btnPanel.Children.Add(okButton);
-        btnPanel.Children.Add(cancelButton);
         DockPanel.SetDock(btnPanel, Dock.Right);
         bottomRow.Children.Add(btnPanel);
         bottomRow.Children.Add(_statusBar);

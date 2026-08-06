@@ -10,10 +10,17 @@ public partial class MainWindow
 {
     // ── Group / Ungroup handlers ─────────────────────────────────────────────
 
+    // R124-outlinecmds-multiarea-group-1: a Ctrl+click multi-area row/column header selection
+    // must group/ungroup EVERY disjoint area, not just the active (last-clicked) one -- Excel
+    // groups all selected areas in a single Group/Ungroup action. Route through
+    // TryExecuteRepeatableCurrentRangesCommand (built for this fix), which iterates
+    // SheetGrid.SelectedRanges the same way GetCurrentSelectionRanges already does for the
+    // AutoFit Row Height/Column Width multi-area fix, instead of reading only the single active
+    // SheetGrid.SelectedRange.
     private void GroupRowsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableCurrentRangeCommand("Group", range, CreateGroupCommand))
+        if (!TryExecuteRepeatableCurrentRangesCommand("Group", range, CreateGroupCommand))
             return;
         UpdateViewport();
     }
@@ -23,7 +30,7 @@ public partial class MainWindow
     private void UngroupRowsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableCurrentRangeCommand("Ungroup", range, CreateUngroupCommand))
+        if (!TryExecuteRepeatableCurrentRangesCommand("Ungroup", range, CreateUngroupCommand))
             return;
 
         UpdateViewport();

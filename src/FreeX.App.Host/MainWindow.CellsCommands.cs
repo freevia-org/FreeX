@@ -172,6 +172,17 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    /// <summary>
+    /// R124-cellscmds-multiarea-rowheight-1: mirrors R123-cellscmds-multiarea-insert-1/-delete-1 for
+    /// Row Height. With rows 2 and 5 Ctrl+click selected via AddAdditionalRowSelection,
+    /// SheetGrid.SelectedRanges holds both disjoint whole-row areas while SheetGrid.SelectedRange is
+    /// only the last-clicked (active) one -- reading only SelectedRange (as
+    /// TryExecuteRepeatableGroupedSheetCommand did) silently dropped every area but the active one
+    /// from the resize, unlike real Excel, which resizes every disjoint area of a multi-area
+    /// selection. Routes through the same selection-ranges-aware plumbing Clear Contents/Insert/Delete
+    /// already use (TryExecuteRepeatableCurrentSelectionRangesCommand), building one
+    /// SetRowHeightCommand per disjoint area (and per grouped sheet).
+    /// </summary>
     private void FormatRowHeightMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
@@ -179,24 +190,29 @@ public partial class MainWindow
         var dialog = new RowHeightDialog(RowColumnSizingPlanner.GetRowHeightDialogValue(sheet, range)) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Row Height",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    return RowColumnSizingPlanner.CreateRowHeightCommand(sheetId, currentRange, dialog.Result.Height);
-                }))
+                range,
+                (sheetId, currentRange) => RowColumnSizingPlanner.CreateRowHeightCommand(sheetId, currentRange, dialog.Result.Height)))
             return;
         UpdateViewport();
     }
 
+    /// <summary>See FormatRowHeightMenuItem_Click above (R124-cellscmds-multiarea-rowheight-1); AutoFit
+    /// Row Height has never been repeatable (F4), so this keeps that but adds multi-area/grouped-sheet
+    /// awareness via the non-repeatable current-selection-ranges helper.</summary>
     private void FormatAutoRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Auto Row Height", sheetId => CreateAutoFitRowHeightCommand(sheetId, range)))
+        if (!TryExecuteCurrentSelectionRangesCommand(
+                "Auto Row Height",
+                range,
+                (sheetId, currentRange) => CreateAutoFitRowHeightCommand(sheetId, currentRange)))
             return;
         UpdateViewport();
     }
+
+    /// <summary>Column counterpart of FormatRowHeightMenuItem_Click above (R124-cellscmds-multiarea-rowheight-1).</summary>
     private void FormatColWidthMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
@@ -204,21 +220,22 @@ public partial class MainWindow
         var dialog = new ColumnWidthDialog(RowColumnSizingPlanner.GetColumnWidthDialogValue(sheet, range)) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Column Width",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    return RowColumnSizingPlanner.CreateColumnWidthCommand(sheetId, currentRange, dialog.Result.Width);
-                }))
+                range,
+                (sheetId, currentRange) => RowColumnSizingPlanner.CreateColumnWidthCommand(sheetId, currentRange, dialog.Result.Width)))
             return;
         UpdateViewport();
     }
 
+    /// <summary>Column counterpart of FormatAutoRowMenuItem_Click above (R124-cellscmds-multiarea-rowheight-1).</summary>
     private void FormatAutoColMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Auto Column Width", sheetId => CreateAutoFitColumnWidthCommand(sheetId, range)))
+        if (!TryExecuteCurrentSelectionRangesCommand(
+                "Auto Column Width",
+                range,
+                (sheetId, currentRange) => CreateAutoFitColumnWidthCommand(sheetId, currentRange)))
             return;
         UpdateViewport();
     }
@@ -873,31 +890,31 @@ public partial class MainWindow
         return true;
     }
 
+    /// <summary>See FormatRowHeightMenuItem_Click (R124-cellscmds-multiarea-rowheight-1): Hide/Unhide
+    /// Rows -- reached from the ribbon, the row-header right-click menu (MainWindow.WorksheetContextMenu.cs)
+    /// and the Ctrl+9/Ctrl+Shift+9 keyboard shortcuts (MainWindow.Selection.cs) -- used to read only the
+    /// active SheetGrid.SelectedRange, so Ctrl+click-selecting rows 2 and 5 then Hide Rows silently left
+    /// row 2 visible. Now routes through the multi-area-aware plumbing.</summary>
     private void ExecuteRowsHidden(bool hidden)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 hidden ? "Hide Row" : "Unhide Row",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    return RowColumnSizingPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden);
-                }))
+                range,
+                (sheetId, currentRange) => RowColumnSizingPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden)))
             return;
 
         UpdateViewport();
     }
 
+    /// <summary>Column counterpart of ExecuteRowsHidden above (R124-cellscmds-multiarea-rowheight-1).</summary>
     private void ExecuteColumnsHidden(bool hidden)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 hidden ? "Hide Column" : "Unhide Column",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    return RowColumnSizingPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden);
-                }))
+                range,
+                (sheetId, currentRange) => RowColumnSizingPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden)))
             return;
 
         UpdateViewport();

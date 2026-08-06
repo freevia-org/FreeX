@@ -532,7 +532,15 @@ public sealed class AvaloniaShellSourceTests
         optionsSource.Should().Contain(": OptionsDialogParityFixture.Create();");
         optionsSource.Should().Contain("OptionsDialogPlanner.TryBuildInput(");
         optionsSource.Should().Contain("var projected = OptionsDialogPlanner.Project(current, input);");
-        optionsSource.Should().Contain("AppOptionsStore.Save(projected)");
+        // R124-avalonia-options-multiwindow-lastwriter: the OK handler reloads the freshest on-disk
+        // options and merges onto it only the fields this dialog session actually edited (see
+        // OptionsDialogPlanner.MergeOntoFreshLoad), instead of saving `projected` -- built purely from
+        // this dialog's open-time snapshot -- as the whole document. Saving `projected` directly would
+        // silently discard whatever another window (or this window's own reload-before-mutate context
+        // menus) persisted while this dialog was open.
+        optionsSource.Should().Contain("var merged = OptionsDialogPlanner.MergeOntoFreshLoad(AppOptionsStore.Load(), current, projected);");
+        optionsSource.Should().Contain("AppOptionsStore.Save(merged)");
+        optionsSource.Should().NotContain("AppOptionsStore.Save(projected)");
         optionsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"OptionsDialog\");");
         optionsSource.Should().Contain("const double optionsDialogWidth = OptionsDialogPlanner.CaptureWidth;");
         optionsSource.Should().Contain("const double optionsDialogHeight = OptionsDialogPlanner.CaptureHeight;");

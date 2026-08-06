@@ -38,11 +38,36 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         {
             var address = new CellAddress(_sheetId, totalsRow, table.Range.Start.Col + (uint)index);
             affectedCells.Add(address);
-            _previousCells[address] = sheet.GetCell(address.Row, address.Col)?.Clone();
+            var oldCell = sheet.GetCell(address.Row, address.Col);
+            _previousCells[address] = oldCell?.Clone();
+
+            // R124: preserve the destination cell's pre-existing formatting (totals-row banding,
+            // custom number format, bold, borders, ...) instead of silently resetting it to
+            // StyleId.Default via Cell.FromFormula/Cell.FromValue's default construction --
+            // matching PropagateCalculatedColumnCommand.Apply's fix for the identical bug class
+            // (Commands.cs ~530-536) and EditCellsCommand.Apply's guard for a direct user edit
+            // (Commands.cs ~110-117). Without this, growing a table (auto-expand, which relocates
+            // the totals row via ResizeStructuredTableCommand with no restyle follow-up) or
+            // re-showing a hidden totals row wipes any styling already sitting on that cell --
+            // including formatting loaded straight from an Excel-authored totalsRowFunction table.
+            var existingStyleId = oldCell?.StyleId ?? sheet.GetStyleOnly(address.Row, address.Col);
+
             if (ResolveTotalsCell(sheet, table, index) is { } cell)
+            {
+                if (existingStyleId is { } styleId)
+                    cell.StyleId = styleId;
                 sheet.SetCell(address, cell);
+            }
+            else if (existingStyleId is { } blankStyleId)
+            {
+                var blank = Cell.FromValue(BlankValue.Instance);
+                blank.StyleId = blankStyleId;
+                sheet.SetCell(address, blank);
+            }
             else
+            {
                 sheet.SetCell(address, BlankValue.Instance);
+            }
         }
 
         return new CommandOutcome(true, AffectedCells: affectedCells);

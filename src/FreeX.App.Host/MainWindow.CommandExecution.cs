@@ -354,6 +354,35 @@ public partial class MainWindow
         Func<SheetId, GridRange, IWorkbookCommand> createCommand) =>
         TryExecuteRepeatableCurrentSelectionRangesCommand(title, fallbackRange, createCommand, out _);
 
+    /// <summary>
+    /// R124-cellscmds-multiarea-rowheight-1: non-repeatable counterpart of
+    /// TryExecuteRepeatableCurrentSelectionRangesCommand above, for callers (AutoFit Row Height/Column
+    /// Width) that have never participated in F4 repeat. Builds one command per disjoint selection
+    /// area (SheetGrid.SelectedRanges from a Ctrl+click multi-area header selection, falling back to
+    /// the single active range) crossed with every grouped-edit sheet, instead of dropping every area
+    /// but the active one the way a plain SheetGrid.SelectedRange read would.
+    /// </summary>
+    private bool TryExecuteCurrentSelectionRangesCommand(
+        string title,
+        GridRange fallbackRange,
+        Func<SheetId, GridRange, IWorkbookCommand> createCommand,
+        out CommandOutcome outcome)
+    {
+        var ranges = GetCurrentSelectionRanges(fallbackRange);
+        var command = SelectionStyleCommandPlanner.CreateRangeCommand(
+            CurrentGroupedEditSheetIds(),
+            ranges,
+            createCommand,
+            title);
+        return TryExecuteCommand(command, title, out outcome);
+    }
+
+    private bool TryExecuteCurrentSelectionRangesCommand(
+        string title,
+        GridRange fallbackRange,
+        Func<SheetId, GridRange, IWorkbookCommand> createCommand) =>
+        TryExecuteCurrentSelectionRangesCommand(title, fallbackRange, createCommand, out _);
+
     private bool TryExecuteRepeatableCurrentRangeCommand(
         string title,
         GridRange fallbackRange,
@@ -386,6 +415,50 @@ public partial class MainWindow
         GridRange fallbackRange,
         Func<GridRange, IWorkbookCommand> createCommand) =>
         TryExecuteRepeatableCurrentRangeCommand(title, fallbackRange, createCommand, out _);
+
+    /// <summary>
+    /// R124-outlinecmds-multiarea-group-1: like TryExecuteRepeatableCurrentRangeCommand above, but
+    /// builds one command per disjoint selection area -- SheetGrid.SelectedRanges from a Ctrl+click
+    /// multi-area row/column header selection, via the same GetCurrentSelectionRanges/
+    /// SelectionStyleCommandPlanner.ResolveRanges choke point the AutoFit Row Height/Column Width
+    /// multi-area fix uses (R124-cellscmds-multiarea-rowheight-1) -- instead of dropping every area
+    /// but the active one. Used by Group/Ungroup (Data - Outline), which are single-sheet-only
+    /// operations with no CurrentGroupedEditSheetIds() fan-out, so this only spans the ranges, not
+    /// sheets.
+    /// </summary>
+    private bool TryExecuteRepeatableCurrentRangesCommand(
+        string title,
+        GridRange fallbackRange,
+        Func<GridRange, IWorkbookCommand> createCommand,
+        out CommandOutcome outcome)
+    {
+        IWorkbookCommand CreateRepeatCommand()
+        {
+            var ranges = GetCurrentSelectionRanges(fallbackRange);
+            var commands = ranges.Select(createCommand).ToList();
+            return commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand(title, commands);
+        }
+
+        outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateRepeatCommand);
+        if (outcome.Success)
+        {
+            MarkWorkbookDirty();
+            _repeatPostAction = null;
+            InvalidateNavigationCaches();
+            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
+            NotifyOtherWindowsOfWorkbookChange();
+            return true;
+        }
+
+        ShowCommandError(outcome, title);
+        return false;
+    }
+
+    private bool TryExecuteRepeatableCurrentRangesCommand(
+        string title,
+        GridRange fallbackRange,
+        Func<GridRange, IWorkbookCommand> createCommand) =>
+        TryExecuteRepeatableCurrentRangesCommand(title, fallbackRange, createCommand, out _);
 
     private bool TryExecuteRepeatableChartLayout(
         string caption,
@@ -611,6 +684,14 @@ public partial class MainWindow
     /// </summary>
     private void RestoreSelectionAfterUndoRedo(CommandOutcome outcome)
     {
+        // R124-app-drawing-undo-selection-1: Undo of Delete Drawing Object (or Redo of it) carries a
+        // hint from CommandBus (see IDrawingObjectDeletionCommand) telling us to sync the host's
+        // object-selection fields, not just the plain cell-range selection below. Applied first so
+        // the cell-range branch below (which still runs, to land the active cell/viewport on the
+        // object's anchor exactly as it did before this fix) doesn't get short-circuited, and so a
+        // stale selection is cleared even if AffectedCells is somehow empty.
+        ApplyDrawingObjectSelectionHint(outcome.DrawingObjectSelection);
+
         if (outcome.AffectedCells is not { Count: > 0 } affectedCells)
             return;
 
@@ -654,6 +735,41 @@ public partial class MainWindow
         if (!targetSheetId.Equals(previousSheetId))
             RefreshSheetTabs();
     }
+
+    // R124-app-drawing-undo-selection-1: applies the DrawingObjectSelectionHint CommandBus attaches
+    // to the Undo/Redo outcome of a DeleteDrawingObjectCommand (see IDrawingObjectDeletionCommand).
+    // hint.Exists is true right after Undo re-inserted the object -- select it, with handles, exactly
+    // as Excel does. hint.Exists is false right after Redo re-deleted it -- if the (now stale)
+    // selection still names this object, clear it rather than leaving the ribbon's contextual
+    // Picture/Shape/Chart Format tab active for an object that no longer exists. The "still names
+    // this object" guard matters because between the Undo and the Redo the user could have selected a
+    // *different* object or a plain cell range; a blind clear would wrongly wipe that unrelated
+    // selection.
+    private void ApplyDrawingObjectSelectionHint(DrawingObjectSelectionHint? hint)
+    {
+        if (hint is not { } value)
+            return;
+
+        if (value.Exists)
+        {
+            SheetGrid.SelectedObjectId = value.ObjectId;
+            SheetGrid.SelectedObjectKind = ToUiObjectKind(value.Kind);
+        }
+        else if (SheetGrid.SelectedObjectId == value.ObjectId)
+        {
+            SheetGrid.SelectedObjectId = Guid.Empty;
+            SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.None;
+        }
+    }
+
+    private static FreeX.App.UI.ObjectKind ToUiObjectKind(SelectionPaneObjectKind kind) => kind switch
+    {
+        SelectionPaneObjectKind.Chart => FreeX.App.UI.ObjectKind.Chart,
+        SelectionPaneObjectKind.Picture => FreeX.App.UI.ObjectKind.Picture,
+        SelectionPaneObjectKind.TextBox => FreeX.App.UI.ObjectKind.TextBox,
+        SelectionPaneObjectKind.Shape => FreeX.App.UI.ObjectKind.Shape,
+        _ => FreeX.App.UI.ObjectKind.None,
+    };
 
     private void RecalculateAfterCommandOutcome(CommandOutcome outcome)
     {

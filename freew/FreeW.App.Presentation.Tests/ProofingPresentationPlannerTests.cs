@@ -121,7 +121,10 @@ public sealed class ProofingPresentationPlannerTests
         plan.Senses[0].DisplayLabel.Should().Be("adjective");
         plan.Senses[0].Actions.Select(action => action.DisplayText)
             .Should().Equal("glad of", "cheerful");
-        plan.Senses[0].Actions[0].ReplaceToolTip.Should().Be("Replace \"Happy\" with \"glad of\"");
+        // ThesaurusActionRow.ReplaceToolTip is a compatibility alias for InsertToolTip; the wording moved
+        // from "Replace X with Y" to "Insert Y in place of X" in a57cb73ff4 "Close FreeW Avalonia
+        // thesaurus action parity" (see ThesaurusPresentationPlannerTests for the current contract).
+        plan.Senses[0].Actions[0].ReplaceToolTip.Should().Be("Insert \"glad of\" in place of \"Happy\"");
         plan.Senses[0].Actions[0].CopyToolTip.Should().Be("Copy \"glad of\" to clipboard");
     }
 

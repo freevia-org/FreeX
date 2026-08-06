@@ -1,5 +1,7 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using Free.Shared.Shell;
 using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
@@ -31,7 +33,17 @@ internal sealed class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.DialogWin
         yes.Click += (_, _) => Accept();
         var no = new Button { Content = "_No", MinWidth = 72, Margin = new Thickness(8, 0, 0, 0) };
         no.Click += (_, _) => CloseWith(ManualHyphenationDialogAction.Skip);
-        var cancel = new Button { Content = "Cancel", MinWidth = 72, Margin = new Thickness(8, 0, 0, 0), IsCancel = true };
+
+        // Cancel routes through the shared shell-strings pipeline (same source ShellStrings.Current
+        // that DialogButtonRowFactory uses) so this dialog gets a localized "Annuler"/etc label and
+        // the Alt+ accelerator every other WPF dialog's Cancel button gets, instead of a hardcoded
+        // English literal. See DialogButtonRowFactoryLocalizationTests for the shared contract.
+        var cancelContent = ShellStrings.Current.Cancel;
+        var cancel = new Button { Content = cancelContent, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0), IsCancel = true };
+        AutomationProperties.SetName(cancel, ShellStrings.Current.CreateAutomationName(cancelContent));
+        var cancelAccelerator = ShellStringText.CreateAcceleratorKey(cancelContent);
+        if (!string.IsNullOrEmpty(cancelAccelerator))
+            AutomationProperties.SetAcceleratorKey(cancel, cancelAccelerator);
         cancel.Click += (_, _) => CloseWith(ManualHyphenationDialogAction.Cancel);
 
         var buttons = new StackPanel

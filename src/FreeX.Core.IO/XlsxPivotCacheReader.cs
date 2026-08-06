@@ -148,9 +148,29 @@ internal static class XlsxPivotCacheReader
         if (recordsEntry is null)
             return null;
 
-        using var stream = recordsEntry.Open();
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
+        // Route through the same hardened, char-capped reader every other package part in this
+        // codebase uses (DtdProcessing.Prohibit, XmlResolver=null, MaxCharactersInDocument) instead
+        // of a raw StreamReader.ReadToEnd(). WorkbookOpenSizeGuard only validates the zip central
+        // directory's *declared* entry Length/CompressedLength -- fields fully controlled by an
+        // attacker -- and never verifies what the DeflateStream actually yields when read, so an
+        // unbounded ReadToEnd() here let a crafted pivotCacheRecordsN.xml part with a small
+        // compressed size but a huge real decompressed size (a zip bomb) exhaust memory whenever a
+        // workbook declares an External/Consolidation/Scenario pivot cache. TryGetPreservedPivot-
+        // CacheRecordsXml (XlsxPivotTableWriter.Cache.cs) already re-parses this string with
+        // XDocument.Parse before ever using it, so returning the bounded-reader's re-serialized form
+        // here (instead of the byte-for-byte original text) loses nothing the write side depended on.
+        // A part that hits the cap or fails to parse returns null, matching TryGetPreservedPivotCache-
+        // RecordsXml's own existing fallback to the normal empty/regenerated-records path.
+        try
+        {
+            using var stream = recordsEntry.Open();
+            var recordsXml = OpcXml.LoadXml(stream);
+            return recordsXml.Root is null ? null : recordsXml.ToString(SaveOptions.DisableFormatting);
+        }
+        catch (System.Xml.XmlException)
+        {
+            return null;
+        }
     }
 
     private static IReadOnlyList<string> ReadSharedItemValues(XElement sharedItems, XNamespace workbookNs) =>

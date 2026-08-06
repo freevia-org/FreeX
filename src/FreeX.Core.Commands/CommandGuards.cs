@@ -361,8 +361,15 @@ public static class CommandGuards
                 // non-anchor member of a LIVE DYNAMIC ARRAY spill is just as directly writable as
                 // the anchor is -- real Excel has no "whole array must be selected" rule for a
                 // modern dynamic array at all, unlike a legacy CSE array. Skip the membership check
-                // entirely for this array; the write proceeds as an ordinary cell mutation and the
-                // owning anchor's next recalculation naturally detects the now-occupied cell.
+                // entirely for this array; the write proceeds as an ordinary cell mutation. The
+                // owning anchor's next recalculation then detects the now-occupied cell via
+                // Sheet.IsSpillBlocked -- guaranteed to actually happen in the very same recalc
+                // pass as this write because RecalcEngine.Recalculate's
+                // ExpandChangedCellsWithSpillMemberAnchors (R124-calc-spill-member-write-anchor-recalc)
+                // adds the anchor to the changed-cell set whenever a changed address is a non-anchor
+                // member of a still-registered live spill, even though the anchor's own formula
+                // (typically reference-free, e.g. "=SEQUENCE(3,1)") has no dependency-graph edge
+                // back to this cell.
                 if (allowDynamicSpillMemberWrite && !isLegacyCseArray)
                     continue;
 

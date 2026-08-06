@@ -21,6 +21,7 @@ public sealed class DialogSharedHelperDedupTests
     [InlineData("PasswordPromptDialog.cs")]
     [InlineData("StyleDialog.cs")]
     [InlineData("ZoomDialog.cs")]
+    [InlineData("IconPickerDialog.cs")]
     public void DialogsWithOkCancelRows_UseSharedButtonRowFactory(string fileName)
     {
         var source = ReadDialogSource(fileName);
@@ -28,6 +29,22 @@ public sealed class DialogSharedHelperDedupTests
         source.Should().Contain("DialogButtonRowFactory.Create(");
         // No hand-rolled accept button literal should remain in these converted dialogs.
         source.Should().NotContain("Content = \"OK\"");
+        source.Should().NotContain("Content = \"Cancel\"");
+    }
+
+    // R124: ManualHyphenationDialog has a 3-button (Yes/No/Cancel) row that does not fit the
+    // two-button DialogButtonRowFactory.Create(...) shape, so it is not in the theory above --
+    // but its Cancel button must still resolve through the shared ShellStrings.Current pipeline
+    // (same ambient source DialogButtonRowFactory reads) rather than hardcoding the English
+    // literal "Cancel", or a French-locale build shows an unlocalized button here while every
+    // other WPF dialog's Cancel is "Annuler". See ManualHyphenationDialogLocalizationTests for
+    // the runtime-localized-content proof.
+    [Fact]
+    public void ManualHyphenationDialog_CancelButton_RoutesThroughShellStrings()
+    {
+        var source = ReadDialogSource("ManualHyphenationDialog.cs");
+
+        source.Should().Contain("ShellStrings.Current.Cancel");
         source.Should().NotContain("Content = \"Cancel\"");
     }
 

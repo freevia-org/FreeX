@@ -161,6 +161,37 @@ public interface ICommandContext
     Sheet GetSheet(SheetId sheetId);
 }
 
+/// <summary>
+/// Optional interface a command can implement to identify itself as one that deletes/restores a
+/// single drawing object (picture, text box, shape, or chart) -- see
+/// <see cref="DeleteDrawingObjectCommand"/>. <see cref="CommandBus"/>'s Undo/Redo use this so the
+/// shells can keep the host's UI object-selection (SheetGrid.SelectedObjectId/-Kind or the Avalonia
+/// equivalent) in sync with the object's actual existence: undoing a delete re-selects the restored
+/// object (matching Excel, which leaves the object selected with resize handles immediately after
+/// Ctrl+Z), and redoing that delete clears a selection that would otherwise still reference the
+/// object that was just removed again.
+/// </summary>
+public interface IDrawingObjectDeletionCommand
+{
+    /// <summary>The kind of the single drawing object this command deletes/restores.</summary>
+    SelectionPaneObjectKind DrawingObjectKind { get; }
+
+    /// <summary>The id of the single drawing object this command deletes/restores.</summary>
+    Guid DrawingObjectId { get; }
+}
+
+/// <summary>
+/// Reported by <see cref="CommandBus"/>'s Undo/Redo when the undone/redone command implements
+/// <see cref="IDrawingObjectDeletionCommand"/>. <paramref name="Exists"/> is true after an Undo (the
+/// delete was reverted, so the object is back and should become the UI's selected object) and false
+/// after a Redo (the delete was re-applied, so any UI selection still pointing at this id/kind is now
+/// stale and should be cleared).
+/// </summary>
+public readonly record struct DrawingObjectSelectionHint(
+    SelectionPaneObjectKind Kind,
+    Guid ObjectId,
+    bool Exists);
+
 /// <summary>Result of executing a command.</summary>
 /// <param name="RequiresFullRecalc">
 /// Set by <see cref="CommandBus"/>'s Undo/Redo (never by a command's own Apply/Revert) when the
@@ -168,9 +199,15 @@ public interface ICommandContext
 /// interface for why Undo/Redo, unlike the forward Execute path, has no other way to trigger the
 /// full recalculation these structural sheet operations require.
 /// </param>
+/// <param name="DrawingObjectSelection">
+/// Set by <see cref="CommandBus"/>'s Undo/Redo (never by a command's own Apply/Revert) when the
+/// undone/redone command implements <see cref="IDrawingObjectDeletionCommand"/> -- see that
+/// interface.
+/// </param>
 public sealed record CommandOutcome(
     bool Success,
     string? ErrorMessage = null,
     IReadOnlyList<CellAddress>? AffectedCells = null,
     bool IsNoOp = false,
-    bool RequiresFullRecalc = false);
+    bool RequiresFullRecalc = false,
+    DrawingObjectSelectionHint? DrawingObjectSelection = null);

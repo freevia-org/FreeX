@@ -68,10 +68,21 @@ internal static class XlsxWorksheetHyperlinkRelationshipPruner
         if (context is null)
             return;
 
-        foreach (var (sheetName, targetWorksheetPath) in context.TargetSheets)
+        foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
-            if (!context.SourceSheets.TryGetValue(sheetName, out var sourceWorksheetPath))
+            // R124-io-hyperlink-rename-1: sheetName here is the LOAD-TIME name; context.TargetSheets
+            // is keyed by the CURRENT (post-rename) name, so a plain lookup of sheetName against it
+            // fails unconditionally for any sheet renamed in this same edit session -- silently
+            // skipping the prune for that sheet forever (see class doc comment: an un-pruned orphan
+            // is re-captured as the next session's source snapshot and can never be pruned
+            // afterward). Resolve via the same rename-tolerant fallback every sibling preserver in
+            // this file set already uses (name match, then rename-stable worksheet-path match, then
+            // Sheet.Id-verified name when available).
+            if (!XlsxRenamedSourceSheetResolver.TryResolveTargetWorksheetPath(
+                    context, sheetName, sourceWorksheetPath, out var targetWorksheetPath))
+            {
                 continue;
+            }
 
             var targetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
             var relsEntry = targetArchive.GetEntry(targetRelsPath);
