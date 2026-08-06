@@ -1318,20 +1318,6 @@ public partial class MainWindow
         if (ext == ".xlsx" && !ConfirmUnsupportedXlsxFeatureSave())
             return false;
 
-        // Detect a concurrent second writer before doing any work: if this save targets the same
-        // path this window loaded from, and the on-disk write time no longer matches what was
-        // captured at open, someone else (another FreeX/Excel instance, a colleague on a shared
-        // drive) has changed the file since -- writing over it here would silently discard their
-        // changes. Ask before clobbering, matching Excel's own behavior for this scenario.
-        if (string.Equals(target.Path, _currentFilePath, StringComparison.OrdinalIgnoreCase) &&
-            _currentFileSourceLastWriteTimeUtc is { } expectedWriteTimeUtc &&
-            System.IO.File.Exists(target.Path) &&
-            System.IO.File.GetLastWriteTimeUtc(target.Path) != expectedWriteTimeUtc &&
-            !ConfirmExternallyModifiedFileOverwrite(target.Path))
-        {
-            return false;
-        }
-
         // Save-As to a plain/single-sheet lossy format (CSV/TXT/PRN/SLK/DIF/DBF, ...) has no gate at
         // all otherwise: a multi-sheet workbook or one with charts would write silently, dropping
         // every sheet but the current one plus any charts, with no warning the .xlsx path already
@@ -1343,10 +1329,17 @@ public partial class MainWindow
             return false;
         }
 
-        // Capture identity/generation before any await so we can detect edits or
-        // workbook replacement that occur while the serialization is running.
-        var generationAtSaveStart = _workbookDirtyGeneration;
-        var workbookAtSaveStart = _workbook;
+        var executionStart = WorkbookSaveExecutionCoordinator.Begin(new WorkbookSaveExecutionStartRequest(
+            _currentFilePath,
+            target,
+            _currentFileSourceLastWriteTimeUtc,
+            GetCurrentWorkbook: () => _workbook,
+            GetDirtyGeneration: () => _workbookDirtyGeneration,
+            ConfirmExternallyModifiedOverwrite: ConfirmExternallyModifiedFileOverwrite));
+        if (!executionStart.CanExecute)
+            return false;
+
+        var saveExecution = executionStart.Execution!;
 
         using var operationCancellation = BeginFileOperationCancellation();
         try
@@ -1369,31 +1362,64 @@ public partial class MainWindow
             _windowRegistry?.BroadcastSaveInProgress(this, inProgress: true);
             _operationProgressFileName = System.IO.Path.GetFileName(target.Path);
             ShowSaveProgress(CreateSaveProgress("preparing", TimeSpan.Zero, 1));
-            // R120-corewriter-persist-saving-window-view-1: reconcile THIS window's own
-            // per-window view state (zoom/view-mode/gridlines/headings/rulers/show-formulas/
-            // freeze/split) onto the shared Sheet fields before the writer reads them, so a save
-            // from THIS window persists what THIS window is displaying rather than whichever
-            // "New Window" sibling last touched those shared fields. Must run synchronously,
-            // before any of the workbook is handed off for background serialization below.
-            ReconcileViewStateForSave();
             var progress = new Progress<SaveProgressUpdate>(
                 update => ShowSaveProgress(update.Title, update.Detail, update.Percent));
-            var saveWarnings = await new SaveWorkbookWriter().SaveAsync(
-                target.Path,
-                target.Adapter,
-                _workbook,
-                progress,
+            var executionResult = await saveExecution.ExecuteAsync(new WorkbookSaveExecutionRequest(
                 operationCancellation.Token,
-                string.Equals(target.Path, _currentFilePath, StringComparison.OrdinalIgnoreCase)
-                    ? _currentFileSourceLastWriteTimeUtc
-                    : null);
-            operationCancellation.Token.ThrowIfCancellationRequested();
+                ProjectViewStateForSave: ReconcileViewStateForSave,
+                SaveAsync: invocation => new SaveWorkbookWriter().SaveAsync(
+                    invocation.Target.Path,
+                    invocation.Target.Adapter,
+                    invocation.Workbook,
+                    progress,
+                    invocation.CancellationToken,
+                    invocation.ExpectedLastWriteTimeUtc)));
 
-            var plan = SaveCompletionPlanner.Plan(
-                generationAtSaveStart,
-                _workbookDirtyGeneration,
-                sameWorkbook: ReferenceEquals(_workbook, workbookAtSaveStart),
-                target.Path);
+            if (executionResult.Outcome == WorkbookSaveExecutionOutcome.Canceled)
+            {
+                RecordDiagnosticEvent("workbook_save_canceled", new Dictionary<string, string?>
+                {
+                    ["extension"] = ext,
+                    ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                    ["format"] = target.Adapter.FormatName
+                });
+                return false;
+            }
+
+            if (executionResult.Outcome == WorkbookSaveExecutionOutcome.ExternalWriteConflict)
+            {
+                RecordDiagnosticEvent("workbook_save_externally_modified", new Dictionary<string, string?>
+                {
+                    ["extension"] = ext,
+                    ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                    ["format"] = target.Adapter.FormatName
+                });
+                ShowOwnedMessage(
+                    UiText.Format("MainWindowMessage_ExternallyModifiedFileBody", System.IO.Path.GetFileName(target.Path)),
+                    UiText.Get("MainWindowMessage_ExternallyModifiedFileTitle"),
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+
+            if (executionResult.Outcome == WorkbookSaveExecutionOutcome.Failed)
+            {
+                var saveException = executionResult.Exception ?? new InvalidOperationException("Save failed.");
+                RecordDiagnosticEvent("workbook_save_failed", new Dictionary<string, string?>
+                {
+                    ["extension"] = ext,
+                    ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                    ["format"] = target.Adapter.FormatName,
+                    ["reason"] = saveException.GetType().Name
+                });
+                ShowOwnedMessage(
+                    UiText.Format("MainWindowMessage_SaveFileFailed", saveException.Message),
+                    UiText.Get("MainWindowMessage_SaveErrorTitle"),
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+
+            var plan = executionResult.CompletionPlan
+                ?? throw new InvalidOperationException("A successful save did not produce a completion plan.");
 
             if (plan.ApplyFileContext && plan.FileContext is { } fileContext)
             {
@@ -1406,9 +1432,7 @@ public partial class MainWindow
                 // The save just wrote target.Path, so refresh our "known good" write-time snapshot
                 // to the file's new on-disk timestamp -- otherwise the very next save would think
                 // ITS OWN prior write was an external modification and warn spuriously.
-                _currentFileSourceLastWriteTimeUtc = System.IO.File.Exists(target.Path)
-                    ? System.IO.File.GetLastWriteTimeUtc(target.Path)
-                    : null;
+                _currentFileSourceLastWriteTimeUtc = executionResult.SavedLastWriteTimeUtc;
             }
 
             if (plan.MarkSaved)
@@ -1420,7 +1444,7 @@ public partial class MainWindow
             // this call ensures the full viewport/title refresh for the file-context.
             if (plan.ApplyFileContext)
                 NotifyOtherWindowsOfWorkbookChange();
-            ShowXlsxSaveWarningsIfNeeded(saveWarnings);
+            ShowXlsxSaveWarningsIfNeeded(executionResult.Warnings);
             RecordDiagnosticEvent("workbook_saved", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
@@ -1429,34 +1453,6 @@ public partial class MainWindow
                 ["worksheetCount"] = _workbook.Sheets.Count.ToString()
             });
             return true;
-        }
-        catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
-        {
-            RecordDiagnosticEvent("workbook_save_canceled", new Dictionary<string, string?>
-            {
-                ["extension"] = ext,
-                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
-                ["format"] = target.Adapter.FormatName
-            });
-            return false;
-        }
-        catch (WorkbookExternallyModifiedException)
-        {
-            // Belt-and-suspenders: the proactive check above already covers the common case, but
-            // the file could still have changed in the (check-then-act) gap between that check and
-            // WorkbookSaveService actually writing. Surface the same warning rather than silently
-            // failing or (worse) letting a stale exception type escape as an unhandled save error.
-            RecordDiagnosticEvent("workbook_save_externally_modified", new Dictionary<string, string?>
-            {
-                ["extension"] = ext,
-                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
-                ["format"] = target.Adapter.FormatName
-            });
-            ShowOwnedMessage(
-                UiText.Format("MainWindowMessage_ExternallyModifiedFileBody", System.IO.Path.GetFileName(target.Path)),
-                UiText.Get("MainWindowMessage_ExternallyModifiedFileTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
-            return false;
         }
         catch (Exception ex)
         {

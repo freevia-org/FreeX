@@ -29720,30 +29720,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return true;
         }
 
-        // This save targets the same path the session was opened from -- only then does the
-        // captured write-time snapshot mean anything (a Save-As to a different path is never a
-        // clobber of the original file).
         var targetPath = target.Path;
-        var savingOverOpenedPath = PlatformPathIdentityComparer.Current.Equals(_session.CurrentFilePath, targetPath);
-
-        // Detect a concurrent second writer before doing any work: if this save targets the same
-        // path this session loaded from, and the on-disk write time no longer matches what was
-        // captured at open, someone else (another FreeX/Excel instance, a colleague on a shared
-        // drive) has changed the file since -- writing over it here would silently discard their
-        // changes. Ask before clobbering, matching Excel's own behavior for this scenario and the
-        // WPF host's equivalent check in MainWindow.Backstage.cs
-        // (R116-avalonia-external-modification-detection).
-        if (savingOverOpenedPath &&
-            _currentFileSourceLastWriteTimeUtc is { } expectedWriteTimeUtc &&
-            File.Exists(targetPath) &&
-            File.GetLastWriteTimeUtc(targetPath) != expectedWriteTimeUtc &&
-            ResolveExternallyModifiedFileOverwriteConfirm(targetPath) != UserMessageResult.Yes)
-        {
+        var sessionAtSaveStart = _session;
+        var executionStart = WorkbookSaveExecutionCoordinator.Begin(new WorkbookSaveExecutionStartRequest(
+            sessionAtSaveStart.CurrentFilePath,
+            target,
+            _currentFileSourceLastWriteTimeUtc,
+            GetCurrentWorkbook: () => _session.Workbook,
+            GetDirtyGeneration: () => _session.DirtyGeneration,
+            ConfirmExternallyModifiedOverwrite: path =>
+                ResolveExternallyModifiedFileOverwriteConfirm(path) == UserMessageResult.Yes,
+            CompletionDisplayName: Path.GetFileName(targetPath)));
+        if (!executionStart.CanExecute)
             return false;
-        }
 
-        // Capture the dirty generation before the first await so mid-save edits are detectable.
-        var generationAtSaveStart = _session.DirtyGeneration;
+        var saveExecution = executionStart.Execution!;
         _isSaving = true;
         // R119-avalonia-file-op-cancel: this is the single choke point every save path funnels
         // through (Save, Save As, autosave-triggered saves), so wiring the cancellable token here
@@ -29764,61 +29755,71 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     _statusText.Foreground = Brush(67, 113, 83);
                 });
 
-            fileAccessIdentity ??= await _workbookFileAccessService.CreateIdentityAsync(
-                targetPath,
-                existingIdentity: _session.CurrentFileAccessIdentity);
-            using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(StorageProvider, fileAccessIdentity);
             // R120-corewriter-persist-saving-window-view-1: reconcile THIS view's own per-window
             // view state (zoom/view-mode/gridlines/headings/show-formulas/freeze/split) onto the
             // shared Sheet fields before the writer reads them, so a save from THIS view persists
             // what THIS view is displaying rather than whichever sibling view last touched those
             // shared fields. Must run synchronously, before the workbook is handed off below.
-            _session.ReconcileViewStateForSave();
-            var saveWarnings = await _saveService.SaveAsync(
-                targetPath,
-                target.Adapter,
-                _session.Workbook,
-                progress,
+            var executionResult = await saveExecution.ExecuteAsync(new WorkbookSaveExecutionRequest(
                 operationCancellation.Token,
-                savingOverOpenedPath ? _currentFileSourceLastWriteTimeUtc : null);
-            operationCancellation.Token.ThrowIfCancellationRequested();
-            _session.TryMarkSavedIfNoEditsArrived(generationAtSaveStart, targetPath, fileAccessIdentity);
+                ProjectViewStateForSave: sessionAtSaveStart.ReconcileViewStateForSave,
+                SaveAsync: invocation => _saveService.SaveAsync(
+                    invocation.Target.Path,
+                    invocation.Target.Adapter,
+                    invocation.Workbook,
+                    progress,
+                    invocation.CancellationToken,
+                    invocation.ExpectedLastWriteTimeUtc),
+                PrepareAsync: async _ =>
+                {
+                    fileAccessIdentity ??= await _workbookFileAccessService.CreateIdentityAsync(
+                        targetPath,
+                        existingIdentity: sessionAtSaveStart.CurrentFileAccessIdentity);
+                    var fileAccess = await _workbookFileAccessService.BeginAccessAsync(
+                        StorageProvider,
+                        fileAccessIdentity);
+                    return new WorkbookSaveExecutionPreparation(fileAccessIdentity, fileAccess);
+                }));
+
+            if (executionResult.Outcome == WorkbookSaveExecutionOutcome.ExternalWriteConflict)
+            {
+                ShowSaveIssue(UiText.Format(
+                    "MainWindowMessage_ExternallyModifiedFileBody",
+                    Path.GetFileName(targetPath)));
+                return false;
+            }
+
+            if (executionResult.Outcome == WorkbookSaveExecutionOutcome.Canceled)
+            {
+                ShowSaveIssue("Save canceled.");
+                return false;
+            }
+
+            if (executionResult.Outcome == WorkbookSaveExecutionOutcome.Failed)
+            {
+                ShowSaveIssue($"Save failed: {executionResult.Exception?.Message ?? "Unknown error."}");
+                return false;
+            }
+
+            var completionPlan = executionResult.CompletionPlan
+                ?? throw new InvalidOperationException("A successful save did not produce a completion plan.");
+            _session.ApplySaveCompletion(completionPlan);
             // The save just wrote targetPath -- refresh the "known good" write-time snapshot to the
             // file's new on-disk timestamp so the very next save doesn't mistake THIS save's own
             // write for an external modification (mirrors the WPF host's equivalent refresh).
-            _currentFileSourceLastWriteTimeUtc = File.Exists(targetPath)
-                ? File.GetLastWriteTimeUtc(targetPath)
-                : null;
+            if (completionPlan.ApplyFileContext)
+            {
+                _currentFileSourceLastWriteTimeUtc = executionResult.SavedLastWriteTimeUtc;
+                if (completionPlan.FileContext is { } fileContext)
+                    RecordRecentWorkbook(fileContext.Path, fileContext.FileAccessIdentity);
+            }
             // A clean save means there is nothing left to recover from — delete the crash-recovery
             // snapshot immediately rather than waiting for window close (mirrors WPF's
             // NotifyAutosaveSaved, called from the same save-completion point).
-            _autosaveCoordinator?.NotifyAutosaveSaved();
-            RecordRecentWorkbook(target.Path, fileAccessIdentity);
-            RefreshShell(FormatSaveCompletionStatus(targetPath, saveWarnings));
+            if (completionPlan.MarkSaved)
+                _autosaveCoordinator?.NotifyAutosaveSaved();
+            RefreshShell(FormatSaveCompletionStatus(targetPath, executionResult.Warnings));
             return true;
-        }
-        catch (WorkbookExternallyModifiedException)
-        {
-            // Belt-and-suspenders: the proactive check above already covers the common case, but
-            // the file could still have changed in the (check-then-act) gap between that check and
-            // WorkbookSaveService actually writing. Surface the same warning rather than silently
-            // failing or letting a shell-crashing exception type escape (mirrors the WPF host's
-            // equivalent catch in MainWindow.Backstage.cs).
-            ShowSaveIssue(UiText.Format(
-                "MainWindowMessage_ExternallyModifiedFileBody",
-                Path.GetFileName(targetPath)));
-            return false;
-        }
-        catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
-        {
-            // The user clicked the status-bar Cancel button (R119-avalonia-file-op-cancel).
-            // WorkbookSaveService.SaveAsync only replaces the on-disk file (ReplaceTargetFile)
-            // after its own final ThrowIfCancellationRequested, so a cancellation reaching here
-            // never overwrote the original file with a partial write -- the workbook is
-            // deliberately left dirty (TryMarkSavedIfNoEditsArrived never ran) so the user is not
-            // told a canceled save actually completed, matching the WPF host's equivalent catch.
-            ShowSaveIssue("Save canceled.");
-            return false;
         }
         catch (Exception ex)
         {
