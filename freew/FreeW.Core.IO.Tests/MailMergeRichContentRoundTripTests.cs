@@ -10,11 +10,11 @@ public sealed class MailMergeRichContentRoundTripTests
     {
         var paragraph = new Paragraph();
         paragraph.Runs.Add(Run.ComplexFieldRun(
-            " FILLIN \"Department\" \\d \"Operations\" \\o ",
+            " FILLIN \"Department\" \\d \"Operations\" \\o \\* Upper ",
             "cached department"));
         paragraph.Runs.Add(new Run(" | "));
         paragraph.Runs.Add(Run.ComplexFieldRun(
-            " ASK Manager \"Who is the manager?\" \\d \"Alex\" \\o ",
+            " ASK Manager \"Who is the manager?\" \\d \"Alex\" \\o \\* Caps ",
             "cached manager"));
         paragraph.Runs.Add(new Run(" | "));
         paragraph.Runs.Add(Run.ComplexFieldRun(" REF Manager ", "cached reference"));
@@ -27,8 +27,8 @@ public sealed class MailMergeRichContentRoundTripTests
         var reopened = DocxReader.Read(stream);
         var prompts = MailMergeInteractivePromptPlanner.Plan(reopened);
         var state = new MergeState();
-        state.FillInAnswers["Department"] = "Engineering";
-        state.AskAnswers["Manager"] = "Margaret";
+        state.FillInAnswers["Department"] = "Engineering team";
+        state.AskAnswers["Manager"] = "margaret hamilton";
         var merged = MailMerge.MergeAllWithRules(
             reopened,
             new MergeData(["Name"], [["Ada"]]),
@@ -45,9 +45,10 @@ public sealed class MailMergeRichContentRoundTripTests
                 "Manager",
                 "Who is the manager?",
                 "Alex"));
-        merged.Should().ContainSingle().Which.PlainText.Should().Be("Engineering |  | Margaret | Ada");
+        merged.Should().ContainSingle().Which.PlainText.Should().Be(
+            "ENGINEERING TEAM |  | Margaret Hamilton | Ada");
         merged[0].Paragraphs.Single().Runs.Should().AllSatisfy(run => run.ComplexField.Should().BeNull());
-        state.Bookmarks["Manager"].Should().Be("Margaret");
+        state.Bookmarks["Manager"].Should().Be("Margaret Hamilton");
     }
 
     [Fact]
