@@ -23,6 +23,11 @@ public sealed class SetZoomTargetCommand : IPresentationCommand
     private string? _oldSectionId;
     private string? _oldRawXml;
     private string? _oldAlternativeText;
+    private ZoomObjectProperties? _oldProperties;
+    private ImagePart? _oldPicture;
+    private Dictionary<string, byte[]>? _oldParts;
+    private Dictionary<string, string>? _oldPartContentTypes;
+    private Dictionary<string, (string RelType, string TargetPath)>? _oldSlideRels;
 
     public SetZoomTargetCommand(
         int slideIndex,
@@ -72,11 +77,34 @@ public sealed class SetZoomTargetCommand : IPresentationCommand
         _oldSectionId = info.ZoomTargetSectionId;
         _oldRawXml = info.RawXml;
         _oldAlternativeText = shape.AlternativeText;
+        _oldProperties = info.ZoomProperties;
+        _oldPicture = shape.Picture is null
+            ? null
+            : new ImagePart
+            {
+                Bytes = shape.Picture.Bytes.ToArray(),
+                ContentType = shape.Picture.ContentType,
+            };
+        _oldParts = CloneBytes(info.Parts);
+        _oldPartContentTypes = new Dictionary<string, string>(info.PartContentTypes, StringComparer.OrdinalIgnoreCase);
+        _oldSlideRels = new Dictionary<string, (string RelType, string TargetPath)>(info.SlideRels, StringComparer.Ordinal);
         if (!TryPatchRawXml(info.RawXml, _targetKind, _newSlideNumericId, _newSectionId, out var rawXml))
             return;
 
         info.ZoomTargetSlideNumericId = _targetKind == ZoomTargetKind.Slide ? _newSlideNumericId : null;
         info.ZoomTargetSectionId = _targetKind == ZoomTargetKind.Section ? _newSectionId : null;
+        if (TryClearAutoPreview(rawXml, info, out var previewRelId, out var previewPath, out var clearedXml))
+        {
+            rawXml = clearedXml;
+            info.SlideRels.Remove(previewRelId!);
+            if (previewPath is not null)
+                RemoveUnreferencedPart(info, previewPath);
+            info.ZoomProperties = (info.ZoomProperties ?? new ZoomObjectProperties()) with
+            {
+                ImageType = "preview",
+            };
+            shape.Picture = null;
+        }
         info.RawXml = rawXml;
         shape.AlternativeText = _newAlternativeText;
     }
@@ -90,6 +118,20 @@ public sealed class SetZoomTargetCommand : IPresentationCommand
         info.ZoomTargetSectionId = _oldSectionId;
         if (_oldRawXml is not null)
             info.RawXml = _oldRawXml;
+        info.ZoomProperties = _oldProperties;
+        shape.Picture = _oldPicture is null
+            ? null
+            : new ImagePart
+            {
+                Bytes = _oldPicture.Bytes.ToArray(),
+                ContentType = _oldPicture.ContentType,
+            };
+        if (_oldParts is not null)
+            Restore(info.Parts, _oldParts);
+        if (_oldPartContentTypes is not null)
+            Restore(info.PartContentTypes, _oldPartContentTypes);
+        if (_oldSlideRels is not null)
+            Restore(info.SlideRels, _oldSlideRels);
         if (_oldAlternativeText is not null)
             shape.AlternativeText = _oldAlternativeText;
     }
@@ -154,6 +196,61 @@ public sealed class SetZoomTargetCommand : IPresentationCommand
 
         patchedXml = root.ToString(SaveOptions.DisableFormatting);
         return true;
+    }
+
+    private static bool TryClearAutoPreview(
+        string rawXml,
+        PreservedObjectInfo info,
+        out string? relationshipId,
+        out string? targetPath,
+        out string clearedXml)
+    {
+        relationshipId = null;
+        targetPath = null;
+        clearedXml = rawXml;
+        XElement root;
+        try { root = XElement.Parse(rawXml, LoadOptions.PreserveWhitespace); }
+        catch { return false; }
+
+        var properties = root.Descendants().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "zmPr", StringComparison.OrdinalIgnoreCase));
+        if (properties is null
+            || string.Equals(properties.Attribute("imageType")?.Value, "cover", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var blip = properties.Descendants().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "blip", StringComparison.OrdinalIgnoreCase));
+        var embed = blip?.Attributes().FirstOrDefault(attribute =>
+            string.Equals(attribute.Name.LocalName, "embed", StringComparison.OrdinalIgnoreCase));
+        if (embed is null || string.IsNullOrWhiteSpace(embed.Value)
+            || !info.SlideRels.TryGetValue(embed.Value, out var relation))
+            return false;
+
+        relationshipId = embed.Value;
+        targetPath = relation.TargetPath;
+        embed.Remove();
+        clearedXml = root.ToString(SaveOptions.DisableFormatting);
+        return true;
+    }
+
+    private static void RemoveUnreferencedPart(PreservedObjectInfo info, string targetPath)
+    {
+        if (info.SlideRels.Values.Any(relation =>
+                string.Equals(relation.TargetPath, targetPath, StringComparison.OrdinalIgnoreCase)))
+            return;
+
+        info.Parts.Remove(targetPath);
+        info.PartContentTypes.Remove(targetPath);
+    }
+
+    private static Dictionary<string, byte[]> CloneBytes(IReadOnlyDictionary<string, byte[]> source) =>
+        source.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray(), StringComparer.OrdinalIgnoreCase);
+
+    private static void Restore<T>(IDictionary<string, T> destination, IReadOnlyDictionary<string, T> source)
+    {
+        destination.Clear();
+        foreach (var pair in source)
+            destination[pair.Key] = pair.Value;
     }
 }
 
