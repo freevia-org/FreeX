@@ -2500,6 +2500,12 @@
   <data name="Ribbon_Command_AnimationEmphasisChangeFontColor_KeyTip" xml:space="preserve">
     <value>FC</value>
   </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeFontSize_Label" xml:space="preserve">
+    <value>Change Font Size</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeFontSize_KeyTip" xml:space="preserve">
+    <value>FS</value>
+  </data>
   <data name="Ribbon_Command_AnimationEmphasisGrowWithColor_Label" xml:space="preserve">
     <value>Grow With Color</value>
   </data>

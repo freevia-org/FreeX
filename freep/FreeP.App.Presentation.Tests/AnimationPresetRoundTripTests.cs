@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Xml.Linq;
+using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
 
@@ -435,6 +436,40 @@ public sealed class AnimationPresetRoundTripTests
         cTn.Attribute("presetSubtype")!.Value.Should().Be("2");
         cTn.Descendants(p + "anim").Should().ContainSingle()
             .Which.Descendants(p + "attrName").Single().Value.Should().Be("style.fontSize");
+        cTn.Descendants(p + "animScale").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AuthoredChangeFontSizeWritesNativePowerPointBehavior()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(
+            PresentationAnimationCommandPlanner.BuildFontSizeAnimation(7));
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+
+        animation.Preset.Should().Be(AnimationPreset.Grow);
+        animation.RawPresetClass.Should().Be("emph");
+        animation.RawPresetId.Should().Be(4);
+        animation.RawPresetSubtype.Should().Be("2");
+        animation.PreservedNumericBehaviorXml.Should().Contain("style.fontSize");
+        animation.PreservedNumericBehaviorXml.Should().Contain("to=\"1.5\"");
+
+        using var archive = new ZipArchive(new MemoryStream(first.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetClass")?.Value == "emph"
+                && element.Attribute("presetID")?.Value == "4");
+        cTn.Attribute("presetSubtype")!.Value.Should().Be("2");
+        cTn.Descendants(p + "anim").Should().ContainSingle()
+            .Which.Descendants(p + "attrName").Single().Value.Should().Be("style.fontSize");
+        cTn.Descendants(p + "anim").Single().Attribute("to")!.Value.Should().Be("1.5");
         cTn.Descendants(p + "animScale").Should().BeEmpty();
     }
 
