@@ -14,6 +14,8 @@ public sealed class MailMergeFinishPlannerSourceTests
         source.Should().Contain("finishPlan.RowIndexes");
         source.Should().Contain("finishPlan.Destination == MailMergeFinishDestination.Printer");
         source.Should().Contain("printDocument!(combined)");
+        source.Should().Contain("MailMergeInteractivePromptPlanner.Plan(template)");
+        source.Should().Contain("prompt.Prompt, prompt.DefaultAnswer");
         source.Should().NotContain("var augmentedRows = data.Rows.Select(r => session.AugmentRow(r)).ToList();");
     }
 

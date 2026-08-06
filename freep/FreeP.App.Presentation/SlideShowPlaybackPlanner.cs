@@ -295,6 +295,63 @@ public static class SlideShowPlaybackPlanner
         return new(italic, bold, underline);
     }
 
+    public static bool? ResolveFontStyleProperty(
+        ShapeAnimation animation,
+        string propertyName)
+    {
+        var values = ResolveFontStyleBehavior(animation);
+        return propertyName switch
+        {
+            "style.fontStyle" => values.Italic,
+            "style.fontWeight" => values.Bold,
+            "style.textDecorationUnderline" => values.Underline,
+            _ => null,
+        };
+    }
+
+    public static string? RewriteFontStyleBehavior(
+        string? behaviorXml,
+        string propertyName,
+        bool value)
+    {
+        if (string.IsNullOrWhiteSpace(behaviorXml)
+            || string.IsNullOrWhiteSpace(propertyName))
+        {
+            return null;
+        }
+
+        var serializedValue = propertyName switch
+        {
+            "style.fontStyle" => value ? "italic" : "normal",
+            "style.fontWeight" => value ? "bold" : "normal",
+            "style.textDecorationUnderline" => value ? "true" : "false",
+            _ => null,
+        };
+        if (serializedValue is null)
+            return null;
+
+        try
+        {
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            var root = XElement.Parse(behaviorXml, LoadOptions.PreserveWhitespace);
+            var setter = root.Descendants(p + "set")
+                .FirstOrDefault(element => string.Equals(
+                    element.Descendants(p + "attrName").FirstOrDefault()?.Value.Trim(),
+                    propertyName,
+                    StringComparison.Ordinal));
+            var target = setter?.Descendants(p + "strVal").FirstOrDefault();
+            if (target?.Attribute("val") is not { } val)
+                return null;
+
+            val.Value = serializedValue;
+            return root.ToString(SaveOptions.DisableFormatting);
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+    }
+
     public static SlideShowFontSizePlaybackPlan? ResolveFontSizeBehavior(ShapeAnimation animation)
     {
         if (string.IsNullOrWhiteSpace(animation.PreservedNumericBehaviorXml))
@@ -317,6 +374,92 @@ public static class SlideShowPlaybackPlanner
             }
 
             return new(multiplier);
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+    }
+
+    public static string? RewriteFontSizeBehavior(
+        ShapeAnimation animation,
+        double multiplier)
+    {
+        ArgumentNullException.ThrowIfNull(animation);
+        if (!double.IsFinite(multiplier) || multiplier <= 0
+            || string.IsNullOrWhiteSpace(animation.PreservedNumericBehaviorXml))
+        {
+            return null;
+        }
+
+        try
+        {
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            var root = XElement.Parse(animation.PreservedNumericBehaviorXml, LoadOptions.PreserveWhitespace);
+            var numericAnimation = root.DescendantsAndSelf(p + "anim")
+                .FirstOrDefault(element =>
+                    string.Equals(
+                        element.Descendants(p + "attrName").FirstOrDefault()?.Value.Trim(),
+                        "style.fontSize",
+                        StringComparison.Ordinal)
+                    && string.Equals(
+                        element.Attribute("valueType")?.Value,
+                        "num",
+                        StringComparison.Ordinal));
+            if (numericAnimation?.Attribute("to") is not { } to)
+                return null;
+
+            to.Value = multiplier.ToString("0.######", CultureInfo.InvariantCulture);
+            return root.ToString(SaveOptions.DisableFormatting);
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+    }
+
+    public static string? ResolveNativeColorToken(string? behaviorXml)
+    {
+        if (string.IsNullOrWhiteSpace(behaviorXml))
+            return null;
+
+        try
+        {
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            var target = XElement.Parse(behaviorXml, LoadOptions.PreserveWhitespace)
+                .Descendants(p + "to")
+                .SelectMany(element => element.Elements(a + "schemeClr"))
+                .FirstOrDefault();
+            return target?.Attribute("val")?.Value.Trim();
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+    }
+
+    public static string? RewriteNativeColorBehavior(
+        string? behaviorXml,
+        string colorToken)
+    {
+        if (string.IsNullOrWhiteSpace(behaviorXml)
+            || string.IsNullOrWhiteSpace(colorToken))
+            return null;
+
+        try
+        {
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            var root = XElement.Parse(behaviorXml, LoadOptions.PreserveWhitespace);
+            var target = root.Descendants(p + "to")
+                .FirstOrDefault(element => element.Elements(a + "schemeClr").Any());
+            if (target is null)
+                return null;
+
+            target.Elements().Where(element => element.Name.Namespace == a).Remove();
+            target.Add(new XElement(a + "schemeClr", new XAttribute("val", colorToken)));
+            return root.ToString(SaveOptions.DisableFormatting);
         }
         catch (XmlException)
         {

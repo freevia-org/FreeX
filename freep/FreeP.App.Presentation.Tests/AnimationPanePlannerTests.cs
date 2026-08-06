@@ -1,5 +1,8 @@
 using System.Globalization;
+using System.IO.Compression;
+using System.Xml.Linq;
 using FreeP.App.Compositor;
+using FreeP.Core.IO;
 
 namespace FreeP.App.Compositor.Tests;
 
@@ -945,6 +948,179 @@ public sealed class AnimationPanePlannerTests
         AnimationPanePlanner.TryApplyEffectOptionMutation(editor, mutation).Should().BeTrue();
         editor.CurrentSlideAnimations[0].ScaleBehavior!.ToX
             .Should().Be(AnimationScaleBehavior.Format(4));
+    }
+
+    [Fact]
+    public void NativeChangeFontSizeAmountEditPreservesNumericBehavior()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = presentation.Slides[0].Shapes[0].Id,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Grow,
+            RawPresetClass = "emph",
+            RawPresetId = 4,
+            RawPresetSubtype = "2",
+            PreservedNumericBehaviorXml = """
+                <p:anim xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" valueType="num" to="1.5">
+                  <p:cBhvr><p:attrNameLst><p:attrName>style.fontSize</p:attrName></p:attrNameLst></p:cBhvr>
+                </p:anim>
+                """
+        });
+
+        var options = AnimationPanePlanner.BuildEffectOptionsPlan(editor.CurrentSlideAnimations, 0);
+
+        options.CanApply.Should().BeTrue();
+        options.SelectedOptionText.Should().Be("Larger (150%)");
+        options.Options.Should().HaveCount(4);
+        options.Options.Should().OnlyContain(option =>
+            option.PreservedNumericBehaviorXml != null);
+
+        AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            "amount-150").ShouldApply.Should().BeFalse();
+
+        var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            "amount-400");
+
+        mutation.ShouldApply.Should().BeTrue();
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, mutation).Should().BeTrue();
+        SlideShowPlaybackPlanner.ResolveFontSizeBehavior(editor.CurrentSlideAnimations[0])!
+            .Multiplier.Should().Be(4);
+        editor.CurrentSlideAnimations[0].PreservedNumericBehaviorXml
+            .Should().Contain("to=\"4\"")
+            .And.NotContain("animScale");
+
+        using var output = new MemoryStream();
+        PptxPackageWriter.Write(presentation, output);
+        using var archive = new ZipArchive(new MemoryStream(output.ToArray()), ZipArchiveMode.Read);
+        using var slideReader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(slideReader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetClass")?.Value == "emph"
+                && element.Attribute("presetID")?.Value == "4");
+        cTn.Descendants(p + "anim").Single().Attribute("to")!.Value.Should().Be("4");
+        cTn.Descendants(p + "animScale").Should().BeEmpty();
+
+        editor.Undo();
+        SlideShowPlaybackPlanner.ResolveFontSizeBehavior(editor.CurrentSlideAnimations[0])!
+            .Multiplier.Should().Be(1.5);
+    }
+
+    [Fact]
+    public void NativeChangeFillColorEffectOptionsRewriteOnlyTheThemeDestination()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(
+            PresentationAnimationCommandPlanner.BuildAnimation(
+                AnimationKind.Emphasis,
+                AnimationPreset.ChangeFillColor,
+                presentation.Slides[0].Shapes[0].Id));
+
+        var options = AnimationPanePlanner.BuildEffectOptionsPlan(editor.CurrentSlideAnimations, 0);
+        options.CanApply.Should().BeTrue();
+        options.Options.Select(option => option.DisplayText)
+            .Should().Equal("Accent 1", "Accent 2", "Accent 3", "Accent 4", "Accent 5", "Accent 6");
+        options.SelectedOptionText.Should().Be("Accent 2");
+
+        var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations, 0, "color-accent4");
+        mutation.ShouldApply.Should().BeTrue();
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, mutation).Should().BeTrue();
+        editor.CurrentSlideAnimations[0].PreservedFillBehaviorXml
+            .Should().Contain("schemeClr val=\"accent4\"")
+            .And.Contain("fill.type");
+
+        using var output = new MemoryStream();
+        PptxPackageWriter.Write(presentation, output);
+        var reopened = PptxPackageReader.Read(new MemoryStream(output.ToArray()));
+        reopened.Slides[0].Animations.Single().PreservedFillBehaviorXml
+            .Should().Contain("schemeClr val=\"accent4\"");
+
+        editor.Undo();
+        editor.CurrentSlideAnimations[0].PreservedFillBehaviorXml
+            .Should().Contain("schemeClr val=\"accent2\"");
+    }
+
+    [Fact]
+    public void NativeChangeFontStyleEffectOptionsRewriteOnlyTheSelectedSetter()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(
+            PresentationAnimationCommandPlanner.BuildFontStyleAnimation(
+                presentation.Slides[0].Shapes[0].Id));
+
+        var options = AnimationPanePlanner.BuildEffectOptionsPlan(editor.CurrentSlideAnimations, 0);
+        options.CanApply.Should().BeTrue();
+        options.Options.Select(option => option.DisplayText)
+            .Should()
+            .Equal(
+                "Italic: Off", "Italic: On",
+                "Bold: Off", "Bold: On",
+                "Underline: Off", "Underline: On");
+        options.Options.Single(option => option.Id == "font-style-bold-on").IsSelected.Should().BeTrue();
+        options.Options.Single(option => option.Id == "font-style-italic-off").IsSelected.Should().BeTrue();
+
+        var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            "font-style-italic-on");
+        mutation.ShouldApply.Should().BeTrue();
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, mutation).Should().BeTrue();
+
+        var style = SlideShowPlaybackPlanner.ResolveFontStyleBehavior(
+            editor.CurrentSlideAnimations[0]);
+        style.Italic.Should().BeTrue();
+        style.Bold.Should().BeTrue();
+        style.Underline.Should().BeFalse();
+        editor.CurrentSlideAnimations[0].PreservedFontStyleBehaviorXml
+            .Should().Contain("style.fontWeight")
+            .And.Contain("val=\"bold\"")
+            .And.Contain("style.textDecorationUnderline")
+            .And.Contain("val=\"false\"");
+
+        using var output = new MemoryStream();
+        PptxPackageWriter.Write(presentation, output);
+        var reopened = PptxPackageReader.Read(new MemoryStream(output.ToArray()));
+        var reopenedStyle = SlideShowPlaybackPlanner.ResolveFontStyleBehavior(
+            reopened.Slides[0].Animations.Single());
+        reopenedStyle.Italic.Should().BeTrue();
+        reopenedStyle.Bold.Should().BeTrue();
+        reopenedStyle.Underline.Should().BeFalse();
+
+        editor.Undo();
+        var restored = SlideShowPlaybackPlanner.ResolveFontStyleBehavior(
+            editor.CurrentSlideAnimations[0]);
+        restored.Italic.Should().BeFalse();
+        restored.Bold.Should().BeTrue();
+        restored.Underline.Should().BeFalse();
+    }
+
+    [Fact]
+    public void RewriteFontStyleBehaviorRejectsUnknownSetterWithoutChangingPayload()
+    {
+        const string behavior = """
+            <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+              <p:set><p:attrNameLst><p:attrName>style.fontWeight</p:attrName></p:attrNameLst><p:to><p:strVal val="bold" /></p:to></p:set>
+            </p:childTnLst>
+            """;
+
+        SlideShowPlaybackPlanner.RewriteFontStyleBehavior(
+            behavior,
+            "style.unknown",
+            true).Should().BeNull();
+        SlideShowPlaybackPlanner.RewriteFontStyleBehavior(
+            behavior,
+            "style.fontWeight",
+            false).Should().Contain("val=\"normal\"");
     }
 
     [Fact]

@@ -16,12 +16,20 @@ namespace FreeP.App.Recording.Windows;
 public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
 {
     public const string ExecutablePath = "windows-media-composition";
+    public static bool CanUseCaptionFallback => FindExecutable("ffmpeg") is not null;
 
     private readonly LinuxVideoEncoderCapability _capability;
+    private readonly ILinuxVideoExportAdapter? _captionFallback;
+    private readonly Func<ILinuxVideoExportAdapter?> _captionFallbackFactory;
 
-    public WindowsNativeVideoExportAdapter(LinuxVideoEncoderCapability capability)
+    public WindowsNativeVideoExportAdapter(
+        LinuxVideoEncoderCapability capability,
+        ILinuxVideoExportAdapter? captionFallback = null,
+        Func<ILinuxVideoExportAdapter?>? captionFallbackFactory = null)
     {
         _capability = capability ?? throw new ArgumentNullException(nameof(capability));
+        _captionFallback = captionFallback;
+        _captionFallbackFactory = captionFallbackFactory ?? TryCreateCaptionFallback;
     }
 
     public LinuxVideoEncoderCapability Capability => _capability;
@@ -63,6 +71,24 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
                 package,
                 mediaArtifacts,
                 temporaryDirectory);
+            if (mediaPlan.CaptionTracks.Count > 0)
+            {
+                var captionFallback = _captionFallback ?? _captionFallbackFactory();
+                if (captionFallback is null)
+                {
+                    return LinuxVideoExportResult.Failed(
+                        "Windows MediaComposition cannot mux timed caption tracks. Install ffmpeg to export this captioned video.",
+                        outputPath);
+                }
+
+                return await captionFallback.ExportAsync(
+                        package,
+                        outputPath,
+                        cancellationToken,
+                        mediaArtifacts)
+                    .ConfigureAwait(false);
+            }
+
             using var archive = new ZipArchive(
                 new MemoryStream(package.Bytes),
                 ZipArchiveMode.Read,
@@ -211,6 +237,37 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
         bytes.AsSpan(4, 4).SequenceEqual("ftyp"u8) &&
         bytes.AsSpan().IndexOf("moov"u8) >= 0 &&
         bytes.AsSpan().IndexOf("mdat"u8) >= 0;
+
+    private static ILinuxVideoExportAdapter? TryCreateCaptionFallback()
+    {
+        var executable = FindExecutable("ffmpeg");
+        return executable is null
+            ? null
+            : new LinuxVideoExportAdapter(
+                new LinuxVideoEncoderCapability(
+                    CanEncodeMp4: true,
+                    ExecutablePath: executable,
+                    EncoderName: "mpeg4",
+                    CanCaptureNarration: false,
+                    Reason: "ffmpeg caption fallback for Windows video export.",
+                    CanMuxTimedCaptions: true));
+    }
+
+    private static string? FindExecutable(string name)
+    {
+        var path = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+
+        foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidate = Path.Combine(directory.Trim(), name + ".exe");
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        return null;
+    }
 
     private static void TryDelete(string path)
     {

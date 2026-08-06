@@ -2202,7 +2202,11 @@ public sealed partial class MainWindow : Window
             }
 
             if (result.ShouldCompleteMerge)
-                _mailMerge.FinishMerge();
+            {
+                var finishPlan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(
+                    _mailMerge.Session.Data!.Count);
+                await ExecuteFinishMergePlanAsync(finishPlan);
+            }
 
             if (result.ShouldOpenReportDocument)
                 OpenMailMergeErrorReport(MailMergeCheckForErrorsPlanner.BuildReportDocument(result));
@@ -2233,15 +2237,42 @@ public sealed partial class MainWindow : Window
         if (_mailMerge is null || !plan.Success)
             return;
 
+        var mergeState = await CollectInteractiveMergeAnswersAsync();
+        if (mergeState is null)
+            return;
+
         if (plan.Destination == MailMergeFinishDestination.NewDocument)
         {
-            _mailMerge.FinishMerge(plan);
+            _mailMerge.FinishMerge(plan, mergeState);
             return;
         }
 
         if (plan.Destination == MailMergeFinishDestination.Printer &&
-            _mailMerge.BuildFinishedMerge(plan) is { } result)
+            _mailMerge.BuildFinishedMerge(plan, mergeState) is { } result)
             await PrintAsync(result.Document);
+    }
+
+    private async Task<MergeState?> CollectInteractiveMergeAnswersAsync()
+    {
+        if (_mailMerge is null)
+            return null;
+
+        var state = new MergeState();
+        foreach (var prompt in _mailMerge.GetInteractiveFinishPrompts())
+        {
+            var title = prompt.Kind == MailMergeInteractivePromptKind.FillIn ? "Fill-in" : "Ask";
+            var answer = await MailMergeDialogs.AskMergeRulePromptAsync(
+                this, title, prompt.Prompt, prompt.DefaultAnswer);
+            if (answer is null)
+                return null;
+
+            if (prompt.Kind == MailMergeInteractivePromptKind.FillIn)
+                state.FillInAnswers[prompt.Key] = answer;
+            else
+                state.AskAnswers[prompt.Key] = answer;
+        }
+
+        return state;
     }
 
     // AV-MAIL: Mailings > Insert Merge Field. Pick / type a field name (seeded with the loaded recipient

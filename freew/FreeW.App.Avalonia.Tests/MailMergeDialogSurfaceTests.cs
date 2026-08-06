@@ -60,6 +60,28 @@ public sealed class MailMergeDialogSurfaceTests
     }
 
     [Fact]
+    public void MailingsCommandHost_CollectsInteractiveRuleAnswersBeforeEveryFinishDestination()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("CollectInteractiveMergeAnswersAsync()");
+        source.Should().Contain("_mailMerge.GetInteractiveFinishPrompts()");
+        source.Should().Contain("this, title, prompt.Prompt, prompt.DefaultAnswer");
+        source.Should().Contain("_mailMerge.FinishMerge(plan, mergeState)");
+        source.Should().Contain("_mailMerge.BuildFinishedMerge(plan, mergeState)");
+    }
+
+    [Fact]
+    public void MailingsPromptDialog_DistinguishesBlankAnswerFromCancel()
+    {
+        var source = File.ReadAllText(RepositoryFile(
+            "freew", "FreeW.App.Avalonia", "MailMergeDialogs.cs"));
+
+        source.Should().Contain("string? result = null;");
+        source.Should().Contain("result = valueBox.Text?.Trim() ?? string.Empty;");
+    }
+
+    [Fact]
     public void MailingsCommandHost_PreservesWpfPreviewAndSessionInvalidationContracts()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"))

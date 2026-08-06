@@ -77,6 +77,141 @@ public sealed class MergeState
     public bool SkipRecordRequested { get; internal set; }
 }
 
+public enum MailMergeInteractivePromptKind
+{
+    FillIn,
+    Ask
+}
+
+public sealed record MailMergeInteractivePrompt(
+    MailMergeInteractivePromptKind Kind,
+    string Key,
+    string Prompt,
+    string DefaultAnswer = "");
+
+/// <summary>
+/// Finds the interactive merge-rule prompts that a host must collect before starting a merge run.
+/// Prompts retain document order and are de-duplicated by Fill-in prompt or Ask bookmark, matching
+/// Word's one-answer-per-merge-run behavior.
+/// </summary>
+public static class MailMergeInteractivePromptPlanner
+{
+    public static IReadOnlyList<MailMergeInteractivePrompt> Plan(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var prompts = new List<MailMergeInteractivePrompt>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var storyText in EnumerateStoryTexts(document))
+        {
+            var offset = 0;
+            while (offset < storyText.Length)
+            {
+                var open = storyText.IndexOf(MailMerge.FieldOpen, offset);
+                if (open < 0)
+                    break;
+                var close = storyText.IndexOf(MailMerge.FieldClose, open + 1);
+                if (close < 0)
+                    break;
+
+                var instruction = storyText[(open + 1)..close].Trim();
+                offset = close + 1;
+                if (!MergeRuleEvaluator.TryParseInteractivePrompt(instruction, out var prompt))
+                    continue;
+
+                var identity = $"{prompt.Kind}:{prompt.Key}";
+                if (seen.Add(identity))
+                    prompts.Add(prompt);
+            }
+        }
+
+        return prompts;
+    }
+
+    private static IEnumerable<string> EnumerateStoryTexts(TextDocument document)
+    {
+        foreach (var block in document.Blocks)
+        {
+            foreach (var text in EnumerateBlockStoryTexts(block))
+                yield return text;
+        }
+
+        foreach (var text in EnumerateHeadersFootersStoryTexts(document.FinalSectionHeadersFooters))
+            yield return text;
+    }
+
+    private static IEnumerable<string> EnumerateBlockStoryTexts(Block block)
+    {
+        switch (block)
+        {
+            case Paragraph paragraph:
+                foreach (var text in EnumerateParagraphStoryTexts(paragraph))
+                    yield return text;
+                if (paragraph.SectionBreak is { } section)
+                    foreach (var text in EnumerateHeadersFootersStoryTexts(section.HeadersFooters))
+                        yield return text;
+                break;
+            case Table table:
+                foreach (var paragraph in table.Rows
+                             .SelectMany(row => row.Cells)
+                             .SelectMany(cell => cell.Paragraphs))
+                    foreach (var text in EnumerateParagraphStoryTexts(paragraph))
+                        yield return text;
+                break;
+        }
+    }
+
+    private static IEnumerable<string> EnumerateParagraphStoryTexts(Paragraph paragraph)
+    {
+        yield return string.Concat(paragraph.Runs.Select(run =>
+            run.ComplexField is { Keyword: "FILLIN" or "ASK" } field
+            && ComplexFieldEngine.HasSwitch(field.Instruction, 'o')
+                ? $"{MailMerge.FieldOpen}{field.Instruction}{MailMerge.FieldClose}"
+                : run.Text));
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Shape is { } shape)
+                foreach (var nested in shape.TextParagraphs.SelectMany(EnumerateParagraphStoryTexts))
+                    yield return nested;
+            if (run.DrawingGroup is { } group)
+                foreach (var nested in EnumerateDrawingGroupStoryTexts(group))
+                    yield return nested;
+        }
+    }
+
+    private static IEnumerable<string> EnumerateDrawingGroupStoryTexts(DrawingGroup group)
+    {
+        foreach (var child in group.Children)
+        {
+            if (child is Shape shape)
+                foreach (var text in shape.TextParagraphs.SelectMany(EnumerateParagraphStoryTexts))
+                    yield return text;
+            if (child is DrawingGroup nested)
+                foreach (var text in EnumerateDrawingGroupStoryTexts(nested))
+                    yield return text;
+        }
+    }
+
+    private static IEnumerable<string> EnumerateHeadersFootersStoryTexts(SectionHeadersFooters headersFooters)
+    {
+        foreach (var headerFooter in new[]
+                 {
+                     headersFooters.Header,
+                     headersFooters.Footer,
+                     headersFooters.EvenHeader,
+                     headersFooters.EvenFooter,
+                     headersFooters.FirstHeader,
+                     headersFooters.FirstFooter
+                 })
+        {
+            if (headerFooter is null)
+                continue;
+            foreach (var text in headerFooter.Paragraphs.SelectMany(EnumerateParagraphStoryTexts))
+                yield return text;
+        }
+    }
+}
+
 /// <summary>
 /// The result of evaluating a merge rule field instruction against a single data row.
 /// </summary>
@@ -110,6 +245,72 @@ public readonly record struct MergeRuleResult(
 /// </summary>
 public static class MergeRuleEvaluator
 {
+    public static bool TryParseInteractivePrompt(
+        string instruction,
+        out MailMergeInteractivePrompt prompt)
+    {
+        ArgumentNullException.ThrowIfNull(instruction);
+        var span = instruction.AsSpan().Trim();
+        if (TryParsePrefix(span, "Fill-in ", out var afterFillIn))
+        {
+            var fillInPrompt = Unquote(afterFillIn.Trim());
+            prompt = new MailMergeInteractivePrompt(
+                MailMergeInteractivePromptKind.FillIn,
+                fillInPrompt,
+                fillInPrompt);
+            return true;
+        }
+
+        if (TryParsePrefix(span, "FILLIN ", out var afterNativeFillIn))
+        {
+            var tokens = Tokenize(afterNativeFillIn.ToString());
+            if (tokens.Count >= 1)
+            {
+                prompt = new MailMergeInteractivePrompt(
+                    MailMergeInteractivePromptKind.FillIn,
+                    tokens[0],
+                    tokens[0],
+                    SwitchArgument(tokens, 'd'));
+                return true;
+            }
+        }
+
+        if (TryParsePrefix(span, "Ask ", out var afterAsk))
+        {
+            var tokens = Tokenize(afterAsk.ToString());
+            if (tokens.Count >= 1)
+            {
+                prompt = new MailMergeInteractivePrompt(
+                    MailMergeInteractivePromptKind.Ask,
+                    tokens[0],
+                    tokens.Count >= 2 ? tokens[1] : string.Empty,
+                    SwitchArgument(tokens, 'd'));
+                return true;
+            }
+        }
+
+        prompt = null!;
+        return false;
+    }
+
+    public static bool TryParseBookmarkReference(string instruction, out string bookmarkName)
+    {
+        ArgumentNullException.ThrowIfNull(instruction);
+        var span = instruction.AsSpan().Trim();
+        if (TryParsePrefix(span, "Ref ", out var afterRef))
+        {
+            var tokens = Tokenize(afterRef.ToString());
+            if (tokens.Count >= 1)
+            {
+                bookmarkName = tokens[0];
+                return true;
+            }
+        }
+
+        bookmarkName = string.Empty;
+        return false;
+    }
+
     /// <summary>
     /// Returns the recipient field referenced by a valid conditional rule. Rules without a recipient-field
     /// operand (Set, Ref, Fill-in, Ask, and Merge Sequence #) return false.
@@ -179,10 +380,9 @@ public static class MergeRuleEvaluator
         }
 
         // ── Ref BookmarkName ─────────────────────────────────────────────────────────────────────
-        if (TryParsePrefix(span, "Ref ", out var afterRef))
+        if (TryParseBookmarkReference(instruction, out var referencedBookmarkName))
         {
-            var name = afterRef.Trim();
-            var value = state.Bookmarks.TryGetValue(name.ToString(), out var bv) ? bv : string.Empty;
+            var value = state.Bookmarks.TryGetValue(referencedBookmarkName, out var bv) ? bv : string.Empty;
             return new MergeRuleResult(value, false, false);
         }
 
@@ -532,6 +732,18 @@ public static class MergeRuleEvaluator
             }
         }
         return tokens;
+    }
+
+    private static string SwitchArgument(IReadOnlyList<string> tokens, char switchLetter)
+    {
+        var switchToken = $"\\{switchLetter}";
+        for (var i = 0; i + 1 < tokens.Count; i++)
+        {
+            if (tokens[i].Equals(switchToken, StringComparison.OrdinalIgnoreCase))
+                return tokens[i + 1];
+        }
+
+        return string.Empty;
     }
 
     // Return the portion of span after consuming n whitespace-separated tokens.
@@ -2014,6 +2226,37 @@ public static class MailMerge
                     return true;
                 case MergeSequenceNumberInstruction:
                     run.Text = state.SequenceNumber.ToString(CultureInfo.InvariantCulture);
+                    return true;
+                case "FILLIN" when ComplexFieldEngine.HasSwitch(run.ComplexField.Instruction, 'o'):
+                    if (MergeRuleEvaluator.TryParseInteractivePrompt(
+                            run.ComplexField.Instruction,
+                            out var prompt))
+                    {
+                        run.Text = state.FillInAnswers.TryGetValue(prompt.Key, out var answer)
+                            ? answer
+                            : prompt.DefaultAnswer;
+                        run.ComplexField = null;
+                    }
+                    return true;
+                case "ASK" when ComplexFieldEngine.HasSwitch(run.ComplexField.Instruction, 'o'):
+                    if (MergeRuleEvaluator.TryParseInteractivePrompt(
+                            run.ComplexField.Instruction,
+                            out var askPrompt))
+                    {
+                        var answer = state.AskAnswers.TryGetValue(askPrompt.Key, out var suppliedAnswer)
+                            ? suppliedAnswer
+                            : askPrompt.DefaultAnswer;
+                        state.Bookmarks[askPrompt.Key] = answer;
+                        run.Text = string.Empty;
+                        run.ComplexField = null;
+                    }
+                    return true;
+                case "REF" when MergeRuleEvaluator.TryParseBookmarkReference(
+                        run.ComplexField.Instruction,
+                        out var bookmarkName)
+                    && state.Bookmarks.TryGetValue(bookmarkName, out var bookmarkValue):
+                    run.Text = bookmarkValue;
+                    run.ComplexField = null;
                     return true;
                 default:
                     return false;
