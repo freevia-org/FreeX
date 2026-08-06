@@ -1,5 +1,70 @@
 namespace FreeP.App.Compositor;
 
+public enum HeaderFooterDialogField
+{
+    DateTime,
+    DateFormat,
+    FixedDateTime,
+    FixedDateTimeText,
+    Footer,
+    FooterText,
+    SlideNumber,
+    SuppressOnTitleSlide,
+}
+
+public enum HeaderFooterDialogAction
+{
+    Apply,
+    ApplyToAll,
+    Cancel,
+}
+
+public static class HeaderFooterDialogSurfaceCatalog
+{
+    public static PresentationDialogSurfacePlan<HeaderFooterDialogField, HeaderFooterDialogAction> Surface { get; } = new(
+        "Header and Footer",
+        "Header and Footer",
+        "FreeP.HeaderFooter.Dialog",
+        [
+            Field(HeaderFooterDialogField.DateTime, PresentationDialogControlKind.Toggle,
+                "Date and time", "Show date and time"),
+            Field(HeaderFooterDialogField.DateFormat, PresentationDialogControlKind.Choice,
+                "Date and time format", "Date and time format"),
+            Field(HeaderFooterDialogField.FixedDateTime, PresentationDialogControlKind.Toggle,
+                "Fixed", "Use fixed date and time"),
+            Field(HeaderFooterDialogField.FixedDateTimeText, PresentationDialogControlKind.Text,
+                "Fixed date and time", "Fixed date and time text"),
+            Field(HeaderFooterDialogField.Footer, PresentationDialogControlKind.Toggle,
+                "Footer", "Show footer"),
+            Field(HeaderFooterDialogField.FooterText, PresentationDialogControlKind.Text,
+                "Footer text", "Footer text"),
+            Field(HeaderFooterDialogField.SlideNumber, PresentationDialogControlKind.Toggle,
+                "Slide number", "Show slide number"),
+            Field(HeaderFooterDialogField.SuppressOnTitleSlide, PresentationDialogControlKind.Toggle,
+                "Don't show on title slide", "Don't show header and footer on title slide"),
+        ],
+        [
+            Action(HeaderFooterDialogAction.Apply, "Apply", "Apply to current slide", isDefault: true),
+            Action(HeaderFooterDialogAction.ApplyToAll, "Apply to All", "Apply to all slides"),
+            Action(HeaderFooterDialogAction.Cancel, "Cancel", "Cancel header and footer changes", isCancel: true),
+        ]);
+
+    private static PresentationDialogFieldPlan<HeaderFooterDialogField> Field(
+        HeaderFooterDialogField id,
+        PresentationDialogControlKind kind,
+        string label,
+        string accessibleName) =>
+        new(id, kind, label, accessibleName, $"FreeP.HeaderFooter.{id}");
+
+    private static PresentationDialogActionPlan<HeaderFooterDialogAction> Action(
+        HeaderFooterDialogAction id,
+        string label,
+        string accessibleName,
+        bool isDefault = false,
+        bool isCancel = false) =>
+        new(id, label, accessibleName, $"FreeP.HeaderFooter.{id}", isDefault, isCancel);
+}
+
 public sealed record HeaderFooterDialogInputState(
     bool ShowDateTime,
     bool ShowFooter,
@@ -43,7 +108,18 @@ public sealed class HeaderFooterDialogSession
 
     public HeaderFooterDialogViewState State { get; private set; }
 
+    public PresentationDialogSurfacePlan<HeaderFooterDialogField, HeaderFooterDialogAction> Surface =>
+        HeaderFooterDialogSurfaceCatalog.Surface;
+
     public HeaderFooterCommandFocus RequestedFocus { get; }
+
+    public HeaderFooterDialogField? RequestedFocusField => RequestedFocus switch
+    {
+        HeaderFooterCommandFocus.DateTime => HeaderFooterDialogField.DateTime,
+        HeaderFooterCommandFocus.Footer => HeaderFooterDialogField.FooterText,
+        HeaderFooterCommandFocus.SlideNumber => HeaderFooterDialogField.SlideNumber,
+        _ => null,
+    };
 
     public HeaderFooterApplyPlan? LastApplyPlan { get; private set; }
 

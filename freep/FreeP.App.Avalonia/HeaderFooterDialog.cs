@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -33,8 +34,11 @@ internal sealed class HeaderFooterDialog : Window
         _session = new HeaderFooterDialogSession(editor, focus);
         var initial = _session.State;
         var defaults = initial.Input;
+        var surface = _session.Surface;
 
-        Title = "Header and Footer";
+        Title = surface.Title;
+        AutomationProperties.SetName(this, surface.AccessibleName);
+        AutomationProperties.SetAutomationId(this, surface.AutomationId);
         Width = 345.3333333333333;
         Height = 260.6666666666667;
         CanResize = false;
@@ -42,7 +46,11 @@ internal sealed class HeaderFooterDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = Brushes.White;
 
-        _dateTimeCheck = new CheckBox { Content = "Date and time", IsChecked = defaults.ShowDateTime };
+        _dateTimeCheck = new CheckBox
+        {
+            Content = surface.Field(HeaderFooterDialogField.DateTime).Label,
+            IsChecked = defaults.ShowDateTime,
+        };
         _dateFormatCombo = new ComboBox
         {
             ItemsSource = initial.DateFormatOptions,
@@ -52,7 +60,7 @@ internal sealed class HeaderFooterDialog : Window
         };
         _fixedDateCheck = new CheckBox
         {
-            Content = "Fixed",
+            Content = surface.Field(HeaderFooterDialogField.FixedDateTime).Label,
             IsChecked = defaults.UseFixedDateTime,
             Margin = new Thickness(20, 0, 0, 4),
         };
@@ -62,7 +70,11 @@ internal sealed class HeaderFooterDialog : Window
             MinWidth = 240,
             Margin = new Thickness(40, 0, 0, 8),
         };
-        _footerCheck = new CheckBox { Content = "Footer", IsChecked = defaults.ShowFooter };
+        _footerCheck = new CheckBox
+        {
+            Content = surface.Field(HeaderFooterDialogField.Footer).Label,
+            IsChecked = defaults.ShowFooter,
+        };
         _footerBox = new TextBox
         {
             Text = defaults.FooterText,
@@ -71,16 +83,27 @@ internal sealed class HeaderFooterDialog : Window
         };
         _slideNumberCheck = new CheckBox
         {
-            Content = "Slide number",
+            Content = surface.Field(HeaderFooterDialogField.SlideNumber).Label,
             IsChecked = defaults.ShowSlideNumber,
             Margin = new Thickness(0, 0, 0, 8),
         };
         _dontShowOnTitleSlideCheck = new CheckBox
         {
-            Content = "Don't show on title slide",
+            Content = surface.Field(HeaderFooterDialogField.SuppressOnTitleSlide).Label,
             IsChecked = defaults.SuppressOnTitleSlide,
             Margin = new Thickness(0, 0, 0, 8),
         };
+
+        ApplySemantic(_dateTimeCheck, surface.Field(HeaderFooterDialogField.DateTime));
+        ApplySemantic(_dateFormatCombo, surface.Field(HeaderFooterDialogField.DateFormat));
+        ApplySemantic(_fixedDateCheck, surface.Field(HeaderFooterDialogField.FixedDateTime));
+        ApplySemantic(_fixedDateBox, surface.Field(HeaderFooterDialogField.FixedDateTimeText));
+        ApplySemantic(_footerCheck, surface.Field(HeaderFooterDialogField.Footer));
+        ApplySemantic(_footerBox, surface.Field(HeaderFooterDialogField.FooterText));
+        ApplySemantic(_slideNumberCheck, surface.Field(HeaderFooterDialogField.SlideNumber));
+        ApplySemantic(
+            _dontShowOnTitleSlideCheck,
+            surface.Field(HeaderFooterDialogField.SuppressOnTitleSlide));
 
         ApplyChrome();
         ApplyDisabledChrome();
@@ -164,9 +187,15 @@ internal sealed class HeaderFooterDialog : Window
             },
         };
 
-        var apply = BuildButton("Apply", () => Apply(HeaderFooterApplyScope.CurrentSlide), isDefault: true);
-        var applyAll = BuildButton("Apply to All", () => Apply(HeaderFooterApplyScope.AllSlides));
-        var cancel = BuildButton("Cancel", () => Close(false), isCancel: true);
+        var apply = BuildButton(
+            _session.Surface.Action(HeaderFooterDialogAction.Apply),
+            () => Apply(HeaderFooterApplyScope.CurrentSlide));
+        var applyAll = BuildButton(
+            _session.Surface.Action(HeaderFooterDialogAction.ApplyToAll),
+            () => Apply(HeaderFooterApplyScope.AllSlides));
+        var cancel = BuildButton(
+            _session.Surface.Action(HeaderFooterDialogAction.Cancel),
+            () => Close(false));
         var actions = AvaloniaCompactDialogChrome.CreateActionRow(
             [apply, applyAll, cancel],
             new Thickness(0));
@@ -217,13 +246,17 @@ internal sealed class HeaderFooterDialog : Window
     }
 
     private static Button BuildButton(
-        string text,
-        Action action,
-        bool isDefault = false,
-        bool isCancel = false)
+        PresentationDialogActionPlan<HeaderFooterDialogAction> plan,
+        Action action)
     {
-        var button = new Button { Content = text, IsCancel = isCancel };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 76, isDefault: isDefault);
+        var button = new Button { Content = plan.Label, IsCancel = plan.IsCancel };
+        AutomationProperties.SetName(button, plan.AccessibleName);
+        AutomationProperties.SetAutomationId(button, plan.AutomationId);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DialogChromeStyle,
+            minWidth: 76,
+            isDefault: plan.IsDefault);
         button.Click += (_, _) => action();
         return button;
     }
@@ -279,18 +312,26 @@ internal sealed class HeaderFooterDialog : Window
 
     private void FocusRequestedControl()
     {
-        switch (RequestedFocus)
+        switch (_session.RequestedFocusField)
         {
-            case HeaderFooterCommandFocus.DateTime:
+            case HeaderFooterDialogField.DateTime:
                 _dateTimeCheck.Focus();
                 break;
-            case HeaderFooterCommandFocus.Footer:
+            case HeaderFooterDialogField.FooterText:
                 _footerBox.Focus();
                 _footerBox.SelectAll();
                 break;
-            case HeaderFooterCommandFocus.SlideNumber:
+            case HeaderFooterDialogField.SlideNumber:
                 _slideNumberCheck.Focus();
                 break;
         }
+    }
+
+    private static void ApplySemantic(
+        Control control,
+        PresentationDialogFieldPlan<HeaderFooterDialogField> field)
+    {
+        AutomationProperties.SetName(control, field.AccessibleName);
+        AutomationProperties.SetAutomationId(control, field.AutomationId);
     }
 }

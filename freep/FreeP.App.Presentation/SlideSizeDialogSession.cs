@@ -2,6 +2,91 @@ using System.Globalization;
 
 namespace FreeP.App.Compositor;
 
+public enum SlideSizeDialogSurfaceField
+{
+    Preset,
+    Unit,
+    Width,
+    Height,
+    Validation,
+}
+
+public enum SlideSizeDialogAction
+{
+    Accept,
+    Cancel,
+}
+
+public sealed record SlideSizeDialogUnitOption(
+    SlideSizeDialogUnit Unit,
+    string Label);
+
+public sealed record SlideSizeDialogSurfacePlan(
+    PresentationDialogSurfacePlan<SlideSizeDialogSurfaceField, SlideSizeDialogAction> Schema,
+    IReadOnlyList<string> PresetNames,
+    IReadOnlyList<SlideSizeDialogUnitOption> UnitOptions)
+{
+    public string Title => Schema.Title;
+
+    public PresentationDialogFieldPlan<SlideSizeDialogSurfaceField> Field(
+        SlideSizeDialogSurfaceField id) => Schema.Field(id);
+
+    public PresentationDialogActionPlan<SlideSizeDialogAction> Action(
+        SlideSizeDialogAction id) => Schema.Action(id);
+
+    public string UnitLabel(SlideSizeDialogUnit unit) =>
+        UnitOptions.First(option => option.Unit == unit).Label;
+}
+
+public static class SlideSizeDialogSurfaceCatalog
+{
+    public static SlideSizeDialogSurfacePlan Surface { get; } = new(
+        new PresentationDialogSurfacePlan<SlideSizeDialogSurfaceField, SlideSizeDialogAction>(
+            "Slide Size",
+            "Slide Size",
+            "FreeP.SlideSize.Dialog",
+            [
+                Field(SlideSizeDialogSurfaceField.Preset, PresentationDialogControlKind.Choice,
+                    "Preset:", "Slide size preset"),
+                Field(SlideSizeDialogSurfaceField.Unit, PresentationDialogControlKind.Choice,
+                    "Unit:", "Measurement unit"),
+                Field(SlideSizeDialogSurfaceField.Width, PresentationDialogControlKind.Text,
+                    "Width:", "Slide width"),
+                Field(SlideSizeDialogSurfaceField.Height, PresentationDialogControlKind.Text,
+                    "Height:", "Slide height"),
+                Field(SlideSizeDialogSurfaceField.Validation, PresentationDialogControlKind.Status,
+                    string.Empty, "Slide size validation message"),
+            ],
+            [
+                Action(SlideSizeDialogAction.Accept, "OK", "Apply slide size", isDefault: true),
+                Action(SlideSizeDialogAction.Cancel, "Cancel", "Cancel slide size changes", isCancel: true),
+            ]),
+        [
+            "Standard (4:3)",
+            "Widescreen (16:9)",
+            "Custom",
+        ],
+        [
+            new(SlideSizeDialogUnit.Inches, "Inches"),
+            new(SlideSizeDialogUnit.Centimeters, "Centimeters"),
+        ]);
+
+    private static PresentationDialogFieldPlan<SlideSizeDialogSurfaceField> Field(
+        SlideSizeDialogSurfaceField id,
+        PresentationDialogControlKind kind,
+        string label,
+        string accessibleName) =>
+        new(id, kind, label, accessibleName, $"FreeP.SlideSize.{id}");
+
+    private static PresentationDialogActionPlan<SlideSizeDialogAction> Action(
+        SlideSizeDialogAction id,
+        string label,
+        string accessibleName,
+        bool isDefault = false,
+        bool isCancel = false) =>
+        new(id, label, accessibleName, $"FreeP.SlideSize.{id}", isDefault, isCancel);
+}
+
 public sealed record SlideSizeDialogState(
     int PresetIndex,
     SlideSizeDialogUnit Unit,
@@ -30,16 +115,14 @@ public sealed class SlideSizeDialogSession
             InitialState.Display);
     }
 
-    public static IReadOnlyList<string> PresetNames { get; } =
-    [
-        "Standard (4:3)",
-        "Widescreen (16:9)",
-        "Custom",
-    ];
+    public static IReadOnlyList<string> PresetNames =>
+        SlideSizeDialogSurfaceCatalog.Surface.PresetNames;
 
     public SlideSizeDialogInitialState InitialState { get; }
 
     public SlideSizeDialogState State { get; private set; }
+
+    public SlideSizeDialogSurfacePlan Surface => SlideSizeDialogSurfaceCatalog.Surface;
 
     public int InitialPresetIndex => PresetIndex(InitialState.Preset);
 

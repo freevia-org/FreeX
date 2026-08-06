@@ -3,6 +3,74 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
+public enum SlideShowSettingsDialogField
+{
+    UseTimings,
+    ShowWithoutAnimation,
+    PlayNarration,
+    ShowMediaControls,
+    ShowMasterGraphics,
+    LoopUntilStopped,
+    ShowType,
+    ShowBrowseScrollbar,
+    KioskRestartMilliseconds,
+}
+
+public enum SlideShowSettingsDialogAction
+{
+    Accept,
+    Cancel,
+}
+
+public static class SlideShowSettingsDialogSurfaceCatalog
+{
+    public static PresentationDialogSurfacePlan<
+        SlideShowSettingsDialogField,
+        SlideShowSettingsDialogAction> Surface { get; } = new(
+            "Set Up Slide Show",
+            "Set Up Slide Show",
+            "FreeP.SlideShowSettings.Dialog",
+            [
+                Field(SlideShowSettingsDialogField.UseTimings, PresentationDialogControlKind.Toggle,
+                    "Use timings, if present", "Use slide timings if present"),
+                Field(SlideShowSettingsDialogField.ShowWithoutAnimation, PresentationDialogControlKind.Toggle,
+                    "Show without animation", "Show without animation"),
+                Field(SlideShowSettingsDialogField.PlayNarration, PresentationDialogControlKind.Toggle,
+                    "Play narration", "Play narration"),
+                Field(SlideShowSettingsDialogField.ShowMediaControls, PresentationDialogControlKind.Toggle,
+                    "Show media controls", "Show media controls"),
+                Field(SlideShowSettingsDialogField.ShowMasterGraphics, PresentationDialogControlKind.Toggle,
+                    "Show master graphics", "Show master graphics"),
+                Field(SlideShowSettingsDialogField.LoopUntilStopped, PresentationDialogControlKind.Toggle,
+                    "Loop until stopped", "Loop slide show until stopped"),
+                Field(SlideShowSettingsDialogField.ShowType, PresentationDialogControlKind.Choice,
+                    "Show type", "Slide show type"),
+                Field(SlideShowSettingsDialogField.ShowBrowseScrollbar, PresentationDialogControlKind.Toggle,
+                    "Show scrollbar when browsing", "Show scrollbar when browsing"),
+                Field(SlideShowSettingsDialogField.KioskRestartMilliseconds, PresentationDialogControlKind.Text,
+                    "Kiosk restart milliseconds (optional)", "Kiosk restart milliseconds"),
+            ],
+            [
+                Action(SlideShowSettingsDialogAction.Accept, "OK", "Apply slide show settings", isDefault: true),
+                Action(SlideShowSettingsDialogAction.Cancel, "Cancel", "Cancel slide show settings", isCancel: true),
+            ]);
+
+    private static PresentationDialogFieldPlan<SlideShowSettingsDialogField> Field(
+        SlideShowSettingsDialogField id,
+        PresentationDialogControlKind kind,
+        string label,
+        string accessibleName) =>
+        new(id, kind, label, accessibleName, $"FreeP.SlideShowSettings.{id}");
+
+    private static PresentationDialogActionPlan<SlideShowSettingsDialogAction> Action(
+        SlideShowSettingsDialogAction id,
+        string label,
+        string accessibleName,
+        bool isDefault = false,
+        bool isCancel = false) =>
+        new(id, label, accessibleName, $"FreeP.SlideShowSettings.{id}", isDefault, isCancel);
+}
+
 public sealed record SlideShowSettingsDialogInput(
     bool UseSlideTimings,
     bool ShowWithoutAnimation,
@@ -55,6 +123,11 @@ public sealed class SlideShowSettingsDialogSession
     public SlideShowSettingsState InitialState { get; }
 
     public SlideShowSettingsDialogInput InitialInput { get; }
+
+    public PresentationDialogSurfacePlan<
+        SlideShowSettingsDialogField,
+        SlideShowSettingsDialogAction> Surface =>
+        SlideShowSettingsDialogSurfaceCatalog.Surface;
 
     public SlideShowSettingsDialogCommitPlan? LastCommitPlan { get; private set; }
 

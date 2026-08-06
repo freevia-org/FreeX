@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using FreeP.App.Compositor;
 
@@ -25,8 +26,11 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _session = new HeaderFooterDialogSession(editor, focus);
         var initial = _session.State;
         var defaults = initial.Input;
+        var surface = _session.Surface;
 
-        Title = "Header and Footer";
+        Title = surface.Title;
+        AutomationProperties.SetName(this, surface.AccessibleName);
+        AutomationProperties.SetAutomationId(this, surface.AutomationId);
         Width = 360;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
@@ -39,7 +43,7 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         _dateTimeCheck = new CheckBox
         {
-            Content = "Date and time",
+            Content = surface.Field(HeaderFooterDialogField.DateTime).Label,
             IsChecked = defaults.ShowDateTime,
             Margin = new Thickness(0, 0, 0, 4),
         };
@@ -53,7 +57,7 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         };
         _fixedDateCheck = new CheckBox
         {
-            Content = "Fixed",
+            Content = surface.Field(HeaderFooterDialogField.FixedDateTime).Label,
             IsChecked = defaults.UseFixedDateTime,
             Margin = new Thickness(20, 0, 0, 4),
         };
@@ -65,7 +69,7 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         };
         _footerCheck = new CheckBox
         {
-            Content = "Footer",
+            Content = surface.Field(HeaderFooterDialogField.Footer).Label,
             IsChecked = defaults.ShowFooter,
             Margin = new Thickness(0, 0, 0, 4),
         };
@@ -77,16 +81,27 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         };
         _slideNumberCheck = new CheckBox
         {
-            Content = "Slide number",
+            Content = surface.Field(HeaderFooterDialogField.SlideNumber).Label,
             IsChecked = defaults.ShowSlideNumber,
             Margin = new Thickness(0, 0, 0, 8),
         };
         _dontShowOnTitleSlideCheck = new CheckBox
         {
-            Content = "Don't show on title slide",
+            Content = surface.Field(HeaderFooterDialogField.SuppressOnTitleSlide).Label,
             IsChecked = defaults.SuppressOnTitleSlide,
             Margin = new Thickness(0, 0, 0, 12),
         };
+
+        ApplySemantic(_dateTimeCheck, surface.Field(HeaderFooterDialogField.DateTime));
+        ApplySemantic(_dateFormatCombo, surface.Field(HeaderFooterDialogField.DateFormat));
+        ApplySemantic(_fixedDateCheck, surface.Field(HeaderFooterDialogField.FixedDateTime));
+        ApplySemantic(_fixedDateBox, surface.Field(HeaderFooterDialogField.FixedDateTimeText));
+        ApplySemantic(_footerCheck, surface.Field(HeaderFooterDialogField.Footer));
+        ApplySemantic(_footerBox, surface.Field(HeaderFooterDialogField.FooterText));
+        ApplySemantic(_slideNumberCheck, surface.Field(HeaderFooterDialogField.SlideNumber));
+        ApplySemantic(
+            _dontShowOnTitleSlideCheck,
+            surface.Field(HeaderFooterDialogField.SuppressOnTitleSlide));
 
         _footerCheck.Checked += (_, _) => UpdateEnabledState();
         _footerCheck.Unchecked += (_, _) => UpdateEnabledState();
@@ -118,26 +133,32 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             HorizontalAlignment = HorizontalAlignment.Right,
         };
 
-        row.Children.Add(MakeButton("Apply", isDefault: true, () => Apply(HeaderFooterApplyScope.CurrentSlide)));
-        row.Children.Add(MakeButton("Apply to All", isDefault: false, () => Apply(HeaderFooterApplyScope.AllSlides)));
-        row.Children.Add(MakeButton("Cancel", isDefault: false, () => DialogResult = false, isCancel: true));
+        row.Children.Add(MakeButton(
+            _session.Surface.Action(HeaderFooterDialogAction.Apply),
+            () => Apply(HeaderFooterApplyScope.CurrentSlide)));
+        row.Children.Add(MakeButton(
+            _session.Surface.Action(HeaderFooterDialogAction.ApplyToAll),
+            () => Apply(HeaderFooterApplyScope.AllSlides)));
+        row.Children.Add(MakeButton(
+            _session.Surface.Action(HeaderFooterDialogAction.Cancel),
+            () => DialogResult = false));
         return row;
     }
 
     private static Button MakeButton(
-        string label,
-        bool isDefault,
-        Action action,
-        bool isCancel = false)
+        PresentationDialogActionPlan<HeaderFooterDialogAction> plan,
+        Action action)
     {
         var button = new Button
         {
-            Content = label,
+            Content = plan.Label,
             MinWidth = 76,
             Margin = new Thickness(6, 0, 0, 0),
-            IsDefault = isDefault,
-            IsCancel = isCancel,
+            IsDefault = plan.IsDefault,
+            IsCancel = plan.IsCancel,
         };
+        AutomationProperties.SetName(button, plan.AccessibleName);
+        AutomationProperties.SetAutomationId(button, plan.AutomationId);
         button.Click += (_, _) => action();
         return button;
     }
@@ -158,16 +179,16 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void FocusRequestedControl()
     {
-        switch (RequestedFocus)
+        switch (_session.RequestedFocusField)
         {
-            case HeaderFooterCommandFocus.DateTime:
+            case HeaderFooterDialogField.DateTime:
                 _dateTimeCheck.Focus();
                 break;
-            case HeaderFooterCommandFocus.Footer:
+            case HeaderFooterDialogField.FooterText:
                 _footerBox.Focus();
                 _footerBox.SelectAll();
                 break;
-            case HeaderFooterCommandFocus.SlideNumber:
+            case HeaderFooterDialogField.SlideNumber:
                 _slideNumberCheck.Focus();
                 break;
         }
@@ -253,5 +274,13 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _slideNumberCheck.IsChecked = input.ShowSlideNumber;
         _dontShowOnTitleSlideCheck.IsChecked = input.SuppressOnTitleSlide;
         UpdateEnabledState();
+    }
+
+    private static void ApplySemantic(
+        DependencyObject control,
+        PresentationDialogFieldPlan<HeaderFooterDialogField> field)
+    {
+        AutomationProperties.SetName(control, field.AccessibleName);
+        AutomationProperties.SetAutomationId(control, field.AutomationId);
     }
 }

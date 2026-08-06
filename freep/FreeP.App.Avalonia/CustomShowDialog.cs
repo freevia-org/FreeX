@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -33,6 +34,10 @@ internal sealed class CustomShowDialog : Window
     private int _customShowSlideDragSourceIndex = -1;
     private bool _customShowSlideDragActive;
 
+    private PresentationDialogSurfacePlan<
+        SlideShowCustomShowDialogField,
+        SlideShowCustomShowDialogAction> Surface => _session.Surface;
+
     public CustomShowDialog(MainWindow host)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
@@ -42,7 +47,9 @@ internal sealed class CustomShowDialog : Window
                 _host.ApplyCustomShowDialogMutation,
                 name => _host.TryStartCustomSlideShow(name)));
 
-        Title = "Custom Shows";
+        Title = Surface.Title;
+        AutomationProperties.SetName(this, Surface.AccessibleName);
+        AutomationProperties.SetAutomationId(this, Surface.AutomationId);
         Width = 625.3333333333334;
         Height = 402.6666666666667;
         MinWidth = 560;
@@ -52,14 +59,17 @@ internal sealed class CustomShowDialog : Window
 
         _showList.Margin = new Thickness(0, 0, 10, 0);
         ApplyListChrome(_showList);
+        ApplySemantic(_showList, Surface.Field(SlideShowCustomShowDialogField.CustomShows));
         _showList.SelectionChanged += (_, _) => OnSelectedShowChanged();
 
         _nameBox.MinWidth = 260;
         _nameBox.Margin = new Thickness(0, 0, 0, 8);
         AvaloniaCompactDialogChrome.ApplyTextBox(_nameBox, DialogChromeStyle);
+        ApplySemantic(_nameBox, Surface.Field(SlideShowCustomShowDialogField.Name));
 
         _customShowSlideList.MinHeight = 92;
         ApplyListChrome(_customShowSlideList);
+        ApplySemantic(_customShowSlideList, Surface.Field(SlideShowCustomShowDialogField.OrderedSlides));
         _customShowSlideList.SelectionChanged += (_, _) =>
             ApplyTransition(_session.SelectSlide(_customShowSlideList.SelectedIndex));
         DragDrop.SetAllowDrop(_customShowSlideList, true);
@@ -73,14 +83,15 @@ internal sealed class CustomShowDialog : Window
         _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
         _validationText.TextWrapping = TextWrapping.Wrap;
         _validationText.Margin = new Thickness(0, 4, 0, 8);
+        ApplySemantic(_validationText, Surface.Field(SlideShowCustomShowDialogField.Validation));
 
-        _renameButton = MakeButton("Rename", OnRename);
-        _updateButton = MakeButton("Update Slides", OnUpdateSlides);
-        _deleteButton = MakeButton("Delete", OnDelete);
-        _startButton = MakeButton("Start Show", OnStartShow);
-        _moveUpButton = MakeButton("Move Up", () => OnMoveSelectedSlide(-1));
-        _moveDownButton = MakeButton("Move Down", () => OnMoveSelectedSlide(1));
-        _removeButton = MakeButton("Remove", OnRemoveSelectedSlide);
+        _renameButton = MakeButton(SlideShowCustomShowDialogAction.Rename, OnRename);
+        _updateButton = MakeButton(SlideShowCustomShowDialogAction.UpdateSlides, OnUpdateSlides);
+        _deleteButton = MakeButton(SlideShowCustomShowDialogAction.Delete, OnDelete);
+        _startButton = MakeButton(SlideShowCustomShowDialogAction.StartShow, OnStartShow);
+        _moveUpButton = MakeButton(SlideShowCustomShowDialogAction.MoveUp, () => OnMoveSelectedSlide(-1));
+        _moveDownButton = MakeButton(SlideShowCustomShowDialogAction.MoveDown, () => OnMoveSelectedSlide(1));
+        _removeButton = MakeButton(SlideShowCustomShowDialogAction.Remove, OnRemoveSelectedSlide);
 
         Content = BuildContent();
         ApplyTransition(_session.InitialTransition);
@@ -155,7 +166,7 @@ internal sealed class CustomShowDialog : Window
         var namePanel = new StackPanel();
         namePanel.Children.Add(new TextBlock
         {
-            Text = "Name",
+            Text = Surface.Field(SlideShowCustomShowDialogField.Name).Label,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 0, 0, 4),
         });
@@ -180,7 +191,7 @@ internal sealed class CustomShowDialog : Window
         orderHeader.Children.Add(moveButtons);
         orderHeader.Children.Add(new TextBlock
         {
-            Text = "Custom show order",
+            Text = Surface.Field(SlideShowCustomShowDialogField.OrderedSlides).Label,
             FontWeight = FontWeight.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -197,7 +208,7 @@ internal sealed class CustomShowDialog : Window
 
         var slidesHeader = new TextBlock
         {
-            Text = "Deck slides",
+            Text = Surface.Field(SlideShowCustomShowDialogField.AvailableSlides).Label,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 8, 0, 4),
         };
@@ -227,12 +238,12 @@ internal sealed class CustomShowDialog : Window
             Spacing = 6,
             Children =
             {
-                MakeButton("Create", OnCreate, isDefault: true),
+                MakeButton(SlideShowCustomShowDialogAction.Create, OnCreate),
                 _renameButton,
                 _updateButton,
                 _deleteButton,
                 _startButton,
-                MakeButton("Close", Close, isCancel: true),
+                MakeButton(SlideShowCustomShowDialogAction.Close, Close),
             },
         };
         Grid.SetRow(buttons, 1);
@@ -294,9 +305,16 @@ internal sealed class CustomShowDialog : Window
             checkBox.MinHeight = 20;
             checkBox.MaxHeight = 20;
             checkBox.Padding = new Thickness(0);
+            ApplySemantic(
+                checkBox,
+                Surface.Field(SlideShowCustomShowDialogField.AvailableSlides),
+                slide.SlideId);
             _slideCheckBoxes.Add(checkBox);
             var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2), LastChildFill = true };
-            var addButton = MakeButton("Add", () => AddSlideOccurrence(slide.SlideId));
+            var addButton = MakeButton(
+                SlideShowCustomShowDialogAction.AddSlide,
+                () => AddSlideOccurrence(slide.SlideId),
+                slide.SlideId);
             addButton.MinWidth = 58;
             DockPanel.SetDock(addButton, Dock.Right);
             row.Children.Add(addButton);
@@ -553,21 +571,42 @@ internal sealed class CustomShowDialog : Window
         listBox.BorderThickness = new Thickness(1);
     }
 
-    private static Button MakeButton(
-        string label,
+    private Button MakeButton(
+        SlideShowCustomShowDialogAction actionId,
         Action onClick,
-        bool isDefault = false,
-        bool isCancel = false)
+        string? automationSuffix = null)
     {
+        var action = Surface.Action(actionId);
         var button = new Button
         {
-            Content = label,
-            IsDefault = isDefault,
-            IsCancel = isCancel,
+            Content = action.Label,
+            IsDefault = action.IsDefault,
+            IsCancel = action.IsCancel,
         };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 82, isDefault: isDefault);
+        AutomationProperties.SetName(button, action.AccessibleName);
+        AutomationProperties.SetAutomationId(
+            button,
+            automationSuffix is null ? action.AutomationId : $"{action.AutomationId}.{automationSuffix}");
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DialogChromeStyle,
+            minWidth: 82,
+            isDefault: action.IsDefault);
         button.Click += (_, _) => onClick();
         return button;
+    }
+
+    private static void ApplySemantic(
+        Control control,
+        PresentationDialogFieldPlan<SlideShowCustomShowDialogField> field,
+        string? automationSuffix = null)
+    {
+        AutomationProperties.SetName(control, field.AccessibleName);
+        AutomationProperties.SetAutomationId(
+            control,
+            automationSuffix is null ? field.AutomationId : $"{field.AutomationId}.{automationSuffix}");
+        if (!string.IsNullOrWhiteSpace(field.HelpText))
+            AutomationProperties.SetHelpText(control, field.HelpText);
     }
 
     private static T? FindControlAncestor<T>(object? source)

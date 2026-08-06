@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -34,8 +35,11 @@ internal sealed class SlideSizeDialog : Window
     public SlideSizeDialog(EditingSession editor)
     {
         _session = new SlideSizeDialogSession(editor);
+        var surface = _session.Surface;
 
-        Title = "Slide Size";
+        Title = surface.Title;
+        AutomationProperties.SetName(this, surface.Schema.AccessibleName);
+        AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
         Width = 365.3333333333333;
         Height = 222.66666666666666;
         CanResize = false;
@@ -45,7 +49,7 @@ internal sealed class SlideSizeDialog : Window
 
         _presetCombo = new ComboBox
         {
-            ItemsSource = SlideSizeDialogSession.PresetNames,
+            ItemsSource = surface.PresetNames,
             Margin = new Thickness(4),
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
@@ -53,14 +57,14 @@ internal sealed class SlideSizeDialog : Window
 
         _inchesRadio = new RadioButton
         {
-            Content = "Inches",
+            Content = surface.UnitLabel(SlideSizeDialogUnit.Inches),
             GroupName = "SlideSizeUnit",
             IsChecked = true,
             Margin = new Thickness(4, 0, 12, 0),
         };
         _centimetersRadio = new RadioButton
         {
-            Content = "Centimeters",
+            Content = surface.UnitLabel(SlideSizeDialogUnit.Centimeters),
             GroupName = "SlideSizeUnit",
             Margin = new Thickness(4, 0, 4, 0),
         };
@@ -72,6 +76,13 @@ internal sealed class SlideSizeDialog : Window
         _widthUnitLabel = BuildUnitLabel();
         _heightUnitLabel = BuildUnitLabel();
         _validationText = new TextBlock();
+
+        ApplySemantic(_presetCombo, surface.Field(SlideSizeDialogSurfaceField.Preset));
+        ApplySemantic(_inchesRadio, surface.Field(SlideSizeDialogSurfaceField.Unit), ".Inches");
+        ApplySemantic(_centimetersRadio, surface.Field(SlideSizeDialogSurfaceField.Unit), ".Centimeters");
+        ApplySemantic(_widthBox, surface.Field(SlideSizeDialogSurfaceField.Width));
+        ApplySemantic(_heightBox, surface.Field(SlideSizeDialogSurfaceField.Height));
+        ApplySemantic(_validationText, surface.Field(SlideSizeDialogSurfaceField.Validation));
 
         AvaloniaCompactDialogChrome.ApplyComboBox(_presetCombo, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyRadioButton(_inchesRadio, DialogChromeStyle);
@@ -124,6 +135,7 @@ internal sealed class SlideSizeDialog : Window
 
     private Control BuildContent()
     {
+        var surface = _session.Surface;
         var grid = new Grid
         {
             Margin = new Thickness(12),
@@ -135,7 +147,7 @@ internal sealed class SlideSizeDialog : Window
             },
         };
 
-        AddLabeledRow(grid, 0, "Preset:", _presetCombo, span: 2);
+        AddLabeledRow(grid, 0, surface.Field(SlideSizeDialogSurfaceField.Preset).Label, _presetCombo, span: 2);
 
         var unitRow = new StackPanel
         {
@@ -143,19 +155,14 @@ internal sealed class SlideSizeDialog : Window
             Margin = new Thickness(4),
             Children = { _inchesRadio, _centimetersRadio },
         };
-        AddLabeledRow(grid, 1, "Unit:", unitRow, span: 2);
-        AddLabeledRow(grid, 2, "Width:", _widthBox, _widthUnitLabel);
-        AddLabeledRow(grid, 3, "Height:", _heightBox, _heightUnitLabel);
+        AddLabeledRow(grid, 1, surface.Field(SlideSizeDialogSurfaceField.Unit).Label, unitRow, span: 2);
+        AddLabeledRow(grid, 2, surface.Field(SlideSizeDialogSurfaceField.Width).Label, _widthBox, _widthUnitLabel);
+        AddLabeledRow(grid, 3, surface.Field(SlideSizeDialogSurfaceField.Height).Label, _heightBox, _heightUnitLabel);
 
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        var ok = new Button { Content = "OK" };
-        ok.Click += (_, _) => Apply();
-        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 80, isDefault: true);
-
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
-        cancel.Click += (_, _) => Close(false);
-        AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 80);
+        var ok = BuildButton(surface.Action(SlideSizeDialogAction.Accept), () => Apply());
+        var cancel = BuildButton(surface.Action(SlideSizeDialogAction.Cancel), () => Close(false));
 
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
             [ok, cancel],
@@ -294,5 +301,35 @@ internal sealed class SlideSizeDialog : Window
         HorizontalAlignment = HorizontalAlignment.Right,
         VerticalAlignment = VerticalAlignment.Center,
     };
+
+    private static Button BuildButton(
+        PresentationDialogActionPlan<SlideSizeDialogAction> plan,
+        Action action)
+    {
+        var button = new Button
+        {
+            Content = plan.Label,
+            IsDefault = plan.IsDefault,
+            IsCancel = plan.IsCancel,
+        };
+        AutomationProperties.SetName(button, plan.AccessibleName);
+        AutomationProperties.SetAutomationId(button, plan.AutomationId);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DialogChromeStyle,
+            minWidth: 80,
+            isDefault: plan.IsDefault);
+        button.Click += (_, _) => action();
+        return button;
+    }
+
+    private static void ApplySemantic(
+        Control control,
+        PresentationDialogFieldPlan<SlideSizeDialogSurfaceField> field,
+        string automationSuffix = "")
+    {
+        AutomationProperties.SetName(control, field.AccessibleName);
+        AutomationProperties.SetAutomationId(control, field.AutomationId + automationSuffix);
+    }
 
 }

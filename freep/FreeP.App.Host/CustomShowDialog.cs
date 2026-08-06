@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -26,6 +27,10 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private Point? _customShowSlideDragStartPoint;
     private int _customShowSlideDragSourceIndex = -1;
 
+    private PresentationDialogSurfacePlan<
+        SlideShowCustomShowDialogField,
+        SlideShowCustomShowDialogAction> Surface => _session.Surface;
+
     public CustomShowDialog(MainWindow host)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
@@ -35,7 +40,9 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 _host.ApplyCustomShowDialogMutation,
                 name => _host.TryStartCustomSlideShow(name)));
 
-        Title = "Custom Shows";
+        Title = Surface.Title;
+        AutomationProperties.SetName(this, Surface.AccessibleName);
+        AutomationProperties.SetAutomationId(this, Surface.AutomationId);
         Width = 640;
         Height = 440;
         MinWidth = 560;
@@ -44,12 +51,15 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         _showList.Margin = new Thickness(0, 0, 10, 0);
+        ApplySemantic(_showList, Surface.Field(SlideShowCustomShowDialogField.CustomShows));
         _showList.SelectionChanged += (_, _) => OnSelectedShowChanged();
 
         _nameBox.MinWidth = 260;
         _nameBox.Margin = new Thickness(0, 0, 0, 8);
+        ApplySemantic(_nameBox, Surface.Field(SlideShowCustomShowDialogField.Name));
 
         _customShowSlideList.MinHeight = 92;
+        ApplySemantic(_customShowSlideList, Surface.Field(SlideShowCustomShowDialogField.OrderedSlides));
         _customShowSlideList.SelectionChanged += (_, _) =>
             ApplyTransition(_session.SelectSlide(_customShowSlideList.SelectedIndex));
         _customShowSlideList.AllowDrop = true;
@@ -61,14 +71,15 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
         _validationText.TextWrapping = TextWrapping.Wrap;
         _validationText.Margin = new Thickness(0, 4, 0, 8);
+        ApplySemantic(_validationText, Surface.Field(SlideShowCustomShowDialogField.Validation));
 
-        _renameButton = MakeButton("Rename", OnRename);
-        _updateButton = MakeButton("Update Slides", OnUpdateSlides);
-        _deleteButton = MakeButton("Delete", OnDelete);
-        _startButton = MakeButton("Start Show", OnStartShow);
-        _moveUpButton = MakeButton("Move Up", () => OnMoveSelectedSlide(-1));
-        _moveDownButton = MakeButton("Move Down", () => OnMoveSelectedSlide(1));
-        _removeButton = MakeButton("Remove", OnRemoveSelectedSlide);
+        _renameButton = MakeButton(SlideShowCustomShowDialogAction.Rename, OnRename);
+        _updateButton = MakeButton(SlideShowCustomShowDialogAction.UpdateSlides, OnUpdateSlides);
+        _deleteButton = MakeButton(SlideShowCustomShowDialogAction.Delete, OnDelete);
+        _startButton = MakeButton(SlideShowCustomShowDialogAction.StartShow, OnStartShow);
+        _moveUpButton = MakeButton(SlideShowCustomShowDialogAction.MoveUp, () => OnMoveSelectedSlide(-1));
+        _moveDownButton = MakeButton(SlideShowCustomShowDialogAction.MoveDown, () => OnMoveSelectedSlide(1));
+        _removeButton = MakeButton(SlideShowCustomShowDialogAction.Remove, OnRemoveSelectedSlide);
 
         Content = BuildContent();
         ApplyTransition(_session.InitialTransition);
@@ -129,7 +140,7 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var namePanel = new StackPanel();
         namePanel.Children.Add(new TextBlock
         {
-            Text = "Name",
+            Text = Surface.Field(SlideShowCustomShowDialogField.Name).Label,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 4),
         });
@@ -150,7 +161,7 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         orderHeader.Children.Add(moveButtons);
         orderHeader.Children.Add(new TextBlock
         {
-            Text = "Custom show order",
+            Text = Surface.Field(SlideShowCustomShowDialogField.OrderedSlides).Label,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -166,7 +177,7 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         editor.Children.Add(Position(new TextBlock
         {
-            Text = "Deck slides",
+            Text = Surface.Field(SlideShowCustomShowDialogField.AvailableSlides).Label,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 8, 0, 4),
         }, row: 3));
@@ -192,12 +203,12 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 12, 0, 0),
         };
-        buttons.Children.Add(MakeButton("Create", OnCreate, isDefault: true));
+        buttons.Children.Add(MakeButton(SlideShowCustomShowDialogAction.Create, OnCreate));
         buttons.Children.Add(_renameButton);
         buttons.Children.Add(_updateButton);
         buttons.Children.Add(_deleteButton);
         buttons.Children.Add(_startButton);
-        buttons.Children.Add(MakeButton("Close", Close, isCancel: true));
+        buttons.Children.Add(MakeButton(SlideShowCustomShowDialogAction.Close, Close));
         Grid.SetRow(buttons, 1);
         Grid.SetColumnSpan(buttons, 2);
         root.Children.Add(buttons);
@@ -252,9 +263,16 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 Tag = slide.SlideId,
                 Margin = new Thickness(0, 2, 0, 2),
             };
+            ApplySemantic(
+                checkBox,
+                Surface.Field(SlideShowCustomShowDialogField.AvailableSlides),
+                slide.SlideId);
             _slideCheckBoxes.Add(checkBox);
             var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2), LastChildFill = true };
-            var addButton = MakeButton("Add", () => AddSlideOccurrence(slide.SlideId));
+            var addButton = MakeButton(
+                SlideShowCustomShowDialogAction.AddSlide,
+                () => AddSlideOccurrence(slide.SlideId),
+                slide.SlideId);
             addButton.MinWidth = 58;
             DockPanel.SetDock(addButton, Dock.Right);
             row.Children.Add(addButton);
@@ -421,23 +439,40 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void SetValidation(string? message) =>
         _validationText.Text = message ?? string.Empty;
 
-    private static Button MakeButton(
-        string label,
+    private Button MakeButton(
+        SlideShowCustomShowDialogAction actionId,
         Action onClick,
-        bool isDefault = false,
-        bool isCancel = false)
+        string? automationSuffix = null)
     {
+        var action = Surface.Action(actionId);
         var button = new Button
         {
-            Content = label,
+            Content = action.Label,
             MinWidth = 82,
             Margin = new Thickness(6, 0, 0, 0),
             Padding = new Thickness(8, 3, 8, 3),
-            IsDefault = isDefault,
-            IsCancel = isCancel,
+            IsDefault = action.IsDefault,
+            IsCancel = action.IsCancel,
         };
+        AutomationProperties.SetName(button, action.AccessibleName);
+        AutomationProperties.SetAutomationId(
+            button,
+            automationSuffix is null ? action.AutomationId : $"{action.AutomationId}.{automationSuffix}");
         button.Click += (_, _) => onClick();
         return button;
+    }
+
+    private static void ApplySemantic(
+        DependencyObject control,
+        PresentationDialogFieldPlan<SlideShowCustomShowDialogField> field,
+        string? automationSuffix = null)
+    {
+        AutomationProperties.SetName(control, field.AccessibleName);
+        AutomationProperties.SetAutomationId(
+            control,
+            automationSuffix is null ? field.AutomationId : $"{field.AutomationId}.{automationSuffix}");
+        if (!string.IsNullOrWhiteSpace(field.HelpText))
+            AutomationProperties.SetHelpText(control, field.HelpText);
     }
 
     private static UIElement Position(UIElement element, int row)

@@ -2,6 +2,78 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
+public enum SlideShowCustomShowDialogField
+{
+    CustomShows,
+    Name,
+    OrderedSlides,
+    AvailableSlides,
+    Validation,
+}
+
+public enum SlideShowCustomShowDialogAction
+{
+    Create,
+    Rename,
+    UpdateSlides,
+    Delete,
+    StartShow,
+    MoveUp,
+    MoveDown,
+    Remove,
+    AddSlide,
+    Close,
+}
+
+public static class SlideShowCustomShowDialogSurfaceCatalog
+{
+    public static PresentationDialogSurfacePlan<
+        SlideShowCustomShowDialogField,
+        SlideShowCustomShowDialogAction> Surface { get; } = new(
+            "Custom Shows",
+            "Custom Shows",
+            "FreeP.CustomShows.Dialog",
+            [
+                Field(SlideShowCustomShowDialogField.CustomShows, PresentationDialogControlKind.List,
+                    "Custom shows", "Custom show list"),
+                Field(SlideShowCustomShowDialogField.Name, PresentationDialogControlKind.Text,
+                    "Name", "Custom show name"),
+                Field(SlideShowCustomShowDialogField.OrderedSlides, PresentationDialogControlKind.List,
+                    "Custom show order", "Slides in custom show"),
+                Field(SlideShowCustomShowDialogField.AvailableSlides, PresentationDialogControlKind.List,
+                    "Deck slides", "Available deck slides"),
+                Field(SlideShowCustomShowDialogField.Validation, PresentationDialogControlKind.Status,
+                    string.Empty, "Custom show validation message"),
+            ],
+            [
+                Action(SlideShowCustomShowDialogAction.Create, "Create", "Create custom show", isDefault: true),
+                Action(SlideShowCustomShowDialogAction.Rename, "Rename", "Rename custom show"),
+                Action(SlideShowCustomShowDialogAction.UpdateSlides, "Update Slides", "Update custom show slides"),
+                Action(SlideShowCustomShowDialogAction.Delete, "Delete", "Delete custom show"),
+                Action(SlideShowCustomShowDialogAction.StartShow, "Start Show", "Start custom show"),
+                Action(SlideShowCustomShowDialogAction.MoveUp, "Move Up", "Move selected slide up"),
+                Action(SlideShowCustomShowDialogAction.MoveDown, "Move Down", "Move selected slide down"),
+                Action(SlideShowCustomShowDialogAction.Remove, "Remove", "Remove selected slide"),
+                Action(SlideShowCustomShowDialogAction.AddSlide, "Add", "Add slide to custom show"),
+                Action(SlideShowCustomShowDialogAction.Close, "Close", "Close custom shows", isCancel: true),
+            ]);
+
+    private static PresentationDialogFieldPlan<SlideShowCustomShowDialogField> Field(
+        SlideShowCustomShowDialogField id,
+        PresentationDialogControlKind kind,
+        string label,
+        string accessibleName) =>
+        new(id, kind, label, accessibleName, $"FreeP.CustomShows.{id}");
+
+    private static PresentationDialogActionPlan<SlideShowCustomShowDialogAction> Action(
+        SlideShowCustomShowDialogAction id,
+        string label,
+        string accessibleName,
+        bool isDefault = false,
+        bool isCancel = false) =>
+        new(id, label, accessibleName, $"FreeP.CustomShows.{id}", isDefault, isCancel);
+}
+
 public enum SlideShowCustomShowDialogMutationKind
 {
     Create,
@@ -158,6 +230,11 @@ public sealed class SlideShowCustomShowDialogSession
     }
 
     public SlideShowCustomShowSessionPlan Plan { get; private set; }
+
+    public PresentationDialogSurfacePlan<
+        SlideShowCustomShowDialogField,
+        SlideShowCustomShowDialogAction> Surface =>
+        SlideShowCustomShowDialogSurfaceCatalog.Surface;
 
     public string? ValidationMessage { get; private set; }
 

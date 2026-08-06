@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeP.App.Compositor;
@@ -31,8 +32,11 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     public SlideSizeDialog(EditingSession editor)
     {
         _session = new SlideSizeDialogSession(editor);
+        var surface = _session.Surface;
 
-        Title = "Slide Size";
+        Title = surface.Title;
+        AutomationProperties.SetName(this, surface.Schema.AccessibleName);
+        AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
         Width = 380;
         Height = 260;
         ResizeMode = ResizeMode.NoResize;
@@ -41,7 +45,7 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         _presetCombo = new ComboBox
         {
-            ItemsSource = SlideSizeDialogSession.PresetNames,
+            ItemsSource = surface.PresetNames,
             Margin = new Thickness(4),
         };
         _presetCombo.SelectedIndex = 0;
@@ -49,13 +53,13 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         _inchesRadio = new RadioButton
         {
-            Content = "Inches",
+            Content = surface.UnitLabel(SlideSizeDialogUnit.Inches),
             IsChecked = true,
             Margin = new Thickness(4, 0, 12, 0)
         };
         _cmRadio = new RadioButton
         {
-            Content = "Centimeters",
+            Content = surface.UnitLabel(SlideSizeDialogUnit.Centimeters),
             IsChecked = false,
             Margin = new Thickness(4, 0, 4, 0)
         };
@@ -68,12 +72,20 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _widthUnitLabel = new Label { Content = "in", Width = 30 };
         _heightUnitLabel = new Label { Content = "in", Width = 30 };
 
+        ApplySemantic(_presetCombo, surface.Field(SlideSizeDialogSurfaceField.Preset));
+        ApplySemantic(_inchesRadio, surface.Field(SlideSizeDialogSurfaceField.Unit), ".Inches");
+        ApplySemantic(_cmRadio, surface.Field(SlideSizeDialogSurfaceField.Unit), ".Centimeters");
+        ApplySemantic(_widthBox, surface.Field(SlideSizeDialogSurfaceField.Width));
+        ApplySemantic(_heightBox, surface.Field(SlideSizeDialogSurfaceField.Height));
+
         LoadInitialState();
 
         var btnRow = DialogButtonRowFactory.Create(
             OnOk,
             buttonWidth: 80,
-            rowMargin: new Thickness(4, 8, 8, 8));
+            rowMargin: new Thickness(4, 8, 8, 8),
+            acceptContent: surface.Action(SlideSizeDialogAction.Accept).Label,
+            cancelContent: surface.Action(SlideSizeDialogAction.Cancel).Label);
 
         var grid = new Grid { Margin = new Thickness(12) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -86,13 +98,13 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddLabel(grid, "Preset:", 0, 0);
+        AddLabel(grid, surface.Field(SlideSizeDialogSurfaceField.Preset).Label, 0, 0);
         Grid.SetRow(_presetCombo, 0);
         Grid.SetColumn(_presetCombo, 1);
         Grid.SetColumnSpan(_presetCombo, 2);
         grid.Children.Add(_presetCombo);
 
-        AddLabel(grid, "Unit:", 1, 0);
+        AddLabel(grid, surface.Field(SlideSizeDialogSurfaceField.Unit).Label, 1, 0);
         var unitPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4) };
         unitPanel.Children.Add(_inchesRadio);
         unitPanel.Children.Add(_cmRadio);
@@ -101,7 +113,7 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Grid.SetColumnSpan(unitPanel, 2);
         grid.Children.Add(unitPanel);
 
-        AddLabel(grid, "Width:", 2, 0);
+        AddLabel(grid, surface.Field(SlideSizeDialogSurfaceField.Width).Label, 2, 0);
         Grid.SetRow(_widthBox, 2);
         Grid.SetColumn(_widthBox, 1);
         grid.Children.Add(_widthBox);
@@ -109,7 +121,7 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Grid.SetColumn(_widthUnitLabel, 2);
         grid.Children.Add(_widthUnitLabel);
 
-        AddLabel(grid, "Height:", 3, 0);
+        AddLabel(grid, surface.Field(SlideSizeDialogSurfaceField.Height).Label, 3, 0);
         Grid.SetRow(_heightBox, 3);
         Grid.SetColumn(_heightBox, 1);
         grid.Children.Add(_heightBox);
@@ -264,5 +276,14 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Grid.SetRow(lbl, row);
         Grid.SetColumn(lbl, col);
         grid.Children.Add(lbl);
+    }
+
+    private static void ApplySemantic(
+        DependencyObject control,
+        PresentationDialogFieldPlan<SlideSizeDialogSurfaceField> field,
+        string automationSuffix = "")
+    {
+        AutomationProperties.SetName(control, field.AccessibleName);
+        AutomationProperties.SetAutomationId(control, field.AutomationId + automationSuffix);
     }
 }
