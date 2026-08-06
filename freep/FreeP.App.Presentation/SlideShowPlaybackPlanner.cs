@@ -295,6 +295,63 @@ public static class SlideShowPlaybackPlanner
         return new(italic, bold, underline);
     }
 
+    public static bool? ResolveFontStyleProperty(
+        ShapeAnimation animation,
+        string propertyName)
+    {
+        var values = ResolveFontStyleBehavior(animation);
+        return propertyName switch
+        {
+            "style.fontStyle" => values.Italic,
+            "style.fontWeight" => values.Bold,
+            "style.textDecorationUnderline" => values.Underline,
+            _ => null,
+        };
+    }
+
+    public static string? RewriteFontStyleBehavior(
+        string? behaviorXml,
+        string propertyName,
+        bool value)
+    {
+        if (string.IsNullOrWhiteSpace(behaviorXml)
+            || string.IsNullOrWhiteSpace(propertyName))
+        {
+            return null;
+        }
+
+        var serializedValue = propertyName switch
+        {
+            "style.fontStyle" => value ? "italic" : "normal",
+            "style.fontWeight" => value ? "bold" : "normal",
+            "style.textDecorationUnderline" => value ? "true" : "false",
+            _ => null,
+        };
+        if (serializedValue is null)
+            return null;
+
+        try
+        {
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            var root = XElement.Parse(behaviorXml, LoadOptions.PreserveWhitespace);
+            var setter = root.Descendants(p + "set")
+                .FirstOrDefault(element => string.Equals(
+                    element.Descendants(p + "attrName").FirstOrDefault()?.Value.Trim(),
+                    propertyName,
+                    StringComparison.Ordinal));
+            var target = setter?.Descendants(p + "strVal").FirstOrDefault();
+            if (target?.Attribute("val") is not { } val)
+                return null;
+
+            val.Value = serializedValue;
+            return root.ToString(SaveOptions.DisableFormatting);
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+    }
+
     public static SlideShowFontSizePlaybackPlan? ResolveFontSizeBehavior(ShapeAnimation animation)
     {
         if (string.IsNullOrWhiteSpace(animation.PreservedNumericBehaviorXml))

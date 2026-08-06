@@ -25,7 +25,10 @@ public sealed record AnimationPaneEffectOptionDescriptor(
     AnimationScaleBehavior? ScaleBehavior = null,
     string? PreservedNumericBehaviorXml = null,
     string? PreservedColorBehaviorXml = null,
-    string? NativeColorToken = null)
+    string? NativeColorToken = null,
+    string? PreservedFontStyleBehaviorXml = null,
+    string? NativeFontStyleProperty = null,
+    bool? NativeFontStyleValue = null)
 {
     public bool ReversesMotionPath { get; init; }
 }
@@ -53,7 +56,10 @@ public sealed record AnimationPaneEffectOptionMutationPlan(
     AnimationScaleBehavior? ScaleBehavior = null,
     string? PreservedNumericBehaviorXml = null,
     string? PreservedColorBehaviorXml = null,
-    string? NativeColorToken = null)
+    string? NativeColorToken = null,
+    string? PreservedFontStyleBehaviorXml = null,
+    string? NativeFontStyleProperty = null,
+    bool? NativeFontStyleValue = null)
 {
     public bool ReversesMotionPath { get; init; }
 }
@@ -1023,10 +1029,11 @@ public static class AnimationPanePlanner
 
         var isAmountEffect = AnimationAmountSemantics.IsGrowShrink(animation.Preset);
         var isNativeColorEffect = descriptors.Any(option => option.NativeColorToken is not null);
+        var isNativeFontStyleEffect = descriptors.Any(option => option.NativeFontStyleProperty is not null);
         var selectedDirection = animation.Preset == AnimationPreset.Split
             ? AnimationDirectionSemantics.ResolveSplitDirection(animation)
             : animation.Direction;
-        var selected = (isNativeColorEffect
+        var selected = (isNativeColorEffect || isNativeFontStyleEffect
                 ? descriptors.FirstOrDefault(option => option.IsSelected)
                 : isAmountEffect
                 ? descriptors.FirstOrDefault(option => option.IsSelected)
@@ -1038,7 +1045,9 @@ public static class AnimationPanePlanner
         var normalized = descriptors
             .Select(option => option with
             {
-                IsSelected = isNativeColorEffect
+                IsSelected = isNativeFontStyleEffect
+                    ? option.IsSelected
+                    : isNativeColorEffect
                     ? string.Equals(option.NativeColorToken, selected.NativeColorToken, StringComparison.OrdinalIgnoreCase)
                     : isAmountEffect
                     ? ScaleBehaviorEquals(option.ScaleBehavior, selected.ScaleBehavior)
@@ -1051,7 +1060,7 @@ public static class AnimationPanePlanner
             true,
             animationIndex,
             FormatEffect(animation),
-            nativeFontSize is not null
+            isNativeFontStyleEffect || nativeFontSize is not null
                 ? selected.DisplayText
                 : isAmountEffect
                 ? AnimationAmountSemantics.Describe(animation.Preset, animation.ScaleBehavior)
@@ -1120,6 +1129,8 @@ public static class AnimationPanePlanner
             ?? animation.PreservedNumericBehaviorXml;
         var preservedColorBehaviorXml = option.PreservedColorBehaviorXml
             ?? ResolveNativeColorBehaviorXml(animation);
+        var preservedFontStyleBehaviorXml = option.PreservedFontStyleBehaviorXml
+            ?? animation.PreservedFontStyleBehaviorXml;
         if (option.EffectSubtype is not null)
             direction = null;
         var isAmountEffect = AnimationAmountSemantics.IsGrowShrink(animation.Preset);
@@ -1136,8 +1147,18 @@ public static class AnimationPanePlanner
                 SlideShowPlaybackPlanner.ResolveNativeColorToken(
                     ResolveNativeColorBehaviorXml(animation)),
                 StringComparison.OrdinalIgnoreCase);
+        var nativeFontStyleChanged = false;
+        if (option.NativeFontStyleProperty is not null
+            && option.NativeFontStyleValue is { } expectedFontStyleValue)
+        {
+            nativeFontStyleChanged = SlideShowPlaybackPlanner.ResolveFontStyleProperty(
+                animation,
+                option.NativeFontStyleProperty) is not { } currentFontStyleValue
+                || currentFontStyleValue != expectedFontStyleValue;
+        }
         return new AnimationPaneEffectOptionMutationPlan(
             (nativeColorChanged
+                || nativeFontStyleChanged
                 || (isAmountEffect
                 ? amountChanged
                 : animation.Direction != direction)
@@ -1154,7 +1175,10 @@ public static class AnimationPanePlanner
             scaleBehavior,
             preservedNumericBehaviorXml,
             preservedColorBehaviorXml,
-            option.NativeColorToken);
+            option.NativeColorToken,
+            preservedFontStyleBehaviorXml,
+            option.NativeFontStyleProperty,
+            option.NativeFontStyleValue);
     }
 
     public static bool TryApplyEffectOptionMutation(
@@ -1199,6 +1223,18 @@ public static class AnimationPanePlanner
                 return false;
 
             SetNativeColorBehaviorXml(updated, rewritten);
+        }
+        if (plan.NativeFontStyleProperty is not null
+            && plan.NativeFontStyleValue is { } nativeFontStyleValue)
+        {
+            var rewritten = SlideShowPlaybackPlanner.RewriteFontStyleBehavior(
+                current.PreservedFontStyleBehaviorXml,
+                plan.NativeFontStyleProperty,
+                nativeFontStyleValue);
+            if (rewritten is null)
+                return false;
+
+            updated.PreservedFontStyleBehaviorXml = rewritten;
         }
         if (current.Preset == AnimationPreset.Wheel)
             updated.WheelSpokeCount = plan.WheelSpokeCount;
@@ -1813,6 +1849,14 @@ public static class AnimationPanePlanner
             yield break;
         }
 
+        var nativeFontStyleOptions = NativeFontStyleOptions(animation).ToArray();
+        if (nativeFontStyleOptions.Length > 0)
+        {
+            foreach (var option in nativeFontStyleOptions)
+                yield return option;
+            yield break;
+        }
+
         switch (animation.Preset)
         {
             case AnimationPreset.FlyIn:
@@ -2036,6 +2080,37 @@ public static class AnimationPanePlanner
                 string.Equals(currentToken, token, StringComparison.OrdinalIgnoreCase),
                 PreservedColorBehaviorXml: behaviorXml,
                 NativeColorToken: token);
+        }
+    }
+
+    private static IEnumerable<AnimationPaneEffectOptionDescriptor> NativeFontStyleOptions(
+        ShapeAnimation animation)
+    {
+        if (string.IsNullOrWhiteSpace(animation.PreservedFontStyleBehaviorXml))
+            yield break;
+
+        foreach (var property in new[]
+        {
+            (Name: "style.fontStyle", Label: "Italic"),
+            (Name: "style.fontWeight", Label: "Bold"),
+            (Name: "style.textDecorationUnderline", Label: "Underline"),
+        })
+        {
+            var current = SlideShowPlaybackPlanner.ResolveFontStyleProperty(animation, property.Name);
+            if (current is null)
+                continue;
+
+            foreach (var value in new[] { false, true })
+            {
+                yield return new AnimationPaneEffectOptionDescriptor(
+                    $"font-style-{property.Label.ToLowerInvariant()}-{(value ? "on" : "off")}",
+                    $"{property.Label}: {(value ? "On" : "Off")}",
+                    null,
+                    current == value,
+                    PreservedFontStyleBehaviorXml: animation.PreservedFontStyleBehaviorXml,
+                    NativeFontStyleProperty: property.Name,
+                    NativeFontStyleValue: value);
+            }
         }
     }
 
