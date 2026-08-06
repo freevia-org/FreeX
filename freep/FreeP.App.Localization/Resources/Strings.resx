@@ -2494,6 +2494,12 @@
   <data name="Ribbon_Command_AnimationEmphasisChangeFillColor_KeyTip" xml:space="preserve">
     <value>F</value>
   </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeFontColor_Label" xml:space="preserve">
+    <value>Change Font Color</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisChangeFontColor_KeyTip" xml:space="preserve">
+    <value>FC</value>
+  </data>
   <data name="Ribbon_Command_AnimationEmphasisGrowWithColor_Label" xml:space="preserve">
     <value>Grow With Color</value>
   </data>

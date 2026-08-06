@@ -39,6 +39,7 @@ public sealed class PresentationAnimationCommandPlannerTests
     [InlineData("freep.anim.emphasis.color-pulse", AnimationKind.Emphasis, AnimationPreset.ColorPulse)]
     [InlineData("freep.anim.emphasis.change-color", AnimationKind.Emphasis, AnimationPreset.ChangeColor)]
     [InlineData("freep.anim.emphasis.change-fill-color", AnimationKind.Emphasis, AnimationPreset.ChangeFillColor)]
+    [InlineData("freep.anim.emphasis.change-font-color", AnimationKind.Emphasis, AnimationPreset.ChangeColor)]
     [InlineData("freep.anim.emphasis.grow-with-color", AnimationKind.Emphasis, AnimationPreset.GrowWithColor)]
     [InlineData("freep.anim.emphasis.wave", AnimationKind.Emphasis, AnimationPreset.Wave)]
     [InlineData("freep.anim.emphasis.shimmer", AnimationKind.Emphasis, AnimationPreset.Shimmer)]
@@ -171,6 +172,33 @@ public sealed class PresentationAnimationCommandPlannerTests
         editor.Bus.Redo();
         editor.CurrentSlideAnimations.Should().ContainSingle()
             .Which.Preset.Should().Be(AnimationPreset.ChangeFillColor);
+    }
+
+    [Fact]
+    public void TryApply_ChangeFontColorAuthorsNativeStyleColorTargetAndSupportsUndo()
+    {
+        var editor = MakeSession(out _, out var shapeId);
+        PresentationAnimationCommandPlanner.TryPlan("freep.anim.emphasis.change-font-color", out var plan)
+            .Should().BeTrue();
+
+        PresentationAnimationCommandPlanner.TryApply(editor, plan).Should().BeTrue();
+
+        var animation = editor.CurrentSlideAnimations.Should().ContainSingle().Subject;
+        animation.ShapeId.Should().Be(shapeId);
+        animation.Preset.Should().Be(AnimationPreset.ChangeColor);
+        animation.RawPresetClass.Should().Be("emph");
+        animation.RawPresetId.Should().Be(3);
+        animation.RawPresetSubtype.Should().Be("0");
+        animation.PreservedColorBehaviorXml.Should().Contain("style.color");
+        animation.PreservedColorBehaviorXml.Should().Contain($"spid=\"{shapeId}\"");
+        animation.PreservedColorBehaviorXml.Should().Contain("accent2");
+
+        editor.Bus.CanUndo.Should().BeTrue();
+        editor.Bus.Undo();
+        editor.CurrentSlideAnimations.Should().BeEmpty();
+        editor.Bus.Redo();
+        editor.CurrentSlideAnimations.Should().ContainSingle()
+            .Which.RawPresetId.Should().Be(3);
     }
 
     [Fact]

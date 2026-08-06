@@ -596,6 +596,8 @@ public sealed class LocTests
             "Ribbon_Command_AnimationEmphasisChangeColor_KeyTip",
             "Ribbon_Command_AnimationEmphasisChangeFillColor_Label",
             "Ribbon_Command_AnimationEmphasisChangeFillColor_KeyTip",
+            "Ribbon_Command_AnimationEmphasisChangeFontColor_Label",
+            "Ribbon_Command_AnimationEmphasisChangeFontColor_KeyTip",
             "Ribbon_Command_AnimationEmphasisGrowWithColor_Label",
             "Ribbon_Command_AnimationEmphasisGrowWithColor_KeyTip",
             "Ribbon_Command_AnimationEmphasisWave_Label",
