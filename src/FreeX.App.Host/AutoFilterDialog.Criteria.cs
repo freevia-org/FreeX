@@ -22,7 +22,7 @@ public sealed partial class AutoFilterDialog
         AutoFilterDialogCriteriaPlanner.SetSelectionForSearch(items, searchText, isSelected);
 
     public static string GetFilterFamilyHeader(AutoFilterMenuFilterKind filterKind) =>
-        AutoFilterCriteriaLabels.GetFilterFamilyHeader(filterKind);
+        AutoFilterMenuPlanner.GetFilterFamilyHeader(filterKind, AutoFilterMenuResources.TextProvider);
 
     public static AutoFilterDialogResult BuildResult(
         AutoFilterSortDirection sortDirection,
@@ -52,7 +52,7 @@ public sealed partial class AutoFilterDialog
         AutoFilterDialogCriteriaPlanner.GetCriteriaSuggestions(menuPlan);
 
     public static IReadOnlyList<AutoFilterCriteriaOption> GetCriteriaOptions(AutoFilterMenuFilterKind filterKind) =>
-        AutoFilterCriteriaLabels.GetCriteriaOptions(filterKind);
+        AutoFilterMenuPlanner.CreateCriteriaOptions(filterKind, AutoFilterMenuResources.TextProvider);
 
     public static IReadOnlyList<AutoFilterCriteriaOption> GetSecondRowCriteriaOptions(
         IReadOnlyList<AutoFilterCriteriaOption> criteriaOptions) =>

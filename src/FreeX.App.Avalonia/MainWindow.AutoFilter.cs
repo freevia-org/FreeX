@@ -182,7 +182,9 @@ public sealed partial class MainWindow
             dropdownPlan,
             InvariantAutoFilterMenuTextProvider.Instance,
             InvariantAutoFilterMenuTextProvider.BlankDisplayText);
-        var model = AutoFilterMenuPlanner.Build(menuPlan);
+        var model = AutoFilterMenuPlanner.Build(
+            menuPlan,
+            InvariantAutoFilterMenuTextProvider.Instance);
 
         var panel = new StackPanel { Spacing = 4, MinWidth = 260, MaxWidth = 340 };
         var allItems = AutoFilterMenuPlanner.CreateDialogItems(model).ToList();
@@ -655,12 +657,7 @@ public sealed partial class MainWindow
             result);
         if (!plan.Success)
         {
-            ShowEditIssue(plan.Error switch
-            {
-                WorksheetFilterMutationError.InvalidCriteria => FormatFilterPromptPlanError(plan.PromptError),
-                WorksheetFilterMutationError.SelectionRequired => UiText.Get("MainWindowMessage_FilterSelectAtLeastOneItem"),
-                _ => UiText.Get("MainWindowMessage_FilterUnsupportedCriterion")
-            });
+            ShowEditIssue(UiText.Get(WorksheetFilterMessagePlanner.GetPlanErrorResourceKey(plan)));
             return;
         }
 
@@ -675,26 +672,14 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(plan.CreateCommand());
         if (!result.Success)
         {
-            var fallback = plan.Kind is
-                WorksheetFilterMutationKind.SortAscending or
-                WorksheetFilterMutationKind.SortDescending or
-                WorksheetFilterMutationKind.SortByColor
-                    ? UiText.Get("ShellLoc_SortFailed")
-                    : UiText.Get("ShellLoc_FilterFailed");
+            var fallback = UiText.Get(WorksheetFilterMessagePlanner.GetCommandFailureResourceKey(plan.Kind));
             ShowEditIssue(result.ErrorMessage ?? fallback);
             return;
         }
 
         _filterWorkflowSession.RecordSuccessfulMutation(plan);
         RecalculateAfterAutoFilterMutation();
-        RefreshShell(plan.Kind switch
-        {
-            WorksheetFilterMutationKind.ClearFilter => UiText.Get("ShellLoc_ClearedFilter"),
-            WorksheetFilterMutationKind.SortAscending => UiText.Get("ShellLoc_SortedAToZ"),
-            WorksheetFilterMutationKind.SortDescending => UiText.Get("ShellLoc_SortedZToA"),
-            WorksheetFilterMutationKind.SortByColor => UiText.Get("ShellLoc_SortedByColor"),
-            _ => UiText.Get("ShellLoc_AppliedFilter")
-        });
+        RefreshShell(UiText.Get(WorksheetFilterMessagePlanner.GetSuccessResourceKey(plan.Kind)));
     }
 
     // Filter visibility and sort order are workbook state, but they are not ordinary cell edits.
@@ -708,18 +693,4 @@ public sealed partial class MainWindow
         IReadOnlyList<string> allowedValues) =>
         RunAutoFilter(range, columnOffset, allowedValues);
 
-    private static string FormatFilterPromptPlanError(FilterPromptPlanError error) =>
-        error switch
-        {
-            FilterPromptPlanError.TopBottomSyntax => UiText.Get("FilterPrompt_ErrorTopBottomSyntax"),
-            FilterPromptPlanError.PercentageRange => UiText.Get("FilterPrompt_ErrorPercentageRange"),
-            FilterPromptPlanError.PositiveItemCount => UiText.Get("FilterPrompt_ErrorPositiveItemCount"),
-            FilterPromptPlanError.CompositeSyntax => UiText.Get("FilterPrompt_ErrorCompositeSyntax"),
-            FilterPromptPlanError.DateBetweenSyntax => UiText.Get("FilterPrompt_ErrorDateBetweenSyntax"),
-            FilterPromptPlanError.BetweenSyntax => UiText.Get("FilterPrompt_ErrorBetweenSyntax"),
-            FilterPromptPlanError.TextToMatch => UiText.Get("FilterPrompt_ErrorTextToMatch"),
-            FilterPromptPlanError.ComparisonNumber => UiText.Get("FilterPrompt_ErrorComparisonNumber"),
-            FilterPromptPlanError.DateFormat => UiText.Get("FilterPrompt_ErrorDateFormat"),
-            _ => UiText.Get("MainWindowMessage_FilterUnsupportedCriterion")
-        };
 }

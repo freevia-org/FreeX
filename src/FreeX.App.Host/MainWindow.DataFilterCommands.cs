@@ -191,12 +191,7 @@ public partial class MainWindow
             result);
         if (!plan.Success)
         {
-            var message = plan.Error switch
-            {
-                WorksheetFilterMutationError.InvalidCriteria => FormatFilterPromptPlanError(plan.PromptError),
-                WorksheetFilterMutationError.SelectionRequired => UiText.Get("MainWindowMessage_FilterSelectAtLeastOneItem"),
-                _ => UiText.Get("MainWindowMessage_FilterUnsupportedCriterion")
-            };
+            var message = UiText.Get(WorksheetFilterMessagePlanner.GetPlanErrorResourceKey(plan));
             _messageService.ShowWarning(message, title);
             return false;
         }
@@ -206,21 +201,6 @@ public partial class MainWindow
         RestoreAutoFilterRangeSelection(range);
         return true;
     }
-
-    private static string FormatFilterPromptPlanError(FilterPromptPlanError error) =>
-        error switch
-        {
-            FilterPromptPlanError.TopBottomSyntax => UiText.Get("FilterPrompt_ErrorTopBottomSyntax"),
-            FilterPromptPlanError.PercentageRange => UiText.Get("FilterPrompt_ErrorPercentageRange"),
-            FilterPromptPlanError.PositiveItemCount => UiText.Get("FilterPrompt_ErrorPositiveItemCount"),
-            FilterPromptPlanError.CompositeSyntax => UiText.Get("FilterPrompt_ErrorCompositeSyntax"),
-            FilterPromptPlanError.DateBetweenSyntax => UiText.Get("FilterPrompt_ErrorDateBetweenSyntax"),
-            FilterPromptPlanError.BetweenSyntax => UiText.Get("FilterPrompt_ErrorBetweenSyntax"),
-            FilterPromptPlanError.TextToMatch => UiText.Get("FilterPrompt_ErrorTextToMatch"),
-            FilterPromptPlanError.ComparisonNumber => UiText.Get("FilterPrompt_ErrorComparisonNumber"),
-            FilterPromptPlanError.DateFormat => UiText.Get("FilterPrompt_ErrorDateFormat"),
-            _ => UiText.Get("MainWindowMessage_FilterUnsupportedCriterion")
-        };
 
     private void CfRuleButton_Click(object sender, RoutedEventArgs e)
     {

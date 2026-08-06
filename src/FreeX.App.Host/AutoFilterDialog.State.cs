@@ -9,9 +9,7 @@ namespace FreeX.App.Host;
 public sealed partial class AutoFilterDialog
 {
     private static IEnumerable<AutoFilterDialogItem> CreateDialogItems(AutoFilterMenuPlan menuPlan) =>
-        menuPlan.Entries
-            .Where(entry => entry.Kind == AutoFilterMenuEntryKind.ChecklistItem)
-            .Select(entry => new AutoFilterDialogItem(entry.Header, entry.Value, entry.IsChecked ?? true));
+        AutoFilterMenuPlanner.CreateDialogItems(menuPlan);
 
     private void ReplaceItems(IEnumerable<AutoFilterDialogItem> items)
     {

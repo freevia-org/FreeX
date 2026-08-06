@@ -55,11 +55,18 @@ public sealed class AutoFilterPlannerSourceGuardTests
         var hostResourcesSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AutoFilterMenuResources.cs"));
         var hostDataFilterSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
         var presentationPromptSource = File.ReadAllText(Path.Combine(presentationRoot, "Filtering", "FilterPromptPlanner.cs"));
+        var presentationMenuSource = File.ReadAllText(Path.Combine(presentationRoot, "Filtering", "AutoFilterMenuPlanner.cs"));
+        var presentationMessageSource = File.ReadAllText(Path.Combine(presentationRoot, "Filtering", "WorksheetFilterMessagePlanner.cs"));
 
         avaloniaSource.Should().Contain("AutoFilterHeaderButtonPlanner.IsFilterButtonCell");
         avaloniaSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
+        avaloniaSource.Should().Contain("AutoFilterMenuPlanner.Build(");
+        avaloniaSource.Should().Contain("WorksheetFilterMessagePlanner.GetPlanErrorResourceKey(plan)");
+        avaloniaSource.Should().Contain("WorksheetFilterMessagePlanner.GetCommandFailureResourceKey(plan.Kind)");
+        avaloniaSource.Should().Contain("WorksheetFilterMessagePlanner.GetSuccessResourceKey(plan.Kind)");
         avaloniaSource.Should().Contain("InvariantAutoFilterMenuTextProvider.Instance");
         avaloniaSource.Should().NotContain("RangeHasActiveFilter(");
+        avaloniaSource.Should().NotContain("private static string FormatFilterPromptPlanError(");
         hostDropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange");
         hostDropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
         hostDropdownSource.Should().Contain("AutoFilterMenuResources.TextProvider");
@@ -69,12 +76,19 @@ public sealed class AutoFilterPlannerSourceGuardTests
         hostDataFilterSource.Should().Contain("AutoFilterToggleRangePlanner.Create(sheet, selectedRange)");
         hostDataFilterSource.Should().Contain("AutoFilterDropdownMenuPlanner.HasActiveFilter(sheet, range)");
         hostDataFilterSource.Should().Contain("_filterWorkflowSession.PlanDialogResult(");
-        hostDataFilterSource.Should().Contain("FormatFilterPromptPlanError(plan.PromptError)");
-        hostDataFilterSource.Should().Contain("UiText.Get(\"FilterPrompt_ErrorTopBottomSyntax\")");
+        hostDataFilterSource.Should().Contain("WorksheetFilterMessagePlanner.GetPlanErrorResourceKey(plan)");
+        hostDataFilterSource.Should().NotContain("private static string FormatFilterPromptPlanError(");
         hostDataFilterSource.Should().NotContain("FilterPromptPlanner.TryPlan(");
         presentationPromptSource.Should().Contain("FilterInputParser.TryParseTopBottom");
         presentationPromptSource.Should().Contain("FilterInputParser.TryParseCriterion");
         presentationPromptSource.Should().NotContain("UiText.Get(");
+        presentationMenuSource.Should().Contain("public static class AutoFilterMenuPlanner");
+        presentationMenuSource.Should().Contain("CreateCriteriaOptions(");
+        presentationMessageSource.Should().Contain("GetPromptErrorResourceKey(");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "AutoFilterMenuPlanner.cs"))
+            .Should().BeFalse("renderer-neutral menu projection belongs in Presentation");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AutoFilterCriteriaLabels.cs"))
+            .Should().BeFalse("localized criteria projection should use the shared menu planner");
         hostDataFilterSource.Should().NotContain("SelectionRangeService.GetCurrentRegion");
     }
 

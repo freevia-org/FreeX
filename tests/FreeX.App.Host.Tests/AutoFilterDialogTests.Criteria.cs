@@ -70,14 +70,15 @@ public sealed partial class AutoFilterDialogTests
     }
 
     [Fact]
-    public void CriteriaLabels_UseSharedPresentationCriteriaCatalog()
+    public void CriteriaLabels_UseSharedPresentationMenuPlanner()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("AutoFilterCriteriaLabels.cs");
+        var source = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Presentation", "Filtering", "AutoFilterMenuPlanner.cs");
 
         source.Should().Contain("AutoFilterMenuCatalog.GetFilterFamilyDescriptor");
         source.Should().Contain("AutoFilterMenuCatalog.GetCriteriaDescriptors");
+        source.Should().Contain("textProvider.Get(descriptor.ResourceKey)");
         source.Should().NotContain("\"AutoFilter_Criteria_");
-        source.Should().NotContain("switch");
     }
 
     [Fact]

@@ -1,10 +1,8 @@
 using Free.Shared.Ribbon;
-using FreeX.App.Presentation.Filtering;
 
-namespace FreeX.App.Avalonia;
+namespace FreeX.App.Presentation.Filtering;
 
-/// <summary>The kind of entry in an AutoFilter dropdown menu.</summary>
-internal enum AutoFilterMenuItemKind
+public enum AutoFilterMenuItemKind
 {
     SortAscending,
     SortDescending,
@@ -19,8 +17,7 @@ internal enum AutoFilterMenuItemKind
     ChecklistItem,
 }
 
-/// <summary>One entry in the AutoFilter dropdown menu.</summary>
-internal sealed record AutoFilterMenuItem(
+public sealed record AutoFilterMenuItem(
     AutoFilterMenuItemKind Kind,
     string Label,
     string Value = "",
@@ -31,8 +28,7 @@ internal sealed record AutoFilterMenuItem(
     bool ShowsContinuation = false,
     bool ParticipatesInSearch = false);
 
-/// <summary>The resolved AutoFilter dropdown menu for a column: header plus ordered entries.</summary>
-internal sealed record AutoFilterMenuModel(
+public sealed record AutoFilterMenuModel(
     string Header,
     AutoFilterMenuFilterKind FilterKind,
     IReadOnlyList<AutoFilterMenuItem> Items,
@@ -41,30 +37,74 @@ internal sealed record AutoFilterMenuModel(
     IReadOnlyList<AutoFilterColorOption> ColorOptions);
 
 /// <summary>
-/// UI-free planner that builds the AutoFilter dropdown menu model for a column from canonical filter
-/// values. The menu chrome remains Avalonia-specific; checklist values and ordering come from the shared
-/// presentation planner so the macOS dropdown matches Windows.
+/// Projects the canonical AutoFilter menu into renderer-neutral interaction rows and owns the
+/// checklist/criteria result decisions used by both desktop shells.
 /// </summary>
-internal static class AutoFilterMenuPlanner
+public static class AutoFilterMenuPlanner
 {
-    public static AutoFilterMenuModel Build(AutoFilterMenuPlan plan)
+    public static AutoFilterMenuModel Build(AutoFilterMenuPlan plan) =>
+        Build(plan, InvariantAutoFilterMenuTextProvider.Instance);
+
+    public static AutoFilterMenuModel Build(
+        AutoFilterMenuPlan plan,
+        IAutoFilterMenuTextProvider textProvider)
     {
         ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(textProvider);
 
         return new AutoFilterMenuModel(
             plan.HeaderText,
             plan.FilterKind,
             plan.Entries.Select(ToMenuItem).ToList(),
-            CreateCriteriaOptions(plan.FilterKind),
+            CreateCriteriaOptions(plan.FilterKind, textProvider),
             AutoFilterDialogCriteriaPlanner.GetCriteriaSuggestions(plan),
             plan.ColorOptions ?? []);
     }
 
-    public static IReadOnlyList<AutoFilterDialogItem> CreateDialogItems(AutoFilterMenuModel model) =>
-        model.Items
+    public static IReadOnlyList<AutoFilterDialogItem> CreateDialogItems(AutoFilterMenuPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        return plan.Entries
+            .Where(entry => entry.Kind == AutoFilterMenuEntryKind.ChecklistItem)
+            .Select(entry => new AutoFilterDialogItem(entry.Header, entry.Value, entry.IsChecked ?? true))
+            .ToList();
+    }
+
+    public static IReadOnlyList<AutoFilterDialogItem> CreateDialogItems(AutoFilterMenuModel model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        return model.Items
             .Where(item => item.Kind == AutoFilterMenuItemKind.ChecklistItem)
             .Select(item => new AutoFilterDialogItem(item.Label, item.Value, item.IsChecked ?? true))
             .ToList();
+    }
+
+    public static string GetFilterFamilyHeader(
+        AutoFilterMenuFilterKind filterKind,
+        IAutoFilterMenuTextProvider textProvider)
+    {
+        ArgumentNullException.ThrowIfNull(textProvider);
+        return textProvider.Get(AutoFilterMenuCatalog.GetFilterFamilyDescriptor(filterKind).ResourceKey);
+    }
+
+    public static IReadOnlyList<AutoFilterCriteriaOption> CreateCriteriaOptions(
+        AutoFilterMenuFilterKind filterKind,
+        IAutoFilterMenuTextProvider textProvider)
+    {
+        ArgumentNullException.ThrowIfNull(textProvider);
+
+        var descriptors = AutoFilterMenuCatalog.GetCriteriaDescriptors(filterKind);
+        var options = new List<AutoFilterCriteriaOption>(descriptors.Count);
+        foreach (var descriptor in descriptors)
+        {
+            options.Add(new AutoFilterCriteriaOption(
+                textProvider.Get(descriptor.ResourceKey),
+                descriptor.CriteriaPrefix,
+                descriptor.RequiresValue));
+        }
+
+        return options;
+    }
 
     public static IReadOnlyList<AutoFilterDialogItem> FilterItems(
         IEnumerable<AutoFilterDialogItem> items,
@@ -158,19 +198,4 @@ internal static class AutoFilterMenuPlanner
             entry.Presentation.FocusRole,
             entry.Presentation.ShowsContinuation,
             entry.Presentation.ParticipatesInSearch);
-
-    private static IReadOnlyList<AutoFilterCriteriaOption> CreateCriteriaOptions(AutoFilterMenuFilterKind filterKind)
-    {
-        var descriptors = AutoFilterMenuCatalog.GetCriteriaDescriptors(filterKind);
-        var options = new List<AutoFilterCriteriaOption>(descriptors.Count);
-        foreach (var descriptor in descriptors)
-        {
-            options.Add(new AutoFilterCriteriaOption(
-                UiText.Get(descriptor.ResourceKey),
-                descriptor.CriteriaPrefix,
-                descriptor.RequiresValue));
-        }
-
-        return options;
-    }
 }

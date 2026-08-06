@@ -11,7 +11,8 @@ public sealed partial class AutoFilterDialogTests
 
         source.Should().Contain("_filterWorkflowSession.PlanDialogResult(");
         source.Should().Contain("TryExecuteAutoFilterMutation(plan)");
-        source.Should().Contain("FormatFilterPromptPlanError(plan.PromptError)");
+        source.Should().Contain("WorksheetFilterMessagePlanner.GetPlanErrorResourceKey(plan)");
+        source.Should().NotContain("private static string FormatFilterPromptPlanError(");
         source.Should().NotContain("new CellFillColorFilterCommand");
         source.Should().NotContain("new CellNoFillColorFilterCommand");
         source.Should().NotContain("new CellFontColorFilterCommand");
