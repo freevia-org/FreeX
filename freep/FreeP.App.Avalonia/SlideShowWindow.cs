@@ -3632,19 +3632,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 break;
 
             case SlideShowShapeAnimationEffectKind.Bounce:
-                BounceEffect(element, plan, onReveal);
-                break;
-
             case SlideShowShapeAnimationEffectKind.Float:
-                FloatEffect(element, plan, onReveal);
-                break;
-
             case SlideShowShapeAnimationEffectKind.Swoop:
-                SwoopEffect(element, plan, onReveal);
-                break;
-
             case SlideShowShapeAnimationEffectKind.Boomerang:
-                BoomerangEffect(element, plan, onReveal);
+                TrajectoryEffect(element, plan, onReveal);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Peek:
@@ -3820,61 +3811,51 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         });
     }
 
-    private void FloatEffect(Control element,
-        SlideShowShapeAnimationPlaybackPlan plan,
+    private void TrajectoryEffect(
+        Control element,
+        SlideShowShapeAnimationPlaybackPlan playback,
         Action? onReveal = null)
     {
+        if (playback.EffectKind == SlideShowShapeAnimationEffectKind.Bounce)
+            InvokeRevealAtStart(playback, onReveal);
+
         double width = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
         double height = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        double directionX = plan.OffsetXFactor * width;
-        double directionY = plan.OffsetYFactor * height;
-        var isExit = plan.Animation.Kind == AnimationKind.Exit;
-        double startX = isExit ? 0 : directionX;
-        double startY = isExit ? 0 : directionY;
-        double endX = isExit ? directionX : 0;
-        double endY = isExit ? directionY : 0;
-        double arcX = Math.Abs(plan.OffsetYFactor) > 0.01
-            ? -Math.Sign(plan.OffsetYFactor) * width * 0.06
-            : 0;
-        double arcY = Math.Abs(plan.OffsetXFactor) > 0.01
-            ? Math.Sign(plan.OffsetXFactor) * height * 0.06
-            : 0;
-        double midX = (startX + endX) / 2 + arcX;
-        double midY = (startY + endY) / 2 + arcY;
-
-        var translate = new TranslateTransform(startX, startY);
+        var trajectory = SlideShowAnimationEffectFramePlanner.Build(
+            playback.EffectKind,
+            playback.Animation.Kind,
+            playback.OffsetXFactor,
+            playback.OffsetYFactor);
+        var translate = new TranslateTransform(
+            trajectory.Start.NormalizedX * width,
+            trajectory.Start.NormalizedY * height);
         element.RenderTransform = translate;
-        DelayedAction(plan.DelayMs, () =>
+
+        DelayedAction(playback.DelayMs, () =>
         {
-            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs);
-            AnimateFloatTranslate(
+            AnimateOpacity(element, playback.FromOpacity, playback.ToOpacity, playback.DurationMs);
+            AnimateTrajectory(
                 translate,
-                startX,
-                startY,
-                midX,
-                midY,
-                endX,
-                endY,
-                plan.DurationMs,
-                CompleteReveal(plan, onReveal));
+                trajectory,
+                width,
+                height,
+                playback.DurationMs,
+                CompleteReveal(playback, onReveal));
         });
     }
 
-    private void AnimateFloatTranslate(
+    private void AnimateTrajectory(
         TranslateTransform translate,
-        double startX,
-        double startY,
-        double middleX,
-        double middleY,
-        double endX,
-        double endY,
+        SlideShowAnimationEffectFramePlan trajectory,
+        double width,
+        double height,
         int durationMs,
         Action? onComplete)
     {
         if (durationMs <= 0)
         {
-            translate.X = endX;
-            translate.Y = endY;
+            translate.X = trajectory.End.NormalizedX * width;
+            translate.Y = trajectory.End.NormalizedY * height;
             onComplete?.Invoke();
             return;
         }
@@ -3889,407 +3870,21 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         timer.Tick += (_, _) =>
         {
             frame++;
-            var t = Math.Min(1.0, (double)frame / steps);
-            var (x, y) = InterpolateFloatPoint(
-                t,
-                startX,
-                startY,
-                middleX,
-                middleY,
-                endX,
-                endY);
-            translate.X = x;
-            translate.Y = y;
+            var progress = Math.Min(1.0, (double)frame / steps);
+            var point = SlideShowAnimationEffectFramePlanner.SampleSmooth(trajectory, progress);
+            translate.X = point.NormalizedX * width;
+            translate.Y = point.NormalizedY * height;
             if (frame >= steps)
             {
                 timer.Stop();
                 _activeTimers.Remove(timer);
-                translate.X = endX;
-                translate.Y = endY;
+                translate.X = trajectory.End.NormalizedX * width;
+                translate.Y = trajectory.End.NormalizedY * height;
                 onComplete?.Invoke();
             }
         };
         timer.Start();
     }
-
-    private static (double X, double Y) InterpolateFloatPoint(
-        double t,
-        double startX,
-        double startY,
-        double middleX,
-        double middleY,
-        double endX,
-        double endY)
-    {
-        t = Math.Clamp(t, 0, 1);
-        if (t <= 0.72)
-        {
-            var eased = EaseInOut(t / 0.72);
-            return (
-                startX + (middleX - startX) * eased,
-                startY + (middleY - startY) * eased);
-        }
-
-        var finalEased = EaseInOut((t - 0.72) / 0.28);
-        return (
-            middleX + (endX - middleX) * finalEased,
-            middleY + (endY - middleY) * finalEased);
-    }
-
-    private void SwoopEffect(Control element,
-        SlideShowShapeAnimationPlaybackPlan plan,
-        Action? onReveal = null)
-    {
-        double width = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        double height = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        double directionX = plan.OffsetXFactor * width;
-        double directionY = plan.OffsetYFactor * height;
-        var isExit = plan.Animation.Kind == AnimationKind.Exit;
-        double startX = isExit ? 0 : directionX;
-        double startY = isExit ? 0 : directionY;
-        double endX = isExit ? directionX : 0;
-        double endY = isExit ? directionY : 0;
-        double arcX = Math.Abs(plan.OffsetYFactor) > 0.01
-            ? -Math.Sign(plan.OffsetYFactor) * width * 0.14
-            : 0;
-        double arcY = Math.Abs(plan.OffsetXFactor) > 0.01
-            ? Math.Sign(plan.OffsetXFactor) * height * 0.14
-            : 0;
-        double midX = (startX + endX) / 2 + arcX;
-        double midY = (startY + endY) / 2 + arcY;
-
-        var translate = new TranslateTransform(startX, startY);
-        element.RenderTransform = translate;
-        DelayedAction(plan.DelayMs, () =>
-        {
-            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs);
-            AnimateSwoopTranslate(
-                translate,
-                startX,
-                startY,
-                midX,
-                midY,
-                endX,
-                endY,
-                plan.DurationMs,
-                CompleteReveal(plan, onReveal));
-        });
-    }
-
-    private void AnimateSwoopTranslate(
-        TranslateTransform translate,
-        double startX,
-        double startY,
-        double middleX,
-        double middleY,
-        double endX,
-        double endY,
-        int durationMs,
-        Action? onComplete)
-    {
-        if (durationMs <= 0)
-        {
-            translate.X = endX;
-            translate.Y = endY;
-            onComplete?.Invoke();
-            return;
-        }
-
-        const int frameMs = 16;
-        var steps = Math.Max(1, durationMs / frameMs);
-        var frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            var t = Math.Min(1.0, (double)frame / steps);
-            var (x, y) = InterpolateSwoopPoint(
-                t,
-                startX,
-                startY,
-                middleX,
-                middleY,
-                endX,
-                endY);
-            translate.X = x;
-            translate.Y = y;
-            if (frame >= steps)
-            {
-                timer.Stop();
-                _activeTimers.Remove(timer);
-                translate.X = endX;
-                translate.Y = endY;
-                onComplete?.Invoke();
-            }
-        };
-        timer.Start();
-    }
-
-    private static (double X, double Y) InterpolateSwoopPoint(
-        double t,
-        double startX,
-        double startY,
-        double middleX,
-        double middleY,
-        double endX,
-        double endY)
-    {
-        t = Math.Clamp(t, 0, 1);
-        if (t <= 0.55)
-        {
-            var eased = EaseInOut(t / 0.55);
-            return (
-                startX + (middleX - startX) * eased,
-                startY + (middleY - startY) * eased);
-        }
-
-        var finalEased = EaseInOut((t - 0.55) / 0.45);
-        return (
-            middleX + (endX - middleX) * finalEased,
-            middleY + (endY - middleY) * finalEased);
-    }
-
-    private void BoomerangEffect(Control element,
-        SlideShowShapeAnimationPlaybackPlan plan,
-        Action? onReveal = null)
-    {
-        double width = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        double height = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        double directionX = plan.OffsetXFactor * width;
-        double directionY = plan.OffsetYFactor * height;
-        var isExit = plan.Animation.Kind == AnimationKind.Exit;
-        double startX = isExit ? 0 : directionX;
-        double startY = isExit ? 0 : directionY;
-        double endX = isExit ? directionX : 0;
-        double endY = isExit ? directionY : 0;
-        double overshootX = isExit
-            ? endX + directionX * 0.08
-            : endX - directionX * 0.08;
-        double overshootY = isExit
-            ? endY + directionY * 0.08
-            : endY - directionY * 0.08;
-
-        var translate = new TranslateTransform(startX, startY);
-        element.RenderTransform = translate;
-        DelayedAction(plan.DelayMs, () =>
-        {
-            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs);
-            AnimateBoomerangTranslate(
-                translate,
-                startX,
-                startY,
-                overshootX,
-                overshootY,
-                endX,
-                endY,
-                plan.DurationMs,
-                CompleteReveal(plan, onReveal));
-        });
-    }
-
-    private void AnimateBoomerangTranslate(
-        TranslateTransform translate,
-        double startX,
-        double startY,
-        double overshootX,
-        double overshootY,
-        double endX,
-        double endY,
-        int durationMs,
-        Action? onComplete)
-    {
-        if (durationMs <= 0)
-        {
-            translate.X = endX;
-            translate.Y = endY;
-            onComplete?.Invoke();
-            return;
-        }
-
-        const int frameMs = 16;
-        var steps = Math.Max(1, durationMs / frameMs);
-        var frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            var t = Math.Min(1.0, (double)frame / steps);
-            var (x, y) = InterpolateBoomerangPoint(
-                t,
-                startX,
-                startY,
-                overshootX,
-                overshootY,
-                endX,
-                endY);
-            translate.X = x;
-            translate.Y = y;
-            if (frame >= steps)
-            {
-                timer.Stop();
-                _activeTimers.Remove(timer);
-                translate.X = endX;
-                translate.Y = endY;
-                onComplete?.Invoke();
-            }
-        };
-        timer.Start();
-    }
-
-    private static (double X, double Y) InterpolateBoomerangPoint(
-        double t,
-        double startX,
-        double startY,
-        double overshootX,
-        double overshootY,
-        double endX,
-        double endY)
-    {
-        t = Math.Clamp(t, 0, 1);
-        if (t <= 0.78)
-        {
-            var eased = EaseInOut(t / 0.78);
-            return (
-                startX + (overshootX - startX) * eased,
-                startY + (overshootY - startY) * eased);
-        }
-
-        var finalEased = EaseInOut((t - 0.78) / 0.22);
-        return (
-            overshootX + (endX - overshootX) * finalEased,
-            overshootY + (endY - overshootY) * finalEased);
-    }
-
-    private void BounceEffect(Control element,
-        SlideShowShapeAnimationPlaybackPlan plan,
-        Action? onReveal = null)
-    {
-        InvokeRevealAtStart(plan, onReveal);
-
-        double width = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        double height = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        double directionX = plan.OffsetXFactor * width;
-        double directionY = plan.OffsetYFactor * height;
-        var isExit = plan.Animation.Kind == AnimationKind.Exit;
-        double startX = isExit ? 0 : directionX;
-        double startY = isExit ? 0 : directionY;
-        double endX = isExit ? directionX : 0;
-        double endY = isExit ? directionY : 0;
-        double overshootX = isExit ? endX + directionX * 0.08 : -directionX * 0.08;
-        double overshootY = isExit ? endY + directionY * 0.08 : -directionY * 0.08;
-        double reboundX = isExit ? endX - directionX * 0.04 : directionX * 0.04;
-        double reboundY = isExit ? endY - directionY * 0.04 : directionY * 0.04;
-
-        var translate = new TranslateTransform(startX, startY);
-        element.RenderTransform = translate;
-        DelayedAction(plan.DelayMs, () =>
-        {
-            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs);
-            AnimateBounceTranslate(
-                translate,
-                startX,
-                startY,
-                endX,
-                endY,
-                overshootX,
-                overshootY,
-                reboundX,
-                reboundY,
-                plan.DurationMs,
-                CompleteReveal(plan, onReveal));
-        });
-    }
-
-    private void AnimateBounceTranslate(
-        TranslateTransform translate,
-        double startX,
-        double startY,
-        double endX,
-        double endY,
-        double overshootX,
-        double overshootY,
-        double reboundX,
-        double reboundY,
-        int durationMs,
-        Action? onComplete)
-    {
-        if (durationMs <= 0)
-        {
-            translate.X = endX;
-            translate.Y = endY;
-            onComplete?.Invoke();
-            return;
-        }
-
-        const int frameMs = 16;
-        var steps = Math.Max(1, durationMs / frameMs);
-        var frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            var t = Math.Min(1.0, (double)frame / steps);
-            var (x, y) = InterpolateBouncePoint(
-                t,
-                startX,
-                startY,
-                endX,
-                endY,
-                overshootX,
-                overshootY,
-                reboundX,
-                reboundY);
-            translate.X = x;
-            translate.Y = y;
-            if (frame >= steps)
-            {
-                timer.Stop();
-                _activeTimers.Remove(timer);
-                translate.X = endX;
-                translate.Y = endY;
-                onComplete?.Invoke();
-            }
-        };
-        timer.Start();
-    }
-
-    private static (double X, double Y) InterpolateBouncePoint(
-        double t,
-        double startX,
-        double startY,
-        double endX,
-        double endY,
-        double overshootX,
-        double overshootY,
-        double reboundX,
-        double reboundY)
-    {
-        var local = t switch
-        {
-            <= 0.55 => t / 0.55,
-            <= 0.72 => (t - 0.55) / 0.17,
-            <= 0.86 => (t - 0.72) / 0.14,
-            _ => (t - 0.86) / 0.14
-        };
-        var eased = EaseInOut(Math.Clamp(local, 0, 1));
-        return t <= 0.55
-            ? (startX + (endX - startX) * eased, startY + (endY - startY) * eased)
-            : t <= 0.72
-                ? (endX + (overshootX - endX) * eased, endY + (overshootY - endY) * eased)
-                : t <= 0.86
-                    ? (overshootX + (reboundX - overshootX) * eased, overshootY + (reboundY - overshootY) * eased)
-                    : (reboundX + (endX - reboundX) * eased, reboundY + (endY - reboundY) * eased);
-    }
-
     private void PeekEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
     {
         double w = _slideCanvas.Bounds.Width  > 0 ? _slideCanvas.Bounds.Width  : 960;
