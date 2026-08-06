@@ -1504,6 +1504,8 @@ public sealed class SetMediaPlaybackOptionsCommand : IPresentationCommand
     private readonly bool _afterRewindAfterPlaying;
     private readonly bool _beforePlayFullScreen;
     private readonly bool _afterPlayFullScreen;
+    private readonly int _beforeStopAfterSlides;
+    private readonly int _afterStopAfterSlides;
 
     public SetMediaPlaybackOptionsCommand(
         int slideIndex,
@@ -1517,7 +1519,9 @@ public sealed class SetMediaPlaybackOptionsCommand : IPresentationCommand
         bool beforeRewindAfterPlaying = false,
         bool afterRewindAfterPlaying = false,
         bool beforePlayFullScreen = false,
-        bool afterPlayFullScreen = false)
+        bool afterPlayFullScreen = false,
+        int beforeStopAfterSlides = 1,
+        int afterStopAfterSlides = 1)
     {
         _slideIndex = slideIndex;
         _shapeId = shapeId;
@@ -1531,6 +1535,8 @@ public sealed class SetMediaPlaybackOptionsCommand : IPresentationCommand
         _afterRewindAfterPlaying = afterRewindAfterPlaying;
         _beforePlayFullScreen = beforePlayFullScreen;
         _afterPlayFullScreen = afterPlayFullScreen;
+        _beforeStopAfterSlides = NormalizeSlideCount(beforeStopAfterSlides);
+        _afterStopAfterSlides = NormalizeSlideCount(afterStopAfterSlides);
     }
 
     public string Label => "Set Media Playback Options";
@@ -1543,14 +1549,15 @@ public sealed class SetMediaPlaybackOptionsCommand : IPresentationCommand
                 || media.Loop != _afterLoop
                 || media.ShowWhenStopped != _afterShowWhenStopped
                 || media.RewindAfterPlaying != _afterRewindAfterPlaying
-                || media.PlayFullScreen != _afterPlayFullScreen);
+                || media.PlayFullScreen != _afterPlayFullScreen
+                || media.StopAfterSlides != _afterStopAfterSlides);
     }
 
     public void Apply(Presentation presentation) => SetOptions(
-        FindMedia(presentation), _afterStartMode, _afterLoop, _afterShowWhenStopped, _afterRewindAfterPlaying, _afterPlayFullScreen);
+        FindMedia(presentation), _afterStartMode, _afterLoop, _afterShowWhenStopped, _afterRewindAfterPlaying, _afterPlayFullScreen, _afterStopAfterSlides);
 
     public void Revert(Presentation presentation) => SetOptions(
-        FindMedia(presentation), _beforeStartMode, _beforeLoop, _beforeShowWhenStopped, _beforeRewindAfterPlaying, _beforePlayFullScreen);
+        FindMedia(presentation), _beforeStartMode, _beforeLoop, _beforeShowWhenStopped, _beforeRewindAfterPlaying, _beforePlayFullScreen, _beforeStopAfterSlides);
 
     private MediaInfo? FindMedia(Presentation presentation)
     {
@@ -1579,7 +1586,8 @@ public sealed class SetMediaPlaybackOptionsCommand : IPresentationCommand
         bool loop,
         bool showWhenStopped,
         bool rewindAfterPlaying,
-        bool playFullScreen)
+        bool playFullScreen,
+        int stopAfterSlides)
     {
         if (media is null)
             return;
@@ -1589,7 +1597,10 @@ public sealed class SetMediaPlaybackOptionsCommand : IPresentationCommand
         media.ShowWhenStopped = showWhenStopped;
         media.RewindAfterPlaying = rewindAfterPlaying;
         media.PlayFullScreen = playFullScreen && media.IsVideo;
+        media.StopAfterSlides = NormalizeSlideCount(stopAfterSlides);
     }
+
+    private static int NormalizeSlideCount(int value) => Math.Max(1, value);
 }
 
 /// <summary>Changes one media object's trim and fade timings as one undoable edit.</summary>

@@ -27,10 +27,11 @@ internal sealed class AvaloniaSlideShowMediaController
         public required LayoutRect AuthoredBounds { get; init; }
         public required bool PlayFullScreen { get; init; }
         public required int BaseVolumePercent { get; set; }
+        public required int RemainingSlides { get; set; }
         public VideoView? VideoView { get; init; }
-        public PresentationMediaTranscriptTrackDescriptor? CaptionTrack { get; init; }
-        public Border? CaptionHost { get; init; }
-        public TextBlock? CaptionText { get; init; }
+        public PresentationMediaTranscriptTrackDescriptor? CaptionTrack { get; set; }
+        public Border? CaptionHost { get; set; }
+        public TextBlock? CaptionText { get; set; }
     }
 
     private readonly Panel _overlay;
@@ -41,6 +42,7 @@ internal sealed class AvaloniaSlideShowMediaController
     private IMediaPlaybackSession? _transitionSoundSession;
     private IReadOnlyList<SlideShowMediaShapePlan> _active = Array.Empty<SlideShowMediaShapePlan>();
     private Slide? _activeSlide;
+    private int? _activeSlideIndex;
     private bool _showMediaControls = true;
     private bool _showNarration = true;
     private double _slideDipW;
@@ -150,14 +152,22 @@ internal sealed class AvaloniaSlideShowMediaController
         int? captionSlideIndex = null,
         int? preferredCaptionSlideIndex = null,
         bool showMediaControls = true,
-        bool showNarration = true)
+        bool showNarration = true,
+        int? presentationSlideIndex = null)
     {
         ArgumentNullException.ThrowIfNull(slide);
         SetCanvasBounds(canvasW, canvasH);
         _slideDipW = slideDipW;
         _slideDipH = slideDipH;
-        TeardownPlayback();
+        var continues = _activeSlideIndex is int previous
+            && presentationSlideIndex is int current
+            && current == previous + 1;
+        if (continues)
+            RetainAcrossSlide();
+        else
+            TeardownPlayback();
         _activeSlide = slide;
+        _activeSlideIndex = presentationSlideIndex;
         _showMediaControls = showMediaControls;
         _showNarration = showNarration;
         _active = SlideShowMediaInteractionPlanner.BuildSlidePlan(
@@ -246,6 +256,7 @@ internal sealed class AvaloniaSlideShowMediaController
                     Media = shape.Media,
                     ShowWhenStopped = shape.Media.ShowWhenStopped,
                     BaseVolumePercent = baseVolumePercent,
+                    RemainingSlides = Math.Max(1, shape.Media.StopAfterSlides),
                     AuthoredBounds = plan.Bounds,
                     PlayFullScreen = shape.Media.PlayFullScreen,
                     VideoView = view,
@@ -579,23 +590,48 @@ internal sealed class AvaloniaSlideShowMediaController
     private void TeardownPlayback()
     {
         foreach (var slot in _slots)
-        {
-            try { slot.Session.Stop(); } catch { }
-            slot.Session.Failed -= OnSessionFailed;
-            slot.Session.Dispose();
-            if (slot.VideoView is not null)
-                _overlay.Children.Remove(slot.VideoView);
-            if (slot.CaptionHost is not null)
-                _overlay.Children.Remove(slot.CaptionHost);
-        }
+            DisposeSlot(slot);
         _slots.Clear();
         _activeSlide = null;
+        _activeSlideIndex = null;
         _captionTimer.Stop();
 
         _transitionSoundSession?.Dispose();
         _transitionSoundSession = null;
         _backend?.Dispose();
         _backend = null;
+    }
+
+    private void RetainAcrossSlide()
+    {
+        for (var i = _slots.Count - 1; i >= 0; i--)
+        {
+            var slot = _slots[i];
+            if (slot.Media.IsVideo || slot.RemainingSlides <= 1)
+            {
+                DisposeSlot(slot);
+                _slots.RemoveAt(i);
+                continue;
+            }
+
+            if (slot.CaptionHost is not null)
+                _overlay.Children.Remove(slot.CaptionHost);
+            slot.RemainingSlides--;
+            slot.CaptionTrack = null;
+            slot.CaptionHost = null;
+            slot.CaptionText = null;
+        }
+    }
+
+    private void DisposeSlot(MediaSlot slot)
+    {
+        try { slot.Session.Stop(); } catch { }
+        slot.Session.Failed -= OnSessionFailed;
+        slot.Session.Dispose();
+        if (slot.VideoView is not null)
+            _overlay.Children.Remove(slot.VideoView);
+        if (slot.CaptionHost is not null)
+            _overlay.Children.Remove(slot.CaptionHost);
     }
 
     private void OnSessionFailed(object? sender, MediaPlaybackFailure failure) => LastFailure = failure;

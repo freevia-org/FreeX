@@ -102,6 +102,42 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Media_StopAfterSlides_RoundTripsNativeAudioTiming()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 71,
+            Name = "Across-slide audio",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = false,
+                StopAfterSlides = 2,
+                Bytes = [0x52, 0x49, 0x46, 0x46],
+                ContentType = "audio/wav",
+            },
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
+            var p = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+            slideXml.Descendants(p + "audio").Single()
+                .Element(p + "cMediaNode")!.Attribute("numSld")!.Value.Should().Be("2");
+        }
+
+        ms.Position = 0;
+        var reopened = PptxPackageReader.Read(ms);
+        reopened.Slides[0].Shapes[0].Media!.StopAfterSlides.Should().Be(2);
+    }
+
+    [Fact]
     public void Media_PlayFullScreen_RoundTripsThroughVideoFile()
     {
         var pres = new Presentation();

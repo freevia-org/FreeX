@@ -2153,7 +2153,8 @@ public static class PptxPackageWriter
                     || shape.Media?.Loop == true
                     || shape.Media?.VolumePercent != 80
                     || shape.Media?.ShowWhenStopped == false
-                    || shape.Media?.RewindAfterPlaying == true))
+                    || shape.Media?.RewindAfterPlaying == true
+                    || shape.Media?.StopAfterSlides > 1))
             .ToList();
         if (animations.Count == 0 && timedMedia.Count == 0 && string.IsNullOrWhiteSpace(slide.AnimationBuildListXml))
             return null;
@@ -2270,6 +2271,8 @@ public static class PptxPackageWriter
         };
         if (shape.Media?.ShowWhenStopped == false)
             mediaNodeAttributes.Add(new XAttribute("showWhenStopped", "0"));
+        if (shape.Media?.StopAfterSlides > 1)
+            mediaNodeAttributes.Add(new XAttribute("numSld", Math.Max(1, shape.Media.StopAfterSlides).ToString(CultureInfo.InvariantCulture)));
         var condition = automatic
             ? new XElement(P + "cond",
                 new XAttribute("evt", "onBegin"),
