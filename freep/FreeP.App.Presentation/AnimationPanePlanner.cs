@@ -23,7 +23,9 @@ public sealed record AnimationPaneEffectOptionDescriptor(
     int? WheelSpokeCount = null,
     string? EffectSubtype = null,
     AnimationScaleBehavior? ScaleBehavior = null,
-    string? PreservedNumericBehaviorXml = null)
+    string? PreservedNumericBehaviorXml = null,
+    string? PreservedColorBehaviorXml = null,
+    string? NativeColorToken = null)
 {
     public bool ReversesMotionPath { get; init; }
 }
@@ -49,7 +51,9 @@ public sealed record AnimationPaneEffectOptionMutationPlan(
     int? WheelSpokeCount = null,
     string? EffectSubtype = null,
     AnimationScaleBehavior? ScaleBehavior = null,
-    string? PreservedNumericBehaviorXml = null)
+    string? PreservedNumericBehaviorXml = null,
+    string? PreservedColorBehaviorXml = null,
+    string? NativeColorToken = null)
 {
     public bool ReversesMotionPath { get; init; }
 }
@@ -1018,10 +1022,13 @@ public static class AnimationPanePlanner
         }
 
         var isAmountEffect = AnimationAmountSemantics.IsGrowShrink(animation.Preset);
+        var isNativeColorEffect = descriptors.Any(option => option.NativeColorToken is not null);
         var selectedDirection = animation.Preset == AnimationPreset.Split
             ? AnimationDirectionSemantics.ResolveSplitDirection(animation)
             : animation.Direction;
-        var selected = (isAmountEffect
+        var selected = (isNativeColorEffect
+                ? descriptors.FirstOrDefault(option => option.IsSelected)
+                : isAmountEffect
                 ? descriptors.FirstOrDefault(option => option.IsSelected)
                 : descriptors.FirstOrDefault(option =>
                 option.Direction == selectedDirection
@@ -1031,7 +1038,9 @@ public static class AnimationPanePlanner
         var normalized = descriptors
             .Select(option => option with
             {
-                IsSelected = isAmountEffect
+                IsSelected = isNativeColorEffect
+                    ? string.Equals(option.NativeColorToken, selected.NativeColorToken, StringComparison.OrdinalIgnoreCase)
+                    : isAmountEffect
                     ? ScaleBehaviorEquals(option.ScaleBehavior, selected.ScaleBehavior)
                     : option.Direction == selected.Direction
                         && option.EffectSubtype == selected.EffectSubtype
@@ -1109,6 +1118,8 @@ public static class AnimationPanePlanner
         var scaleBehavior = option.ScaleBehavior ?? animation.ScaleBehavior;
         var preservedNumericBehaviorXml = option.PreservedNumericBehaviorXml
             ?? animation.PreservedNumericBehaviorXml;
+        var preservedColorBehaviorXml = option.PreservedColorBehaviorXml
+            ?? ResolveNativeColorBehaviorXml(animation);
         if (option.EffectSubtype is not null)
             direction = null;
         var isAmountEffect = AnimationAmountSemantics.IsGrowShrink(animation.Preset);
@@ -1119,14 +1130,21 @@ public static class AnimationPanePlanner
         var amountChanged = nativeFontSize is not null
             ? Math.Abs(nativeFontSize.Multiplier - nextScale) >= 0.000001
             : !ScaleBehaviorEquals(animation.ScaleBehavior, scaleBehavior);
+        var nativeColorChanged = option.NativeColorToken is not null
+            && !string.Equals(
+                option.NativeColorToken,
+                SlideShowPlaybackPlanner.ResolveNativeColorToken(
+                    ResolveNativeColorBehaviorXml(animation)),
+                StringComparison.OrdinalIgnoreCase);
         return new AnimationPaneEffectOptionMutationPlan(
-            (isAmountEffect
+            (nativeColorChanged
+                || (isAmountEffect
                 ? amountChanged
                 : animation.Direction != direction)
                 || (animation.Preset == AnimationPreset.Wheel
                     && option.WheelSpokeCount is not null
                     && currentWheelSpokeCount != option.WheelSpokeCount)
-                || (!isAmountEffect && animation.EffectSubtype != effectSubtype),
+                || (!isAmountEffect && animation.EffectSubtype != effectSubtype)),
             animationIndex,
             direction,
             option.DisplayText,
@@ -1134,7 +1152,9 @@ public static class AnimationPanePlanner
             option.WheelSpokeCount ?? animation.WheelSpokeCount,
             isAmountEffect ? null : effectSubtype,
             scaleBehavior,
-            preservedNumericBehaviorXml);
+            preservedNumericBehaviorXml,
+            preservedColorBehaviorXml,
+            option.NativeColorToken);
     }
 
     public static bool TryApplyEffectOptionMutation(
@@ -1170,6 +1190,16 @@ public static class AnimationPanePlanner
         }
         else
             updated.EffectSubtype = plan.EffectSubtype;
+        if (plan.NativeColorToken is not null)
+        {
+            var rewritten = SlideShowPlaybackPlanner.RewriteNativeColorBehavior(
+                ResolveNativeColorBehaviorXml(current),
+                plan.NativeColorToken);
+            if (rewritten is null)
+                return false;
+
+            SetNativeColorBehaviorXml(updated, rewritten);
+        }
         if (current.Preset == AnimationPreset.Wheel)
             updated.WheelSpokeCount = plan.WheelSpokeCount;
         editor.SetAnimation(plan.AnimationIndex, updated);
@@ -1775,6 +1805,14 @@ public static class AnimationPanePlanner
             yield break;
         }
 
+        var nativeColorOptions = NativeColorOptions(animation).ToArray();
+        if (nativeColorOptions.Length > 0)
+        {
+            foreach (var option in nativeColorOptions)
+                yield return option;
+            yield break;
+        }
+
         switch (animation.Preset)
         {
             case AnimationPreset.FlyIn:
@@ -1978,6 +2016,51 @@ public static class AnimationPanePlanner
                 true,
                 ScaleBehavior: AnimationScaleBehavior.FromTo(current.Multiplier),
                 PreservedNumericBehaviorXml: customBehaviorXml);
+        }
+    }
+
+    private static IEnumerable<AnimationPaneEffectOptionDescriptor> NativeColorOptions(
+        ShapeAnimation animation)
+    {
+        var behaviorXml = ResolveNativeColorBehaviorXml(animation);
+        var currentToken = SlideShowPlaybackPlanner.ResolveNativeColorToken(behaviorXml);
+        if (currentToken is null)
+            yield break;
+
+        foreach (var token in new[] { "accent1", "accent2", "accent3", "accent4", "accent5", "accent6" })
+        {
+            yield return new AnimationPaneEffectOptionDescriptor(
+                $"color-{token}",
+                token.Replace("accent", "Accent ", StringComparison.Ordinal),
+                null,
+                string.Equals(currentToken, token, StringComparison.OrdinalIgnoreCase),
+                PreservedColorBehaviorXml: behaviorXml,
+                NativeColorToken: token);
+        }
+    }
+
+    private static string? ResolveNativeColorBehaviorXml(ShapeAnimation animation) =>
+        animation.Preset switch
+        {
+            AnimationPreset.ChangeFillColor => animation.PreservedFillBehaviorXml,
+            AnimationPreset.ChangeLineColor => animation.PreservedLineBehaviorXml,
+            AnimationPreset.ChangeColor => animation.PreservedColorBehaviorXml,
+            _ => null,
+        };
+
+    private static void SetNativeColorBehaviorXml(ShapeAnimation animation, string value)
+    {
+        switch (animation.Preset)
+        {
+            case AnimationPreset.ChangeFillColor:
+                animation.PreservedFillBehaviorXml = value;
+                break;
+            case AnimationPreset.ChangeLineColor:
+                animation.PreservedLineBehaviorXml = value;
+                break;
+            case AnimationPreset.ChangeColor:
+                animation.PreservedColorBehaviorXml = value;
+                break;
         }
     }
 
