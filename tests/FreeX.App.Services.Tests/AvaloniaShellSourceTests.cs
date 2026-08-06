@@ -4735,10 +4735,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("style.BorderDiagonalDown.Style != BorderStyle.None");
         source.Should().Contain("style.BorderDiagonalUp.Style != BorderStyle.None");
         // Border drawing is delegated to CellBorderPanel (stroked Lines with dash + per-style
-        // thickness in CellBorderPanel.cs/CellBorderGeometry.cs), replacing the old inline
+        // thickness from portable CellBorderVisualPlanner), replacing the old inline
         // solid-Border-strip approach that could not dash and had wrong Hair/SlantDashDot thickness.
         // borderNeighbors carries the touching neighbor cells' opposing edge styles so a shared grid
-        // edge resolves via CellBorderGeometry.ResolveBorderEdgeWinner (R66-render-gridlines-borders-6-1).
+        // edge resolves via CellBorderVisualPlanner.ResolveEdgeWinner (R66-render-gridlines-borders-6-1).
         source.Should().Contain("content.Children.Add(new CellBorderPanel(visibleStyle, borderNeighbors, zoomFactor));");
     }
 

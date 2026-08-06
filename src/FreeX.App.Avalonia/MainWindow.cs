@@ -36,6 +36,7 @@ using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.QuickAnalysis;
+using FreeX.App.Presentation.Rendering;
 using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
@@ -9313,7 +9314,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// Looks up the four neighboring cells' touching border edges (above's bottom, below's top,
     /// left's right, right's left) from the active sheet's raw (unmerged/un-CF'd) styles, so
     /// <see cref="CellBorderPanel"/> can resolve adjacent-edge conflicts via
-    /// <see cref="CellBorderGeometry.ResolveBorderEdgeWinner"/> instead of always drawing its own
+    /// <see cref="CellBorderVisualPlanner.ResolveEdgeWinner"/> instead of always drawing its own
     /// cell's edge unconditionally. Border styles are not affected by conditional formatting (only
     /// fill/font are), so the raw <see cref="Cell.StyleId"/> lookup mirrors what the neighbor's own
     /// <see cref="CellBorderPanel"/> would draw for that shared edge. A missing neighbor cell (no
@@ -12613,8 +12614,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // supporting dash patterns and correct per-style thicknesses (replaces the old solid
         // Border-strip approach that could not dash and had incorrect Hair/SlantDashDot thickness).
         // borderNeighbors carries the touching neighbor cells' opposing edge styles so a shared
-        // grid edge resolves to the heavier/more-prominent style (CellBorderGeometry.
-        // ResolveBorderEdgeWinner) instead of this cell always winning by paint order.
+        // grid edge resolves to the heavier/more-prominent style through CellBorderVisualPlanner
+        // instead of this cell always winning by paint order.
         content.Children.Add(new CellBorderPanel(visibleStyle, borderNeighbors, zoomFactor));
     }
 

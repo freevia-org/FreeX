@@ -79,7 +79,8 @@ public partial class GridView
     {
         if (border.Style == BorderStyle.None) return;
 
-        var rawThickness = GetBorderThickness(border.Style);
+        var strokePlan = CellBorderVisualPlanner.Plan(border.Style);
+        var rawThickness = strokePlan.Thickness;
         var thickness = BorderStrokePixelSnapper.SnapThickness(rawThickness, effectivePixelsPerDip);
 
         Pen pen;
@@ -91,14 +92,12 @@ public partial class GridView
         }
         else
         {
-            DashStyle dash = border.Style switch
+            DashStyle dash = strokePlan.DashPattern switch
             {
-                BorderStyle.Dashed or BorderStyle.MediumDashed => DashStyles.Dash,
-                BorderStyle.Dotted => DashStyles.Dot,
-                BorderStyle.DashDot or BorderStyle.MediumDashDot => DashStyles.DashDot,
-                BorderStyle.DashDotDot or BorderStyle.MediumDashDotDot => DashStyles.DashDotDot,
-                BorderStyle.SlantDashDot => DashStyles.DashDot,   // WPF approximation of slant dash-dot
-                BorderStyle.Hair => DashStyles.Solid,
+                CellBorderDashPattern.Dash => DashStyles.Dash,
+                CellBorderDashPattern.Dot => DashStyles.Dot,
+                CellBorderDashPattern.DashDot => DashStyles.DashDot,
+                CellBorderDashPattern.DashDotDot => DashStyles.DashDotDot,
                 _ => DashStyles.Solid
             };
 
@@ -109,24 +108,24 @@ public partial class GridView
                 borderPenCache[border] = pen;
         }
 
-        if (border.Style == BorderStyle.Double)
+        if (strokePlan.IsDouble)
         {
-            DrawDoubleBorderLines(dc, pen, p1, p2, rawThickness, effectivePixelsPerDip);
+            var doubleEdge = CellBorderVisualPlanner.PlanDoubleEdge(
+                p1.X,
+                p1.Y,
+                p2.X,
+                p2.Y,
+                rawThickness,
+                effectivePixelsPerDip);
+            DrawBorderLinePrimitive(dc, pen, doubleEdge.First);
+            if (doubleEdge.HasSecond)
+                DrawBorderLinePrimitive(dc, pen, doubleEdge.Second);
             return;
         }
 
         var (start, end) = SnapAxisAlignedBorderLine(p1, p2, pen.Thickness, effectivePixelsPerDip);
         dc.DrawLine(pen, start, end);
     }
-
-    private static double GetBorderThickness(BorderStyle style) => style switch
-    {
-        BorderStyle.Hair => 0.25,
-        BorderStyle.Thin => 0.5,
-        BorderStyle.Medium or BorderStyle.MediumDashed or BorderStyle.MediumDashDot or BorderStyle.MediumDashDotDot or BorderStyle.SlantDashDot => 1.5,
-        BorderStyle.Thick => 2.5,
-        _ => 0.5
-    };
 
     private static (Point Start, Point End) SnapAxisAlignedBorderLine(
         Point p1,
@@ -149,80 +148,11 @@ public partial class GridView
         return (p1, p2);
     }
 
-    /// <summary>
-    /// Renders Excel's "Double" border style as two thin parallel lines separated by a small
-    /// gap, straddling the requested edge, instead of a single solid line. Works for horizontal,
-    /// vertical, and diagonal edges alike by offsetting perpendicular to the edge direction, so
-    /// the same helper serves <see cref="BorderStyle.Double"/> top/bottom/left/right edges as
-    /// well as diagonal borders.
-    /// </summary>
-    private static void DrawDoubleBorderLines(
+    private static void DrawBorderLinePrimitive(
         DrawingContext dc,
         Pen pen,
-        Point p1,
-        Point p2,
-        double rawThickness,
-        double effectivePixelsPerDip)
-    {
-        if (TryDrawAxisAlignedDoubleBorderLines(dc, pen, p1, p2, rawThickness, effectivePixelsPerDip))
-            return;
-
-        const double gap = 1.0; // DIPs between the centerlines of the two strokes
-
-        var dx = p2.X - p1.X;
-        var dy = p2.Y - p1.Y;
-        var length = Math.Sqrt(dx * dx + dy * dy);
-        if (length < 1e-6)
-        {
-            // Degenerate (zero-length) edge: nothing to offset a second line against.
-            dc.DrawLine(pen, p1, p2);
-            return;
-        }
-
-        var offsetX = -dy / length * (gap / 2.0);
-        var offsetY = dx / length * (gap / 2.0);
-
-        dc.DrawLine(pen, new Point(p1.X + offsetX, p1.Y + offsetY), new Point(p2.X + offsetX, p2.Y + offsetY));
-        dc.DrawLine(pen, new Point(p1.X - offsetX, p1.Y - offsetY), new Point(p2.X - offsetX, p2.Y - offsetY));
-    }
-
-    private static bool TryDrawAxisAlignedDoubleBorderLines(
-        DrawingContext dc,
-        Pen pen,
-        Point p1,
-        Point p2,
-        double rawThickness,
-        double effectivePixelsPerDip)
-    {
-        var scale = BorderStrokePixelSnapper.NormalizePixelsPerDip(effectivePixelsPerDip);
-        var linePixels = BorderStrokePixelSnapper.SnapThicknessToDevicePixels(rawThickness, scale);
-        if (linePixels <= 0)
-            return false;
-
-        var gapPixels = Math.Max(1, (int)Math.Round(CellBorderDoubleGap * scale, MidpointRounding.AwayFromZero));
-        var totalThickness = ((linePixels * 2.0) + gapPixels) / scale;
-        var offset = (linePixels + gapPixels) / (2.0 * scale);
-
-        if (Math.Abs(p1.Y - p2.Y) < 0.0001)
-        {
-            var center = BorderStrokePixelSnapper.SnapCenter(p1.Y, totalThickness, scale);
-            dc.DrawLine(pen, new Point(p1.X, center - offset), new Point(p2.X, center - offset));
-            dc.DrawLine(pen, new Point(p1.X, center + offset), new Point(p2.X, center + offset));
-            return true;
-        }
-
-        if (Math.Abs(p1.X - p2.X) < 0.0001)
-        {
-            var center = BorderStrokePixelSnapper.SnapCenter(p1.X, totalThickness, scale);
-            dc.DrawLine(pen, new Point(center - offset, p1.Y), new Point(center - offset, p2.Y));
-            dc.DrawLine(pen, new Point(center + offset, p1.Y), new Point(center + offset, p2.Y));
-            return true;
-        }
-
-        return false;
-    }
-
-    private const double CellBorderDoubleGap = 1.0;
+        CellBorderLinePrimitive line) =>
+        dc.DrawLine(pen, new Point(line.X1, line.Y1), new Point(line.X2, line.Y2));
 
     private static bool HasVisibleCellBorder(CellStyle style) =>
         style.BorderTop.Style != BorderStyle.None ||
@@ -264,7 +194,11 @@ public partial class GridView
         Dictionary<CellColor, SolidColorBrush>? brushCache = null,
         Dictionary<CellColor, Pen>? fillPatternPenCache = null)
     {
-        if (style is null || style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
+        if (style is null)
+            return;
+
+        var patternPlan = CellFillPatternPlanner.Plan(style.FillPatternStyle);
+        if (patternPlan.Kind == CellFillPatternPlanKind.None)
             return;
 
         // Re-resolve against the CURRENT theme rather than reading the baked FillPatternColor
@@ -273,53 +207,36 @@ public partial class GridView
         // font/fill-color fix applied throughout this file (see ResolveFontColor/ResolveFillColor
         // call sites in GridView.Rendering.cs).
         var color = style.ResolveFillPatternColor(theme) ?? CellColor.Black;
-        var pen = FillPatternPenForCellColor(color, brushCache, fillPatternPenCache);
-        const double step = 6;
 
         dc.PushClip(FrozenRectangleGeometry(rect));
-        switch (style.FillPatternStyle)
+        if (patternPlan.Kind == CellFillPatternPlanKind.Opacity)
         {
-            case CellFillPatternStyle.Gray0625:
-            case CellFillPatternStyle.Gray125:
-            case CellFillPatternStyle.LightGray:
-            case CellFillPatternStyle.MediumGray:
-            case CellFillPatternStyle.DarkGray:
-                var opacity = style.FillPatternStyle switch
+            dc.DrawRectangle(
+                MakeBrushAlpha((byte)(patternPlan.Opacity * 255), color.R, color.G, color.B),
+                null,
+                rect);
+        }
+        else
+        {
+            var pen = FillPatternPenForCellColor(color, brushCache, fillPatternPenCache);
+            foreach (var line in patternPlan.Lines)
+            {
+                switch (line)
                 {
-                    CellFillPatternStyle.Gray0625 => 0.12,
-                    CellFillPatternStyle.Gray125 => 0.18,
-                    CellFillPatternStyle.LightGray => 0.28,
-                    CellFillPatternStyle.MediumGray => 0.45,
-                    _ => 0.62
-                };
-                dc.DrawRectangle(MakeBrushAlpha((byte)(opacity * 255), color.R, color.G, color.B), null, rect);
-                break;
-            case CellFillPatternStyle.LightHorizontal:
-            case CellFillPatternStyle.DarkHorizontal:
-                DrawHorizontalPattern(dc, rect, pen, step);
-                break;
-            case CellFillPatternStyle.LightVertical:
-            case CellFillPatternStyle.DarkVertical:
-                DrawVerticalPattern(dc, rect, pen, step);
-                break;
-            case CellFillPatternStyle.LightGrid:
-            case CellFillPatternStyle.DarkGrid:
-                DrawHorizontalPattern(dc, rect, pen, step);
-                DrawVerticalPattern(dc, rect, pen, step);
-                break;
-            case CellFillPatternStyle.LightDown:
-            case CellFillPatternStyle.DarkDown:
-                DrawDiagonalPattern(dc, rect, pen, descending: true);
-                break;
-            case CellFillPatternStyle.LightUp:
-            case CellFillPatternStyle.DarkUp:
-                DrawDiagonalPattern(dc, rect, pen, descending: false);
-                break;
-            case CellFillPatternStyle.LightTrellis:
-            case CellFillPatternStyle.DarkTrellis:
-                DrawDiagonalPattern(dc, rect, pen, descending: true);
-                DrawDiagonalPattern(dc, rect, pen, descending: false);
-                break;
+                    case CellFillPatternLinePrimitive.Horizontal:
+                        DrawHorizontalPattern(dc, rect, pen, patternPlan.TileSize);
+                        break;
+                    case CellFillPatternLinePrimitive.Vertical:
+                        DrawVerticalPattern(dc, rect, pen, patternPlan.TileSize);
+                        break;
+                    case CellFillPatternLinePrimitive.DescendingDiagonal:
+                        DrawDiagonalPattern(dc, rect, pen, descending: true, patternPlan.TileSize);
+                        break;
+                    case CellFillPatternLinePrimitive.AscendingDiagonal:
+                        DrawDiagonalPattern(dc, rect, pen, descending: false, patternPlan.TileSize);
+                        break;
+                }
+            }
         }
         dc.Pop();
     }
@@ -358,9 +275,13 @@ public partial class GridView
             dc.DrawLine(pen, new Point(x, rect.Top), new Point(x, rect.Bottom));
     }
 
-    private static void DrawDiagonalPattern(DrawingContext dc, Rect rect, Pen pen, bool descending)
+    private static void DrawDiagonalPattern(
+        DrawingContext dc,
+        Rect rect,
+        Pen pen,
+        bool descending,
+        double step)
     {
-        const double step = 8;
         for (var offset = -rect.Height; offset < rect.Width; offset += step)
         {
             var start = descending

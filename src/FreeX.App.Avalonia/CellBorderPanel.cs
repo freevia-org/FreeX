@@ -13,7 +13,7 @@ namespace FreeX.App.Avalonia;
 /// The four neighboring cells' border edges that touch this cell's own four edges (the neighbor
 /// above's <c>BorderBottom</c> touches this cell's <c>BorderTop</c>, and so on). Passed into
 /// <see cref="CellBorderPanel"/> so it can resolve which of the two conflicting styles describing
-/// a shared grid edge actually gets painted via <see cref="CellBorderGeometry.ResolveBorderEdgeWinner"/>,
+/// a shared grid edge actually gets painted via <see cref="CellBorderVisualPlanner.ResolveEdgeWinner"/>,
 /// instead of drawing its own edge unconditionally and leaving a paint-order-dependent double-draw
 /// wherever both neighboring cells declare a border on the same physical edge.
 /// </summary>
@@ -133,10 +133,10 @@ internal sealed class CellBorderPanel : Panel
         // prominent style regardless of which cell's panel happens to be built first — mirrors the
         // WPF GridView.Rendering.cs BorderEdgePrecedence pass. A cell with no neighbor border (the
         // default, all-None CellBorderNeighborEdges) always yields its own style unchanged.
-        var top    = CellBorderGeometry.ResolveBorderEdgeWinner(_style.BorderTop,    _neighbors.Above);
-        var bottom = CellBorderGeometry.ResolveBorderEdgeWinner(_style.BorderBottom, _neighbors.Below);
-        var left   = CellBorderGeometry.ResolveBorderEdgeWinner(_style.BorderLeft,   _neighbors.Left);
-        var right  = CellBorderGeometry.ResolveBorderEdgeWinner(_style.BorderRight,  _neighbors.Right);
+        var top    = CellBorderVisualPlanner.ResolveEdgeWinner(_style.BorderTop,    _neighbors.Above);
+        var bottom = CellBorderVisualPlanner.ResolveEdgeWinner(_style.BorderBottom, _neighbors.Below);
+        var left   = CellBorderVisualPlanner.ResolveEdgeWinner(_style.BorderLeft,   _neighbors.Left);
+        var right  = CellBorderVisualPlanner.ResolveEdgeWinner(_style.BorderRight,  _neighbors.Right);
 
         AddEdge(top,    new Point(0, 0),    new Point(w, 0),    isHorizontal: true);
         AddEdge(bottom, new Point(0, h),    new Point(w, h),    isHorizontal: true);
@@ -157,9 +157,9 @@ internal sealed class CellBorderPanel : Panel
         if (border.Style == BorderStyle.None)
             return;
 
+        var strokePlan = CellBorderVisualPlanner.Plan(border.Style);
         var renderScaling = GetRenderScaling();
-        var thickness  = GetDisplayThickness(border.Style, renderScaling);
-        var dashArray  = CellBorderGeometry.GetDashArray(border.Style);
+        var thickness  = GetDisplayThickness(strokePlan, renderScaling);
         var stroke     = ColorToBrush(border.Color);
         var halfThick  = thickness / 2.0;
 
@@ -182,16 +182,16 @@ internal sealed class CellBorderPanel : Panel
             end   = new Point(x, p2.Y);
         }
 
-        AddLineOrDouble(border.Style, start, end, stroke, thickness, dashArray, renderScaling);
+        AddLineOrDouble(strokePlan, start, end, stroke, thickness, renderScaling);
     }
 
     private void AddDiagonal(CellBorder border, Point p1, Point p2)
     {
+        var strokePlan = CellBorderVisualPlanner.Plan(border.Style);
         var renderScaling = GetRenderScaling();
-        var thickness = GetDisplayThickness(border.Style, renderScaling);
-        var dashArray = CellBorderGeometry.GetDashArray(border.Style);
+        var thickness = GetDisplayThickness(strokePlan, renderScaling);
         var stroke    = ColorToBrush(border.Color);
-        AddLineOrDouble(border.Style, p1, p2, stroke, thickness, dashArray, renderScaling);
+        AddLineOrDouble(strokePlan, p1, p2, stroke, thickness, renderScaling);
     }
 
     /// <summary>
@@ -202,74 +202,53 @@ internal sealed class CellBorderPanel : Panel
     /// one solid line).
     /// </summary>
     private void AddLineOrDouble(
-        BorderStyle style,
+        CellBorderStrokePlan strokePlan,
         Point p1,
         Point p2,
         IBrush stroke,
         double thickness,
-        double[]? dashArray,
         double renderScaling)
     {
-        if (style == BorderStyle.Double)
+        if (strokePlan.IsDouble)
         {
-            if (TryAddAxisAlignedDoubleBorderLines(p1, p2, stroke, thickness, renderScaling))
-                return;
-
-            var (x1, y1, x2, y2, x3, y3, x4, y4) =
-                CellBorderGeometry.GetDoubleBorderLineOffsets(p1.X, p1.Y, p2.X, p2.Y);
-            Children.Add(MakeLine(new Point(x1, y1), new Point(x2, y2), stroke, thickness, null));
-            Children.Add(MakeLine(new Point(x3, y3), new Point(x4, y4), stroke, thickness, null));
+            var doubleEdge = CellBorderVisualPlanner.PlanDoubleEdge(
+                p1.X,
+                p1.Y,
+                p2.X,
+                p2.Y,
+                thickness,
+                renderScaling);
+            Children.Add(MakeLine(doubleEdge.First, stroke, thickness, null));
+            if (doubleEdge.HasSecond)
+                Children.Add(MakeLine(doubleEdge.Second, stroke, thickness, null));
             return;
         }
 
-        Children.Add(MakeLine(p1, p2, stroke, thickness, dashArray));
+        Children.Add(MakeLine(p1, p2, stroke, thickness, strokePlan.DashArray));
     }
 
-    private bool TryAddAxisAlignedDoubleBorderLines(
-        Point p1,
-        Point p2,
-        IBrush stroke,
-        double thickness,
-        double renderScaling)
+    private double GetDisplayThickness(CellBorderStrokePlan strokePlan, double renderScaling)
     {
-        var scale = BorderStrokePixelSnapper.NormalizePixelsPerDip(renderScaling);
-        var linePixels = BorderStrokePixelSnapper.SnapThicknessToDevicePixels(thickness, scale);
-        if (linePixels <= 0)
-            return false;
-
-        var gapPixels = Math.Max(1, (int)Math.Round(CellBorderGeometry.DoubleBorderGap * scale, MidpointRounding.AwayFromZero));
-        var totalThickness = ((linePixels * 2.0) + gapPixels) / scale;
-        var offset = (linePixels + gapPixels) / (2.0 * scale);
-
-        if (Math.Abs(p1.Y - p2.Y) < 0.0001)
-        {
-            var center = BorderStrokePixelSnapper.SnapCenter(p1.Y, totalThickness, scale);
-            Children.Add(MakeLine(new Point(p1.X, center - offset), new Point(p2.X, center - offset), stroke, thickness, null));
-            Children.Add(MakeLine(new Point(p1.X, center + offset), new Point(p2.X, center + offset), stroke, thickness, null));
-            return true;
-        }
-
-        if (Math.Abs(p1.X - p2.X) < 0.0001)
-        {
-            var center = BorderStrokePixelSnapper.SnapCenter(p1.X, totalThickness, scale);
-            Children.Add(MakeLine(new Point(center - offset, p1.Y), new Point(center - offset, p2.Y), stroke, thickness, null));
-            Children.Add(MakeLine(new Point(center + offset, p1.Y), new Point(center + offset, p2.Y), stroke, thickness, null));
-            return true;
-        }
-
-        return false;
-    }
-
-    private double GetDisplayThickness(BorderStyle style, double renderScaling)
-    {
-        var displayThickness = CellBorderGeometry.GetThickness(style) * _zoomFactor;
+        var displayThickness = strokePlan.Thickness * _zoomFactor;
         return BorderStrokePixelSnapper.SnapThickness(displayThickness, renderScaling);
     }
 
     private double GetRenderScaling() =>
         BorderStrokePixelSnapper.NormalizePixelsPerDip(TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0);
 
-    private static Line MakeLine(Point start, Point end, IBrush stroke, double thickness, double[]? dashArray)
+    private static Line MakeLine(
+        CellBorderLinePrimitive line,
+        IBrush stroke,
+        double thickness,
+        IReadOnlyList<double>? dashArray) =>
+        MakeLine(new Point(line.X1, line.Y1), new Point(line.X2, line.Y2), stroke, thickness, dashArray);
+
+    private static Line MakeLine(
+        Point start,
+        Point end,
+        IBrush stroke,
+        double thickness,
+        IReadOnlyList<double>? dashArray)
     {
         var line = new Line
         {

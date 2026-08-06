@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Media;
 
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
@@ -536,30 +537,6 @@ public partial class GridView
     /// both describe the same physical grid edge (one from each of the two adjoining cells),
     /// heaviest/most-prominent first. An unrecognized style ranks lowest (last).
     /// </summary>
-    private static readonly BorderStyle[] BorderEdgePrecedence =
-    {
-        BorderStyle.Double,
-        BorderStyle.Thick,
-        BorderStyle.Medium,
-        BorderStyle.MediumDashDotDot,
-        BorderStyle.MediumDashDot,
-        BorderStyle.MediumDashed,
-        BorderStyle.SlantDashDot,
-        BorderStyle.Thin,
-        BorderStyle.DashDotDot,
-        BorderStyle.DashDot,
-        BorderStyle.Dashed,
-        BorderStyle.Dotted,
-        BorderStyle.Hair,
-        BorderStyle.None,
-    };
-
-    private static int BorderEdgePrecedenceRank(BorderStyle style)
-    {
-        var index = Array.IndexOf(BorderEdgePrecedence, style);
-        return index < 0 ? BorderEdgePrecedence.Length : index;
-    }
-
     /// <summary>
     /// Resolves which of two <see cref="CellBorder"/> values describing the same shared grid
     /// edge (one owned by each neighboring cell) should actually be painted, matching Excel's
@@ -569,12 +546,8 @@ public partial class GridView
     /// PDF render path (PrintRenderer.GridCells.cs, a different assembly) can resolve shared
     /// edges with this exact same precedence rule instead of duplicating or drifting from it.
     /// </summary>
-    public static CellBorder ResolveBorderEdgeWinner(CellBorder mine, CellBorder neighbor)
-    {
-        if (mine.Style == BorderStyle.None) return neighbor;
-        if (neighbor.Style == BorderStyle.None) return mine;
-        return BorderEdgePrecedenceRank(mine.Style) <= BorderEdgePrecedenceRank(neighbor.Style) ? mine : neighbor;
-    }
+    public static CellBorder ResolveBorderEdgeWinner(CellBorder mine, CellBorder neighbor) =>
+        CellBorderVisualPlanner.ResolveEdgeWinner(mine, neighbor);
 
     private void RenderCells(DrawingContext dc)
     {
