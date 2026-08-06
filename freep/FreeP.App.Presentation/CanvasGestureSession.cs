@@ -80,7 +80,7 @@ public sealed class CanvasGestureSession
     {
         ArgumentNullException.ThrowIfNull(slide);
 
-        var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        var shape = ShapeHitTester.FindShape(slide, shapeId);
         if (shape is null)
             return false;
 
@@ -122,7 +122,7 @@ public sealed class CanvasGestureSession
     {
         ArgumentNullException.ThrowIfNull(slide);
 
-        var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        var shape = ShapeHitTester.FindShape(slide, shapeId);
         if (shape is null)
             return false;
 
@@ -174,7 +174,7 @@ public sealed class CanvasGestureSession
         ArgumentNullException.ThrowIfNull(slide);
         ArgumentNullException.ThrowIfNull(presentation);
 
-        var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        var shape = ShapeHitTester.FindShape(slide, shapeId);
         if (shape is null)
             return false;
 
@@ -318,7 +318,7 @@ public sealed class CanvasGestureSession
         if (slide is null || Geometry is not { HandleName: { } handleName } geometry)
             return null;
 
-        var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == geometry.ShapeId);
+        var shape = ShapeHitTester.FindShape(slide, geometry.ShapeId);
         if (shape is null)
             return null;
 
@@ -351,7 +351,7 @@ public sealed class CanvasGestureSession
         if (slide is null || Geometry is not { HandleName: { } handleName } geometry)
             return false;
 
-        var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == geometry.ShapeId);
+        var shape = ShapeHitTester.FindShape(slide, geometry.ShapeId);
         if (shape is null)
             return false;
 
