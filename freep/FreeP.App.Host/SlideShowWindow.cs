@@ -3865,6 +3865,14 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 BlinkEffect(sb, element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.FlashBulb:
+                FlashBulbEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Flicker:
+                FlickerEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Wave:
                 WaveEffect(sb, element, plan);
                 break;
@@ -3873,6 +3881,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             case SlideShowShapeAnimationEffectKind.ChangeColor:
             case SlideShowShapeAnimationEffectKind.ChangeFontStyle:
                 EmphasisPulseEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.ColorWave:
+                ColorWaveEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.ChangeFillColor:
@@ -5225,6 +5237,42 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         sb.Children.Add(anim);
     }
 
+    private static void FlashBulbEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        var anim = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.05, KeyTime.FromPercent(0.08)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0.16)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.70, KeyTime.FromPercent(0.30)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
+        sb.Children.Add(anim);
+    }
+
+    private static void FlickerEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        var anim = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.20, KeyTime.FromPercent(0.20)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.80, KeyTime.FromPercent(0.35)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.15, KeyTime.FromPercent(0.50)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.65, KeyTime.FromPercent(0.65)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.25, KeyTime.FromPercent(0.80)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
+        sb.Children.Add(anim);
+    }
+
     private static void WaveEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
     {
         el.Opacity = 1;
@@ -5282,6 +5330,24 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             sb.Children.Add(scaleX);
             sb.Children.Add(scaleY);
         }
+    }
+
+    private static void ColorWaveEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        var anim = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.25)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0.50)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.75)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
+        sb.Children.Add(anim);
+        AddAuthoredColorOverlay(sb, el, plan);
     }
 
     private static void FillColorEffect(
@@ -5357,11 +5423,22 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs))
         };
-        color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0)));
-        color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(0.5)));
-        color.KeyFrames.Add(new LinearColorKeyFrame(
-            plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? to : from,
-            KeyTime.FromPercent(1)));
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ColorWave)
+        {
+            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0)));
+            color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(0.25)));
+            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0.50)));
+            color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(0.75)));
+            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(1)));
+        }
+        else
+        {
+            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0)));
+            color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(0.5)));
+            color.KeyFrames.Add(new LinearColorKeyFrame(
+                plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? to : from,
+                KeyTime.FromPercent(1)));
+        }
         Storyboard.SetTarget(color, brush);
         Storyboard.SetTargetProperty(color, new PropertyPath(SolidColorBrush.ColorProperty));
         storyboard.Children.Add(color);
@@ -5371,10 +5448,20 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs))
         };
         opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0)));
-        opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.5)));
-        opacity.KeyFrames.Add(new LinearDoubleKeyFrame(
-            plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? 0.65 : 0,
-            KeyTime.FromPercent(1)));
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ColorWave)
+        {
+            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.25)));
+            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0.50)));
+            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.75)));
+            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
+        }
+        else
+        {
+            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.5)));
+            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(
+                plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? 0.65 : 0,
+                KeyTime.FromPercent(1)));
+        }
         Storyboard.SetTarget(opacity, tint);
         Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
         storyboard.Children.Add(opacity);

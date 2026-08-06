@@ -165,6 +165,8 @@ public sealed class MailingsTabTests
         engine.InsertAddressBlock();
 
         ((Paragraph)view.Document.Blocks[0]).PlainText.Should().Contain("«AddressBlock»");
+        ComplexFields(view).Single().ComplexField!.Instruction
+            .Should().Be(" ADDRESSBLOCK \\* MERGEFORMAT ");
     }
 
     [Fact]
@@ -177,6 +179,26 @@ public sealed class MailingsTabTests
         engine.InsertGreetingLine();
 
         ((Paragraph)view.Document.Blocks[0]).PlainText.Should().Contain("«GreetingLine»");
+        ComplexFields(view).Single().ComplexField!.Instruction
+            .Should().Be(" GREETINGLINE \\f \"<<_BEFORE_ Dear >><<_TITLE0_ >><<_LAST0_>><<_AFTER_ ,>>\" \\e \"Dear Sir or Madam,\" \\l 1033 \\* MERGEFORMAT ");
+    }
+
+    [Fact]
+    public void CompositeRowAugmentation_PreservesExplicitSourceValues()
+    {
+        var view = ViewWith(new Paragraph(""));
+        var engine = new MailMergeEngine(view, Callbacks());
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["FirstName"] = "Ignored",
+            ["AddressBlock"] = "Explicit address",
+            ["GreetingLine"] = "Explicit greeting"
+        };
+
+        var augmented = engine.Session.AugmentRow(row);
+
+        augmented["AddressBlock"].Should().Be("Explicit address");
+        augmented["GreetingLine"].Should().Be("Explicit greeting");
     }
 
     [Fact]

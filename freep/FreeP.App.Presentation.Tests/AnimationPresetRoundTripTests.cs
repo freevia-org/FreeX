@@ -254,7 +254,7 @@ public sealed class AnimationPresetRoundTripTests
     [Theory]
     [InlineData(26, AnimationPreset.FlashBulb)] // PowerPoint FlashBulb
     [InlineData(27, AnimationPreset.Flicker)] // PowerPoint Flicker
-    public void ImportedFlashBulbAndFlickerRetainNativeIdsAndUseBlinkPlayback(int presetId, AnimationPreset expectedPreset)
+    public void ImportedFlashBulbAndFlickerRetainNativeIdsAndUseDistinctPlayback(int presetId, AnimationPreset expectedPreset)
     {
         var presentation = Presentation.CreateEmpty();
         presentation.Slides[0].Shapes.Add(new SlideShape
@@ -288,7 +288,10 @@ public sealed class AnimationPresetRoundTripTests
         animation.RawPresetSubtype.Should().Be("0");
 
         SlideShowPlaybackPlanner.PlanShapeAnimation(animation, startDelayMs: 0)
-            .EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Blink);
+            .EffectKind.Should().Be(
+                expectedPreset == AnimationPreset.FlashBulb
+                    ? SlideShowShapeAnimationEffectKind.FlashBulb
+                    : SlideShowShapeAnimationEffectKind.Flicker);
 
         using var second = new MemoryStream();
         PptxPackageWriter.Write(reloaded, second);
@@ -303,7 +306,7 @@ public sealed class AnimationPresetRoundTripTests
     }
 
     [Fact]
-    public void ImportedColorWaveRetainsNativeIdAndUsesColorPulsePlayback()
+    public void ImportedColorWaveRetainsNativeIdAndUsesDistinctPlayback()
     {
         var presentation = Presentation.CreateEmpty();
         presentation.Slides[0].Shapes.Add(new SlideShape
@@ -336,7 +339,7 @@ public sealed class AnimationPresetRoundTripTests
         animation.RawPresetId.Should().Be(20);
         animation.RawPresetSubtype.Should().Be("0");
         SlideShowPlaybackPlanner.PlanShapeAnimation(animation, startDelayMs: 0)
-            .EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ColorPulse);
+            .EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ColorWave);
 
         using var second = new MemoryStream();
         PptxPackageWriter.Write(reloaded, second);

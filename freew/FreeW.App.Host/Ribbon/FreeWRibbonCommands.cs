@@ -6137,11 +6137,11 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Mailings > Insert Address Block: insert the «AddressBlock» composite placeholder at the caret.
+    // Mailings > Insert Address Block: insert a native ADDRESSBLOCK field at the caret.
     // The placeholder is resolved at preview/merge time via the session's FieldMapping (auto-matched or
     // user-customised via Match Fields). Opens Match Fields first if no data is loaded so the user can
     // configure the mapping before the placeholder lands in the document.
-    private sealed class InsertAddressBlockCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    internal sealed class InsertAddressBlockCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
@@ -6155,13 +6155,15 @@ internal static class FreeWRibbonCommands
             }
 
             editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}AddressBlock{MailMerge.FieldClose}");
+            editor.InsertComplexField(
+                MailMerge.AddressBlockInstruction,
+                $"{MailMerge.FieldOpen}AddressBlock{MailMerge.FieldClose}");
         }
     }
 
-    // Mailings > Insert Greeting Line: insert the «GreetingLine» composite placeholder at the caret.
+    // Mailings > Insert Greeting Line: insert a native default GREETINGLINE field at the caret.
     // Resolved per-record at preview/merge time using the session's FieldMapping.
-    private sealed class InsertGreetingLineCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    internal sealed class InsertGreetingLineCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
@@ -6175,7 +6177,9 @@ internal static class FreeWRibbonCommands
             }
 
             editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}GreetingLine{MailMerge.FieldClose}");
+            editor.InsertComplexField(
+                MailMerge.GreetingLineInstruction,
+                $"{MailMerge.FieldOpen}GreetingLine{MailMerge.FieldClose}");
         }
     }
 

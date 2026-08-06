@@ -1341,6 +1341,30 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void MailingsAddressAndGreetingCommands_InsertNativeWordFields()
+    {
+        var editor = new DocumentView();
+        var session = new MailMergeSession
+        {
+            Data = MergeData.FromCsv("FirstName,LastName\nAda,Lovelace")
+        };
+
+        new FreeWRibbonCommands.InsertAddressBlockCommand(editor, session)
+            .Execute(RibbonCommandContext.Empty);
+        new FreeWRibbonCommands.InsertGreetingLineCommand(editor, session)
+            .Execute(RibbonCommandContext.Empty);
+
+        var fields = editor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
+            .ToArray();
+        fields.Select(run => run.ComplexField!.Instruction).Should().BeEquivalentTo(
+            " ADDRESSBLOCK \\* MERGEFORMAT ",
+            " GREETINGLINE \\f \"<<_BEFORE_ Dear >><<_TITLE0_ >><<_LAST0_>><<_AFTER_ ,>>\" \\e \"Dear Sir or Madam,\" \\l 1033 \\* MERGEFORMAT ");
+        fields.Select(run => run.Text).Should().BeEquivalentTo("«AddressBlock»", "«GreetingLine»");
+    }
+
+    [StaFact]
     public void MailingsCheckErrors_SimulationOpensEditableReportInsteadOfCompletingMerge()
     {
         var editor = new DocumentView();

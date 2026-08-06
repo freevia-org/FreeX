@@ -3712,6 +3712,16 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 BlinkEffect(element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.FlashBulb:
+                InvokeRevealAtStart(plan, onReveal);
+                FlashBulbEffect(element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Flicker:
+                InvokeRevealAtStart(plan, onReveal);
+                FlickerEffect(element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Wave:
                 InvokeRevealAtStart(plan, onReveal);
                 WaveEffect(element, plan);
@@ -3720,6 +3730,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             case SlideShowShapeAnimationEffectKind.ColorPulse:
             case SlideShowShapeAnimationEffectKind.ChangeColor:
                 EmphasisPulseEffect(element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.ColorWave:
+                ColorWaveEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.ChangeFillColor:
@@ -5087,6 +5101,24 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             value => el.Opacity = value));
     }
 
+    private void FlashBulbEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
+            plan.DurationMs,
+            new[] { (1.0, 0.0), (0.05, 0.08), (1.0, 0.16), (0.70, 0.30), (1.0, 1.0) },
+            value => el.Opacity = value));
+    }
+
+    private void FlickerEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
+            plan.DurationMs,
+            new[] { (1.0, 0.0), (0.20, 0.20), (0.80, 0.35), (0.15, 0.50), (0.65, 0.65), (0.25, 0.80), (1.0, 1.0) },
+            value => el.Opacity = value));
+    }
+
     private void WaveEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
     {
         el.Opacity = 1;
@@ -5122,6 +5154,16 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                     AnimateScale(el, scale, plan.PeakScale, 1, plan.DurationMs / 2));
             });
         }
+    }
+
+    private void ColorWaveEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
+            plan.DurationMs,
+            new[] { (1.0, 0.0), (0.65, 0.25), (1.0, 0.50), (0.65, 0.75), (1.0, 1.0) },
+            value => el.Opacity = value));
+        AddAuthoredColorOverlay(el, plan);
     }
 
     private void FillColorEffect(Control element, SlideShowShapeAnimationPlaybackPlan plan)
@@ -5176,17 +5218,31 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         Canvas.SetTop(tint, Canvas.GetTop(element));
         parent.Children.Add(tint);
 
-        var endColor = plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? to : from;
         DelayedAction(plan.DelayMs, () =>
         {
-            AnimateColorKeyframes(
-                plan.DurationMs,
-                new[] { (from, 0.0), (to, 0.5), (endColor, 1.0) },
-                value => brush.Color = value);
-            AnimateKeyframes(
-                plan.DurationMs,
-                new[] { (0.0, 0.0), (0.65, 0.5), (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? 0.65 : 0.0, 1.0) },
-                value => tint.Opacity = value);
+            if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ColorWave)
+            {
+                AnimateColorKeyframes(
+                    plan.DurationMs,
+                    new[] { (from, 0.0), (to, 0.25), (from, 0.50), (to, 0.75), (from, 1.0) },
+                    value => brush.Color = value);
+                AnimateKeyframes(
+                    plan.DurationMs,
+                    new[] { (0.0, 0.0), (0.65, 0.25), (0.0, 0.50), (0.65, 0.75), (0.0, 1.0) },
+                    value => tint.Opacity = value);
+            }
+            else
+            {
+                var endColor = plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? to : from;
+                AnimateColorKeyframes(
+                    plan.DurationMs,
+                    new[] { (from, 0.0), (to, 0.5), (endColor, 1.0) },
+                    value => brush.Color = value);
+                AnimateKeyframes(
+                    plan.DurationMs,
+                    new[] { (0.0, 0.0), (0.65, 0.5), (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? 0.65 : 0.0, 1.0) },
+                    value => tint.Opacity = value);
+            }
         });
     }
 

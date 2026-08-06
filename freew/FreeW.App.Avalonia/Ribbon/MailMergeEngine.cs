@@ -346,7 +346,7 @@ internal sealed class MailMergeEngine
     // ── Address Block / Greeting Line ───────────────────────────────────────────────
 
     /// <summary>
-    /// Mailings &gt; Address Block. Inserts the composite «AddressBlock» placeholder at the caret (undoable),
+    /// Mailings &gt; Address Block. Inserts a native ADDRESSBLOCK field at the caret (undoable),
     /// resolved per-record at preview / merge time via the session's field mapping. No-ops (with an info
     /// message) when no recipients are loaded, mirroring the WPF host.
     /// </summary>
@@ -354,18 +354,22 @@ internal sealed class MailMergeEngine
     {
         if (!RequireRecipients("Select recipients first (Mailings > Select Recipients), then insert an Address Block."))
             return;
-        _editor.InsertText($"{MailMerge.FieldOpen}AddressBlock{MailMerge.FieldClose}");
+        _editor.InsertComplexField(
+            MailMerge.AddressBlockInstruction,
+            $"{MailMerge.FieldOpen}AddressBlock{MailMerge.FieldClose}");
     }
 
     /// <summary>
-    /// Mailings &gt; Greeting Line. Inserts the composite «GreetingLine» placeholder at the caret (undoable),
+    /// Mailings &gt; Greeting Line. Inserts a native default GREETINGLINE field at the caret (undoable),
     /// resolved per-record at preview / merge time. No-ops (with an info message) when no recipients are loaded.
     /// </summary>
     public void InsertGreetingLine()
     {
         if (!RequireRecipients("Select recipients first (Mailings > Select Recipients), then insert a Greeting Line."))
             return;
-        _editor.InsertText($"{MailMerge.FieldOpen}GreetingLine{MailMerge.FieldClose}");
+        _editor.InsertComplexField(
+            MailMerge.GreetingLineInstruction,
+            $"{MailMerge.FieldOpen}GreetingLine{MailMerge.FieldClose}");
     }
 
     // ── Preview Results ─────────────────────────────────────────────────────────────
