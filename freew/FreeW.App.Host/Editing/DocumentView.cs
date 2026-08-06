@@ -233,20 +233,6 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Holds the run + paragraph formatting captured when Format Painter is armed (null when the
-    /// painter is idle). On the next selection the user makes, this is stamped onto that selection
-    /// and the painter disarms (single-shot) or stays armed (locked mode). See <see cref="ArmFormatPainter"/>.
-    /// </summary>
-    private FormatPainterClipboard? _formatPainter;
-
-    /// <summary>
-    /// When true the painter stays armed after each application (double-click / lock mode), re-applying
-    /// on every new selection until the user clicks the button again or presses Escape. False for the
-    /// default single-shot gesture.
-    /// </summary>
-    private bool _formatPainterLocked;
-
-    /// <summary>
     /// Model block indices of headings the user has collapsed in the outline. Collapse is purely a
     /// view concern: while a heading is collapsed, <see cref="Render"/> skips building the body blocks
     /// beneath it (down to the next same-or-higher heading), and <see cref="CommitToModel"/> re-inserts
@@ -3949,7 +3935,7 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>True while Format Painter is armed (captured formatting waiting to be stamped).</summary>
-    public bool FormatPainterActive => _formatPainter is not null;
+    public bool FormatPainterActive => _editingSession.Interaction.IsFormatPainterArmed;
 
     /// <summary>
     /// Arm the Format Painter: capture the run formatting under the caret/selection and the caret
@@ -3961,30 +3947,15 @@ public sealed class DocumentView : RichTextBox
     public bool ArmFormatPainter(bool locked = false)
     {
         Focus();
-        if (_formatPainter is not null)
-        {
-            if (locked)
-            {
-                _formatPainterLocked = true;
-                return true;
-            }
-
-            _formatPainter = null;
-            _formatPainterLocked = false;
-            return false;
-        }
-
-        _formatPainter = FormatPainterClipboard.Capture(CaptureSelectionRunFormatting(), CaptureCaretParagraphFormatting());
-        _formatPainterLocked = locked;
-        return true;
+        return _editingSession.Interaction.ToggleFormatPainter(
+            CaptureSelectionRunFormatting(),
+            CaptureCaretParagraphFormatting(),
+            locked);
     }
 
     /// <summary>Disarm the Format Painter regardless of lock mode (e.g. on Escape key).</summary>
-    public void EscapeFormatPainter()
-    {
-        _formatPainter = null;
-        _formatPainterLocked = false;
-    }
+    public void EscapeFormatPainter() =>
+        _editingSession.Interaction.CancelFormatPainter();
 
     /// <summary>
     /// If the Format Painter is armed and the current selection is non-empty, stamp the captured run
@@ -3997,69 +3968,15 @@ public sealed class DocumentView : RichTextBox
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
             return false;
 
-        if (_formatPainter is not { } clipboard || Selection.IsEmpty)
+        if (!FormatPainterActive
+            || Selection.IsEmpty
+            || !TryGetCurrentBodyTextRange(out var range))
+        {
             return false;
-
-        var selectedRange = SelectedVisibleTextRange();
-        if (selectedRange is null)
-            return false;
+        }
 
         CommitToModel();
-        var ranges = new List<(int BlockIndex, int StartOffset, int EndOffset)>();
-        for (var i = 0; i < selectedRange.Value.VisibleBlockIndices.Count; i++)
-        {
-            var modelIndex = ModelIndexFromVisible(selectedRange.Value.VisibleBlockIndices[i]);
-            if (modelIndex < 0 || modelIndex >= _model.Blocks.Count
-                || _model.Blocks[modelIndex] is not ModelParagraph paragraph)
-            {
-                continue;
-            }
-
-            var textLength = paragraph.Runs.Sum(run => run.Text.Length);
-            var start = i == 0 ? selectedRange.Value.StartOffset : 0;
-            var end = i == selectedRange.Value.VisibleBlockIndices.Count - 1
-                ? selectedRange.Value.EndOffset
-                : textLength;
-            start = Math.Clamp(start, 0, textLength);
-            end = Math.Clamp(end, 0, textLength);
-            if (end > start)
-                ranges.Add((modelIndex, start, end));
-        }
-
-        if (ranges.Count == 0)
-            return false;
-
-        _commands.BeginUndoGroup();
-        try
-        {
-            foreach (var range in ranges)
-            {
-                _commands.Execute(new FormatRunRangeCommand(
-                    range.BlockIndex,
-                    range.StartOffset,
-                    range.EndOffset,
-                    clipboard.ApplyTo));
-            }
-
-            foreach (var blockIndex in ranges.Select(range => range.BlockIndex).Distinct())
-            {
-                var paragraph = (ModelParagraph)_model.Blocks[blockIndex];
-                _commands.Execute(new SetParagraphFormattingCommand(
-                    blockIndex,
-                    clipboard.ApplyTo(paragraph.Formatting)));
-            }
-
-            _commands.CommitUndoGroup("Format Painter");
-        }
-        catch
-        {
-            _commands.AbortUndoGroup();
-            throw;
-        }
-
-        if (!_formatPainterLocked)
-            _formatPainter = null;
-        return true;
+        return _editingSession.Interaction.TryApplyFormatPainter(range);
     }
 
     // Read the run formatting of the current selection/caret straight from WPF selection property
@@ -4168,7 +4085,7 @@ public sealed class DocumentView : RichTextBox
     protected override void OnPreviewMouseLeftButtonUp(MouseButtonEventArgs e)
     {
         base.OnPreviewMouseLeftButtonUp(e);
-        if (_formatPainter is not null)
+        if (FormatPainterActive)
             TryApplyFormatPainter();
     }
 

@@ -292,8 +292,6 @@ public sealed class DocumentView : Control
     // is collapsed (no selection). Set by the Font dialog on a collapsed-caret apply; consumed
     // and cleared by the next InsertText call.
     private RunFormatting? _pendingRunFmt;
-    private FormatPainterClipboard? _formatPainter;
-    private bool _formatPainterLocked;
     // GB2: backed by a persisted .lex store (mirrors the WPF host's CustomDictionaryStore — same file
     // location/format, so words added in either shell are available in the other) rather than a plain
     // in-memory CustomDictionary, so Add-to-Dictionary survives a restart. Loaded once at construction;
@@ -22628,61 +22626,30 @@ public sealed class DocumentView : Control
         return true;
     }
 
-    public bool IsFormatPainterArmed => _formatPainter is not null;
+    public bool IsFormatPainterArmed => _editingSession.Interaction.IsFormatPainterArmed;
 
     public void ArmFormatPainter(bool locked = false)
     {
         if (IsEditingLocked)
             return;
 
-        if (_formatPainter is not null)
-        {
-            if (locked)
-            {
-                _formatPainterLocked = true;
-                return;
-            }
-
-            CancelFormatPainter();
-            return;
-        }
-
         var formatting = GetSelectionFormatting();
-        _formatPainter = FormatPainterClipboard.Capture(formatting.Run, formatting.Paragraph);
-        _formatPainterLocked = locked;
+        _editingSession.Interaction.ToggleFormatPainter(
+            formatting.Run,
+            formatting.Paragraph,
+            locked);
     }
 
-    public void CancelFormatPainter()
-    {
-        _formatPainter = null;
-        _formatPainterLocked = false;
-    }
+    public void CancelFormatPainter() =>
+        _editingSession.Interaction.CancelFormatPainter();
 
     public bool ApplyFormatPainterToSelection()
     {
-        if (_formatPainter is not { } painter || IsEditingLocked || NormalizedSelection() is null)
+        if (IsEditingLocked || NormalizedSelection() is null)
             return false;
 
-        _bus.BeginUndoGroup();
-        try
-        {
-            ApplyRunFormatting(painter.ApplyTo);
-            foreach (var index in SelectedParagraphIndices())
-            {
-                if (_doc.Blocks[index] is Paragraph paragraph && IsEditable(paragraph))
-                    _bus.Execute(new SetParagraphFormattingCommand(index, painter.ApplyTo(paragraph.Formatting)));
-            }
-
-            _bus.CommitUndoGroup("Format Painter");
-        }
-        catch
-        {
-            _bus.AbortUndoGroup();
-            throw;
-        }
-
-        if (!_formatPainterLocked)
-            CancelFormatPainter();
+        if (!_editingSession.Interaction.TryApplyFormatPainter(CurrentBodyTextRange()))
+            return false;
         Focus();
         return true;
     }

@@ -1169,6 +1169,11 @@ public sealed class DocumentEditingSession
         }
     }
 
+    internal void ExecuteCommands(IReadOnlyList<IDocumentCommand> commands, string undoLabel) =>
+        ExecuteGroup(commands, undoLabel);
+
+    internal string? RevisionDateXmlForEdit() => _revisionDateXml();
+
     private DocumentCommandBus CreateCommandBus(TextDocument document)
     {
         var commands = new DocumentCommandBus(new SessionCommandContext(document, _revisionAuthor));

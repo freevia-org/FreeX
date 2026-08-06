@@ -80,6 +80,8 @@ public readonly record struct DocumentSectionPosition(int Current, int Total);
 public sealed class DocumentEditorInteractionSession
 {
     private readonly DocumentEditingSession _editing;
+    private FormatPainterClipboard? _formatPainter;
+    private bool _formatPainterLocked;
 
     internal DocumentEditorInteractionSession(DocumentEditingSession editing)
     {
@@ -104,6 +106,72 @@ public sealed class DocumentEditorInteractionSession
         }
 
         return new DocumentSectionPosition(Math.Clamp(current, 1, total), total);
+    }
+
+    public bool IsFormatPainterArmed => _formatPainter is not null;
+
+    public bool ToggleFormatPainter(
+        RunFormatting? run,
+        ParagraphFormatting? paragraph,
+        bool locked = false)
+    {
+        if (_formatPainter is not null)
+        {
+            if (locked)
+            {
+                _formatPainterLocked = true;
+                return true;
+            }
+
+            CancelFormatPainter();
+            return false;
+        }
+
+        _formatPainter = FormatPainterClipboard.Capture(run, paragraph);
+        _formatPainterLocked = locked;
+        return true;
+    }
+
+    public void CancelFormatPainter()
+    {
+        _formatPainter = null;
+        _formatPainterLocked = false;
+    }
+
+    public bool TryApplyFormatPainter(DocumentTextRange selection)
+    {
+        if (_formatPainter is not { } painter)
+            return false;
+
+        var ranges = ParagraphRanges(selection);
+        if (ranges.Count == 0)
+            return false;
+
+        var commands = new List<IDocumentCommand>();
+        foreach (var range in ranges)
+        {
+            commands.Add(new FormatPainterRangeCommand(
+                range.Start.BlockIndex,
+                range.Start.Offset,
+                range.End.Offset,
+                painter.ApplyTo,
+                _editing.RevisionDateXmlForEdit));
+        }
+
+        foreach (var blockIndex in ranges
+                     .Select(range => range.Start.BlockIndex)
+                     .Distinct())
+        {
+            var paragraph = (Paragraph)_editing.Document.Blocks[blockIndex];
+            commands.Add(new SetParagraphFormattingCommand(
+                blockIndex,
+                painter.ApplyTo(paragraph.Formatting)));
+        }
+
+        _editing.ExecuteCommands(commands, "Format Painter");
+        if (!_formatPainterLocked)
+            _formatPainter = null;
+        return true;
     }
 
     public string ProjectSelectionText(DocumentTextRange selection)
@@ -179,4 +247,122 @@ public sealed class DocumentEditorInteractionSession
         DocumentEditorInputIntent intent,
         bool extendSelection) =>
         new(intent, extendSelection);
+
+    private IReadOnlyList<DocumentTextRange> ParagraphRanges(DocumentTextRange selection)
+    {
+        var normalized = selection.Normalize();
+        if (normalized.IsCollapsed
+            || normalized.Start.BlockIndex < 0
+            || normalized.End.BlockIndex >= _editing.Document.Blocks.Count)
+        {
+            return [];
+        }
+
+        var ranges = new List<DocumentTextRange>();
+        for (var blockIndex = normalized.Start.BlockIndex;
+             blockIndex <= normalized.End.BlockIndex;
+             blockIndex++)
+        {
+            if (_editing.Document.Blocks[blockIndex] is not Paragraph paragraph)
+                continue;
+
+            var start = blockIndex == normalized.Start.BlockIndex ? normalized.Start.Offset : 0;
+            var end = blockIndex == normalized.End.BlockIndex
+                ? normalized.End.Offset
+                : paragraph.PlainText.Length;
+            start = Math.Clamp(start, 0, paragraph.PlainText.Length);
+            end = Math.Clamp(end, start, paragraph.PlainText.Length);
+            if (end > start)
+            {
+                ranges.Add(new DocumentTextRange(
+                    new DocumentTextPosition(blockIndex, start),
+                    new DocumentTextPosition(blockIndex, end)));
+            }
+        }
+
+        return ranges;
+    }
+
+    private sealed class FormatPainterRangeCommand(
+        int blockIndex,
+        int startOffset,
+        int endOffset,
+        Func<RunFormatting, RunFormatting> transform,
+        Func<string?> revisionDateXml) : IDocumentCommand
+    {
+        private List<Run>? _previous;
+        private List<Run>? _replacement;
+
+        public string Label => "Format Painter";
+
+        public DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.BodyFormatting;
+
+        public void Apply(IDocumentCommandContext context)
+        {
+            var paragraph = (Paragraph)context.Document.Blocks[blockIndex];
+            if (_replacement is not null)
+            {
+                paragraph.Runs.Clear();
+                paragraph.Runs.AddRange(_replacement);
+                return;
+            }
+
+            _previous = [.. paragraph.Runs];
+            var rebuilt = new List<Run>();
+            var position = 0;
+            foreach (var source in paragraph.Runs)
+            {
+                var runStart = position;
+                var runEnd = runStart + source.Text.Length;
+                position = runEnd;
+                var coverStart = Math.Max(runStart, startOffset);
+                var coverEnd = Math.Min(runEnd, endOffset);
+                if (source.Text.Length == 0 || coverStart >= coverEnd)
+                {
+                    rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text));
+                    continue;
+                }
+
+                var localStart = coverStart - runStart;
+                var localEnd = coverEnd - runStart;
+                if (localStart > 0)
+                    rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text[..localStart]));
+
+                var covered = RevisionEditPlanner.CloneRunWithText(
+                    source,
+                    source.Text[localStart..localEnd]);
+                var formatting = transform(source.Formatting);
+                covered.Formatting = formatting;
+                if (context.Document is { TrackRevisions: true, DoNotTrackFormatting: false }
+                    && formatting != source.Formatting
+                    && covered.FormatRevision is null)
+                {
+                    var author = string.IsNullOrWhiteSpace(context.RevisionAuthor)
+                        ? "FreeW User"
+                        : context.RevisionAuthor.Trim();
+                    covered.FormatRevision = new FormatRevision(
+                        source.Formatting,
+                        author,
+                        revisionDateXml());
+                }
+                rebuilt.Add(covered);
+
+                if (localEnd < source.Text.Length)
+                    rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text[localEnd..]));
+            }
+
+            paragraph.Runs.Clear();
+            paragraph.Runs.AddRange(rebuilt);
+            _replacement = [.. paragraph.Runs];
+        }
+
+        public void Revert(IDocumentCommandContext context)
+        {
+            if (_previous is null)
+                return;
+            var paragraph = (Paragraph)context.Document.Blocks[blockIndex];
+            paragraph.Runs.Clear();
+            paragraph.Runs.AddRange(_previous);
+        }
+    }
 }
