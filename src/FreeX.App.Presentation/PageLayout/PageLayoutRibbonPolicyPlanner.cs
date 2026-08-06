@@ -24,6 +24,13 @@ public enum PageLayoutPaperSizePreset
     B5
 }
 
+public enum PageLayoutScaleField
+{
+    Width,
+    Height,
+    Percent
+}
+
 public enum PageLayoutPageSetupOpenSource
 {
     DialogButton,
@@ -98,6 +105,18 @@ public static class PageLayoutRibbonPolicyPlanner
                     current.FitToPagesTall))
             : PageLayoutScaleCommitPlan.Revert(current);
     }
+
+    public static PageLayoutScaleCommitPlan PlanScaleCommit(
+        PageLayoutScaleField field,
+        WorksheetScaleToFit current,
+        string text) =>
+        field switch
+        {
+            PageLayoutScaleField.Width => PlanScaleWidthCommit(current, text),
+            PageLayoutScaleField.Height => PlanScaleHeightCommit(current, text),
+            PageLayoutScaleField.Percent => PlanScalePercentCommit(current, text),
+            _ => PageLayoutScaleCommitPlan.Revert(current)
+        };
 
     public static PageLayoutScaleCommitPlan PlanScaleHeightCommit(
         WorksheetScaleToFit current,

@@ -15,6 +15,7 @@ public enum PageSetupDialogFollowUpAction
 {
     None,
     Print,
+    PrintPreview,
     ShowPrinterOptions
 }
 
@@ -143,7 +144,8 @@ public static class PageSetupSubmissionPlanner
         action switch
         {
             PageSetupDialogAction.Options => PageSetupDialogFollowUpAction.ShowPrinterOptions,
-            PageSetupDialogAction.Print or PageSetupDialogAction.PrintPreview => PageSetupDialogFollowUpAction.Print,
+            PageSetupDialogAction.Print => PageSetupDialogFollowUpAction.Print,
+            PageSetupDialogAction.PrintPreview => PageSetupDialogFollowUpAction.PrintPreview,
             _ => PageSetupDialogFollowUpAction.None
         };
 

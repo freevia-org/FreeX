@@ -94,4 +94,23 @@ public sealed class PageLayoutRibbonPolicyPlannerTests
         plan.ShouldApply.Should().BeFalse();
         plan.ScaleToFit.Should().Be(current);
     }
+
+    [Theory]
+    [InlineData(PageLayoutScaleField.Width, "2 pages", null, 2, 3)]
+    [InlineData(PageLayoutScaleField.Height, "4 pages", null, 1, 4)]
+    [InlineData(PageLayoutScaleField.Percent, "125%", 125, null, null)]
+    public void PlanScaleCommit_RoutesFieldThroughPortablePolicy(
+        PageLayoutScaleField field,
+        string text,
+        int? expectedPercent,
+        int? expectedWide,
+        int? expectedTall)
+    {
+        var current = new WorksheetScaleToFit(null, 1, 3);
+
+        var plan = PageLayoutRibbonPolicyPlanner.PlanScaleCommit(field, current, text);
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.ScaleToFit.Should().Be(new WorksheetScaleToFit(expectedPercent, expectedWide, expectedTall));
+    }
 }

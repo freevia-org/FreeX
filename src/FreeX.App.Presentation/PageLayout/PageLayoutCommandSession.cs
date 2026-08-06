@@ -9,6 +9,23 @@ public sealed record PageLayoutCommandExecutionPlan(
     PageLayoutCommandStatusPlan? Status = null,
     string? SuccessStatusText = null);
 
+public sealed record PageSetupCommandExecutionPlan(
+    PageLayoutCommandExecutionPlan Execution,
+    PageSetupDialogFollowUpAction FollowUpAction);
+
+public sealed record PageSetupCommandExecutionBuildResult(
+    PageSetupCommandExecutionPlan? Plan,
+    PageSetupSubmissionValidation? Validation)
+{
+    public bool Success => Plan is not null;
+
+    public static PageSetupCommandExecutionBuildResult Ok(PageSetupCommandExecutionPlan plan) =>
+        new(plan, null);
+
+    public static PageSetupCommandExecutionBuildResult Fail(PageSetupSubmissionValidation validation) =>
+        new(null, validation);
+}
+
 /// <summary>
 /// Owns the target-sheet set and portable command composition for Page Layout actions. Platform hosts
 /// remain responsible for native controls, dialogs, command execution, and visual refreshes.
@@ -90,6 +107,12 @@ public sealed class PageLayoutCommandSession
             PageLayoutRibbonActionPlanner.ScaleToFitCommandLabel,
             sheetId => PageLayoutRibbonCommandPlanner.BuildScaleToFitCommand(sheetId, scaleToFit));
 
+    public PageLayoutScaleCommitPlan PlanScaleCommit(
+        PageLayoutScaleField field,
+        WorksheetScaleToFit current,
+        string text) =>
+        PageLayoutRibbonPolicyPlanner.PlanScaleCommit(field, current, text);
+
     public PageLayoutCommandExecutionPlan PlanPageBreakAction(
         PageBreakMenuAction action,
         GridRange selection,
@@ -125,6 +148,44 @@ public sealed class PageLayoutCommandSession
     {
         ArgumentNullException.ThrowIfNull(plan);
         return PlanPageBreaks(plan.RowBreaks, plan.ColumnBreaks);
+    }
+
+    public PageLayoutCommandExecutionPlan PlanMovePageBreak(
+        PageBreakAxis axis,
+        uint originalIndex,
+        uint? newIndex,
+        IEnumerable<uint> currentRowBreaks,
+        IEnumerable<uint> currentColumnBreaks) =>
+        PlanPageBreaks(PageBreakSelectionPlanner.Move(
+            axis,
+            originalIndex,
+            newIndex,
+            currentRowBreaks,
+            currentColumnBreaks));
+
+    public PageSetupCommandExecutionBuildResult TryPlanPageSetup(
+        Sheet sourceSheet,
+        PageSetupDialogFields fields,
+        PageSetupDialogAction requestedAction = PageSetupDialogAction.Ok)
+    {
+        ArgumentNullException.ThrowIfNull(sourceSheet);
+        ArgumentNullException.ThrowIfNull(fields);
+
+        var submissionBuild = PageSetupSubmissionPlanner.TryBuild(sourceSheet, fields, requestedAction);
+        if (!submissionBuild.Success)
+            return PageSetupCommandExecutionBuildResult.Fail(submissionBuild.Validation!);
+
+        var submission = submissionBuild.Submission!;
+        var commandBuild = submission.TryBuildCompositeCommandForTargets(sourceSheet, _targetSheetIds);
+        if (!commandBuild.Success)
+            return PageSetupCommandExecutionBuildResult.Fail(commandBuild.Validation!);
+
+        return PageSetupCommandExecutionBuildResult.Ok(new PageSetupCommandExecutionPlan(
+            new PageLayoutCommandExecutionPlan(
+                commandBuild.Command!,
+                PageSetupSubmissionPlanner.DefaultCommandLabel,
+                PageLayoutStatusPlanner.PageSetupSubmission),
+            submission.FollowUpAction));
     }
 
     public PageLayoutCommandExecutionPlan PlanHeaderFooter(PageSetupHeaderFooterRequest request)

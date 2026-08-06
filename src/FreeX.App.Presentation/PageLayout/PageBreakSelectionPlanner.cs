@@ -6,6 +6,12 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PageLayout;
 
+public enum PageBreakAxis
+{
+    Row,
+    Column
+}
+
 public static class PageBreakSelectionPlanner
 {
     public static PageBreakSelectionPlan Insert(
@@ -19,6 +25,27 @@ public static class PageBreakSelectionPlanner
         IEnumerable<uint> existingRowBreaks,
         IEnumerable<uint> existingColumnBreaks) =>
         Create(selection, existingRowBreaks, existingColumnBreaks, addBreak: false);
+
+    public static PageBreakSelectionPlan Move(
+        PageBreakAxis axis,
+        uint originalIndex,
+        uint? newIndex,
+        IEnumerable<uint> existingRowBreaks,
+        IEnumerable<uint> existingColumnBreaks)
+    {
+        ArgumentNullException.ThrowIfNull(existingRowBreaks);
+        ArgumentNullException.ThrowIfNull(existingColumnBreaks);
+
+        var rowBreaks = new SortedSet<uint>(existingRowBreaks);
+        var columnBreaks = new SortedSet<uint>(existingColumnBreaks);
+        var targetBreaks = axis == PageBreakAxis.Row ? rowBreaks : columnBreaks;
+
+        targetBreaks.Remove(originalIndex);
+        if (newIndex is { } index)
+            targetBreaks.Add(index);
+
+        return new PageBreakSelectionPlan(rowBreaks.ToArray(), columnBreaks.ToArray());
+    }
 
     private static PageBreakSelectionPlan Create(
         GridRange selection,
