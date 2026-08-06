@@ -343,6 +343,11 @@ internal static class PptxAnimationMap
                 34 => AnimationPreset.Wave,
                 14 => AnimationPreset.Pulse,
                 15 => AnimationPreset.Blink,
+                // PowerPoint FlashBulb and Flicker are not modeled as separate
+                // authoring presets yet; keep their raw IDs for package fidelity
+                // while using the closest existing visibility playback contract.
+                26 => AnimationPreset.Blink,
+                27 => AnimationPreset.Blink,
                 _  => AnimationPreset.Pulse
             };
             return (kind, emphPreset);
