@@ -20,32 +20,45 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class CrossReferenceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly TextDocument _doc;
+    private readonly CrossReferenceDialogSession _session;
     private readonly ListBox _typeList;
     private readonly ListBox _insertAsList;
     private readonly ListBox _targetList;
     private readonly CheckBox _hyperlinkBox;
-    private readonly List<CrossReferenceTargetChoice> _targets = [];
+    private bool _updatingControls;
     private CrossReferenceDialogChoice? _result;
 
     private CrossReferenceDialog(Window? owner, TextDocument doc)
     {
-        _doc = doc;
+        _session = new CrossReferenceDialogSession(doc);
         Owner = owner;
         Title = CrossReferenceDialogPlanner.Title;
         SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        System.Windows.Automation.AutomationProperties.SetAutomationId(this, CrossReferenceDialogPlanner.AutomationId);
 
-        _typeList = new ListBox { MinWidth = 150, Height = 170 };
-        foreach (var type in CrossReferenceDialogPlanner.BuildTypeChoices())
-            _typeList.Items.Add(type);
-        _typeList.SelectedIndex = 0;
+        _typeList = new ListBox
+        {
+            MinWidth = 150,
+            Height = 170,
+            ItemsSource = _session.TypeChoices,
+            SelectedIndex = _session.State.TypeIndex,
+        };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(
+            _typeList,
+            CrossReferenceDialogPlanner.TypeAutomationId);
 
         _insertAsList = new ListBox { MinWidth = 180, Height = 170 };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(
+            _insertAsList,
+            CrossReferenceDialogPlanner.InsertAsAutomationId);
 
         _targetList = new ListBox { MinWidth = 300, Height = 200 };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(
+            _targetList,
+            CrossReferenceDialogPlanner.TargetAutomationId);
         _targetList.MouseDoubleClick += (_, _) => Accept();
 
         _hyperlinkBox = new CheckBox
@@ -54,11 +67,20 @@ internal sealed class CrossReferenceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             IsChecked = true,
             Margin = new Thickness(0, 10, 0, 0)
         };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(
+            _hyperlinkBox,
+            CrossReferenceDialogPlanner.HyperlinkAutomationId);
 
-        _typeList.SelectionChanged += (_, _) => { ReloadInsertOptions(); ReloadTargets(); };
-        _insertAsList.SelectionChanged += (_, _) => ReloadTargets();
-        ReloadInsertOptions();
-        ReloadTargets();
+        _typeList.SelectionChanged += (_, _) => UpdateTypeSelection();
+        _insertAsList.SelectionChanged += (_, _) => UpdateInsertAsSelection();
+        _targetList.SelectionChanged += (_, _) =>
+        {
+            if (!_updatingControls)
+                _session.UpdateTarget(_targetList.SelectedIndex);
+        };
+        _hyperlinkBox.Checked += (_, _) => _session.UpdateHyperlink(hyperlink: true);
+        _hyperlinkBox.Unchecked += (_, _) => _session.UpdateHyperlink(hyperlink: false);
+        ApplySessionChoices(includeInsertAs: true);
 
         Content = BuildLayout();
         Loaded += (_, _) => _typeList.Focus();
@@ -107,52 +129,59 @@ internal sealed class CrossReferenceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         return stack;
     }
 
-    private CrossRefType SelectedType =>
-        (_typeList.SelectedItem as CrossReferenceTypeChoice)?.Type ?? CrossRefType.Heading;
-
-    private CrossRefInsertAs SelectedInsertAs =>
-        (_insertAsList.SelectedItem as CrossReferenceInsertAsChoice)?.InsertAs ?? CrossRefInsertAs.Text;
-
-    private void ReloadInsertOptions()
+    private void UpdateTypeSelection()
     {
-        var previous = (_insertAsList.SelectedItem as CrossReferenceInsertAsChoice)?.InsertAs;
-        var choices = CrossReferenceDialogPlanner.BuildInsertAsChoices(SelectedType);
-        _insertAsList.Items.Clear();
-        foreach (var option in choices)
-            _insertAsList.Items.Add(option);
-        _insertAsList.SelectedIndex = CrossReferenceDialogPlanner.PreserveInsertAsSelection(choices, previous);
+        if (_updatingControls)
+            return;
+
+        _session.UpdateType(_typeList.SelectedIndex);
+        ApplySessionChoices(includeInsertAs: true);
     }
 
-    private void ReloadTargets()
+    private void UpdateInsertAsSelection()
     {
-        _targets.Clear();
-        _targetList.Items.Clear();
-        foreach (var target in CrossReferenceDialogPlanner.BuildTargetChoices(_doc, SelectedType))
+        if (_updatingControls)
+            return;
+
+        _session.UpdateInsertAs(_insertAsList.SelectedIndex);
+        ApplySessionChoices(includeInsertAs: false);
+    }
+
+    private void ApplySessionChoices(bool includeInsertAs)
+    {
+        _updatingControls = true;
+        try
         {
-            _targets.Add(target);
-            _targetList.Items.Add(target.Label);
+            if (includeInsertAs)
+            {
+                _insertAsList.ItemsSource = _session.InsertAsChoices;
+                _insertAsList.SelectedIndex = _session.State.InsertAsIndex;
+            }
+
+            _targetList.ItemsSource = _session.TargetChoices;
+            _targetList.SelectedIndex = _session.State.TargetIndex;
         }
-        _targetList.SelectedIndex = _targetList.Items.Count > 0 ? 0 : -1;
+        finally
+        {
+            _updatingControls = false;
+        }
     }
 
     private void Accept()
     {
-        var index = _targetList.SelectedIndex;
-        if (!CrossReferenceDialogPlanner.TryCreateChoice(
-                _doc,
-                SelectedType,
-                SelectedInsertAs,
-                index,
-                _hyperlinkBox.IsChecked == true,
-                out var choice))
+        _session.UpdateInsertAs(_insertAsList.SelectedIndex);
+        _session.UpdateTarget(_targetList.SelectedIndex);
+        _session.UpdateHyperlink(_hyperlinkBox.IsChecked == true);
+        var acceptance = _session.PlanAcceptance();
+        if (!acceptance.IsAccepted)
         {
             DialogMessageHelper.ShowWarning(
                 this,
-                CrossReferenceDialogPlanner.MissingTargetMessage,
+                acceptance.ValidationMessage ?? CrossReferenceDialogPlanner.MissingTargetMessage,
                 CrossReferenceDialogPlanner.Title);
             return;
         }
-        _result = choice;
+        _result = acceptance.Result;
         DialogResult = true;
     }
 

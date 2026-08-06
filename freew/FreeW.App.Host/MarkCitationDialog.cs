@@ -11,17 +11,16 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class MarkCitationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    internal sealed record Result(Citation Citation);
-
-    private readonly IReadOnlyList<MarkCitationCategoryChoice> _categoryChoices;
+    private readonly MarkCitationDialogSession _session;
     private readonly ComboBox _categoryCombo;
     private readonly TextBox _longForm;
     private readonly TextBox _shortForm;
     private readonly TextBlock _status;
-    private Result? _result;
+    private MarkCitationDialogResult? _result;
 
     private MarkCitationDialog(Window? owner, MarkCitationDialogState initialState)
     {
+        _session = new MarkCitationDialogSession(initialState.LongCitation);
         Owner = owner;
         Title = MarkCitationDialogPlanner.Title;
         Width = MarkCitationDialogPlanner.DialogWidth;
@@ -29,12 +28,13 @@ internal sealed class MarkCitationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        System.Windows.Automation.AutomationProperties.SetAutomationId(this, MarkCitationDialogPlanner.AutomationId);
 
-        _categoryChoices = MarkCitationDialogPlanner.BuildCategoryChoices();
         _categoryCombo = new ComboBox { Margin = new Thickness(0, 0, 0, MarkCitationDialogPlanner.FieldBottomMargin) };
-        foreach (var choice in _categoryChoices)
+        foreach (var choice in _session.CategoryChoices)
             _categoryCombo.Items.Add(choice);
-        _categoryCombo.SelectedIndex = MarkCitationDialogPlanner.SelectCategoryIndex(_categoryChoices, initialState.Category);
+        _categoryCombo.SelectedIndex = _session.CategoryIndex(initialState.Category);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_categoryCombo, MarkCitationDialogPlanner.CategoryAutomationId);
 
         _longForm = new TextBox
         {
@@ -42,18 +42,21 @@ internal sealed class MarkCitationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Margin = new Thickness(0, 0, 0, MarkCitationDialogPlanner.FieldBottomMargin),
             Text = initialState.LongCitation
         };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_longForm, MarkCitationDialogPlanner.LongCitationAutomationId);
         _shortForm = new TextBox
         {
             MinWidth = 320,
             Margin = new Thickness(0, 0, 0, MarkCitationDialogPlanner.FieldBottomMargin),
             Text = initialState.ShortCitation
         };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_shortForm, MarkCitationDialogPlanner.ShortCitationAutomationId);
         _status = new TextBlock
         {
             Foreground = Brushes.DarkRed,
             Margin = new Thickness(0, 0, 0, MarkCitationDialogPlanner.StatusBottomMargin),
             Visibility = Visibility.Collapsed
         };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_status, MarkCitationDialogPlanner.StatusAutomationId);
 
         var buttons = DialogButtonRowFactory.Create(
             Accept,
@@ -91,8 +94,8 @@ internal sealed class MarkCitationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private MarkCitationDialogState CurrentState()
     {
-        var category = _categoryCombo.SelectedIndex >= 0 && _categoryCombo.SelectedIndex < _categoryChoices.Count
-            ? _categoryChoices[_categoryCombo.SelectedIndex].Category
+        var category = _categoryCombo.SelectedIndex >= 0 && _categoryCombo.SelectedIndex < _session.CategoryChoices.Count
+            ? _session.CategoryChoices[_categoryCombo.SelectedIndex].Category
             : CitationCategory.Cases;
         return new MarkCitationDialogState(
             category,
@@ -102,15 +105,16 @@ internal sealed class MarkCitationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private bool Accept(bool closeOnSuccess = true)
     {
-        if (!MarkCitationDialogPlanner.TryBuildCitation(CurrentState(), out var citation, out var validation))
+        var acceptance = _session.PlanAcceptance(CurrentState());
+        if (!acceptance.IsAccepted)
         {
-            _status.Text = validation?.Message ?? MarkCitationDialogPlanner.MissingLongCitationMessage;
+            _status.Text = acceptance.Validation?.Message ?? MarkCitationDialogPlanner.MissingLongCitationMessage;
             _status.Visibility = Visibility.Visible;
             return false;
         }
 
         _status.Visibility = Visibility.Collapsed;
-        _result = new Result(citation!);
+        _result = acceptance.Result;
         if (closeOnSuccess)
             Close();
         return true;
@@ -126,7 +130,7 @@ internal sealed class MarkCitationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     internal void SetForTest(CitationCategory category, string? longCitation, string? shortCitation)
     {
-        _categoryCombo.SelectedIndex = MarkCitationDialogPlanner.SelectCategoryIndex(_categoryChoices, category);
+        _categoryCombo.SelectedIndex = _session.CategoryIndex(category);
         _longForm.Text = longCitation;
         _shortForm.Text = shortCitation;
     }
@@ -134,9 +138,9 @@ internal sealed class MarkCitationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     internal bool AcceptForTest() =>
         Accept(closeOnSuccess: false);
 
-    internal Result? ResultForTest => _result;
+    internal MarkCitationDialogResult? ResultForTest => _result;
 
-    public static Result? Prompt(Window? owner, MarkCitationDialogState initialState)
+    public static MarkCitationDialogResult? Prompt(Window? owner, MarkCitationDialogState initialState)
     {
         var dlg = new MarkCitationDialog(owner, initialState);
         dlg.ShowDialog();

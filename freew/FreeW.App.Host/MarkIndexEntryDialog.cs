@@ -9,8 +9,7 @@ namespace FreeW.App.Host;
 /// <summary>Thin WPF host for Word's References &gt; Mark Index Entry dialog.</summary>
 internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    internal sealed record Result(IndexMark Mark, bool MarkAll);
-
+    private readonly MarkIndexEntryDialogSession _session;
     private readonly TextBox _mainEntry;
     private readonly TextBox _subentry;
     private readonly TextBox _identifier;
@@ -23,14 +22,16 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly CheckBox _italicPageNumber;
     private readonly Button _markAll;
     private readonly TextBlock _status;
-    private readonly string _selectedText;
-    private Result? _result;
+    private MarkIndexEntryDialogResult? _result;
 
     private MarkIndexEntryDialog(
         Window? owner,
         MarkIndexEntryDialogState initialState,
         IReadOnlyList<string> bookmarkNames)
     {
+        _session = new MarkIndexEntryDialogSession(initialState, bookmarkNames);
+        initialState = _session.InitialState;
+        bookmarkNames = _session.BookmarkNames;
         Owner = owner;
         Title = MarkIndexEntryDialogPlanner.Title;
         Width = MarkIndexEntryDialogPlanner.DialogWidth;
@@ -38,11 +39,14 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        _selectedText = initialState.MainEntry;
+        System.Windows.Automation.AutomationProperties.SetAutomationId(this, MarkIndexEntryDialogPlanner.AutomationId);
 
         _mainEntry = CreateTextBox(initialState.MainEntry);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_mainEntry, MarkIndexEntryDialogPlanner.MainEntryAutomationId);
         _subentry = CreateTextBox(initialState.Subentry);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_subentry, MarkIndexEntryDialogPlanner.SubentryAutomationId);
         _identifier = CreateTextBox(initialState.Identifier);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_identifier, MarkIndexEntryDialogPlanner.IdentifierAutomationId);
         _currentPage = new RadioButton
         {
             Content = MarkIndexEntryDialogPlanner.CurrentPageLabel,
@@ -67,6 +71,7 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 : null,
             Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.OptionBottomMargin)
         };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_bookmarkName, MarkIndexEntryDialogPlanner.BookmarkAutomationId);
         _crossReferenceOption = new RadioButton
         {
             Content = MarkIndexEntryDialogPlanner.CrossReferenceLabel,
@@ -75,6 +80,7 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.OptionBottomMargin)
         };
         _crossReference = CreateTextBox(initialState.CrossReference);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_crossReference, MarkIndexEntryDialogPlanner.CrossReferenceAutomationId);
         _boldPageNumber = new CheckBox
         {
             Content = MarkIndexEntryDialogPlanner.BoldLabel,
@@ -97,6 +103,7 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Margin = new Thickness(0, 0, 0, MarkIndexEntryDialogPlanner.StatusBottomMargin),
             Visibility = Visibility.Collapsed
         };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_status, MarkIndexEntryDialogPlanner.StatusAutomationId);
 
         var buttons = DialogButtonRowFactory.Create(
             () => Accept(markAll: false),
@@ -111,7 +118,7 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             Content = MarkIndexEntryDialogPlanner.MarkAllButtonLabel,
             MinWidth = 80,
-            IsEnabled = MarkIndexEntryDialogPlanner.CanMarkAll(initialState.MainEntry, initialState.ReferenceKind),
+            IsEnabled = _session.PlanEnabledState(initialState.ReferenceKind).MarkAllEnabled,
             Margin = new Thickness(0, 0, 8, 0)
         };
         _markAll.Click += (_, _) => Accept(markAll: true);
@@ -177,12 +184,12 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void UpdateReferenceState()
     {
-        var referenceKind = ReferenceKind;
-        _bookmarkName.IsEnabled = referenceKind == IndexEntryReferenceKind.PageRange;
-        _crossReference.IsEnabled = referenceKind == IndexEntryReferenceKind.CrossReference;
-        _boldPageNumber.IsEnabled = referenceKind != IndexEntryReferenceKind.CrossReference;
-        _italicPageNumber.IsEnabled = referenceKind != IndexEntryReferenceKind.CrossReference;
-        _markAll.IsEnabled = MarkIndexEntryDialogPlanner.CanMarkAll(_selectedText, referenceKind);
+        var enabled = _session.PlanEnabledState(ReferenceKind);
+        _bookmarkName.IsEnabled = enabled.BookmarkSelectorEnabled;
+        _crossReference.IsEnabled = enabled.CrossReferenceEnabled;
+        _boldPageNumber.IsEnabled = enabled.PageNumberFormattingEnabled;
+        _italicPageNumber.IsEnabled = enabled.PageNumberFormattingEnabled;
+        _markAll.IsEnabled = enabled.MarkAllEnabled;
     }
 
     private MarkIndexEntryDialogState CurrentState() => new(
@@ -197,18 +204,19 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private bool Accept(bool markAll, bool closeOnSuccess = true)
     {
-        if (markAll && !MarkIndexEntryDialogPlanner.CanMarkAll(_selectedText, ReferenceKind))
-            return false;
-
-        if (!MarkIndexEntryDialogPlanner.TryBuildMark(CurrentState(), out var mark, out var validation))
+        var acceptance = _session.PlanAcceptance(CurrentState(), markAll);
+        if (!acceptance.IsAccepted)
         {
-            _status.Text = validation?.Message ?? MarkIndexEntryDialogPlanner.MissingMainEntryMessage;
-            _status.Visibility = Visibility.Visible;
+            if (acceptance.Validation is not null)
+            {
+                _status.Text = acceptance.Validation.Message;
+                _status.Visibility = Visibility.Visible;
+            }
             return false;
         }
 
         _status.Visibility = Visibility.Collapsed;
-        _result = new Result(mark!, markAll);
+        _result = acceptance.Result;
         if (closeOnSuccess)
             Close();
         return true;
@@ -264,14 +272,14 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     internal bool AcceptForTest() => Accept(markAll: false, closeOnSuccess: false);
     internal bool AcceptAllForTest() => Accept(markAll: true, closeOnSuccess: false);
-    internal Result? ResultForTest => _result;
+    internal MarkIndexEntryDialogResult? ResultForTest => _result;
     internal bool CrossReferenceEnabledForTest => _crossReference.IsEnabled;
     internal bool BookmarkSelectorEnabledForTest => _bookmarkName.IsEnabled;
     internal IReadOnlyList<string> BookmarkNamesForTest => _bookmarkName.Items.Cast<string>().ToArray();
     internal bool PageNumberFormattingEnabledForTest => _boldPageNumber.IsEnabled && _italicPageNumber.IsEnabled;
     internal bool MarkAllEnabledForTest => _markAll.IsEnabled;
 
-    public static Result? Prompt(
+    public static MarkIndexEntryDialogResult? Prompt(
         Window? owner,
         MarkIndexEntryDialogState initialState,
         IReadOnlyList<string> bookmarkNames)

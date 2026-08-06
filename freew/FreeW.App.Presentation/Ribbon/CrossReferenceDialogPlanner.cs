@@ -26,6 +26,11 @@ public sealed record CrossReferenceDialogChoice(
 
 public static class CrossReferenceDialogPlanner
 {
+    public const string AutomationId = "CrossReferenceDialog";
+    public const string TypeAutomationId = "CrossReferenceTypeList";
+    public const string InsertAsAutomationId = "CrossReferenceInsertAsList";
+    public const string TargetAutomationId = "CrossReferenceTargetList";
+    public const string HyperlinkAutomationId = "CrossReferenceHyperlinkCheckBox";
     public const string Title = "Cross-reference";
     public const string AcceptButtonLabel = "OK";
     public const string CancelButtonLabel = "Cancel";

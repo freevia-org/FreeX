@@ -24,6 +24,13 @@ public sealed record MarkIndexEntryValidation(string Message);
 /// <summary>Host-neutral state and validation for Word's References &gt; Mark Entry dialog.</summary>
 public static class MarkIndexEntryDialogPlanner
 {
+    public const string AutomationId = "MarkIndexEntryDialog";
+    public const string MainEntryAutomationId = "MarkIndexMainEntryTextBox";
+    public const string SubentryAutomationId = "MarkIndexSubentryTextBox";
+    public const string IdentifierAutomationId = "MarkIndexIdentifierTextBox";
+    public const string BookmarkAutomationId = "MarkIndexBookmarkComboBox";
+    public const string CrossReferenceAutomationId = "MarkIndexCrossReferenceTextBox";
+    public const string StatusAutomationId = "MarkIndexValidationText";
     public const double DialogWidth = 390;
     public const double ContentHorizontalMargin = 16;
     public const double ContentTopMargin = 16;
