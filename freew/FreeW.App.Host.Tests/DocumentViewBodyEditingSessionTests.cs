@@ -1,4 +1,5 @@
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Editing;
 
 namespace FreeW.App.Host.Tests;
 
@@ -73,6 +74,30 @@ public sealed class DocumentViewBodyEditingSessionTests
     }
 
     [StaFact]
+    public void BackspaceAtListStart_UsesPortableOutdentTransition()
+    {
+        var paragraph = new Paragraph("item")
+        {
+            Formatting = new ParagraphFormatting
+            {
+                ListKind = ListKind.Bullet,
+                ListLevel = 1,
+            },
+        };
+        var view = BuildView(paragraph);
+        view.MoveCaretToBlockForTest(0, 0);
+        view.BodyTextRangeForTest().Should().Be(new DocumentTextRange(
+            new DocumentTextPosition(0, 0),
+            new DocumentTextPosition(0, 0)));
+
+        view.BackspaceForTest();
+
+        ((Paragraph)view.Model.Blocks[0]).Formatting.ListLevel.Should().Be(0);
+        view.Commands.Undo().Should().BeTrue();
+        ((Paragraph)view.Model.Blocks[0]).Formatting.ListLevel.Should().Be(1);
+    }
+
+    [StaFact]
     public void ParagraphBreakOverSelection_SplitsAndUndoesInOneStep()
     {
         var view = BuildView("abcdef");
@@ -91,6 +116,15 @@ public sealed class DocumentViewBodyEditingSessionTests
         var document = new TextDocument();
         foreach (var text in paragraphs)
             document.Blocks.Add(new Paragraph(text));
+        var view = new DocumentView();
+        view.LoadModel(document);
+        return view;
+    }
+
+    private static DocumentView BuildView(params Paragraph[] paragraphs)
+    {
+        var document = new TextDocument();
+        document.Blocks.AddRange(paragraphs);
         var view = new DocumentView();
         view.LoadModel(document);
         return view;

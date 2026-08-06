@@ -14298,19 +14298,19 @@ public sealed class DocumentView : RichTextBox
     {
         if (string.IsNullOrEmpty(text)
             || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
-            || !TryGetCurrentBodyTextRange(out var range, out var hasSelection))
+            || !TryGetCurrentBodyTextRange(out var range))
         {
             return false;
         }
 
-        var formatting = !TrackChangesEnabled && !hasSelection
+        var formatting = !TrackChangesEnabled && range.IsCollapsed
             ? CaptureSelectionRunFormatting()
             : null;
         CommitToModel();
-        var applied = TrackChangesEnabled
-            ? _editingSession.TryReplaceTrackedBodyText(range, text, formatting: null, out var result)
-            : _editingSession.TryReplaceBodyText(range, text, formatting, out result);
-        if (!applied)
+        if (!_editingSession.Body.TryApplyTextInput(
+                range,
+                new DocumentBodyTextInput(text, TrackChangesEnabled, formatting),
+                out var result))
         {
             return false;
         }
@@ -14326,89 +14326,46 @@ public sealed class DocumentView : RichTextBox
     private bool TryApplyBodyDeletion(bool backward)
     {
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
-            || !TryGetCurrentBodyTextRange(out var range, out var hasSelection))
+            || !TryGetCurrentBodyTextRange(out var range))
         {
             return false;
         }
 
         CommitToModel();
-        var normalized = range.Normalize();
-        if (hasSelection)
-        {
-            var applied = TrackChangesEnabled
-                ? _editingSession.TryDeleteTrackedBodyText(
-                    normalized,
-                    advancePastKeptText: false,
-                    out var trackedResult)
-                : _editingSession.TryDeleteBodyText(normalized, out trackedResult);
-            if (!applied)
-                return false;
-            PlaceCaretAtModelTextOffset(trackedResult.Caret.BlockIndex, trackedResult.Caret.Offset);
-            return true;
-        }
-
-        var caret = normalized.Start;
-        if (caret.BlockIndex < 0
-            || caret.BlockIndex >= _model.Blocks.Count
-            || _model.Blocks[caret.BlockIndex] is not ModelParagraph paragraph)
+        if (!_editingSession.Body.TryApplyDeletion(
+                range,
+                backward
+                    ? DocumentBodyDeleteDirection.Backward
+                    : DocumentBodyDeleteDirection.Forward,
+                TrackChangesEnabled,
+                out var result))
         {
             return false;
         }
 
-        var paragraphLength = paragraph.PlainText.Length;
-        if (backward && caret.Offset > 0 || !backward && caret.Offset < paragraphLength)
-        {
-            var deleteRange = backward
-                ? new DocumentTextRange(
-                    new DocumentTextPosition(caret.BlockIndex, caret.Offset - 1),
-                    caret)
-                : new DocumentTextRange(
-                    caret,
-                    new DocumentTextPosition(caret.BlockIndex, caret.Offset + 1));
-            var applied = TrackChangesEnabled
-                ? _editingSession.TryDeleteTrackedBodyText(
-                    deleteRange,
-                    advancePastKeptText: !backward,
-                    out var deleteResult)
-                : _editingSession.TryDeleteBodyText(deleteRange, out deleteResult);
-            if (!applied)
-                return false;
-            PlaceCaretAtModelTextOffset(deleteResult.Caret.BlockIndex, deleteResult.Caret.Offset);
-            return true;
-        }
-
-        if (backward && paragraph.Formatting.ListKind != ListKind.None)
-            return false;
-        var merged = backward
-            ? _editingSession.TryMergeBodyParagraphWithPrevious(caret.BlockIndex, out var mergeResult)
-            : _editingSession.TryMergeBodyParagraphWithNext(caret.BlockIndex, out mergeResult);
-        if (!merged)
-            return false;
-        PlaceCaretAtModelTextOffset(mergeResult.Caret.BlockIndex, mergeResult.Caret.Offset);
+        PlaceCaretAtModelTextOffset(result.Caret.BlockIndex, result.Caret.Offset);
         return true;
     }
 
     private bool TryApplyBodyParagraphBreak()
     {
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
-            || !TryGetCurrentBodyTextRange(out var range, out _))
+            || !TryGetCurrentBodyTextRange(out var range))
         {
             return false;
         }
 
         CommitToModel();
-        if (!_editingSession.TryInsertBodyParagraphBreak(range, out var result))
+        if (!_editingSession.Body.TryApplyParagraphBreak(range, out var result))
             return false;
         PlaceCaretAtModelTextOffset(result.Caret.BlockIndex, result.Caret.Offset);
         return true;
     }
 
-    private bool TryGetCurrentBodyTextRange(
-        out DocumentTextRange range,
-        out bool hasSelection)
+    private bool TryGetCurrentBodyTextRange(out DocumentTextRange range)
     {
         range = default;
-        hasSelection = !Selection.IsEmpty;
+        var hasSelection = !Selection.IsEmpty;
         var startParagraph = hasSelection ? Selection.Start.Paragraph : CaretPosition?.Paragraph;
         var endParagraph = hasSelection ? Selection.End.Paragraph : startParagraph;
         if (startParagraph is null || endParagraph is null)
@@ -14513,6 +14470,9 @@ public sealed class DocumentView : RichTextBox
         if (anchor is not null && caret is not null)
             Selection.Select(anchor, caret);
     }
+
+    internal DocumentTextRange? BodyTextRangeForTest() =>
+        TryGetCurrentBodyTextRange(out var range) ? range : null;
 
     internal bool ApplyFormatPainterToSelectionForTest() => TryApplyFormatPainter();
 
@@ -16304,7 +16264,11 @@ public sealed class DocumentView : RichTextBox
     /// <summary>The plain-text character offset of <paramref name="position"/> from the paragraph's start.</summary>
     private static int OffsetInParagraph(WpfParagraph paragraph, TextPointer position)
     {
-        var range = new TextRange(paragraph.ContentStart, position);
+        var modelTextStart = TextPointerAtParagraphOffset(paragraph, 0);
+        if (position.CompareTo(modelTextStart) <= 0)
+            return 0;
+
+        var range = new TextRange(modelTextStart, position);
         return range.Text.Length;
     }
 

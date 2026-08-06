@@ -2582,12 +2582,6 @@ public sealed class DocumentView : Control
     internal bool ListTabAtItemStartPublic(bool shift) => ListTabAtItemStart(shift);
 
     /// <summary>
-    /// Invoke the Backspace-outdent list handler and return whether it consumed the key.
-    /// Exposed for AV-LIST unit tests.
-    /// </summary>
-    internal bool BackspaceOutdentListItemPublic() => BackspaceOutdentListItem();
-
-    /// <summary>
     /// Return the sequential list number that would be rendered for block <paramref name="blockIdx"/>,
     /// by walking the document model the same way the layout loop does (render-time numbering).
     /// For Number lists returns the per-level counter at the paragraph's level.
@@ -17704,24 +17698,18 @@ public sealed class DocumentView : Control
         // AV-LINK: typing strictly inside a hyperlink span extends that link (Word's behaviour); typing at a
         // link's edge or outside a link inserts plain (un-linked) text.
         var insLink = ActiveLink(paragraph, bodyOffset);
-        var applied = TrackChangesEnabled
-            ? _editingSession.TryReplaceTrackedBodyText(
+        var bodyLink = insLink is { } activeLink
+            ? new DocumentTextHyperlink(activeLink.Url, activeLink.Anchor, activeLink.Tooltip)
+            : (DocumentTextHyperlink?)null;
+        if (_editingSession.Body.TryApplyTextInput(
                 bodyRange,
-                text,
-                bodyFmt,
-                insLink is { } activeTrackedLink
-                    ? new DocumentTextHyperlink(activeTrackedLink.Url, activeTrackedLink.Anchor, activeTrackedLink.Tooltip)
-                    : (DocumentTextHyperlink?)null,
-                out var result)
-            : _editingSession.TryReplaceBodyText(
-                bodyRange,
-                text,
-                bodyFmt,
-                insLink is { } activeBodyLink
-                    ? new DocumentTextHyperlink(activeBodyLink.Url, activeBodyLink.Anchor, activeBodyLink.Tooltip)
-                    : (DocumentTextHyperlink?)null,
-                out result);
-        if (applied)
+                new DocumentBodyTextInput(
+                    text,
+                    TrackChangesEnabled,
+                    bodyFmt,
+                    InheritHyperlink: false,
+                    Hyperlink: bodyLink),
+                out var result))
         {
             _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
             _selectionAnchor = _caret;
@@ -18157,62 +18145,38 @@ public sealed class DocumentView : Control
             return;
         }
 
+        if (_editingSession.Body.TryApplyDeletion(
+                CurrentBodyTextRange(),
+                DocumentBodyDeleteDirection.Backward,
+                TrackChangesEnabled,
+                out var bodyResult))
+        {
+            _caret = new DocPosition(bodyResult.Caret.BlockIndex, bodyResult.Caret.Offset);
+            _selectionAnchor = _caret;
+            return;
+        }
+
         if (NormalizedSelection() is not null) { DeleteSelection(); return; }
-        // AV-LIST: Backspace at start of a list item outdents / removes list formatting.
-        if (BackspaceOutdentListItem()) return;
+        if (TrackChangesEnabled)
+            return;
+
+        // Structurally special paragraphs stay on the renderer-owned path.
         if (_caret.Offset > 0)
         {
             var block = _caret.Block;
             var offset = _caret.Offset;
-            if (TrackChangesEnabled)
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
             {
-                var range = new DocumentTextRange(
-                    new DocumentTextPosition(block, offset - 1),
-                    new DocumentTextPosition(block, offset));
-                if (!_editingSession.TryDeleteTrackedBodyText(
-                        range,
-                        advancePastKeptText: false,
-                        out var result))
-                {
-                    return;
-                }
-                _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
-            }
-            else
-            {
-                var range = new DocumentTextRange(
-                    new DocumentTextPosition(block, offset - 1),
-                    new DocumentTextPosition(block, offset));
-                if (_editingSession.TryDeleteBodyText(range, out var result))
-                {
-                    _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
-                }
-                else
-                {
-                    _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
-                    {
-                        var cells = ParaCells(p);
-                        if (offset - 1 < cells.Count)
-                            cells.RemoveAt(offset - 1);
-                        SetRuns(p, cells);
-                    }));
-                    _caret = new DocPosition(block, offset - 1);
-                }
-            }
+                var cells = ParaCells(p);
+                if (offset - 1 < cells.Count)
+                    cells.RemoveAt(offset - 1);
+                SetRuns(p, cells);
+            }));
+            _caret = new DocPosition(block, offset - 1);
             _selectionAnchor = _caret;
         }
         else
-        {
-            if (_editingSession.TryMergeBodyParagraphWithPrevious(_caret.Block, out var result))
-            {
-                _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
-                _selectionAnchor = _caret;
-            }
-            else
-            {
-                MergeWithPrevious();
-            }
-        }
+            MergeWithPrevious();
     }
 
     private void DeleteForward()
@@ -18303,7 +18267,22 @@ public sealed class DocumentView : Control
             return;
         }
 
+        if (_editingSession.Body.TryApplyDeletion(
+                CurrentBodyTextRange(),
+                DocumentBodyDeleteDirection.Forward,
+                TrackChangesEnabled,
+                out var bodyResult))
+        {
+            _caret = new DocPosition(bodyResult.Caret.BlockIndex, bodyResult.Caret.Offset);
+            _selectionAnchor = _caret;
+            return;
+        }
+
         if (NormalizedSelection() is not null) { DeleteSelection(); return; }
+        if (TrackChangesEnabled)
+            return;
+
+        // Structurally special paragraphs stay on the renderer-owned path.
         if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             return;
         var bodyLen = ParaCells(paragraph).Count;
@@ -18311,41 +18290,13 @@ public sealed class DocumentView : Control
         {
             var block = _caret.Block;
             var offset = _caret.Offset;
-            if (TrackChangesEnabled)
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
             {
-                var range = new DocumentTextRange(
-                    new DocumentTextPosition(block, offset),
-                    new DocumentTextPosition(block, offset + 1));
-                if (_editingSession.TryDeleteTrackedBodyText(
-                        range,
-                        advancePastKeptText: true,
-                        out var result))
-                {
-                    _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
-                    _selectionAnchor = _caret;
-                }
-            }
-            else
-            {
-                var range = new DocumentTextRange(
-                    new DocumentTextPosition(block, offset),
-                    new DocumentTextPosition(block, offset + 1));
-                if (!_editingSession.TryDeleteBodyText(range, out _))
-                {
-                    _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
-                    {
-                        var cells = ParaCells(p);
-                        if (offset < cells.Count)
-                            cells.RemoveAt(offset);
-                        SetRuns(p, cells);
-                    }));
-                }
-            }
-        }
-        else if (_editingSession.TryMergeBodyParagraphWithNext(_caret.Block, out var mergeResult))
-        {
-            _caret = new DocPosition(mergeResult.Caret.BlockIndex, mergeResult.Caret.Offset);
-            _selectionAnchor = _caret;
+                var cells = ParaCells(p);
+                if (offset < cells.Count)
+                    cells.RemoveAt(offset);
+                SetRuns(p, cells);
+            }));
         }
     }
 
@@ -18429,7 +18380,7 @@ public sealed class DocumentView : Control
         }
 
         var bodyRange = CurrentBodyTextRange();
-        if (_editingSession.TryInsertBodyParagraphBreak(bodyRange, out var bodyResult))
+        if (_editingSession.Body.TryApplyParagraphBreak(bodyRange, out var bodyResult))
         {
             _caret = new DocPosition(bodyResult.Caret.BlockIndex, bodyResult.Caret.Offset);
             _selectionAnchor = _caret;
@@ -18844,13 +18795,11 @@ public sealed class DocumentView : Control
         var bodyRange = new DocumentTextRange(
             new DocumentTextPosition(sel.Start.Block, sel.Start.Offset),
             new DocumentTextPosition(sel.End.Block, sel.End.Offset));
-        var sharedApplied = TrackChangesEnabled
-            ? _editingSession.TryDeleteTrackedBodyText(
+        if (_editingSession.Body.TryApplyDeletion(
                 bodyRange,
-                advancePastKeptText: false,
-                out var sharedResult)
-            : _editingSession.TryDeleteBodyText(bodyRange, out sharedResult);
-        if (sharedApplied)
+                DocumentBodyDeleteDirection.Backward,
+                TrackChangesEnabled,
+                out var sharedResult))
         {
             _caret = new DocPosition(sharedResult.Caret.BlockIndex, sharedResult.Caret.Offset);
             _selectionAnchor = _caret;
@@ -18873,31 +18822,19 @@ public sealed class DocumentView : Control
             }
             if (TrackChangesEnabled)
             {
-                var range = new DocumentTextRange(
-                    new DocumentTextPosition(block, a),
-                    new DocumentTextPosition(block, b));
-                if (!_editingSession.TryDeleteTrackedBodyText(
-                        range,
-                        advancePastKeptText: false,
-                        out var result))
-                {
-                    _selectionAnchor = _caret;
-                    return;
-                }
-                _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
+                _selectionAnchor = _caret;
+                return;
             }
-            else
+
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
             {
-                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
-                {
-                    var cells = ParaCells(p);
-                    var lo = Math.Clamp(a, 0, cells.Count);
-                    var hi = Math.Clamp(b, 0, cells.Count);
-                    cells.RemoveRange(lo, Math.Max(0, hi - lo));
-                    SetRuns(p, cells);
-                }));
-                _caret = new DocPosition(block, Math.Min(a, b));
-            }
+                var cells = ParaCells(p);
+                var lo = Math.Clamp(a, 0, cells.Count);
+                var hi = Math.Clamp(b, 0, cells.Count);
+                cells.RemoveRange(lo, Math.Max(0, hi - lo));
+                SetRuns(p, cells);
+            }));
+            _caret = new DocPosition(block, Math.Min(a, b));
         }
         else if (_doc.Blocks[sel.Start.Block] is Paragraph startPara && _doc.Blocks[sel.End.Block] is Paragraph endPara)
         {
@@ -22167,37 +22104,6 @@ public sealed class DocumentView : Control
             _editingSession.FormatParagraphs(
                 [_caret.Block],
                 formatting => formatting with { ListLevel = Math.Min(formatting.ListLevel + 1, 8) });
-        }
-        return true;
-    }
-
-    // AV-LIST: Backspace at the very start of a list item (offset == 0, no selection) →
-    // outdent: decrease ListLevel, or remove list formatting entirely when already at level 0.
-    // Returns true when the key was consumed; caller should skip normal Backspace.
-    private bool BackspaceOutdentListItem()
-    {
-        if (NormalizedSelection() is not null)
-            return false;           // let normal DeleteSelection handle it
-        if (_caret.Offset != 0)
-            return false;
-        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
-            return false;
-        var fmt = paragraph.Formatting;
-        if (fmt.ListKind == ListKind.None)
-            return false;
-
-        if (fmt.ListLevel == 0)
-        {
-            // At top level: remove list formatting entirely.
-            _editingSession.FormatParagraphs(
-                [_caret.Block],
-                formatting => formatting with { ListKind = ListKind.None, ListLevel = 0 });
-        }
-        else
-        {
-            _editingSession.FormatParagraphs(
-                [_caret.Block],
-                formatting => formatting with { ListLevel = formatting.ListLevel - 1 });
         }
         return true;
     }

@@ -509,40 +509,45 @@ public sealed class DocumentEditingSessionSourceOwnershipTests
             source.Should().Contain("_editingSession.InsertDocumentAfter(");
             source.Should().Contain("_editingSession.RemoveBookmark(name)");
             source.Should().Contain("new DocumentTextPosition(");
-            source.Should().Contain("_editingSession.TryDeleteTrackedBodyText(");
-            source.Should().Contain("_editingSession.TryReplaceBodyText(");
-            source.Should().Contain("_editingSession.TryDeleteBodyText(");
-            source.Should().Contain("_editingSession.TryInsertBodyParagraphBreak(");
-            source.Should().Contain("_editingSession.TryMergeBodyParagraphWithPrevious(");
-            source.Should().Contain("_editingSession.TryMergeBodyParagraphWithNext(");
+            source.Should().Contain("_editingSession.Body.TryApplyTextInput(");
+            source.Should().Contain("_editingSession.Body.TryApplyDeletion(");
+            source.Should().Contain("_editingSession.Body.TryApplyParagraphBreak(");
+            source.Should().NotContain("_editingSession.TryDeleteTrackedBodyText(");
+            source.Should().NotContain("_editingSession.TryReplaceTrackedBodyText(");
+            source.Should().NotContain("_editingSession.TryReplaceBodyText(");
+            source.Should().NotContain("_editingSession.TryDeleteBodyText(");
+            source.Should().NotContain("_editingSession.TryInsertBodyParagraphBreak(");
+            source.Should().NotContain("_editingSession.TryMergeBodyParagraphWithPrevious(");
+            source.Should().NotContain("_editingSession.TryMergeBodyParagraphWithNext(");
             source.Should().NotContain("new DocumentCommandBus(");
             source.Should().NotContain("new RemoveBookmarkCommand(");
             source.Should().NotContain("class ViewContext");
         }
 
-        wpf.Should().Contain("_editingSession.TryReplaceTrackedBodyText(");
         wpf.Should().NotContain("RevisionEditPlanner.DeleteRangeAsRevision(");
         wpf.Should().NotContain("RevisionEditPlanner.InsertText(");
-        avalonia.Should().Contain("_editingSession.TryReplaceTrackedBodyText(");
-        avalonia.Should().Contain("_editingSession.TryMergeBodyParagraphWithPrevious(");
-        avalonia.Should().Contain("_editingSession.TryMergeBodyParagraphWithNext(");
-        System.Text.RegularExpressions.Regex.Matches(
-                avalonia,
-                "_editingSession\\.TryDeleteTrackedBodyText\\(")
-            .Count.Should().BeGreaterThanOrEqualTo(3);
+        avalonia.Should().NotContain("BackspaceOutdentListItem");
     }
 
     [Fact]
     public void PortableSessionHasNoRendererDependencies()
     {
-        var source = ReadSource(
-            "freew", "FreeW.App.Presentation", "Editing", "DocumentEditingSession.cs");
+        var sources = new[]
+        {
+            ReadSource(
+                "freew", "FreeW.App.Presentation", "Editing", "DocumentEditingSession.cs"),
+            ReadSource(
+                "freew", "FreeW.App.Presentation", "Editing", "DocumentBodyEditingCoordinator.cs"),
+        };
 
-        source.Should().NotContain("using Avalonia");
-        source.Should().NotContain("using System.Windows");
-        source.Should().NotContain("DocumentView");
-        source.Should().NotContain("TextPointer");
-        source.Should().NotContain("DocPosition");
+        foreach (var source in sources)
+        {
+            source.Should().NotContain("using Avalonia");
+            source.Should().NotContain("using System.Windows");
+            source.Should().NotContain("DocumentView");
+            source.Should().NotContain("TextPointer");
+            source.Should().NotContain("DocPosition");
+        }
     }
 
     private static string ReadSource(params string[] parts)
