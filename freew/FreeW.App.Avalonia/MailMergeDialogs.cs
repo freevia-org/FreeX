@@ -601,7 +601,7 @@ internal static class MailMergeDialogs
         var content = CreateForm((prompt, (Control)valueBox));
         AddActions(dialog, content, () =>
         {
-            result = string.IsNullOrWhiteSpace(valueBox.Text) ? null : valueBox.Text.Trim();
+            result = valueBox.Text?.Trim() ?? string.Empty;
         });
 
         await dialog.ShowDialog(owner);

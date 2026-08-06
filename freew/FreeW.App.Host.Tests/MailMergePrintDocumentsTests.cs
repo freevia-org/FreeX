@@ -75,6 +75,101 @@ public sealed class MailMergePrintDocumentsTests
     }
 
     [StaFact]
+    public void CancelledInteractivePrompt_PreservesTemplateSessionAndDoesNotPrint()
+    {
+        var template = TextDocument.CreateEmpty();
+        template.Blocks.Clear();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " FILLIN \"Department\" \\d \"Engineering\" \\o ",
+                    "cached")
+            }
+        });
+        var preview = DocumentWith("preview");
+        var editor = new DocumentView();
+        editor.LoadModel(preview);
+        var session = new FreeWRibbonCommands.MailMergeSession
+        {
+            Data = MergeData.FromCsv("FirstName\nAda"),
+            Template = template
+        };
+        var plan = MailMergeFinishPlanner.Plan(
+            MailMergeFinishDestination.Printer,
+            MailMergeRecipientScope.All,
+            recordCount: 1,
+            currentIndex: 0,
+            fromRecordText: null,
+            toRecordText: null);
+        var printCalls = 0;
+        var observedDefault = string.Empty;
+        var command = new FreeWRibbonCommands.FinishMergeCommand(
+            editor,
+            session,
+            printDocument: _ => printCalls++,
+            ask: (_, _, _) => plan,
+            showInfo: (_, _) => { },
+            askInteractivePrompt: (_, _, _, initialValue) =>
+            {
+                observedDefault = initialValue;
+                return null;
+            });
+
+        command.Execute(RibbonCommandContext.Empty);
+
+        observedDefault.Should().Be("Engineering");
+        printCalls.Should().Be(0);
+        editor.Model.Should().BeSameAs(preview);
+        session.Template.Should().BeSameAs(template);
+    }
+
+    [StaFact]
+    public void BlankInteractivePrompt_ContinuesAndPrintsEmptyFieldResult()
+    {
+        var template = TextDocument.CreateEmpty();
+        template.Blocks.Clear();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " FILLIN \"Department\" \\d \"Engineering\" \\o ",
+                    "cached")
+            }
+        });
+        var editor = new DocumentView();
+        editor.LoadModel(DocumentWith("preview"));
+        var session = new FreeWRibbonCommands.MailMergeSession
+        {
+            Data = MergeData.FromCsv("FirstName\nAda"),
+            Template = template
+        };
+        var plan = MailMergeFinishPlanner.Plan(
+            MailMergeFinishDestination.Printer,
+            MailMergeRecipientScope.All,
+            recordCount: 1,
+            currentIndex: 0,
+            fromRecordText: null,
+            toRecordText: null);
+        TextDocument? printed = null;
+        var command = new FreeWRibbonCommands.FinishMergeCommand(
+            editor,
+            session,
+            printDocument: document => printed = document,
+            ask: (_, _, _) => plan,
+            showInfo: (_, _) => { },
+            askInteractivePrompt: (_, _, _, _) => string.Empty);
+
+        command.Execute(RibbonCommandContext.Empty);
+
+        printed.Should().NotBeNull();
+        PlainText(printed!).Should().BeEmpty();
+        session.Template.Should().BeSameAs(template);
+    }
+
+    [StaFact]
     public void NewDocumentDestination_PreservesMappedNativeCompositeColumns()
     {
         var template = TextDocument.CreateEmpty();

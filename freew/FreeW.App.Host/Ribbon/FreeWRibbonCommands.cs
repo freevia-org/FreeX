@@ -7172,11 +7172,14 @@ internal static class FreeWRibbonCommands
         MailMergeSession session,
         Action<TextDocument>? printDocument = null,
         Func<Window?, int, int, MailMergeFinishPlan?>? ask = null,
-        Action<Window?, string>? showInfo = null) : IRibbonCommand
+        Action<Window?, string>? showInfo = null,
+        Func<Window?, string, string, string, string?>? askInteractivePrompt = null) : IRibbonCommand
     {
         private readonly Func<Window?, int, int, MailMergeFinishPlan?> _ask = ask ?? MailMergeFinishDialog.Ask;
         private readonly Action<Window?, string> _showInfo = showInfo ??
             ((owner, message) => DialogMessageHelper.ShowInfo(owner, message, "Mail Merge"));
+        private readonly Func<Window?, string, string, string, string?> _askInteractivePrompt =
+            askInteractivePrompt ?? MergeRulePromptDialog.AskPrompt;
 
         public void Execute(RibbonCommandContext context)
         {
@@ -7211,7 +7214,11 @@ internal static class FreeWRibbonCommands
             // Collect Fill-in and Ask prompts from the template body so we can ask the user once
             // before the merge run starts (matching Word's behaviour).
             var mergeState = new MergeState();
-            CollectFillInAndAskAnswers(template, mergeState, owner);
+            if (!CollectFillInAndAskAnswers(template, mergeState, owner))
+            {
+                editor.Focus();
+                return;
+            }
 
             // Augment every row with the composed «AddressBlock» and «GreetingLine» values so composite
             // placeholders in the template resolve correctly across every record.
@@ -7251,23 +7258,29 @@ internal static class FreeWRibbonCommands
 
         // Scan the template for «Fill-in "Prompt"» and «Ask BookmarkName "Prompt"» instructions and
         // prompt the user once per unique prompt/bookmark before the merge run.
-        private static void CollectFillInAndAskAnswers(TextDocument template, MergeState state, Window? owner)
+        private bool CollectFillInAndAskAnswers(TextDocument template, MergeState state, Window? owner)
         {
             foreach (var prompt in MailMergeInteractivePromptPlanner.Plan(template))
             {
                 if (prompt.Kind == MailMergeInteractivePromptKind.FillIn)
                 {
-                    var answer = MergeRulePromptDialog.AskPrompt(
+                    var answer = _askInteractivePrompt(
                         owner, "Fill-in", prompt.Prompt, prompt.DefaultAnswer);
-                    state.FillInAnswers[prompt.Key] = answer ?? string.Empty;
+                    if (answer is null)
+                        return false;
+                    state.FillInAnswers[prompt.Key] = answer;
                 }
                 else
                 {
-                    var answer = MergeRulePromptDialog.AskPrompt(
+                    var answer = _askInteractivePrompt(
                         owner, "Ask", prompt.Prompt, prompt.DefaultAnswer);
-                    state.AskAnswers[prompt.Key] = answer ?? string.Empty;
+                    if (answer is null)
+                        return false;
+                    state.AskAnswers[prompt.Key] = answer;
                 }
             }
+
+            return true;
         }
     }
 

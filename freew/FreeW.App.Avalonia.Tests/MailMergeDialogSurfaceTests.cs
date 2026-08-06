@@ -72,6 +72,16 @@ public sealed class MailMergeDialogSurfaceTests
     }
 
     [Fact]
+    public void MailingsPromptDialog_DistinguishesBlankAnswerFromCancel()
+    {
+        var source = File.ReadAllText(RepositoryFile(
+            "freew", "FreeW.App.Avalonia", "MailMergeDialogs.cs"));
+
+        source.Should().Contain("string? result = null;");
+        source.Should().Contain("result = valueBox.Text?.Trim() ?? string.Empty;");
+    }
+
+    [Fact]
     public void MailingsCommandHost_PreservesWpfPreviewAndSessionInvalidationContracts()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"))
