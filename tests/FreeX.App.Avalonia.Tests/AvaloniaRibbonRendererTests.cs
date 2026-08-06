@@ -166,7 +166,7 @@ public sealed class AvaloniaRibbonRendererTests
 
         var collapsedButtons = content.GetLogicalDescendants()
             .OfType<Button>()
-            .Where(b => b.Classes.Contains("freex-ribbon-collapsed-group"))
+            .Where(b => b.Classes.Contains("free-ribbon-collapsed-group"))
             .ToList();
 
         Assert.NotEmpty(collapsedButtons);
@@ -214,7 +214,7 @@ public sealed class AvaloniaRibbonRendererTests
 
         var collapsedButtons = content.GetLogicalDescendants()
             .OfType<Button>()
-            .Where(b => b.Classes.Contains("freex-ribbon-collapsed-group"))
+            .Where(b => b.Classes.Contains("free-ribbon-collapsed-group"))
             .ToList();
 
         Assert.Empty(collapsedButtons);

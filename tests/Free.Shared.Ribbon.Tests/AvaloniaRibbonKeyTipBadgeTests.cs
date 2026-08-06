@@ -152,7 +152,7 @@ public sealed class AvaloniaRibbonKeyTipBadgeTests
             try
             {
                 var collapsed = ribbon.GetLogicalDescendants().OfType<Button>()
-                    .First(button => button.Classes.Contains("freex-ribbon-collapsed-group"));
+                    .First(button => button.Classes.Contains("free-ribbon-collapsed-group"));
                 var flyout = Assert.IsType<MenuFlyout>(collapsed.Flyout);
 
                 flyout.ShowAt(collapsed);

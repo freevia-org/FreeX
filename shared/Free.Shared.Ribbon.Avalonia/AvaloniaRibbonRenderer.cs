@@ -36,9 +36,9 @@ public static class AvaloniaRibbonRenderer
 {
     private const string FileRibbonTabId = "FileTab";
     private const string KeyTipBadgeTag = "RibbonKeyTipBadge";
-    private const string SelectedTabUnderlineTag = "FreeX.SelectedTabUnderline";
-    private const string PopupChromeClass = "freex-ribbon-popup-chrome";
-    private const string SubmenuPlacementClass = "freex-ribbon-submenu-placement";
+    private const string SelectedTabUnderlineTag = "Free.Ribbon.SelectedTabUnderline";
+    private const string PopupChromeClass = "free-ribbon-popup-chrome";
+    private const string SubmenuPlacementClass = "free-ribbon-submenu-placement";
     private const double RibbonCheckBoxHeight = 16;
     private const double RibbonCheckGlyphSize = 11;
     private const int MaxRowsPerColumn = 3;
@@ -203,7 +203,7 @@ public static class AvaloniaRibbonRenderer
     private static readonly ConditionalWeakTable<Control, StateStoreBinding> StateStoreBindings = new();
 
     internal static AvaloniaRibbonPalette ResolvePalette(RibbonVisualPalette? palette = null) =>
-        new(palette ?? RibbonVisualPalette.FromTheme(BrandThemes.FreeX));
+        new(palette ?? RibbonVisualPalette.DefaultNeutral);
 
     internal sealed class AvaloniaRibbonPalette
     {
@@ -2655,7 +2655,7 @@ public static class AvaloniaRibbonRenderer
             ConfigureCollapsedGroupFlyout(flyout, button, _palette);
             button.Flyout = flyout;
             SetKeyTip(button, _collapsedKeyTip);
-            button.Classes.Add("freex-ribbon-collapsed-group");
+            button.Classes.Add("free-ribbon-collapsed-group");
             return button;
         }
     }
