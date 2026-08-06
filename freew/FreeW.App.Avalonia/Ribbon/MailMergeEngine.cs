@@ -503,6 +503,12 @@ internal sealed class MailMergeEngine
 
     public TextDocument? FinishMerge(MailMergeFinishPlan finishPlan)
     {
+        return FinishMerge(finishPlan, new MergeState());
+    }
+
+    public TextDocument? FinishMerge(MailMergeFinishPlan finishPlan, MergeState mergeState)
+    {
+        ArgumentNullException.ThrowIfNull(mergeState);
         if (Session.Data is not { Count: > 0 })
         {
             ShowInfo("Select recipients first (Mailings > Select Recipients), then Finish & Merge.");
@@ -518,7 +524,7 @@ internal sealed class MailMergeEngine
         if (finishPlan.Destination != MailMergeFinishDestination.NewDocument)
             return null;
 
-        var result = BuildFinishedMerge(finishPlan);
+        var result = BuildFinishedMerge(finishPlan, mergeState);
         if (result is null)
             return null;
 
@@ -539,6 +545,14 @@ internal sealed class MailMergeEngine
     /// </summary>
     public MailMergeFinishBuildResult? BuildFinishedMerge(MailMergeFinishPlan finishPlan)
     {
+        return BuildFinishedMerge(finishPlan, new MergeState());
+    }
+
+    public MailMergeFinishBuildResult? BuildFinishedMerge(
+        MailMergeFinishPlan finishPlan,
+        MergeState mergeState)
+    {
+        ArgumentNullException.ThrowIfNull(mergeState);
         if (!finishPlan.Success ||
             Session.Data is not { Count: > 0 } data ||
             finishPlan.RowIndexes.Any(index => index < 0 || index >= data.Count))
@@ -550,11 +564,16 @@ internal sealed class MailMergeEngine
         // placeholders resolve across every record, then run the rules-aware merge (records flagged by a
         // «Skip Record If» rule are excluded).
         var augmentedData = BuildAugmentedData(data, finishPlan.RowIndexes);
-        var state = new MergeState();
-        var merged = MailMerge.MergeAllWithRules(template, augmentedData, state);
+        var merged = MailMerge.MergeAllWithRules(template, augmentedData, mergeState);
         var combined = MailMerge.CombineMergedRecords(merged, Session.Mode);
 
-        return new MailMergeFinishBuildResult(combined, merged.Count, state.SkippedIndices.Count);
+        return new MailMergeFinishBuildResult(combined, merged.Count, mergeState.SkippedIndices.Count);
+    }
+
+    public IReadOnlyList<MailMergeInteractivePrompt> GetInteractiveFinishPrompts()
+    {
+        var template = Session.IsPreviewing ? Session.Template! : _editor.Document;
+        return MailMergeInteractivePromptPlanner.Plan(template);
     }
 
     /// <summary>

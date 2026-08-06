@@ -451,6 +451,31 @@ public sealed class MailingsTabTests
     }
 
     [Fact]
+    public void BuildFinishedMerge_UsesHostCollectedFillInAndAskAnswersForEveryRecord()
+    {
+        var fillIn = MergeRuleEvaluator.BuildFillInInstruction("Department");
+        var ask = MergeRuleEvaluator.BuildAskInstruction("Manager", "Who is the manager?");
+        var view = ViewWith(new Paragraph(
+            $"{Wrap(fillIn)} | {Wrap(ask)} | {MailMerge.FieldOpen}FirstName{MailMerge.FieldClose}"));
+        var engine = new MailMergeEngine(view, Callbacks());
+        engine.LoadRecipientsCsv(SampleCsv);
+        var state = new MergeState();
+        state.FillInAnswers["Department"] = "Engineering";
+        state.AskAnswers["Manager"] = "Margaret";
+        var plan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(2);
+
+        var result = engine.BuildFinishedMerge(plan, state);
+
+        result.Should().NotBeNull();
+        PlainText(result!.Document).Should().Contain("Engineering | Margaret | Ada");
+        PlainText(result.Document).Should().Contain("Engineering | Margaret | Grace");
+        state.Bookmarks["Manager"].Should().Be("Margaret");
+        engine.GetInteractiveFinishPrompts().Should().Equal(
+            new MailMergeInteractivePrompt(MailMergeInteractivePromptKind.FillIn, "Department", "Department"),
+            new MailMergeInteractivePrompt(MailMergeInteractivePromptKind.Ask, "Manager", "Who is the manager?"));
+    }
+
+    [Fact]
     public void FinishMerge_without_recipients_is_noop_and_emits_info()
     {
         var info = new List<string>();
