@@ -46,9 +46,12 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
             AppContext.BaseDirectory,
             "../../../../FreeP.App.Avalonia/MainWindow.cs"));
         var source = File.ReadAllText(sourcePath);
+        var workflow = File.ReadAllText(Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../FreeP.App.Presentation/Ribbon/FreePRibbonCommandWorkflow.cs")));
 
-        source.Should().Contain("SmartArtEditingPlanner.OpenTextPaneCommandId");
-        source.Should().Contain("new ActionRibbonCommand(() => ShowSmartArtTextPane())");
+        workflow.Should().Contain("SmartArtEditingPlanner.OpenTextPaneCommandId");
+        source.Should().Contain("case FreePRibbonHostActionKind.OpenSmartArtTextPane: ShowSmartArtTextPane(); break;");
     }
 
     [Fact]

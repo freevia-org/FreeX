@@ -1,4 +1,3 @@
-using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -100,77 +99,6 @@ public sealed partial class MainWindow : Window
                 "application/vnd.ms-powerpoint",
             ]);
 
-    private static readonly (string CommandId, Action<EditingSession> Execute)[] ArrangeCommandRoutes =
-    [
-        ("freep.arrange.group", static editor => editor.GroupSelectedShapes()),
-        ("freep.arrange.ungroup", static editor => editor.UngroupSelected()),
-        (ShapeChangePlanner.RectangleCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Rectangle)),
-        (ShapeChangePlanner.RoundedRectangleCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.RoundedRectangle)),
-        (ShapeChangePlanner.EllipseCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Ellipse)),
-        (ShapeChangePlanner.TriangleCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Triangle)),
-        (ShapeChangePlanner.DiamondCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Diamond)),
-        (ShapeChangePlanner.RightArrowCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.RightArrow)),
-        (ShapeChangePlanner.HexagonCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Hexagon)),
-        (ShapeChangePlanner.ParallelogramCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Parallelogram)),
-        (ShapeChangePlanner.TrapezoidCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Trapezoid)),
-        (ShapeChangePlanner.LeftArrowCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.LeftArrow)),
-        (ShapeChangePlanner.Star5CommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Star5)),
-        (ShapeChangePlanner.UpArrowCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.UpArrow)),
-        (ShapeChangePlanner.DownArrowCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.DownArrow)),
-        (ShapeChangePlanner.CrossCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Cross)),
-        (ShapeChangePlanner.PlusSignCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.PlusSign)),
-        (ShapeChangePlanner.PentagonCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Pentagon)),
-        (ShapeChangePlanner.OctagonCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Octagon)),
-        (ShapeChangePlanner.LeftRightArrowCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.LeftRightArrow)),
-        (ShapeChangePlanner.UpDownArrowCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.UpDownArrow)),
-        (ShapeChangePlanner.Star8CommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Star8)),
-        (ShapeChangePlanner.ChevronCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Chevron)),
-        (ShapeChangePlanner.HomePlateCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.HomePlate)),
-        (ShapeChangePlanner.RightTriangleCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.RightTriangle)),
-        (ShapeChangePlanner.MinusSignCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.MinusSign)),
-        (ShapeChangePlanner.MultiplySignCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.MultiplySign)),
-        (ShapeChangePlanner.DivideSignCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.DivideSign)),
-        (ShapeChangePlanner.EqualSignCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.EqualSign)),
-        (ShapeChangePlanner.NotEqualSignCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.NotEqualSign)),
-        (ShapeChangePlanner.WaveCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Wave)),
-        (ShapeChangePlanner.RectangularCalloutCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.RectangularCallout)),
-        (ShapeChangePlanner.RoundedRectangularCalloutCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.RoundedRectangularCallout)),
-        (ShapeChangePlanner.OvalCalloutCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.OvalCallout)),
-        (ShapeChangePlanner.ExplosionCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Explosion)),
-        (ShapeChangePlanner.RibbonCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Ribbon)),
-        (ShapeChangePlanner.FlowchartProcessCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.FlowchartProcess)),
-        (ShapeChangePlanner.FlowchartDecisionCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.FlowchartDecision)),
-        (ShapeChangePlanner.FlowchartDataCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.FlowchartData)),
-        (ShapeChangePlanner.FlowchartPredefinedProcessCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.FlowchartPredefinedProcess)),
-        (ShapeChangePlanner.FlowchartDocumentCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.FlowchartDocument)),
-        (ShapeChangePlanner.FlowchartTerminatorCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.FlowchartTerminator)),
-        (ShapeChangePlanner.LineCalloutCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.LineCallout)),
-        (ShapeChangePlanner.CylinderCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Cylinder)),
-        (ShapeChangePlanner.ChordCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Chord)),
-        (ShapeChangePlanner.HeartCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Heart)),
-        ("freep.arrange.bring-to-front", static editor => editor.BringToFront()),
-        ("freep.arrange.bring-forward", static editor => editor.BringForward()),
-        ("freep.arrange.send-backward", static editor => editor.SendBackward()),
-        ("freep.arrange.send-to-back", static editor => editor.SendToBack()),
-        ("freep.arrange.flip-horizontal", static editor => editor.FlipSelectedHorizontal()),
-        ("freep.arrange.flip-vertical", static editor => editor.FlipSelectedVertical()),
-        ("freep.arrange.rotate-left-90", static editor => editor.RotateSelectedLeft90()),
-        ("freep.arrange.rotate-right-90", static editor => editor.RotateSelectedRight90()),
-        ("freep.arrange.align-left", static editor => editor.AlignLeft()),
-        ("freep.arrange.align-center-h", static editor => editor.AlignCenterH()),
-        ("freep.arrange.align-right", static editor => editor.AlignRight()),
-        ("freep.arrange.align-top", static editor => editor.AlignTop()),
-        ("freep.arrange.align-middle", static editor => editor.AlignMiddle()),
-        ("freep.arrange.align-bottom", static editor => editor.AlignBottom()),
-        ("freep.arrange.align-left-to-slide", static editor => editor.AlignLeftToSlide()),
-        ("freep.arrange.align-center-h-to-slide", static editor => editor.AlignCenterHToSlide()),
-        ("freep.arrange.align-right-to-slide", static editor => editor.AlignRightToSlide()),
-        ("freep.arrange.align-top-to-slide", static editor => editor.AlignTopToSlide()),
-        ("freep.arrange.align-middle-to-slide", static editor => editor.AlignMiddleToSlide()),
-        ("freep.arrange.align-bottom-to-slide", static editor => editor.AlignBottomToSlide()),
-        ("freep.arrange.distribute-h", static editor => editor.DistributeHorizontally()),
-        ("freep.arrange.distribute-v", static editor => editor.DistributeVertically()),
-    ];
 
     // ── Presentation model ─────────────────────────────────────────────────────
 
@@ -1320,6 +1248,14 @@ public sealed partial class MainWindow : Window
     {
         var bus = new PresentationCommandBus(_presentation);
         Editor  = new EditingSession(_presentation, bus);
+        if (_ribbonCommandRegistry is not null)
+        {
+            FreePRibbonCommandWorkflow.BindInto(
+                _ribbonCommandRegistry,
+                Editor,
+                _ribbonStateStore,
+                CreateRibbonCommandHostAdapter());
+        }
         _selectionPane?.SetEditor(Editor);
         _applicationFrameSession?.Attach(Editor);
     }
@@ -2734,338 +2670,30 @@ public sealed partial class MainWindow : Window
 
     internal RibbonCommandRegistry BuildCommandRegistry()
     {
-        var r = new RibbonCommandRegistry();
+        var host = CreateRibbonCommandHostAdapter();
+        var registry = FreePRibbonCommandWorkflow.Build(Editor, _ribbonStateStore, host).Registry;
 
-        // File operations
-        r.Register("freep.file.new",     new ActionRibbonCommand(FileNew));
-        r.Register("freep.file.open",    new ActionRibbonCommand(() => _ = FileOpenAsync()));
-        r.Register("freep.file.save",    new ActionRibbonCommand(() => _ = FileSaveAsync()));
-        r.Register("freep.file.save-as", new ActionRibbonCommand(() => _ = FileSaveAsAsync()));
-        r.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
-        r.Register(PresentationExportPlanner.NotesPagePdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportNotesPagePdfAsync()));
-        r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
-        r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() =>
+        // File workflows and native export/print surfaces are renderer-owned.
+        registry.Register("freep.file.new", new ActionRibbonCommand(FileNew));
+        registry.Register("freep.file.open", new ActionRibbonCommand(() => _ = FileOpenAsync()));
+        registry.Register("freep.file.save", new ActionRibbonCommand(() => _ = FileSaveAsync()));
+        registry.Register("freep.file.save-as", new ActionRibbonCommand(() => _ = FileSaveAsAsync()));
+        registry.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
+        registry.Register(PresentationExportPlanner.NotesPagePdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportNotesPagePdfAsync()));
+        registry.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
+        registry.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() =>
         {
             RefreshHandoutLayoutPlan();
             ShowPrintBackstage();
         }));
-        r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => _ = FileExportVideoAsync()));
-        
+        registry.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => _ = FileExportVideoAsync()));
 
-        // Slide navigation/management
-        r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
-        r.Register("freep.duplicate-slide", new ActionRibbonCommand(() => Editor.DuplicateCurrentSlide()));
-        r.Register("freep.delete-slide",    new ActionRibbonCommand(() => Editor.DeleteCurrentSlide()));
-        r.Register(SlideZoomInsertionPlanner.CommandId,
-            new ActionRibbonCommand(() => _ = OpenSlideZoomDialogAsync()));
-        r.Register(SectionZoomInsertionPlanner.CommandId,
-            new ActionRibbonCommand(() => _ = OpenSectionZoomDialogAsync()));
-        r.Register(SummaryZoomInsertionPlanner.CommandId,
-            new ActionRibbonCommand(() => _ = OpenSummaryZoomDialogAsync()));
-        r.Register(ZoomTargetPlanner.CommandId,
-            new ActionRibbonCommand(() => _ = OpenZoomTargetDialogAsync()));
-        r.Register(SummaryZoomTargetPlanner.CommandId,
-            new ActionRibbonCommand(() => _ = OpenSummaryZoomTargetsDialogAsync()));
-        r.Register(ZoomObjectPropertiesPlanner.CommandId,
-            new ActionRibbonCommand(() => _ = OpenZoomObjectPropertiesDialogAsync()));
-        r.Register(ZoomCoverImagePlanner.CommandId,
-            new ActionRibbonCommand(() => _ = OpenZoomCoverImagePickerAsync()));
-        r.Register(ZoomCoverImagePlanner.ResetCommandId,
-            new ActionRibbonCommand(() => _ = RestoreZoomPreviewAsync()));
-        r.Register(PresentationDesignCommandPlanner.LayoutCommandId, new ActionRibbonCommand(() =>
-            PresentationDesignCommandPlanner.TryApply(
-                Editor,
-                PresentationDesignCommandPlanner.LayoutPlan,
-                OnDesignHostRequest)));
-
-        // Clipboard
-        r.Register("freep.copy", new ActionRibbonCommand(() =>
-            QueueClipboardCopy()));
-        r.Register("freep.cut", new ActionRibbonCommand(() =>
-            QueueClipboardCut()));
-        r.Register("freep.paste", new ActionRibbonCommand(() =>
-            QueueClipboardPaste()));
-        r.Register("freep.format-painter", new ActionRibbonCommand(() =>
-        {
-            if (Editor.SelectedShapeIds.Count == 1 && _gestureHandler?.BeginFormatPainter() == true)
-                return;
-
-            // Preserve the existing one-click multi-selection behavior: the first selected
-            // shape is the source and all other selected shapes are painted immediately.
-            Editor.CopyFormatting();
-            Editor.ApplyFormattingToSelection();
-        }));
-
-        // Font formatting
-        r.Register("freep.font-family", new ContextRibbonCommand(ctx =>
-        {
-            if (string.IsNullOrEmpty(ctx.SelectedValue))
-                return;
-
-            if (_textEditor?.TryApplyActiveShapeFontFamily(ctx.SelectedValue) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellFontFamily(ctx.SelectedValue) == true) return;
-            if (Editor.TryApplyActiveTableCellFontFamily(ctx.SelectedValue)) return;
-            Editor.SetFontFamilyOnSelection(ctx.SelectedValue);
-        }));
-        r.Register("freep.font-size", new ContextRibbonCommand(ctx =>
-        {
-            if (!TryGetRibbonFontSize(ctx, out double sizePt))
-                return;
-
-            if (_textEditor?.TryApplyActiveShapeFontSize(sizePt) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellFontSize(sizePt) == true) return;
-            if (Editor.TryApplyActiveTableCellFontSize(sizePt)) return;
-            Editor.SetFontSizeOnSelection(sizePt);
-        }));
-        r.Register("freep.font-color", new ContextRibbonCommand(ctx =>
-        {
-            if (!TryGetRibbonFontColor(ctx, out var color))
-                return;
-
-            if (_textEditor?.TryApplyActiveShapeColor(color) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellColor(color) == true) return;
-            if (Editor.TryApplyActiveTableCellColor(color)) return;
-            Editor.SetColorOnSelection(color);
-        }));
-        r.Register("freep.text-autofit", new ContextRibbonCommand(ctx =>
-        {
-            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
-                value is not string selection ||
-                !TextAutoFitOptionParser.TryParse(selection, out var kind))
-                return;
-
-            Editor.SetTextAutoFitOnSelection(kind);
-        }));
-        r.Register("freep.text-direction", new ContextRibbonCommand(ctx =>
-        {
-            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
-                value is not string selection ||
-                !TextVerticalTypeOptionParser.TryParse(selection, out var verticalType))
-                return;
-
-            if (_textEditor?.TryApplyActiveTableCellTextVerticalType(verticalType) == true)
-                return;
-            if (Editor.TryApplyActiveTableCellTextVerticalType(verticalType))
-                return;
-            Editor.SetTextVerticalTypeOnSelection(verticalType);
-        }));
-        r.Register("freep.text-columns", new ContextRibbonCommand(ctx =>
-        {
-            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
-                value is not string selection ||
-                !TextColumnCountOptionParser.TryParse(selection, out var count))
-                return;
-
-            Editor.SetTextColumnCountOnSelection(count);
-        }));
-        r.Register("freep.text-column-spacing", new ContextRibbonCommand(ctx =>
-        {
-            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
-                value is not string selection ||
-                !TextColumnSpacingOptionParser.TryParse(selection, out var spacingEmu))
-                return;
-
-            Editor.SetTextColumnSpacingOnSelection(spacingEmu);
-        }));
-        r.Register("freep.table-cell-fill", new ContextRibbonCommand(ctx =>
-        {
-            if (!TryGetRibbonFontColor(ctx, out var color))
-                return;
-
-            if (_textEditor?.TryApplyActiveTableCellFill(color) == true)
-                return;
-            Editor.TryApplyActiveTableCellFill(color);
-        }));
-        r.Register("freep.table-cell-anchor", new ContextRibbonCommand(ctx =>
-        {
-            if (!TryGetRibbonTableCellAnchor(ctx, out var anchor))
-                return;
-
-            if (_textEditor?.TryApplyActiveTableCellAnchor(anchor) == true)
-                return;
-            Editor.TryApplyActiveTableCellAnchor(anchor);
-        }));
-        r.Register("freep.table-cell-border", new ContextRibbonCommand(ctx =>
-        {
-            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
-                value is not string selection ||
-                !TableCellBorderOptionParser.TryParse(selection, out var side, out var outline))
-                return;
-
-            if (_textEditor?.TryApplyActiveTableCellBorder(side, outline) == true)
-                return;
-            Editor.TryApplyActiveTableCellBorder(side, outline);
-        }));
-        r.Register("freep.table-cell-inset", new ContextRibbonCommand(ctx =>
-        {
-            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
-                value is not string selection ||
-                !TableCellInsetOptionParser.TryParse(selection, out var side, out var insetPt))
-                return;
-
-            if (_textEditor?.TryApplyActiveTableCellInset(side, insetPt) == true)
-                return;
-            Editor.TryApplyActiveTableCellInset(side, insetPt);
-        }));
-        r.Register("freep.table-row-height", new ContextRibbonCommand(ctx =>
-        {
-            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
-                value is not string selection ||
-                !TableRowHeightOptionParser.TryParse(selection, out var heightEmu))
-                return;
-
-            if (_textEditor?.TryApplyActiveTableRowHeight(heightEmu) == true)
-                return;
-            Editor.TryApplyActiveTableRowHeight(heightEmu);
-        }));
-        r.Register(TableCellEditPlanner.MergeCellsCommandId,
-            new TableCellRouteRibbonCommand(
-                () => _domainContextMenuSession.ExecuteCurrentTableAction(
-                    PresentationDomainContextActionKind.MergeTableCell,
-                    TryExecuteInlineTableAction),
-                () => _domainContextMenuSession.CanExecuteCurrentTableAction(
-                    PresentationDomainContextActionKind.MergeTableCell)));
-        r.Register(TableCellEditPlanner.SplitCellCommandId,
-            new TableCellRouteRibbonCommand(
-                () => _domainContextMenuSession.ExecuteCurrentTableAction(
-                    PresentationDomainContextActionKind.SplitTableCell,
-                    TryExecuteInlineTableAction),
-                () => _domainContextMenuSession.CanExecuteCurrentTableAction(
-                    PresentationDomainContextActionKind.SplitTableCell)));
-        r.Register(TableCellEditPlanner.TableFirstRowCommandId,
-            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.FirstRow)));
-        r.Register(TableCellEditPlanner.TableLastRowCommandId,
-            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.LastRow)));
-        r.Register(TableCellEditPlanner.TableFirstColCommandId,
-            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.FirstCol)));
-        r.Register(TableCellEditPlanner.TableLastColCommandId,
-            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.LastCol)));
-        r.Register(TableCellEditPlanner.TableBandRowCommandId,
-            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.BandRow)));
-        r.Register(TableCellEditPlanner.TableBandColCommandId,
-            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.BandCol)));
-        r.Register("freep.bold", new ActionRibbonCommand(() =>
-        {
-            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold) == true) return;
-            if (Editor.ToggleBoldOnActiveTableCell()) return;
-            Editor.ToggleBoldOnSelection();
-        }));
-        r.Register("freep.italic", new ActionRibbonCommand(() =>
-        {
-            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Italic) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Italic) == true) return;
-            if (Editor.ToggleItalicOnActiveTableCell()) return;
-            Editor.ToggleItalicOnSelection();
-        }));
-        r.Register("freep.underline", new ActionRibbonCommand(() =>
-        {
-            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Underline) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Underline) == true) return;
-            if (Editor.ToggleUnderlineOnActiveTableCell()) return;
-            Editor.ToggleUnderlineOnSelection();
-        }));
-        r.Register("freep.superscript", new ActionRibbonCommand(() =>
-        {
-            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Superscript) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Superscript) == true) return;
-            if (Editor.ToggleSuperscriptOnActiveTableCell()) return;
-            Editor.ToggleSuperscriptOnSelection();
-        }));
-        r.Register("freep.subscript", new ActionRibbonCommand(() =>
-        {
-            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Subscript) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Subscript) == true) return;
-            if (Editor.ToggleSubscriptOnActiveTableCell()) return;
-            Editor.ToggleSubscriptOnSelection();
-        }));
-        r.Register("freep.paragraph.align-left", new ActionRibbonCommand(() =>
-        {
-            if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Left) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Left) == true) return;
-            Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Left);
-        }));
-        r.Register("freep.paragraph.align-center", new ActionRibbonCommand(() =>
-        {
-            if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Center) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Center) == true) return;
-            Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Center);
-        }));
-        r.Register("freep.paragraph.align-right", new ActionRibbonCommand(() =>
-        {
-            if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Right) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Right) == true) return;
-            Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Right);
-        }));
-        r.Register("freep.paragraph.align-justify", new ActionRibbonCommand(() =>
-        {
-            if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Justify) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify) == true) return;
-            Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify);
-        }));
-        r.Register("freep.bullets", new ContextRibbonCommand(ctx =>
-        {
-            if (TableCellListPresetCatalog.TryGet(ctx.SelectedValue, out var bulletPreset) &&
-                bulletPreset is not null)
-            {
-                if (_textEditor?.TryApplyActiveShapeParagraphListPreset(bulletPreset) == true) return;
-                if (_textEditor?.TryApplyActiveTableCellParagraphListPreset(bulletPreset) == true) return;
-                Editor.TryApplyActiveTableCellParagraphListPreset(bulletPreset);
-                return;
-            }
-
-            if (_textEditor?.TryApplyActiveShapeParagraphBulletToggle() == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true) return;
-            Editor.TryApplyActiveTableCellParagraphBulletToggle();
-        }));
-        r.Register("freep.numbering", new ContextRibbonCommand(ctx =>
-        {
-            if (TableCellListPresetCatalog.TryGet(ctx.SelectedValue, out var numberingPreset) &&
-                numberingPreset is not null)
-            {
-                if (_textEditor?.TryApplyActiveShapeParagraphListPreset(numberingPreset) == true) return;
-                if (_textEditor?.TryApplyActiveTableCellParagraphListPreset(numberingPreset) == true) return;
-                Editor.TryApplyActiveTableCellParagraphListPreset(numberingPreset);
-                return;
-            }
-
-            if (_textEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true) return;
-            Editor.TryApplyActiveTableCellParagraphNumberingToggle();
-        }));
-        RegisterListGalleryPresetCommands(r);
-        r.Register("freep.indent-increase", new ActionRibbonCommand(() =>
-        {
-            if (_textEditor?.TryApplyActiveShapeParagraphIndent() == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphIndent() == true) return;
-            Editor.TryApplyActiveTableCellParagraphIndent();
-        }));
-        r.Register("freep.indent-decrease", new ActionRibbonCommand(() =>
-        {
-            if (_textEditor?.TryApplyActiveShapeParagraphOutdent() == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphOutdent() == true) return;
-            Editor.TryApplyActiveTableCellParagraphOutdent();
-        }));
-        r.Register("freep.increase-indent", new ActionRibbonCommand(() =>
-        {
-            if (_textEditor?.TryApplyActiveShapeParagraphIndent() == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphIndent() == true) return;
-            Editor.TryApplyActiveTableCellParagraphIndent();
-        }));
-        r.Register("freep.decrease-indent", new ActionRibbonCommand(() =>
-        {
-            if (_textEditor?.TryApplyActiveShapeParagraphOutdent() == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphOutdent() == true) return;
-            Editor.TryApplyActiveTableCellParagraphOutdent();
-        }));
-
-        foreach (var route in ArrangeCommandRoutes)
-        {
-            r.Register(route.CommandId, new ActionRibbonCommand(() => route.Execute(Editor)));
-        }
-        r.Register(RotationOptionsPlanner.CommandId,
-            new ActionRibbonCommand(OpenRotationOptionsDialog));
-        r.Register(OleActivationPlanner.OpenEmbeddedObjectCommandId,
+        // OLE activation remains native and outside the portable ribbon workflow.
+        registry.Register(
+            OleInsertionPlanner.InsertEmbeddedObjectCommandId,
+            new ActionRibbonCommand(() => _ = InsertEmbeddedObjectFromFileAsync()));
+        registry.Register(
+            OleActivationPlanner.OpenEmbeddedObjectCommandId,
             new ActionRibbonCommand(() =>
             {
                 OleActivationPlanner.TryOpenInlineFirst(
@@ -3078,577 +2706,206 @@ public sealed partial class MainWindow : Window
                         return true;
                     });
             }));
-        r.Register(OleInsertionPlanner.InsertEmbeddedObjectCommandId,
-            new ActionRibbonCommand(() => _ = InsertEmbeddedObjectFromFileAsync()));
-        r.Register("freep.arrange.edit-points", new EditPointsToggleCommand(_slideCanvas));
 
-        // Insert objects/text
-        foreach (var plan in SlideObjectInsertionPlanner.BuiltInPlans)
-        {
-            if (plan.CommandId == SlideObjectInsertionPlanner.Table3x3CommandId)
-            {
-                r.Register(plan.CommandId, new ActionRibbonCommand(OpenTablePicker));
-                continue;
-            }
-
-            if (plan.RequiresPicturePayload)
-            {
-                r.Register(plan.CommandId, new ActionRibbonCommand(() => _ = InsertPictureFromFileAsync()));
-                continue;
-            }
-
-            if (plan.RequiresMediaPayload)
-            {
-                var isVideo = plan.CommandId == SlideObjectInsertionPlanner.VideoCommandId;
-                r.Register(plan.CommandId, new ActionRibbonCommand(() => _ = InsertMediaFromFileAsync(isVideo)));
-                continue;
-            }
-
-            r.Register(plan.CommandId, new ActionRibbonCommand(() =>
-                SlideObjectInsertionPlanner.Apply(Editor, plan)));
-        }
-
-        r.Register(
-            PictureCropAuthoringPlanner.InsetCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedPictureCrop(PictureCropAuthoringPlanner.Inset())));
-        r.Register(
-            PictureCropAuthoringPlanner.ResetCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedPictureCrop(PictureCropAuthoringPlanner.Reset())));
-        r.Register(
-            PictureColorEffectAuthoringPlanner.GrayscaleCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedPictureColorEffects(PictureColorEffectAuthoringPlanner.Grayscale())));
-        r.Register(
-            PictureColorEffectAuthoringPlanner.ResetCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedPictureColorEffects(PictureColorEffectAuthoringPlanner.Reset())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.NoneCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeShadow(ShapeEffectAuthoringPlanner.None())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.SubtleCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeShadow(ShapeEffectAuthoringPlanner.Subtle())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.OffsetCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeShadow(ShapeEffectAuthoringPlanner.Offset())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.GlowNoneCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeGlow(ShapeEffectAuthoringPlanner.GlowNone())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.GlowSubtleCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeGlow(ShapeEffectAuthoringPlanner.GlowSubtle())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.GlowStrongCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeGlow(ShapeEffectAuthoringPlanner.GlowStrong())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.SoftEdgeNoneCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeSoftEdge(ShapeEffectAuthoringPlanner.SoftEdgeNone())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.SoftEdgeSubtleCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeSoftEdge(ShapeEffectAuthoringPlanner.SoftEdgeSubtle())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.SoftEdgeStrongCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeSoftEdge(ShapeEffectAuthoringPlanner.SoftEdgeStrong())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.BevelNoneCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeBevel(ShapeEffectAuthoringPlanner.BevelNone())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.BevelSubtleCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeBevel(ShapeEffectAuthoringPlanner.BevelSubtle())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.BevelStrongCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeBevel(ShapeEffectAuthoringPlanner.BevelStrong())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.Shape3dNoneCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShape3d(ShapeEffectAuthoringPlanner.Shape3dNone())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.Shape3dSubtleCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShape3d(ShapeEffectAuthoringPlanner.Shape3dSubtle())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.Shape3dStrongCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShape3d(ShapeEffectAuthoringPlanner.Shape3dStrong())));
-
-        r.Register(ChartDataDialogPlanner.EditDataCommandId, new ActionRibbonCommand(OpenChartDataDialog));
-        r.Register(ChartDataDialogPlanner.ChangeChartTypeCommandId, new ActionRibbonCommand(OpenChartDataDialog));
-        foreach (var option in ChartDataDialogPlanner.ChartTypeOptions)
-        {
-            var chartType = option.Value;
-            r.Register(
-                ChartDataDialogPlanner.ChangeChartTypeOptionCommandId(chartType),
-                new ActionRibbonCommand(() => Editor.ChangeSelectedChartType(chartType)));
-        }
-        r.Register(ChartDisplayOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDisplayOptionsDialog));
-        r.Register(ChartAxisOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartAxisOptionsDialog));
-        r.Register(ChartSeriesOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartSeriesOptionsDialog));
-        r.Register(
-            ChartPointOptionsPlanner.CommandId,
-            new ActionRibbonCommand(() => OpenChartPointOptionsDialog()));
-        r.Register(ChartLayoutOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartLayoutOptionsDialog));
-        r.Register(ChartExSeriesLayoutPlanner.CommandId, new ActionRibbonCommand(OpenChartExSeriesLayoutDialog));
-        r.Register(ChartDataTableOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDataTableOptionsDialog));
-        r.Register(ChartBubbleOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartBubbleOptionsDialog));
-        r.Register(ChartPieOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartPieOptionsDialog));
-        r.Register(ChartPlotStyleOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartPlotStyleOptionsDialog));
-        r.Register(Chart3DViewOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChart3DViewOptionsDialog));
-        r.Register(ChartTextOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartTextOptionsDialog));
-        r.Register(ChartAreaOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartAreaOptionsDialog));
-        r.Register(ChartProtectionOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartProtectionOptionsDialog));
-        r.Register(ShapeTransparencyPlanner.FillCommandId, new ActionRibbonCommand(() => Editor.SetSelectedFillTransparency(0)));
-        r.Register(ShapeTransparencyPlanner.OutlineCommandId, new ActionRibbonCommand(() => Editor.SetSelectedOutlineTransparency(0)));
-        foreach (var option in ShapeTransparencyPlanner.Options)
-        {
-            r.Register(
-                ShapeTransparencyPlanner.OptionCommandId(ShapeTransparencyTarget.Fill, option.Percent),
-                new ActionRibbonCommand(() => Editor.SetSelectedFillTransparency(option.Percent)));
-            r.Register(
-                ShapeTransparencyPlanner.OptionCommandId(ShapeTransparencyTarget.Outline, option.Percent),
-                new ActionRibbonCommand(() => Editor.SetSelectedOutlineTransparency(option.Percent)));
-        }
-        r.Register("freep.insert-link", new ActionRibbonCommand(OpenHyperlinkDialog));
-        r.Register("freep.remove-link", new ActionRibbonCommand(() =>
-        {
-            if (_textEditor?.TryApplySelectedShapeRunHyperlink(null) == true)
-                return;
-            Editor.RemoveShapeHyperlink();
-        }));
-        r.Register(HeaderFooterCommandPlanner.HeaderFooterCommandId,
-            new ActionRibbonCommand(() => OpenHeaderFooterDialog(HeaderFooterCommandFocus.HeaderFooter)));
-        r.Register(HeaderFooterCommandPlanner.DateTimeCommandId,
-            new ActionRibbonCommand(() => OpenHeaderFooterDialog(HeaderFooterCommandFocus.DateTime)));
-        r.Register(HeaderFooterCommandPlanner.SlideNumberCommandId,
-            new ActionRibbonCommand(() => OpenHeaderFooterDialog(HeaderFooterCommandFocus.SlideNumber)));
-        r.Register(SmartArtAuthoringPlanner.ThemeAccentsCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.ThemeAccents)));
-        r.Register(SmartArtAuthoringPlanner.SingleAccentCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.SingleAccent)));
-        r.Register(SmartArtAuthoringPlanner.MonochromaticAccent2CommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent2)));
-        r.Register(SmartArtAuthoringPlanner.MonochromaticAccent3CommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent3)));
-        r.Register(SmartArtAuthoringPlanner.MonochromaticAccent4CommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent4)));
-        r.Register(SmartArtAuthoringPlanner.MonochromaticAccent5CommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent5)));
-        r.Register(SmartArtAuthoringPlanner.MonochromaticAccent6CommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent6)));
-        r.Register(SmartArtAuthoringPlanner.GrayscaleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.Grayscale)));
-        foreach (var entry in SmartArtAuthoringPlanner.ColorGallery)
-        {
-            var preset = entry.Preset;
-            r.Register(entry.CommandId,
-                new ActionRibbonCommand(() => ApplySmartArtColorPreset(preset)));
-        }
-        r.Register(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicProcess)));
-        r.Register(SmartArtAuthoringPlanner.AccentProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.AccentProcess)));
-        r.Register(SmartArtAuthoringPlanner.AscendingProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.AscendingProcess)));
-        r.Register(SmartArtAuthoringPlanner.DescendingProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.DescendingProcess)));
-        r.Register(SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicTimeline)));
-        r.Register(SmartArtAuthoringPlanner.CircleAccentTimelineLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.CircleAccentTimeline)));
-        r.Register(SmartArtAuthoringPlanner.PhasedProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PhasedProcess)));
-        r.Register(SmartArtAuthoringPlanner.StepDownProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.StepDownProcess)));
-        r.Register(SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ContinuousBlockProcess)));
-        r.Register(SmartArtAuthoringPlanner.SegmentedProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.SegmentedProcess)));
-        r.Register(SmartArtAuthoringPlanner.ChevronProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ChevronProcess)));
-        r.Register(SmartArtAuthoringPlanner.BasicChevronProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicChevronProcess)));
-        r.Register(SmartArtAuthoringPlanner.ClosedChevronProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ClosedChevronProcess)));
-        r.Register(SmartArtAuthoringPlanner.BendingProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BendingProcess)));
-        r.Register(SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.AlternatingProcess)));
-        r.Register(SmartArtAuthoringPlanner.ArrowRibbonLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ArrowRibbon)));
-        r.Register(SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.CircleProcess)));
-        r.Register(SmartArtAuthoringPlanner.CircleArrowProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.CircleArrowProcess)));
-        r.Register(SmartArtAuthoringPlanner.IncreasingCircleProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.IncreasingCircleProcess)));
-        r.Register(SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.FunnelProcess)));
-        r.Register(SmartArtAuthoringPlanner.VerticalProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalProcess)));
-        r.Register(SmartArtAuthoringPlanner.VerticalBoxListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBoxList)));
-        r.Register(SmartArtAuthoringPlanner.VerticalBlockListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBlockList)));
-        r.Register(SmartArtAuthoringPlanner.VerticalChevronListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalChevronList)));
-        r.Register(SmartArtAuthoringPlanner.VerticalArrowListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalArrowList)));
-        r.Register(SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBulletList)));
-        r.Register(SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.HorizontalBulletList)));
-        r.Register(SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.HorizontalBlockList)));
-        r.Register(SmartArtAuthoringPlanner.TrapezoidListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TrapezoidList)));
-        r.Register(SmartArtAuthoringPlanner.GroupedListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.GroupedList)));
-        r.Register(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicCycle)));
-        r.Register(SmartArtAuthoringPlanner.MultidirectionalCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.MultidirectionalCycle)));
-        r.Register(SmartArtAuthoringPlanner.Cycle2LayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.Cycle2)));
-        r.Register(SmartArtAuthoringPlanner.ContinuousCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ContinuousCycle)));
-        r.Register(SmartArtAuthoringPlanner.GearCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.GearCycle)));
-        r.Register(SmartArtAuthoringPlanner.TextCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TextCycle)));
-        r.Register(SmartArtAuthoringPlanner.BlockCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BlockCycle)));
-        r.Register(SmartArtAuthoringPlanner.NonDirectionalCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.NonDirectionalCycle)));
-        r.Register(SmartArtAuthoringPlanner.BasicBlockListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicBlockList)));
-        r.Register(SmartArtAuthoringPlanner.BasicListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicList)));
-        r.Register(SmartArtAuthoringPlanner.List2LayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.List2)));
-        r.Register(SmartArtAuthoringPlanner.StackedListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.StackedList)));
-        r.Register(SmartArtAuthoringPlanner.DescendingBlockListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.DescendingBlockList)));
-        r.Register(SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicPyramid)));
-        r.Register(SmartArtAuthoringPlanner.PyramidListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PyramidList)));
-        r.Register(SmartArtAuthoringPlanner.InvertedPyramidLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.InvertedPyramid)));
-        r.Register(SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.RadialCycle)));
-        r.Register(SmartArtAuthoringPlanner.BasicRadialLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicRadial)));
-        r.Register(SmartArtAuthoringPlanner.RadialClusterLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.RadialCluster)));
-        r.Register(SmartArtAuthoringPlanner.RadialListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.RadialList)));
-        r.Register(SmartArtAuthoringPlanner.BasicMatrixLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicMatrix)));
-        r.Register(SmartArtAuthoringPlanner.TitledMatrixLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TitledMatrix)));
-        r.Register(SmartArtAuthoringPlanner.GridMatrixLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.GridMatrix)));
-        r.Register(SmartArtAuthoringPlanner.BasicRelationshipLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicRelationship)));
-        r.Register(SmartArtAuthoringPlanner.OpposingIdeasLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.OpposingIdeas)));
-        r.Register(SmartArtAuthoringPlanner.ConvergingRadialLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ConvergingRadial)));
-        r.Register(SmartArtAuthoringPlanner.DivergingRadialLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.DivergingRadial)));
-        r.Register(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicVenn)));
-        r.Register(SmartArtAuthoringPlanner.RadialVennLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.RadialVenn)));
-        r.Register(SmartArtAuthoringPlanner.TargetListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TargetList)));
-        r.Register(SmartArtAuthoringPlanner.StackedVennLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.StackedVenn)));
-        r.Register(SmartArtAuthoringPlanner.InterlockingRingsLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.InterlockingRings)));
-        r.Register(SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicHierarchy)));
-        r.Register(SmartArtAuthoringPlanner.Hierarchy3LayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.Hierarchy3)));
-        r.Register(SmartArtAuthoringPlanner.HorizontalHierarchyLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.HorizontalHierarchy)));
-        r.Register(SmartArtAuthoringPlanner.OrgChartLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.OrgChart)));
-        r.Register(SmartArtAuthoringPlanner.NameAndTitleOrgChartLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.NameAndTitleOrgChart)));
-        r.Register(SmartArtAuthoringPlanner.PictureCaptionListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureCaptionList)));
-        r.Register(SmartArtAuthoringPlanner.PictureAccentListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureAccentList)));
-        r.Register(SmartArtAuthoringPlanner.PictureStackLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureStack)));
-        r.Register(SmartArtAuthoringPlanner.PictureLineupLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureLineup)));
-        r.Register(SmartArtAuthoringPlanner.PictureStripsLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureStrips)));
-        r.Register(SmartArtAuthoringPlanner.ContinuousPictureListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ContinuousPictureList)));
-        r.Register(SmartArtAuthoringPlanner.PictureGridLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureGrid)));
-        r.Register(SmartArtAuthoringPlanner.PictureAccentProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureAccentProcess)));
-        r.Register(SmartArtAuthoringPlanner.LabeledHierarchyLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.LabeledHierarchy)));
-        r.Register(SmartArtAuthoringPlanner.TableHierarchyLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TableHierarchy)));
-        r.Register(SmartArtAuthoringPlanner.SimpleQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Simple)));
-        r.Register(SmartArtAuthoringPlanner.ModerateQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Moderate)));
-        r.Register(SmartArtAuthoringPlanner.IntenseQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Intense)));
-        r.Register(SmartArtAuthoringPlanner.SubtleQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Subtle)));
-        r.Register(SmartArtAuthoringPlanner.SoftEdgeQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.SoftEdge)));
-        r.Register(SmartArtAuthoringPlanner.InsertQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Insert)));
-        r.Register(SmartArtAuthoringPlanner.CartoonQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Cartoon)));
-        r.Register(SmartArtAuthoringPlanner.PowderQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Powder)));
-        r.Register(SmartArtAuthoringPlanner.PolishedQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Polished)));
-        r.Register(SmartArtAuthoringPlanner.BrickSceneQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.BrickScene)));
-        r.Register(SmartArtAuthoringPlanner.FlatSceneQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.FlatScene)));
-        r.Register(SmartArtAuthoringPlanner.MetallicSceneQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.MetallicScene)));
-        r.Register(SmartArtAuthoringPlanner.SunsetSceneQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.SunsetScene)));
-        r.Register(SmartArtAuthoringPlanner.BirdsEyeSceneQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.BirdsEyeScene)));
-        r.Register(SmartArtAuthoringPlanner.ConvertToShapesCommandId,
-            new ActionRibbonCommand(ConvertSelectedSmartArtToShapes));
-        r.Register(
-            SmartArtEditingPlanner.OpenTextPaneCommandId,
-            new ActionRibbonCommand(() => ShowSmartArtTextPane()));
-
-        // Undo / Redo
-        r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));
-        r.Register("freep.redo", new ActionRibbonCommand(() => Editor.Redo()));
-        r.Register("freep.find", new ActionRibbonCommand(OpenFindDialog));
-        r.Register("freep.replace", new ActionRibbonCommand(OpenFindReplaceDialog));
-        RegisterReviewWorkflowCommands(r);
-        RegisterViewShowCommands(r);
-        RegisterViewZoomCommands(r);
-
-        foreach (var plan in PresentationTransitionCommandPlanner.BuiltInPlans)
-        {
-            r.Register(
-                plan.CommandId,
-                plan.Intent == PresentationTransitionCommandIntentKind.ToggleAdvanceOnClick
-                    ? new TransitionAdvanceOnClickToggleCommand(Editor, plan)
-                    : new ContextRibbonCommand(ctx =>
-                        PresentationTransitionCommandPlanner.TryApply(
-                            Editor,
-                            plan,
-                            ctx.SelectedValue,
-                            () => _ = PickTransitionSoundAsync())));
-        }
-
-        foreach (var plan in PresentationDesignCommandPlanner.BuiltInPlans)
-        {
-            r.Register(plan.CommandId, new ActionRibbonCommand(() =>
-                PresentationDesignCommandPlanner.TryApply(Editor, plan, OnDesignHostRequest)));
-        }
-
-        foreach (var plan in PresentationAnimationCommandPlanner.BuiltInPlans)
-        {
-            r.Register(
-                plan.CommandId,
-                plan.Intent == PresentationAnimationCommandIntentKind.TogglePane
-                    ? new AnimationPaneToggleCommand(
-                        Editor,
-                        plan,
-                        () => IsAnimationPaneVisible,
-                        OnAnimationPaneRequested)
-                    : new ContextRibbonCommand(ctx =>
-                        PresentationAnimationCommandPlanner.TryApply(
-                            Editor,
-                            plan,
-                            ctx.SelectedValue,
-                            OnAnimationPaneRequested)));
-        }
-
-        // Slide show
-        r.Register("freep.slideshow.from-beginning",
-            new ActionRibbonCommand(() => StartSlideShow(fromStart: true)));
-        r.Register("freep.slideshow.from-current-slide",
-            new ActionRibbonCommand(() => StartSlideShow(fromStart: false)));
-        r.Register("freep.slideshow.rehearse-timings",
-            new ActionRibbonCommand(() => StartSlideShowWithTiming(
-                FreeP.App.Compositor.SlideShowTimingIntent.RehearseTimings)));
-        r.Register("freep.slideshow.record-timings",
-            new ActionRibbonCommand(() => StartSlideShowWithTiming(
-                FreeP.App.Compositor.SlideShowTimingIntent.RecordTimings)));
-        r.Register("freep.slideshow.custom-shows",
-            new ActionRibbonCommand(OpenCustomShowDialog));
-        r.Register(SlideShowSettingsPlanner.CommandId,
-            new ActionRibbonCommand(OpenSlideShowSettingsDialog));
-
-        return r;
+        return registry;
     }
 
-    private void RegisterListGalleryPresetCommands(RibbonCommandRegistry registry)
+    private FreePRibbonCommandHostAdapter CreateRibbonCommandHostAdapter() => new()
     {
-        foreach (var item in PresentationListGalleryPlanner.BuildPlans().SelectMany(plan => plan.Items))
+        ExecuteAction = ExecuteRibbonHostAction,
+        QueryState = QueryRibbonHostState,
+        TryHandleTextAction = TryHandleRibbonTextAction,
+    };
+
+    private void ExecuteRibbonHostAction(FreePRibbonHostAction action)
+    {
+        switch (action.Kind)
         {
-            if (!item.IsEnabled || item.ListPreset is null)
-                continue;
-
-            registry.Register(item.CommandId, new ActionRibbonCommand(() =>
-            {
-                if (_textEditor?.TryApplyActiveShapeParagraphListPreset(item.ListPreset) == true) return;
-                if (_textEditor?.TryApplyActiveTableCellParagraphListPreset(item.ListPreset) == true) return;
-                Editor.TryApplyActiveTableCellParagraphListPreset(item.ListPreset);
-            }));
+            case FreePRibbonHostActionKind.Copy: QueueClipboardCopy(); break;
+            case FreePRibbonHostActionKind.Cut: QueueClipboardCut(); break;
+            case FreePRibbonHostActionKind.Paste: QueueClipboardPaste(); break;
+            case FreePRibbonHostActionKind.InsertPicture: _ = InsertPictureFromFileAsync(); break;
+            case FreePRibbonHostActionKind.InsertVideo: _ = InsertMediaFromFileAsync(isVideo: true); break;
+            case FreePRibbonHostActionKind.InsertAudio: _ = InsertMediaFromFileAsync(isVideo: false); break;
+            case FreePRibbonHostActionKind.OpenTablePicker: OpenTablePicker(); break;
+            case FreePRibbonHostActionKind.MergeTableCells:
+                _domainContextMenuSession.ExecuteCurrentTableAction(
+                    PresentationDomainContextActionKind.MergeTableCell,
+                    TryExecuteInlineTableAction);
+                break;
+            case FreePRibbonHostActionKind.SplitTableCell:
+                _domainContextMenuSession.ExecuteCurrentTableAction(
+                    PresentationDomainContextActionKind.SplitTableCell,
+                    TryExecuteInlineTableAction);
+                break;
+            case FreePRibbonHostActionKind.PickPictureBullet: _ = ApplyPictureBulletFromFileAsync(); break;
+            case FreePRibbonHostActionKind.InsertSlideZoom: _ = OpenSlideZoomDialogAsync(); break;
+            case FreePRibbonHostActionKind.InsertSectionZoom: _ = OpenSectionZoomDialogAsync(); break;
+            case FreePRibbonHostActionKind.InsertSummaryZoom: _ = OpenSummaryZoomDialogAsync(); break;
+            case FreePRibbonHostActionKind.EditZoomTarget: _ = OpenZoomTargetDialogAsync(); break;
+            case FreePRibbonHostActionKind.EditSummaryZoomTargets: _ = OpenSummaryZoomTargetsDialogAsync(); break;
+            case FreePRibbonHostActionKind.FormatZoom: _ = OpenZoomObjectPropertiesDialogAsync(); break;
+            case FreePRibbonHostActionKind.SetZoomCoverImage: _ = OpenZoomCoverImagePickerAsync(); break;
+            case FreePRibbonHostActionKind.ResetZoomCoverImage: _ = RestoreZoomPreviewAsync(); break;
+            case FreePRibbonHostActionKind.OpenHeaderFooter:
+                OpenHeaderFooterDialog((HeaderFooterCommandFocus)action.Argument!);
+                break;
+            case FreePRibbonHostActionKind.DesignRequest:
+                OnDesignHostRequest((PresentationDesignCommandPlan)action.Argument!);
+                break;
+            case FreePRibbonHostActionKind.ApplySmartArtColor:
+                ApplySmartArtColorPreset((SmartArtColorPreset)action.Argument!);
+                break;
+            case FreePRibbonHostActionKind.ApplySmartArtLayout:
+                ApplySmartArtLayoutPreset((SmartArtLayoutPreset)action.Argument!);
+                break;
+            case FreePRibbonHostActionKind.ApplySmartArtQuickStyle:
+                ApplySmartArtQuickStylePreset((SmartArtQuickStylePreset)action.Argument!);
+                break;
+            case FreePRibbonHostActionKind.ConvertSmartArtToShapes: ConvertSelectedSmartArtToShapes(); break;
+            case FreePRibbonHostActionKind.OpenSmartArtTextPane: ShowSmartArtTextPane(); break;
+            case FreePRibbonHostActionKind.OpenChartData: OpenChartDataDialog(); break;
+            case FreePRibbonHostActionKind.OpenChartDisplayOptions: OpenChartDisplayOptionsDialog(); break;
+            case FreePRibbonHostActionKind.OpenChartAxisOptions: OpenChartAxisOptionsDialog(); break;
+            case FreePRibbonHostActionKind.OpenChartSeriesOptions: OpenChartSeriesOptionsDialog(); break;
+            case FreePRibbonHostActionKind.OpenChartPointOptions: OpenChartPointOptionsDialog(); break;
+            case FreePRibbonHostActionKind.OpenChartLayoutOptions: OpenChartLayoutOptionsDialog(); break;
+            case FreePRibbonHostActionKind.OpenChartExSeriesLayout: OpenChartExSeriesLayoutDialog(); break;
+            case FreePRibbonHostActionKind.OpenChartDataTableOptions: OpenChartDataTableOptionsDialog(); break;
+            case FreePRibbonHostActionKind.OpenChartBubbleOptions: OpenChartBubbleOptionsDialog(); break;
+            case FreePRibbonHostActionKind.OpenChartPieOptions: OpenChartPieOptionsDialog(); break;
+            case FreePRibbonHostActionKind.OpenChartPlotStyleOptions: OpenChartPlotStyleOptionsDialog(); break;
+            case FreePRibbonHostActionKind.OpenChart3DViewOptions: OpenChart3DViewOptionsDialog(); break;
+            case FreePRibbonHostActionKind.OpenChartTextOptions: OpenChartTextOptionsDialog(); break;
+            case FreePRibbonHostActionKind.OpenChartAreaOptions: OpenChartAreaOptionsDialog(); break;
+            case FreePRibbonHostActionKind.OpenChartProtectionOptions: OpenChartProtectionOptionsDialog(); break;
+            case FreePRibbonHostActionKind.OpenHyperlink: OpenHyperlinkDialog(); break;
+            case FreePRibbonHostActionKind.OpenRotationOptions: OpenRotationOptionsDialog(); break;
+            case FreePRibbonHostActionKind.SetEditPointsEnabled:
+                _slideCanvas.SetEditPointsMode((bool)action.Argument!);
+                break;
+            case FreePRibbonHostActionKind.OpenFind: OpenFindDialog(); break;
+            case FreePRibbonHostActionKind.OpenReplace: OpenFindReplaceDialog(); break;
+            case FreePRibbonHostActionKind.ShowCommentsPane: ShowReviewCommentsPane(); break;
+            case FreePRibbonHostActionKind.ShowAccessibilityPane: ShowAccessibilityCheckerPane(); break;
+            case FreePRibbonHostActionKind.ShowAltTextPane: ShowAltTextPane(); break;
+            case FreePRibbonHostActionKind.ShowReadingOrderPane: ShowReadingOrderPane(); break;
+            case FreePRibbonHostActionKind.ShowSelectionPane: ShowSelectionPane(); break;
+            case FreePRibbonHostActionKind.ShowProofingPane: ShowProofingPane(); break;
+            case FreePRibbonHostActionKind.AddComment: AddComment("New comment"); break;
+            case FreePRibbonHostActionKind.EditComment: EditSelectedComment(GetSelectedCommentText()); break;
+            case FreePRibbonHostActionKind.ReplyComment: ReplyToSelectedComment("New reply"); break;
+            case FreePRibbonHostActionKind.DeleteComment: DeleteSelectedComment(); break;
+            case FreePRibbonHostActionKind.PreviousComment:
+                NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment);
+                break;
+            case FreePRibbonHostActionKind.NextComment:
+                NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment);
+                break;
+            case FreePRibbonHostActionKind.ResolveComment: ResolveSelectedComment(); break;
+            case FreePRibbonHostActionKind.ReopenComment: ReopenSelectedComment(); break;
+            case FreePRibbonHostActionKind.ApplyViewShowState:
+                ApplyPresentationViewShowState((PresentationViewShowState)action.Argument!);
+                break;
+            case FreePRibbonHostActionKind.ApplyViewZoomState:
+                ApplyPresentationViewZoomState((PresentationViewZoomState)action.Argument!);
+                break;
+            case FreePRibbonHostActionKind.PickTransitionSound: _ = PickTransitionSoundAsync(); break;
+            case FreePRibbonHostActionKind.ToggleAnimationPane:
+                OnAnimationPaneRequested((PresentationAnimationCommandPlan)action.Argument!);
+                break;
+            case FreePRibbonHostActionKind.StartSlideShowFromBeginning: StartSlideShow(fromStart: true); break;
+            case FreePRibbonHostActionKind.StartSlideShowFromCurrent: StartSlideShow(fromStart: false); break;
+            case FreePRibbonHostActionKind.RehearseTimings:
+                StartSlideShowWithTiming(FreeP.App.Compositor.SlideShowTimingIntent.RehearseTimings);
+                break;
+            case FreePRibbonHostActionKind.RecordTimings:
+                StartSlideShowWithTiming(FreeP.App.Compositor.SlideShowTimingIntent.RecordTimings);
+                break;
+            case FreePRibbonHostActionKind.OpenCustomShows: OpenCustomShowDialog(); break;
+            case FreePRibbonHostActionKind.OpenSlideShowSettings: OpenSlideShowSettingsDialog(); break;
         }
-
-        registry.Register(
-            PresentationListGalleryPlanner.ImageBulletCommandId,
-            new ActionRibbonCommand(() => _ = ApplyPictureBulletFromFileAsync()));
     }
 
-    private static bool TryGetRibbonFontSize(RibbonCommandContext ctx, out double sizePt)
+    private object? QueryRibbonHostState(FreePRibbonHostQuery query) => query.Kind switch
     {
-        sizePt = 0;
-        if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value))
-            return false;
+        FreePRibbonHostQueryKind.BeginFormatPainter => _gestureHandler?.BeginFormatPainter() == true,
+        FreePRibbonHostQueryKind.CanMergeTableCells =>
+            _domainContextMenuSession.CanExecuteCurrentTableAction(
+                PresentationDomainContextActionKind.MergeTableCell),
+        FreePRibbonHostQueryKind.CanSplitTableCell =>
+            _domainContextMenuSession.CanExecuteCurrentTableAction(
+                PresentationDomainContextActionKind.SplitTableCell),
+        FreePRibbonHostQueryKind.EditPointsEnabled => _slideCanvas.EditPointsEnabled,
+        FreePRibbonHostQueryKind.AnimationPaneVisible => IsAnimationPaneVisible,
+        FreePRibbonHostQueryKind.ViewShowState => _viewShowState,
+        FreePRibbonHostQueryKind.ViewZoomState => _viewZoomState,
+        _ => null,
+    };
 
-        switch (value)
-        {
-            case double d:
-                sizePt = d;
-                break;
-            case float f:
-                sizePt = f;
-                break;
-            case int i:
-                sizePt = i;
-                break;
-            case decimal m:
-                sizePt = (double)m;
-                break;
-            case string s:
-                var text = s.Trim();
-                if (text.EndsWith("pt", StringComparison.OrdinalIgnoreCase))
-                    text = text[..^2].Trim();
-                if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out sizePt))
-                    return false;
-                break;
-            default:
-                return false;
-        }
-
-        return sizePt > 0 && !double.IsNaN(sizePt) && !double.IsInfinity(sizePt);
-    }
-
-    private static bool TryGetRibbonFontColor(RibbonCommandContext ctx, out ThemeAwareColor? color)
+    private bool TryHandleRibbonTextAction(FreePRibbonTextAction action)
     {
-        color = null;
-        if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value))
-            return false;
-
-        switch (value)
+        switch (action.Kind)
         {
-            case ThemeAwareColor themeColor:
-                color = themeColor;
-                return true;
-            case SrgbColor srgb:
-                color = new ThemeAwareColor(srgb);
-                return true;
-            case string s:
-                return TryParseRibbonFontColor(s, out color);
+            case FreePRibbonTextActionKind.ToggleFormat:
+                var format = (TableCellTextFormatKind)action.Argument!;
+                return _textEditor?.TryApplyActiveShapeTextFormat(format) == true ||
+                       _textEditor?.TryApplyActiveTableCellTextFormat(format) == true;
+            case FreePRibbonTextActionKind.SetParagraphAlignment:
+                var alignment = (TextAlign)action.Argument!;
+                return _textEditor?.TryApplyActiveShapeParagraphAlignment(alignment) == true ||
+                       _textEditor?.TryApplyActiveTableCellParagraphAlignment(alignment) == true;
+            case FreePRibbonTextActionKind.ApplyListPreset:
+                var preset = (TableCellListPresetDescriptor)action.Argument!;
+                return _textEditor?.TryApplyActiveShapeParagraphListPreset(preset) == true ||
+                       _textEditor?.TryApplyActiveTableCellParagraphListPreset(preset) == true;
+            case FreePRibbonTextActionKind.ToggleBullets:
+                return _textEditor?.TryApplyActiveShapeParagraphBulletToggle() == true ||
+                       _textEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true;
+            case FreePRibbonTextActionKind.ToggleNumbering:
+                return _textEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true ||
+                       _textEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true;
+            case FreePRibbonTextActionKind.Indent:
+                return _textEditor?.TryApplyActiveShapeParagraphIndent() == true ||
+                       _textEditor?.TryApplyActiveTableCellParagraphIndent() == true;
+            case FreePRibbonTextActionKind.Outdent:
+                return _textEditor?.TryApplyActiveShapeParagraphOutdent() == true ||
+                       _textEditor?.TryApplyActiveTableCellParagraphOutdent() == true;
+            case FreePRibbonTextActionKind.SetFontFamily:
+                var family = (string)action.Argument!;
+                return _textEditor?.TryApplyActiveShapeFontFamily(family) == true ||
+                       _textEditor?.TryApplyActiveTableCellFontFamily(family) == true;
+            case FreePRibbonTextActionKind.SetFontSize:
+                var sizePt = (double)action.Argument!;
+                return _textEditor?.TryApplyActiveShapeFontSize(sizePt) == true ||
+                       _textEditor?.TryApplyActiveTableCellFontSize(sizePt) == true;
+            case FreePRibbonTextActionKind.SetColor:
+                var color = (ThemeAwareColor?)action.Argument;
+                return _textEditor?.TryApplyActiveShapeColor(color) == true ||
+                       _textEditor?.TryApplyActiveTableCellColor(color) == true;
+            case FreePRibbonTextActionKind.SetTextVerticalType:
+                return _textEditor?.TryApplyActiveTableCellTextVerticalType((TextVerticalType)action.Argument!) == true;
+            case FreePRibbonTextActionKind.SetTableCellFill:
+                return _textEditor?.TryApplyActiveTableCellFill((ThemeAwareColor?)action.Argument) == true;
+            case FreePRibbonTextActionKind.SetTableCellAnchor:
+                return _textEditor?.TryApplyActiveTableCellAnchor((TableCellAnchor?)action.Argument) == true;
+            case FreePRibbonTextActionKind.SetTableCellBorder:
+                return _textEditor?.TryApplyActiveTableCellBorder(
+                    (TableCellBorderSide)action.Argument!,
+                    (ShapeOutline?)action.SecondaryArgument) == true;
+            case FreePRibbonTextActionKind.SetTableCellInset:
+                return _textEditor?.TryApplyActiveTableCellInset(
+                    (TableCellInsetSide)action.Argument!,
+                    (double?)action.SecondaryArgument) == true;
+            case FreePRibbonTextActionKind.SetTableRowHeight:
+                return _textEditor?.TryApplyActiveTableRowHeight((long)action.Argument!) == true;
+            case FreePRibbonTextActionKind.RemoveHyperlink:
+                return _textEditor?.TryApplySelectedShapeRunHyperlink(null) == true;
             default:
                 return false;
         }
     }
 
-    private static bool TryGetRibbonTableCellAnchor(RibbonCommandContext ctx, out TableCellAnchor? anchor)
-    {
-        anchor = null;
-        if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value))
-            return false;
-
-        switch (value)
-        {
-            case TableCellAnchor cellAnchor:
-                anchor = cellAnchor;
-                return true;
-            case string s:
-                return TryParseRibbonTableCellAnchor(s, out anchor);
-            default:
-                return false;
-        }
-    }
-
-    private static bool TryParseRibbonTableCellAnchor(string? value, out TableCellAnchor? anchor)
-    {
-        anchor = null;
-        if (string.IsNullOrWhiteSpace(value))
-            return false;
-
-        switch (value.Trim().ToLowerInvariant())
-        {
-            case "automatic":
-            case "auto":
-            case "default":
-                return true;
-            case "top":
-                anchor = TableCellAnchor.Top;
-                return true;
-            case "middle":
-            case "center":
-            case "centre":
-                anchor = TableCellAnchor.Middle;
-                return true;
-            case "bottom":
-                anchor = TableCellAnchor.Bottom;
-                return true;
-            default:
-                return false;
-        }
-    }
-
-    private static bool TryParseRibbonFontColor(string? value, out ThemeAwareColor? color)
-    {
-        color = null;
-        if (string.IsNullOrWhiteSpace(value))
-            return false;
-
-        var text = value.Trim();
-        if (text.Equals("automatic", StringComparison.OrdinalIgnoreCase) ||
-            text.Equals("auto", StringComparison.OrdinalIgnoreCase) ||
-            text.Equals("default", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        var hex = text.StartsWith("#", StringComparison.Ordinal) ? text[1..] : text;
-        if (hex.Length == 6 &&
-            int.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int rgb))
-        {
-            color = new ThemeAwareColor(SrgbColor.FromRgb(rgb));
-            return true;
-        }
-
-        color = text.ToLowerInvariant() switch
-        {
-            "black" => ThemeAwareColor.Black,
-            "white" => ThemeAwareColor.White,
-            "red" => new ThemeAwareColor(SrgbColor.FromRgb(0xC00000)),
-            "green" => new ThemeAwareColor(SrgbColor.FromRgb(0x008000)),
-            "blue" => new ThemeAwareColor(SrgbColor.FromRgb(0x0000FF)),
-            "yellow" => new ThemeAwareColor(SrgbColor.FromRgb(0xFFFF00)),
-            "orange" => new ThemeAwareColor(SrgbColor.FromRgb(0xF4B183)),
-            "purple" => new ThemeAwareColor(SrgbColor.FromRgb(0x7030A0)),
-            "dark-red" or "dark red" => new ThemeAwareColor(SrgbColor.FromRgb(0x800000)),
-            "dark-blue" or "dark blue" => new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79)),
-            _ => null,
-        };
-
-        return color is not null;
-    }
 
     private void OnDesignHostRequest(PresentationDesignCommandPlan plan)
     {
@@ -5824,81 +5081,6 @@ public sealed partial class MainWindow : Window
                 : capability.Reason);
     }
 
-    private void RegisterReviewWorkflowCommands(RibbonCommandRegistry registry)
-    {
-        registry.Register(
-            PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
-            new ActionRibbonCommand(() => ShowReviewCommentsPane()));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.AccessibilityCommandId,
-            new ActionRibbonCommand(() => ShowAccessibilityCheckerPane()));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.AltTextCommandId,
-            new ActionRibbonCommand(ShowAltTextPane));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId,
-            new ActionRibbonCommand(() => ShowReadingOrderPane()));
-        registry.Register(
-            PresentationSelectionPanePlanner.SelectionPaneCommandId,
-            new ActionRibbonCommand(() => ShowSelectionPane()));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.ProofingCommandId,
-            new ActionRibbonCommand(() => ShowProofingPane()));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.AddCommentCommandId,
-            new ActionRibbonCommand(() => AddComment("New comment")));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.EditCommentCommandId,
-            new ActionRibbonCommand(() => EditSelectedComment(GetSelectedCommentText())));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.ReplyCommentCommandId,
-            new ActionRibbonCommand(() => ReplyToSelectedComment("New reply")));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
-            new ActionRibbonCommand(() => DeleteSelectedComment()));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.PreviousCommentCommandId,
-            new ActionRibbonCommand(() => NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment)));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.NextCommentCommandId,
-            new ActionRibbonCommand(() => NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment)));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.ResolveCommentCommandId,
-            new ActionRibbonCommand(() => ResolveSelectedComment()));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.ReopenCommentCommandId,
-            new ActionRibbonCommand(() => ReopenSelectedComment()));
-    }
-
-    private void RegisterViewShowCommands(RibbonCommandRegistry registry)
-    {
-        foreach (var plan in PresentationViewShowPlanner.BuildPlans(_viewShowState))
-        {
-            registry.Register(
-                plan.CommandId,
-                new ViewShowToggleCommand(
-                    plan,
-                    () => _viewShowState,
-                    ApplyPresentationViewShowState));
-        }
-    }
-
-    private void RegisterViewZoomCommands(RibbonCommandRegistry registry)
-    {
-        foreach (var plan in PresentationViewZoomPlanner.BuiltInPlans)
-        {
-            registry.Register(
-                plan.CommandId,
-                new ContextRibbonCommand(ctx =>
-                {
-                    var result = PresentationViewZoomPlanner.Execute(
-                        _viewZoomState,
-                        plan,
-                        ctx.SelectedValue);
-                    ApplyPresentationViewZoomState(result.State);
-                }));
-        }
-    }
 
     internal void RefreshReviewWorkflowPlans()
     {
@@ -10264,101 +9446,4 @@ public sealed partial class MainWindow : Window
         await dialog.ShowDialog(this);
     }
 
-    private sealed class TableCellRouteRibbonCommand(
-        Func<bool> execute,
-        Func<bool> canExecute) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (canExecute())
-                execute();
-        }
-
-        public RibbonCommandState GetState() => new(IsEnabled: canExecute());
-    }
-
-    private sealed class EditPointsToggleCommand(SlideCanvas canvas) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            canvas.SetEditPointsMode(
-                PresentationEditPointsModePlanner.BuildTogglePlan(canvas.EditPointsEnabled).NextIsEnabled);
-
-        public RibbonCommandState GetState() => new(
-            IsEnabled: true,
-            IsChecked: canvas.EditPointsEnabled);
-    }
-
-    private sealed class TransitionAdvanceOnClickToggleCommand(
-        EditingSession editor,
-        PresentationTransitionCommandPlan plan) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            PresentationTransitionCommandPlanner.TryApply(
-                editor,
-                plan,
-                context.SelectedValue);
-
-        public RibbonCommandState GetState() => new(
-            IsEnabled: true,
-            IsChecked: PresentationTransitionCommandPlanner.IsAdvanceOnClickChecked(
-                editor.CurrentSlideTransition));
-    }
-
-    private sealed class AnimationPaneToggleCommand : IRibbonStatefulCommand
-    {
-        private readonly EditingSession _editor;
-        private readonly PresentationAnimationCommandPlan _plan;
-        private readonly Func<bool> _isPaneVisible;
-        private readonly Action<PresentationAnimationCommandPlan> _togglePane;
-
-        public AnimationPaneToggleCommand(
-            EditingSession editor,
-            PresentationAnimationCommandPlan plan,
-            Func<bool> isPaneVisible,
-            Action<PresentationAnimationCommandPlan> togglePane)
-        {
-            _editor = editor;
-            _plan = plan;
-            _isPaneVisible = isPaneVisible;
-            _togglePane = togglePane;
-        }
-
-        public void Execute(RibbonCommandContext context) =>
-            PresentationAnimationCommandPlanner.TryApply(
-                _editor,
-                _plan,
-                context.SelectedValue,
-                _togglePane);
-
-        public RibbonCommandState GetState() => new(
-            IsEnabled: true,
-            IsChecked: _isPaneVisible());
-    }
-
-    private sealed class ViewShowToggleCommand : IRibbonStatefulCommand
-    {
-        private readonly PresentationViewShowCommandPlan _plan;
-        private readonly Func<PresentationViewShowState> _getState;
-        private readonly Action<PresentationViewShowState> _applyState;
-
-        public ViewShowToggleCommand(
-            PresentationViewShowCommandPlan plan,
-            Func<PresentationViewShowState> getState,
-            Action<PresentationViewShowState> applyState)
-        {
-            _plan = plan;
-            _getState = getState;
-            _applyState = applyState;
-        }
-
-        public void Execute(RibbonCommandContext context)
-        {
-            var result = PresentationViewShowPlanner.Toggle(_getState(), _plan);
-            _applyState(result.State);
-        }
-
-        public RibbonCommandState GetState() => new(
-            IsEnabled: true,
-            IsChecked: PresentationViewShowPlanner.IsChecked(_getState(), _plan.Kind));
-    }
 }

@@ -7,25 +7,32 @@ public sealed class SlideObjectInsertionRoutingSourceTests
     [Fact]
     public void MainWindow_RoutesObjectInsertionThroughPlanner()
     {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            root,
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
+        var workflow = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "Ribbon",
+            "FreePRibbonCommandWorkflow.cs"));
 
-        source.Should().Contain("foreach (var plan in SlideObjectInsertionPlanner.BuiltInPlans)");
-        source.Should().Contain("if (plan.RequiresPicturePayload)");
+        workflow.Should().Contain("foreach (var plan in SlideObjectInsertionPlanner.BuiltInPlans)");
+        workflow.Should().Contain("FreePRibbonHostActionKind.InsertPicture");
         source.Should().Contain("InsertPictureFromFileAsync");
-        source.Should().Contain("SlideObjectInsertionPlanner.Apply(Editor, plan)");
+        workflow.Should().Contain("SlideObjectInsertionPlanner.Apply(editor, plan)");
         source.Should().Contain("SlideObjectInsertionPlanner.CreatePicturePayload");
         source.Should().Contain("SlideObjectInsertionPlanner.ApplyCommand(");
         source.Should().Contain("SlideObjectInsertionPlanner.PictureCommandId");
-        source.Should().NotContain("Editor.InsertDefaultTextBox(");
-        source.Should().NotContain("Editor.InsertDefaultRectangle(");
-        source.Should().NotContain("Editor.InsertDefaultEllipse(");
-        source.Should().NotContain("Editor.InsertPicture(");
-        source.Should().NotContain("Editor.InsertTable(");
-        source.Should().NotContain("Editor.InsertChart(");
+        workflow.Should().NotContain("editor.InsertDefaultTextBox(");
+        workflow.Should().NotContain("editor.InsertDefaultRectangle(");
+        workflow.Should().NotContain("editor.InsertDefaultEllipse(");
+        workflow.Should().NotContain("editor.InsertPicture(");
+        workflow.Should().NotContain("editor.InsertTable(");
+        workflow.Should().NotContain("editor.InsertChart(");
     }
 
 }

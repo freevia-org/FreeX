@@ -730,10 +730,10 @@ public sealed class MainWindowHeadlessTests
     public void MainWindow_sources_route_design_commands_through_shared_planner()
     {
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var workflow = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs"));
 
-        source.Should().Contain("PresentationDesignCommandPlanner.BuiltInPlans");
-        source.Should().Contain("PresentationDesignCommandPlanner.TryApply(Editor, plan, OnDesignHostRequest)");
-        source.Should().Contain("PresentationDesignCommandPlanner.LayoutPlan");
+        workflow.Should().Contain("PresentationDesignCommandPlanner.BuiltInPlans.Prepend(PresentationDesignCommandPlanner.LayoutPlan)");
+        workflow.Should().Contain("PresentationDesignCommandPlanner.TryApply(");
         source.Should().Contain("OnLayoutPickerRequested");
         source.Should().Contain("PresentationDesignCommandPlanner.BuildLayoutPickerPlan(");
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
@@ -793,9 +793,10 @@ public sealed class MainWindowHeadlessTests
     public void MainWindow_sources_route_animation_commands_through_shared_planner()
     {
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var workflow = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs"));
 
-        source.Should().Contain("PresentationAnimationCommandPlanner.BuiltInPlans");
-        source.Should().Contain("PresentationAnimationCommandPlanner.TryApply(");
+        workflow.Should().Contain("PresentationAnimationCommandPlanner.BuiltInPlans");
+        workflow.Should().Contain("PresentationAnimationCommandPlanner.TryApply(");
         source.Should().Contain("OnAnimationPaneRequested");
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
         source.Should().Contain("AnimationPanePlanner.BuildWorkflowEvidencePlan(");

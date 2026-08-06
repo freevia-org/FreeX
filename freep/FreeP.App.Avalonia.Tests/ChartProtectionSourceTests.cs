@@ -15,8 +15,10 @@ public sealed class ChartProtectionSourceTests
     public void Avalonia_ChartProtectionDialogIsRegistered()
     {
         var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var workflow = File.ReadAllText(RepoFile(
+            "freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs"));
 
-        source.Should().Contain("ChartProtectionOptionsPlanner.CommandId");
+        workflow.Should().Contain("ChartProtectionOptionsPlanner.CommandId");
         source.Should().Contain("OpenChartProtectionOptionsDialog");
     }
 
