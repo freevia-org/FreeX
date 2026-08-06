@@ -359,12 +359,9 @@ public static partial class PrintRenderer
 
         var sparklineValues = FreeX.App.Presentation.Sparklines.SparklineSeriesReader.BuildValues(workbook, sheet);
 
-        GridView.BuildSparklineGroupScalingBounds(
+        var axisScalePlan = FreeX.App.Presentation.Sparklines.SparklineAxisScalePlanner.Build(
             sheet.Sparklines,
-            sparklineValues,
-            out var groupMinValues,
-            out var groupMaxValues,
-            out var groupMaxAbsValues);
+            sparklineValues);
 
         foreach (var sparkline in sheet.Sparklines)
         {
@@ -387,7 +384,7 @@ public static partial class PrintRenderer
                 Math.Max(1, colWidth - 6),
                 Math.Max(1, rowHeight - 6));
 
-            GridView.DrawSparklineIntoCell(dc, sparkline, values, rect, groupMinValues, groupMaxValues, groupMaxAbsValues);
+            GridView.DrawSparklineIntoCell(dc, sparkline, values, rect, axisScalePlan);
         }
     }
 

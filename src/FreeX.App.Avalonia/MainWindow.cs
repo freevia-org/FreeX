@@ -40,6 +40,7 @@ using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Presentation.SparklineUI;
+using FreeX.App.Presentation.Sparklines;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
@@ -9137,33 +9138,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // ── Pre-compute group scaling bounds ──────────────────────────────────
         // When MinAxisType or MaxAxisType == Group, find the shared min/max across all
         // sparklines that share the same GroupId, mirroring the WPF RenderSparklines logic.
-        var groupMin    = new Dictionary<int, double>(); // groupId → shared min
-        var groupMax    = new Dictionary<int, double>(); // groupId → shared max
-        var groupMaxAbs = new Dictionary<int, double>(); // groupId → shared maxAbs (column)
-
-        foreach (var sp in sheet.Sparklines)
-        {
-            if ((sp.MinAxisType == SparklineAxisScaling.Group ||
-                 sp.MaxAxisType == SparklineAxisScaling.Group) &&
-                values.TryGetValue(sp.Id, out var groupVals) && groupVals.Count > 0)
-            {
-                if (!groupMin.ContainsKey(sp.GroupId))
-                {
-                    groupMin[sp.GroupId]    = double.MaxValue;
-                    groupMax[sp.GroupId]    = double.MinValue;
-                    groupMaxAbs[sp.GroupId] = 0;
-                }
-
-                foreach (var v in groupVals)
-                {
-                    if (!double.IsFinite(v)) continue;
-                    if (v < groupMin[sp.GroupId])    groupMin[sp.GroupId]    = v;
-                    if (v > groupMax[sp.GroupId])    groupMax[sp.GroupId]    = v;
-                    var abs = Math.Abs(v);
-                    if (abs > groupMaxAbs[sp.GroupId]) groupMaxAbs[sp.GroupId] = abs;
-                }
-            }
-        }
+        var axisScalePlan = SparklineAxisScalePlanner.Build(sheet.Sparklines, values);
 
         // ── Build per-cell entries with resolved axis overrides ───────────────
         foreach (var sparkline in sheet.Sparklines)
@@ -9171,56 +9146,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (!values.TryGetValue(sparkline.Id, out var series) || series.Count == 0)
                 continue;
 
-            var overrideMin    = ResolveSparklineGroupMin(sparkline, groupMin);
-            var overrideMax    = ResolveSparklineGroupMax(sparkline, groupMax);
-            var overrideMaxAbs = ResolveSparklineGroupMaxAbs(sparkline, groupMax, groupMaxAbs);
+            var axisScale = axisScalePlan.Resolve(sparkline);
 
             lookup[(sparkline.Location.Row, sparkline.Location.Col)] =
-                new SparklineCellEntry(series, sparkline, overrideMin, overrideMax, overrideMaxAbs);
+                new SparklineCellEntry(
+                    series,
+                    sparkline,
+                    axisScale.Minimum,
+                    axisScale.Maximum,
+                    axisScale.MaximumAbsolute);
         }
 
         return lookup;
-    }
-
-    private static double? ResolveSparklineGroupMin(SparklineModel sp, Dictionary<int, double> groupMin) =>
-        sp.MinAxisType switch
-        {
-            SparklineAxisScaling.Custom => sp.ManualMin,
-            SparklineAxisScaling.Group  =>
-                groupMin.TryGetValue(sp.GroupId, out var v) && v != double.MaxValue ? v : null,
-            _ => null,
-        };
-
-    private static double? ResolveSparklineGroupMax(SparklineModel sp, Dictionary<int, double> groupMax) =>
-        sp.MaxAxisType switch
-        {
-            SparklineAxisScaling.Custom => sp.ManualMax,
-            SparklineAxisScaling.Group  =>
-                groupMax.TryGetValue(sp.GroupId, out var v) && v != double.MinValue ? v : null,
-            _ => null,
-        };
-
-    private static double? ResolveSparklineGroupMaxAbs(
-        SparklineModel sp,
-        Dictionary<int, double> groupMax,
-        Dictionary<int, double> groupMaxAbs)
-    {
-        // Custom axis wins for its side; take the larger abs when both apply.
-        double? customAbs = null;
-        if (sp.MaxAxisType == SparklineAxisScaling.Custom && sp.ManualMax.HasValue)
-            customAbs = Math.Abs(sp.ManualMax.Value);
-        if (sp.MinAxisType == SparklineAxisScaling.Custom && sp.ManualMin.HasValue)
-        {
-            var absMin = Math.Abs(sp.ManualMin.Value);
-            customAbs = customAbs.HasValue ? Math.Max(customAbs.Value, absMin) : absMin;
-        }
-
-        double? groupAbs = null;
-        if (sp.MaxAxisType == SparklineAxisScaling.Group || sp.MinAxisType == SparklineAxisScaling.Group)
-            groupAbs = groupMaxAbs.TryGetValue(sp.GroupId, out var v) ? v : null;
-
-        if (customAbs.HasValue && groupAbs.HasValue) return Math.Max(customAbs.Value, groupAbs.Value);
-        return customAbs ?? groupAbs;
     }
 
     private Border CreateCell(DisplayCell cell, uint row, uint col, double zoomFactor, double cellWidth, double cellHeight, GridRange? mergeRegion = null)

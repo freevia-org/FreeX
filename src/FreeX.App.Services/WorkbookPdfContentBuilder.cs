@@ -205,8 +205,7 @@ public static class WorkbookPdfContentBuilder
         var sparklineValues = sparklinesByCell.Count > 0
             ? SparklineSeriesReader.BuildValues(workbook, sheet)
             : EmptySparklineValues;
-        BuildSparklineGroupScalingBounds(
-            sheet.Sparklines, sparklineValues, out var groupMinValues, out var groupMaxValues, out var groupMaxAbsValues);
+        var axisScalePlan = SparklineAxisScalePlanner.Build(sheet.Sparklines, sparklineValues);
 
         // ── Draw cell fills and text ───────────────────────────────────────────
         foreach (var cell in contentPlan.Cells)
@@ -261,7 +260,7 @@ public static class WorkbookPdfContentBuilder
                 sparklineSeries.Count > 0)
             {
                 DrawSparklineIntoCell(
-                    ops, sparkline, sparklineSeries, x, y, w, h, groupMinValues, groupMaxValues, groupMaxAbsValues);
+                    ops, sparkline, sparklineSeries, x, y, w, h, axisScalePlan);
             }
 
             if (!string.IsNullOrEmpty(cell.DisplayText))
@@ -1796,13 +1795,9 @@ public static class WorkbookPdfContentBuilder
     //
     // Reuses the portable FreeX.App.Presentation.Sparklines.SparklineLayoutEngine/SparklineSeriesReader
     // (the same framework-free math the Avalonia grid's SparklineCellPanel.cs draws with) so this path
-    // never re-derives axis/scaling math independently. Group axis-scaling bounds are recomputed here
-    // with the identical algorithm GridView.Overlays.Sparklines.cs's BuildSparklineGroupScalingBounds
-    // uses for the WPF print/PDF path -- that method itself is pure Dictionary&lt;int,double&gt; math with
-    // no WPF types, but it lives in a WPF-only assembly (FreeX.App.UI) this portable exporter cannot
-    // reference, so the same algorithm is duplicated here rather than shared. Markers, axis lines, and
-    // date-axis spacing are not drawn -- the line/column/win-loss body is the primary visual signal a
-    // user needs to see a sparkline at all in the exported PDF instead of nothing.
+    // never re-derives axis/scaling math independently. SparklineAxisScalePlanner supplies the same
+    // group/custom bounds to WPF, Avalonia, and this portable PDF adapter. Markers, axis lines, and
+    // date-axis spacing are not drawn -- the line/column/win-loss body is the primary visual signal.
 
     private static readonly IReadOnlyDictionary<Guid, IReadOnlyList<double>> EmptySparklineValues =
         new Dictionary<Guid, IReadOnlyList<double>>();
@@ -1813,80 +1808,6 @@ public static class WorkbookPdfContentBuilder
         foreach (var sparkline in sheet.Sparklines)
             lookup[(sparkline.Location.Row, sparkline.Location.Col)] = sparkline;
         return lookup;
-    }
-
-    private static void BuildSparklineGroupScalingBounds(
-        IEnumerable<SparklineModel> sparklines,
-        IReadOnlyDictionary<Guid, IReadOnlyList<double>> sparklineValues,
-        out Dictionary<int, double> groupMinValues,
-        out Dictionary<int, double> groupMaxValues,
-        out Dictionary<int, double> groupMaxAbsValues)
-    {
-        groupMinValues = new Dictionary<int, double>();
-        groupMaxValues = new Dictionary<int, double>();
-        groupMaxAbsValues = new Dictionary<int, double>();
-
-        foreach (var sp in sparklines)
-        {
-            if ((sp.MinAxisType != SparklineAxisScaling.Group && sp.MaxAxisType != SparklineAxisScaling.Group) ||
-                !sparklineValues.TryGetValue(sp.Id, out var vals) || vals.Count == 0)
-            {
-                continue;
-            }
-
-            if (!groupMinValues.ContainsKey(sp.GroupId))
-            {
-                groupMinValues[sp.GroupId] = double.MaxValue;
-                groupMaxValues[sp.GroupId] = double.MinValue;
-                groupMaxAbsValues[sp.GroupId] = 0;
-            }
-
-            foreach (var v in vals)
-            {
-                if (!double.IsFinite(v))
-                    continue;
-                if (v < groupMinValues[sp.GroupId]) groupMinValues[sp.GroupId] = v;
-                if (v > groupMaxValues[sp.GroupId]) groupMaxValues[sp.GroupId] = v;
-                var abs = Math.Abs(v);
-                if (abs > groupMaxAbsValues[sp.GroupId]) groupMaxAbsValues[sp.GroupId] = abs;
-            }
-        }
-    }
-
-    private static double? ResolveSparklineAxisMin(SparklineModel sp, Dictionary<int, double> groupMin) =>
-        sp.MinAxisType switch
-        {
-            SparklineAxisScaling.Custom => sp.ManualMin,
-            SparklineAxisScaling.Group => groupMin.TryGetValue(sp.GroupId, out var v) && v != double.MaxValue ? v : null,
-            _ => null,
-        };
-
-    private static double? ResolveSparklineAxisMax(SparklineModel sp, Dictionary<int, double> groupMax) =>
-        sp.MaxAxisType switch
-        {
-            SparklineAxisScaling.Custom => sp.ManualMax,
-            SparklineAxisScaling.Group => groupMax.TryGetValue(sp.GroupId, out var v) && v != double.MinValue ? v : null,
-            _ => null,
-        };
-
-    private static double? ResolveSparklineAxisMaxAbs(SparklineModel sp, Dictionary<int, double> groupMaxAbs)
-    {
-        double? customAbs = null;
-        if (sp.MaxAxisType == SparklineAxisScaling.Custom && sp.ManualMax.HasValue)
-            customAbs = Math.Abs(sp.ManualMax.Value);
-        if (sp.MinAxisType == SparklineAxisScaling.Custom && sp.ManualMin.HasValue)
-        {
-            var absMin = Math.Abs(sp.ManualMin.Value);
-            customAbs = customAbs.HasValue ? Math.Max(customAbs.Value, absMin) : absMin;
-        }
-
-        double? groupAbs = null;
-        if (sp.MaxAxisType == SparklineAxisScaling.Group || sp.MinAxisType == SparklineAxisScaling.Group)
-            groupAbs = groupMaxAbs.TryGetValue(sp.GroupId, out var v) ? v : null;
-
-        if (customAbs.HasValue && groupAbs.HasValue)
-            return Math.Max(customAbs.Value, groupAbs.Value);
-        return customAbs ?? groupAbs;
     }
 
     /// <summary>
@@ -1901,9 +1822,7 @@ public static class WorkbookPdfContentBuilder
         double y,
         double w,
         double h,
-        Dictionary<int, double> groupMinValues,
-        Dictionary<int, double> groupMaxValues,
-        Dictionary<int, double> groupMaxAbsValues)
+        SparklineAxisScalePlan axisScalePlan)
     {
         var insetPt = 3.0 * PixelToPointRatio;
         var innerWidth = Math.Max(1.0, w - (2 * insetPt));
@@ -1912,6 +1831,7 @@ public static class WorkbookPdfContentBuilder
         var originTopPt = y + h - insetPt;
 
         var rect = new LayoutRect(0, 0, innerWidth, innerHeight);
+        var axisScale = axisScalePlan.Resolve(sparkline);
         var seriesColor = sparkline.SeriesColor is { } sc ? ToPdfColor(sc) : SparklineDefaultPositiveColor;
         var negativeColor = sparkline.ShowNegativePoints
             ? (sparkline.NegativeColor is { } nc ? ToPdfColor(nc) : SparklineDefaultNegativeColor)
@@ -1919,9 +1839,12 @@ public static class WorkbookPdfContentBuilder
 
         if (sparkline.Kind == SparklineKind.Line)
         {
-            var overrideMin = ResolveSparklineAxisMin(sparkline, groupMinValues);
-            var overrideMax = ResolveSparklineAxisMax(sparkline, groupMaxValues);
-            var layout = SparklineLayoutEngine.CalculateLineLayout(sparkline, values, rect, overrideMin, overrideMax);
+            var layout = SparklineLayoutEngine.CalculateLineLayout(
+                sparkline,
+                values,
+                rect,
+                axisScale.Minimum,
+                axisScale.Maximum);
 
             foreach (var segment in layout.Segments)
             {
@@ -1941,8 +1864,11 @@ public static class WorkbookPdfContentBuilder
         }
         else
         {
-            var overrideMaxAbs = ResolveSparklineAxisMaxAbs(sparkline, groupMaxAbsValues);
-            var layout = SparklineLayoutEngine.CalculateColumnLayout(sparkline, values, rect, overrideMaxAbs);
+            var layout = SparklineLayoutEngine.CalculateColumnLayout(
+                sparkline,
+                values,
+                rect,
+                axisScale.MaximumAbsolute);
 
             foreach (var bar in layout.Bars)
             {

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 using FluentAssertions;
+using FreeX.App.Presentation.Sparklines;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI.Tests;
@@ -26,6 +27,9 @@ public sealed class R90_SparklineRightToLeftRenderTests
         };
         var values = new List<double> { 2, -4 };
         var rect = new Rect(0, 0, 100, 40);
+        var axisScalePlan = SparklineAxisScalePlanner.Build(
+            [sparkline],
+            new Dictionary<Guid, IReadOnlyList<double>> { [sparkline.Id] = values });
 
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
@@ -35,9 +39,7 @@ public sealed class R90_SparklineRightToLeftRenderTests
                 sparkline,
                 values,
                 rect,
-                groupMinValues: new Dictionary<int, double>(),
-                groupMaxValues: new Dictionary<int, double>(),
-                groupMaxAbsValues: new Dictionary<int, double>());
+                axisScalePlan);
         }
 
         return CollectRects(visual.Drawing);

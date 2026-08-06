@@ -11,7 +11,7 @@ namespace FreeX.App.Host.Tests;
 /// (GridView.Overlays.Sparklines.cs RenderSparklines) above the interactive grid, never referenced
 /// by PrintRenderer.GridCells.cs -- Print, Print Preview, PDF, and XPS output silently omitted every
 /// sparkline while still printing the cell's plain value/fill/borders/gridlines. Fixed by drawing
-/// them in the print path via the new GridView.DrawSparklineIntoCell/BuildSparklineGroupScalingBounds
+/// them in the print path via GridView.DrawSparklineIntoCell/SparklineAxisScalePlanner
 /// helpers (public for exactly this cross-assembly reuse, mirroring how
 /// DrawConditionalDataBar/DrawConditionalIcon were already made public for the R79 fix --
 /// see R79_PrintRendererConditionalDataBarIconTests).
