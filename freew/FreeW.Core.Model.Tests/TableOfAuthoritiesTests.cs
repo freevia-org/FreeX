@@ -342,19 +342,23 @@ public class TableOfAuthoritiesTests
     }
 
     [Fact]
-    public void Build_CategoryFilter_WhenFilteredCategoryHasNoCitations_YieldsOnlyHeading()
+    public void Build_CategoryFilter_WhenFilteredCategoryHasNoCitations_AuthorsNativeEmptyResult()
     {
         var citations = new[] { new Citation("Brown v. Board", CitationCategory.Cases) };
 
         var opts = new ToaOptions { CategoryFilter = CitationCategory.Statutes };
-        var table = TableOfAuthorities.Build(citations, opts).Select(p => p.PlainText).ToList();
+        var table = TableOfAuthorities.Build(citations, opts);
 
-        // No Statutes citations exist → only the heading paragraph.
-        table.Should().ContainSingle().Which.Should().Be(TableOfAuthorities.HeadingText);
+        table.Select(paragraph => paragraph.PlainText).Should().Equal(
+            TableOfAuthorities.HeadingText,
+            TableOfAuthorities.EmptyResultText);
+        table[1].Runs.Should().ContainSingle();
+        table[1].Runs[0].ComplexField!.Instruction.Should().Be(" TOA \\h \\c \"2\" \\f ");
+        TableOfAuthorities.IsTableOfAuthoritiesParagraph(table[1]).Should().BeTrue();
     }
 
     [Fact]
-    public void Build_UsePassim_AppendsSuffixWhenFiveOrMoreOccurrences()
+    public void Build_UsePassim_WithoutPageEvidenceKeepsLegacyOccurrenceFallback()
     {
         // A citation that appears 5 times must get " passim" appended.
         var citation = new Citation("Brown v. Board", CitationCategory.Cases);
@@ -594,9 +598,11 @@ public class TableOfAuthoritiesTests
         doc.Blocks.Add(CitationMarkParagraph(
             "National Federation of Independent Business v. Sebelius, 567 U.S. 519 (2012)",
             shortCitation: "NFIB"));
-        doc.Blocks.Add(DocumentOps.CreatePageBreak());
         for (var i = 0; i < 4; i++)
+        {
+            doc.Blocks.Add(DocumentOps.CreatePageBreak());
             doc.Blocks.Add(CitationMarkParagraph("NFIB"));
+        }
 
         var entry = TableOfAuthorities.Build(doc, new ToaOptions { UsePassim = true })
             .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
@@ -662,20 +668,40 @@ public class TableOfAuthoritiesTests
     }
 
     [Fact]
-    public void Build_FromDocument_UsePassimWithPageReferencesUsesPageReferenceSegment()
+    public void Build_FromDocument_UsePassimRequiresFiveDistinctPageReferences()
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
         doc.Blocks.Add(CitationMarkParagraph("Case A"));
-        doc.Blocks.Add(DocumentOps.CreatePageBreak());
         for (var i = 0; i < 4; i++)
+        {
+            doc.Blocks.Add(DocumentOps.CreatePageBreak());
             doc.Blocks.Add(CitationMarkParagraph("Case A"));
+        }
 
         var entry = TableOfAuthorities.Build(doc, new ToaOptions { UsePassim = true })
             .Single(p => p.StyleId == TableOfAuthorities.EntryStyleId);
 
         entry.PlainText.Should().Be("Case A\tpassim");
         entry.Runs.Select(run => run.Text).Should().Equal("Case A", "\t", "passim");
+    }
+
+    [Fact]
+    public void Build_FromDocument_UsePassimDoesNotCountFiveMarksOnOnePageAsPassim()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        for (var i = 0; i < 5; i++)
+            doc.Blocks.Add(CitationMarkParagraph("Case A"));
+
+        var entry = TableOfAuthorities.Build(
+                doc,
+                new ToaOptions { UsePassim = true },
+                (_, _, _, _) => TableOfAuthorities.CreatePageReference(1))
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+
+        entry.PlainText.Should().Be("Case A\t1");
+        entry.Runs.Select(run => run.Text).Should().Equal("Case A", "\t", "1");
     }
 
     [Fact]
