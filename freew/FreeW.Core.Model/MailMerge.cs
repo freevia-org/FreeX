@@ -162,7 +162,11 @@ public static class MailMergeInteractivePromptPlanner
 
     private static IEnumerable<string> EnumerateParagraphStoryTexts(Paragraph paragraph)
     {
-        yield return string.Concat(paragraph.Runs.Select(run => run.Text));
+        yield return string.Concat(paragraph.Runs.Select(run =>
+            run.ComplexField is { Keyword: "FILLIN" or "ASK" } field
+            && ComplexFieldEngine.HasSwitch(field.Instruction, 'o')
+                ? $"{MailMerge.FieldOpen}{field.Instruction}{MailMerge.FieldClose}"
+                : run.Text));
         foreach (var run in paragraph.Runs)
         {
             if (run.Shape is { } shape)
@@ -254,6 +258,19 @@ public static class MergeRuleEvaluator
                 fillInPrompt,
                 fillInPrompt);
             return true;
+        }
+
+        if (TryParsePrefix(span, "FILLIN ", out var afterNativeFillIn))
+        {
+            var tokens = Tokenize(afterNativeFillIn.ToString());
+            if (tokens.Count >= 1)
+            {
+                prompt = new MailMergeInteractivePrompt(
+                    MailMergeInteractivePromptKind.FillIn,
+                    tokens[0],
+                    tokens[0]);
+                return true;
+            }
         }
 
         if (TryParsePrefix(span, "Ask ", out var afterAsk))
@@ -2177,6 +2194,20 @@ public static class MailMerge
                     return true;
                 case MergeSequenceNumberInstruction:
                     run.Text = state.SequenceNumber.ToString(CultureInfo.InvariantCulture);
+                    return true;
+                case "FILLIN" when ComplexFieldEngine.HasSwitch(run.ComplexField.Instruction, 'o'):
+                case "ASK" when ComplexFieldEngine.HasSwitch(run.ComplexField.Instruction, 'o'):
+                    if (MergeRuleEvaluator.TryParseInteractivePrompt(
+                            run.ComplexField.Instruction,
+                            out var prompt))
+                    {
+                        run.Text = prompt.Kind == MailMergeInteractivePromptKind.FillIn
+                            ? state.FillInAnswers.GetValueOrDefault(prompt.Key, string.Empty)
+                            : state.AskAnswers.GetValueOrDefault(prompt.Key, string.Empty);
+                        if (prompt.Kind == MailMergeInteractivePromptKind.Ask)
+                            state.Bookmarks[prompt.Key] = run.Text;
+                        run.ComplexField = null;
+                    }
                     return true;
                 default:
                     return false;

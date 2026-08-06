@@ -1816,6 +1816,30 @@ public class MailMergeTests
     }
 
     [Fact]
+    public void InteractivePromptPlanner_DiscoversNativeFillInAndAskComplexFields()
+    {
+        var document = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            " FILLIN \"Office location?\" \\d \"Kyiv\" \\o ",
+            "cached office"));
+        paragraph.Runs.Add(new Run(" / "));
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            " ASK Approver \"Who approves?\" \\d \"Ada\" \\o ",
+            "cached approver"));
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            " FILLIN \"Per-record prompt\" ",
+            "cached per-record value"));
+        document.Blocks.Add(paragraph);
+
+        var prompts = MailMergeInteractivePromptPlanner.Plan(document);
+
+        prompts.Should().Equal(
+            new MailMergeInteractivePrompt(MailMergeInteractivePromptKind.FillIn, "Office location?", "Office location?"),
+            new MailMergeInteractivePrompt(MailMergeInteractivePromptKind.Ask, "Approver", "Who approves?"));
+    }
+
+    [Fact]
     public void MergeRuleEvaluator_UnrecognisedInstruction_ReturnsNull()
     {
         var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Name"] = "Ada" };
@@ -1978,6 +2002,53 @@ public class MailMergeTests
         merged.Should().HaveCount(2);
         merged[0].PlainText.Should().Be("Hello Ada, Engineering");
         merged[1].PlainText.Should().Be("Hello Grace, Engineering");
+    }
+
+    [Fact]
+    public void MergeAllWithRules_NativeFillInAndAsk_UseAnswersAndMaterializeResults()
+    {
+        var template = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.ComplexFieldRun(" FILLIN \"Department\" \\o ", "cached department"));
+        paragraph.Runs.Add(new Run(" | "));
+        paragraph.Runs.Add(Run.ComplexFieldRun(" ASK Manager \"Who is the manager?\" \\o ", "cached manager"));
+        paragraph.Runs.Add(new Run($" | {MailMerge.FieldOpen}Name{MailMerge.FieldClose}"));
+        template.Blocks.Add(paragraph);
+        var data = new MergeData(["Name"], [["Ada"], ["Grace"]]);
+        var state = new MergeState();
+        state.FillInAnswers["Department"] = "Engineering";
+        state.AskAnswers["Manager"] = "Margaret";
+
+        var merged = MailMerge.MergeAllWithRules(template, data, state);
+
+        merged.Select(document => document.PlainText).Should().Equal(
+            "Engineering | Margaret | Ada",
+            "Engineering | Margaret | Grace");
+        merged.SelectMany(document => document.Blocks.OfType<Paragraph>())
+            .SelectMany(resultParagraph => resultParagraph.Runs)
+            .Should().AllSatisfy(run => run.ComplexField.Should().BeNull());
+        state.Bookmarks["Manager"].Should().Be("Margaret");
+    }
+
+    [Fact]
+    public void MergeAllWithRules_NativeInteractiveFieldWithoutOnceSwitch_RemainsAField()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" FILLIN \"Per-record prompt\" ", "cached result") }
+        });
+        var state = new MergeState();
+        state.FillInAnswers["Per-record prompt"] = "one answer";
+
+        var merged = MailMerge.MergeAllWithRules(
+            template,
+            new MergeData(["Name"], [["Ada"]]),
+            state);
+
+        merged.Should().ContainSingle().Which.PlainText.Should().Be("cached result");
+        merged[0].Paragraphs.Single().Runs.Single().ComplexField.Should().NotBeNull();
+        MailMergeInteractivePromptPlanner.Plan(template).Should().BeEmpty();
     }
 
     [Fact]
