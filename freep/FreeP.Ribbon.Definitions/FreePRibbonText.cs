@@ -632,6 +632,7 @@ internal static class FreePRibbonText
     public static RibbonText AnimationEmphasisBlinkCommand { get; } = new("Ribbon_Command_AnimationEmphasisBlink_Label", "Ribbon_Command_AnimationEmphasisBlink_KeyTip");
     public static RibbonText AnimationEmphasisColorPulseCommand { get; } = new("Ribbon_Command_AnimationEmphasisColorPulse_Label", "Ribbon_Command_AnimationEmphasisColorPulse_KeyTip");
     public static RibbonText AnimationEmphasisChangeColorCommand { get; } = new("Ribbon_Command_AnimationEmphasisChangeColor_Label", "Ribbon_Command_AnimationEmphasisChangeColor_KeyTip");
+    public static RibbonText AnimationEmphasisChangeFillColorCommand { get; } = new("Ribbon_Command_AnimationEmphasisChangeFillColor_Label", "Ribbon_Command_AnimationEmphasisChangeFillColor_KeyTip");
     public static RibbonText AnimationEmphasisGrowWithColorCommand { get; } = new("Ribbon_Command_AnimationEmphasisGrowWithColor_Label", "Ribbon_Command_AnimationEmphasisGrowWithColor_KeyTip");
     public static RibbonText AnimationEmphasisWaveCommand { get; } = new("Ribbon_Command_AnimationEmphasisWave_Label", "Ribbon_Command_AnimationEmphasisWave_KeyTip");
     public static RibbonText AnimationEmphasisShimmerCommand { get; } = new("Ribbon_Command_AnimationEmphasisShimmer_Label", "Ribbon_Command_AnimationEmphasisShimmer_KeyTip");

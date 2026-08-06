@@ -517,6 +517,41 @@ public sealed class AnimationPresetRoundTripTests
     }
 
     [Fact]
+    public void AuthoredChangeFillColorWritesNativePowerPointBehavior()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(
+            PresentationAnimationCommandPlanner.BuildAnimation(
+                AnimationKind.Emphasis,
+                AnimationPreset.ChangeFillColor,
+                shapeId: 7));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+
+        var reloaded = PptxPackageReader.Read(new MemoryStream(stream.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+        animation.Preset.Should().Be(AnimationPreset.ChangeFillColor);
+        animation.RawPresetClass.Should().Be("emph");
+        animation.RawPresetId.Should().Be(1);
+        animation.RawPresetSubtype.Should().Be("2");
+        animation.PreservedFillBehaviorXml.Should().Contain("fillcolor");
+        animation.PreservedFillBehaviorXml.Should().Contain("accent2");
+        animation.PreservedFillBehaviorXml.Should().Contain("spid=\"7\"");
+
+        using var archive = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        slideXml.Descendants(p + "animClr")
+            .Single()
+            .Descendants(p + "attrName")
+            .Single()
+            .Value.Should().Be("fillcolor");
+    }
+
+    [Fact]
     public void SpinEffectSubtypeSurvivesReadCloneAndWrite()
     {
         var presentation = Presentation.CreateEmpty();
