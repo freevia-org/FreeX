@@ -1943,7 +1943,7 @@ public static class MailMerge
             if (!TryGetMergeFieldName(run.ComplexField, out var fieldName))
                 return false;
 
-            run.Text = ResolveMergeFieldResult(run.ComplexField!, fieldName, row);
+            run.Text = ResolveMergeFieldResult(run, fieldName, row);
             run.ComplexField = null;
             return true;
         }
@@ -1973,7 +1973,7 @@ public static class MailMerge
             switch (run.ComplexField?.Keyword)
             {
                 case "MERGEFIELD" when TryGetMergeFieldName(run.ComplexField, out var fieldName):
-                    run.Text = ResolveMergeFieldResult(run.ComplexField!, fieldName, row);
+                    run.Text = ResolveMergeFieldResult(run, fieldName, row);
                     run.ComplexField = null;
                     return true;
                 case NextRecordInstruction:
@@ -1993,18 +1993,115 @@ public static class MailMerge
     }
 
     private static string ResolveMergeFieldResult(
-        ComplexField field,
+        Run run,
         string fieldName,
         IReadOnlyDictionary<string, string> row)
     {
+        var field = run.ComplexField!;
         var value = Lookup(row, fieldName);
         if (value.Length == 0)
             return string.Empty;
 
+        value = ApplyMergeFieldDatePicture(value, field.Instruction, MergeFieldCulture(run));
         value = ApplyMergeFieldNumericPicture(value, field.Instruction);
         var before = ComplexFieldEngine.SwitchValue(field.Instruction, 'b') ?? string.Empty;
         var after = ComplexFieldEngine.SwitchValue(field.Instruction, 'f') ?? string.Empty;
         return ApplyMergeFieldGeneralFormats(before + value + after, field.Instruction);
+    }
+
+    private static CultureInfo MergeFieldCulture(Run run)
+    {
+        if (run.Formatting.LanguageTag is { Length: > 0 } tag)
+        {
+            try
+            {
+                return CultureInfo.GetCultureInfo(tag);
+            }
+            catch (CultureNotFoundException)
+            {
+                // Fall through to the process culture for malformed/imported language tags.
+            }
+        }
+        return CultureInfo.CurrentCulture;
+    }
+
+    private static string ApplyMergeFieldDatePicture(
+        string value,
+        string instruction,
+        CultureInfo culture)
+    {
+        var picture = ComplexFieldEngine.SwitchValue(instruction, '@');
+        if (picture is null || !TryConvertWordDatePicture(picture, out var netPicture))
+            return value;
+
+        if (!DateTime.TryParse(value, culture, DateTimeStyles.AllowWhiteSpaces, out var moment)
+            && !DateTime.TryParse(
+                value,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces,
+                out moment))
+        {
+            return value;
+        }
+
+        return moment.ToString(netPicture, culture);
+    }
+
+    private static bool TryConvertWordDatePicture(
+        string picture,
+        out string netPicture)
+    {
+        var builder = new StringBuilder(picture.Length + 4);
+        for (var i = 0; i < picture.Length;)
+        {
+            if (picture.AsSpan(i).StartsWith("AM/PM", StringComparison.Ordinal))
+            {
+                builder.Append("tt");
+                i += 5;
+                continue;
+            }
+            if (picture.AsSpan(i).StartsWith("am/pm", StringComparison.Ordinal))
+            {
+                builder.Append("tt");
+                i += 5;
+                continue;
+            }
+
+            var ch = picture[i];
+            if (!char.IsLetter(ch))
+            {
+                if (ch is '/' or ':')
+                    builder.Append('\\');
+                builder.Append(ch);
+                i++;
+                continue;
+            }
+
+            var end = i + 1;
+            while (end < picture.Length && picture[end] == ch)
+                end++;
+            var length = end - i;
+            var valid = ch switch
+            {
+                'd' or 'M' => length is >= 1 and <= 4,
+                'y' => length is >= 1 and <= 4,
+                'h' or 'H' or 'm' or 's' => length is >= 1 and <= 2,
+                _ => false
+            };
+            if (!valid)
+            {
+                netPicture = string.Empty;
+                return false;
+            }
+
+            builder.Append(ch, length);
+            i = end;
+        }
+
+        netPicture = builder.Length == 1
+            ? "%" + builder.ToString()
+            : builder.ToString();
+        return netPicture.Length > 0;
     }
 
     private static string ApplyMergeFieldNumericPicture(string value, string instruction)
