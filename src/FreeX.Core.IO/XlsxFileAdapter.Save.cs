@@ -38,6 +38,20 @@ public sealed partial class XlsxFileAdapter
         SaveCore(workbook, stream, warnings: null, preserveVbaProject: true);
     }
 
+    // R123-io-xlsm-save-warnings: the warnings-collecting counterpart to
+    // SavePreservingVbaProject, used by XlsmFileAdapter/XltmFileAdapter so a per-item save
+    // failure (a comment, hyperlink, merged region, named range, or data-validation rule that
+    // could not be serialized) on a macro-enabled workbook/template is reported to the user the
+    // same way it already is for a plain .xlsx save via SaveWithWarnings, instead of being
+    // silently swallowed because the only entry point those adapters had access to
+    // (SavePreservingVbaProject) always passed warnings: null.
+    internal XlsxSaveResult SaveWithWarningsPreservingVbaProject(Workbook workbook, Stream stream)
+    {
+        var warnings = new List<string>();
+        SaveCore(workbook, stream, warnings, preserveVbaProject: true);
+        return warnings.Count == 0 ? XlsxSaveResult.Clean : new XlsxSaveResult(warnings.AsReadOnly());
+    }
+
     private void SaveCore(Workbook workbook, Stream stream, List<string>? warnings, bool preserveVbaProject)
     {
         // Serialize with loads/other saves: the full-save path builds a ClosedXML XLWorkbook, which
@@ -143,7 +157,13 @@ public sealed partial class XlsxFileAdapter
             xlSheet.Visibility = sheet.IsVeryHidden
                 ? XLWorksheetVisibility.VeryHidden
                 : sheet.IsHidden ? XLWorksheetVisibility.Hidden : XLWorksheetVisibility.Visible;
-            if (sheet.TabColor is { } tabColor)
+            // Prefer the theme-color reference over the baked RGB when present, mirroring the
+            // font/fill/border save path (see R123-tab-theme-color-1) so a theme-relative tab color
+            // round-trips as <tabColor theme="…" tint="…"/> instead of being downgraded to a literal
+            // <tabColor rgb="…"/> that no longer follows the workbook theme in real Excel.
+            if (sheet.TabThemeColor is { } tabThemeColor)
+                xlSheet.TabColor = XlsxClosedXmlCellMapper.ToXLColor(tabThemeColor);
+            else if (sheet.TabColor is { } tabColor)
                 xlSheet.TabColor = XLColor.FromArgb(tabColor.R, tabColor.G, tabColor.B);
 
             // Cells claimed as non-anchor members of an array-formula range written below (via

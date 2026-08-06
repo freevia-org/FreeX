@@ -660,7 +660,7 @@ internal static class XlsxClosedXmlCellMapper
     // MapColor, so ApplyStyle can re-emit <color theme="…" tint="…"/> instead of a literal rgb on save
     // (see R19-theme-extlst-1: without this a theme-linked cell color loses its theme link on round-trip
     // and never re-colors when the workbook theme changes).
-    private static WorkbookThemeColorReference? MapThemeColorReference(XLColor xlColor) =>
+    internal static WorkbookThemeColorReference? MapThemeColorReference(XLColor xlColor) =>
         xlColor.ColorType == XLColorType.Theme
             ? new WorkbookThemeColorReference(ToWorkbookThemeColorSlot(xlColor.ThemeColor), xlColor.ThemeTint)
             : null;
@@ -668,7 +668,7 @@ internal static class XlsxClosedXmlCellMapper
     // Inverse of ToXLColor: converts a resolved theme-color reference back into a ClosedXML XLColor
     // that serializes as <color theme="…" tint="…"/>, mirroring the tint-omission convention already
     // used by MapRunColorToXLColor (XlsxFileAdapter.Save.cs) for rich-text run colors.
-    private static XLColor ToXLColor(WorkbookThemeColorReference themeColor) =>
+    internal static XLColor ToXLColor(WorkbookThemeColorReference themeColor) =>
         Math.Abs(themeColor.Tint) > 0.000001
             ? XLColor.FromTheme(ToXLThemeColor(themeColor.Slot), themeColor.Tint)
             : XLColor.FromTheme(ToXLThemeColor(themeColor.Slot));

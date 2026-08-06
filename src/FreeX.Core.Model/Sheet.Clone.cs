@@ -97,6 +97,7 @@ public sealed partial class Sheet
             IsVeryHidden                  = IsVeryHidden,
             CodeName                      = CodeName,
             TabColor                      = TabColor,
+            TabThemeColor                 = TabThemeColor,
             OutlineSummaryBelow           = OutlineSummaryBelow,
             OutlineSummaryRight           = OutlineSummaryRight,
             ShowOutlineSymbols            = ShowOutlineSymbols,

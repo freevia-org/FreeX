@@ -94,8 +94,14 @@ internal static class XlsxWorksheetDrawingPartMerger
             // name) fail even though the sheet's own worksheet part -- and thus its drawing -- is
             // completely unaffected. Resolve via XlsxRenamedSourceSheetResolver so a renamed sheet's
             // drawing still gets merged instead of being silently skipped like a deleted sheet's.
-            if (!XlsxRenamedSourceSheetResolver.TryResolveTargetWorksheetPath(
-                    context, sheetName, sourceWorksheetPath, out var targetWorksheetPath))
+            // R123-io-rename-drawing-supersede-gap: use TryResolveCurrentSheet (not the path-only
+            // TryResolveTargetWorksheetPath overload) so we also get the sheet's CURRENT (post-rename)
+            // name back -- needed below to look the Sheet model up in the live Workbook, which only
+            // knows sheets by their current name. Using the stale load-time sheetName there made
+            // workbook?.GetSheet(sheetName) return null after any rename, silently disabling the
+            // tombstone/supersede guard (deleted objects resurrected, edited objects duplicated).
+            if (!XlsxRenamedSourceSheetResolver.TryResolveCurrentSheet(
+                    context, sheetName, sourceWorksheetPath, out var currentSheetName, out var targetWorksheetPath))
             {
                 continue;
             }
@@ -119,7 +125,7 @@ internal static class XlsxWorksheetDrawingPartMerger
             if (string.IsNullOrWhiteSpace(sourceDrawingPath) || string.IsNullOrWhiteSpace(targetDrawingPath))
                 continue;
 
-            var sheet = workbook?.GetSheet(sheetName);
+            var sheet = workbook?.GetSheet(currentSheetName);
             var supersededSourceNames = sheet is not null
                 ? XlsxWorksheetDrawingObjectWriter.GetRewrittenSourceObjectNames(sheet)
                 : null;

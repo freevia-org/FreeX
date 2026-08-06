@@ -113,7 +113,7 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
             }
         }
 
-        if (CommandGuards.RejectIfSplitsArray(sheet, destinationCells) is { } splitsArrayRejection)
+        if (CommandGuards.RejectIfSplitsArray(sheet, destinationCells, allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
         _snapshot = CaptureCellSnapshots(sheet, destinationCells);

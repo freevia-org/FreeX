@@ -61,12 +61,16 @@ internal static class DefinedNamesShellGlue
         }
 
         // Formula/constant-valued names (e.g. "TaxRate" = "=1.05" or "Total" = "=SUM(Sheet1!A:A)") are stored
-        // separately from NamedRanges — they carry no range and no metadata, only raw formula text — but they
-        // are just as real a defined name and must be listed so the user can see/edit/delete them.
+        // separately from NamedRanges — but (R123) can carry the same Comment metadata a plain named range
+        // does, keyed by name in the same NamedRangeMetadataByName dictionary (see
+        // DefineNamedFormulaCommand) — so this must read it the same way the range loop above does, or a
+        // comment entered for a named formula/constant would round-trip to the file correctly but never be
+        // visible again in this Name Manager.
         foreach (var (name, formulaText) in workbook.NamedFormulas)
         {
+            var comment = workbook.TryGetNamedRangeMetadata(name, out var formulaMetadata) ? formulaMetadata.Comment : "";
             var refersTo = "=" + formulaText;
-            rows.Add(DefinedNameListProjector.CreateRow(name, DefinedNameScope.WorkbookLabel, refersTo, refersTo));
+            rows.Add(DefinedNameListProjector.CreateRow(name, DefinedNameScope.WorkbookLabel, refersTo, refersTo, comment));
         }
 
         // Sheet-scoped named ranges (Excel "localSheetId") are stored separately from the workbook-global
@@ -84,11 +88,13 @@ internal static class DefinedNamesShellGlue
         // Sheet-scoped named formulas (Excel "localSheetId") are stored separately from the workbook-global
         // NamedFormulas dictionary and must also be listed, or they're invisible and unreachable through the
         // Name Manager's Edit/Delete actions — the same requirement already applied to scoped named ranges.
+        // Same R123 comment-metadata read as the workbook-global formula loop above.
         foreach (var ((name, sheetId), formulaText) in workbook.ScopedNamedFormulas)
         {
-            var scopeLabel = workbook.GetSheet(sheetId)?.Name ?? DefinedNameScope.WorkbookLabel;
+            workbook.TryGetScopedNamedRangeMetadata(name, sheetId, out var scopedFormulaMetadata);
+            var scopeLabel = workbook.GetSheet(sheetId)?.Name ?? scopedFormulaMetadata.Scope;
             var refersTo = "=" + formulaText;
-            rows.Add(DefinedNameListProjector.CreateRow(name, scopeLabel, refersTo, refersTo));
+            rows.Add(DefinedNameListProjector.CreateRow(name, scopeLabel, refersTo, refersTo, scopedFormulaMetadata.Comment));
         }
 
         return rows;
@@ -144,9 +150,11 @@ internal static class DefinedNamesShellGlue
     /// <c>=SUM(Sheet1!A:A)</c>). The leading '=' is stripped since <see cref="Workbook.NamedFormulas"/> stores
     /// the raw formula text. <see cref="DefinedNameScope.Sheet"/> is passed through as the command's
     /// scope-sheet id so a sheet-scoped choice defines a sheet-scoped named formula rather than a
-    /// workbook-global one, matching <see cref="BuildDefineCommand"/>. Callers try
-    /// <see cref="BuildDefineCommand"/> first and fall back to this only when the refers-to text is not a
-    /// resolvable range.
+    /// workbook-global one, matching <see cref="BuildDefineCommand"/>. The scope label and comment are
+    /// carried into the named-range metadata exactly like <see cref="BuildDefineCommand"/> does (R123:
+    /// the Define Name editor's Comment field works identically for a range-backed or formula/constant-
+    /// backed name, matching Excel's Name Manager). Callers try <see cref="BuildDefineCommand"/> first and
+    /// fall back to this only when the refers-to text is not a resolvable range.
     /// </summary>
     public static DefineNamedFormulaCommand BuildDefineFormulaCommand(DefinedNameDraft draft)
     {
@@ -155,7 +163,8 @@ internal static class DefinedNamesShellGlue
         var text = draft.RefersTo.Trim();
         if (text.StartsWith('='))
             text = text[1..].Trim();
-        return new DefineNamedFormulaCommand(draft.Name, text, draft.Scope.Sheet);
+        var metadata = new NamedRangeMetadata(draft.Scope.Label, draft.Comment ?? "");
+        return new DefineNamedFormulaCommand(draft.Name, text, draft.Scope.Sheet, metadata);
     }
 
     /// <summary>

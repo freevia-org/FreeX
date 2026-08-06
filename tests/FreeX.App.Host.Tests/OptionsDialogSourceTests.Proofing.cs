@@ -38,10 +38,17 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("PopulateProofingCustomDictionaryWords();");
         source.Should().Contain("FreeXOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text)");
         source.Should().Contain("FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords.Append(word))");
-        source.Should().Contain("SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords)");
+        // R123: computed into `editedCustomDictionaryWords` and applied onto the freshly-reloaded
+        // `opts` only when changed from _opts -- see FreeXOptionsDialogMultiWindowSaveTests.
+        source.Should().Contain("editedCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords)");
         source.Should().Contain("OptProofingIgnoreUppercase.IsChecked = _opts.ProofingIgnoreUppercase;");
-        source.Should().Contain("ProofingIgnoreUppercase = _opts.ProofingIgnoreUppercase");
-        source.Should().Contain("ProofingIgnoreNumbers = _opts.ProofingIgnoreNumbers");
+        // R123: this dialog has no control that edits ProofingIgnoreUppercase/ProofingIgnoreNumbers,
+        // so OkBtn_Click intentionally leaves them untouched on `opts` (which was just reloaded from
+        // disk) instead of pinning them to the dialog-open-time `_opts` snapshot -- pinning them would
+        // silently revert a value another MainWindow instance already saved (see
+        // FreeXOptionsDialogMultiWindowSaveTests).
+        source.Should().NotContain("ProofingIgnoreUppercase = _opts.ProofingIgnoreUppercase");
+        source.Should().NotContain("ProofingIgnoreNumbers = _opts.ProofingIgnoreNumbers");
     }
 
     [Fact]

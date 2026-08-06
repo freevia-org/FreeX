@@ -28,7 +28,7 @@ public sealed class WorkbookPasswordProtectedException : Exception
 /// XLSX file adapter using ClosedXML.
 /// Supports standard .xlsx workbook files.
 /// </summary>
-public sealed partial class XlsxFileAdapter : IFileAdapter
+public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFileAdapter
 {
     private const int ClosedXmlStyleOnlyStripCellThreshold = 16_384;
     private static readonly ConditionalWeakTable<Workbook, XlsxSourcePackage> SourcePackages = new();
@@ -354,7 +354,15 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             sheet.IsHidden = xlSheet.Visibility != XLWorksheetVisibility.Visible;
             if (xlSheet.TabColor.HasValue)
             {
+                // Capture both the baked RGB (for renderers that don't yet re-resolve live) and the
+                // theme-color reference (slot+tint), mirroring font/fill/border colors — see
+                // R123-tab-theme-color-1: without the reference, a theme-relative <tabColor theme="…"/>
+                // was permanently baked to RGB at load and silently downgraded to a literal <tabColor
+                // rgb="…"/> on save, losing the theme link. Order matters: assigning TabColor first
+                // clears any stale TabThemeColor (see Sheet.TabColor), so the theme reference must be
+                // set AFTER the baked color here.
                 sheet.TabColor = XlsxClosedXmlCellMapper.MapColor(xlSheet.TabColor, workbook.Theme, indexedColors);
+                sheet.TabThemeColor = XlsxClosedXmlCellMapper.MapThemeColorReference(xlSheet.TabColor);
             }
 
             // Track declared array formula ref ranges (anchor address + bounding box).

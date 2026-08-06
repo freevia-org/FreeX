@@ -8,8 +8,13 @@ namespace FreeX.Integration.Tests;
 /// Regression tests for R25-spill-dynamic-deep-3: selecting ONLY the anchor cell of a live
 /// dynamic-array spill and pressing Delete must clear the formula and the whole spill, matching
 /// Excel and mirroring the analogous R25-spill-dynamic-deep-1 fix already applied to
-/// MoveRangeCommand. RejectIfSplitsArray must still block every other "partial array" shape:
-/// a non-anchor member alone, or the anchor together with only some of the body.
+/// MoveRangeCommand.
+///
+/// R123-dynamic-spill-member-write superseded the two "still blocked" tests this file originally
+/// had for a non-anchor member alone / anchor+partial body: real Excel has NO "you cannot change
+/// part of an array" restriction on a live DYNAMIC array's spill footprint at all (unlike a legacy
+/// CSE array) -- clearing any subset of it, anchor included or not, is a normal allowed edit. Both
+/// tests are renamed "...IsAllowed_R123" below and now assert the allowed outcome.
 /// </summary>
 public class ClearContentsSpillAnchorTests
 {
@@ -47,33 +52,46 @@ public class ClearContentsSpillAnchorTests
     }
 
     [Fact]
-    public void ClearContentsCommand_OnNonAnchorSpillMemberAlone_IsStillBlocked()
+    public void ClearContentsCommand_OnNonAnchorSpillMemberAlone_IsAllowed_R123()
     {
-        // Sibling/opposite case from the finding: only the anchor is special-cased. A single
-        // non-anchor member selected alone must still be rejected, exactly as before the fix.
-        var (_, sheet, _, ctx) = MakeLiveSpillSetup();
+        // R123-dynamic-spill-member-write: a single non-anchor member of a live DYNAMIC array's
+        // spill, selected alone, is no longer rejected -- there is no "whole array must be
+        // selected" restriction for a modern dynamic array at all (unlike a legacy CSE array). A2
+        // has no independent cell content of its own (it exists only as a computed spill overlay
+        // value), so -- matching Excel, where Delete on such a cell is a genuine no-op -- clearing
+        // it leaves its displayed (spilled) value and the rest of the array completely unchanged;
+        // only the earlier hard REJECTION is gone.
+        var (_, sheet, anchor, ctx) = MakeLiveSpillSetup();
         var row2 = new CellAddress(sheet.Id, 2, 1); // A2 - covered, non-anchor
+        var row3 = new CellAddress(sheet.Id, 3, 1); // A3
 
         var outcome = new ClearContentsCommand(sheet.Id, new GridRange(row2, row2)).Apply(ctx);
 
-        outcome.Success.Should().BeFalse();
-        outcome.ErrorMessage.Should().Be(CannotChangePartOfArrayMessage);
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
         sheet.GetValue(row2).Should().Be(new NumberValue(2));
+        // The anchor formula and the untouched sibling member survive -- nothing else changed.
+        sheet.GetCell(anchor)!.FormulaText.Should().Be("SEQUENCE(3,1)");
+        sheet.GetValue(row3).Should().Be(new NumberValue(3));
     }
 
     [Fact]
-    public void ClearContentsCommand_OnAnchorPlusPartialBody_IsStillBlocked()
+    public void ClearContentsCommand_OnAnchorPlusPartialBody_IsAllowed_R123()
     {
-        // Another still-rejected shape: the anchor together with only SOME of the body (missing
-        // A3) must not be treated the same as the anchor-alone allowance.
+        // R123-dynamic-spill-member-write: the anchor together with only SOME of the body (missing
+        // A3) is likewise no longer a special "partial array" shape for a dynamic array -- clearing
+        // the anchor removes the formula and its whole live spill (matching the anchor-alone case
+        // above), so A3 ends up cleared too even though it wasn't in the selected range.
         var (_, sheet, anchor, ctx) = MakeLiveSpillSetup();
         var row2 = new CellAddress(sheet.Id, 2, 1); // A2
+        var row3 = new CellAddress(sheet.Id, 3, 1); // A3
         var partialRange = new GridRange(anchor, row2); // A1:A2, missing A3
 
         var outcome = new ClearContentsCommand(sheet.Id, partialRange).Apply(ctx);
 
-        outcome.Success.Should().BeFalse();
-        outcome.ErrorMessage.Should().Be(CannotChangePartOfArrayMessage);
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+        sheet.GetValue(anchor).Should().Be(BlankValue.Instance);
+        sheet.GetValue(row2).Should().Be(BlankValue.Instance);
+        sheet.GetValue(row3).Should().Be(BlankValue.Instance);
     }
 
     [Fact]

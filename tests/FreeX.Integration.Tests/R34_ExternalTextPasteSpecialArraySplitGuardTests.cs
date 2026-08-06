@@ -14,6 +14,12 @@ namespace FreeX.Integration.Tests;
 /// _spillAnchors/_spillValues bookkeeping -- keyed off the anchor -- was left untouched, desyncing the
 /// cached spill state instead of being rejected with Excel's "You cannot change part of an array."
 /// Fixed by adding the same RejectIfSplitsArray guard used by its siblings.
+///
+/// R123-dynamic-spill-member-write later superseded the non-anchor-member test below (originally
+/// "..._IsBlocked"): real Excel has no "you cannot change part of an array" restriction for a live
+/// DYNAMIC array's spill member at all (legacy CSE arrays are the only ones still fully protected),
+/// so a Paste Special arithmetic Operation over a single dynamic-array spill member is now allowed,
+/// same as EditCellsCommand/ClearContentsCommand.
 /// </summary>
 public sealed class R34_ExternalTextPasteSpecialArraySplitGuardTests
 {
@@ -36,8 +42,11 @@ public sealed class R34_ExternalTextPasteSpecialArraySplitGuardTests
     }
 
     [Fact]
-    public void ExternalTextPasteWithOperation_OnNonAnchorSpillMember_IsBlocked()
+    public void ExternalTextPasteWithOperation_OnNonAnchorSpillMember_IsAllowed_R123()
     {
+        // R123-dynamic-spill-member-write: pasting over a single non-anchor member of a live
+        // DYNAMIC array's spill is a normal, allowed edit in real Excel -- only a legacy CSE array
+        // keeps the whole-range restriction (see ...OnLegacyArrayAnchorAlone_IsStillBlocked below).
         var (_, sheet, _, ctx) = MakeLiveSpillSetup();
         var member = new CellAddress(sheet.Id, 2, 1); // A2 - spill member, not anchor
 
@@ -50,10 +59,10 @@ public sealed class R34_ExternalTextPasteSpecialArraySplitGuardTests
 
         var outcome = command.Apply(ctx);
 
-        outcome.Success.Should().BeFalse();
-        outcome.ErrorMessage.Should().Be(CannotChangePartOfArrayMessage);
-        // The spill member must be left untouched -- no silent overwrite/desync.
-        sheet.GetValue(member).Should().Be(new NumberValue(2));
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+        // Combines against the raw (pre-spill) cell, which -- like every other destination in this
+        // synthetic setup -- starts from Blank/0 (see ...OnEntireSpillRange_IsAllowed's comment).
+        sheet.GetValue(member).Should().Be(new NumberValue(5));
     }
 
     [Fact]

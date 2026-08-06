@@ -387,6 +387,15 @@ public partial class MainWindow
         return true;
     }
 
+    // R123-model-drawing-backspace-1: shared "is a picture/shape/text box/chart genuinely selected"
+    // check, used by TryDeleteSelectedDrawingObject (Delete key) AND the Backspace
+    // (ClearSelectionAndEdit) handler in MainWindow.KeyboardCommands.cs, so both keys agree on when
+    // a drawing object -- not a cell -- owns the current selection. Matches Excel: with an object
+    // selected, Backspace is a total no-op (no delete, no cell clear, no edit-mode entry).
+    private bool HasSelectedDrawingObject() =>
+        ToSelectionPaneObjectKindIncludingChart(SheetGrid.SelectedObjectKind) is not null
+        && SheetGrid.SelectedObjectId != Guid.Empty;
+
     private static SelectionPaneObjectKind? ToSelectionPaneObjectKindIncludingChart(FreeX.App.UI.ObjectKind kind) =>
         kind switch
         {

@@ -435,9 +435,28 @@ public partial class MainWindow
 
     private void DeleteColBtn_Click(object sender, RoutedEventArgs e) => DeleteSelectedColumns();
 
+    /// <summary>
+    /// R123-cellscmds-multiarea-insert-1: mirrors R123-cellscmds-multiarea-delete-1's fix for the
+    /// Insert side. InsertRowBtn_Click, the worksheet right-click "Insert Row Above/Below" items
+    /// (MainWindow.WorksheetContextMenu.cs), and the keyboard Ctrl+Plus path (ExecuteKeyboardInsert)
+    /// all funnel through InsertRows/InsertColumns below, so fixing them here fixes every caller in
+    /// one choke point (no per-call-site duplication to forget). With rows 2 and 5 Ctrl+click
+    /// selected via AddAdditionalRowSelection, SheetGrid.SelectedRanges holds both disjoint whole-row
+    /// areas while beforeRow (derived from the single ACTIVE area) only ever names one of them --
+    /// Insert Row used to silently insert a single blank row at the active area alone, unlike real
+    /// Excel, which inserts one new row at every disjoint area of a multi-area selection.
+    /// </summary>
     private void InsertRows(uint beforeRow)
     {
-        if (!TryExecuteRepeatableGroupedSheetCommand("Insert Row", sheetId => new InsertRowsCommand(sheetId, beforeRow)))
+        var fallbackRange = new GridRange(
+            new CellAddress(_currentSheetId, beforeRow, 1),
+            new CellAddress(_currentSheetId, beforeRow, 1));
+        if (!TryExecuteRepeatableCurrentSelectionAreasInsertCommand(
+                "Insert Row",
+                fallbackRange,
+                orderByRow: true,
+                (sheetId, currentRange) => new InsertRowsCommand(sheetId, currentRange.Start.Row),
+                out _))
             return;
 
         ClearFormulaTraceArrowsAfterStructuralEdit();
@@ -447,9 +466,18 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    /// <summary>Column counterpart of InsertRows above (R123-cellscmds-multiarea-insert-1).</summary>
     private void InsertColumns(uint beforeCol)
     {
-        if (!TryExecuteRepeatableGroupedSheetCommand("Insert Column", sheetId => new InsertColumnsCommand(sheetId, beforeCol)))
+        var fallbackRange = new GridRange(
+            new CellAddress(_currentSheetId, 1, beforeCol),
+            new CellAddress(_currentSheetId, 1, beforeCol));
+        if (!TryExecuteRepeatableCurrentSelectionAreasInsertCommand(
+                "Insert Column",
+                fallbackRange,
+                orderByRow: false,
+                (sheetId, currentRange) => new InsertColumnsCommand(sheetId, currentRange.Start.Col),
+                out _))
             return;
 
         ClearFormulaTraceArrowsAfterStructuralEdit();
@@ -459,19 +487,128 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    /// <summary>
+    /// R123-cellscmds-multiarea-insert-1: resolves the disjoint area(s) an Insert should act on. This
+    /// deliberately does NOT reuse GetCurrentSelectionRanges (used by the Delete side): that helper
+    /// falls back to the single ACTIVE SheetGrid.SelectedRange whenever SheetGrid.SelectedRanges is
+    /// empty, but several Insert callers (the right-click "Insert Row Below"/"Insert Column Right"
+    /// items) intentionally pass a beforeRow/beforeCol that is offset by one from the active range
+    /// (address.Row + 1) -- falling back to the active range instead of the caller's own
+    /// fallbackRange would silently insert one row/column too high for every ordinary (non-multi-area)
+    /// invocation. Only a GENUINE multi-area header selection (SheetGrid.SelectedRanges populated,
+    /// which only ever happens via AddAdditionalRowSelection/AddAdditionalColumnSelection Ctrl+click)
+    /// overrides the caller's single fallbackRange; the common single-selection case is untouched.
+    /// </summary>
+    private IReadOnlyList<GridRange> ResolveInsertAreas(GridRange fallbackRange) =>
+        SheetGrid.SelectedRanges is { Count: > 0 } ranges
+            ? SelectionStyleCommandPlanner.ResolveRanges(SheetGrid.SelectedRange, ranges)
+            : [fallbackRange];
+
+    /// <summary>See ResolveInsertAreas above; Insert-side counterpart of
+    /// TryExecuteRepeatableCurrentSelectionAreasDeleteCommand. Areas are processed in DESCENDING
+    /// row/column order so inserting at one area never renumbers the still-pending index of another
+    /// queued area.</summary>
+    private bool TryExecuteRepeatableCurrentSelectionAreasInsertCommand(
+        string title,
+        GridRange fallbackRange,
+        bool orderByRow,
+        Func<SheetId, GridRange, IWorkbookCommand> createCommand,
+        out CommandOutcome outcome)
+    {
+        IWorkbookCommand CreateRepeatCommand()
+        {
+            var areas = ResolveInsertAreas(fallbackRange);
+            var ordered = orderByRow
+                ? areas.OrderByDescending(r => r.Start.Row).ToList()
+                : areas.OrderByDescending(r => r.Start.Col).ToList();
+            return SelectionStyleCommandPlanner.CreateRangeCommand(
+                CurrentGroupedEditSheetIds(),
+                ordered,
+                createCommand,
+                title);
+        }
+
+        outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateRepeatCommand);
+        if (outcome.Success)
+        {
+            if (outcome.IsNoOp)
+                return true;
+
+            MarkWorkbookDirty();
+            _repeatPostAction = null;
+            InvalidateNavigationCaches();
+            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
+            NotifyOtherWindowsOfWorkbookChange();
+            return true;
+        }
+
+        ShowCommandError(outcome, title);
+        return false;
+    }
+
+    /// <summary>
+    /// R123-cellscmds-multiarea-delete-1: Ctrl+click on row/column headers
+    /// (AddAdditionalRowSelection/AddAdditionalColumnSelection, MainWindow.Selection.cs) is a
+    /// first-class Excel gesture that builds a genuine multi-area selection -- every clicked whole
+    /// row/column lands in SheetGrid.SelectedRanges, while SheetGrid.SelectedRange is only the
+    /// last-clicked (active) area. DeleteSelectedRows/DeleteSelectedColumns and the keyboard
+    /// Ctrl+Minus path used to read ONLY SheetGrid.SelectedRange, so every area but the active one
+    /// was silently dropped from the delete. This routes the delete through the same
+    /// selection-ranges-aware plumbing Clear Contents/style commands already use
+    /// (GetCurrentSelectionRanges/SelectionStyleCommandPlanner), building one Delete*Command per
+    /// disjoint area. Areas are processed in DESCENDING row/column order so deleting one band never
+    /// renumbers the still-pending index of another queued area (deleting row 2 before row 5 would
+    /// otherwise turn "row 5" into the wrong row once row 2's delete shifts everything up).
+    /// </summary>
+    private bool TryExecuteRepeatableCurrentSelectionAreasDeleteCommand(
+        string title,
+        GridRange fallbackRange,
+        bool orderByRow,
+        Func<SheetId, GridRange, IWorkbookCommand> createCommand,
+        out CommandOutcome outcome)
+    {
+        IWorkbookCommand CreateRepeatCommand()
+        {
+            var ranges = GetCurrentSelectionRanges(fallbackRange);
+            var ordered = orderByRow
+                ? ranges.OrderByDescending(r => r.Start.Row).ToList()
+                : ranges.OrderByDescending(r => r.Start.Col).ToList();
+            return SelectionStyleCommandPlanner.CreateRangeCommand(
+                CurrentGroupedEditSheetIds(),
+                ordered,
+                createCommand,
+                title);
+        }
+
+        outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateRepeatCommand);
+        if (outcome.Success)
+        {
+            if (outcome.IsNoOp)
+                return true;
+
+            MarkWorkbookDirty();
+            _repeatPostAction = null;
+            InvalidateNavigationCaches();
+            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
+            NotifyOtherWindowsOfWorkbookChange();
+            return true;
+        }
+
+        ShowCommandError(outcome, title);
+        return false;
+    }
+
     private void DeleteSelectedRows()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var startRow = range.Start.Row;
         var rowCount = range.End.Row - range.Start.Row + 1;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionAreasDeleteCommand(
                 "Delete Row",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    var count = currentRange.End.Row - currentRange.Start.Row + 1;
-                    return new DeleteRowsCommand(sheetId, currentRange.Start.Row, count);
-                }))
+                range,
+                orderByRow: true,
+                (sheetId, currentRange) => new DeleteRowsCommand(sheetId, currentRange.Start.Row, currentRange.RowCount),
+                out _))
             return;
 
         ClearFormulaTraceArrowsAfterStructuralEdit();
@@ -486,14 +623,12 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is not { } range) return;
         var startCol = range.Start.Col;
         var colCount = range.End.Col - range.Start.Col + 1;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionAreasDeleteCommand(
                 "Delete Column",
-                sheetId =>
-                {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    var count = currentRange.End.Col - currentRange.Start.Col + 1;
-                    return new DeleteColumnsCommand(sheetId, currentRange.Start.Col, count);
-                }))
+                range,
+                orderByRow: false,
+                (sheetId, currentRange) => new DeleteColumnsCommand(sheetId, currentRange.Start.Col, currentRange.ColCount),
+                out _))
             return;
 
         ClearFormulaTraceArrowsAfterStructuralEdit();
@@ -568,26 +703,28 @@ public partial class MainWindow
         var plan = KeyboardInsertDeletePlanner.PlanInsert(range);
         if (plan == KeyboardInsertDeletePlan.Rows)
         {
-            if (!TryExecuteRepeatableGroupedSheetCommand(
+            // R123-cellscmds-multiarea-insert-1: route the keyboard Ctrl+Plus path through the same
+            // multi-area-aware plumbing as InsertRows (ribbon/right-click), instead of reading only
+            // the active SheetGrid.SelectedRange -- so Ctrl+Plus on a disjoint multi-area row-header
+            // selection inserts at every area, not just the active one.
+            if (!TryExecuteRepeatableCurrentSelectionAreasInsertCommand(
                     "Insert Row",
-                    sheetId =>
-                    {
-                        var currentRange = SheetGrid.SelectedRange ?? range;
-                        return new InsertRowsCommand(sheetId, currentRange.Start.Row, currentRange.RowCount);
-                    }))
+                    range,
+                    orderByRow: true,
+                    (sheetId, currentRange) => new InsertRowsCommand(sheetId, currentRange.Start.Row, currentRange.RowCount),
+                    out _))
                 return;
 
             ClearFormulaTraceArrowsAfterStructuralEdit();
         }
         else if (plan == KeyboardInsertDeletePlan.Columns)
         {
-            if (!TryExecuteRepeatableGroupedSheetCommand(
+            if (!TryExecuteRepeatableCurrentSelectionAreasInsertCommand(
                     "Insert Column",
-                    sheetId =>
-                    {
-                        var currentRange = SheetGrid.SelectedRange ?? range;
-                        return new InsertColumnsCommand(sheetId, currentRange.Start.Col, currentRange.ColCount);
-                    }))
+                    range,
+                    orderByRow: false,
+                    (sheetId, currentRange) => new InsertColumnsCommand(sheetId, currentRange.Start.Col, currentRange.ColCount),
+                    out _))
                 return;
 
             ClearFormulaTraceArrowsAfterStructuralEdit();
@@ -609,26 +746,24 @@ public partial class MainWindow
         var plan = KeyboardInsertDeletePlanner.PlanDelete(range);
         if (plan == KeyboardInsertDeletePlan.Rows)
         {
-            if (!TryExecuteRepeatableGroupedSheetCommand(
+            if (!TryExecuteRepeatableCurrentSelectionAreasDeleteCommand(
                     "Delete Row",
-                    sheetId =>
-                    {
-                        var currentRange = SheetGrid.SelectedRange ?? range;
-                        return new DeleteRowsCommand(sheetId, currentRange.Start.Row, currentRange.RowCount);
-                    }))
+                    range,
+                    orderByRow: true,
+                    (sheetId, currentRange) => new DeleteRowsCommand(sheetId, currentRange.Start.Row, currentRange.RowCount),
+                    out _))
                 return;
 
             ClearFormulaTraceArrowsAfterStructuralEdit();
         }
         else if (plan == KeyboardInsertDeletePlan.Columns)
         {
-            if (!TryExecuteRepeatableGroupedSheetCommand(
+            if (!TryExecuteRepeatableCurrentSelectionAreasDeleteCommand(
                     "Delete Column",
-                    sheetId =>
-                    {
-                        var currentRange = SheetGrid.SelectedRange ?? range;
-                        return new DeleteColumnsCommand(sheetId, currentRange.Start.Col, currentRange.ColCount);
-                    }))
+                    range,
+                    orderByRow: false,
+                    (sheetId, currentRange) => new DeleteColumnsCommand(sheetId, currentRange.Start.Col, currentRange.ColCount),
+                    out _))
                 return;
 
             ClearFormulaTraceArrowsAfterStructuralEdit();

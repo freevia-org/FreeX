@@ -401,6 +401,26 @@ public static class FormulaRewriter
         // any future sheet that happened to reuse the deleted name.
         if (rr.EndSheetName is not null)
         {
+            // Paste offset / transpose is unambiguous standard Excel behaviour for a 3-D span: the
+            // cell address shifts exactly like an ordinary relative reference, while the sheet span
+            // (SheetName/EndSheetName) never changes — sheet names aren't part of the row/col
+            // adjustment. Unlike the row/col-shift STRUCTURAL ops (insert/delete rows/cols, move)
+            // documented above, there's no "which spanned sheet did this happen on" ambiguity here:
+            // a paste offset applies uniformly regardless of which sheet(s) the reference spans.
+            if (op is PasteOffsetOp or PasteTransposeOp)
+            {
+                var pasteStart = RewriteCellRef(rr.Start, op, hostSheetName, ref changed);
+                var pasteEnd = RewriteCellRef(rr.End, op, hostSheetName, ref changed);
+
+                if (pasteStart is ErrorNode || pasteEnd is ErrorNode)
+                {
+                    changed = true;
+                    return new ErrorNode(ErrorValue.Ref);
+                }
+
+                return rr with { Start = (CellRefNode)pasteStart, End = (CellRefNode)pasteEnd };
+            }
+
             if (op is RenameSheetOp renameSpan)
             {
                 var newStartSheet = rr.SheetName;

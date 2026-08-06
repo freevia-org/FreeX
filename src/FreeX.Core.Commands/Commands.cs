@@ -63,7 +63,7 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             }
         }
 
-        if (CommandGuards.RejectIfSplitsArray(sheet, _affectedCells) is { } splitsArrayRejection)
+        if (CommandGuards.RejectIfSplitsArray(sheet, _affectedCells, allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
         _snapshot = [];
@@ -471,7 +471,7 @@ internal sealed class PropagateCalculatedColumnCommand : IWorkbookCommand
     private readonly uint _sourceRow;
     private readonly string _sourceFormulaText;
     private readonly IReadOnlyList<uint> _targetRows;
-    private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
     private StructuredTableColumnModel? _previousColumn;
     private bool _applied;
 
@@ -517,10 +517,23 @@ internal sealed class PropagateCalculatedColumnCommand : IWorkbookCommand
         foreach (var row in _targetRows)
         {
             var address = new CellAddress(_sheetId, row, col);
-            _snapshot.Add((address, sheet.GetCell(address)?.Clone()));
+            var oldCell = sheet.GetCell(address);
+            // A blank sibling row can still carry a style-only override (e.g. the banding fill
+            // ApplyStructuredTableStyleCommand bakes onto every data-body row, or a custom number
+            // format applied before any value was typed) — capture it here so it survives both
+            // this row's rewrite (SetCell below unconditionally clears style-only entries) and,
+            // on Revert, so it can be put back exactly as it was.
+            var oldStyleOnly = oldCell is null ? sheet.GetStyleOnly(row, col) : null;
+            _snapshot.Add((address, oldCell?.Clone(), oldStyleOnly));
 
             var shiftedFormula = StructuredTableEditEffects.ShiftFormulaRows(_sourceFormulaText, _sourceRow, row, sheet.Name);
-            sheet.SetCell(address, Cell.FromFormula(shiftedFormula));
+            var newCell = Cell.FromFormula(shiftedFormula);
+            // Preserve the row's existing formatting (table banding, custom number format,
+            // borders, ...) instead of silently replacing it with Cell.FromFormula's default
+            // style -- matching the guard EditCellsCommand.Apply already applies for the row the
+            // user actually typed into (Commands.cs ~110-117).
+            newCell.StyleId = oldCell?.StyleId ?? oldStyleOnly ?? StyleId.Default;
+            sheet.SetCell(address, newCell);
         }
 
         // Persist the formula anchored to the table's first data-body row -- matching the OOXML
@@ -546,12 +559,20 @@ internal sealed class PropagateCalculatedColumnCommand : IWorkbookCommand
 
         if (_snapshot is not null)
         {
-            foreach (var (address, oldCell) in _snapshot)
+            foreach (var (address, oldCell, oldStyleOnly) in _snapshot)
             {
                 if (oldCell is null)
+                {
                     sheet.ClearCell(address);
+                    if (oldStyleOnly.HasValue)
+                        sheet.SetStyleOnly(address.Row, address.Col, oldStyleOnly.Value);
+                    else
+                        sheet.ClearStyleOnly(address.Row, address.Col);
+                }
                 else
+                {
                     sheet.SetCell(address, oldCell.Clone());
+                }
             }
         }
 

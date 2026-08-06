@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Avalonia;
@@ -41,7 +42,7 @@ internal sealed class CommentReplyDialog : FreeWDialogWindow
 
         var ok = Button("Reply", Accept, isDefault: true);
         var cancel = Button("Cancel", () => Close(null), isCancel: true);
-        body.Children.Add(ButtonRow(ok, cancel));
+        body.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 6, 0, 0)));
 
         Content = body;
         Opened += (_, _) => _text.Focus();
@@ -84,19 +85,6 @@ internal sealed class CommentReplyDialog : FreeWDialogWindow
         return button;
     }
 
-    private static StackPanel ButtonRow(params Button[] buttons)
-    {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 6, 0, 0),
-        };
-        foreach (var button in buttons)
-            row.Children.Add(button);
-        return row;
-    }
 }
 
 internal sealed class CommentListDialog : FreeWDialogWindow
@@ -141,13 +129,7 @@ internal sealed class CommentListDialog : FreeWDialogWindow
         };
         close.Click += (_, _) => Close();
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(16, 10, 16, 14),
-        };
-        buttonRow.Children.Add(close);
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([close], new Thickness(16, 10, 16, 14));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         Content = new DockPanel

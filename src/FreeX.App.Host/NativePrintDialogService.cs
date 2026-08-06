@@ -31,21 +31,43 @@ internal static class NativePrintDialogService
         if (ShowDialog(dialog, owner) != Forms.DialogResult.OK)
             return;
 
-        var selectedQueue = ResolvePrintQueue(dialog.PrinterSettings.PrinterName) ?? printQueue;
-        var documentPrinter = new PrintDialog();
-        if (selectedQueue is not null)
-            documentPrinter.PrintQueue = selectedQueue;
-
-        if (documentPrinter.PrintTicket is not null)
+        // A printer failure here (offline/removed printer, stopped spooler, driver fault,
+        // invalid PrintTicket, access-denied on a network queue) must never crash the whole
+        // app -- match the ExportAsPdf/ExportAsXps pattern (MainWindow.PrintExport.cs) of
+        // catching and showing an owned error dialog instead of letting the exception reach
+        // the WPF dispatcher unhandled.
+        try
         {
-            documentPrinter.PrintTicket.CopyCount = Math.Clamp((int)dialog.PrinterSettings.Copies, 1, 999);
-            documentPrinter.PrintTicket.Collation = dialog.PrinterSettings.Collate
-                ? Collation.Collated
-                : Collation.Uncollated;
-            documentPrinter.PrintTicket.Duplexing = ResolveDuplexing(dialog.PrinterSettings.Duplex, sidesMode);
-        }
+            var selectedQueue = ResolvePrintQueue(dialog.PrinterSettings.PrinterName) ?? printQueue;
+            var documentPrinter = new PrintDialog();
+            if (selectedQueue is not null)
+                documentPrinter.PrintQueue = selectedQueue;
 
-        documentPrinter.PrintDocument(paginator, "FreeX worksheet");
+            if (documentPrinter.PrintTicket is not null)
+            {
+                documentPrinter.PrintTicket.CopyCount = Math.Clamp((int)dialog.PrinterSettings.Copies, 1, 999);
+                documentPrinter.PrintTicket.Collation = dialog.PrinterSettings.Collate
+                    ? Collation.Collated
+                    : Collation.Uncollated;
+                documentPrinter.PrintTicket.Duplexing = ResolveDuplexing(dialog.PrinterSettings.Duplex, sidesMode);
+            }
+
+            documentPrinter.PrintDocument(paginator, "FreeX worksheet");
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            ShowPrintFailedMessage(ex, owner);
+        }
+    }
+
+    private static void ShowPrintFailedMessage(Exception ex, Window? owner)
+    {
+        var message = UiText.Format("MainWindowMessage_PrintFailed", ex.Message);
+        var title = UiText.Get("MainWindowMessage_PrintFailedTitle");
+        if (owner is not null)
+            MessageBox.Show(owner, message, title, MessageBoxButton.OK, MessageBoxImage.Error);
+        else
+            MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     private static PrintDocument CreatePrinterSelectionDocument(

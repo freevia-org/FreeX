@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -120,6 +121,52 @@ public sealed class DialogChromeDedupSourceGuardTests
 
             AssertNoLocalCompactChrome(source, fileName);
         }
+    }
+
+    // r122 fixed ManualHyphenationDialog's hand-rolled action-row StackPanel, but the
+    // ResidualAvaloniaDialogs_DelegateCompactChromeToSharedHelper guard above only scans a
+    // fixed allowlist of files, so the identical drift was free to persist (and did) in any
+    // Avalonia dialog file the allowlist didn't happen to name. This test closes that gap by
+    // scanning the whole freew/FreeW.App.Avalonia tree for the same pattern, the same way
+    // FreeW_dialog_chrome_uses_the_shared_Windows_authority_font already does a directory-wide
+    // scan for the WPF-authority-font drift.
+    [Fact]
+    public void R123_NoAvaloniaDialogSourceHandRollsTheActionRowStackPanel_TreeWide()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var sourceRoot = Path.Combine(root, "freew", "FreeW.App.Avalonia");
+        var sourceFiles = Directory.GetFiles(sourceRoot, "*.cs", SearchOption.AllDirectories);
+
+        sourceFiles.Should().NotBeEmpty();
+
+        var offenders = sourceFiles
+            .Where(path => HandRolledActionRowPattern.IsMatch(File.ReadAllText(path)))
+            .Select(path => Path.GetRelativePath(sourceRoot, path))
+            .ToArray();
+
+        offenders.Should().BeEmpty(
+            "every Avalonia dialog action row should delegate to AvaloniaCompactDialogChrome.CreateActionRow " +
+            "instead of hand-rolling the Orientation=Horizontal/HorizontalAlignment=Right StackPanel it replaces");
+    }
+
+    // Whitespace-insensitive so it catches the pattern regardless of the enclosing method's
+    // indentation depth (the fixed-allowlist guard's literal string match did not).
+    private static readonly Regex HandRolledActionRowPattern = new(
+        @"new\s+StackPanel\s*\{\s*Orientation\s*=\s*Orientation\.Horizontal\s*,\s*HorizontalAlignment\s*=\s*HorizontalAlignment\.Right\s*,",
+        RegexOptions.Compiled | RegexOptions.Singleline);
+
+    // No-regression sibling: plenty of legitimate Avalonia rows (e.g. CupsPrintDialog's
+    // labeled "Printer:"/"Copies:" rows, ParagraphCommandDialogs' sort-key type row) are
+    // horizontal StackPanels that are NOT action rows -- they have no HorizontalAlignment.Right.
+    // The tree-wide scan must not flag those, or the guard becomes noisy and gets muted/deleted.
+    [Fact]
+    public void R123_HandRolledActionRowRegex_DoesNotFlagUnrelatedHorizontalStackPanels()
+    {
+        const string labeledRow =
+            "var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { label, control } };";
+
+        HandRolledActionRowPattern.IsMatch(labeledRow).Should().BeFalse(
+            "a horizontal StackPanel without HorizontalAlignment.Right (e.g. a labeled field row) is not the action-row drift pattern");
     }
 
     [Fact]

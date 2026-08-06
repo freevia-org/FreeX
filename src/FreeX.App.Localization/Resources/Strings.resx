@@ -11082,6 +11082,13 @@ Saved PDF file:&#xD;
     <value>Failed to save PDF file:&#xD;
 {0}</value>
   </data>
+  <data name="MainWindowMessage_PrintFailed" xml:space="preserve">
+    <value>There was a problem printing this document:&#xD;
+{0}</value>
+  </data>
+  <data name="MainWindowMessage_PrintFailedTitle" xml:space="preserve">
+    <value>Print Error</value>
+  </data>
   <data name="PivotValueFieldSettings_ShowPercentOfParentColumnTotal" xml:space="preserve">
     <value>% of Parent Column Total</value>
   </data>

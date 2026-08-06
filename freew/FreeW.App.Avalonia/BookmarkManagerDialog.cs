@@ -44,14 +44,10 @@ internal sealed class BookmarkManagerDialog : FreeWDialogWindow
         AutomationProperties.SetAutomationId(_delete, "BookmarkManagerDeleteButton");
         AutomationProperties.SetAutomationId(close, "BookmarkManagerCloseButton");
         close.IsCancel = true;
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 0,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { _goTo, _delete, close },
-        };
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
+            [_goTo, _delete, close],
+            new Thickness(0, 10, 0, 0),
+            AvaloniaCompactDialogChrome.WindowsStyle with { ActionSpacing = 0 });
         Content = new StackPanel
         {
             Margin = new Thickness(14),

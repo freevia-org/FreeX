@@ -138,6 +138,7 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand, IAffectedCellsCo
     private bool _existed;
     private bool _wasFormula;
     private string? _previousFormulaText;
+    private NamedRangeMetadata? _previousFormulaMetadata;
     private List<CellAddress> _affectedCells = [];
 
     /// <summary>
@@ -178,6 +179,13 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand, IAffectedCellsCo
             {
                 _existed = true;
                 _wasFormula = true;
+                // Capture the (name, scope) key's metadata (comment/hidden) before removing, so
+                // Revert can restore it — RemoveScopedNamedFormula purges it as part of deleting
+                // the name entirely (R123: a named formula/constant can now carry a Comment set
+                // via DefineNamedFormulaCommand, so this delete-then-undo path must round-trip it
+                // exactly like the range branch below already does).
+                if (ctx.Workbook.TryGetScopedNamedRangeMetadata(_name, scopeSheetId, out var scopedFormulaMetadata))
+                    _previousFormulaMetadata = scopedFormulaMetadata;
                 _affectedCells = NamedDefinitionRecalcHelper.FindCellsReferencingName(ctx.Workbook, _name, scopeSheetId);
                 ctx.Workbook.RemoveScopedNamedFormula(_name, scopeSheetId);
                 return new CommandOutcome(true, AffectedCells: _affectedCells);
@@ -200,6 +208,10 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand, IAffectedCellsCo
         {
             _existed = true;
             _wasFormula = true;
+            // See the scoped branch above: capture metadata before RemoveNamedFormula purges it,
+            // so Revert can restore a deleted named formula's Comment/Hidden state.
+            if (ctx.Workbook.TryGetNamedRangeMetadata(_name, out var formulaMetadata))
+                _previousFormulaMetadata = formulaMetadata;
             _affectedCells = NamedDefinitionRecalcHelper.FindCellsReferencingName(ctx.Workbook, _name, null);
             ctx.Workbook.RemoveNamedFormula(_name);
             return new CommandOutcome(true, AffectedCells: _affectedCells);
@@ -216,9 +228,18 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand, IAffectedCellsCo
         if (_wasFormula)
         {
             if (_scopeSheetId is { } formulaScopeSheetId)
-                ctx.Workbook.DefineNamedFormula(_name, _previousFormulaText!, formulaScopeSheetId);
+            {
+                ctx.Workbook.DefineNamedFormula(_name, _previousFormulaText!, formulaScopeSheetId, _previousFormulaMetadata);
+            }
             else
+            {
                 ctx.Workbook.NamedFormulas[_name] = _previousFormulaText!;
+                if (_previousFormulaMetadata is { } metadata)
+                {
+                    ctx.Workbook.NamedRangeMetadataByName.Remove(_name);
+                    ctx.Workbook.NamedRangeMetadataByName[_name] = metadata;
+                }
+            }
             return;
         }
 
@@ -244,11 +265,13 @@ public sealed class DefineNamedFormulaCommand : IWorkbookCommand, IAffectedCells
 {
     private readonly string _name;
     private readonly string _formulaText;
+    private readonly NamedRangeMetadata? _metadata;
     private readonly SheetId? _scopeSheetId;
 
     // Snapshot captured during Apply for undo
     private bool _existed;
     private string? _previousFormulaText;
+    private NamedRangeMetadata? _previousMetadata;
     private List<CellAddress> _affectedCells = [];
 
     /// <summary>
@@ -266,11 +289,22 @@ public sealed class DefineNamedFormulaCommand : IWorkbookCommand, IAffectedCells
     ///   When set, the name is defined with sheet scope (Excel "localSheetId") on this sheet
     ///   instead of workbook-global.
     /// </param>
-    public DefineNamedFormulaCommand(string name, string formulaText, SheetId? scopeSheetId = null)
+    /// <param name="metadata">
+    ///   Optional Excel-style metadata (scope label, comment, hidden). R123: the New/Edit Name
+    ///   dialog is a single form used for both range-backed and formula/constant-backed defined
+    ///   names, and its Comment field must work identically for both — matching real Excel's Name
+    ///   Manager, which stores the comment on the &lt;definedName comment="..."&gt; element the same
+    ///   way regardless of whether RefersTo resolves to a range or a formula/constant. Passing
+    ///   <see langword="null"/> (the default) leaves any metadata already recorded for this name
+    ///   untouched, so callers with nothing to contribute (file-load, structural-edit rewrites,
+    ///   sheet-copy) can't accidentally wipe out metadata a prior Define call already stored.
+    /// </param>
+    public DefineNamedFormulaCommand(string name, string formulaText, SheetId? scopeSheetId = null, NamedRangeMetadata? metadata = null)
     {
         _name = name;
         _formulaText = formulaText;
         _scopeSheetId = scopeSheetId;
+        _metadata = metadata;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -285,7 +319,9 @@ public sealed class DefineNamedFormulaCommand : IWorkbookCommand, IAffectedCells
         if (_scopeSheetId is { } scopeSheetId)
         {
             _existed = ctx.Workbook.ScopedNamedFormulas.TryGetValue((_name, scopeSheetId), out _previousFormulaText);
-            ctx.Workbook.DefineNamedFormula(_name, _formulaText, scopeSheetId);
+            if (_metadata is not null && ctx.Workbook.TryGetScopedNamedRangeMetadata(_name, scopeSheetId, out var previousScopedMetadata))
+                _previousMetadata = previousScopedMetadata;
+            ctx.Workbook.DefineNamedFormula(_name, _formulaText, scopeSheetId, _metadata);
             _affectedCells = _existed
                 ? NamedDefinitionRecalcHelper.FindCellsReferencingName(ctx.Workbook, _name, scopeSheetId)
                 : [];
@@ -293,7 +329,14 @@ public sealed class DefineNamedFormulaCommand : IWorkbookCommand, IAffectedCells
         }
 
         _existed = ctx.Workbook.NamedFormulas.TryGetValue(_name, out _previousFormulaText);
+        if (_metadata is not null && ctx.Workbook.TryGetNamedRangeMetadata(_name, out var previousMetadata))
+            _previousMetadata = previousMetadata;
         ctx.Workbook.NamedFormulas[_name] = _formulaText;
+        if (_metadata is not null)
+        {
+            ctx.Workbook.NamedRangeMetadataByName.Remove(_name);
+            ctx.Workbook.NamedRangeMetadataByName[_name] = _metadata;
+        }
         _affectedCells = _existed
             ? NamedDefinitionRecalcHelper.FindCellsReferencingName(ctx.Workbook, _name, null)
             : [];
@@ -305,16 +348,37 @@ public sealed class DefineNamedFormulaCommand : IWorkbookCommand, IAffectedCells
         if (_scopeSheetId is { } scopeSheetId)
         {
             if (_existed)
-                ctx.Workbook.DefineNamedFormula(_name, _previousFormulaText!, scopeSheetId);
+            {
+                // _previousMetadata is only ever populated when _metadata is non-null (i.e. Apply
+                // actually touched the metadata dict); when the name had no prior metadata,
+                // NamedRangeMetadata.WorkbookScope is the same "reset to default" sentinel
+                // DefineNamedRangeCommand's own Revert relies on (its _previousMetadata similarly
+                // stays null for a previously-metadata-less name, and DefineNamedRange's `metadata
+                // ?? NamedRangeMetadata.WorkbookScope` fallback resolves it the same way).
+                ctx.Workbook.DefineNamedFormula(
+                    _name, _previousFormulaText!, scopeSheetId,
+                    _metadata is not null ? (_previousMetadata ?? NamedRangeMetadata.WorkbookScope) : null);
+            }
             else
+            {
                 ctx.Workbook.RemoveScopedNamedFormula(_name, scopeSheetId);
+            }
             return;
         }
 
         if (_existed)
+        {
             ctx.Workbook.NamedFormulas[_name] = _previousFormulaText!;
+            if (_metadata is not null)
+            {
+                ctx.Workbook.NamedRangeMetadataByName.Remove(_name);
+                ctx.Workbook.NamedRangeMetadataByName[_name] = _previousMetadata ?? NamedRangeMetadata.WorkbookScope;
+            }
+        }
         else
+        {
             ctx.Workbook.RemoveNamedFormula(_name);
+        }
     }
 }
 

@@ -310,7 +310,26 @@ public static class CommandGuards
     /// replaced directly, unlike a legacy Ctrl+Shift+Enter (CSE) array's anchor, which still
     /// requires the whole originally-declared range to be selected/edited as a unit.
     /// </summary>
-    public static CommandOutcome? RejectIfSplitsArray(Sheet sheet, IEnumerable<CellAddress> addresses)
+    /// <param name="allowDynamicSpillMemberWrite">
+    /// R123-dynamic-spill-member-write: true for callers that write literal content directly into
+    /// the given <paramref name="addresses"/> -- EditCellsCommand (typing), the paste family
+    /// (PasteCellsCommand/PasteSpecialCommand/ExternalTextPasteSpecialCommand/CopyRangeCommand),
+    /// ClearContentsCommand (Delete key), and the fill family (FillCellsCommand/AutofillCommand).
+    /// In real Excel, a modern dynamic array's live spill has NO "you cannot change part of an
+    /// array" restriction at all -- clicking any individual spill member (anchor or not) and
+    /// typing/pasting/clearing it is a normal edit that stores the literal value and lets the
+    /// owning formula re-evaluate to #SPILL! (Sheet.IsSpillBlocked / RecalcEngine's
+    /// _spillBlockedAnchors machinery then surfaces and later recovers from that state). Only a
+    /// legacy Ctrl+Shift+Enter (CSE) array keeps the whole-range restriction. Defaults to false so
+    /// structural/relocation commands (Insert/Delete Rows/Columns/Cells, Sort, Move Range, Remove
+    /// Duplicates) keep rejecting ANY partial split of a dynamic-array spill's footprint exactly as
+    /// before -- those commands physically shift cell positions rather than writing content into a
+    /// user-selected cell, a different Excel rule this parameter does not address.
+    /// </param>
+    public static CommandOutcome? RejectIfSplitsArray(
+        Sheet sheet,
+        IEnumerable<CellAddress> addresses,
+        bool allowDynamicSpillMemberWrite = false)
     {
         if (!sheet.HasArrayOrSpillMembers && !sheet.HasDataTableRanges)
             return null;
@@ -323,6 +342,8 @@ public static class CommandGuards
             {
                 addressSet ??= new HashSet<CellAddress>(addresses);
 
+                var isLegacyCseArray = (sheet.GetCell(anchor)?.LegacyArrayRows ?? 0) > 0;
+
                 // R112-array-anchor-edit: editing/clearing a modern dynamic-array formula's anchor
                 // cell directly is always allowed in real Excel, even when the rest of its live
                 // spill is not part of the edit -- that's the defining UX difference from a legacy
@@ -333,7 +354,16 @@ public static class CommandGuards
                 // CSE formula (Cell.LegacyArrayRows == 0). Any other split shape -- a non-anchor
                 // member alone, or the anchor together with only some of the body -- still falls
                 // through to the ordinary rejecting check below.
-                if (address.Equals(anchor) && (sheet.GetCell(anchor)?.LegacyArrayRows ?? 0) == 0)
+                if (address.Equals(anchor) && !isLegacyCseArray)
+                    continue;
+
+                // R123-dynamic-spill-member-write: for the opted-in content-write callers above, a
+                // non-anchor member of a LIVE DYNAMIC ARRAY spill is just as directly writable as
+                // the anchor is -- real Excel has no "whole array must be selected" rule for a
+                // modern dynamic array at all, unlike a legacy CSE array. Skip the membership check
+                // entirely for this array; the write proceeds as an ordinary cell mutation and the
+                // owning anchor's next recalculation naturally detects the now-occupied cell.
+                if (allowDynamicSpillMemberWrite && !isLegacyCseArray)
                     continue;
 
                 for (var r = 0u; r < rows; r++)

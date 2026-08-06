@@ -562,47 +562,87 @@ public partial class OptionsDialog : Window
             return;
         }
 
-        var opts = new FreeXOptions
+        // Compute what this dialog session actually edited, evaluating every field's control
+        // exactly as before, on top of the dialog's own open-time snapshot (_opts).
+        var editedDefaultFontName = OptDefaultFont.SelectedItem as string ?? _opts.DefaultFontName;
+        var editedUserName = string.IsNullOrWhiteSpace(OptUserName.Text) ? _opts.UserName : OptUserName.Text.Trim();
+        var editedCollapseRibbon = OptCollapseRibbon.IsChecked == true;
+        var editedShowScreenTips = OptShowScreenTips.IsChecked == true;
+        var editedAutoCalculate = OptCalcAuto.IsChecked == true;
+        var editedUseR1C1 = OptR1C1.IsChecked == true;
+        var editedShowFormulaBar = OptShowFormulaBar.IsChecked == true;
+        var editedFormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true;
+        var editedMoveAfterEnter = OptMoveAfterEnter.IsChecked == true;
+        var editedAfterEnterDirection = OptAfterEnterDirection.SelectedIndex switch
         {
-            DefaultFontName   = OptDefaultFont.SelectedItem as string ?? _opts.DefaultFontName,
-            DefaultFontSize   = defaultFontSize,
-            DefaultSheetCount = defaultSheetCount,
-            UserName          = string.IsNullOrWhiteSpace(OptUserName.Text) ? _opts.UserName : OptUserName.Text.Trim(),
-            CollapseRibbonAutomatically = OptCollapseRibbon.IsChecked == true,
-            ShowScreenTips = OptShowScreenTips.IsChecked == true,
-            AutoCalculate     = OptCalcAuto.IsChecked == true,
-            UseR1C1ReferenceStyle = OptR1C1.IsChecked == true,
-            ShowFormulaBar     = OptShowFormulaBar.IsChecked == true,
-            FormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true,
-            MoveSelectionAfterEnter = OptMoveAfterEnter.IsChecked == true,
-            AfterEnterDirection = OptAfterEnterDirection.SelectedIndex switch
-            {
-                1 => FreeXEnterDirection.Right,
-                2 => FreeXEnterDirection.Up,
-                3 => FreeXEnterDirection.Left,
-                _ => FreeXEnterDirection.Down
-            },
-            EnableFillHandleAndCellDragAndDrop = OptAdvancedFillHandle.IsChecked == true,
-            EnableAutoCompleteForCellValues = OptAdvancedAutoComplete.IsChecked == true,
-            ShowGridlines = OptShowGridlines.IsChecked == true,
-            ShowHeadings = OptShowHeadings.IsChecked == true,
-            ObjectsDisplay = OptObjectsDisplay.SelectedIndex switch
-            {
-                1 => FreeXObjectDisplay.Placeholders,
-                2 => FreeXObjectDisplay.Nothing,
-                _ => FreeXObjectDisplay.All
-            },
-            DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? FreeXOptions.FreeXWorkbookDefaultFormat : FreeXOptions.XlsxDefaultFormat,
-            QuickAccessToolbarBelowRibbon = QuickAccessBelowRibbonCheckBox.IsChecked == true,
-            QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList(),
-            ProofingIgnoreUppercase = _opts.ProofingIgnoreUppercase,
-            ProofingIgnoreNumbers = _opts.ProofingIgnoreNumbers,
-            AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string),
-            SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords),
-            CrashAnalyticsEnabled = OptCrashAnalytics.IsChecked == true,
-            CrashAnalyticsPrompted = _opts.CrashAnalyticsPrompted || OptCrashAnalytics.IsChecked == true,
-            PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage),
+            1 => FreeXEnterDirection.Right,
+            2 => FreeXEnterDirection.Up,
+            3 => FreeXEnterDirection.Left,
+            _ => FreeXEnterDirection.Down
         };
+        var editedFillHandle = OptAdvancedFillHandle.IsChecked == true;
+        var editedAutoComplete = OptAdvancedAutoComplete.IsChecked == true;
+        var editedShowGridlines = OptShowGridlines.IsChecked == true;
+        var editedShowHeadings = OptShowHeadings.IsChecked == true;
+        var editedObjectsDisplay = OptObjectsDisplay.SelectedIndex switch
+        {
+            1 => FreeXObjectDisplay.Placeholders,
+            2 => FreeXObjectDisplay.Nothing,
+            _ => FreeXObjectDisplay.All
+        };
+        var editedDefaultFormat = OptDefaultFormat.SelectedIndex == 1 ? FreeXOptions.FreeXWorkbookDefaultFormat : FreeXOptions.XlsxDefaultFormat;
+        var editedQuickAccessToolbarBelowRibbon = QuickAccessBelowRibbonCheckBox.IsChecked == true;
+        var editedQuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList();
+        var editedAppLanguage = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string);
+        var editedCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords);
+        var editedCrashAnalyticsEnabled = OptCrashAnalytics.IsChecked == true;
+
+        // Reload the current on-disk options immediately before saving, instead of building the
+        // saved record purely from this dialog's open-time snapshot (_opts). A second MainWindow
+        // opened via View > New Window shares this window's live workbook but loads its own
+        // independent FreeXOptions snapshot (see MainWindow.MultiWindow.cs ViewNewWindowBtn_Click
+        // and MainWindow.xaml.cs's `_options = options ?? FreeXOptions.Load()`); without this
+        // reload, OK in one window's dialog would blow away whatever an unrelated option another
+        // window already saved (last-writer-wins). Every dialog control always reflects a value —
+        // there is no way to tell "the user picked this" from "this is just what _opts held when
+        // the dialog opened" other than comparing against _opts, so each field below is applied to
+        // the freshly-reloaded `opts` ONLY when it actually differs from _opts (this dialog's own
+        // opening snapshot). A field the user never touched in this session — including one this
+        // dialog exposes no control for at all, e.g. status-bar visibility toggles — is left alone
+        // and keeps whatever is freshest on disk right now, instead of reverting to this window's
+        // stale value or a hardcoded default.
+        var opts = FreeXOptions.Load();
+        if (editedDefaultFontName != _opts.DefaultFontName) opts.DefaultFontName = editedDefaultFontName;
+        if (defaultFontSize != _opts.DefaultFontSize) opts.DefaultFontSize = defaultFontSize;
+        if (defaultSheetCount != _opts.DefaultSheetCount) opts.DefaultSheetCount = defaultSheetCount;
+        if (editedUserName != _opts.UserName) opts.UserName = editedUserName;
+        if (editedCollapseRibbon != _opts.CollapseRibbonAutomatically) opts.CollapseRibbonAutomatically = editedCollapseRibbon;
+        if (editedShowScreenTips != _opts.ShowScreenTips) opts.ShowScreenTips = editedShowScreenTips;
+        if (editedAutoCalculate != _opts.AutoCalculate) opts.AutoCalculate = editedAutoCalculate;
+        if (editedUseR1C1 != _opts.UseR1C1ReferenceStyle) opts.UseR1C1ReferenceStyle = editedUseR1C1;
+        if (editedShowFormulaBar != _opts.ShowFormulaBar) opts.ShowFormulaBar = editedShowFormulaBar;
+        if (editedFormulaBarExpanded != _opts.FormulaBarExpanded) opts.FormulaBarExpanded = editedFormulaBarExpanded;
+        if (editedMoveAfterEnter != _opts.MoveSelectionAfterEnter) opts.MoveSelectionAfterEnter = editedMoveAfterEnter;
+        if (editedAfterEnterDirection != _opts.AfterEnterDirection) opts.AfterEnterDirection = editedAfterEnterDirection;
+        if (editedFillHandle != _opts.EnableFillHandleAndCellDragAndDrop) opts.EnableFillHandleAndCellDragAndDrop = editedFillHandle;
+        if (editedAutoComplete != _opts.EnableAutoCompleteForCellValues) opts.EnableAutoCompleteForCellValues = editedAutoComplete;
+        if (editedShowGridlines != _opts.ShowGridlines) opts.ShowGridlines = editedShowGridlines;
+        if (editedShowHeadings != _opts.ShowHeadings) opts.ShowHeadings = editedShowHeadings;
+        if (editedObjectsDisplay != _opts.ObjectsDisplay) opts.ObjectsDisplay = editedObjectsDisplay;
+        if (editedDefaultFormat != FreeXOptions.NormalizeDefaultFormat(_opts.DefaultFormat)) opts.DefaultFormat = editedDefaultFormat;
+        if (editedQuickAccessToolbarBelowRibbon != _opts.QuickAccessToolbarBelowRibbon) opts.QuickAccessToolbarBelowRibbon = editedQuickAccessToolbarBelowRibbon;
+        if (!editedQuickAccessToolbarCommands.SequenceEqual(_opts.QuickAccessToolbarCommands)) opts.QuickAccessToolbarCommands = editedQuickAccessToolbarCommands;
+        if (!string.Equals(editedAppLanguage, AppLanguageCatalog.NormalizeCultureName(_opts.AppLanguage), StringComparison.Ordinal)) opts.AppLanguage = editedAppLanguage;
+        if (!editedCustomDictionaryWords.SequenceEqual(FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords))) opts.SpellCheckCustomDictionaryWords = editedCustomDictionaryWords;
+        if (editedCrashAnalyticsEnabled != _opts.CrashAnalyticsEnabled) opts.CrashAnalyticsEnabled = editedCrashAnalyticsEnabled;
+        // Monotonic flag (never reverts once true), so unconditionally OR-ing the freshly-reloaded
+        // value with the current checkbox state is safe even when the checkbox wasn't touched.
+        opts.CrashAnalyticsPrompted = opts.CrashAnalyticsPrompted || editedCrashAnalyticsEnabled;
+        // ProofingIgnoreUppercase/Numbers and PdfExportLanguage have no controls in this dialog at
+        // all, so they are left untouched here — `opts` already carries whatever is newest on disk
+        // for them; normalize PdfExportLanguage defensively since Load() does not itself apply
+        // ExportPlanner's PDF-language normalization.
+        opts.PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(opts.PdfExportLanguage);
         if (!opts.Save())
         {
             DialogMessageHelper.ShowError(this, opts.LastPersistenceError, Title);
