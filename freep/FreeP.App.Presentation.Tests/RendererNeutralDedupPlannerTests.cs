@@ -968,77 +968,75 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
-    public void WpfAndAvaloniaSlideCanvases_ConsumeOneSharedChartScenePlan()
+    public void WpfAndAvaloniaSlideCanvases_ConsumeOneSharedChartCommandPlan()
     {
-        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
-        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
+        var planner = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "Core", "ChartRenderCommandPlanner.cs");
+        var wpf = ReadWorkspaceFile(
+            "freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.ChartExecution.cs");
+        var avalonia = ReadWorkspaceFile(
+            "freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.ChartExecution.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("ChartRenderPlanner.BuildScenePlan(");
-            source.Should().Contain("scene.GeometryKind");
-            source.Should().Contain("scene.Frame.Plot");
-            source.Should().Contain("scene.Rectangles");
-            source.Should().Contain("scene.LineSeries");
-            source.Should().Contain("scene.ComboLineSeries");
-            source.Should().Contain("scene.Surface");
-            source.Should().Contain("scene.Scatter");
-            source.Should().Contain("scene.Bubble");
-            source.Should().Contain("scene.Radar");
-            source.Should().Contain("scene.Stock");
-            source.Should().Contain("scene.AreaSeries");
-            source.Should().Contain("scene.PieSlices");
-            source.Should().Contain("scene.DoughnutSlices");
-            source.Should().Contain("scene.AxisTicks");
-            source.Should().Contain("scene.DataLabels");
-            source.Should().Contain("scene.DataLabelLeaderLines");
-            source.Should().Contain("scene.SecondaryAxis");
-            source.Should().Contain("scene.CategoryAxisLabels");
-            source.Should().Contain("scene.ValueAxisLabels");
-            source.Should().Contain("scene.AxisTitles");
-            source.Should().Contain("scene.LegendItems");
+            source.Should().Contain("ChartRenderCommandPlanner.Build(");
+            source.Should().Contain("foreach (var command in plan.Commands)");
+            source.Should().NotContain("ChartRenderPlanner.BuildScenePlan(");
+            source.Should().NotContain("scene.GeometryKind");
         }
+
+        planner.Should().Contain("ChartRenderPlanner.BuildScenePlan(");
+        planner.Should().Contain("switch (scene.GeometryKind)");
+        planner.Should().Contain("scene.Rectangles");
+        planner.Should().Contain("scene.LineSeries");
+        planner.Should().Contain("scene.Surface");
+        planner.Should().Contain("scene.DataTable");
+        planner.Should().Contain("scene.LegendItems");
     }
 
     [Fact]
     public void WpfAndAvaloniaSlideCanvases_ApplySharedChartFrameRotation()
     {
-        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
-        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
+        var planner = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "Core", "ChartRenderCommandPlanner.cs");
+        var wpf = ReadWorkspaceFile(
+            "freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.ChartExecution.cs");
+        var avalonia = ReadWorkspaceFile(
+            "freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.ChartExecution.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("ShapeTransformPlanner.PlanShapeTransform(");
-            source.Should().Contain("chartOp.RotationDeg");
-            source.Should().Contain("RenderChartCore(dc, chartOp)");
+            source.Should().Contain("plan.Transform");
+            source.Should().Contain("ChartRenderCommandPlanner.Build(");
         }
 
-        wpf.Should().Contain("ToWpfTransform(transform)");
-        avalonia.Should().Contain("ToAvaloniaMatrix(transform)");
+        planner.Should().Contain("ShapeTransformPlanner.PlanShapeTransform(");
+        planner.Should().Contain("chartOperation.RotationDeg");
+        wpf.Should().Contain("ToWpfTransform(plan.Transform)");
+        avalonia.Should().Contain("ToAvaloniaMatrix(plan.Transform)");
     }
 
     [Fact]
-    public void RadarLowerLabelRegistration_IsHostLocalAndImportedScoped()
+    public void RadarLowerLabelRegistration_IsSharedAndImportedScoped()
     {
-        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
-        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
+        var planner = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "Core", "ChartRenderCommandPlanner.cs");
 
-        wpf.Should().Contain("plan.Rings.Count == 9");
-        wpf.Should().Contain("plan.CategoryLabels.Count == 5");
-        wpf.Should().Contain("ImportedRadarAgilityLabelOffsetX");
-        wpf.Should().Contain("ImportedRadarStaminaLabelOffsetX");
-        wpf.Should().Contain("ImportedRadarLowerLabelOffsetY");
-        avalonia.Should().Contain("AvaloniaImportedRadarAgilityLabelOffsetX");
-        avalonia.Should().Contain("AvaloniaImportedRadarStaminaLabelOffsetX");
-        avalonia.Should().Contain("AvaloniaImportedRadarLowerLabelOffsetY");
-        avalonia.Should().Contain("ImportedRadarValueLabelAvaloniaYCompensation");
+        planner.Should().Contain("plan.Rings.Count == 9");
+        planner.Should().Contain("plan.CategoryLabels.Count == 5");
+        planner.Should().Contain("ImportedRadarAgilityLabelOffsetX");
+        planner.Should().Contain("ImportedRadarStaminaLabelOffsetX");
+        planner.Should().Contain("ImportedRadarLowerLabelOffsetY");
+        planner.Should().Contain("ImportedRadarValueLabelOffsetY");
     }
 
     [Fact]
     public void WpfAndAvaloniaSlideCanvases_KeepChartMathOutOfPlatformSources()
     {
-        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
-        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs")
+            + ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.ChartExecution.cs");
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs")
+            + ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.ChartExecution.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
@@ -1070,15 +1068,17 @@ public sealed class RendererNeutralDedupPlannerTests
     [Fact]
     public void WpfAndAvaloniaSlideCanvases_KeepNativePaintingAndTextMeasurementBoundaries()
     {
-        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
-        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs")
+            + ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.ChartExecution.cs");
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs")
+            + ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.ChartExecution.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("DrawChartLabel");
             source.Should().Contain("DrawChartMarker");
             source.Should().Contain("ToPieSliceGeometry");
-            source.Should().Contain("ToGeometry(path)");
+            source.Should().Contain("ToGeometry(path.Primitive");
             source.Should().NotContain("ChartRenderPlanner.ThreeDPieDepthFillAlpha");
             source.Should().NotContain("ChartRenderPlanner.ResolveSeriesColor");
         }
