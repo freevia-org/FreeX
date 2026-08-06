@@ -1,9 +1,9 @@
-using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
@@ -19,7 +19,8 @@ internal sealed class WordCountDialog : FreeWDialogWindow
 
     public WordCountDialog(DocumentStatistics stats)
     {
-        Title = "Word Count";
+        var plan = StatisticsDialogPlanner.Build(stats, StatisticsDialogDepth.Compact);
+        Title = plan.Title;
         Width = 300;
         Height = 240;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -31,11 +32,8 @@ internal sealed class WordCountDialog : FreeWDialogWindow
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
         };
 
-        AddStatRow(grid, 0, "Words", stats.Words);
-        AddStatRow(grid, 1, "Characters (no spaces)", stats.CharactersWithoutSpaces);
-        AddStatRow(grid, 2, "Characters (with spaces)", stats.CharactersWithSpaces);
-        AddStatRow(grid, 3, "Paragraphs", stats.Paragraphs);
-        AddStatRow(grid, 4, "Lines", stats.Lines);
+        for (var index = 0; index < plan.Rows.Count; index++)
+            AddStatRow(grid, index, plan.Rows[index]);
 
         var ok = new Button { Content = "OK", IsDefault = true, IsCancel = true, MinWidth = 72 };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
@@ -51,13 +49,13 @@ internal sealed class WordCountDialog : FreeWDialogWindow
         };
     }
 
-    private static void AddStatRow(Grid grid, int row, string label, int value)
+    private static void AddStatRow(Grid grid, int row, StatisticsDialogRow plan)
     {
         grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
 
         var name = new TextBlock
         {
-            Text = label,
+            Text = plan.Label,
             Margin = new Thickness(0, 4, 12, 4),
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -66,7 +64,7 @@ internal sealed class WordCountDialog : FreeWDialogWindow
 
         var amount = new TextBlock
         {
-            Text = value.ToString("N0", CultureInfo.CurrentCulture),
+            Text = plan.Value,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 4, 0, 4),
             HorizontalAlignment = HorizontalAlignment.Right,

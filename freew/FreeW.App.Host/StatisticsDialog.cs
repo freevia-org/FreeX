@@ -1,7 +1,7 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -26,8 +26,12 @@ internal sealed class StatisticsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     public StatisticsDialog(Window owner, TextDocument document)
     {
         _document = document;
+        var initialPlan = StatisticsDialogPlanner.Build(
+            document,
+            includeNotes: false,
+            StatisticsDialogDepth.Detailed);
         Owner = owner;
-        Title = "Word Count";
+        Title = initialPlan.Title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -39,22 +43,18 @@ internal sealed class StatisticsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         _currentRow = 0;
-        AddRow("Words", "0");
-        AddRow("Characters (with spaces)", "0");
-        AddRow("Characters (no spaces)", "0");
-        AddRow("Paragraphs", "0");
-        AddRow("Lines", "0");
-        AddRow("Sentences", "0");
-        AddSeparator();
-        AddRow("Reading time", "—");
-        AddRow("Words per sentence", "—");
-        AddRow("Readability (Flesch)", "—");
+        foreach (var row in initialPlan.Rows)
+        {
+            if (row.StartsNewSection)
+                AddSeparator();
+            AddRow(row.Key, row.Label, row.Value);
+        }
 
         // Include footnotes/endnotes checkbox (Word parity).
         _grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var checkbox = new CheckBox
         {
-            Content = "Include footnotes and endnotes",
+            Content = StatisticsDialogPlanner.IncludeNotesLabel,
             Margin = new Thickness(0, 8, 0, 2),
             IsChecked = false,
         };
@@ -79,17 +79,12 @@ internal sealed class StatisticsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void RefreshValues()
     {
-        var stats = DocumentStatistics.Compute(_document, _includeNotes);
-        SetValue("Words", Number(stats.Words));
-        SetValue("Characters (with spaces)", Number(stats.CharactersWithSpaces));
-        SetValue("Characters (no spaces)", Number(stats.CharactersWithoutSpaces));
-        SetValue("Paragraphs", Number(stats.Paragraphs));
-        SetValue("Lines", Number(stats.Lines));
-        SetValue("Sentences", Number(stats.Sentences));
-        SetValue("Reading time", FormatReadingTime(stats.ReadingTimeMinutes));
-        SetValue("Words per sentence", stats.AverageWordsPerSentence.ToString("0.0", CultureInfo.CurrentCulture));
-        SetValue("Readability (Flesch)",
-            $"{stats.FleschReadingEase.ToString("0.0", CultureInfo.CurrentCulture)} — {DescribeEase(stats.FleschReadingEase)}");
+        var plan = StatisticsDialogPlanner.Build(
+            _document,
+            _includeNotes,
+            StatisticsDialogDepth.Detailed);
+        foreach (var row in plan.Rows)
+            SetValue(row.Key, row.Value);
     }
 
     private void SetValue(string label, string value)
@@ -98,28 +93,7 @@ internal sealed class StatisticsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             block.Text = value;
     }
 
-    private static string Number(int value) => value.ToString("N0", CultureInfo.CurrentCulture);
-
-    // "less than a minute" for 0, "1 minute" / "N minutes" otherwise.
-    private static string FormatReadingTime(int minutes) => minutes switch
-    {
-        <= 0 => "less than a minute",
-        1 => "1 minute",
-        _ => $"{minutes} minutes"
-    };
-
-    // The standard Flesch Reading Ease bands, summarised to a short label.
-    private static string DescribeEase(double score) => score switch
-    {
-        >= 90 => "very easy",
-        >= 70 => "easy",
-        >= 60 => "plain English",
-        >= 50 => "fairly difficult",
-        >= 30 => "difficult",
-        _ => "very difficult"
-    };
-
-    private void AddRow(string label, string initialValue)
+    private void AddRow(string key, string label, string initialValue)
     {
         _grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
@@ -145,7 +119,7 @@ internal sealed class StatisticsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Grid.SetColumn(valueBlock, 1);
         _grid.Children.Add(valueBlock);
 
-        _valueBlocks[label] = valueBlock;
+        _valueBlocks[key] = valueBlock;
         _currentRow++;
     }
 
