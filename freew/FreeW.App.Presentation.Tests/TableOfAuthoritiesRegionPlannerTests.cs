@@ -181,6 +181,35 @@ public sealed class TableOfAuthoritiesRegionPlannerTests
     }
 
     [Fact]
+    public void BuildRefreshPlan_WithoutExplicitOptions_PreservesImportedNativeFieldOptions()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Citations.Add(new Citation("Case A", CitationCategory.Cases));
+        document.Citations.Add(new Citation("17 U.S.C. 107", CitationCategory.Statutes));
+        document.Blocks.Add(new Paragraph("Old statute\t1")
+        {
+            StyleId = "Normal",
+            SpanningFieldOwner = new ComplexField(" TOA \\h \\c \"2\" \\p "),
+            Formatting = ParagraphFormatting.Default with
+            {
+                TabStops = [new TabStop(468, TabStopAlignment.Right, TabLeader.Dashes)]
+            }
+        });
+
+        var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(document);
+
+        plan.DeleteIndicesDescending.Should().Equal(0);
+        plan.Paragraphs.Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Table of Authorities", "Statutes", "17 U.S.C. 107");
+        plan.Paragraphs[1].SpanningFieldStart!.Instruction
+            .Should().Be(" TOA \\h \\c \"2\" \\p ");
+        plan.Paragraphs.Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId)
+            .Formatting.TabStops.Should().ContainSingle()
+            .Which.Leader.Should().Be(TabLeader.Dashes);
+    }
+
+    [Fact]
     public void BuildRefreshPlan_ProducesWordLikeRenderedEntryMetadata()
     {
         var document = TextDocument.CreateEmpty();

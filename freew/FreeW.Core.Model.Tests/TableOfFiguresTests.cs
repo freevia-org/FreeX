@@ -39,6 +39,12 @@ public class TableOfFiguresTests
             TableOfFigures.HeadingStyleId,
             TableOfFigures.EntryStyleId,
             TableOfFigures.EntryStyleId);
+
+        tof[0].SpanningFieldOwner.Should().BeNull();
+        tof.Skip(1).All(paragraph => paragraph.SpanningFieldOwner?.Instruction == " TOC \\c \"Figure\" ")
+            .Should().BeTrue();
+        tof[1].SpanningFieldStart!.Instruction.Should().Be(" TOC \\c \"Figure\" ");
+        tof[^1].EndsSpanningField.Should().BeTrue();
     }
 
     [Fact]
@@ -136,6 +142,20 @@ public class TableOfFiguresTests
         doc.Blocks.Clear();
         doc.Blocks.Add(new Paragraph("Table of Schemes") { StyleId = TableOfFigures.HeadingStyleId });
         TableOfFigures.ExistingLabelText(doc).Should().Be("Scheme");
+
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Scheme 1\t1")
+        {
+            StyleId = "Normal",
+            SpanningFieldOwner = new ComplexField(" TOC \\c \"Scheme\" ")
+        });
+        TableOfFigures.ExistingLabelText(doc).Should().Be("Scheme");
+
+        doc.Blocks.Insert(0, new Paragraph("Table of Figures")
+        {
+            StyleId = TableOfFigures.HeadingStyleId
+        });
+        TableOfFigures.ExistingLabelText(doc).Should().Be("Scheme");
     }
 
     [Fact]
@@ -183,6 +203,23 @@ public class TableOfFiguresTests
             new Paragraph("x") { StyleId = TableOfFigures.HeadingStyleId }).Should().BeTrue();
         TableOfFigures.IsTableOfFiguresParagraph(
             new Paragraph("x") { StyleId = "Caption" }).Should().BeFalse();
+        TableOfFigures.IsTableOfFiguresParagraph(new Paragraph("x")
+        {
+            SpanningFieldOwner = new ComplexField(" TOC \\c \"Figure\" ")
+        }).Should().BeTrue();
+        TableOfFigures.IsTableOfFiguresParagraph(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" TOC \\a \"Table\" ", "Table 1\t1") }
+        }).Should().BeTrue();
+        TableOfFigures.IsTableOfFiguresParagraph(new Paragraph("x")
+        {
+            SpanningFieldOwner = new ComplexField(" TOC \\o \"1-3\" ")
+        }).Should().BeFalse();
+        TableOfFigures.IsTableOfFiguresParagraph(new Paragraph("x")
+        {
+            StyleId = TableOfFigures.EntryStyleId,
+            SpanningFieldOwner = new ComplexField(" TOC \\o \"1-3\" ")
+        }).Should().BeFalse();
         TableOfFigures.IsTableOfFiguresParagraph(Table.Create(1, 1)).Should().BeFalse();
     }
 

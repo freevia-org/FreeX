@@ -44,7 +44,7 @@ public static class TableOfAuthoritiesRegionPlanner
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        var resolvedOptions = options ?? ToaOptions.Default;
+        var resolvedOptions = options ?? TableOfAuthorities.ExistingOptions(document) ?? ToaOptions.Default;
         TableOfAuthorities.EnsureStyles(document);
 
         var existingIndices = new List<int>();

@@ -327,6 +327,130 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void SynchronizePreservedDrawingText_UpdatesMultipleCachedShapesWithoutRebuildingLayout()
+    {
+        var (_, smartArt) = MakeSmartArtSession();
+        smartArt.Data!.IsLiveLayoutSupported = false;
+        var previousData = SlideCloner.CloneSmartArt(smartArt).Data!;
+        var drawingPart = smartArt.Parts[smartArt.DrawingPartPath!];
+        drawingPart.Bytes = System.Text.Encoding.UTF8.GetBytes(
+            "<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" " +
+            "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><dsp:spTree>" +
+            "<dsp:sp><dsp:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Plan</a:t></a:r></a:p></dsp:txBody></dsp:sp>" +
+            "<dsp:sp><dsp:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Build</a:t></a:r></a:p></dsp:txBody></dsp:sp>" +
+            "</dsp:spTree></dsp:drawing>");
+        smartArt.FallbackShapes.AddRange(new[] { "Plan", "Build" }.Select(text => new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph { Runs = { new Run { Text = text } } },
+                },
+            },
+        }));
+
+        SmartArtEditingPlanner.Apply(
+            smartArt.Data,
+            SmartArtNodeEditIntent.ChangeText("n1", "Discover")).Applied.Should().BeTrue();
+        SmartArtEditingPlanner.Apply(
+            smartArt.Data,
+            SmartArtNodeEditIntent.ChangeText("n2", "Construct")).Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+
+        SmartArtEditingPlanner.SynchronizePreservedDrawingText(smartArt, previousData)
+            .Should().Match<SmartArtDrawingCacheRegenerationResult>(result =>
+                result.Applied && result.Message.StartsWith("2 text edits", StringComparison.Ordinal));
+        smartArt.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Equal("Discover", "Construct");
+        var raw = System.Text.Encoding.UTF8.GetString(drawingPart.Bytes);
+        raw.Should().Contain("Discover").And.Contain("Construct")
+            .And.NotContain(">Plan<").And.NotContain(">Build<");
+    }
+
+    [Fact]
+    public void SynchronizePreservedDrawingText_UpdatesDuplicateSourceTextByVerifiedOrdinalMapping()
+    {
+        var (_, smartArt) = MakeSmartArtSession();
+        smartArt.Data!.IsLiveLayoutSupported = false;
+        smartArt.Data.Nodes[1].Text = "Plan";
+        var previousData = SlideCloner.CloneSmartArt(smartArt).Data!;
+        var drawingPart = smartArt.Parts[smartArt.DrawingPartPath!];
+        drawingPart.Bytes = System.Text.Encoding.UTF8.GetBytes(
+            "<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" " +
+            "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><dsp:spTree>" +
+            "<dsp:sp><dsp:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Plan</a:t></a:r></a:p></dsp:txBody></dsp:sp>" +
+            "<dsp:sp><dsp:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Plan</a:t></a:r></a:p></dsp:txBody></dsp:sp>" +
+            "</dsp:spTree></dsp:drawing>");
+        smartArt.FallbackShapes.AddRange(Enumerable.Range(0, 2).Select(_ => new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph { Runs = { new Run { Text = "Plan" } } },
+                },
+            },
+        }));
+
+        SmartArtEditingPlanner.Apply(
+            smartArt.Data,
+            SmartArtNodeEditIntent.ChangeText("n1", "Discover")).Applied.Should().BeTrue();
+        SmartArtEditingPlanner.Apply(
+            smartArt.Data,
+            SmartArtNodeEditIntent.ChangeText("n2", "Construct")).Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+
+        var synchronized = SmartArtEditingPlanner.SynchronizePreservedDrawingText(smartArt, previousData);
+
+        synchronized.Applied.Should().BeTrue(synchronized.Message);
+        smartArt.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Equal("Discover", "Construct");
+        var raw = System.Text.Encoding.UTF8.GetString(drawingPart.Bytes);
+        raw.Should().Contain("Discover").And.Contain("Construct");
+    }
+
+    [Fact]
+    public void SynchronizePreservedDrawingText_RejectsParagraphShapeChangesAtomically()
+    {
+        var (_, smartArt) = MakeSmartArtSession();
+        smartArt.Data!.IsLiveLayoutSupported = false;
+        var previousData = SlideCloner.CloneSmartArt(smartArt).Data!;
+        var drawingPart = smartArt.Parts[smartArt.DrawingPartPath!];
+        drawingPart.Bytes = System.Text.Encoding.UTF8.GetBytes(
+            "<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" " +
+            "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><dsp:spTree>" +
+            "<dsp:sp><dsp:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Plan</a:t></a:r></a:p></dsp:txBody></dsp:sp>" +
+            "</dsp:spTree></dsp:drawing>");
+        smartArt.FallbackShapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph { Runs = { new Run { Text = "Plan" } } },
+                },
+            },
+        });
+
+        SmartArtEditingPlanner.Apply(
+            smartArt.Data,
+            SmartArtNodeEditIntent.ChangeText("n1", "Discover\nMore")).Applied.Should().BeTrue();
+        var originalBytes = drawingPart.Bytes.ToArray();
+        var originalFallback = smartArt.FallbackShapes.Single().PlainText;
+
+        var result = SmartArtEditingPlanner.SynchronizePreservedDrawingText(smartArt, previousData);
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Contain("does not fit");
+        drawingPart.Bytes.Should().Equal(originalBytes);
+        smartArt.FallbackShapes.Single().PlainText.Should().Be(originalFallback);
+    }
+
+    [Fact]
     public void GroupedSmartArt_LayoutAndConvertRoutesRemainUndoable()
     {
         var (session, _) = MakeSmartArtSession();
