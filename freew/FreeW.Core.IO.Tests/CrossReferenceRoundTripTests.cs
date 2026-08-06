@@ -9,8 +9,9 @@ namespace FreeW.Core.IO.Tests;
 /// <summary>
 /// Round-trip coverage for cross-reference fields (Word's References &gt; Cross-reference). The field
 /// serialises as a <c>w:fldSimple</c> whose <c>w:instr</c> carries a <c>REF</c>/<c>PAGEREF</c>/<c>NOTEREF</c>
-/// instruction over a bookmark name or note id, with optional <c>\w</c>/<c>\n</c>/<c>\p</c> and <c>\h</c>
-/// switches, wrapping a run holding the cached resolved text.
+/// instruction over a bookmark name, with optional <c>\w</c>/<c>\n</c>/<c>\p</c> and <c>\h</c>
+/// switches, wrapping a run holding the cached resolved text. Legacy numeric NOTEREF operands remain
+/// readable.
 /// </summary>
 public class CrossReferenceRoundTripTests
 {
@@ -68,13 +69,73 @@ public class CrossReferenceRoundTripTests
     }
 
     [Fact]
-    public void NoteRefField_RoundTripsOverNoteId()
+    public void LegacyNumericNoteRefField_RoundTripsOverNoteId()
     {
         var field = new CrossReferenceField(CrossRefFieldKind.NoteRef, "3", CrossRefInsertAs.Text, Hyperlink: true);
 
         var run = RoundTrip(WithCrossReference(field, "3")).Blocks.OfType<Paragraph>().Single().Runs.Single();
 
         run.CrossReference.Should().Be(field);
+    }
+
+    [Fact]
+    public void NoteRefField_EmitsBookmarkAroundPhysicalMarkerAndReopensExactly()
+    {
+        var doc = new TextDocument();
+        var target = new Paragraph();
+        target.Runs.Add(new Run("Body"));
+        target.Runs.Add(Run.FootnoteReference(3));
+        target.BookmarkNames.Add("_RefNote");
+        target.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "note", BookmarkBoundaryKind.Start, 1, "_RefNote"));
+        target.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "note", BookmarkBoundaryKind.End, 2));
+        doc.Blocks.Add(target);
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.CrossReferenceFieldRun(
+                    new CrossReferenceField(CrossRefFieldKind.NoteRef, "_RefNote", CrossRefInsertAs.Text, true),
+                    "1")
+            }
+        });
+        doc.Footnotes[3] = new Footnote(3, "note");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        var package = stream.ToArray();
+        using (var zip = new ZipArchive(new MemoryStream(package), ZipArchiveMode.Read))
+        using (var entry = zip.GetEntry("word/document.xml")!.Open())
+        {
+            var xml = XDocument.Load(entry);
+            var bodyParagraph = xml.Descendants(W + "p").First();
+            var children = bodyParagraph.Elements().ToList();
+            var start = children.FindIndex(element => element.Name == W + "bookmarkStart");
+            var marker = children.FindIndex(element => element.Descendants(W + "footnoteReference").Any());
+            var end = children.FindIndex(element => element.Name == W + "bookmarkEnd");
+            start.Should().BeLessThan(marker);
+            marker.Should().BeLessThan(end);
+            xml.Descendants(W + "fldSimple").Single().Attribute(W + "instr")!.Value
+                .Should().Be(" NOTEREF _RefNote \\h ");
+        }
+
+        var reopened = DocxReader.Read(new MemoryStream(package));
+        var reopenedTarget = (Paragraph)reopened.Blocks[0];
+        reopenedTarget.BookmarkNames.Should().Contain("_RefNote");
+        reopenedTarget.BookmarkBoundaries.Select(boundary => boundary.RunIndex).Should().Equal(1, 2);
+        ((Paragraph)reopened.Blocks[1]).Runs.Single().CrossReference.Should().Be(
+            new CrossReferenceField(CrossRefFieldKind.NoteRef, "_RefNote", CrossRefInsertAs.Text, true));
+    }
+
+    [Fact]
+    public void NoteRefAboveBelow_EmitsPSwitch()
+    {
+        var field = new CrossReferenceField(
+            CrossRefFieldKind.NoteRef, "_RefNote", CrossRefInsertAs.AboveBelow, Hyperlink: false);
+
+        Instruction(WithCrossReference(field, "above"))
+            .Should().Be(" NOTEREF _RefNote \\p ");
     }
 
     [Fact]

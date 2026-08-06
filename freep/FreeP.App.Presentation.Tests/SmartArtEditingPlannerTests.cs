@@ -823,6 +823,27 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void Promote_AssistantToRoot_IsRejectedWithoutMutation()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"));
+        data.Nodes[0].Children.Add(new SmartArtNode
+        {
+            ModelId = "assistant",
+            Text = "Assistant",
+            Level = 1,
+            IsAssistant = true
+        });
+
+        var result = SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.Promote("assistant"));
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Be("An assistant node cannot be promoted to the root.");
+        data.Nodes.Should().ContainSingle();
+        data.Nodes[0].Children.Should().ContainSingle(child =>
+            child.ModelId == "assistant" && child.IsAssistant);
+    }
+
+    [Fact]
     public void Demote_MakesNodeChildOfPreviousSiblingAndUpdatesHierarchyLayout()
     {
         var data = MakeFlatData(SmartArtFamily.Hierarchy, ("n1", "Leader"), ("n2", "Manager"), ("n3", "Peer"));
@@ -854,6 +875,36 @@ public sealed class SmartArtEditingPlannerTests
         result.Applied.Should().BeFalse();
         result.Message.Should().Be("The first SmartArt sibling cannot be demoted.");
         data.Nodes.Select(node => node.ModelId).Should().Equal("n1", "n2");
+    }
+
+    [Fact]
+    public void Demote_AssistantInsertsBeforeRegularChildrenOfNewParent()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"));
+        var root = data.Nodes[0];
+        root.Children.AddRange(
+        [
+            new SmartArtNode
+            {
+                ModelId = "assistant-parent",
+                Text = "Assistant Parent",
+                Level = 1,
+                IsAssistant = true,
+                Children = { new SmartArtNode { ModelId = "existing-report", Text = "Existing Report", Level = 2 } }
+            },
+            new SmartArtNode { ModelId = "assistant", Text = "Assistant", Level = 1, IsAssistant = true },
+            new SmartArtNode { ModelId = "report", Text = "Report", Level = 1 }
+        ]);
+
+        var result = SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.Demote("assistant"));
+
+        result.Applied.Should().BeTrue();
+        root.Children.Select(node => node.ModelId).Should().Equal("assistant-parent", "report");
+        root.Children[0].Children.Select(node => node.ModelId)
+            .Should().Equal("assistant", "existing-report");
+        root.Children[0].Children[0].IsAssistant.Should().BeTrue();
+        result.Outline.Select(item => (item.ModelId, item.Level, item.IsAssistant))
+            .Should().Contain(("assistant", 2, true));
     }
 
     [Fact]
@@ -1033,6 +1084,50 @@ public sealed class SmartArtEditingPlannerTests
 
         disable.Applied.Should().BeTrue();
         data.Nodes[0].Children.Single().IsAssistant.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ToggleAssistant_MovesNodeAcrossAssistantPrefixAndPreservesPackageOrder()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"));
+        data.Nodes[0].Children.AddRange(
+        [
+            new SmartArtNode { ModelId = "assistant", Text = "Assistant", Level = 1, IsAssistant = true },
+            new SmartArtNode { ModelId = "report1", Text = "Report 1", Level = 1 },
+            new SmartArtNode { ModelId = "report2", Text = "Report 2", Level = 1 }
+        ]);
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/orgChart";
+
+        var smartArt = new SmartArtShape { Data = data };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
+        };
+
+        SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.ToggleAssistant("report2"))
+            .Applied.Should().BeTrue();
+        data.Nodes[0].Children.Select(node => node.ModelId)
+            .Should().Equal("assistant", "report2", "report1");
+        data.Nodes[0].Children[1].IsAssistant.Should().BeTrue();
+
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var points = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/data1.xml"].Bytes))
+            .Descendants(dgm + "pt")
+            .Where(point => point.Attribute("modelId") is not null)
+            .ToArray();
+        points.Select(point => (string)point.Attribute("modelId")!)
+            .Should().ContainInOrder("assistant", "report2", "report1");
+        points.Single(point => (string)point.Attribute("modelId")! == "report2")
+            .Attribute("type")!.Value.Should().Be("asst");
+
+        SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.ToggleAssistant("report2"))
+            .Applied.Should().BeTrue();
+        data.Nodes[0].Children.Select(node => node.ModelId)
+            .Should().Equal("assistant", "report2", "report1");
+        data.Nodes[0].Children[1].IsAssistant.Should().BeFalse();
     }
 
     [Fact]

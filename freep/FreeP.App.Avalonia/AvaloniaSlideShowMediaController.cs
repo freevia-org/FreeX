@@ -507,7 +507,7 @@ internal sealed class AvaloniaSlideShowMediaController
         text.Text = null;
         foreach (var span in cue.Spans)
         {
-            text.Inlines?.Add(new global::Avalonia.Controls.Documents.Run
+            var run = new global::Avalonia.Controls.Documents.Run
             {
                 Text = span.Text,
                 FontWeight = span.Bold ? FontWeight.Bold : FontWeight.Normal,
@@ -515,7 +515,16 @@ internal sealed class AvaloniaSlideShowMediaController
                 TextDecorations = span.Underline ? TextDecorations.Underline : null,
                 Foreground = CaptionBrush(span.ForegroundColorHex),
                 Background = CaptionBrush(span.BackgroundColorHex)
-            });
+            };
+            if (!string.IsNullOrWhiteSpace(span.FontFamily))
+            {
+                run.FontFamily = span.FontFamily;
+            }
+            if (span.FontSizePx is { } fontSizePx)
+            {
+                run.FontSize = fontSizePx;
+            }
+            text.Inlines?.Add(run);
         }
     }
 

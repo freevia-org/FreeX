@@ -21181,7 +21181,10 @@ public sealed class DocumentView : Control
             hostIndex,
             plan.FieldRun,
             plan.Target.BlockIndex,
-            plan.BookmarkNameToAdd));
+            plan.BookmarkNameToAdd,
+            plan.TargetRunIndex,
+            plan.TargetNoteId,
+            plan.TargetIsFootnote));
 
         _cellCaret = null;
         _caret = new DocPosition(hostIndex, BlockLength(hostIndex));
@@ -22282,7 +22285,8 @@ public sealed class DocumentView : Control
                         run.Text,
                         b,
                         crossReferencePageResolver,
-                        crossReferencePageTextResolver);
+                        crossReferencePageTextResolver,
+                        sourceRunIndex: r);
                     if (!string.IsNullOrEmpty(resolved))
                         run.Text = resolved;
                 }

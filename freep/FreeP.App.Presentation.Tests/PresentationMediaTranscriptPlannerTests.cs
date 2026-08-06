@@ -111,7 +111,7 @@ public sealed class PresentationMediaTranscriptPlannerTests
                             NOTE Imported authoring metadata
 
                             STYLE
-                            ::cue(.speaker) { color: #ffcc00; background-color: rgb(0, 0, 0); font-weight: bold; text-decoration: underline; }
+                            ::cue(.speaker) { color: #ffcc00; background-color: rgb(0, 0, 0); font-family: "Aptos"; font-size: 18pt; font-weight: bold; text-decoration: underline; }
 
                             cue-1
                             00:00.000 --> 00:01.500 align:start position:0%
@@ -173,6 +173,8 @@ public sealed class PresentationMediaTranscriptPlannerTests
         webVtt.Cues[0].Spans[0].Classes.Should().Equal("speaker");
         webVtt.Cues[0].Spans[0].ForegroundColorHex.Should().Be("FFCC00");
         webVtt.Cues[0].Spans[0].BackgroundColorHex.Should().Be("000000");
+        webVtt.Cues[0].Spans[0].FontFamily.Should().Be("Aptos");
+        webVtt.Cues[0].Spans[0].FontSizePx.Should().BeApproximately(24, 0.001);
         webVtt.Cues[0].Spans[0].Bold.Should().BeTrue();
         webVtt.Cues[0].Spans[0].Underline.Should().BeTrue();
         webVtt.Cues[1].Spans.Should().Contain(span => span.Text == "Next quarter" && span.Italic);

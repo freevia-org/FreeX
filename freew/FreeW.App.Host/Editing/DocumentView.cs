@@ -12907,7 +12907,8 @@ public sealed class DocumentView : RichTextBox
                         r.Text,
                         b,
                         crossReferencePageResolver,
-                        crossReferencePageTextResolver);
+                        crossReferencePageTextResolver,
+                        sourceRunIndex: i);
                     if (resolved.Length > 0)
                         r.Text = resolved;
                 }
@@ -16752,7 +16753,10 @@ public sealed class DocumentView : RichTextBox
                 caretBlock,
                 plan.FieldRun,
                 plan.Target.BlockIndex,
-                plan.BookmarkNameToAdd));
+                plan.BookmarkNameToAdd,
+                plan.TargetRunIndex,
+                plan.TargetNoteId,
+                plan.TargetIsFootnote));
             _commands.CommitUndoGroup("Insert Cross-reference");
         }
         catch
