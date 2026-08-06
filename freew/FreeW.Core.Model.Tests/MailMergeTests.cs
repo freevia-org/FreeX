@@ -307,6 +307,17 @@ public class MailMergeTests
     [InlineData("abc", "0.00", "abc")]
     [InlineData("1234.5", "x##", "1234.5")]
     [InlineData("-12.5", "$#,##0.00", "-12.5")]
+    [InlineData("1234.5", "0", "1235")]
+    [InlineData("1234.5", "0.00", "1234.50")]
+    [InlineData("1234.5", "#,##0", "1,235")]
+    [InlineData("1234.5", "#,##0.00", "1,234.50")]
+    [InlineData("1234.5", "000000", "001235")]
+    [InlineData("-1234.5", "#,##0.00", "-1,234.50")]
+    [InlineData("1234.5", "$#,##0.00;($#,##0.00)", "$1,234.50")]
+    [InlineData("-1234.5", "$#,##0.00;($#,##0.00)", "($1,234.50)")]
+    [InlineData("1234.5", "0.00;-0.00;ZERO", "1234.50")]
+    [InlineData("-1234.5", "0.00;-0.00;ZERO", "-1234.50")]
+    [InlineData("0", "0.00;-0.00;ZERO", "ZERO")]
     public void MergeRecord_AppliesNativeNumericPicture(string value, string picture, string expected)
     {
         var template = new TextDocument();
@@ -339,6 +350,7 @@ public class MailMergeTests
     [InlineData("8/6/2026 2:05 PM", "d", "6")]
     [InlineData("8/6/2026 2:05 PM", "m", "5")]
     [InlineData("8/6/2026 2:05 PM", "h", "2")]
+    [InlineData("8/6/2026 2:05 PM", "MMMM d, yyyy 'at' h:mm AM/PM", "August 6, 2026 at 2:05 PM")]
     [InlineData("not-a-date", "yyyy-MM-dd", "not-a-date")]
     public void MergeRecord_AppliesCalibratedNativeDatePicture(
         string value,

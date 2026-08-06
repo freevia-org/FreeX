@@ -2068,6 +2068,19 @@ public static class MailMerge
             }
 
             var ch = picture[i];
+            if (ch == '\'')
+            {
+                var closingQuote = picture.IndexOf('\'', i + 1);
+                if (closingQuote < 0)
+                {
+                    netPicture = string.Empty;
+                    return false;
+                }
+
+                builder.Append(picture, i, closingQuote - i + 1);
+                i = closingQuote + 1;
+                continue;
+            }
             if (!char.IsLetter(ch))
             {
                 if (ch is '/' or ':')
@@ -2107,7 +2120,15 @@ public static class MailMerge
     private static string ApplyMergeFieldNumericPicture(string value, string instruction)
     {
         var picture = ComplexFieldEngine.SwitchValue(instruction, '#');
-        if (picture is not ("$#,##0.00" or "0.0%")
+        if (picture is not ("0"
+                or "0.00"
+                or "#,##0"
+                or "#,##0.00"
+                or "000000"
+                or "$#,##0.00"
+                or "$#,##0.00;($#,##0.00)"
+                or "0.00;-0.00;ZERO"
+                or "0.0%")
             || !double.TryParse(
                 value,
                 NumberStyles.Float | NumberStyles.AllowThousands,
