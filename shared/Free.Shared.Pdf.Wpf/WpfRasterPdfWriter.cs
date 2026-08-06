@@ -203,7 +203,8 @@ public static class WpfRasterPdfWriter
 
     private static void ApplyProperties(PdfDocument pdf, PdfDocumentProperties? properties)
     {
-        pdf.Info.Creator = string.IsNullOrWhiteSpace(properties?.Creator) ? "FreeX" : properties!.Creator;
+        if (Normalize(properties?.Creator) is { } creator)
+            pdf.Info.Creator = creator;
         if (properties is null)
             return;
 

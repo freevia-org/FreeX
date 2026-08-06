@@ -103,6 +103,7 @@ public sealed class PdfRenderGeometryTests
         wpf.Should().Contain("XImage.FromBitmapSource");
         wpf.Should().Contain("PdfSharp.Drawing");
         wpf.Should().NotContain("SkiaSharp");
+        wpf.Should().NotContain("? \"FreeX\"");
     }
 
     private static string FindWorkspaceRoot() =>
