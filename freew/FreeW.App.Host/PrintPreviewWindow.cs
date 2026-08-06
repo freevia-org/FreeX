@@ -6,7 +6,9 @@ using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -27,9 +29,19 @@ namespace FreeW.App.Host;
 /// </summary>
 public sealed class PrintPreviewWindow : Window
 {
-    public PrintPreviewWindow(DocumentView editor)
+    public PrintPreviewWindow(DocumentView editor, string? displayName = null)
     {
-        Title = "Print Preview — FreeW";
+        var source = PrintLayout.BuildPaginatedSource(editor);
+        source.DocumentPaginator.ComputePageCount();
+        var preview = new FreeWPrintPreviewSession(
+            displayName,
+            editor.Model.Page,
+            BackstageDirectPrintCapability.NativeDialogAvailable(),
+            canCreatePdf: false,
+            canDirectPrint: true);
+        var state = preview.SetPageCount(source.DocumentPaginator.PageCount);
+
+        Title = state.Title;
         Width = 900;
         Height = 760;
         Background = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60));
@@ -37,7 +49,8 @@ public sealed class PrintPreviewWindow : Window
 
         var viewer = new DocumentViewer
         {
-            Document = PrintLayout.BuildPaginatedSource(editor)
+            Document = source,
+            ToolTip = state.PageCountText,
         };
 
         Content = viewer;

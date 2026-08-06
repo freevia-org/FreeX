@@ -40,14 +40,17 @@ public sealed class SisterDialogTextResourceSourceTests
     public void MainWindow_ResolvesFilePickerAndStatusTextFromSharedResources()
     {
         var source = ReadAvaloniaSource("MainWindow.cs");
+        var outputWorkflow = ReadPresentationSource("Shell", "FreeWOutputWorkflow.cs");
 
         source.Should().Contain("FreeWFileTextResources.Document");
         source.Should().Contain("FileText.OpenPickerTitle");
         source.Should().Contain("FileText.SavePickerTitle");
-        source.Should().Contain("FreeWFileTextResources.ExportPdfPickerTitle");
-        source.Should().Contain("FreeWFileTextResources.ExportXpsPickerTitle");
+        source.Should().Contain("FreeWExportWorkflow.CreatePlan(");
+        outputWorkflow.Should().Contain("FreeWFileTextResources.ExportPdfPickerTitle");
+        outputWorkflow.Should().Contain("FreeWFileTextResources.ExportXpsPickerTitle");
         source.Should().Contain("showOverwritePrompt: true");
-        source.Should().Contain("ExportAtomicWriter.ReplaceTarget(");
+        source.Should().Contain("FreeWExportWorkflow.ExecuteAsync(");
+        outputWorkflow.Should().Contain("ExportAtomicWriter.ReplaceTarget(");
         source.Should().Contain("InsertDialogTextResources.TextFromFilePickerTitle");
         source.Should().Contain("SisterAppFileTextPlanner.FormatUnsupportedFileType(");
         source.Should().Contain("SisterAppFileTextPlanner.FormatCommandFailed(");
@@ -67,6 +70,12 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().NotContain("_status.Text = $\"Open failed:");
         source.Should().NotContain("_status.Text = $\"Save failed:");
         source.Should().NotContain("_status.Text = $\"Saved ");
+    }
+
+    private static string ReadPresentationSource(params string[] parts)
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        return File.ReadAllText(Path.Combine([root, "freew", "FreeW.App.Presentation", .. parts]));
     }
 
     [Fact]

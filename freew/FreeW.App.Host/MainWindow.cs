@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
@@ -2898,33 +2899,44 @@ public sealed class MainWindow : Window
         // continuation pages.
         var paginator = PrintLayout.BuildPaginator(editor);
         paginator.ComputePageCount();
-        dialog.UserPageRangeEnabled = paginator.PageCount > 1;
+        var plan = FreeWPrintRequestPlanner.Create(
+            description,
+            editor.Model.Page,
+            paginator.PageCount);
+        dialog.UserPageRangeEnabled = plan.TotalPages > 1;
         dialog.MinPage = 1;
-        dialog.MaxPage = (uint)Math.Max(1, paginator.PageCount);
+        dialog.MaxPage = (uint)plan.TotalPages;
 
         // Print at the model's page size (points -> DIP), not just the printer's printable area, so
         // margins and page breaks match what the user sees in Print Preview.
-        var page = editor.Model.Page;
-        var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
-        dialog.PrintTicket.PageMediaSize = new System.Printing.PageMediaSize(pageWidth, pageHeight);
+        dialog.PrintTicket.PageMediaSize = new System.Printing.PageMediaSize(
+            plan.PageWidthDip,
+            plan.PageHeightDip);
 
         if (dialog.ShowDialog() != true)
             return;
 
         if (dialog.PageRangeSelection == PageRangeSelection.UserPages)
         {
+            var selectedRange = FreeWPrintRequestPlanner.FromOneBasedRange(
+                (int)dialog.PageRange.PageFrom,
+                (int)dialog.PageRange.PageTo,
+                plan.TotalPages);
+            var (firstPage, lastPage) = FreeWPrintRequestPlanner.ResolvePageRange(
+                selectedRange,
+                plan.TotalPages);
             paginator = PageRangeDocumentPaginator.Create(
                 paginator,
-                (int)dialog.PageRange.PageFrom,
-                (int)dialog.PageRange.PageTo);
+                firstPage,
+                lastPage);
         }
 
-        dialog.PrintDocument(paginator, description);
+        dialog.PrintDocument(paginator, plan.Description);
     }
 
     private void OpenPrintPreview()
     {
-        var preview = new PrintPreviewWindow(_editor) { Owner = this };
+        var preview = new PrintPreviewWindow(_editor, _file.DisplayName) { Owner = this };
         preview.Show();
     }
 
@@ -2937,35 +2949,42 @@ public sealed class MainWindow : Window
     /// </summary>
     private void ExportToPdf()
     {
+        var plan = FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Pdf, _file.DisplayName);
         var saveResult = WpfFileDialogService.ShowSaveDialog(
             this,
-            "PDF document (*.pdf)|*.pdf",
-            _file.DisplayName + ".pdf",
-            ".pdf",
+            plan.Filter,
+            plan.SuggestedFileName,
+            plan.DefaultExtensionWithDot,
             1,
-            "Export to PDF");
+            plan.PickerTitle);
         if (!saveResult.Chosen)
             return;
 
         var path = saveResult.FileName!;
-        try
+        var execution = FreeWExportWorkflow.ExecuteAsync(
+            plan,
+            path,
+            (temporaryPath, _) =>
+            {
+                var paginator = PrintLayout.BuildPaginator(_editor);
+                paginator.ComputePageCount();
+                var bytes = PdfExport.RenderToBytes(paginator, _file.DisplayName);
+                File.WriteAllBytes(temporaryPath, bytes);
+                return ValueTask.FromResult(new FreeWExportArtifact(paginator.PageCount, "WPF"));
+            }).GetAwaiter().GetResult();
+        if (execution.Succeeded)
         {
-            // Render on the UI thread (walks the WPF visual tree), then write atomically.
-            var paginator = PrintLayout.BuildPaginator(_editor);
-            var bytes = PdfExport.RenderToBytes(paginator, _file.DisplayName);
-            Free.Shared.Shell.ExportAtomicWriter.WriteAllBytes(path, bytes);
-
             DialogMessageHelper.ShowInfo(
                 this,
-                $"Exported to PDF:\n{path}",
-                "Export to PDF");
+                execution.Message,
+                plan.PickerTitle);
         }
-        catch (Exception ex)
+        else
         {
             DialogMessageHelper.ShowError(
                 this,
-                "The document could not be exported to PDF.\n\n" + ex.Message,
-                "Export to PDF");
+                execution.Message,
+                plan.PickerTitle);
         }
     }
 
@@ -2978,35 +2997,41 @@ public sealed class MainWindow : Window
     /// </summary>
     private void ExportToXps()
     {
+        var plan = FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Xps, _file.DisplayName);
         var saveResult = WpfFileDialogService.ShowSaveDialog(
             this,
-            "XPS document (*.xps)|*.xps",
-            _file.DisplayName + ".xps",
-            ".xps",
+            plan.Filter,
+            plan.SuggestedFileName,
+            plan.DefaultExtensionWithDot,
             1,
-            "Export to XPS");
+            plan.PickerTitle);
         if (!saveResult.Chosen)
             return;
 
         var path = saveResult.FileName!;
-        try
+        var execution = FreeWExportWorkflow.ExecuteAsync(
+            plan,
+            path,
+            (temporaryPath, _) =>
+            {
+                var paginator = PrintLayout.BuildPaginator(_editor);
+                var bytes = XpsExport.RenderToBytes(paginator);
+                File.WriteAllBytes(temporaryPath, bytes);
+                return ValueTask.FromResult(new FreeWExportArtifact());
+            }).GetAwaiter().GetResult();
+        if (execution.Succeeded)
         {
-            // Render on the UI thread (walks the WPF visual tree), then write atomically.
-            var paginator = PrintLayout.BuildPaginator(_editor);
-            var bytes = XpsExport.RenderToBytes(paginator);
-            Free.Shared.Shell.ExportAtomicWriter.WriteAllBytes(path, bytes);
-
             DialogMessageHelper.ShowInfo(
                 this,
-                $"Exported to XPS:\n{path}",
-                "Export to XPS");
+                execution.Message,
+                plan.PickerTitle);
         }
-        catch (Exception ex)
+        else
         {
             DialogMessageHelper.ShowError(
                 this,
-                "The document could not be exported to XPS.\n\n" + ex.Message,
-                "Export to XPS");
+                execution.Message,
+                plan.PickerTitle);
         }
     }
 
