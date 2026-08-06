@@ -111,6 +111,12 @@ public sealed class CitationEditorTests
             .Where(Citations.IsBibliographyParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should().Contain("Smith. (2024). A Work.");
+        var bibliography = view.Model.Blocks.OfType<Paragraph>()
+            .Where(Citations.IsBibliographyParagraph)
+            .ToArray();
+        bibliography[0].SpanningFieldOwner.Should().BeNull();
+        bibliography[1].SpanningFieldStart!.Instruction.Should().Be(Citations.NativeFieldInstruction);
+        bibliography[1].EndsSpanningField.Should().BeTrue();
 
         view.Commands.Undo().Should().BeTrue();
         view.Model.Blocks.OfType<Paragraph>()

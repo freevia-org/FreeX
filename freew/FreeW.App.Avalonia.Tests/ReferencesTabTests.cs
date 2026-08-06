@@ -593,6 +593,15 @@ public sealed class ReferencesTabTests
         view.InsertBibliography();
 
         view.Document.Blocks.Count.Should().BeGreaterThan(before, "bibliography paragraphs are inserted");
+        var bibliography = view.Document.Blocks.OfType<Paragraph>()
+            .Where(Citations.IsBibliographyParagraph)
+            .ToArray();
+        bibliography.Select(paragraph => paragraph.PlainText).Should().Equal(
+            "References",
+            "Smith. (2024). A Work.");
+        bibliography[0].SpanningFieldOwner.Should().BeNull();
+        bibliography[1].SpanningFieldStart!.Instruction.Should().Be(Citations.NativeFieldInstruction);
+        bibliography[1].EndsSpanningField.Should().BeTrue();
 
         view.Undo();
         view.Document.Blocks.Count.Should().Be(before, "undo removes the whole bibliography block");

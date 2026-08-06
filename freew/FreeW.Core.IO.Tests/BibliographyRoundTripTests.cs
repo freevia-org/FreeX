@@ -15,6 +15,7 @@ namespace FreeW.Core.IO.Tests;
 public class BibliographyRoundTripTests
 {
     private static readonly XNamespace B = "http://schemas.openxmlformats.org/officeDocument/2006/bibliography";
+    private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
     private static TextDocument RoundTrip(TextDocument document)
     {
@@ -66,6 +67,81 @@ public class BibliographyRoundTripTests
 
         using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
         zip.GetEntry("word/bibliography/sources.xml").Should().BeNull();
+    }
+
+    [Fact]
+    public void GeneratedBibliography_RoundTripsNativeSpanningFieldInsideBibliographyControl()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Sources.Add(new Source { Tag = "Ad79", Author = "Adams", Title = "Guide", Year = "1979" });
+        doc.Sources.Add(new Source { Tag = "Kn97", Author = "Knuth", Title = "TAOCP", Year = "1997" });
+        var control = BlockContentControl.BibliographyRegion();
+        var generated = Citations.BuildBibliography(doc, CitationStyle.Apa);
+        foreach (var paragraph in generated)
+        {
+            paragraph.BlockContentControl = control;
+            doc.Blocks.Add(paragraph);
+        }
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        using (var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read))
+        using (var entry = zip.GetEntry("word/document.xml")!.Open())
+        {
+            var xml = XDocument.Load(entry);
+            var sdt = xml.Descendants(W + "sdt").Should().ContainSingle().Subject;
+            sdt.Descendants(W + "docPartGallery").Should().ContainSingle()
+                .Which.Attribute(W + "val")!.Value.Should().Be(BlockContentControl.BibliographyGallery);
+            sdt.Descendants(W + "docPartUnique").Should().ContainSingle();
+
+            var paragraphs = sdt.Descendants(W + "p").ToArray();
+            paragraphs.Should().HaveCount(3);
+            paragraphs[0].Descendants(W + "fldChar").Should().BeEmpty();
+            paragraphs[1].Descendants(W + "instrText").Should().ContainSingle()
+                .Which.Value.Should().Be(Citations.NativeFieldInstruction);
+            paragraphs[1].Descendants(W + "fldChar")
+                .Select(field => field.Attribute(W + "fldCharType")!.Value)
+                .Should().Equal("begin", "separate");
+            paragraphs[2].Descendants(W + "fldChar")
+                .Select(field => field.Attribute(W + "fldCharType")!.Value)
+                .Should().Equal("end");
+        }
+
+        stream.Position = 0;
+        var reopened = DocxReader.Read(stream);
+        var result = reopened.Blocks.OfType<Paragraph>().ToArray();
+        result.Select(paragraph => paragraph.PlainText).Should().Equal(
+            "References",
+            "Adams. (1979). Guide.",
+            "Knuth. (1997). TAOCP.");
+        result[0].SpanningFieldOwner.Should().BeNull();
+        result.Skip(1).Should().OnlyContain(paragraph =>
+            paragraph.SpanningFieldOwner != null
+            && paragraph.SpanningFieldOwner.Instruction == Citations.NativeFieldInstruction);
+        result[1].SpanningFieldStart!.Instruction.Should().Be(Citations.NativeFieldInstruction);
+        result[2].EndsSpanningField.Should().BeTrue();
+        result.Should().OnlyContain(paragraph =>
+            paragraph.BlockContentControl != null
+            && paragraph.BlockContentControl.Kind == BlockContentControlKind.Bibliography);
+    }
+
+    [Fact]
+    public void EmptyGeneratedBibliography_RoundTripsWordEmptyFieldResult()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.AddRange(Citations.BuildBibliography(doc));
+
+        var reopened = RoundTrip(doc);
+        var paragraphs = reopened.Blocks.OfType<Paragraph>().ToArray();
+
+        paragraphs.Select(paragraph => paragraph.PlainText).Should().Equal(
+            Citations.HeadingText,
+            Citations.EmptyResultText);
+        paragraphs[1].Runs.Should().ContainSingle();
+        paragraphs[1].Runs[0].ComplexField!.Instruction.Should().Be(Citations.NativeFieldInstruction);
+        paragraphs[1].EndsSpanningField.Should().BeFalse();
     }
 
     [Fact]

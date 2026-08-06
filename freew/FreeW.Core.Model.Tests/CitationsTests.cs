@@ -164,15 +164,22 @@ public class CitationsTests
     }
 
     [Fact]
-    public void BuildBibliography_NoSources_YieldsOnlyTheHeadingParagraph()
+    public void BuildBibliography_NoSources_YieldsNativeEmptyResultAfterHeading()
     {
         var doc = new TextDocument();
 
         var bibliography = Citations.BuildBibliography(doc);
 
-        bibliography.Should().ContainSingle();
+        bibliography.Should().HaveCount(2);
         bibliography[0].PlainText.Should().Be(Citations.HeadingText);
         bibliography[0].StyleId.Should().Be(Citations.HeadingStyleId);
+        bibliography[0].SpanningFieldOwner.Should().BeNull();
+        bibliography[1].PlainText.Should().Be(Citations.EmptyResultText);
+        bibliography[1].StyleId.Should().Be(Citations.EntryStyleId);
+        bibliography[1].Runs.Should().ContainSingle();
+        bibliography[1].Runs[0].ComplexField!.Instruction.Should().Be(Citations.NativeFieldInstruction);
+        bibliography[1].SpanningFieldStart.Should().BeNull();
+        bibliography[1].EndsSpanningField.Should().BeFalse();
     }
 
     [Fact]
@@ -195,6 +202,12 @@ public class CitationsTests
 
         bibliography[0].StyleId.Should().Be(Citations.HeadingStyleId);
         bibliography.Skip(1).Should().OnlyContain(p => p.StyleId == Citations.EntryStyleId);
+        bibliography[0].SpanningFieldOwner.Should().BeNull();
+        bibliography.Skip(1).Should().OnlyContain(paragraph =>
+            ReferenceEquals(paragraph.SpanningFieldOwner, bibliography[1].SpanningFieldStart));
+        bibliography[1].SpanningFieldStart!.Instruction.Should().Be(Citations.NativeFieldInstruction);
+        bibliography[1].EndsSpanningField.Should().BeFalse();
+        bibliography[^1].EndsSpanningField.Should().BeTrue();
     }
 
     [Fact]
