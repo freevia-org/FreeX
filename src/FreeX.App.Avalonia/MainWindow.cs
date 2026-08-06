@@ -28212,11 +28212,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // applies when this navigation will actually MOVE the active cell (not extend a range).
         bool willMoveActiveCell = !(extendSelection && !moveOnly);
         if (willMoveActiveCell &&
-            sheet is { IsProtected: true } &&
-            GetProtectedNavigationStep(navigationKey, extendSelection) is { } step &&
-            !CommandGuards.CanSelectCell(_session.Workbook, sheet, navigationTarget))
+            sheet is { IsProtected: true })
         {
-            var adjustedTarget = FindNextSelectableCellInDirection(sheet, navigationTarget, step.RowStep, step.ColStep);
+            var adjustedTarget = ExcelWorksheetNavigationPlanner.ResolveProtectedSheetTarget(
+                _session.Workbook,
+                sheet,
+                navigationTarget,
+                navigationKey,
+                extendSelection);
             if (adjustedTarget is null)
             {
                 // No selectable cell exists further in this direction (e.g. every remaining cell
@@ -28232,48 +28235,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ClearSelectedDrawingObject();
         e.Handled = true;
         RefreshShell("Ready");
-    }
-
-    /// <summary>
-    /// The (row, column) step of travel a given navigation key moves the active cell by, used only
-    /// to know which direction to keep stepping in past a locked cell on a protected sheet
-    /// (R75-services-protection-security-4-1). Returns null for keys this protection-skip doesn't
-    /// cover (Home/End/PageUp/PageDown/data-boundary jumps) -- those land on their target
-    /// unadjusted, mirroring the WPF host's scope in MainWindow.Selection.cs.
-    /// </summary>
-    private static (int RowStep, int ColStep)? GetProtectedNavigationStep(ExcelWorksheetNavigationKey key, bool shiftHeld) =>
-        key switch
-        {
-            ExcelWorksheetNavigationKey.Up => (-1, 0),
-            ExcelWorksheetNavigationKey.Down => (1, 0),
-            ExcelWorksheetNavigationKey.Left => (0, -1),
-            ExcelWorksheetNavigationKey.Right => (0, 1),
-            ExcelWorksheetNavigationKey.Enter => shiftHeld ? (-1, 0) : (1, 0),
-            ExcelWorksheetNavigationKey.Tab => shiftHeld ? (0, -1) : (0, 1),
-            _ => null
-        };
-
-    /// <summary>
-    /// Starting at <paramref name="start"/> (already known not to be selectable), keeps stepping by
-    /// (<paramref name="rowStep"/>, <paramref name="colStep"/>) until a cell <see
-    /// cref="CommandGuards.CanSelectCell"/> allows is found, mirroring Excel's
-    /// protected-sheet navigation skip. Returns null if the worksheet bounds are reached with
-    /// nothing selectable in between (R75-services-protection-security-4-1).
-    /// </summary>
-    private CellAddress? FindNextSelectableCellInDirection(Sheet sheet, CellAddress start, int rowStep, int colStep)
-    {
-        var candidate = start;
-        while (!CommandGuards.CanSelectCell(_session.Workbook, sheet, candidate))
-        {
-            long nextRow = (long)candidate.Row + rowStep;
-            long nextCol = (long)candidate.Col + colStep;
-            if (nextRow < 1 || nextRow > CellAddress.MaxRow || nextCol < 1 || nextCol > CellAddress.MaxCol)
-                return null;
-
-            candidate = new CellAddress(candidate.Sheet, (uint)nextRow, (uint)nextCol);
-        }
-
-        return candidate;
     }
 
     private CellAddress OffsetAddress(CellAddress current, int rowDelta, int colDelta) =>
