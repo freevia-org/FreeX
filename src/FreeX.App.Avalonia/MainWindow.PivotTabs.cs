@@ -46,19 +46,12 @@ public sealed partial class MainWindow
     /// <summary>Refresh PivotTable — re-materializes the active pivot from its cache via the Core command.</summary>
     private void RefreshActivePivotTable()
     {
-        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
+        if (!TryResolvePivotApplicationTarget(
+                out var target,
+                missingMessage: UiText.Get("PivotLoc_SelectCellToRefresh")))
             return;
 
-        var pivot = ResolveInsertControlPivot();
-        if (pivot is null)
-        {
-            RefreshShell(UiText.Get("PivotLoc_SelectCellToRefresh"));
-            return;
-        }
-
-        ExecutePivotTabCommand(
-            new RefreshPivotTableCommand(_session.ActiveSheet.Id, pivot.Name),
-            UiText.Format("PivotLoc_RefreshedPivot", pivot.Name));
+        ApplyPivotApplicationPlan(PivotApplication.PlanRefresh(target));
     }
 
     // ── Analyze ▸ Filter (reuse the existing Insert Slicer/Timeline pickers) ─────

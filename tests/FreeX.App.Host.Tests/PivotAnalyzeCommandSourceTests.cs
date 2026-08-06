@@ -17,7 +17,7 @@ public sealed class PivotAnalyzeCommandSourceTests
         pivotSource.Should().Contain("PivotFieldListPane.Visibility = PivotFieldListPane.Visibility == Visibility.Visible");
         pivotSource.Should().Contain("new PivotTableDataSourceDialog(");
         pivotSource.Should().Contain("PivotApplication.PlanChangeDataSource(target, dialog.Result.SourceRangeText)");
-        pivotSource.Should().Contain("new PivotTableNameDialog(pivotTable.Name)");
+        pivotSource.Should().Contain("new PivotTableNameDialog(target.PivotTable.Name)");
         pivotSource.Should().Contain("PivotApplication.PlanRename(target, dialog.Result.Name)");
         pivotSource.Should().Contain("ShowPivotTableOptionsDialog();");
         pivotSource.Should().Contain("PivotApplication.PlanClear(target)");

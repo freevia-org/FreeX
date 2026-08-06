@@ -22,7 +22,8 @@ public sealed partial class MainWindow
 
     private bool TryResolvePivotApplicationTarget(
         out PivotApplicationTarget target,
-        PivotTargetFallback fallback = PivotTargetFallback.FirstOnSheet)
+        PivotTargetFallback fallback = PivotTargetFallback.FirstOnSheet,
+        string? missingMessage = null)
     {
         target = null!;
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
@@ -34,7 +35,10 @@ public sealed partial class MainWindow
             fallback);
         if (resolution.Target is not { } resolved)
         {
-            ShowPivotApplicationIssue(resolution.Message);
+            if (missingMessage is not null)
+                ShowEditIssue(missingMessage);
+            else
+                ShowPivotApplicationIssue(resolution.Message);
             return false;
         }
 
