@@ -1081,14 +1081,27 @@ public sealed class SlideCanvasTests
     [Fact]
     public void SlideCanvas_LineSeriesRenderer_ConsumesSharedPathPrimitive()
     {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var planner = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "Core",
+            "ChartRenderCommandPlanner.cs"));
+        var execution = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "SlideCanvas.ChartExecution.cs"));
         var source = File.ReadAllText(Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            root,
             "freep",
             "FreeP.App.Rendering.Wpf",
             "SlideCanvas.cs"));
 
-        source.Should().Contain("foreach (var path in primitive.LinePaths)");
-        source.Should().Contain("ToGeometry(path, depth)");
+        planner.Should().Contain("foreach (var path in primitive.LinePaths)");
+        planner.Should().Contain("new ChartRenderCommand.LinePath(");
+        execution.Should().Contain("ToGeometry(path.Primitive, path.Depth)");
         source.Should().Contain("ctx.BezierTo(");
         source.Should().Contain("ChartLinePathSegmentKind.CubicBezier");
     }
