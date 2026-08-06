@@ -327,6 +327,64 @@ public class MailMergeTests
             .PlainText.Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("8/6/2026 2:05 PM", "MMMM d, yyyy", "August 6, 2026")]
+    [InlineData("8/6/2026 2:05 PM", "MM/dd/yyyy", "08/06/2026")]
+    [InlineData("8/6/2026 2:05 PM", "yyyy-MM-dd", "2026-08-06")]
+    [InlineData("8/6/2026 2:05 PM", "h:mm AM/PM", "2:05 PM")]
+    [InlineData("8/6/2026 2:05 PM", "M/d/yyyy", "8/6/2026")]
+    [InlineData("8/6/2026 2:05 PM", "dddd", "Thursday")]
+    [InlineData("8/6/2026 2:05 PM", "h:mm am/pm", "2:05 PM")]
+    [InlineData("8/6/2026 2:05 PM", "dd.MM.yyyy", "06.08.2026")]
+    [InlineData("8/6/2026 2:05 PM", "d", "6")]
+    [InlineData("8/6/2026 2:05 PM", "m", "5")]
+    [InlineData("8/6/2026 2:05 PM", "h", "2")]
+    [InlineData("not-a-date", "yyyy-MM-dd", "not-a-date")]
+    public void MergeRecord_AppliesCalibratedNativeDatePicture(
+        string value,
+        string picture,
+        string expected)
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    $" MERGEFIELD When \\@ \"{picture}\" \\* MERGEFORMAT ",
+                    "«When»",
+                    formatting: new RunFormatting { LanguageTag = "en-US" })
+            }
+        });
+        var row = new Dictionary<string, string> { ["When"] = value };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be(expected);
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be(expected);
+    }
+
+    [Fact]
+    public void MergeRecord_DatePictureUsesRunLanguageForParsingAndNames()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD When \\@ \"dddd, d. MMMM yyyy\" ",
+                    "«When»",
+                    formatting: new RunFormatting { LanguageTag = "de-DE" })
+            }
+        });
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string> { ["When"] = "06.08.2026" });
+
+        merged.PlainText.Should().Be("Donnerstag, 6. August 2026");
+    }
+
     [Fact]
     public void MergeRecordWithRules_ResolvesNativeMergeFieldAlongsideRules()
     {
