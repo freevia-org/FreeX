@@ -371,6 +371,9 @@ public static class SlideShowPlaybackFramePlanner
             return Lerp(0.65, 1, (progress - 0.75) / 0.25);
         }
 
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeFontSize)
+            return isBeforeStart ? 0 : 1;
+
         if (plan.EffectKind is SlideShowShapeAnimationEffectKind.ColorPulse
             or SlideShowShapeAnimationEffectKind.ChangeColor
             or SlideShowShapeAnimationEffectKind.ChangeLineColor
@@ -610,6 +613,7 @@ public static class SlideShowPlaybackFramePlanner
                 or SlideShowShapeAnimationEffectKind.ChangeColor
                 or SlideShowShapeAnimationEffectKind.ChangeLineColor
                 or SlideShowShapeAnimationEffectKind.ChangeFontStyle
+                or SlideShowShapeAnimationEffectKind.ChangeFontSize
                 or SlideShowShapeAnimationEffectKind.ChangeFillColor
                 or SlideShowShapeAnimationEffectKind.GrowWithColor
                 or SlideShowShapeAnimationEffectKind.Shimmer

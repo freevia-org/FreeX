@@ -103,6 +103,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private readonly Dictionary<uint, FrameworkElement> _animFillElements = new();
     private readonly Dictionary<uint, FrameworkElement> _animLineElements = new();
     private readonly Dictionary<uint, FrameworkElement> _animFontStyleElements = new();
+    private readonly Dictionary<uint, FrameworkElement> _animFontSizeElements = new();
     private readonly Dictionary<uint, IReadOnlyList<FrameworkElement>> _paragraphAnimElements = new();
 
     // Track which shapes have been revealed so the live canvas can hide/show correctly.
@@ -3802,6 +3803,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _animFillElements.Clear();
         _animLineElements.Clear();
         _animFontStyleElements.Clear();
+        _animFontSizeElements.Clear();
         _paragraphAnimElements.Clear();
         _revealedShapes.Clear();
         _slideCanvas.SuppressedShapeIds.Clear();
@@ -4025,6 +4027,44 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 }
             }
 
+            var fontSizeAnimation = slide.Animations.FirstOrDefault(a =>
+                a.ShapeId == shapeId
+                && a.Preset is (AnimationPreset.Grow or AnimationPreset.Shrink)
+                && SlideShowPlaybackPlanner.ResolveFontSizeBehavior(a) is not null);
+            var fontSizePlan = fontSizeAnimation is null
+                ? null
+                : SlideShowPlaybackPlanner.ResolveFontSizeBehavior(fontSizeAnimation);
+            var explicitRuns = shape.TextBody?.Paragraphs
+                .SelectMany(paragraph => paragraph.Runs)
+                .ToList();
+            if (fontSizeAnimation is not null
+                && explicitRuns is { Count: > 0 }
+                && explicitRuns.All(run => run.FontSizePt is > 0)
+                && fontSizePlan is { } targetSize)
+            {
+                var fontSizeShape = SlideCloner.CloneShape(shape);
+                foreach (var run in fontSizeShape.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs))
+                    run.FontSizePt = run.FontSizePt!.Value * targetSize.Multiplier;
+
+                var fontSizeBitmap = RenderShapeToOverlayBitmap(slide, fontSizeShape, w, h);
+                if (fontSizeBitmap is not null)
+                {
+                    var fontSizeElement = new Image
+                    {
+                        Source = fontSizeBitmap,
+                        Width = w,
+                        Height = h,
+                        Stretch = Stretch.None,
+                        Opacity = 0,
+                        IsHitTestVisible = false,
+                    };
+                    Canvas.SetLeft(fontSizeElement, 0);
+                    Canvas.SetTop(fontSizeElement, 0);
+                    _animOverlay.Children.Add(fontSizeElement);
+                    _animFontSizeElements[shapeId] = fontSizeElement;
+                }
+            }
+
             if (slide.Animations.Any(a => a.ShapeId == shapeId
                                           && (a.Kind == AnimationKind.Entrance
                                               || a.Kind == AnimationKind.Motion)))
@@ -4145,6 +4185,16 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 && _animFontStyleElements.TryGetValue(anim.ShapeId, out var fontStyleElement))
             {
                 PlayShapeAnimation(fontStyleElement, plan);
+                _revealedShapes.Add(anim.ShapeId);
+                continue;
+            }
+
+            if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeFontSize)
+            {
+                if (_animFontSizeElements.TryGetValue(anim.ShapeId, out var fontSizeElement))
+                    PlayShapeAnimation(fontSizeElement, plan);
+                else
+                    PlayShapeAnimation(element, plan with { EffectKind = SlideShowShapeAnimationEffectKind.GrowShrink });
                 _revealedShapes.Add(anim.ShapeId);
                 continue;
             }
@@ -4325,6 +4375,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
             case SlideShowShapeAnimationEffectKind.ChangeFontStyle:
                 FontStyleEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.ChangeFontSize:
+                FontSizeEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.ColorWave:
@@ -6089,6 +6143,23 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     }
 
     private static void FontStyleEffect(
+        Storyboard storyboard,
+        FrameworkElement element,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        var opacity = new DoubleAnimation
+        {
+            From = 0,
+            To = 1,
+            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs)),
+            Duration = TimeSpan.FromMilliseconds(1),
+        };
+        Storyboard.SetTarget(opacity, element);
+        Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
+        storyboard.Children.Add(opacity);
+    }
+
+    private static void FontSizeEffect(
         Storyboard storyboard,
         FrameworkElement element,
         SlideShowShapeAnimationPlaybackPlan plan)

@@ -109,6 +109,7 @@ public enum SlideShowShapeAnimationEffectKind
     ColorWave,
     ChangeColor,
     ChangeFontStyle,
+    ChangeFontSize,
     ChangeFillColor,
     GrowWithColor,
     Wave,
@@ -208,6 +209,8 @@ public sealed record SlideShowFontStylePlaybackPlan(
     bool? Bold,
     bool? Underline);
 
+public sealed record SlideShowFontSizePlaybackPlan(double Multiplier);
+
 /// <summary>
 /// Logical visibility behavior for an animation whose visual overlay could not be built.
 /// Hosts use this shared plan to preserve PowerPoint's step semantics without inventing
@@ -290,6 +293,35 @@ public static class SlideShowPlaybackPlanner
         }
 
         return new(italic, bold, underline);
+    }
+
+    public static SlideShowFontSizePlaybackPlan? ResolveFontSizeBehavior(ShapeAnimation animation)
+    {
+        if (string.IsNullOrWhiteSpace(animation.PreservedNumericBehaviorXml))
+            return null;
+
+        try
+        {
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            var root = XElement.Parse(animation.PreservedNumericBehaviorXml, LoadOptions.PreserveWhitespace);
+            var target = root.Descendants(p + "attrName")
+                .Select(element => element.Value.Trim())
+                .FirstOrDefault();
+            var rawMultiplier = root.Attribute("to")?.Value.Trim();
+            if (!string.Equals(target, "style.fontSize", StringComparison.Ordinal)
+                || !double.TryParse(rawMultiplier, NumberStyles.Float, CultureInfo.InvariantCulture, out var multiplier)
+                || !double.IsFinite(multiplier)
+                || multiplier <= 0)
+            {
+                return null;
+            }
+
+            return new(multiplier);
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
     }
 
     public static SlideShowTransitionPlaybackPlan PlanTransition(SlideTransition transition)
@@ -563,6 +595,9 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Crawl => SlideShowShapeAnimationEffectKind.Crawl,
             AnimationPreset.Zoom => SlideShowShapeAnimationEffectKind.Zoom,
             AnimationPreset.Pulse => SlideShowShapeAnimationEffectKind.Pulse,
+            AnimationPreset.Grow or AnimationPreset.Shrink
+                when ResolveFontSizeBehavior(animation) is not null
+                => SlideShowShapeAnimationEffectKind.ChangeFontSize,
             AnimationPreset.Grow or AnimationPreset.Shrink => SlideShowShapeAnimationEffectKind.GrowShrink,
             AnimationPreset.Spin => SlideShowShapeAnimationEffectKind.Spin,
             AnimationPreset.Teeter => SlideShowShapeAnimationEffectKind.Teeter,
