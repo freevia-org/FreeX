@@ -312,6 +312,10 @@ public sealed class CanvasGesturePlannerTests
             "freep",
             "FreeP.App.Presentation",
             "CanvasGestureSession.cs");
+        var router = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "CanvasGestureRouter.cs");
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "CanvasGestureHandler.cs");
         var avalonia = ReadWorkspaceFile(
             "freep",
@@ -323,25 +327,31 @@ public sealed class CanvasGesturePlannerTests
         session.Should().Contain("CanvasGesturePlanner.PlanMultiResize");
         session.Should().Contain("CanvasGesturePlanner.PlanMultiRotate");
         session.Should().Contain("CanvasGesturePlanner.ReduceDrag");
+        router.Should().Contain("CanvasGestureSession _session");
+        router.Should().Contain("_session.PlanMove(");
+        router.Should().Contain("_session.PlanMultiResize(");
+        router.Should().Contain("_session.PlanMultiRotate(");
+        router.Should().Contain("_editor.ApplySelectedTransforms(");
+        router.Should().Contain("_editor.TryApplyFormatPainterToShape(");
 
-        wpf.Should().Contain("CanvasGestureSession _gestureSession");
-        wpf.Should().Contain("ApplySelectedTransforms");
+        wpf.Should().Contain("CanvasGestureRouter _gestureRouter");
+        wpf.Should().Contain("_gestureRouter.HandlePointerPressed(");
+        wpf.Should().Contain("_gestureRouter.CompletePointer(");
         wpf.Should().Contain("BeginFormatPainter");
         wpf.Should().Contain("CancelFormatPainter");
-        wpf.Should().Contain("TryApplyFormatPainterToShape");
-        wpf.Should().Contain("StartResize(uint shapeId, Slide slide, CanvasGestureHandleKind handle");
+        wpf.Should().Contain("ApplyPreviewPlan(");
         wpf.Should().NotContain("ToCanvasGestureHandle");
         wpf.Should().NotContain("private const long MinEmu");
         wpf.Should().NotContain("SlideTransformCore.UnRotateDelta(dxDip, dyDip");
         wpf.Should().NotContain("Math.Abs(ddxPx)");
         wpf.Should().NotContain("Math.Abs(ddyPx)");
 
-        avalonia.Should().Contain("CanvasGestureSession _gestureSession");
-        avalonia.Should().Contain("ApplySelectedTransforms");
+        avalonia.Should().Contain("CanvasGestureRouter _gestureRouter");
+        avalonia.Should().Contain("_gestureRouter.HandlePointerPressed(");
+        avalonia.Should().Contain("_gestureRouter.CompletePointer(");
         avalonia.Should().Contain("BeginFormatPainter");
         avalonia.Should().Contain("CancelFormatPainter");
-        avalonia.Should().Contain("TryApplyFormatPainterToShape");
-        avalonia.Should().Contain("StartResize(uint shapeId, Slide slide, CanvasGestureHandleKind handle");
+        avalonia.Should().Contain("ApplyPreviewPlan(");
         avalonia.Should().NotContain("ToCanvasGestureHandle");
         avalonia.Should().NotContain("private const long MinEmu");
         avalonia.Should().NotContain("SlideTransformCore.UnRotateDelta(dxDip, dyDip");

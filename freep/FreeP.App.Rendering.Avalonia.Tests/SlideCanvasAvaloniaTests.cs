@@ -4087,19 +4087,29 @@ public sealed class GestureHandlerAltSnapTests
     public void DoubleClickPolicy_ZoomNavigationIsTerminalBeforeSelection()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
-        var source = File.ReadAllText(Path.Combine(
+        var router = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "CanvasGestureRouter.cs")).Replace("\r\n", "\n");
+        var adapter = File.ReadAllText(Path.Combine(
             root,
             "freep",
             "FreeP.App.Rendering.Avalonia",
-            "AvaloniaCanvasGestureHandler.cs")).Replace("\r\n", "\n");
-        var start = source.IndexOf(
+            "AvaloniaCanvasGestureHandler.cs"));
+        var start = router.IndexOf(
             "if (shape?.Kind == SlideShapeKind.Zoom &&",
             StringComparison.Ordinal);
-        var end = source.IndexOf("// Text editing", start, StringComparison.Ordinal);
+        var end = router.IndexOf(
+            "if (!CanvasGesturePlanner.ShouldContinueDoubleClickSelection(shape))",
+            start,
+            StringComparison.Ordinal);
 
         start.Should().BeGreaterThanOrEqualTo(0);
         end.Should().BeGreaterThan(start);
-        source[start..end].Should().Contain("e.Handled = true;\n                return;");
+        router[start..end].Should().Contain("_editor.SelectSlide(targetSlideIndex);");
+        router[start..end].Should().Contain("return CanvasGesturePressPlan.HandledOnly;");
+        adapter.Should().Contain("_gestureRouter.HandlePointerPressed(");
     }
 
     // ── Helper: build a handler with one shape ────────────────────────────────
@@ -4201,6 +4211,22 @@ public sealed class GestureHandlerAltSnapTests
             shape.OffsetYEmu.Should().Be(457200L);
             shape.ExtentCxEmu.Should().Be(1828800L);
             shape.ExtentCyEmu.Should().Be(914400L);
+        });
+    }
+
+    [Fact]
+    public async Task GestureHandler_KeyboardTranslation_UsesSharedNudgeModifierPolicy()
+    {
+        await Run(() =>
+        {
+            var (handler, _, shape) = MakeHandler();
+
+            handler.HandleKeyDown(Key.Right, KeyModifiers.None).Should().BeTrue();
+            handler.HandleKeyDown(Key.Down, KeyModifiers.Shift).Should().BeTrue();
+
+            shape.OffsetXEmu.Should().Be(914400L + CanvasGesturePlanner.SmallNudgeEmu);
+            shape.OffsetYEmu.Should().Be(457200L + CanvasGesturePlanner.LargeNudgeEmu);
+            handler.Dispose();
         });
     }
 

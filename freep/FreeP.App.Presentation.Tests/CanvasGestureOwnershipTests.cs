@@ -9,6 +9,10 @@ public sealed class CanvasGestureOwnershipTests
             "freep",
             "FreeP.App.Presentation",
             "CanvasGestureSession.cs");
+        var router = ReadRepoFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "CanvasGestureRouter.cs");
         var wpf = ReadRepoFile(
             "freep",
             "FreeP.App.Rendering.Wpf",
@@ -22,10 +26,26 @@ public sealed class CanvasGestureOwnershipTests
         shared.Should().Contain("CanvasGesturePlanner.PlanMove");
         shared.Should().Contain("CanvasGesturePlanner.ComputeResizeBounds");
         shared.Should().Contain("CanvasGesturePlanner.PlanMultiRotate");
+        router.Should().Contain("private readonly CanvasGestureSession _session");
+        router.Should().Contain("HandlePointerPressed(CanvasGesturePressRequest request)");
+        router.Should().Contain("PreviewPointer(");
+        router.Should().Contain("CompletePointer(");
+        router.Should().Contain("HandleKeyDown(");
+        router.Should().Contain("ShapeHitTester.MarqueeHitTest");
+        router.Should().Contain("ChartPointHitTester.TryHitTest");
+        router.Should().Contain("ZoomNavigationService.TryGetTargetSlideIndex");
 
         foreach (var adapter in new[] { wpf, avalonia })
         {
-            adapter.Should().Contain("CanvasGestureSession _gestureSession");
+            adapter.Should().Contain("CanvasGestureRouter _gestureRouter");
+            adapter.Should().Contain("_gestureRouter.HandlePointerPressed(");
+            adapter.Should().Contain("_gestureRouter.PreviewPointer(");
+            adapter.Should().Contain("_gestureRouter.CompletePointer(");
+            adapter.Should().Contain("_gestureRouter.HandleKeyDown(");
+            adapter.Should().Contain("CreatePressRequest(");
+            adapter.Should().Contain("ApplyPreviewPlan(");
+            adapter.Should().Contain("ToGestureModifiers(");
+            adapter.Should().NotContain("CanvasGestureSession");
             adapter.Should().NotContain("private enum GestureKind");
             adapter.Should().NotContain("_dragStartScreen");
             adapter.Should().NotContain("_resizeOrigX");
@@ -35,6 +55,16 @@ public sealed class CanvasGestureOwnershipTests
             adapter.Should().NotContain("ShapeGeometryAdjustmentPlanner.BuildMutationPlan");
             adapter.Should().NotContain("PictureCropAuthoringPlanner.BuildMutationPlan");
             adapter.Should().NotContain("private const long SmallNudgeEmu");
+            adapter.Should().NotContain("ChartPointHitTester.TryHitTest");
+            adapter.Should().NotContain("ZoomNavigationService.TryGetTargetSlideIndex");
+            adapter.Should().NotContain("ShapeHitTester.MarqueeHitTest");
+            adapter.Should().NotContain("_editor.Select(");
+            adapter.Should().NotContain("_editor.ClearSelection(");
+            adapter.Should().NotContain("_editor.MoveSelected(");
+            adapter.Should().NotContain("_editor.ResizeShape(");
+            adapter.Should().NotContain("_editor.RotateShape(");
+            adapter.Should().NotContain("_editor.ApplySelectedTransforms(");
+            adapter.Should().NotContain("_editor.DeleteSelected(");
         }
     }
 

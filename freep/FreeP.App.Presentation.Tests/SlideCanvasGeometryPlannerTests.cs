@@ -185,14 +185,26 @@ public sealed class SlideCanvasGeometryPlannerTests
             "freep",
             "FreeP.App.Rendering.Avalonia",
             "AvaloniaCanvasGestureHandler.cs");
+        var router = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "CanvasGestureRouter.cs");
+
+        router.Should().Contain("CanvasGestureSession _session");
+        router.Should().Contain("_session.PlanMove(");
+        router.Should().Contain("SlideCanvasGeometryPlanner.ScreenRectBetween");
 
         foreach (var source in new[] { wpfGesture, avaloniaGesture })
         {
-            source.Should().Contain("CanvasGesturePlanner.CaptureMoveState");
-            source.Should().Contain("CanvasGesturePlanner.PlanMove");
+            source.Should().Contain("CanvasGestureRouter _gestureRouter");
+            source.Should().Contain("_gestureRouter.PreviewPointer(");
+            source.Should().Contain("ApplyPreviewPlan(");
             source.Should().Contain("SlideCanvasGeometryPlanner.EmuBoundsToScreen");
-            source.Should().Contain("SlideCanvasGeometryPlanner.ScreenRectBetween");
             source.Should().Contain("SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen");
+            source.Should().Contain("ToGesturePoint(");
+            source.Should().NotContain("CanvasGesturePlanner.CaptureMoveState");
+            source.Should().NotContain("CanvasGesturePlanner.PlanMove");
+            source.Should().NotContain("SlideCanvasGeometryPlanner.ScreenRectBetween");
             source.Should().NotContain("BoundsToScreenRect");
             source.Should().NotContain("SnapEngine.Snap(");
         }
