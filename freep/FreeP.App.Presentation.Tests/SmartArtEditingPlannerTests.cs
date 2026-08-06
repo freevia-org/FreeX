@@ -823,6 +823,27 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void Promote_AssistantToRoot_IsRejectedWithoutMutation()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"));
+        data.Nodes[0].Children.Add(new SmartArtNode
+        {
+            ModelId = "assistant",
+            Text = "Assistant",
+            Level = 1,
+            IsAssistant = true
+        });
+
+        var result = SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.Promote("assistant"));
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Be("An assistant node cannot be promoted to the root.");
+        data.Nodes.Should().ContainSingle();
+        data.Nodes[0].Children.Should().ContainSingle(child =>
+            child.ModelId == "assistant" && child.IsAssistant);
+    }
+
+    [Fact]
     public void Demote_MakesNodeChildOfPreviousSiblingAndUpdatesHierarchyLayout()
     {
         var data = MakeFlatData(SmartArtFamily.Hierarchy, ("n1", "Leader"), ("n2", "Manager"), ("n3", "Peer"));
@@ -854,6 +875,36 @@ public sealed class SmartArtEditingPlannerTests
         result.Applied.Should().BeFalse();
         result.Message.Should().Be("The first SmartArt sibling cannot be demoted.");
         data.Nodes.Select(node => node.ModelId).Should().Equal("n1", "n2");
+    }
+
+    [Fact]
+    public void Demote_AssistantInsertsBeforeRegularChildrenOfNewParent()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"));
+        var root = data.Nodes[0];
+        root.Children.AddRange(
+        [
+            new SmartArtNode
+            {
+                ModelId = "assistant-parent",
+                Text = "Assistant Parent",
+                Level = 1,
+                IsAssistant = true,
+                Children = { new SmartArtNode { ModelId = "existing-report", Text = "Existing Report", Level = 2 } }
+            },
+            new SmartArtNode { ModelId = "assistant", Text = "Assistant", Level = 1, IsAssistant = true },
+            new SmartArtNode { ModelId = "report", Text = "Report", Level = 1 }
+        ]);
+
+        var result = SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.Demote("assistant"));
+
+        result.Applied.Should().BeTrue();
+        root.Children.Select(node => node.ModelId).Should().Equal("assistant-parent", "report");
+        root.Children[0].Children.Select(node => node.ModelId)
+            .Should().Equal("assistant", "existing-report");
+        root.Children[0].Children[0].IsAssistant.Should().BeTrue();
+        result.Outline.Select(item => (item.ModelId, item.Level, item.IsAssistant))
+            .Should().Contain(("assistant", 2, true));
     }
 
     [Fact]

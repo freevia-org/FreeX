@@ -935,12 +935,23 @@ public static class SmartArtEditingPlanner
         var parentLocation = FindLocation(data, location.Parent.ModelId);
         var currentSiblings = location.Parent.Children;
         var node = currentSiblings[location.Index];
+        if (node.IsAssistant && parentLocation.Parent is null)
+        {
+            return SmartArtNodeEditResult.NotApplied(
+                SmartArtNodeEditKind.Promote,
+                targetId,
+                "An assistant node cannot be promoted to the root.",
+                BuildOutline(data));
+        }
+
         currentSiblings.RemoveAt(location.Index);
 
         var promotedSiblings = parentLocation.Parent is null
             ? data.Nodes
             : parentLocation.Parent.Children;
-        var insertAt = Math.Clamp(parentLocation.Index + 1, 0, promotedSiblings.Count);
+        var insertAt = node.IsAssistant
+            ? promotedSiblings.TakeWhile(sibling => sibling.IsAssistant).Count()
+            : Math.Clamp(parentLocation.Index + 1, 0, promotedSiblings.Count);
         promotedSiblings.Insert(insertAt, node);
         NormalizeLevels(data);
 
@@ -970,7 +981,10 @@ public static class SmartArtEditingPlanner
         var node = siblings[location.Index];
         var newParent = siblings[location.Index - 1];
         siblings.RemoveAt(location.Index);
-        newParent.Children.Add(node);
+        var insertAt = node.IsAssistant
+            ? newParent.Children.TakeWhile(child => child.IsAssistant).Count()
+            : newParent.Children.Count;
+        newParent.Children.Insert(insertAt, node);
         NormalizeLevels(data);
 
         return Applied(
