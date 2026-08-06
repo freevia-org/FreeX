@@ -17,6 +17,7 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("CreateRowHeaderCell(row, rowMetric, selectedRow, zoomFactor)");
         source.Should().Contain("AddColumnResizeHandle(header, col, metric, zoomFactor)");
         source.Should().Contain("AddRowResizeHandle(header, resizeRow, resizeHeight)");
+        source.Should().Contain("AutoFitRowFromHeader(resizeRow);");
         source.Should().Contain("GridResizePreviewPlanner.GetRowResizeRange(sheet, selectedRange: null, visibleRow + 1).Start");
         source.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Column");
         source.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Row");
@@ -35,6 +36,7 @@ public sealed class AvaloniaGridInputSourceTests
             source.IndexOf("private void PreviewHeaderResize(", StringComparison.Ordinal)];
         commitResize.Should().NotContain("SelectEntireColumn(");
         commitResize.Should().NotContain("SelectEntireRow(");
+        commitResize.Should().Contain("GridResizeSizePlanner.IsMeaningfulDrag(drag.StartPointer, pointer)");
     }
 
     [Fact]
@@ -61,6 +63,8 @@ public sealed class AvaloniaGridInputSourceTests
         rowHandle.Should().Contain("if (args.ClickCount >= 2)");
         rowHandle.IndexOf("if (args.ClickCount >= 2)", StringComparison.Ordinal)
             .Should().BeLessThan(rowHandle.IndexOf("BeginHeaderResize(", StringComparison.Ordinal));
+        rowHandle.Should().NotContain("if (displayedHeight <= 0)");
+        rowHandle.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Row, row, displayedHeight);");
     }
 
     [Fact]

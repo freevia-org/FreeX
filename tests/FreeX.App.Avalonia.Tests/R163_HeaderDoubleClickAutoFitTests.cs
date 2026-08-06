@@ -158,6 +158,41 @@ public sealed class R163_HeaderDoubleClickAutoFitTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public void HiddenBoundaryResize_UsesNoOpClickAndAllowsPositiveDrag()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var rowHandle = source[
+            source.IndexOf("private Control AddRowResizeHandle(", StringComparison.Ordinal)..
+            source.IndexOf("private static Border CreateHeaderResizeHandle", StringComparison.Ordinal)];
+        var commitResize = source[
+            source.IndexOf("private void CommitHeaderResize(", StringComparison.Ordinal)..
+            source.IndexOf("private void PreviewHeaderResize(", StringComparison.Ordinal)];
+
+        rowHandle.Should().NotContain("if (displayedHeight <= 0)");
+        rowHandle.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Row, row, displayedHeight);");
+        commitResize.Should().Contain("GridResizeSizePlanner.IsMeaningfulDrag(drag.StartPointer, pointer)");
+        commitResize.Should().Contain("drag.Pointer.Capture(null);");
+        commitResize.Should().Contain("if (!meaningfulDrag)");
+        commitResize.Should().Contain("args.Handled = true;");
+
+        var noOpGuard = commitResize.IndexOf("if (!meaningfulDrag)", StringComparison.Ordinal);
+        var commandPath = commitResize.IndexOf(
+            "if (drag.Kind == HeaderResizeKind.Column)", noOpGuard, StringComparison.Ordinal);
+        commandPath.Should().BeGreaterThan(noOpGuard);
+        commitResize[noOpGuard..commandPath]
+            .Should().NotContain("new SetColumnWidthCommand(")
+            .And.NotContain("new SetRowHeightCommand(")
+            .And.NotContain("RefreshShell(")
+            .And.Contain("return;");
+        commitResize.IndexOf("drag.Pointer.Capture(null);", StringComparison.Ordinal)
+            .Should().BeLessThan(noOpGuard,
+                "a no-movement click must release capture before taking the no-op return");
+        var firstCommand = commitResize.IndexOf("new SetColumnWidthCommand(", StringComparison.Ordinal);
+        firstCommand.Should().BeGreaterThan(noOpGuard,
+            "a no-movement collapsed click must exit before issuing a resize command");
+    }
+
     private static void InvokeAutoFitColumnFromHeader(MainWindow window, uint col) =>
         typeof(MainWindow)
             .GetMethod("AutoFitColumnFromHeader", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -167,4 +202,16 @@ public sealed class R163_HeaderDoubleClickAutoFitTests
         typeof(MainWindow)
             .GetMethod("AutoFitRowFromHeader", BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(window, [row]);
+
+    private static string RepoFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
+            directory = directory.Parent;
+
+        if (directory is null)
+            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
+
+        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
+    }
 }

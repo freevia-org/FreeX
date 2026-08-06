@@ -36,6 +36,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private readonly TextBox _frameBorderGlowRadius;
     private readonly TextBox _frameBorderSoftEdgeRadius;
     private readonly TextBox _frameBorderReflectionAlpha;
+    private readonly TextBox _frameBorderReflectionBlur;
     private readonly TextBox _frameBorderReflectionDistance;
     private readonly TextBox _frameBorderReflectionDirection;
     private readonly TextBox _frameBorderReflectionScale;
@@ -307,6 +308,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderReflectionEnabled(current),
         };
         _frameBorderReflectionAlpha = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionAlpha(current), MinWidth = 180 };
+        _frameBorderReflectionBlur = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionBlur(current), MinWidth = 180 };
         _frameBorderReflectionDistance = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(current), MinWidth = 180 };
         _frameBorderReflectionDirection = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(current), MinWidth = 180 };
         _frameBorderReflectionScale = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(current), MinWidth = 180 };
@@ -382,6 +384,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             Row("Soft-edge radius (pt):", _frameBorderSoftEdgeRadius),
             _frameBorderReflectionEnabled,
             Row("Reflection alpha (%):", _frameBorderReflectionAlpha),
+            Row("Reflection blur (pt):", _frameBorderReflectionBlur),
             Row("Reflection distance (pt):", _frameBorderReflectionDistance),
             Row("Reflection direction (deg):", _frameBorderReflectionDirection),
             Row("Reflection scale (%):", _frameBorderReflectionScale),
@@ -593,6 +596,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                 _frameBorderReflectionDistance.Text,
                 _frameBorderReflectionDirection.Text,
                 _frameBorderReflectionScale.Text,
+                _frameBorderReflectionBlur.Text,
                 _frameBorderReflectionEnabled.IsChecked == true,
                 out var frameBorderReflection))
         {
@@ -721,6 +725,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         _frameBorderSoftEdgeRadius.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderSoftEdgeRadius(properties);
         _frameBorderReflectionEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderReflectionEnabled(properties);
         _frameBorderReflectionAlpha.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionAlpha(properties);
+        _frameBorderReflectionBlur.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionBlur(properties);
         _frameBorderReflectionDistance.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(properties);
         _frameBorderReflectionDirection.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(properties);
         _frameBorderReflectionScale.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(properties);
@@ -775,6 +780,7 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         _frameBorderSoftEdgeRadius.IsEnabled = enabled && _frameBorderSoftEdgeEnabled.IsChecked == true;
         _frameBorderReflectionEnabled.IsEnabled = enabled;
         _frameBorderReflectionAlpha.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
+        _frameBorderReflectionBlur.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
         _frameBorderReflectionDistance.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
         _frameBorderReflectionDirection.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
         _frameBorderReflectionScale.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;

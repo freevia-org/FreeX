@@ -2399,7 +2399,11 @@ probe_grid_autofit() {
             hidden_row4_height="$observed_height"
             hidden_rows_after='[5]'
             local hidden_row5_top hidden_row5_left hidden_row5_center_x hidden_row5_center_y
-            hidden_row5_top=$((a1_y + 3 * cell_height + hidden_row4_height))
+            # selection_box reports the outlined cell bounds, which include the same four-pixel
+            # center inset used for the physical boundary clicks. Use the cell's actual next-row
+            # origin here so a positive AutoFit height is proved by the real B5 selection rather
+            # than rejected for the outline's extra border pixels.
+            hidden_row5_top=$((a1_y + 3 * cell_height + hidden_row4_height - handle_center_inset))
             hidden_row5_left=$((a1_x + cell_width))
             hidden_row5_center_x=$((hidden_row5_left + cell_width / 2))
             hidden_row5_center_y=$((hidden_row5_top + cell_height / 2))

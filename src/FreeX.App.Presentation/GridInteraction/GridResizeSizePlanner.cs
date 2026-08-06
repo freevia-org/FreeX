@@ -11,6 +11,7 @@ namespace FreeX.App.Presentation.GridInteraction;
 public static class GridResizeSizePlanner
 {
     public const double MinimumSizePixels = 0;
+    public const double MeaningfulDragThresholdPixels = 4;
     public const double MaximumColumnSizePixels = ColumnWidthPixelMapper.MaximumColumnWidthPixels;
 
     // R105: the drag delta this planner clamps is a pixel value (it feeds SetRowHeightCommand's
@@ -26,6 +27,9 @@ public static class GridResizeSizePlanner
 
     public static double ClampRowSize(double requestedPixels) =>
         ClampToAllowedRange(requestedPixels, MaximumRowSizePixels);
+
+    public static bool IsMeaningfulDrag(double startPointer, double currentPointer) =>
+        Math.Abs(currentPointer - startPointer) >= MeaningfulDragThresholdPixels;
 
     public static double CalculateLinePosition(double sizeStartPixels, double dragEdgeStart, double resizedSizePixels) =>
         dragEdgeStart - sizeStartPixels + resizedSizePixels;

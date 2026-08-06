@@ -616,6 +616,7 @@ public sealed class SlideCompositorTests
         shapeProperties.Add(new XElement(drawing + "effectLst",
             new XElement(drawing + "reflection",
                 new XAttribute("stA", 42000),
+                new XAttribute("blurRad", 12700),
                 new XAttribute("dist", 44450),
                 new XAttribute("dir", 5400000),
                 new XAttribute("sy", -75000),
@@ -627,6 +628,7 @@ public sealed class SlideCompositorTests
         picture.Effects.Should().NotBeNull();
         picture.Effects!.HasReflection.Should().BeTrue();
         picture.Effects.ReflectionAlpha.Should().Be(107);
+        picture.Effects.ReflectionBlurDip.Should().BeApproximately(12700 / 9525d, 0.00001);
         picture.Effects.ReflectionDistDip.Should().BeApproximately(44450 / 9525d, 0.00001);
         picture.Effects.ReflectionScaleY.Should().BeApproximately(-0.75, 0.00001);
     }

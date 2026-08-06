@@ -69,6 +69,7 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("grid-autofit-postcondition.json");
         probe.Should().Contain("hiddenRowsBefore\\\":[4,5]");
         probe.Should().Contain("hiddenRowsAfter\\\":$hidden_rows_after");
+        probe.Should().Contain("hidden_row5_top=$((a1_y + 3 * cell_height + hidden_row4_height - handle_center_inset))");
         probe.Should().Contain("xdotool click --repeat 2 --delay 180 1");
         schema.Should().Contain("\"schemaVersion\": { \"const\": 2 }");
         schema.Should().Contain("\"hiddenRowBoundary\"");
