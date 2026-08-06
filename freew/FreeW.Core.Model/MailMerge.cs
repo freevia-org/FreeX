@@ -86,7 +86,8 @@ public enum MailMergeInteractivePromptKind
 public sealed record MailMergeInteractivePrompt(
     MailMergeInteractivePromptKind Kind,
     string Key,
-    string Prompt);
+    string Prompt,
+    string DefaultAnswer = "");
 
 /// <summary>
 /// Finds the interactive merge-rule prompts that a host must collect before starting a merge run.
@@ -268,7 +269,8 @@ public static class MergeRuleEvaluator
                 prompt = new MailMergeInteractivePrompt(
                     MailMergeInteractivePromptKind.FillIn,
                     tokens[0],
-                    tokens[0]);
+                    tokens[0],
+                    SwitchArgument(tokens, 'd'));
                 return true;
             }
         }
@@ -281,7 +283,8 @@ public static class MergeRuleEvaluator
                 prompt = new MailMergeInteractivePrompt(
                     MailMergeInteractivePromptKind.Ask,
                     tokens[0],
-                    tokens.Count >= 2 ? tokens[1] : string.Empty);
+                    tokens.Count >= 2 ? tokens[1] : string.Empty,
+                    SwitchArgument(tokens, 'd'));
                 return true;
             }
         }
@@ -712,6 +715,18 @@ public static class MergeRuleEvaluator
             }
         }
         return tokens;
+    }
+
+    private static string SwitchArgument(IReadOnlyList<string> tokens, char switchLetter)
+    {
+        var switchToken = $"\\{switchLetter}";
+        for (var i = 0; i + 1 < tokens.Count; i++)
+        {
+            if (tokens[i].Equals(switchToken, StringComparison.OrdinalIgnoreCase))
+                return tokens[i + 1];
+        }
+
+        return string.Empty;
     }
 
     // Return the portion of span after consuming n whitespace-separated tokens.
@@ -2201,9 +2216,12 @@ public static class MailMerge
                             run.ComplexField.Instruction,
                             out var prompt))
                     {
-                        run.Text = prompt.Kind == MailMergeInteractivePromptKind.FillIn
-                            ? state.FillInAnswers.GetValueOrDefault(prompt.Key, string.Empty)
-                            : state.AskAnswers.GetValueOrDefault(prompt.Key, string.Empty);
+                        var answers = prompt.Kind == MailMergeInteractivePromptKind.FillIn
+                            ? state.FillInAnswers
+                            : state.AskAnswers;
+                        run.Text = answers.TryGetValue(prompt.Key, out var answer)
+                            ? answer
+                            : prompt.DefaultAnswer;
                         if (prompt.Kind == MailMergeInteractivePromptKind.Ask)
                             state.Bookmarks[prompt.Key] = run.Text;
                         run.ComplexField = null;

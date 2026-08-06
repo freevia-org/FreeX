@@ -66,7 +66,7 @@ public sealed class MailMergeDialogSurfaceTests
 
         source.Should().Contain("CollectInteractiveMergeAnswersAsync()");
         source.Should().Contain("_mailMerge.GetInteractiveFinishPrompts()");
-        source.Should().Contain("MailMergeDialogs.AskMergeRulePromptAsync(this, title, prompt.Prompt)");
+        source.Should().Contain("this, title, prompt.Prompt, prompt.DefaultAnswer");
         source.Should().Contain("_mailMerge.FinishMerge(plan, mergeState)");
         source.Should().Contain("_mailMerge.BuildFinishedMerge(plan, mergeState)");
     }

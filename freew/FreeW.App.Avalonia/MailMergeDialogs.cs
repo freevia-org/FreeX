@@ -589,10 +589,14 @@ internal static class MailMergeDialogs
         return result;
     }
 
-    public static async Task<string?> AskMergeRulePromptAsync(Window owner, string title, string prompt)
+    public static async Task<string?> AskMergeRulePromptAsync(
+        Window owner,
+        string title,
+        string prompt,
+        string initialValue = "")
     {
         var dialog = CreateDialog(title, 340, 165);
-        var valueBox = CreateTextBox(string.Empty, prompt);
+        var valueBox = CreateTextBox(initialValue, prompt);
         string? result = null;
         var content = CreateForm((prompt, (Control)valueBox));
         AddActions(dialog, content, () =>

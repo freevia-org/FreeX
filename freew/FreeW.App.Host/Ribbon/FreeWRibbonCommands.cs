@@ -6773,7 +6773,7 @@ internal static class FreeWRibbonCommands
     // Simple single-prompt dialog (for Fill-in prompt text and Ref bookmark name).
     private static class MergeRulePromptDialog
     {
-        public static string? AskPrompt(Window? owner, string title, string label)
+        public static string? AskPrompt(Window? owner, string title, string label, string initialValue = "")
         {
             string? result = null;
             var dialog = new Window
@@ -6786,7 +6786,12 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var box = new System.Windows.Controls.TextBox { MinWidth = 260, Margin = new Thickness(0, 0, 0, 12) };
+            var box = new System.Windows.Controls.TextBox
+            {
+                Text = initialValue,
+                MinWidth = 260,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
             var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) => { result = box.Text; dialog.DialogResult = true; };
@@ -7252,12 +7257,14 @@ internal static class FreeWRibbonCommands
             {
                 if (prompt.Kind == MailMergeInteractivePromptKind.FillIn)
                 {
-                    var answer = MergeRulePromptDialog.AskPrompt(owner, "Fill-in", prompt.Prompt);
+                    var answer = MergeRulePromptDialog.AskPrompt(
+                        owner, "Fill-in", prompt.Prompt, prompt.DefaultAnswer);
                     state.FillInAnswers[prompt.Key] = answer ?? string.Empty;
                 }
                 else
                 {
-                    var answer = MergeRulePromptDialog.AskPrompt(owner, "Ask", prompt.Prompt);
+                    var answer = MergeRulePromptDialog.AskPrompt(
+                        owner, "Ask", prompt.Prompt, prompt.DefaultAnswer);
                     state.AskAnswers[prompt.Key] = answer ?? string.Empty;
                 }
             }
