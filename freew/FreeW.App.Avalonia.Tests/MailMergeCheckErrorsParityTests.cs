@@ -36,10 +36,10 @@ public sealed class MailMergeCheckErrorsParityTests
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain(
-            "Select recipients first (Mailings > Select Recipients), then check for errors.");
+            "ValidateMailMergeOperationAsync(MailMergeOperation.CheckForErrors)");
         source.Should().Contain("if (mode is not { } selected)\n            return;");
         source.Should().Contain(
-            "var execution = _mailMerge.CheckForErrorsPlan(selected);");
+            "var execution = _mailMerge!.CheckForErrorsPlan(selected);");
         source.Should().Contain(
             "OpenMailMergeErrorReport(report);");
         source.Should().Contain(

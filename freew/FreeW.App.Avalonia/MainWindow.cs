@@ -2090,15 +2090,25 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
+    private async Task<bool> ValidateMailMergeOperationAsync(MailMergeOperation operation)
+    {
+        if (_mailMerge is null)
+            return false;
+
+        var validation = _mailMerge.ValidateOperation(operation);
+        if (validation.IsValid)
+            return true;
+
+        await FreeWInfoDialog.ShowAsync(this, validation.Message);
+        return false;
+    }
+
     private async Task OpenMatchFieldsAsync()
     {
-        if (_mailMerge?.Session.Data is not { } data)
-        {
-            await FreeWInfoDialog.ShowAsync(
-                this,
-                "Select recipients first (Mailings > Select Recipients), then match fields.");
+        if (!await ValidateMailMergeOperationAsync(MailMergeOperation.MatchFields))
             return;
-        }
+
+        var data = _mailMerge!.Session.Data!;
         var mapping = await MailMergeDialogs.AskMatchFieldsAsync(
             this, data.Header, _mailMerge.Session.Mapping ?? new FieldMapping());
         if (mapping is not null)
@@ -2108,13 +2118,10 @@ public sealed partial class MainWindow : Window
 
     private async Task OpenFilterSortAsync()
     {
-        if (_mailMerge?.Session.Data is not { Count: > 0 } data)
-        {
-            await FreeWInfoDialog.ShowAsync(
-                this,
-                "Select recipients first (Mailings > Select Recipients), then filter and sort.");
+        if (!await ValidateMailMergeOperationAsync(MailMergeOperation.FilterSortRecipients))
             return;
-        }
+
+        var data = _mailMerge!.Session.Data!;
         var filtered = await MailMergeDialogs.AskFilterSortRecipientsAsync(this, data);
         if (filtered is not null)
             _mailMerge.ApplyRecipientFilter(filtered);
@@ -2125,13 +2132,8 @@ public sealed partial class MainWindow : Window
     {
         if (_mailMerge is null)
             return;
-        if (_mailMerge.Session.Data is not { Count: > 0 })
-        {
-            await FreeWInfoDialog.ShowAsync(
-                this,
-                "Select recipients first (Mailings > Select Recipients), then preview a record.");
+        if (!await ValidateMailMergeOperationAsync(MailMergeOperation.PreviewRecord))
             return;
-        }
         if (!_mailMerge.EnsurePreviewingForNavigation())
             return;
         var data = _mailMerge.Session.Data!;
@@ -2148,11 +2150,8 @@ public sealed partial class MainWindow : Window
 
     private async Task OpenFindRecipientAsync()
     {
-        if (_mailMerge?.Session.Data is not { Count: > 0 } data)
+        if (!await ValidateMailMergeOperationAsync(MailMergeOperation.FindRecipient))
         {
-            await FreeWInfoDialog.ShowAsync(
-                this,
-                "Select recipients first (Mailings > Select Recipients), then find a recipient.");
             _editor.Focus();
             return;
         }
@@ -2163,25 +2162,20 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var result = _mailMerge.FindRecipient(query);
+        var result = _mailMerge!.FindRecipient(query);
         await FreeWInfoDialog.ShowAsync(this, result.Message);
         _editor.Focus();
     }
 
     private async Task OpenCheckForErrorsAsync()
     {
-        if (_mailMerge?.Session.Data is not { Count: > 0 })
-        {
-            await FreeWInfoDialog.ShowAsync(
-                this,
-                "Select recipients first (Mailings > Select Recipients), then check for errors.");
+        if (!await ValidateMailMergeOperationAsync(MailMergeOperation.CheckForErrors))
             return;
-        }
         var mode = await MailMergeDialogs.AskCheckForErrorsAsync(this);
         if (mode is not { } selected)
             return;
 
-        var execution = _mailMerge.CheckForErrorsPlan(selected);
+        var execution = _mailMerge!.CheckForErrorsPlan(selected);
         if (execution.Success && execution.Result is { } result)
         {
             foreach (var message in execution.Messages)
@@ -2204,13 +2198,10 @@ public sealed partial class MainWindow : Window
     {
         if (_mailMerge is null)
             return;
-        if (_mailMerge.Session.Data is not { Count: > 0 } data)
-        {
-            await FreeWInfoDialog.ShowAsync(
-                this,
-                "Select recipients first (Mailings > Select Recipients), then Finish & Merge.");
+        if (!await ValidateMailMergeOperationAsync(MailMergeOperation.FinishMerge))
             return;
-        }
+
+        var data = _mailMerge.Session.Data!;
         var plan = await MailMergeDialogs.AskFinishMergeAsync(
             this, data.Count, _mailMerge.Session.CurrentIndex);
         if (plan is not null)

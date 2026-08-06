@@ -119,7 +119,7 @@ internal sealed class MailMergeEngine
 
     public void MatchFields()
     {
-        if (!Validate(MailMergeOperation.MatchFields))
+        if (!ValidateAndShow(MailMergeOperation.MatchFields))
             return;
 
         ApplyFieldMapping(MailMerge.AutoMatchFields(Session.Data!.Header));
@@ -147,7 +147,7 @@ internal sealed class MailMergeEngine
 
     public void FilterSortRecipients()
     {
-        if (!Validate(MailMergeOperation.FilterSortRecipients))
+        if (!ValidateAndShow(MailMergeOperation.FilterSortRecipients))
             return;
 
         var data = Session.Data!;
@@ -350,7 +350,7 @@ internal sealed class MailMergeEngine
     /// </summary>
     public void InsertAddressBlock()
     {
-        if (!Validate(MailMergeOperation.InsertAddressBlock))
+        if (!ValidateAndShow(MailMergeOperation.InsertAddressBlock))
             return;
         _editor.InsertComplexField(
             MailMerge.AddressBlockInstruction,
@@ -363,7 +363,7 @@ internal sealed class MailMergeEngine
     /// </summary>
     public void InsertGreetingLine()
     {
-        if (!Validate(MailMergeOperation.InsertGreetingLine))
+        if (!ValidateAndShow(MailMergeOperation.InsertGreetingLine))
             return;
         _editor.InsertComplexField(
             MailMerge.GreetingLineInstruction,
@@ -580,9 +580,12 @@ internal sealed class MailMergeEngine
         ShowInfo($"Inserted a {rows} x {columns} label grid.");
     }
 
-    private bool Validate(MailMergeOperation operation)
+    public MailMergeValidationPlan ValidateOperation(MailMergeOperation operation) =>
+        _workflow.Validate(operation);
+
+    private bool ValidateAndShow(MailMergeOperation operation)
     {
-        var validation = _workflow.Validate(operation);
+        var validation = ValidateOperation(operation);
         if (validation.IsValid)
             return true;
 

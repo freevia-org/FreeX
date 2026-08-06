@@ -51,11 +51,11 @@ public sealed class MailMergeDialogSurfaceTests
 
         source.Should().Contain("OpenFindRecipientAsync");
         source.Should().Contain("MailMergeDialogs.AskFindRecipientAsync(this)");
-        source.Should().Contain("_mailMerge.FindRecipient(query)");
+        source.Should().Contain("_mailMerge!.FindRecipient(query)");
         source.Should().Contain("if (query is null)");
         source.Should().Contain("OpenCheckForErrorsAsync");
         source.Should().Contain("MailMergeDialogs.AskCheckForErrorsAsync(this)");
-        source.Should().Contain("_mailMerge.CheckForErrorsPlan(selected)");
+        source.Should().Contain("_mailMerge!.CheckForErrorsPlan(selected)");
         source.Should().Contain("FreeWInfoDialog.ShowAsync(this, result.Message)");
     }
 
@@ -68,14 +68,11 @@ public sealed class MailMergeDialogSurfaceTests
         source.Should().Contain("_mailMerge.EnsurePreviewingForNavigation()");
         source.Should().Contain("_mailMerge.ApplyFieldMapping(mapping);");
         source.Should().Contain("_mailMerge.ApplyRecipientFilter(filtered);");
-        source.Should().Contain(
-            "Select recipients first (Mailings > Select Recipients), then match fields.");
-        source.Should().Contain(
-            "Select recipients first (Mailings > Select Recipients), then filter and sort.");
-        source.Should().Contain(
-            "Select recipients first (Mailings > Select Recipients), then preview a record.");
-        source.Should().Contain(
-            "Select recipients first (Mailings > Select Recipients), then Finish & Merge.");
+        source.Should().Contain("ValidateMailMergeOperationAsync(MailMergeOperation.MatchFields)");
+        source.Should().Contain("ValidateMailMergeOperationAsync(MailMergeOperation.FilterSortRecipients)");
+        source.Should().Contain("ValidateMailMergeOperationAsync(MailMergeOperation.PreviewRecord)");
+        source.Should().Contain("ValidateMailMergeOperationAsync(MailMergeOperation.FinishMerge)");
+        source.Should().Contain("FreeWInfoDialog.ShowAsync(this, validation.Message)");
     }
 
     [Fact]
