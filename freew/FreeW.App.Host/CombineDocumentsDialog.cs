@@ -1,7 +1,7 @@
 using System;
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Host;
 
@@ -26,16 +26,11 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class CombineDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    /// <summary>What the dialog returns when the user clicks OK.</summary>
-    internal sealed record Result(string OriginalFilePath, string ReviewerBFilePath, string AuthorA, string AuthorB);
-
-    private const string DocxFilter = "Word documents (*.docx)|*.docx|All files (*.*)|*.*";
-
     private readonly string _originalPath;
     private readonly string _reviewerBPath;
     private readonly TextBox _authorABox;
     private readonly TextBox _authorBBox;
-    private Result? _result;
+    private CombineDocumentsDialogResult? _result;
 
     private CombineDocumentsDialog(
         Window? owner,
@@ -47,9 +42,13 @@ internal sealed class CombineDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     {
         _originalPath = originalPath;
         _reviewerBPath = reviewerBPath;
+        var plan = ReviewCompareCombineWorkflow.BuildCombineDialogPlan(
+            originalPath,
+            reviewerBPath,
+            new CombineDocumentsPromptState(defaultAuthorA, defaultAuthorB, reviewerATitle));
 
         Owner = owner;
-        Title = "Combine Documents";
+        Title = plan.Title;
         Width = 460;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -58,13 +57,13 @@ internal sealed class CombineDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
         _authorABox = new TextBox
         {
-            Text = defaultAuthorA,
+            Text = plan.DefaultAuthorA,
             MinWidth = 200,
             MaxWidth = 240
         };
         _authorBBox = new TextBox
         {
-            Text = defaultAuthorB,
+            Text = plan.DefaultAuthorB,
             MinWidth = 200,
             MaxWidth = 240
         };
@@ -77,17 +76,17 @@ internal sealed class CombineDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         for (var i = 0; i < 7; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddReadOnlyRow(grid, 0, "Original:", TruncatePath(originalPath));
-        AddReadOnlyRow(grid, 1, "Reviewer A:", string.IsNullOrEmpty(reviewerATitle) ? "(current document)" : reviewerATitle);
-        AddReadOnlyRow(grid, 2, "Reviewer B:", TruncatePath(reviewerBPath));
+        AddReadOnlyRow(grid, 0, plan.OriginalLabel, plan.OriginalDisplayPath);
+        AddReadOnlyRow(grid, 1, plan.ReviewerALabel, plan.ReviewerADisplayName);
+        AddReadOnlyRow(grid, 2, plan.ReviewerBLabel, plan.ReviewerBDisplayPath);
 
         var sep = new Separator { Margin = new Thickness(0, 6, 0, 6) };
         Grid.SetRow(sep, 3);
         Grid.SetColumnSpan(sep, 2);
         grid.Children.Add(sep);
 
-        AddFieldRow(grid, 4, "Label Reviewer A with:", _authorABox);
-        AddFieldRow(grid, 5, "Label Reviewer B with:", _authorBBox);
+        AddFieldRow(grid, 4, plan.AuthorALabel, _authorABox);
+        AddFieldRow(grid, 5, plan.AuthorBLabel, _authorBBox);
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
         Grid.SetRow(buttons, 6);
@@ -141,35 +140,19 @@ internal sealed class CombineDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     private void TryAccept(bool showWarnings)
     {
-        var authorA = _authorABox.Text.Trim();
-        if (string.IsNullOrEmpty(authorA))
+        if (!ReviewCompareCombineWorkflow.TryBuildCombineDialogResult(
+                _originalPath,
+                _reviewerBPath,
+                _authorABox.Text,
+                _authorBBox.Text,
+                out _result,
+                out var validationMessage))
         {
             if (showWarnings)
-                DialogMessageHelper.ShowWarning(this, "Enter a name for Reviewer A to label their tracked changes.");
+                DialogMessageHelper.ShowWarning(this, validationMessage!);
             return;
         }
-
-        var authorB = _authorBBox.Text.Trim();
-        if (string.IsNullOrEmpty(authorB))
-        {
-            if (showWarnings)
-                DialogMessageHelper.ShowWarning(this, "Enter a name for Reviewer B to label their tracked changes.");
-            return;
-        }
-
-        _result = new Result(_originalPath, _reviewerBPath, authorA, authorB);
         Close();
-    }
-
-    // Show at most the last two path components so the dialog is not too wide.
-    private static string TruncatePath(string path)
-    {
-        var dir = Path.GetDirectoryName(path);
-        var file = Path.GetFileName(path);
-        if (string.IsNullOrEmpty(dir))
-            return file;
-        var parent = Path.GetFileName(dir);
-        return string.IsNullOrEmpty(parent) ? file : $"…\\{parent}\\{file}";
     }
 
     // -----------------------------------------------------------------------
@@ -189,10 +172,10 @@ internal sealed class CombineDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         new(owner: null, originalPath, reviewerBPath, defaultAuthorA, defaultAuthorB, reviewerATitle);
 
     /// <summary>
-    /// Test seam: validate the current author values and return the <see cref="Result"/>, without
+    /// Test seam: validate the current author values and return the shared result, without
     /// closing the window (mirrors <see cref="CompareDocumentsDialog.AcceptForTest"/>).
     /// </summary>
-    internal Result? AcceptForTest()
+    internal CombineDocumentsDialogResult? AcceptForTest()
     {
         TryAccept(showWarnings: false);
         return _result;
@@ -209,7 +192,7 @@ internal sealed class CombineDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     /// <paramref name="reviewerATitle"/> shows as the "Reviewer A:" display name. Returns null if the user
     /// cancels any phase.
     /// </summary>
-    public static Result? Prompt(
+    public static CombineDocumentsDialogResult? Prompt(
         Window? owner,
         string defaultAuthorA,
         string defaultAuthorB,
@@ -218,18 +201,18 @@ internal sealed class CombineDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         // Phase 1: file picker for the original (base) document.
         var originalPicker = WpfFileDialogService.ShowOpenDialog(
             owner,
-            DocxFilter,
-            defaultExtensionWithDot: ".docx",
-            title: "Combine: pick the ORIGINAL (base) document");
+            ReviewCompareCombineWorkflow.CombineDocumentFilter,
+            defaultExtensionWithDot: ReviewCompareCombineWorkflow.CombineDocumentDefaultExtension,
+            title: ReviewCompareCombineWorkflow.CombineOriginalPickerTitle);
         if (!originalPicker.Chosen)
             return null;
 
         // Phase 2: file picker for reviewer B's revised copy.
         var reviewerBPicker = WpfFileDialogService.ShowOpenDialog(
             owner,
-            DocxFilter,
-            defaultExtensionWithDot: ".docx",
-            title: "Combine: pick Reviewer B's revised document");
+            ReviewCompareCombineWorkflow.CombineDocumentFilter,
+            defaultExtensionWithDot: ReviewCompareCombineWorkflow.CombineDocumentDefaultExtension,
+            title: ReviewCompareCombineWorkflow.CombineReviewerBPickerTitle);
         if (!reviewerBPicker.Chosen)
             return null;
 

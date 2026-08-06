@@ -23,6 +23,19 @@ public sealed record CombineDocumentsDialogResult(
     string AuthorA,
     string AuthorB);
 
+public sealed record CombineDocumentsDialogPlan(
+    string Title,
+    string OriginalLabel,
+    string OriginalDisplayPath,
+    string ReviewerALabel,
+    string ReviewerADisplayName,
+    string ReviewerBLabel,
+    string ReviewerBDisplayPath,
+    string AuthorALabel,
+    string AuthorBLabel,
+    string DefaultAuthorA,
+    string DefaultAuthorB);
+
 public sealed record CompareDocumentsExecutionInput(
     TextDocument Original,
     TextDocument Revised,
@@ -42,6 +55,14 @@ public static class ReviewCompareCombineWorkflow
 {
     public const string DefaultReviewerB = "Reviewer 2";
     public const string FallbackReviewer = "Reviewer";
+    public const string CombineOriginalPickerTitle = "Combine: pick the ORIGINAL (base) document";
+    public const string CombineReviewerBPickerTitle = "Combine: pick Reviewer B's revised document";
+    public const string CombineDocumentFilter = "Word documents (*.docx)|*.docx|All files (*.*)|*.*";
+    public const string CombineDocumentDefaultExtension = ".docx";
+    public const string MissingCombineAuthorAMessage =
+        "Enter a name for Reviewer A to label their tracked changes.";
+    public const string MissingCombineAuthorBMessage =
+        "Enter a name for Reviewer B to label their tracked changes.";
 
     public static CompareDocumentsPromptState BuildComparePrompt(
         TextDocument revised,
@@ -67,6 +88,65 @@ public static class ReviewCompareCombineWorkflow
             ResolveAuthor(revisedA.Properties.Author, fallbackAuthorA),
             ResolveAuthor(null, fallbackAuthorB, DefaultReviewerB),
             ResolveDocumentTitle(revisedA, currentFileName));
+    }
+
+    public static CombineDocumentsDialogPlan BuildCombineDialogPlan(
+        string originalFilePath,
+        string reviewerBFilePath,
+        CombineDocumentsPromptState state)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(originalFilePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reviewerBFilePath);
+        ArgumentNullException.ThrowIfNull(state);
+
+        return new CombineDocumentsDialogPlan(
+            "Combine Documents",
+            "Original:",
+            TruncatePathForDialog(originalFilePath),
+            "Reviewer A:",
+            string.IsNullOrWhiteSpace(state.ReviewerATitle) ? "(current document)" : state.ReviewerATitle,
+            "Reviewer B:",
+            TruncatePathForDialog(reviewerBFilePath),
+            "Label Reviewer A with:",
+            "Label Reviewer B with:",
+            state.DefaultAuthorA,
+            state.DefaultAuthorB);
+    }
+
+    public static bool TryBuildCombineDialogResult(
+        string originalFilePath,
+        string reviewerBFilePath,
+        string? authorA,
+        string? authorB,
+        out CombineDocumentsDialogResult? result,
+        out string? validationMessage)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(originalFilePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reviewerBFilePath);
+
+        var normalizedAuthorA = authorA?.Trim();
+        if (string.IsNullOrEmpty(normalizedAuthorA))
+        {
+            result = null;
+            validationMessage = MissingCombineAuthorAMessage;
+            return false;
+        }
+
+        var normalizedAuthorB = authorB?.Trim();
+        if (string.IsNullOrEmpty(normalizedAuthorB))
+        {
+            result = null;
+            validationMessage = MissingCombineAuthorBMessage;
+            return false;
+        }
+
+        result = new CombineDocumentsDialogResult(
+            originalFilePath,
+            reviewerBFilePath,
+            normalizedAuthorA,
+            normalizedAuthorB);
+        validationMessage = null;
+        return true;
     }
 
     public static string CreateRevisionDateXml(DateTimeOffset timestamp) =>

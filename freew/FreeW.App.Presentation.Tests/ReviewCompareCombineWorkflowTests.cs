@@ -51,6 +51,66 @@ public sealed class ReviewCompareCombineWorkflowTests
     }
 
     [Fact]
+    public void Combine_dialog_plan_projects_shared_labels_and_short_paths()
+    {
+        var plan = ReviewCompareCombineWorkflow.BuildCombineDialogPlan(
+            @"C:\Docs\Review\base.docx",
+            "/tmp/review/revised.docx",
+            new CombineDocumentsPromptState("Alice", "Bob", " "));
+
+        plan.Title.Should().Be("Combine Documents");
+        plan.OriginalLabel.Should().Be("Original:");
+        plan.OriginalDisplayPath.Should().Be(@"...\Review\base.docx");
+        plan.ReviewerADisplayName.Should().Be("(current document)");
+        plan.ReviewerBDisplayPath.Should().Be(@"...\review\revised.docx");
+        plan.AuthorALabel.Should().Be("Label Reviewer A with:");
+        plan.AuthorBLabel.Should().Be("Label Reviewer B with:");
+        plan.DefaultAuthorA.Should().Be("Alice");
+        plan.DefaultAuthorB.Should().Be("Bob");
+    }
+
+    [Fact]
+    public void Combine_dialog_result_trims_authors_and_preserves_paths()
+    {
+        var accepted = ReviewCompareCombineWorkflow.TryBuildCombineDialogResult(
+            @"C:\Docs\base.docx",
+            @"C:\Docs\revised.docx",
+            "  Alice  ",
+            "  Bob  ",
+            out var result,
+            out var validationMessage);
+
+        accepted.Should().BeTrue();
+        validationMessage.Should().BeNull();
+        result.Should().Be(new CombineDocumentsDialogResult(
+            @"C:\Docs\base.docx",
+            @"C:\Docs\revised.docx",
+            "Alice",
+            "Bob"));
+    }
+
+    [Theory]
+    [InlineData(" ", "Bob", ReviewCompareCombineWorkflow.MissingCombineAuthorAMessage)]
+    [InlineData("Alice", " ", ReviewCompareCombineWorkflow.MissingCombineAuthorBMessage)]
+    public void Combine_dialog_result_rejects_missing_reviewer_names(
+        string authorA,
+        string authorB,
+        string expectedMessage)
+    {
+        var accepted = ReviewCompareCombineWorkflow.TryBuildCombineDialogResult(
+            @"C:\Docs\base.docx",
+            @"C:\Docs\revised.docx",
+            authorA,
+            authorB,
+            out var result,
+            out var validationMessage);
+
+        accepted.Should().BeFalse();
+        result.Should().BeNull();
+        validationMessage.Should().Be(expectedMessage);
+    }
+
+    [Fact]
     public void Revision_date_xml_is_utc_and_second_precision()
     {
         var timestamp = new DateTimeOffset(2026, 7, 3, 12, 10, 11, TimeSpan.FromHours(3));

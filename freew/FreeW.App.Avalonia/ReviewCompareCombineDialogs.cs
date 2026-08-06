@@ -308,10 +308,11 @@ internal sealed class CombineDocumentsDialog : FreeWDialogWindow
 
         _originalPath = originalPath;
         _reviewerBPath = reviewerBPath;
-        _authorABox.Text = state.DefaultAuthorA;
-        _authorBBox.Text = state.DefaultAuthorB;
+        var plan = ReviewCompareCombineWorkflow.BuildCombineDialogPlan(originalPath, reviewerBPath, state);
+        _authorABox.Text = plan.DefaultAuthorA;
+        _authorBBox.Text = plan.DefaultAuthorB;
 
-        Title = "Combine Documents";
+        Title = plan.Title;
         Width = 460;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -322,17 +323,17 @@ internal sealed class CombineDocumentsDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyTextBox(_authorBBox, InsertDialogLayout.ChromeStyle);
 
         var grid = CompareDocumentsDialog.DialogGrid(rows: 7);
-        CompareDocumentsDialog.AddReadOnlyRow(grid, 0, "Original:", ReviewCompareCombineWorkflow.TruncatePathForDialog(originalPath));
-        CompareDocumentsDialog.AddReadOnlyRow(grid, 1, "Reviewer A:", string.IsNullOrWhiteSpace(state.ReviewerATitle) ? "(current document)" : state.ReviewerATitle);
-        CompareDocumentsDialog.AddReadOnlyRow(grid, 2, "Reviewer B:", ReviewCompareCombineWorkflow.TruncatePathForDialog(reviewerBPath));
+        CompareDocumentsDialog.AddReadOnlyRow(grid, 0, plan.OriginalLabel, plan.OriginalDisplayPath);
+        CompareDocumentsDialog.AddReadOnlyRow(grid, 1, plan.ReviewerALabel, plan.ReviewerADisplayName);
+        CompareDocumentsDialog.AddReadOnlyRow(grid, 2, plan.ReviewerBLabel, plan.ReviewerBDisplayPath);
 
         var separator = new Separator { Margin = new Thickness(0, 6, 0, 6) };
         Grid.SetRow(separator, 3);
         Grid.SetColumnSpan(separator, 2);
         grid.Children.Add(separator);
 
-        CompareDocumentsDialog.AddFieldRow(grid, 4, "Label Reviewer A with:", _authorABox);
-        CompareDocumentsDialog.AddFieldRow(grid, 5, "Label Reviewer B with:", _authorBBox);
+        CompareDocumentsDialog.AddFieldRow(grid, 4, plan.AuthorALabel, _authorABox);
+        CompareDocumentsDialog.AddFieldRow(grid, 5, plan.AuthorBLabel, _authorBBox);
 
         var buttons = InsertDialogLayout.OkCancelRow(Accept, Close);
         Grid.SetRow(buttons, 6);
@@ -357,15 +358,18 @@ internal sealed class CombineDocumentsDialog : FreeWDialogWindow
 
     private void Accept()
     {
-        var authorA = _authorABox.Text?.Trim();
-        if (string.IsNullOrEmpty(authorA))
+        if (!ReviewCompareCombineWorkflow.TryBuildCombineDialogResult(
+                _originalPath,
+                _reviewerBPath,
+                _authorABox.Text,
+                _authorBBox.Text,
+                out var result,
+                out _))
+        {
             return;
+        }
 
-        var authorB = _authorBBox.Text?.Trim();
-        if (string.IsNullOrEmpty(authorB))
-            return;
-
-        Result = new CombineDocumentsDialogResult(_originalPath, _reviewerBPath, authorA, authorB);
+        Result = result;
         Close();
     }
 }
