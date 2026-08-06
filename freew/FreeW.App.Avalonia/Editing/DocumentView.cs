@@ -19614,8 +19614,13 @@ public sealed class DocumentView : Control
             return false;
 
         var dateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
-        _bus.Execute(new MarkRevisionRangeCommand(block, startOffset, endOffset, kind, RevisionAuthor, dateXml));
-        return TrackChanges.HasRevisions(_doc);
+        return _editingSession.Review.TryMarkRevisionRange(
+            block,
+            startOffset,
+            endOffset,
+            kind,
+            RevisionAuthor,
+            dateXml);
     }
 
     /// <summary>Every tracked change in the committed document, in reading order — drives Previous/Next.</summary>
@@ -19656,10 +19661,9 @@ public sealed class DocumentView : Control
         if (target is null)
             return false;
 
-        _bus.Execute(accept
-            ? new AcceptOneRevisionCommand(target)
-            : new RejectOneRevisionCommand(target));
-        return true;
+        return _editingSession.Review.TryResolveRevision(
+            target,
+            accept ? RevisionResolutionAction.Accept : RevisionResolutionAction.Reject);
     }
 
     /// <summary>
@@ -19668,10 +19672,7 @@ public sealed class DocumentView : Control
     /// </summary>
     public bool AcceptAllRevisions()
     {
-        if (!TrackChanges.HasRevisions(_doc))
-            return false;
-        _bus.Execute(new AcceptAllRevisionsCommand());
-        return true;
+        return _editingSession.Review.TryResolveAllRevisions(RevisionResolutionAction.Accept);
     }
 
     /// <summary>
@@ -19680,10 +19681,7 @@ public sealed class DocumentView : Control
     /// </summary>
     public bool RejectAllRevisions()
     {
-        if (!TrackChanges.HasRevisions(_doc))
-            return false;
-        _bus.Execute(new RejectAllRevisionsCommand());
-        return true;
+        return _editingSession.Review.TryResolveAllRevisions(RevisionResolutionAction.Reject);
     }
 
     /// <summary>

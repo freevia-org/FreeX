@@ -45,25 +45,36 @@ public sealed record RevisionTargetDecision(
     int TopLevelBlockIndex,
     RevisionEntry Entry)
 {
+    public bool IsCurrent(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return ResolveCurrent(document) is not null;
+    }
+
     public bool TryApply(TextDocument document, RevisionResolutionAction action)
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        var entries = RevisionList.Enumerate(document);
-        if (RevisionIndex < 0 || RevisionIndex >= entries.Count)
+        if (ResolveCurrent(document) is not { } current)
             return false;
-
-        var current = entries[RevisionIndex];
-        if (!ReferenceEquals(current.Paragraph, Entry.Paragraph)
-            || !ReferenceEquals(current.Run, Entry.Run)
-            || current.Kind != Entry.Kind)
-        {
-            return false;
-        }
 
         return action == RevisionResolutionAction.Accept
             ? RevisionList.Accept(document, current)
             : RevisionList.Reject(document, current);
+    }
+
+    private RevisionEntry? ResolveCurrent(TextDocument document)
+    {
+        var entries = RevisionList.Enumerate(document);
+        if (RevisionIndex < 0 || RevisionIndex >= entries.Count)
+            return null;
+
+        var current = entries[RevisionIndex];
+        return ReferenceEquals(current.Paragraph, Entry.Paragraph)
+               && ReferenceEquals(current.Run, Entry.Run)
+               && current.Kind == Entry.Kind
+            ? current
+            : null;
     }
 }
 
@@ -226,6 +237,54 @@ public sealed class DocumentReviewEditingSession
 
     public IReadOnlyList<RevisionEntry> ListRevisions() =>
         RevisionList.Enumerate(_editingSession.Document);
+
+    public bool TryMarkRevisionRange(
+        int blockIndex,
+        int startOffset,
+        int endOffset,
+        RevisionKind kind,
+        string author,
+        string? dateXml)
+    {
+        if (kind == RevisionKind.None
+            || _editingSession.Document.Blocks.ElementAtOrDefault(blockIndex) is not Paragraph paragraph
+            || paragraph.PlainText.Length == 0)
+        {
+            return false;
+        }
+
+        _editingSession.Commands.Execute(new MarkRevisionRangeCommand(
+            blockIndex,
+            startOffset,
+            endOffset,
+            kind,
+            author,
+            dateXml));
+        return true;
+    }
+
+    public bool TryResolveRevision(
+        RevisionTargetDecision target,
+        RevisionResolutionAction action)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        if (!target.IsCurrent(_editingSession.Document))
+            return false;
+
+        _editingSession.Commands.Execute(new ResolveOneRevisionCommand(target, action));
+        return true;
+    }
+
+    public bool TryResolveAllRevisions(RevisionResolutionAction action)
+    {
+        if (!TrackChanges.HasRevisions(_editingSession.Document))
+            return false;
+
+        _editingSession.Commands.Execute(action == RevisionResolutionAction.Accept
+            ? new AcceptAllRevisionsCommand()
+            : new RejectAllRevisionsCommand());
+        return true;
+    }
 
     public RevisionTargetDecision? ResolveRevisionTarget(RevisionEntry entry)
     {

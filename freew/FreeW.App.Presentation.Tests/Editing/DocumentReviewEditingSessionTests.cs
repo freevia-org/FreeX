@@ -195,8 +195,78 @@ public sealed class DocumentReviewEditingSessionTests
 
         RevisionList.Accept(document, target.Entry).Should().BeTrue();
 
-        target.TryApply(document, RevisionResolutionAction.Accept).Should().BeFalse();
+        session.Review.TryResolveRevision(target, RevisionResolutionAction.Accept).Should().BeFalse();
+        session.Commands.CanUndo.Should().BeFalse();
         second.Runs[0].Revision.Should().Be(RevisionKind.Inserted);
+    }
+
+    [Fact]
+    public void MarkRevisionRange_IsPortableAndUndoable()
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("abcdef")
+        {
+            Formatting = RunFormatting.Default with { Bold = true },
+        });
+        var document = new TextDocument();
+        document.Blocks.Add(paragraph);
+        var session = DeterministicSession();
+        session.LoadDocument(document);
+
+        session.Review.TryMarkRevisionRange(
+                0,
+                2,
+                4,
+                RevisionKind.Inserted,
+                "Ann Reviewer",
+                "2026-08-05T10:20:30Z")
+            .Should().BeTrue();
+
+        paragraph.Runs.Select(run => run.Text).Should().Equal("ab", "cd", "ef");
+        paragraph.Runs[1].Revision.Should().Be(RevisionKind.Inserted);
+        paragraph.Runs[1].RevisionAuthor.Should().Be("Ann Reviewer");
+        paragraph.Runs.Should().OnlyContain(run => run.Formatting.Bold);
+
+        session.Commands.Undo().Should().BeTrue();
+        paragraph.Runs.Should().ContainSingle().Which.Text.Should().Be("abcdef");
+        paragraph.Runs.Single().Revision.Should().Be(RevisionKind.None);
+
+        session.Commands.Redo().Should().BeTrue();
+        paragraph.Runs[1].Revision.Should().Be(RevisionKind.Inserted);
+    }
+
+    [Fact]
+    public void SingleAndAllRevisionResolution_UsePortableUndoHistory()
+    {
+        var document = new TextDocument();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("kept "));
+        body.Runs.Add(new Run("inserted") { Revision = RevisionKind.Inserted });
+        document.Blocks.Add(body);
+        var table = Table.Create(1, 1);
+        var cellParagraph = table.Rows[0].Cells[0].Paragraphs[0];
+        cellParagraph.Runs.Clear();
+        cellParagraph.Runs.Add(new Run("deleted") { Revision = RevisionKind.Deleted });
+        document.Blocks.Add(table);
+        var session = DeterministicSession();
+        session.LoadDocument(document);
+
+        var single = session.Review.ResolveRevisionTarget(session.Review.ListRevisions()[0])!;
+        session.Review.TryResolveRevision(single, RevisionResolutionAction.Accept).Should().BeTrue();
+        body.PlainText.Should().Be("kept inserted");
+        body.Runs.Should().OnlyContain(run => run.Revision == RevisionKind.None);
+
+        session.Commands.Undo().Should().BeTrue();
+        body.Runs.Should().Contain(run => run.Revision == RevisionKind.Inserted);
+
+        session.Review.TryResolveAllRevisions(RevisionResolutionAction.Reject).Should().BeTrue();
+        body.PlainText.Should().Be("kept ");
+        cellParagraph.PlainText.Should().Be("deleted");
+        TrackChanges.HasRevisions(document).Should().BeFalse();
+
+        session.Commands.Undo().Should().BeTrue();
+        body.Runs.Should().Contain(run => run.Revision == RevisionKind.Inserted);
+        cellParagraph.Runs.Should().Contain(run => run.Revision == RevisionKind.Deleted);
     }
 
     private static DocumentEditingSession DeterministicSession() =>
@@ -264,15 +334,16 @@ public sealed class DocumentReviewEditingSessionSourceOwnershipTests
     [Fact]
     public void PortableReviewCoordinatorHasNoRendererDependencies()
     {
-        var source = ReadSource(
-            "freew", "FreeW.App.Presentation", "Editing", "DocumentReviewEditingSession.cs");
-
-        source.Should().NotContain("using Avalonia");
-        source.Should().NotContain("using System.Windows");
-        source.Should().NotContain("TextPointer");
-        source.Should().NotContain("DocPosition");
-        source.Should().NotContain("InvalidateVisual");
-        source.Should().NotContain("Render()");
+        foreach (var file in new[] { "DocumentReviewEditingSession.cs", "RevisionCommands.cs" })
+        {
+            var source = ReadSource("freew", "FreeW.App.Presentation", "Editing", file);
+            source.Should().NotContain("using Avalonia");
+            source.Should().NotContain("using System.Windows");
+            source.Should().NotContain("TextPointer");
+            source.Should().NotContain("DocPosition");
+            source.Should().NotContain("InvalidateVisual");
+            source.Should().NotContain("Render()");
+        }
     }
 
     [Fact]
@@ -281,23 +352,37 @@ public sealed class DocumentReviewEditingSessionSourceOwnershipTests
         var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
         var revisionCommands = ReadSource(
-            "freew", "FreeW.App.Avalonia", "Editing", "RevisionCommands.cs");
+            "freew", "FreeW.App.Presentation", "Editing", "RevisionCommands.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("_editingSession.Review.PlanInspectorRemovals(choice).Apply(");
             source.Should().Contain("_editingSession.Review.ResolveRevisionTarget(entry)");
+            source.Should().Contain("_editingSession.Review.TryMarkRevisionRange(");
+            source.Should().Contain("_editingSession.Review.TryResolveRevision(");
+            source.Should().Contain("_editingSession.Review.TryResolveAllRevisions(");
             source.Should().NotContain("DocumentInspector.RemoveComments(");
             source.Should().NotContain("DocumentInspector.RemoveRevisions(");
             source.Should().NotContain("DocumentInspector.RemoveProperties(");
             source.Should().NotContain("DocumentInspector.RemoveBookmarks(");
+            source.Should().NotContain("new MarkRevisionRangeCommand(");
+            source.Should().NotContain("new AcceptAllRevisionsCommand(");
+            source.Should().NotContain("new RejectAllRevisionsCommand(");
+            source.Should().NotContain("new ResolveOneRevisionCommand(");
+            source.Should().NotContain("TrackChanges.AcceptAll(");
+            source.Should().NotContain("TrackChanges.RejectAll(");
         }
 
         avalonia.Should().Contain("ResolveRevisionTargetAtOrAfterTopLevelBlock(_caret.Block)");
         revisionCommands.Should().Contain("RevisionTargetDecision target");
-        revisionCommands.Should().Contain("target.TryApply(document, RevisionResolutionAction.Accept)");
-        revisionCommands.Should().Contain("target.TryApply(document, RevisionResolutionAction.Reject)");
+        revisionCommands.Should().Contain("target.TryApply(document, action)");
         revisionCommands.Should().NotContain("RevisionList.Enumerate(document)");
+
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        File.Exists(Path.Combine(
+                root,
+                "freew", "FreeW.App.Avalonia", "Editing", "RevisionCommands.cs"))
+            .Should().BeFalse("revision command policy belongs in Presentation");
 
         wpf.Should().NotContain("private int TopLevelBlockIndexOf(");
         wpf.Should().NotContain("private static void MarkRevisionRange(");

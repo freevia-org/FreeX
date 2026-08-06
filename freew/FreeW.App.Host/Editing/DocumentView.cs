@@ -16200,8 +16200,13 @@ public sealed class DocumentView : RichTextBox
         if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
             return;
 
-        RevisionEditPlanner.MarkRevisionRange(modelParagraph, startOffset, endOffset, kind, author, dateXml);
-        Render();
+        _editingSession.Review.TryMarkRevisionRange(
+            paragraphIndex,
+            startOffset,
+            endOffset,
+            kind,
+            author,
+            dateXml);
     }
 
     /// <summary>
@@ -16211,8 +16216,7 @@ public sealed class DocumentView : RichTextBox
     public void AcceptAllRevisions()
     {
         CommitToModel();
-        TrackChanges.AcceptAll(_model);
-        Render();
+        _editingSession.Review.TryResolveAllRevisions(RevisionResolutionAction.Accept);
     }
 
     /// <summary>
@@ -16222,8 +16226,7 @@ public sealed class DocumentView : RichTextBox
     public void RejectAllRevisions()
     {
         CommitToModel();
-        TrackChanges.RejectAll(_model);
-        Render();
+        _editingSession.Review.TryResolveAllRevisions(RevisionResolutionAction.Reject);
     }
 
     /// <summary>
@@ -16245,10 +16248,8 @@ public sealed class DocumentView : RichTextBox
     public bool AcceptRevision(RevisionEntry entry)
     {
         var target = _editingSession.Review.ResolveRevisionTarget(entry);
-        var resolved = target?.TryApply(_model, RevisionResolutionAction.Accept) == true;
-        if (resolved)
-            Render();
-        return resolved;
+        return target is not null
+               && _editingSession.Review.TryResolveRevision(target, RevisionResolutionAction.Accept);
     }
 
     /// <summary>
@@ -16259,10 +16260,8 @@ public sealed class DocumentView : RichTextBox
     public bool RejectRevision(RevisionEntry entry)
     {
         var target = _editingSession.Review.ResolveRevisionTarget(entry);
-        var resolved = target?.TryApply(_model, RevisionResolutionAction.Reject) == true;
-        if (resolved)
-            Render();
-        return resolved;
+        return target is not null
+               && _editingSession.Review.TryResolveRevision(target, RevisionResolutionAction.Reject);
     }
 
     /// <summary>

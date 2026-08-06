@@ -800,4 +800,41 @@ public sealed class DocumentViewTrackEditTests
         ParagraphOf(rejectView).PlainText.Should().Be("abc");
         ParagraphOf(rejectView).Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
     }
+
+    [StaFact]
+    public void RevisionCommands_UsePortableUndoHistoryFromTheWpfSelectionBoundary()
+    {
+        var markView = BuildView("abcdef");
+        markView.SetSelectionRangeForTest(0, 2, 0, 4);
+
+        markView.MarkSelectionAsRevision(
+            RevisionKind.Inserted,
+            "Ann Reviewer",
+            "2026-08-06T10:20:30Z");
+
+        var markedParagraph = (Paragraph)markView.Model.Blocks[0];
+        markedParagraph.Runs.Should().Contain(run =>
+            run.Text == "cd"
+            && run.Revision == RevisionKind.Inserted
+            && run.RevisionAuthor == "Ann Reviewer");
+        markView.Commands.Undo().Should().BeTrue();
+        ((Paragraph)markView.Model.Blocks[0]).Runs.Should()
+            .OnlyContain(run => run.Revision == RevisionKind.None);
+        ((Paragraph)markView.Model.Blocks[0]).PlainText.Should().Be("abcdef");
+
+        var revised = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("inserted") { Revision = RevisionKind.Inserted });
+        revised.Blocks.Add(paragraph);
+        var acceptView = new DocumentView();
+        acceptView.LoadModel(revised);
+
+        acceptView.AcceptAllRevisions();
+        ((Paragraph)acceptView.Model.Blocks[0]).Runs.Should()
+            .OnlyContain(run => run.Revision == RevisionKind.None);
+
+        acceptView.Commands.Undo().Should().BeTrue();
+        ((Paragraph)acceptView.Model.Blocks[0]).Runs.Should()
+            .Contain(run => run.Revision == RevisionKind.Inserted);
+    }
 }
