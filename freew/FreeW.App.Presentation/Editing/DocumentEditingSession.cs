@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Editing;
@@ -55,6 +56,8 @@ public sealed class DocumentEditingSession
         _commands = CreateCommandBus(Document);
         Review = new DocumentReviewEditingSession(this, _revisionDateXml);
         Objects = new DocumentObjectEditingCoordinator(this);
+        Tables = new DocumentTableEditingCoordinator(this);
+        References = new DocumentReferenceEditingCoordinator(this);
     }
 
     public event Action? Changed;
@@ -66,6 +69,10 @@ public sealed class DocumentEditingSession
     public DocumentReviewEditingSession Review { get; }
 
     public DocumentObjectEditingCoordinator Objects { get; }
+
+    public DocumentTableEditingCoordinator Tables { get; }
+
+    public DocumentReferenceEditingCoordinator References { get; }
 
     /// <summary>Replaces the active document and starts a fresh undo/redo history for it.</summary>
     public void LoadDocument(TextDocument document)
@@ -140,6 +147,88 @@ public sealed class DocumentEditingSession
         return InsertBlocksAfter(caretBlockIndex, clones, "Insert Text from File");
     }
 
+    /// <summary>Replaces an empty body paragraph with cloned source blocks as one undoable paste.</summary>
+    public bool ReplaceEmptyParagraphWithDocument(int blockIndex, TextDocument? source)
+    {
+        if (source is null
+            || source.Blocks.Count == 0
+            || blockIndex < 0
+            || blockIndex >= Document.Blocks.Count
+            || Document.Blocks[blockIndex] is not Paragraph { PlainText.Length: 0 })
+        {
+            return false;
+        }
+
+        var clones = DocumentMerge.CloneBlocksForInsertion(Document, source);
+        if (clones.Count == 0)
+            return false;
+        foreach (var (id, style) in source.Styles)
+            Document.Styles.TryAdd(id, style);
+        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, clones));
+        return true;
+    }
+
+    /// <summary>Sorts paragraph slots in a body span while preserving interleaved non-paragraph blocks.</summary>
+    public bool SortParagraphSpan(
+        int firstBlockIndex,
+        int lastBlockIndex,
+        SortKind kind,
+        bool ascending,
+        bool caseSensitive,
+        bool hasHeaderRow)
+    {
+        var first = Math.Min(firstBlockIndex, lastBlockIndex);
+        var last = Math.Max(firstBlockIndex, lastBlockIndex);
+        if (first < 0 || last >= Document.Blocks.Count)
+            return false;
+        var paragraphs = Document.Blocks
+            .Skip(first)
+            .Take(last - first + 1)
+            .OfType<Paragraph>()
+            .ToArray();
+        if (paragraphs.Length < 2)
+            return false;
+
+        var sorted = ParagraphSort.Sort(
+            paragraphs,
+            kind,
+            ascending,
+            caseSensitive,
+            hasHeaderRow);
+        var replacement = new List<Block>(last - first + 1);
+        var nextSorted = 0;
+        for (var index = first; index <= last; index++)
+        {
+            replacement.Add(Document.Blocks[index] is Paragraph
+                ? sorted[nextSorted++]
+                : Document.Blocks[index]);
+        }
+        _commands.Execute(new ReplaceBlocksCommand(first, replacement.Count, replacement));
+        return true;
+    }
+
+    /// <summary>Converts a paragraph span to a table and reports the replacement block index.</summary>
+    public int ConvertParagraphsToTable(
+        IReadOnlyList<int> blockIndices,
+        char delimiter,
+        bool showBorders)
+    {
+        ArgumentNullException.ThrowIfNull(blockIndices);
+        var targets = ResolveParagraphIndices(blockIndices).Order().ToArray();
+        if (targets.Length == 0)
+            return -1;
+        var first = targets[0];
+        var last = targets[^1];
+        var paragraphs = targets
+            .Select(index => (Paragraph)Document.Blocks[index])
+            .ToArray();
+        var table = TextTableConvert.TextToTable(paragraphs, delimiter);
+        if (showBorders)
+            table.Formatting = table.Formatting with { Borders = true };
+        _commands.Execute(new ReplaceBlocksCommand(first, last - first + 1, [table]));
+        return first;
+    }
+
     /// <summary>Removes a named bookmark through the shared undo history.</summary>
     public bool RemoveBookmark(string? name)
     {
@@ -154,6 +243,271 @@ public sealed class DocumentEditingSession
 
         _commands.Execute(new RemoveBookmarkCommand(normalized));
         return true;
+    }
+
+    /// <summary>Applies one portable paragraph-format transform as a single undoable edit.</summary>
+    public bool FormatParagraphs(
+        IReadOnlyList<int> blockIndices,
+        Func<ParagraphFormatting, ParagraphFormatting> transform,
+        string undoLabel = "Paragraph Formatting")
+    {
+        ArgumentNullException.ThrowIfNull(blockIndices);
+        ArgumentNullException.ThrowIfNull(transform);
+        ArgumentException.ThrowIfNullOrWhiteSpace(undoLabel);
+        var targets = ResolveParagraphIndices(blockIndices);
+        if (targets.Count == 0)
+            return false;
+
+        ExecuteGroup(
+            targets
+                .Select(index => (IDocumentCommand)new SetParagraphFormattingCommand(
+                    index,
+                    transform(((Paragraph)Document.Blocks[index]).Formatting)))
+                .ToArray(),
+            undoLabel);
+        return true;
+    }
+
+    /// <summary>Applies a character-format transform to complete paragraph runs as one undo step.</summary>
+    public bool FormatParagraphRuns(
+        IReadOnlyList<int> blockIndices,
+        Func<RunFormatting, RunFormatting> transform,
+        string undoLabel = "Character Formatting")
+    {
+        ArgumentNullException.ThrowIfNull(blockIndices);
+        ArgumentNullException.ThrowIfNull(transform);
+        ArgumentException.ThrowIfNullOrWhiteSpace(undoLabel);
+        var targets = ResolveParagraphIndices(blockIndices);
+        if (targets.Count == 0)
+            return false;
+
+        ExecuteGroup(
+            targets
+                .Select(index => (IDocumentCommand)new FormatParagraphRunsCommand(index, transform))
+                .ToArray(),
+            undoLabel);
+        return true;
+    }
+
+    /// <summary>Applies confirmed soft-hyphen insertions through the shared undo history.</summary>
+    public bool ApplyManualHyphenation(IReadOnlyList<ManualHyphenationEdit> edits)
+    {
+        ArgumentNullException.ThrowIfNull(edits);
+        if (edits.Count == 0)
+            return false;
+        _commands.Execute(new ApplyManualHyphenationCommand(edits));
+        return true;
+    }
+
+    /// <summary>Moves one outline subtree and returns the heading's resulting model index.</summary>
+    public int MoveHeadingSubtree(int blockIndex, bool moveUp)
+    {
+        if (blockIndex < 0 || blockIndex >= Document.Blocks.Count)
+            return blockIndex;
+        var heading = Document.Blocks[blockIndex];
+        var reordered = OutlineTools.MoveSubtree(Document.Blocks, blockIndex, moveUp);
+        if (ReferenceEquals(reordered, Document.Blocks))
+            return blockIndex;
+
+        _commands.Execute(new ReorderBlocksCommand(reordered));
+        for (var index = 0; index < reordered.Count; index++)
+        {
+            if (ReferenceEquals(reordered[index], heading))
+                return index;
+        }
+        return blockIndex;
+    }
+
+    public bool ApplyDropCap(
+        int blockIndex,
+        DropCapPosition position,
+        double sizePt,
+        int lineSpan,
+        double distanceFromTextPt)
+    {
+        if (blockIndex < 0
+            || blockIndex >= Document.Blocks.Count
+            || Document.Blocks[blockIndex] is not Paragraph)
+        {
+            return false;
+        }
+
+        _commands.Execute(new ReplaceParagraphRunsCommand(
+            blockIndex,
+            paragraph => DropCap.ApplyDropCap(
+                paragraph,
+                position,
+                sizePt,
+                lineSpan,
+                distanceFromTextPt)));
+        return true;
+    }
+
+    public bool ClearDropCap(int blockIndex)
+    {
+        if (blockIndex < 0
+            || blockIndex >= Document.Blocks.Count
+            || Document.Blocks[blockIndex] is not Paragraph)
+        {
+            return false;
+        }
+
+        _commands.Execute(new ReplaceParagraphRunsCommand(blockIndex, DropCap.ClearFormatting));
+        return true;
+    }
+
+    /// <summary>Applies a paragraph style to all valid targets as a single undoable edit.</summary>
+    public bool SetParagraphStyles(
+        IReadOnlyList<int> blockIndices,
+        string? styleId,
+        string undoLabel = "Apply Style")
+    {
+        ArgumentNullException.ThrowIfNull(blockIndices);
+        ArgumentException.ThrowIfNullOrWhiteSpace(undoLabel);
+        var targets = ResolveParagraphIndices(blockIndices);
+        if (targets.Count == 0)
+            return false;
+
+        ExecuteGroup(
+            targets
+                .Select(index => (IDocumentCommand)new SetParagraphStyleCommand(index, styleId))
+                .ToArray(),
+            undoLabel);
+        return true;
+    }
+
+    /// <summary>Transforms one paragraph style after validating the portable model target.</summary>
+    public bool ShiftParagraphStyle(int blockIndex, Func<string?, string?> shift)
+    {
+        ArgumentNullException.ThrowIfNull(shift);
+        if (blockIndex < 0
+            || blockIndex >= Document.Blocks.Count
+            || Document.Blocks[blockIndex] is not Paragraph paragraph)
+        {
+            return false;
+        }
+
+        var next = shift(paragraph.StyleId);
+        if (string.Equals(next, paragraph.StyleId, StringComparison.Ordinal))
+            return false;
+        _commands.Execute(new SetParagraphStyleCommand(blockIndex, next));
+        return true;
+    }
+
+    /// <summary>
+    /// Applies a multilevel-list definition, linked heading styles, and number formats as one undo step.
+    /// </summary>
+    public bool ApplyMultilevelListDefinition(
+        IReadOnlyList<int> blockIndices,
+        MultilevelListDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(blockIndices);
+        ArgumentNullException.ThrowIfNull(definition);
+        var targets = ResolveParagraphIndices(blockIndices);
+        if (targets.Count == 0)
+            return false;
+
+        var commands = new List<IDocumentCommand>();
+        foreach (var index in targets)
+        {
+            var paragraph = (Paragraph)Document.Blocks[index];
+            var updated = MultilevelListDialogPlanner.ApplyDefinition(
+                paragraph.Formatting,
+                definition);
+            commands.Add(new SetParagraphFormattingCommand(index, updated));
+            var linkedStyleId = MultilevelListDialogPlanner.ResolveLinkedHeadingStyleId(
+                updated.ListLevel,
+                definition);
+            if (linkedStyleId is not null && Document.Styles.ContainsKey(linkedStyleId))
+                commands.Add(new SetParagraphStyleCommand(index, linkedStyleId));
+        }
+        commands.Add(new SetMultiLevelNumberFormatsCommand(definition.NumberFormats));
+        ExecuteGroup(commands, "Define Multilevel List");
+        return true;
+    }
+
+    /// <summary>Creates a catalog style and applies it to the requested paragraphs as one undo step.</summary>
+    public DocumentStyle? CreateParagraphStyleAndApply(
+        IReadOnlyList<int> blockIndices,
+        string name,
+        string? basedOnId,
+        RunFormatting run,
+        ParagraphFormatting paragraph,
+        string? nextStyleId)
+    {
+        ArgumentNullException.ThrowIfNull(blockIndices);
+        var targets = ResolveParagraphIndices(blockIndices);
+        DocumentStyle? created = null;
+        _commands.BeginUndoGroup();
+        try
+        {
+            _commands.Execute(new StyleCatalogCommand("New Style", document =>
+            {
+                created = StyleManager.CreateStyle(
+                    document,
+                    name,
+                    basedOnId,
+                    run,
+                    paragraph,
+                    nextStyleId);
+            }));
+            if (created is not null)
+            {
+                foreach (var index in targets)
+                    _commands.Execute(new SetParagraphStyleCommand(index, created.Id));
+            }
+            _commands.CommitUndoGroup("New Style");
+        }
+        catch
+        {
+            _commands.AbortUndoGroup();
+            throw;
+        }
+        return created;
+    }
+
+    /// <summary>Updates a paragraph-style catalog entry through the shared undo history.</summary>
+    public DocumentStyle? ModifyParagraphStyle(
+        string styleId,
+        RunFormatting run,
+        ParagraphFormatting paragraph,
+        string? basedOnId,
+        string? nextStyleId)
+    {
+        if (string.IsNullOrWhiteSpace(styleId) || !Document.Styles.ContainsKey(styleId))
+            return null;
+
+        DocumentStyle? updated = null;
+        _commands.Execute(new StyleCatalogCommand("Modify Style", document =>
+        {
+            updated = StyleManager.ModifyStyle(
+                document,
+                styleId,
+                run: run,
+                para: paragraph,
+                basedOnId: basedOnId,
+                clearBasedOn: basedOnId is null,
+                nextStyleId: nextStyleId,
+                clearNext: nextStyleId is null);
+        }));
+        return updated;
+    }
+
+    /// <summary>Deletes a custom paragraph style through the shared catalog policy and undo history.</summary>
+    public bool DeleteParagraphStyle(string styleId)
+    {
+        if (string.IsNullOrWhiteSpace(styleId)
+            || StyleManager.IsBuiltIn(styleId)
+            || !Document.Styles.ContainsKey(styleId))
+        {
+            return false;
+        }
+
+        var deleted = false;
+        _commands.Execute(new StyleCatalogCommand(
+            "Delete Style",
+            document => deleted = StyleManager.DeleteStyle(document, styleId)));
+        return deleted;
     }
 
     /// <summary>
@@ -775,6 +1129,36 @@ public sealed class DocumentEditingSession
 
     private int ResolveInsertionIndexAfter(int caretBlockIndex) =>
         Math.Clamp(caretBlockIndex + 1, 0, Document.Blocks.Count);
+
+    private IReadOnlyList<int> ResolveParagraphIndices(IReadOnlyList<int> blockIndices) =>
+        blockIndices
+            .Distinct()
+            .Where(index => index >= 0
+                && index < Document.Blocks.Count
+                && Document.Blocks[index] is Paragraph)
+            .ToArray();
+
+    private void ExecuteGroup(IReadOnlyList<IDocumentCommand> commands, string undoLabel)
+    {
+        if (commands.Count == 1)
+        {
+            _commands.Execute(commands[0]);
+            return;
+        }
+
+        _commands.BeginUndoGroup();
+        try
+        {
+            foreach (var command in commands)
+                _commands.Execute(command);
+            _commands.CommitUndoGroup(undoLabel);
+        }
+        catch
+        {
+            _commands.AbortUndoGroup();
+            throw;
+        }
+    }
 
     private DocumentCommandBus CreateCommandBus(TextDocument document)
     {

@@ -11,11 +11,22 @@ public sealed class GridResizePreviewPlannerTests
     public void GetColumnResizeRange_SelectedColumnInsideMultiColumnSelection_UsesSelection()
     {
         var sheet = CreateSheet();
-        var range = Range(sheet, startRow: 1, startCol: 2, endRow: 1, endCol: 4);
+        var range = Range(sheet, startRow: 1, startCol: 2, endRow: CellAddress.MaxRow, endCol: 4);
 
         GridResizePreviewPlanner.GetColumnResizeRange(sheet, range, column: 3)
             .Should()
             .Be((2u, 4u));
+    }
+
+    [Fact]
+    public void GetColumnResizeRange_RowSpanningCellSelection_DoesNotBecomeWholeColumnBand()
+    {
+        var sheet = CreateSheet();
+        var range = Range(sheet, startRow: 1, startCol: 2, endRow: 8, endCol: 4);
+
+        GridResizePreviewPlanner.GetColumnResizeRange(sheet, range, column: 3)
+            .Should()
+            .Be((3u, 3u));
     }
 
     [Fact]
@@ -70,6 +81,17 @@ public sealed class GridResizePreviewPlannerTests
         GridResizePreviewPlanner.GetRowResizeRange(sheet, Range(sheet, 1, 1, 8, 1), row: 5)
             .Should()
             .Be((5u, 6u));
+    }
+
+    [Fact]
+    public void GetRowResizeRange_ColumnSpanningCellSelection_DoesNotBecomeWholeRowBand()
+    {
+        var sheet = CreateSheet();
+        var range = Range(sheet, startRow: 2, startCol: 1, endRow: 4, endCol: 8);
+
+        GridResizePreviewPlanner.GetRowResizeRange(sheet, range, row: 3)
+            .Should()
+            .Be((3u, 3u));
     }
 
     [Fact]

@@ -21,6 +21,16 @@ public sealed class PresentationCommentMutationService
             "Comment",
             range => new DeleteCommentCommand(sheetId, range.Start));
 
+    public PresentationCommentMutationPlan PlanToggleNoteVisibility(SheetId sheetId) =>
+        new(
+            "Show/Hide Note",
+            range => new ShowHideCommentCommand(sheetId, range.Start));
+
+    public PresentationCommentMutationPlan PlanToggleAllNotesVisibility(SheetId sheetId) =>
+        new(
+            "Show All Notes",
+            _ => new ShowAllNotesCommand(sheetId));
+
     public PresentationCommentMutationPlan PlanDeleteThreadedComment(SheetId sheetId) =>
         new(
             "Threaded Comment",

@@ -8095,7 +8095,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Control AddColumnResizeHandle(Border header, uint col, ColMetric metric, double zoomFactor)
     {
         var handle = CreateHeaderResizeHandle(HeaderResizeKind.Column);
-        handle.PointerPressed += (_, args) => BeginHeaderResize(args, handle, HeaderResizeKind.Column, col, GetDisplayedColumnWidth(metric, zoomFactor));
+        handle.PointerPressed += (_, args) =>
+        {
+            // WPF checks the second press before starting a resize. Without the same precedence,
+            // the first press commits a tiny resize and rebuilds the grid before Avalonia can
+            // deliver the second press to the original boundary, so physical AutoFit becomes a
+            // no-op (R163 foreground-pointer-harness).
+            if (args.ClickCount >= 2)
+            {
+                AutoFitColumnFromHeader(col);
+                args.Handled = true;
+                return;
+            }
+
+            BeginHeaderResize(args, handle, HeaderResizeKind.Column, col, GetDisplayedColumnWidth(metric, zoomFactor));
+        };
         handle.PointerMoved += (_, args) => ContinueHeaderResize(args);
         handle.PointerReleased += (_, args) => CommitHeaderResize(args);
         handle.DoubleTapped += (_, args) =>
@@ -8109,7 +8123,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Control AddRowResizeHandle(Border header, uint row, RowMetric metric, double zoomFactor)
     {
         var handle = CreateHeaderResizeHandle(HeaderResizeKind.Row);
-        handle.PointerPressed += (_, args) => BeginHeaderResize(args, handle, HeaderResizeKind.Row, row, GetDisplayedRowHeight(metric, zoomFactor));
+        handle.PointerPressed += (_, args) =>
+        {
+            // Keep row AutoFit ahead of the resize gesture for the same physical double-click
+            // contract as WPF and the column handle above.
+            if (args.ClickCount >= 2)
+            {
+                AutoFitRowFromHeader(row);
+                args.Handled = true;
+                return;
+            }
+
+            BeginHeaderResize(args, handle, HeaderResizeKind.Row, row, GetDisplayedRowHeight(metric, zoomFactor));
+        };
         handle.PointerMoved += (_, args) => ContinueHeaderResize(args);
         handle.PointerReleased += (_, args) => CommitHeaderResize(args);
         handle.DoubleTapped += (_, args) =>
@@ -8232,26 +8258,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         if (drag.Kind == HeaderResizeKind.Column)
         {
-            var result = _session.ExecuteReviewCommand(
-                new SetColumnWidthCommand(
-                    _session.ActiveSheet.Id,
-                    drag.StartIndex,
-                    drag.EndIndex,
-                    ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize)),
-                _session.ActiveCell);
+            var result = _session.SetColumnsWidthPixels(
+                drag.StartIndex,
+                drag.EndIndex,
+                clampedSize);
             RefreshShell(result.Success
                 ? UiText.Format("RowColumn_ColumnWidthApplied", FormatDimension(ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize)))
                 : result.ErrorMessage ?? UiText.Get("RowColumn_ColumnWidthFailed"));
         }
         else
         {
-            var result = _session.ExecuteReviewCommand(
-                new SetRowHeightCommand(
-                    _session.ActiveSheet.Id,
-                    drag.StartIndex,
-                    drag.EndIndex,
-                    clampedSize),
-                _session.ActiveCell);
+            var result = _session.SetRowsHeightPixels(
+                drag.StartIndex,
+                drag.EndIndex,
+                clampedSize);
             RefreshShell(result.Success
                 ? UiText.Format("RowColumn_RowHeightApplied", FormatDimension(clampedSize))
                 : result.ErrorMessage ?? UiText.Get("RowColumn_RowHeightFailed"));
@@ -8308,7 +8328,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // (R84-app-mouse-selection-5-2).
     private void AutoFitColumnFromHeader(uint col)
     {
-        var (startCol, endCol) = GridResizePreviewPlanner.GetSelectedColumnResizeRange(_session.SelectedRange, col);
+        var (startCol, endCol) = GridResizePreviewPlanner.GetColumnResizeRange(
+            _session.ActiveSheet,
+            _session.SelectedRange,
+            col);
         if (startCol != endCol)
         {
             var wideRange = SelectionRangeService.GetWholeColumns(new GridRange(
@@ -8327,7 +8350,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// <summary>Row-header counterpart of <see cref="AutoFitColumnFromHeader"/>.</summary>
     private void AutoFitRowFromHeader(uint row)
     {
-        var (startRow, endRow) = GridResizePreviewPlanner.GetSelectedRowResizeRange(_session.SelectedRange, row);
+        var (startRow, endRow) = GridResizePreviewPlanner.GetRowResizeRange(
+            _session.ActiveSheet,
+            _session.SelectedRange,
+            row);
         if (startRow != endRow)
         {
             var wideRange = SelectionRangeService.GetWholeRows(new GridRange(
@@ -20278,6 +20304,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
+        _filterWorkflowSession.ResetAutoFilterState();
         RefreshShell(wasEnabled ? UiText.Get("MainLoc_RemovedFilter") : UiText.Get("MainLoc_AddedFilter"));
     }
 
@@ -21734,12 +21761,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        _lastInPlaceAdvancedFilter =
-            FreeX.App.Presentation.Filtering.AdvancedFilterReapplyPlanner.CreateState(
-                plan.ListRange,
-                plan.CriteriaRange,
-                plan.OutputMode == AdvancedFilterOutputMode.FilterInPlace,
-                plan.UniqueRecordsOnly);
+        _filterWorkflowSession.RememberAdvancedFilter(
+            plan.ListRange,
+            plan.CriteriaRange,
+            plan.OutputMode == AdvancedFilterOutputMode.FilterInPlace,
+            plan.UniqueRecordsOnly);
 
         RefreshShell(FormatAdvancedFilterStatus(plan));
     }

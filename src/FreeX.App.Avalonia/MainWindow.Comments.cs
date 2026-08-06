@@ -83,19 +83,26 @@ public sealed partial class MainWindow
 
     private void ToggleActiveCellNoteVisibility()
     {
-        var result = _session.ExecuteReviewCommand(
-            new ShowHideCommentCommand(_session.ActiveSheet.Id, _session.ActiveCell));
-        RefreshShell(result.Success
-            ? "Show/Hide Note"
-            : result.ErrorMessage ?? UiText.Get("Comment_NoNote"));
+        var result = ReviewSessionController.ToggleNoteVisibility(_session.ActiveCell);
+        if (!result.Success)
+        {
+            RefreshShell(result.ErrorMessage ?? UiText.Get("Comment_NoNote"));
+            return;
+        }
+
+        ApplyReviewRefreshPlan(result.RefreshPlan, "Show/Hide Note");
     }
 
     private void ToggleAllNotesVisibility()
     {
-        var result = _session.ExecuteReviewCommand(new ShowAllNotesCommand(_session.ActiveSheet.Id));
-        RefreshShell(result.Success
-            ? "Show All Notes"
-            : result.ErrorMessage ?? UiText.Get("Comment_NoNote"));
+        var result = ReviewSessionController.ToggleAllNotesVisibility();
+        if (!result.Success)
+        {
+            RefreshShell(result.ErrorMessage ?? UiText.Get("Comment_NoNote"));
+            return;
+        }
+
+        ApplyReviewRefreshPlan(result.RefreshPlan, "Show All Notes");
     }
 
     // ── Threaded comment dialog: create / edit root / reply / edit-reply / delete-reply ────────

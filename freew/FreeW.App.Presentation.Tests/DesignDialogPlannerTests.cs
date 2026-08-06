@@ -62,8 +62,12 @@ public sealed class DesignDialogPlannerTests
     [Fact]
     public void ThemeFonts_UsesWpfChoicesAndDefaultName()
     {
-        var state = CustomizeThemeFontsDialogPlanner.BuildInitialState(DocumentFontSet.Default);
+        var session = CustomizeThemeFontsDialogPlanner.CreateSession(DocumentFontSet.Default);
+        var state = session.InitialState;
         state.Should().Be(new CustomizeThemeFontsInitialState("Calibri", "Calibri", "Custom"));
+        CustomizeThemeFontsDialogPlanner.HeadingFontLabel.Should().Be("Heading font:");
+        CustomizeThemeFontsDialogPlanner.BodyFontLabel.Should().Be("Body font:");
+        CustomizeThemeFontsDialogPlanner.NameLabel.Should().Be("Name:");
         CustomizeThemeFontsDialogPlanner.CommonFonts.Should().ContainInOrder("Arial", "Calibri", "Cambria", "Georgia", "Verdana");
         CustomizeThemeFontsDialogPlanner.DialogWidth.Should().Be(380);
         CustomizeThemeFontsDialogPlanner.DialogMargin.Should().Be(14);
@@ -102,6 +106,21 @@ public sealed class DesignDialogPlannerTests
             .Should().BeTrue();
 
         result.Should().Be(new DocumentFontSet("Custom", "Cambria", "Georgia"));
+    }
+
+    [Fact]
+    public void ThemeFontsSession_OwnsAcceptanceAndValidationFocus()
+    {
+        var session = CustomizeThemeFontsDialogPlanner.CreateSession(DocumentFontSet.Default);
+
+        var rejected = session.PlanAcceptance(new CustomizeThemeFontsDialogInput("Calibri", "", "Ignored"));
+        var accepted = session.PlanAcceptance(new CustomizeThemeFontsDialogInput(" Cambria ", " Georgia ", "  "));
+
+        rejected.IsAccepted.Should().BeFalse();
+        rejected.ErrorMessage.Should().Be("Enter a body font name.");
+        rejected.FocusField.Should().Be(CustomizeThemeFontsDialogField.BodyFont);
+        accepted.IsAccepted.Should().BeTrue();
+        accepted.Result.Should().Be(new DocumentFontSet("Custom", "Cambria", "Georgia"));
     }
 
     [Fact]

@@ -22,9 +22,9 @@ public sealed class FontDialogPolicySourceGuardTests
         source.Should().Contain("FontDialogPlanner.LigatureChoices");
         source.Should().Contain("FontDialogPlanner.NumberFormChoices");
         source.Should().Contain("FontDialogPlanner.NumberSpacingChoices");
-        source.Should().Contain("Double strikethrough");
+        source.Should().Contain("FontDialogPlanner.Text.DoubleStrikethroughLabel");
         source.Should().Contain("DoubleStrikethroughIndeterminate");
-        source.Should().Contain("Check(\"Hidden\", threeState: true)");
+        source.Should().Contain("Check(FontDialogPlanner.Text.HiddenLabel, threeState: true)");
         source.Should().Contain("HiddenIndeterminate");
     }
 
@@ -47,6 +47,9 @@ public sealed class FontDialogPolicySourceGuardTests
         source.Should().NotContain("FontDialogPlanner.TryBuildResult(");
         source.Should().NotContain("ToDialogResult(");
         source.Should().NotContain("Invalid font size:");
+        source.Should().NotContain("Title = \"Font\"");
+        source.Should().NotContain("AddField(fontPanel, \"Font family:\"");
+        source.Should().NotContain("AddField(advancedPanel, \"Character spacing (pt):\"");
     }
 
     private static string ReadAvaloniaSource(string fileName)

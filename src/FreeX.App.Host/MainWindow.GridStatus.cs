@@ -407,13 +407,9 @@ public partial class MainWindow
             ? (snap.StartIndex, snap.EndIndex)
             : GetColumnResizeRange(sheet, col);
         var restoredPreview = RestoreColumnResizePreview(sheet);
-        if (!TryExecuteGroupedSheetCommand(
-                "Column Width",
-                sheetId => new SetColumnWidthCommand(
-                    sheetId,
-                    startCol,
-                    endCol,
-                    ColumnWidthPixelMapper.PixelsToColumnWidth(newWidthPx))))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.SetColumnsWidthPixels(startCol, endCol, newWidthPx),
+                "Column Width"))
         {
             if (restoredPreview)
                 UpdateViewport();
@@ -424,12 +420,14 @@ public partial class MainWindow
 
     private void OnColumnAutoFitRequested(uint col)
     {
-        var (startCol, endCol) = GetSelectedColRange(col);
-        var range = new GridRange(
-            new CellAddress(_currentSheetId, 1, startCol),
-            new CellAddress(_currentSheetId, CellAddress.MaxRow, endCol));
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
 
-        if (!TryExecuteGroupedSheetCommand("Auto Column Width", sheetId => CreateAutoFitColumnWidthCommand(sheetId, range)))
+        var (startCol, endCol) = GetColumnResizeRange(sheet, col);
+        if (!TryExecuteWorksheetLayout(
+                () => _session.AutoFitColumns(startCol, endCol),
+                "Auto Column Width"))
             return;
 
         UpdateViewport();
@@ -451,12 +449,14 @@ public partial class MainWindow
 
     private void OnRowAutoFitRequested(uint row)
     {
-        var (startRow, endRow) = GetSelectedRowRange(row);
-        var range = new GridRange(
-            new CellAddress(_currentSheetId, startRow, 1),
-            new CellAddress(_currentSheetId, endRow, CellAddress.MaxCol));
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
 
-        if (!TryExecuteGroupedSheetCommand("Auto Row Height", sheetId => CreateAutoFitRowHeightCommand(sheetId, range)))
+        var (startRow, endRow) = GetRowResizeRange(sheet, row);
+        if (!TryExecuteWorksheetLayout(
+                () => _session.AutoFitRows(startRow, endRow),
+                "Auto Row Height"))
             return;
 
         UpdateViewport();
@@ -470,7 +470,9 @@ public partial class MainWindow
             ? (snap.StartIndex, snap.EndIndex)
             : GetRowResizeRange(sheet, row);
         var restoredPreview = RestoreRowResizePreview(sheet);
-        if (!TryExecuteGroupedSheetCommand("Row Height", sheetId => new SetRowHeightCommand(sheetId, startRow, endRow, newHeightPx)))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.SetRowsHeightPixels(startRow, endRow, newHeightPx),
+                "Row Height"))
         {
             if (restoredPreview)
                 UpdateViewport();

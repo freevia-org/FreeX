@@ -58,27 +58,13 @@ public sealed partial class MainWindow
     private void GroupSelectedRows()
     {
         var range = _session.SelectedRange;
-        var sheet = _session.ActiveSheet;
-
-        if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
-        {
-            var colLevel = OutlineGroupingPlanner.GetNextOutlineLevel(
-                range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
-            var colResult = _session.ExecuteReviewCommand(
-                new GroupColumnsCommand(sheet.Id, range.Start.Col, range.End.Col, colLevel, preserveExistingHierarchy: true));
-            RefreshShell(colResult.Success
-                ? $"Grouped columns {range.Start.Col}–{range.End.Col}"
-                : colResult.ErrorMessage ?? "Could not group columns.");
-            return;
-        }
-
-        var rowLevel = OutlineGroupingPlanner.GetNextOutlineLevel(
-            range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
-        var result = _session.ExecuteReviewCommand(
-            new GroupRowsCommand(sheet.Id, range.Start.Row, range.End.Row, rowLevel, preserveExistingHierarchy: true));
+        var columns = OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns;
+        var result = _session.GroupSelectedOutline();
         RefreshShell(result.Success
-            ? $"Grouped rows {range.Start.Row}–{range.End.Row}"
-            : result.ErrorMessage ?? "Could not group rows.");
+            ? columns
+                ? $"Grouped columns {range.Start.Col}–{range.End.Col}"
+                : $"Grouped rows {range.Start.Row}–{range.End.Row}"
+            : result.ErrorMessage ?? (columns ? "Could not group columns." : "Could not group rows."));
     }
 
     /// <summary>
@@ -90,79 +76,13 @@ public sealed partial class MainWindow
     private void UngroupSelection()
     {
         var range = _session.SelectedRange;
-        var sheet = _session.ActiveSheet;
-
-        if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
-        {
-            var colRuns = GetContiguousSameLevelRuns(range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
-            var colCommands = colRuns
-                .Select(run => (IWorkbookCommand)new GroupColumnsCommand(
-                    sheet.Id,
-                    run.Start,
-                    run.End,
-                    OutlineGroupingPlanner.GetUngroupedOutlineLevel(run.Start, run.End, sheet.ColOutlineLevels)))
-                .ToList();
-            var colResult = _session.ExecuteReviewCommand(new CompositeWorkbookCommand("Ungroup", colCommands));
-            RefreshShell(colResult.Success
+        var columns = OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns;
+        var result = _session.UngroupSelectedOutline();
+        RefreshShell(result.Success
+            ? columns
                 ? $"Ungrouped columns {range.Start.Col}–{range.End.Col}"
-                : colResult.ErrorMessage ?? "Could not ungroup columns.");
-            return;
-        }
-
-        var rowRuns = GetContiguousSameLevelRuns(range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
-        var rowCommands = rowRuns
-            .Select(run => (IWorkbookCommand)new GroupRowsCommand(
-                sheet.Id,
-                run.Start,
-                run.End,
-                OutlineGroupingPlanner.GetUngroupedOutlineLevel(run.Start, run.End, sheet.RowOutlineLevels)))
-            .ToList();
-        var rowResult = _session.ExecuteReviewCommand(new CompositeWorkbookCommand("Ungroup", rowCommands));
-        RefreshShell(rowResult.Success
-            ? $"Ungrouped rows {range.Start.Row}–{range.End.Row}"
-            : rowResult.ErrorMessage ?? "Could not ungroup rows.");
-    }
-
-    // Splits [start, end] into contiguous runs of indices that currently share the same outline
-    // level. Indices with no level / level 0 are excluded entirely (they have nothing to decrement
-    // and must stay untouched). Mirrors the WPF host shell's outline-command helper of the same
-    // name so both shells share the identical per-run splitting behavior.
-    private static List<(uint Start, uint End)> GetContiguousSameLevelRuns(
-        uint start, uint end, IReadOnlyDictionary<uint, int> outlineLevels)
-    {
-        var runs = new List<(uint Start, uint End)>();
-        uint? runStart = null;
-        int runLevel = 0;
-        for (var index = start; index <= end; index++)
-        {
-            outlineLevels.TryGetValue(index, out var level);
-            if (level <= 0)
-            {
-                if (runStart is { } pendingStart)
-                {
-                    runs.Add((pendingStart, index - 1));
-                    runStart = null;
-                }
-                continue;
-            }
-
-            if (runStart is null)
-            {
-                runStart = index;
-                runLevel = level;
-            }
-            else if (level != runLevel)
-            {
-                runs.Add((runStart.Value, index - 1));
-                runStart = index;
-                runLevel = level;
-            }
-        }
-
-        if (runStart is { } finalStart)
-            runs.Add((finalStart, end));
-
-        return runs;
+                : $"Ungrouped rows {range.Start.Row}–{range.End.Row}"
+            : result.ErrorMessage ?? (columns ? "Could not ungroup columns." : "Could not ungroup rows."));
     }
 
     /// <summary>
@@ -171,7 +91,7 @@ public sealed partial class MainWindow
     /// </summary>
     private void ClearWorksheetOutline()
     {
-        var result = _session.ExecuteReviewCommand(new ClearWorksheetOutlineCommand(_session.ActiveSheet.Id));
+        var result = _session.ClearActiveWorksheetOutline();
         RefreshShell(result.Success
             ? "Cleared the worksheet outline."
             : result.ErrorMessage ?? "Could not clear the outline.");

@@ -46,14 +46,9 @@ public sealed class PasteStyleDialogParityTests
     {
         await Session.Dispatch(() =>
         {
-            var dialog = Create<StyleDialog>(
-                "New Style",
+            var dialog = Create<StyleDialog>(StyleDialogPlanner.CreateNewSession(
                 new Dictionary<string, string>(),
-                null,
-                null,
-                RunFormatting.Default,
-                ParagraphFormatting.Default,
-                null);
+                defaultBasedOnId: null));
             dialog.Show();
             var labels = dialog.GetLogicalDescendants().OfType<TextBlock>().Select(block => block.Text).ToArray();
             var name = dialog.GetLogicalDescendants().OfType<TextBox>().Single();
@@ -68,8 +63,9 @@ public sealed class PasteStyleDialogParityTests
             comboBoxes.Select(comboBox => comboBox.MinWidth).Should().Equal(280, 280, 100, 160, 160);
             name.IsFocused.Should().BeTrue();
             comboBoxes.Should().NotContain(comboBox => comboBox.IsFocused);
-            checkBoxes.Should().OnlyContain(checkBox => checkBox.Height == 18 && checkBox.Template != null);
-            buttons.Select(button => button.Content?.ToString()).Should().Equal(
+            checkBoxes.Should().OnlyContain(checkBox =>
+                checkBox.Height == StyleDialogMetrics.CheckBoxHeight && checkBox.Template != null);
+            buttons.Select(UserFacingButtonText).Should().Equal(
                 ShellStrings.Current.Ok,
                 ShellStrings.Current.Cancel);
             buttons[0].IsDefault.Should().BeTrue();
@@ -84,14 +80,9 @@ public sealed class PasteStyleDialogParityTests
     {
         await Session.Dispatch(() =>
         {
-            var dialog = Create<StyleDialog>(
-                "New Style",
+            var dialog = Create<StyleDialog>(StyleDialogPlanner.CreateNewSession(
                 new Dictionary<string, string>(),
-                null,
-                null,
-                RunFormatting.Default,
-                ParagraphFormatting.Default,
-                null);
+                defaultBasedOnId: null));
             var textBox = dialog.GetLogicalDescendants().OfType<TextBox>().Single();
             var combos = dialog.GetLogicalDescendants().OfType<ComboBox>().ToArray();
 
@@ -141,14 +132,24 @@ public sealed class PasteStyleDialogParityTests
             "Program.cs"));
 
         source.Should().Contain("--wpf-authority");
-        source.Should().Contain("scenario.RouteId is \"font\" or \"paragraph\"");
+        source.Should().Contain("or \"font\" or \"paragraph\"");
         source.Should().Contain("or \"style\" or \"manage-styles\"");
         source.Should().Contain("authorityCapture!.LogicalWidth");
         source.Should().Contain("authorityCapture!.LogicalHeight");
-        source.Should().Contain("Where(button => button is not ToggleButton and not RepeatButton)");
+        source.Should().Contain("if (button is ToggleButton or RepeatButton)");
         source.Should().Contain("scenario.RouteId == \"style\"");
         source.Should().Contain("Sample Style");
         source.Should().Contain("name.Focus(NavigationMethod.Tab)");
+
+        var factorySource = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "tools",
+            "FreeW.DialogVisualHarness.Avalonia",
+            "AvaloniaDialogRouteFactory.cs"));
+        factorySource.Should().Contain("StyleDialogPlanner.CreateNewSession(catalog, defaultBasedOnId: null)");
+        factorySource.Should().Contain("[session]");
+        factorySource.Should().NotContain("[\"New Style\", catalog");
 
         var wpfSource = File.ReadAllText(Path.Combine(
             root,

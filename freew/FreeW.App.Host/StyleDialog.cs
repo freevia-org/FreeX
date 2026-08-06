@@ -22,8 +22,7 @@ internal static class StyleDialog
         Window? owner,
         IReadOnlyDictionary<string, string> styleNamesById,
         string? defaultBasedOnId) =>
-        Show(owner, "New Style", styleNamesById, fixedName: null, defaultBasedOnId,
-            RunFormatting.Default, ParagraphFormatting.Default, defaultNextStyleId: null);
+        Show(owner, StyleDialogPlanner.CreateNewSession(styleNamesById, defaultBasedOnId));
 
     /// <summary>
     /// Show the Modify Style dialog seeded with an existing style's name/based-on/formatting. The name is
@@ -33,29 +32,15 @@ internal static class StyleDialog
         Window? owner,
         IReadOnlyDictionary<string, string> styleNamesById,
         DocumentStyle existing) =>
-        Show(owner, $"Modify Style — {existing.Name}", styleNamesById, fixedName: existing.Name,
-            existing.BasedOnStyleId, existing.Run, existing.Paragraph, existing.NextStyleId);
+        Show(owner, StyleDialogPlanner.CreateModifySession(styleNamesById, existing));
 
     private static StyleDefinitionResult? Show(
         Window? owner,
-        string title,
-        IReadOnlyDictionary<string, string> styleNamesById,
-        string? fixedName,
-        string? defaultBasedOnId,
-        RunFormatting seedRun,
-        ParagraphFormatting seedPara,
-        string? defaultNextStyleId)
+        StyleDialogSession session)
     {
         StyleDefinitionResult? result = null;
-        var session = StyleDialogPlanner.CreateSession(
-            title,
-            styleNamesById,
-            fixedName,
-            defaultBasedOnId,
-            seedRun,
-            seedPara,
-            defaultNextStyleId);
         var state = session.InitialState;
+        var text = StyleDialogPlanner.Text;
 
         var dialog = new Window
         {
@@ -127,7 +112,9 @@ internal static class StyleDialog
                 DialogMessageHelper.ShowWarning(
                     dialog,
                     acceptance.ErrorMessage ?? string.Empty,
-                    StyleDialogSession.ValidationTitle);
+                    session.ValidationTitle);
+                if (acceptance.FocusField == StyleDialogField.Name)
+                    name.Focus();
                 return;
             }
 
@@ -143,17 +130,17 @@ internal static class StyleDialog
             rowMargin: new Thickness(0, StyleDialogMetrics.ActionRowTopMargin, 0, 0));
 
         var panel = new StackPanel { Margin = new Thickness(StyleDialogMetrics.DialogMargin) };
-        AddRow(panel, "Name:", name);
-        AddRow(panel, "Style based on:", basedOn);
-        AddRow(panel, "Style for following paragraph:", nextStyle);
-        AddRow(panel, "Formatting:", effects);
-        AddRow(panel, "Font size:", size);
-        AddRow(panel, "Text colour:", color);
-        AddRow(panel, "Alignment:", alignment);
+        AddRow(panel, text.NameLabel, name);
+        AddRow(panel, text.BasedOnLabel, basedOn);
+        AddRow(panel, text.NextStyleLabel, nextStyle);
+        AddRow(panel, text.FormattingLabel, effects);
+        AddRow(panel, text.FontSizeLabel, size);
+        AddRow(panel, text.TextColorLabel, color);
+        AddRow(panel, text.AlignmentLabel, alignment);
         panel.Children.Add(buttons);
         dialog.Content = panel;
 
-        if (state.NameIsReadOnly)
+        if (state.InitialFocus == StyleDialogFocusTarget.BasedOn)
             basedOn.Focus();
         else
             name.Focus();
@@ -182,10 +169,11 @@ internal static class ManageStylesDialog
     {
         ManageStyleAction? result = null;
         var session = StyleDialogPlanner.CreateManageStylesSession(model, preselectStyleId);
+        var text = StyleDialogPlanner.Text;
 
         var dialog = new Window
         {
-            Title = ManageStylesDialogSession.Title,
+            Title = text.ManageTitle,
             SizeToContent = SizeToContent.WidthAndHeight,
             ResizeMode = ResizeMode.NoResize,
             WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
@@ -197,7 +185,7 @@ internal static class ManageStylesDialog
         var sortOrderBox = new ComboBox { MinWidth = 160, Margin = new Thickness(0, 0, 0, 8) };
         foreach (var label in StyleDialogPlanner.ManageStyleSortLabels)
             sortOrderBox.Items.Add(label);
-        sortOrderBox.SelectedIndex = 0;
+        sortOrderBox.SelectedIndex = session.State.SortIndex;
 
         var list = new ListBox { MinWidth = 320, MinHeight = 220 };
 
@@ -214,10 +202,10 @@ internal static class ManageStylesDialog
 
         RebuildList(sortOrderBox.SelectedIndex);
 
-        var apply  = new Button { Content = "Apply",   IsDefault = true, MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
-        var modify = new Button { Content = "Modify…",               MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
-        var delete = new Button { Content = "Delete",                MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
-        var close  = new Button { Content = "Close", IsCancel = true, MinWidth = 80 };
+        var apply  = new Button { Content = text.ApplyLabel,   IsDefault = true, MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
+        var modify = new Button { Content = text.ModifyLabel,               MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
+        var delete = new Button { Content = text.DeleteLabel,                MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
+        var close  = new Button { Content = text.CloseLabel, IsCancel = true, MinWidth = 80 };
 
         void SyncButtons()
         {
@@ -258,7 +246,7 @@ internal static class ManageStylesDialog
         var sortRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
         sortRow.Children.Add(new TextBlock
         {
-            Text = "Sort:",
+            Text = text.SortLabel,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
         });

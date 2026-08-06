@@ -44,10 +44,13 @@ public sealed class FreeWRibbonParityTests
         var mainWindow = File.ReadAllText(Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
             "freew", "FreeW.App.Host", "MainWindow.cs"));
-        mainWindow.Should().Contain("New: () => _file.New()");
-        mainWindow.Should().Contain("Open: () => _file.Open()");
+        mainWindow.Should().Contain(
+            "NewDocument: () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument)");
+        mainWindow.Should().Contain(
+            "Browse: () => _applicationCommands.Execute(FreeWKeyboardCommand.OpenDocument)");
         mainWindow.Should().Contain("ImportPdfText: () => _file.ImportPdfText()");
-        mainWindow.Should().Contain("Save: () => _file.Save()");
+        mainWindow.Should().Contain(
+            "Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument)");
     }
 
     [StaFact]

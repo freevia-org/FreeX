@@ -261,6 +261,8 @@ public sealed class DocumentView : Control
     private TextDocument _doc => _editingSession.Document;
     private DocumentCommandBus _bus => _editingSession.Commands;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
+    private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
+    private DocumentReferenceEditingCoordinator ReferenceEdits => _editingSession.References;
 
     private static DocumentObjectTarget ObjectTarget(
         int blockIndex,
@@ -517,11 +519,8 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
-        _bus.Execute(new SetTableCellContentCommand(
-            blockIndex,
-            rowIndex,
-            columnIndex,
-            paragraphs));
+        if (TableEdits.AddressFromCellIndex(blockIndex, rowIndex, columnIndex) is { } address)
+            TableEdits.SetCellContent(address, paragraphs);
     }
 
     public TextDocument Document => _doc;
@@ -861,29 +860,12 @@ public sealed class DocumentView : Control
     }
 
     private void ShiftHeadingStyle(int blockIndex, Func<string?, string?> shift)
-    {
-        if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count || _doc.Blocks[blockIndex] is not Paragraph paragraph)
-            return;
-        var nextStyle = shift(paragraph.StyleId);
-        if (!string.Equals(nextStyle, paragraph.StyleId, StringComparison.Ordinal))
-            _bus.Execute(new SetParagraphStyleCommand(blockIndex, nextStyle));
-    }
+        => _editingSession.ShiftParagraphStyle(blockIndex, shift);
 
     public int MoveHeading(int blockIndex, bool moveUp)
     {
-        var reordered = OutlineTools.MoveSubtree(_doc.Blocks, blockIndex, moveUp);
-        if (ReferenceEquals(reordered, _doc.Blocks))
-            return blockIndex;
-
-        var heading = _doc.Blocks[blockIndex];
         _collapsedHeadings.Clear();
-        _bus.Execute(new ReorderBlocksCommand(reordered));
-        for (var index = 0; index < reordered.Count; index++)
-        {
-            if (ReferenceEquals(reordered[index], heading))
-                return index;
-        }
-        return blockIndex;
+        return _editingSession.MoveHeadingSubtree(blockIndex, moveUp);
     }
 
     public void CollapseHeading(int blockIndex)
@@ -1662,40 +1644,38 @@ public sealed class DocumentView : Control
     /// Insert a blank row above the caret's current row in the table.
     /// No-op when the caret is not inside a table cell. Undoable.
     /// </summary>
-    public void InsertTableRowAbove() => MutateCaretTable((blockIdx, row, _) =>
-        new InsertTableRowCommand(blockIdx, row));
+    public void InsertTableRowAbove() => MutateCaretTable(address =>
+        TableEdits.InsertRow(address, after: false));
 
     /// <summary>
     /// Insert a blank row below the caret's current row in the table.
     /// No-op when the caret is not inside a table cell. Undoable.
     /// </summary>
-    public void InsertTableRowBelow() => MutateCaretTable((blockIdx, row, _) =>
-        new InsertTableRowCommand(blockIdx, row + 1));
+    public void InsertTableRowBelow() => MutateCaretTable(address =>
+        TableEdits.InsertRow(address, after: true));
 
     /// <summary>
     /// Delete the caret's current row from the table. No-op when not in a table or only one row remains.
     /// Undoable.
     /// </summary>
-    public void DeleteTableRow() => MutateCaretTable((blockIdx, row, _) =>
-        new DeleteTableRowCommand(blockIdx, row));
+    public void DeleteTableRow() => MutateCaretTable(TableEdits.DeleteRow);
 
     /// <summary>
     /// Insert a blank column to the left of the caret's current column. Undoable.
     /// </summary>
-    public void InsertTableColumnLeft() => MutateCaretTable((blockIdx, _, col) =>
-        new InsertTableColumnCommand(blockIdx, col));
+    public void InsertTableColumnLeft() => MutateCaretTable(address =>
+        TableEdits.InsertColumn(address, after: false));
 
     /// <summary>
     /// Insert a blank column to the right of the caret's current column. Undoable.
     /// </summary>
-    public void InsertTableColumnRight() => MutateCaretTable((blockIdx, _, col) =>
-        new InsertTableColumnCommand(blockIdx, col + 1));
+    public void InsertTableColumnRight() => MutateCaretTable(address =>
+        TableEdits.InsertColumn(address, after: true));
 
     /// <summary>
     /// Delete the caret's current column from the table. No-op when only one column remains. Undoable.
     /// </summary>
-    public void DeleteTableColumn() => MutateCaretTable((blockIdx, _, col) =>
-        new DeleteTableColumnCommand(blockIdx, col));
+    public void DeleteTableColumn() => MutateCaretTable(TableEdits.DeleteColumn);
 
     /// <summary>
     /// Executes a table mutation (insert/delete row or column) keyed on the caret's table location.
@@ -1703,18 +1683,19 @@ public sealed class DocumentView : Control
     /// supplied factory, runs it through the command bus (undoable), clears the stale cell caret, and
     /// triggers a re-layout.
     /// </summary>
-    private void MutateCaretTable(Func<int, int, int, IDocumentCommand> build)
+    private void MutateCaretTable(
+        Func<DocumentTableCellAddress, DocumentTableEditResult> mutate)
     {
         if (IsEditingLocked)
             return;
 
         if (_cellCaret is not { } cc)
             return;
-        var blockIdx = cc.TableBlock;
-        if (blockIdx < 0 || blockIdx >= _doc.Blocks.Count || _doc.Blocks[blockIdx] is not Table)
+        if (TableEdits.AddressFromGridColumn(cc.TableBlock, cc.Row, cc.Col) is not { } address)
             return;
-        var cmd = build(blockIdx, cc.Row, cc.Col);
-        _bus.Execute(cmd);
+        var result = mutate(address);
+        if (!result.Applied)
+            return;
         // Clear the cell caret — row/col indices shift after mutations; ClampCaret handles safe reset.
         _cellCaret = null;
         _cellAnchor = null;
@@ -1741,45 +1722,21 @@ public sealed class DocumentView : Control
 
         if (SelectedCellRange is not { } sel)
             return;
-        var blockIdx = sel.TableBlock;
-        if (blockIdx < 0 || blockIdx >= _doc.Blocks.Count || _doc.Blocks[blockIdx] is not Table)
+        var result = TableEdits.MergeCells(
+            new DocumentTableCellAddress(sel.TableBlock, sel.MinRow, sel.MinCol),
+            new DocumentTableCellAddress(sel.TableBlock, sel.MaxRow, sel.MaxCol));
+        if (!result.Applied)
             return;
-
-        var table = (Table)_doc.Blocks[blockIdx];
-        if (sel.MinRow == sel.MaxRow)
-        {
-            // Same row — horizontal merge.
-            // BH1: SelectedCellRange returns GRID columns; MergeCellsHorizontalCommand expects
-            // CELL-LIST indices. Convert via GridColumnToCellIndex for the relevant row.
-            var row = table.Rows[sel.MinRow];
-            var firstCellIdx = GridColumnToCellIndex(row, sel.MinCol);
-            var lastCellIdx  = GridColumnToCellIndex(row, sel.MaxCol);
-            if (firstCellIdx < 0 || lastCellIdx < 0)
-                return;
-            _bus.Execute(new MergeCellsHorizontalCommand(blockIdx, sel.MinRow, firstCellIdx, lastCellIdx));
-        }
-        else if (sel.MinCol == sel.MaxCol)
-        {
-            // Same column — vertical merge.
-            // MergeCellsVerticalCommand takes a GRID column and converts internally — pass as-is.
-            _bus.Execute(new MergeCellsVerticalCommand(blockIdx, sel.MinCol, sel.MinRow, sel.MaxRow));
-        }
-        else
-        {
-            // Mixed — best-effort: horizontal merge on the first row only.
-            // BH1: same grid→cell-list conversion for the best-effort path.
-            var row = table.Rows[sel.MinRow];
-            var firstCellIdx = GridColumnToCellIndex(row, sel.MinCol);
-            var lastCellIdx  = GridColumnToCellIndex(row, sel.MaxCol);
-            if (firstCellIdx < 0 || lastCellIdx < 0)
-                return;
-            _bus.Execute(new MergeCellsHorizontalCommand(blockIdx, sel.MinRow, firstCellIdx, lastCellIdx));
-        }
 
         // Clear block selection and place caret in the surviving top-left cell.
         _cellBlockAnchor = null;
         _cellBlockFocus  = null;
-        PlaceCaretInCell(blockIdx, sel.MinRow, sel.MinCol, 0, 0);
+        PlaceCaretInCell(
+            result.Caret.BlockIndex,
+            result.Caret.RowIndex,
+            result.Caret.GridColumn,
+            0,
+            0);
         InvalidateLayoutAndVisual();
     }
 
@@ -1796,18 +1753,12 @@ public sealed class DocumentView : Control
             MergeSelectedCells();
             return;
         }
-        if (_cellCaret is not { } caret
-            || caret.TableBlock < 0
-            || caret.TableBlock >= _doc.Blocks.Count
-            || _doc.Blocks[caret.TableBlock] is not Table table
-            || TableEraserCommandPlanner.PlanByGridColumn(table, caret.Row, caret.Col) is not { } plan)
+        if (_cellCaret is not { } caret)
             return;
 
-        _bus.Execute(new MergeCellsHorizontalCommand(
-            caret.TableBlock,
-            plan.RowIndex,
-            plan.FirstCellIndex,
-            plan.LastCellIndex));
+        if (!TableEdits.EraseBorderAt(
+                new DocumentTableCellAddress(caret.TableBlock, caret.Row, caret.Col)).Applied)
+            return;
         PlaceCaretInCell(caret.TableBlock, caret.Row, caret.Col, 0, 0);
         InvalidateLayoutAndVisual();
     }
@@ -1837,7 +1788,7 @@ public sealed class DocumentView : Control
         var splitCellIdx = GridColumnToCellIndex(splitTable.Rows[cc.Row], cc.Col);
         if (splitCellIdx < 0)
             return;
-        _bus.Execute(new SplitCellCommand(blockIdx, cc.Row, splitCellIdx));
+        TableEdits.SplitCell(new DocumentTableCellAddress(blockIdx, cc.Row, cc.Col));
         // Re-place caret in the same cell (which is now split back to span=1).
         PlaceCaretInCell(blockIdx, cc.Row, cc.Col, 0, 0);
         InvalidateLayoutAndVisual();
@@ -1864,6 +1815,7 @@ public sealed class DocumentView : Control
             if (sel.TableBlock < 0 || sel.TableBlock >= _doc.Blocks.Count
                 || _doc.Blocks[sel.TableBlock] is not Table selTbl)
                 return;
+            var addresses = new List<DocumentTableCellAddress>();
             for (var r = sel.MinRow; r <= sel.MaxRow; r++)
             {
                 if (r >= selTbl.Rows.Count) break;
@@ -1878,9 +1830,10 @@ public sealed class DocumentView : Control
                     if (cellIdx < 0) break; // beyond row's grid width
                     if (cellIdx == lastCellIdx) continue; // merged cell already processed
                     lastCellIdx = cellIdx;
-                    _bus.Execute(new SetCellShadingCommand(sel.TableBlock, r, cellIdx, hexColor));
+                    addresses.Add(new DocumentTableCellAddress(sel.TableBlock, r, gridCol));
                 }
             }
+            TableEdits.SetCellShading(addresses, hexColor);
         }
         else if (_cellCaret is { } cc)
         {
@@ -1891,7 +1844,9 @@ public sealed class DocumentView : Control
             // BL1: cc.Col is a GRID column; convert to cell-list index before issuing the command.
             var caretCellIdx = GridColumnToCellIndex(ccTbl.Rows[cc.Row], cc.Col);
             if (caretCellIdx < 0) return;
-            _bus.Execute(new SetCellShadingCommand(cc.TableBlock, cc.Row, caretCellIdx, hexColor));
+            TableEdits.SetCellShading(
+                [new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col)],
+                hexColor);
         }
         else
         {
@@ -1950,6 +1905,7 @@ public sealed class DocumentView : Control
             || _doc.Blocks[blockIdx] is not Table tbl)
             return;
 
+        var borderEdits = new List<DocumentTableCellBorderEdit>();
         for (var r = minRow; r <= maxRow; r++)
         {
             if (r >= tbl.Rows.Count) break;
@@ -1980,7 +1936,9 @@ public sealed class DocumentView : Control
                             edges, r, firstGridColForCell, lastGridColForCell,
                             minRow, maxRow, minCol, maxCol);
                         if (flushedEdges != CellBorderEdges.None)
-                            _bus.Execute(new SetCellBordersCommand(blockIdx, r, lastCellIdx, flushedEdges, style, colorHex, widthPt, clearEdges));
+                            borderEdits.Add(new DocumentTableCellBorderEdit(
+                                new DocumentTableCellAddress(blockIdx, r, firstGridColForCell),
+                                flushedEdges));
                     }
                     lastCellIdx         = cellIdx;
                     firstGridColForCell = gridCol;
@@ -1999,9 +1957,12 @@ public sealed class DocumentView : Control
                     edges, r, firstGridColForCell, lastGridColForCell,
                     minRow, maxRow, minCol, maxCol);
                 if (finalEdges != CellBorderEdges.None)
-                    _bus.Execute(new SetCellBordersCommand(blockIdx, r, lastCellIdx, finalEdges, style, colorHex, widthPt, clearEdges));
+                    borderEdits.Add(new DocumentTableCellBorderEdit(
+                        new DocumentTableCellAddress(blockIdx, r, firstGridColForCell),
+                        finalEdges));
             }
         }
+        TableEdits.SetCellBorderEdges(borderEdits, style, colorHex, widthPt, clearEdges);
         InvalidateLayoutAndVisual();
     }
 
@@ -2033,30 +1994,24 @@ public sealed class DocumentView : Control
             if (sel.TableBlock < 0 || sel.TableBlock >= _doc.Blocks.Count
                 || _doc.Blocks[sel.TableBlock] is not Table selTbl)
                 return;
-            _bus.BeginUndoGroup();
-            try
+            var addresses = new List<DocumentTableCellAddress>();
+            for (var r = sel.MinRow; r <= sel.MaxRow; r++)
             {
-                for (var r = sel.MinRow; r <= sel.MaxRow; r++)
+                if (r >= selTbl.Rows.Count) break;
+                var row = selTbl.Rows[r];
+                // BL1/BL3: SelectedCellRange uses GRID columns; SetCellAlignmentCommand expects
+                // CELL-LIST indices. Convert and dedupe merged cells (same pattern as SetCellShading).
+                var lastCellIdx = -1;
+                for (var gridCol = sel.MinCol; gridCol <= sel.MaxCol; gridCol++)
                 {
-                    if (r >= selTbl.Rows.Count) break;
-                    var row = selTbl.Rows[r];
-                    // BL1/BL3: SelectedCellRange uses GRID columns; SetCellAlignmentCommand expects
-                    // CELL-LIST indices. Convert and dedupe merged cells (same pattern as SetCellShading).
-                    var lastCellIdx = -1;
-                    for (var gridCol = sel.MinCol; gridCol <= sel.MaxCol; gridCol++)
-                    {
-                        var cellIdx = GridColumnToCellIndex(row, gridCol);
-                        if (cellIdx < 0) break;
-                        if (cellIdx == lastCellIdx) continue; // merged cell already processed
-                        lastCellIdx = cellIdx;
-                        _bus.Execute(new SetCellAlignmentCommand(sel.TableBlock, r, cellIdx, verticalAlignment, horizontalAlignment));
-                    }
+                    var cellIdx = GridColumnToCellIndex(row, gridCol);
+                    if (cellIdx < 0) break;
+                    if (cellIdx == lastCellIdx) continue; // merged cell already processed
+                    lastCellIdx = cellIdx;
+                    addresses.Add(new DocumentTableCellAddress(sel.TableBlock, r, gridCol));
                 }
             }
-            finally
-            {
-                _bus.CommitUndoGroup("Set Cell Alignment");
-            }
+            TableEdits.SetCellAlignment(addresses, verticalAlignment, horizontalAlignment);
         }
         else if (_cellCaret is { } cc)
         {
@@ -2066,7 +2021,10 @@ public sealed class DocumentView : Control
             // BL1: cc.Col is a GRID column; convert to cell-list index.
             var caretCellIdx = GridColumnToCellIndex(ccTbl.Rows[cc.Row], cc.Col);
             if (caretCellIdx < 0) return;
-            _bus.Execute(new SetCellAlignmentCommand(cc.TableBlock, cc.Row, caretCellIdx, verticalAlignment, horizontalAlignment));
+            TableEdits.SetCellAlignment(
+                [new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col)],
+                verticalAlignment,
+                horizontalAlignment);
         }
         else
         {
@@ -2182,7 +2140,7 @@ public sealed class DocumentView : Control
         if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count) return;
         if (_doc.Blocks[blockIndex] is not Table) return;
         // Replace the single table block with an empty replacement list — effectively deleting it.
-        _bus.Execute(new ReplaceBlocksCommand(blockIndex, 1, Array.Empty<Block>()));
+        TableEdits.DeleteTable(blockIndex, DocumentTableDeleteMode.RemoveBlock);
         _cellCaret = null;
         _cellAnchor = null;
         _cellBlockAnchor = null;
@@ -2234,8 +2192,9 @@ public sealed class DocumentView : Control
             || _doc.Blocks[cc.TableBlock] is not Table tbl)
             return;
 
-        var newFmt = update(tbl.Formatting);
-        _bus.Execute(new SetTableFormattingCommand(cc.TableBlock, newFmt));
+        TableEdits.UpdateFormatting(
+            new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col),
+            update);
         InvalidateLayoutAndVisual();
     }
 
@@ -2247,9 +2206,9 @@ public sealed class DocumentView : Control
             || _doc.Blocks[cc.TableBlock] is not Table table)
             return;
 
-        if (TableLayoutOperations.TryBuildSplitReplacement(table, cc.Row, out var replacement))
+        if (TableEdits.SplitTable(
+                new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col)) is { Applied: true })
         {
-            _bus.Execute(new ReplaceBlocksCommand(cc.TableBlock, 1, replacement));
             _cellCaret = null;
             _cellAnchor = null;
             _cellBlockAnchor = null;
@@ -2263,7 +2222,8 @@ public sealed class DocumentView : Control
     {
         if (IsEditingLocked || _cellCaret is not { } caret || CaretTable() is null)
             return;
-        _bus.Execute(new DistributeTableRowsCommand(caret.TableBlock));
+        TableEdits.DistributeRows(
+            new DocumentTableCellAddress(caret.TableBlock, caret.Row, caret.Col));
         InvalidateLayoutAndVisual();
     }
 
@@ -2271,7 +2231,8 @@ public sealed class DocumentView : Control
     {
         if (IsEditingLocked || _cellCaret is not { } caret || CaretTable() is null)
             return;
-        _bus.Execute(new DistributeTableColumnsCommand(caret.TableBlock));
+        TableEdits.DistributeColumns(
+            new DocumentTableCellAddress(caret.TableBlock, caret.Row, caret.Col));
         InvalidateLayoutAndVisual();
     }
 
@@ -2279,7 +2240,9 @@ public sealed class DocumentView : Control
     {
         if (IsEditingLocked || _cellCaret is not { } caret || CaretTable() is null)
             return;
-        _bus.Execute(new SetTableAutoFitCommand(caret.TableBlock, mode));
+        TableEdits.SetAutoFit(
+            new DocumentTableCellAddress(caret.TableBlock, caret.Row, caret.Col),
+            mode);
         InvalidateLayoutAndVisual();
     }
 
@@ -2293,7 +2256,9 @@ public sealed class DocumentView : Control
 
         var cellIndex = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
         if (cellIndex >= 0)
-            _bus.Execute(new SetCellTextDirectionCommand(cc.TableBlock, cc.Row, cellIndex, direction));
+            TableEdits.SetCellTextDirection(
+                new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col),
+                direction);
     }
 
     public (Table Table, int RowIndex, int ColumnIndex)? CaretTableCell()
@@ -2326,7 +2291,9 @@ public sealed class DocumentView : Control
     {
         ArgumentNullException.ThrowIfNull(style);
         if (_cellCaret is { } caret)
-            _bus.Execute(new ApplyTableStyleCommand(caret.TableBlock, style));
+            TableEdits.ApplyStyle(
+                new DocumentTableCellAddress(caret.TableBlock, caret.Row, caret.Col),
+                style);
     }
 
     public void ApplyTableProperties(TablePropertiesValues values)
@@ -2343,9 +2310,9 @@ public sealed class DocumentView : Control
             return;
         }
 
-        var cellIndex = GridColumnToCellIndex(table.Rows[caret.Row], caret.Col);
-        if (cellIndex >= 0)
-            _bus.Execute(new ApplyTablePropertiesCommand(caret.TableBlock, caret.Row, cellIndex, values));
+        TableEdits.ApplyProperties(
+            new DocumentTableCellAddress(caret.TableBlock, caret.Row, caret.Col),
+            values);
     }
 
     /// <summary>Apply the five editable core properties as one undoable operation.</summary>
@@ -2363,20 +2330,15 @@ public sealed class DocumentView : Control
             || _doc.Blocks[cc.TableBlock] is not Table table)
             return;
 
-        var cellIndex = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
-        if (cellIndex < 0)
-            return;
-
         var targetOffset = cc.Offset;
-        var command = new InsertTableCellFormulaCommand(
-            cc.TableBlock,
-            cc.Row,
-            cellIndex,
+        var result = TableEdits.InsertFormula(
+            new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col),
             cc.ParaIdx,
             targetOffset,
             formula);
-        _bus.Execute(command);
-        var newOffset = targetOffset + command.InsertedTextLength;
+        if (!result.Applied)
+            return;
+        var newOffset = result.TextOffset;
         _cellCaret = cc with { Offset = newOffset };
         _cellAnchor = _cellCaret;
         _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, newOffset));
@@ -17340,9 +17302,9 @@ public sealed class DocumentView : Control
                 var listKind = result.Outcome == AutoFormatOutcomeKind.BulletList
                     ? ListKind.Bullet
                     : ListKind.Number;
-                _bus.Execute(new SetParagraphFormattingCommand(
-                    _caret.Block,
-                    paragraph.Formatting with { ListKind = listKind, ListLevel = 0 }));
+                _editingSession.FormatParagraphs(
+                    [_caret.Block],
+                    formatting => formatting with { ListKind = listKind, ListLevel = 0 });
                 _bus.CommitUndoGroup("AutoFormat list");
             }
             catch
@@ -18156,7 +18118,7 @@ public sealed class DocumentView : Control
         }
         else
         {
-            _bus.Execute(new ReplaceContentControlRunCommand(target.BlockIndex, target.RunIndex, updated));
+            ReferenceEdits.ReplaceContentControlRun(target.BlockIndex, target.RunIndex, updated);
         }
         return true;
     }
@@ -18534,7 +18496,7 @@ public sealed class DocumentView : Control
             {
                 // Enter on an EMPTY list item → exit the list: turn the paragraph into a normal one.
                 var exitFmt = listFmt with { ListKind = ListKind.None, ListLevel = 0 };
-                _bus.Execute(new SetParagraphFormattingCommand(block, exitFmt));
+                _editingSession.FormatParagraphs([block], _ => exitFmt);
                 // Caret stays at block 0 (now a normal paragraph). No split.
                 return;
             }
@@ -19843,8 +19805,13 @@ public sealed class DocumentView : Control
     {
         if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             return;
-        _bus.Execute(new SetParagraphFormattingCommand(_caret.Block,
-            paragraph.Formatting with { SpaceBeforePt = Math.Max(0, pt), SpaceBeforeIsSet = true }));
+        _editingSession.FormatParagraphs(
+            [_caret.Block],
+            formatting => formatting with
+            {
+                SpaceBeforePt = Math.Max(0, pt),
+                SpaceBeforeIsSet = true,
+            });
     }
 
     /// <summary>
@@ -19854,8 +19821,13 @@ public sealed class DocumentView : Control
     {
         if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             return;
-        _bus.Execute(new SetParagraphFormattingCommand(_caret.Block,
-            paragraph.Formatting with { SpaceAfterPt = Math.Max(0, pt), SpaceAfterIsSet = true }));
+        _editingSession.FormatParagraphs(
+            [_caret.Block],
+            formatting => formatting with
+            {
+                SpaceAfterPt = Math.Max(0, pt),
+                SpaceAfterIsSet = true,
+            });
     }
 
     /// <summary>
@@ -19872,7 +19844,7 @@ public sealed class DocumentView : Control
         fmt = rule == LineSpacingRule.Multiple
             ? fmt with { LineRule = rule, LineSpacing = Math.Max(0.5, value), LineSpacingIsSet = true }
             : fmt with { LineRule = rule, LineHeightPt = Math.Max(1, value), LineSpacingIsSet = true };
-        _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt));
+        _editingSession.FormatParagraphs([_caret.Block], _ => fmt);
     }
 
     /// <summary>
@@ -19887,7 +19859,7 @@ public sealed class DocumentView : Control
         if (leftPt.HasValue)     fmt = fmt with { IndentLeftPt      = Math.Max(0, leftPt.Value) };
         if (rightPt.HasValue)    fmt = fmt with { IndentRightPt     = Math.Max(0, rightPt.Value) };
         if (firstLinePt.HasValue) fmt = fmt with { FirstLineIndentPt = firstLinePt.Value };
-        _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt));
+        _editingSession.FormatParagraphs([_caret.Block], _ => fmt);
     }
 
     /// <summary>
@@ -19960,9 +19932,13 @@ public sealed class DocumentView : Control
             return;
         var fmt = paragraph.Formatting;
         if (fmt.ListKind != ListKind.None)
-            _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { ListLevel = Math.Min(fmt.ListLevel + 1, 8) }));
+            _editingSession.FormatParagraphs(
+                [_caret.Block],
+                formatting => formatting with { ListLevel = Math.Min(formatting.ListLevel + 1, 8) });
         else
-            _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { IndentLeftPt = fmt.IndentLeftPt + 36 }));
+            _editingSession.FormatParagraphs(
+                [_caret.Block],
+                formatting => formatting with { IndentLeftPt = formatting.IndentLeftPt + 36 });
     }
 
     /// <summary>
@@ -19975,9 +19951,13 @@ public sealed class DocumentView : Control
             return;
         var fmt = paragraph.Formatting;
         if (fmt.ListKind != ListKind.None)
-            _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { ListLevel = Math.Max(fmt.ListLevel - 1, 0) }));
+            _editingSession.FormatParagraphs(
+                [_caret.Block],
+                formatting => formatting with { ListLevel = Math.Max(formatting.ListLevel - 1, 0) });
         else
-            _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { IndentLeftPt = Math.Max(fmt.IndentLeftPt - 36, 0) }));
+            _editingSession.FormatParagraphs(
+                [_caret.Block],
+                formatting => formatting with { IndentLeftPt = Math.Max(formatting.IndentLeftPt - 36, 0) });
     }
 
     /// <summary>
@@ -20090,7 +20070,9 @@ public sealed class DocumentView : Control
     {
         if (CurrentParagraph() is not { } paragraph)
             return;
-        _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, paragraph.Formatting with { Alignment = alignment }));
+        _editingSession.FormatParagraphs(
+            [_caret.Block],
+            formatting => formatting with { Alignment = alignment });
     }
 
     public void ApplyMultiLevelListToSelection()
@@ -20119,30 +20101,7 @@ public sealed class DocumentView : Control
         if (indices.Count == 0)
             return;
 
-        _bus.BeginUndoGroup();
-        try
-        {
-            foreach (var index in indices)
-            {
-                var paragraph = (Paragraph)_doc.Blocks[index];
-                var updated = MultilevelListDialogPlanner.ApplyDefinition(paragraph.Formatting, definition);
-                _bus.Execute(new SetParagraphFormattingCommand(
-                    index,
-                    updated));
-                var linkedStyleId = MultilevelListDialogPlanner.ResolveLinkedHeadingStyleId(
-                    updated.ListLevel,
-                    definition);
-                if (linkedStyleId is not null && _doc.Styles.ContainsKey(linkedStyleId))
-                    _bus.Execute(new SetParagraphStyleCommand(index, linkedStyleId));
-            }
-            _bus.Execute(new SetMultiLevelNumberFormatsCommand(definition.NumberFormats));
-            _bus.CommitUndoGroup("Define Multilevel List");
-        }
-        catch
-        {
-            _bus.AbortUndoGroup();
-            throw;
-        }
+        _editingSession.ApplyMultilevelListDefinition(indices, definition);
     }
 
     public void ApplyMultiLevelListStartOverrides(int? level0StartAt, int? level1StartAt)
@@ -20210,22 +20169,7 @@ public sealed class DocumentView : Control
         if (indices.Count == 0)
             return;
 
-        if (indices.Count == 1)
-        {
-            // Single paragraph: no group overhead needed.
-            var paragraph = (Paragraph)_doc.Blocks[indices[0]];
-            _bus.Execute(new SetParagraphFormattingCommand(indices[0], transform(paragraph.Formatting)));
-            return;
-        }
-
-        // Multiple paragraphs: group into a single undoable action.
-        _bus.BeginUndoGroup();
-        foreach (var idx in indices)
-        {
-            var paragraph = (Paragraph)_doc.Blocks[idx];
-            _bus.Execute(new SetParagraphFormattingCommand(idx, transform(paragraph.Formatting)));
-        }
-        _bus.CommitUndoGroup("Paragraph Formatting");
+        _editingSession.FormatParagraphs(indices, transform);
     }
 
     public void ToggleKeepWithNext()
@@ -20307,38 +20251,25 @@ public sealed class DocumentView : Control
         if (first < 0 || last >= _doc.Blocks.Count)
             return;
 
-        var paragraphs = new List<Paragraph>();
-        for (var i = first; i <= last; i++)
-            if (_doc.Blocks[i] is Paragraph paragraph)
-                paragraphs.Add(paragraph);
-        if (paragraphs.Count < 2)
-            return;
-
-        var sorted = ParagraphSort.Sort(paragraphs, kind, ascending, caseSensitive, hasHeaderRow);
-        var replacement = new List<Block>(last - first + 1);
-        var nextSorted = 0;
-        for (var i = first; i <= last; i++)
-            replacement.Add(_doc.Blocks[i] is Paragraph ? sorted[nextSorted++] : _doc.Blocks[i]);
-
-        _bus.Execute(new ReplaceBlocksCommand(first, replacement.Count, replacement));
+        _editingSession.SortParagraphSpan(
+            first,
+            last,
+            kind,
+            ascending,
+            caseSensitive,
+            hasHeaderRow);
     }
 
     public void SortCaretTableRows(SortKind kind, bool ascending, bool caseSensitive, bool hasHeaderRow)
     {
         if (IsEditingLocked || _cellCaret is not { } cc)
             return;
-        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count ||
-            _doc.Blocks[cc.TableBlock] is not Table table ||
-            table.Rows.Count < 2)
-            return;
-
-        var keyColumn = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
-        if (keyColumn < 0)
-            keyColumn = 0;
-
-        var sorted = ParagraphSort.SortRows(table.Rows, keyColumn, kind, ascending, caseSensitive, hasHeaderRow);
-        var replacement = TableLayoutOperations.CopyTableWithRows(table, sorted);
-        _bus.Execute(new ReplaceBlocksCommand(cc.TableBlock, 1, new Block[] { replacement }));
+        TableEdits.SortRows(
+            new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col),
+            kind,
+            ascending,
+            caseSensitive,
+            hasHeaderRow);
     }
 
     /// <summary>
@@ -20461,9 +20392,7 @@ public sealed class DocumentView : Control
     /// <summary>Apply confirmed manual soft-hyphen insertions as one undoable body edit.</summary>
     public void ApplyManualHyphenation(IReadOnlyList<ManualHyphenationEdit> edits)
     {
-        ArgumentNullException.ThrowIfNull(edits);
-        if (edits.Count > 0)
-            _bus.Execute(new ApplyManualHyphenationCommand(edits));
+        _editingSession.ApplyManualHyphenation(edits);
     }
 
     public void ApplyPageNumberFormat(PageNumberFormatDialogResult result) =>
@@ -20569,9 +20498,7 @@ public sealed class DocumentView : Control
             return;
 
         var delimiter = paragraph.PlainText.Contains('\t', StringComparison.Ordinal) ? '\t' : ',';
-        var table = TextTableConvert.TextToTable([paragraph], delimiter);
-        table.Formatting = TableFormatting.Default with { Borders = true };
-        _bus.Execute(new ReplaceBlocksCommand(block, 1, [table]));
+        _editingSession.ConvertParagraphsToTable([block], delimiter, showBorders: true);
         _cellCaret = (block, 0, 0, 0, 0);
         _hfCaret = null;
         _selectionAnchor = _caret = new DocPosition(block, 0);
@@ -20592,10 +20519,7 @@ public sealed class DocumentView : Control
         if (indices.Count != last - first + 1)
             return;
 
-        var paragraphs = indices.Select(index => (Paragraph)_doc.Blocks[index]).ToArray();
-        var table = TextTableConvert.TextToTable(paragraphs, delimiter);
-        table.Formatting = TableFormatting.Default with { Borders = true };
-        _bus.Execute(new ReplaceBlocksCommand(first, paragraphs.Length, [table]));
+        _editingSession.ConvertParagraphsToTable(indices, delimiter, showBorders: true);
         _cellCaret = (first, 0, 0, 0, 0);
         _hfCaret = null;
         _selectionAnchor = _caret = new DocPosition(first, 0);
@@ -20620,9 +20544,12 @@ public sealed class DocumentView : Control
             return;
 
         var block = cellCaret.TableBlock;
-        var table = (Table)_doc.Blocks[block];
-        var paragraphs = TextTableConvert.TableToText(table, delimiter);
-        _bus.Execute(new ReplaceBlocksCommand(block, 1, [.. paragraphs]));
+        TableEdits.ConvertToText(
+            new DocumentTableCellAddress(
+                cellCaret.TableBlock,
+                cellCaret.Row,
+                cellCaret.Col),
+            delimiter);
         _cellCaret = null;
         _hfCaret = null;
         _selectionAnchor = _caret = new DocPosition(block, 0);
@@ -20869,12 +20796,11 @@ public sealed class DocumentView : Control
 
     public void ReplaceNoteContent(int id, bool footnote, IReadOnlyList<Paragraph> paragraphs)
     {
-        ArgumentNullException.ThrowIfNull(paragraphs);
-        _bus.Execute(new ReplaceNoteContentCommand(id, footnote, paragraphs));
+        ReferenceEdits.ReplaceNoteContent(id, footnote, paragraphs);
     }
 
     public void DeleteNote(int id, bool footnote) =>
-        _bus.Execute(new DeleteNoteCommand(id, footnote));
+        ReferenceEdits.DeleteNote(id, footnote);
 
     public void ApplyFootnoteEndnoteOptions(FootnoteEndnoteOptionsDialogResult result)
     {
@@ -20955,22 +20881,16 @@ public sealed class DocumentView : Control
     // host-paragraph creation fallback and note insertion share one undo group.
     private void InsertNote(string text, bool footnote)
     {
-        _bus.BeginUndoGroup();
-        var hostIndex = ResolveReferenceHostBlock();
-        if (hostIndex < 0)
-        {
-            _bus.AbortUndoGroup();
+        var hostIndex = ResolveReferenceHostBlock(createIfMissing: false);
+        var offset = hostIndex >= 0
+            ? Math.Clamp(ReferenceInsertionOffset(hostIndex), 0, BlockLength(hostIndex))
+            : 0;
+        var result = ReferenceEdits.InsertNote(hostIndex, offset, text, footnote);
+        if (!result.Applied)
             return;
-        }
-
-        var id = footnote ? _doc.NextFootnoteId() : _doc.NextEndnoteId();
-        var marker = footnote ? Run.FootnoteReference(id) : Run.EndnoteReference(id);
-        var offset = Math.Clamp(ReferenceInsertionOffset(hostIndex), 0, BlockLength(hostIndex));
-        _bus.Execute(new InsertNoteCommand(id, footnote, text ?? string.Empty, hostIndex, offset));
-        _bus.CommitUndoGroup(footnote ? "Insert Footnote" : "Insert Endnote");
 
         _cellCaret = null;
-        _caret = new DocPosition(hostIndex, offset + marker.Text.Length);
+        _caret = new DocPosition(result.HostBlockIndex, result.TextOffset);
         _selectionAnchor = _caret;
     }
 
@@ -20983,9 +20903,8 @@ public sealed class DocumentView : Control
     /// </summary>
     public void InsertTableOfContents()
     {
-        TableOfContents.EnsureStyles(_doc);
         var at = Math.Clamp(_caret.Block, 0, _doc.Blocks.Count);
-        InsertTocAt(at, "Insert Table of Contents");
+        ReferenceEdits.InsertTableOfContents(at, BuildGeneratedPageTextResolver());
     }
 
     /// <summary>
@@ -20995,36 +20914,11 @@ public sealed class DocumentView : Control
     /// <see cref="InsertTableOfContents"/>, inserting at the document start. Grouped into one undo.
     /// </summary>
     public void UpdateTableOfContents()
-    {
-        TableOfContents.EnsureStyles(_doc);
-
-        // Collect the existing TOC paragraphs (the marker region). The first anchors the re-insert point.
-        var tocIndices = new List<int>();
-        for (var i = 0; i < _doc.Blocks.Count; i++)
-            if (TableOfContents.IsTocParagraph(_doc.Blocks[i]))
-                tocIndices.Add(i);
-
-        var insertAt = tocIndices.Count > 0 ? tocIndices[0] : 0;
-
-        _bus.BeginUndoGroup();
-        // Remove from the end so earlier indices stay valid.
-        for (var i = tocIndices.Count - 1; i >= 0; i--)
-            _bus.Execute(new DeleteParagraphCommand(tocIndices[i]));
-        var index = Math.Clamp(insertAt, 0, _doc.Blocks.Count);
-        foreach (var paragraph in BuildTableOfContents())
-            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
-        _bus.CommitUndoGroup("Update Table of Contents");
-    }
+        => ReferenceEdits.RefreshTableOfContents(BuildGeneratedPageTextResolver());
 
     // Build + insert the TOC paragraphs starting at block `at`, grouped into one undo.
     private void InsertTocAt(int at, string label)
-    {
-        _bus.BeginUndoGroup();
-        var index = Math.Clamp(at, 0, _doc.Blocks.Count);
-        foreach (var paragraph in BuildTableOfContents())
-            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
-        _bus.CommitUndoGroup(label);
-    }
+        => ReferenceEdits.InsertTableOfContents(at, BuildGeneratedPageTextResolver());
 
     private IReadOnlyList<Paragraph> BuildTableOfContents()
     {
@@ -21045,12 +20939,8 @@ public sealed class DocumentView : Control
 
     public void InsertCaption(string labelText, string text = "")
     {
-        labelText = Captions.NormalizeLabelText(labelText);
-        Captions.EnsureStyles(_doc);
-        var number = Captions.NextCaptionNumber(_doc, labelText);
-        var caption = Captions.BuildCaption(labelText, number, text);
-        var index = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
-        _bus.Execute(new InsertParagraphCommand(index, caption));
+        var result = ReferenceEdits.InsertCaption(_caret.Block, labelText, text);
+        var index = result.InsertedBlockIndex;
         _caret = new DocPosition(index, BlockLength(index));
         _selectionAnchor = _caret;
     }
@@ -21069,17 +20959,16 @@ public sealed class DocumentView : Control
         if (hostIndex < 0)
             return;
 
-        var sourceBlock = _caret.Block;
-        var plan = CrossReferences.PlanInsertion(_doc, type, target, insertAs, hyperlink, sourceBlock);
-
-        _bus.Execute(new InsertCrossReferenceCommand(
+        var result = ReferenceEdits.InsertCrossReference(
+            _caret.Block,
             hostIndex,
-            plan.FieldRun,
-            plan.Target.BlockIndex,
-            plan.BookmarkNameToAdd));
+            type,
+            target,
+            insertAs,
+            hyperlink);
 
         _cellCaret = null;
-        _caret = new DocPosition(hostIndex, BlockLength(hostIndex));
+        _caret = new DocPosition(result.HostBlockIndex, BlockLength(result.HostBlockIndex));
         _selectionAnchor = _caret;
     }
 
@@ -21188,7 +21077,7 @@ public sealed class DocumentView : Control
         if (block < 0 || block >= _doc.Blocks.Count || _doc.Blocks[block] is not Paragraph)
             return;
 
-        _bus.Execute(new SetBookmarkNameCommand(block, name.Trim()));
+        ReferenceEdits.SetBookmark(block, name);
         Focus();
     }
 
@@ -21573,18 +21462,15 @@ public sealed class DocumentView : Control
 
     public void ApplyCitationStyle(CitationStyle style)
     {
-        if (_doc.BibliographyStyle == style)
+        if (!ReferenceEdits.ApplyCitationStyle(style))
             return;
-
-        _bus.Execute(new ApplyCitationStyleCommand(style));
         InvalidateLayoutAndVisual();
         Focus();
     }
 
     public void ReplaceSources(IReadOnlyList<Source> sources)
     {
-        ArgumentNullException.ThrowIfNull(sources);
-        _bus.Execute(new ReplaceSourcesCommand(sources));
+        ReferenceEdits.ReplaceSources(sources);
         Focus();
     }
 
@@ -21604,23 +21490,16 @@ public sealed class DocumentView : Control
     public void MarkIndexEntry(IndexMark mark)
     {
         ArgumentNullException.ThrowIfNull(mark);
-        var markRun = DocumentIndex.MarkRun(mark);
-        if (DocumentIndex.MarkedEntry(markRun) is not { MainEntry.Length: > 0 } normalized)
-            return;
-
         var hostIndex = ResolveReferenceHostBlock();
-        if (hostIndex < 0
-            || _doc.Blocks[hostIndex] is not Paragraph paragraph
-            || paragraph.Runs.Any(run => DocumentIndex.MarksEquivalent(DocumentIndex.MarkedEntry(run), normalized)))
-        {
+        if (hostIndex < 0)
             return;
-        }
 
         var offset = ReferenceInsertionOffset(hostIndex);
-        _bus.Execute(new ReplaceParagraphRunsCommand(hostIndex, target =>
-            InsertRunAtOffset(target, offset, markRun)));
+        var result = ReferenceEdits.InsertIndexEntry(hostIndex, offset, mark);
+        if (!result.Applied)
+            return;
         _cellCaret = null;
-        _caret = new DocPosition(hostIndex, Math.Clamp(offset, 0, BlockLength(hostIndex)));
+        _caret = new DocPosition(result.HostBlockIndex, result.TextOffset);
         _selectionAnchor = _caret;
         Focus();
     }
@@ -21628,32 +21507,13 @@ public sealed class DocumentView : Control
     public int MarkAllIndexEntries(string sourceText, IndexMark mark)
     {
         ArgumentNullException.ThrowIfNull(mark);
-        var markRun = DocumentIndex.MarkRun(mark);
-        if (DocumentIndex.MarkedEntry(markRun) is not { MainEntry.Length: > 0 } normalized)
+        var count = ReferenceEdits.MarkAllIndexEntries(sourceText, mark);
+        if (count == 0)
             return 0;
-        var targets = DocumentIndex.MarkAllTargets(_doc, sourceText, normalized);
-        if (targets.Count == 0)
-            return 0;
-
-        _bus.BeginUndoGroup();
-        try
-        {
-            foreach (var target in targets)
-            {
-                _bus.Execute(new ReplaceParagraphRunsCommand(target.BlockIndex, paragraph =>
-                    InsertRunAtOffset(paragraph, target.TextOffset, DocumentIndex.MarkRun(normalized))));
-            }
-            _bus.CommitUndoGroup("Mark All Index Entries");
-        }
-        catch
-        {
-            _bus.AbortUndoGroup();
-            throw;
-        }
 
         InvalidateLayoutAndVisual();
         Focus();
-        return targets.Count;
+        return count;
     }
 
     public void InsertIndex() => InsertIndex(identifier: null);
@@ -21734,11 +21594,12 @@ public sealed class DocumentView : Control
             return;
 
         var offset = ReferenceInsertionOffset(hostIndex);
-        _bus.Execute(new ReplaceParagraphRunsCommand(hostIndex, paragraph =>
-            InsertRunAtOffset(paragraph, offset, Run.CitationMark(citation))));
+        var result = ReferenceEdits.InsertAuthorityCitation(hostIndex, offset, citation);
+        if (!result.Applied)
+            return;
 
         _cellCaret = null;
-        _caret = new DocPosition(hostIndex, Math.Clamp(offset, 0, BlockLength(hostIndex)));
+        _caret = new DocPosition(result.HostBlockIndex, result.TextOffset);
         _selectionAnchor = _caret;
         Focus();
     }
@@ -21756,11 +21617,16 @@ public sealed class DocumentView : Control
         ApplyGeneratedReferencePlan(plan, "Insert Table of Authorities", adjustCaretForInsert: true);
     }
 
-    public void RefreshTableOfAuthorities() => RefreshTableOfAuthorities(ToaOptions.Default);
+    public void RefreshTableOfAuthorities() => RefreshTableOfAuthoritiesCore(options: null);
 
     public void RefreshTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        RefreshTableOfAuthoritiesCore(options);
+    }
+
+    private void RefreshTableOfAuthoritiesCore(ToaOptions? options)
+    {
         var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
             _doc,
             options,
@@ -21879,16 +21745,11 @@ public sealed class DocumentView : Control
         ArgumentNullException.ThrowIfNull(paragraphs);
 
         var originalCaret = _caret;
-        _bus.BeginUndoGroup();
-        var index = Math.Clamp(insertAt, 0, _doc.Blocks.Count);
-        var appliedIndex = index;
-        foreach (var paragraph in paragraphs)
-            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
-        _bus.CommitUndoGroup(label);
+        var result = ReferenceEdits.InsertGeneratedRegion(insertAt, paragraphs, label);
 
-        if (paragraphs.Count > 0 && appliedIndex <= originalCaret.Block)
+        if (result.InsertedCount > 0 && result.InsertIndex <= originalCaret.Block)
         {
-            _caret = originalCaret with { Block = originalCaret.Block + paragraphs.Count };
+            _caret = originalCaret with { Block = originalCaret.Block + result.InsertedCount };
             _selectionAnchor = _caret;
         }
     }
@@ -21899,19 +21760,15 @@ public sealed class DocumentView : Control
         bool adjustCaretForInsert)
     {
         var originalCaret = _caret;
-        _bus.BeginUndoGroup();
-        foreach (var deleteIndex in plan.DeleteIndicesDescending)
-            _bus.Execute(new DeleteParagraphCommand(deleteIndex));
+        var result = ReferenceEdits.ApplyGeneratedRegion(
+            plan.DeleteIndicesDescending,
+            plan.InsertIndex,
+            plan.Paragraphs,
+            label);
 
-        var index = Math.Clamp(plan.InsertIndex, 0, _doc.Blocks.Count);
-        var appliedIndex = index;
-        foreach (var paragraph in plan.Paragraphs)
-            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
-        _bus.CommitUndoGroup(label);
-
-        if (adjustCaretForInsert && plan.Paragraphs.Count > 0 && appliedIndex <= originalCaret.Block)
+        if (adjustCaretForInsert && result.InsertedCount > 0 && result.InsertIndex <= originalCaret.Block)
         {
-            _caret = originalCaret with { Block = originalCaret.Block + plan.Paragraphs.Count };
+            _caret = originalCaret with { Block = originalCaret.Block + result.InsertedCount };
             _selectionAnchor = _caret;
         }
     }
@@ -21922,39 +21779,26 @@ public sealed class DocumentView : Control
         bool adjustCaretForInsert)
     {
         var originalCaret = _caret;
-        _bus.BeginUndoGroup();
-        foreach (var deleteIndex in plan.DeleteIndicesDescending)
-            _bus.Execute(new DeleteParagraphCommand(deleteIndex));
+        var result = ReferenceEdits.ApplyGeneratedRegion(
+            plan.DeleteIndicesDescending,
+            plan.InsertIndex,
+            plan.Paragraphs,
+            label);
 
-        var index = Math.Clamp(plan.InsertIndex, 0, _doc.Blocks.Count);
-        var appliedIndex = index;
-        foreach (var paragraph in plan.Paragraphs)
-            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
-        _bus.CommitUndoGroup(label);
-
-        if (adjustCaretForInsert && plan.Paragraphs.Count > 0 && appliedIndex <= originalCaret.Block)
+        if (adjustCaretForInsert && result.InsertedCount > 0 && result.InsertIndex <= originalCaret.Block)
         {
-            _caret = originalCaret with { Block = originalCaret.Block + plan.Paragraphs.Count };
+            _caret = originalCaret with { Block = originalCaret.Block + result.InsertedCount };
             _selectionAnchor = _caret;
         }
     }
 
     private void RefreshGeneratedReferenceBlocks(Func<Block, bool> isGeneratedBlock, Func<IReadOnlyList<Paragraph>> build, string label)
     {
-        var indices = new List<int>();
-        for (var i = 0; i < _doc.Blocks.Count; i++)
-            if (isGeneratedBlock(_doc.Blocks[i]))
-                indices.Add(i);
-
-        var insertAt = indices.Count > 0 ? indices[0] : 0;
-
-        _bus.BeginUndoGroup();
-        for (var i = indices.Count - 1; i >= 0; i--)
-            _bus.Execute(new DeleteParagraphCommand(indices[i]));
-        var index = Math.Clamp(insertAt, 0, _doc.Blocks.Count);
-        foreach (var paragraph in build())
-            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
-        _bus.CommitUndoGroup(label);
+        ReferenceEdits.RefreshGeneratedRegion(
+            isGeneratedBlock,
+            fallbackInsertIndex: 0,
+            build(),
+            label);
     }
 
     // ── AV-INSERT2: Insert depth 2 (cover page / drop cap / document-property field / equation / quick part) ──
@@ -21973,10 +21817,7 @@ public sealed class DocumentView : Control
         if (blocks.Count == 0)
             return;
 
-        _bus.BeginUndoGroup();
-        for (var i = 0; i < blocks.Count; i++)
-            _bus.Execute(new InsertBlockCommand(i, blocks[i]));
-        _bus.CommitUndoGroup("Insert Cover Page");
+        _editingSession.InsertBlocksAfter(-1, blocks, "Insert Cover Page");
 
         // Park the caret on the first body block after the cover page so typing continues in the body.
         _cellCaret = null;
@@ -22003,9 +21844,7 @@ public sealed class DocumentView : Control
         var index = _caret.Block;
         if (index < 0 || index >= _doc.Blocks.Count || _doc.Blocks[index] is not Paragraph p || !IsEditable(p))
             return;
-        _bus.Execute(new ReplaceParagraphRunsCommand(
-            index,
-            para => DropCap.ApplyDropCap(para, position, sizePt, lineSpan, distanceFromTextPt)));
+        _editingSession.ApplyDropCap(index, position, sizePt, lineSpan, distanceFromTextPt);
         Focus();
     }
 
@@ -22019,7 +21858,7 @@ public sealed class DocumentView : Control
         var index = _caret.Block;
         if (index < 0 || index >= _doc.Blocks.Count || _doc.Blocks[index] is not Paragraph p || !IsEditable(p))
             return;
-        _bus.Execute(new ReplaceParagraphRunsCommand(index, DropCap.ClearFormatting));
+        _editingSession.ClearDropCap(index);
         Focus();
     }
 
@@ -22372,7 +22211,7 @@ public sealed class DocumentView : Control
     // the caret's block when it is an editable body paragraph; otherwise the first editable body paragraph;
     // otherwise append a fresh empty paragraph and host it there. Returns -1 only when no paragraph can be
     // created (never, since a fresh one is appended) — defensive.
-    private int ResolveReferenceHostBlock()
+    private int ResolveReferenceHostBlock(bool createIfMissing = true)
     {
         var index = _caret.Block;
         if (index >= 0 && index < _doc.Blocks.Count && _doc.Blocks[index] is Paragraph)
@@ -22380,6 +22219,8 @@ public sealed class DocumentView : Control
         index = FirstEditableBlock();
         if (index >= 0)
             return index;
+        if (!createIfMissing)
+            return -1;
         index = _doc.Blocks.Count;
         _bus.Execute(new InsertBlockCommand(index, new Paragraph()));
         return index;
@@ -22434,7 +22275,9 @@ public sealed class DocumentView : Control
         if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             return;
         var newKind = paragraph.Formatting.ListKind == kind ? ListKind.None : kind;
-        _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, paragraph.Formatting with { ListKind = newKind }));
+        _editingSession.FormatParagraphs(
+            [_caret.Block],
+            formatting => formatting with { ListKind = newKind });
     }
 
     // AV-LIST: Tab at the start of a list item (caret offset == 0) demotes (Tab) or promotes
@@ -22459,33 +22302,14 @@ public sealed class DocumentView : Control
             if (listIndices.Count == 0)
                 return false; // Selection has no list paragraphs → fall through to normal tab/shift-tab.
 
-            // Apply demote (+1) or promote (-1) to every list paragraph in the selection.
-            if (listIndices.Count == 1)
-            {
-                // Single list paragraph in selection: no undo-group overhead.
-                var idx = listIndices[0];
-                var f = ((Paragraph)_doc.Blocks[idx]).Formatting;
-                _bus.Execute(new SetParagraphFormattingCommand(idx, shift
-                    ? (f.ListLevel == 0
-                        ? f with { ListKind = ListKind.None, ListLevel = 0 }
-                        : f with { ListLevel = f.ListLevel - 1 })
-                    : f with { ListLevel = Math.Min(f.ListLevel + 1, 8) }));
-            }
-            else
-            {
-                // Multiple list paragraphs: wrap in one undo group so a single Ctrl+Z reverts all.
-                _bus.BeginUndoGroup();
-                foreach (var idx in listIndices)
-                {
-                    var f = ((Paragraph)_doc.Blocks[idx]).Formatting;
-                    _bus.Execute(new SetParagraphFormattingCommand(idx, shift
-                        ? (f.ListLevel == 0
-                            ? f with { ListKind = ListKind.None, ListLevel = 0 }
-                            : f with { ListLevel = f.ListLevel - 1 })
-                        : f with { ListLevel = Math.Min(f.ListLevel + 1, 8) }));
-                }
-                _bus.CommitUndoGroup(shift ? "Promote List Items" : "Demote List Items");
-            }
+            _editingSession.FormatParagraphs(
+                listIndices,
+                formatting => shift
+                    ? formatting.ListLevel == 0
+                        ? formatting with { ListKind = ListKind.None, ListLevel = 0 }
+                        : formatting with { ListLevel = formatting.ListLevel - 1 }
+                    : formatting with { ListLevel = Math.Min(formatting.ListLevel + 1, 8) },
+                shift ? "Promote List Items" : "Demote List Items");
             return true;
         }
 
@@ -22504,17 +22328,23 @@ public sealed class DocumentView : Control
             if (fmt.ListLevel == 0)
             {
                 // Already at level 0: leave the list entirely (Word behavior).
-                _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { ListKind = ListKind.None, ListLevel = 0 }));
+                _editingSession.FormatParagraphs(
+                    [_caret.Block],
+                    formatting => formatting with { ListKind = ListKind.None, ListLevel = 0 });
             }
             else
             {
-                _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { ListLevel = fmt.ListLevel - 1 }));
+                _editingSession.FormatParagraphs(
+                    [_caret.Block],
+                    formatting => formatting with { ListLevel = formatting.ListLevel - 1 });
             }
         }
         else
         {
             // Tab → demote (increase level, cap at 8).
-            _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { ListLevel = Math.Min(fmt.ListLevel + 1, 8) }));
+            _editingSession.FormatParagraphs(
+                [_caret.Block],
+                formatting => formatting with { ListLevel = Math.Min(formatting.ListLevel + 1, 8) });
         }
         return true;
     }
@@ -22537,11 +22367,15 @@ public sealed class DocumentView : Control
         if (fmt.ListLevel == 0)
         {
             // At top level: remove list formatting entirely.
-            _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { ListKind = ListKind.None, ListLevel = 0 }));
+            _editingSession.FormatParagraphs(
+                [_caret.Block],
+                formatting => formatting with { ListKind = ListKind.None, ListLevel = 0 });
         }
         else
         {
-            _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { ListLevel = fmt.ListLevel - 1 }));
+            _editingSession.FormatParagraphs(
+                [_caret.Block],
+                formatting => formatting with { ListLevel = formatting.ListLevel - 1 });
         }
         return true;
     }
@@ -22551,9 +22385,9 @@ public sealed class DocumentView : Control
     {
         if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             return;
-        _bus.Execute(new FormatParagraphRunsCommand(
-            _caret.Block,
-            f => f with { FontSizePt = fontSizePoints, Bold = bold }));
+        _editingSession.FormatParagraphRuns(
+            [_caret.Block],
+            f => f with { FontSizePt = fontSizePoints, Bold = bold });
     }
 
     /// <summary>
@@ -22642,17 +22476,7 @@ public sealed class DocumentView : Control
         if (indices.Count == 0)
             return null;
 
-        if (indices.Count == 1)
-        {
-            _bus.Execute(new SetParagraphStyleCommand(indices[0], styleId));
-        }
-        else
-        {
-            _bus.BeginUndoGroup();
-            foreach (var idx in indices)
-                _bus.Execute(new SetParagraphStyleCommand(idx, styleId));
-            _bus.CommitUndoGroup("Apply Style");
-        }
+        _editingSession.SetParagraphStyles(indices, styleId);
         return styleId;
     }
 
@@ -22731,30 +22555,13 @@ public sealed class DocumentView : Control
             return null;
 
         var targets = SelectedParagraphIndices();
-        DocumentStyle? created = null;
-        _bus.BeginUndoGroup();
-        try
-        {
-            _bus.Execute(new StyleCatalogCommand("New Style", doc =>
-            {
-                created = StyleManager.CreateStyle(doc, name, basedOnId, run, paragraph, nextStyleId);
-            }));
-
-            if (created is not null)
-            {
-                foreach (var index in targets)
-                    _bus.Execute(new SetParagraphStyleCommand(index, created.Id));
-            }
-
-            _bus.CommitUndoGroup("New Style");
-        }
-        catch
-        {
-            _bus.AbortUndoGroup();
-            throw;
-        }
-
-        return created;
+        return _editingSession.CreateParagraphStyleAndApply(
+            targets,
+            name,
+            basedOnId,
+            run,
+            paragraph,
+            nextStyleId);
     }
 
     /// <summary>Home &gt; Styles &gt; Manage Styles: modify a style's catalog entry and redraw style-linked text.</summary>
@@ -22765,35 +22572,20 @@ public sealed class DocumentView : Control
         string? basedOnId,
         string? nextStyleId)
     {
-        if (IsEditingLocked || string.IsNullOrWhiteSpace(styleId) || !_doc.Styles.ContainsKey(styleId))
+        if (IsEditingLocked)
             return null;
-
-        DocumentStyle? updated = null;
-        _bus.Execute(new StyleCatalogCommand("Modify Style", doc =>
-        {
-            updated = StyleManager.ModifyStyle(doc, styleId,
-                run: run,
-                para: paragraph,
-                basedOnId: basedOnId,
-                clearBasedOn: basedOnId is null,
-                nextStyleId: nextStyleId,
-                clearNext: nextStyleId is null);
-        }));
-        return updated;
+        return _editingSession.ModifyParagraphStyle(
+            styleId,
+            run,
+            paragraph,
+            basedOnId,
+            nextStyleId);
     }
 
     /// <summary>Home &gt; Styles &gt; Manage Styles: delete a custom style through the shared catalog rules.</summary>
     public bool DeleteParagraphStyle(string styleId)
     {
-        if (IsEditingLocked
-            || string.IsNullOrWhiteSpace(styleId)
-            || StyleManager.IsBuiltIn(styleId)
-            || !_doc.Styles.ContainsKey(styleId))
-            return false;
-
-        var deleted = false;
-        _bus.Execute(new StyleCatalogCommand("Delete Style", doc => deleted = StyleManager.DeleteStyle(doc, styleId)));
-        return deleted;
+        return !IsEditingLocked && _editingSession.DeleteParagraphStyle(styleId);
     }
 
     /// <summary>
@@ -22852,16 +22644,7 @@ public sealed class DocumentView : Control
         if (indices.Count == 0)
             return;
 
-        if (indices.Count == 1)
-        {
-            _bus.Execute(new SetParagraphStyleCommand(indices[0], null));
-            return;
-        }
-
-        _bus.BeginUndoGroup();
-        foreach (var idx in indices)
-            _bus.Execute(new SetParagraphStyleCommand(idx, null));
-        _bus.CommitUndoGroup("Clear Style");
+        _editingSession.SetParagraphStyles(indices, null, "Clear Style");
     }
 
     // Overlay a character style's run formatting onto a run's existing formatting: only the style's
@@ -23098,15 +22881,9 @@ public sealed class DocumentView : Control
             return false;
         }
 
-        var clones = DocumentMerge.CloneBlocksForInsertion(_doc, source);
-        if (clones.Count == 0)
-            return false;
-
-        foreach (var (id, style) in source.Styles)
-            _doc.Styles.TryAdd(id, style);
-
         var blockIndex = _caret.Block;
-        _bus.Execute(new ReplaceBlocksCommand(blockIndex, 1, clones));
+        if (!_editingSession.ReplaceEmptyParagraphWithDocument(blockIndex, source))
+            return false;
         _caret = new DocPosition(blockIndex, 0);
         _selectionAnchor = _caret;
         _pendingRunFmt = null;
@@ -23378,16 +23155,7 @@ public sealed class DocumentView : Control
         if (indices.Count == 0)
             return;
 
-        if (indices.Count == 1)
-        {
-            _bus.Execute(new FormatParagraphRunsCommand(indices[0], transform));
-            return;
-        }
-
-        _bus.BeginUndoGroup();
-        foreach (var index in indices)
-            _bus.Execute(new FormatParagraphRunsCommand(index, transform));
-        _bus.CommitUndoGroup("Character Formatting");
+        _editingSession.FormatParagraphRuns(indices, transform);
     }
 
     private void ApplyRunFormatting(Func<RunFormatting, RunFormatting> transform)
@@ -23696,7 +23464,9 @@ public sealed class DocumentView : Control
         if (forward && targetIdx >= cellOrder.Count)
         {
             // Tab in the last cell → append a new row (Word behaviour) and place caret in it.
-            _bus.Execute(new InsertTableRowCommand(cc.TableBlock, table.Rows.Count));
+            TableEdits.InsertRow(
+                new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col),
+                after: true);
             // After insert the table has grown; re-read to find the new last row.
             if (_doc.Blocks[cc.TableBlock] is not Table updatedTable)
                 return;

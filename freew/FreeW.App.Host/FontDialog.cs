@@ -26,10 +26,11 @@ internal static class FontDialog
         RunFormatting? result = null;
         var session = FontDialogPlanner.CreateSession(current, CultureInfo.CurrentCulture);
         var state = session.InitialState;
+        var text = FontDialogPlanner.Text;
 
         var dialog = new Window
         {
-            Title = "Font",
+            Title = text.Title,
             Width = 460,
             SizeToContent = SizeToContent.Height,
             ResizeMode = ResizeMode.NoResize,
@@ -50,16 +51,16 @@ internal static class FontDialog
             sizeBox.Items.Add(size.Label);
         sizeBox.Text = state.FontSizeText;
 
-        var boldCheck      = new CheckBox { Content = "Bold",             IsChecked = state.Bold,          Margin = new Thickness(0, 0, 12, 4) };
-        var italicCheck    = new CheckBox { Content = "Italic",           IsChecked = state.Italic,        Margin = new Thickness(0, 0, 12, 4) };
-        var underlineCheck = new CheckBox { Content = "Underline",        IsChecked = state.Underline,     Margin = new Thickness(0, 0, 12, 4) };
-        var strikeCheck    = new CheckBox { Content = "Strikethrough",    IsChecked = state.Strikethrough, Margin = new Thickness(0, 0, 12, 4) };
-        var doubleStrikeCheck = new CheckBox { Content = "Double strikethrough", IsChecked = state.DoubleStrikethrough, Margin = new Thickness(0, 0, 12, 4) };
-        var hiddenCheck    = new CheckBox { Content = "Hidden",           IsChecked = state.Hidden,        Margin = new Thickness(0, 0, 12, 4) };
-        var smallCapsCheck = new CheckBox { Content = "Small Caps",       IsChecked = state.SmallCaps,     Margin = new Thickness(0, 0, 12, 4) };
-        var allCapsCheck   = new CheckBox { Content = "All Caps",         IsChecked = state.AllCaps,       Margin = new Thickness(0, 0, 12, 4) };
-        var superCheck     = new CheckBox { Content = "Superscript",      IsChecked = state.Superscript,   Margin = new Thickness(0, 0, 12, 4) };
-        var subCheck       = new CheckBox { Content = "Subscript",        IsChecked = state.Subscript,     Margin = new Thickness(0, 0, 0, 4) };
+        var boldCheck      = new CheckBox { Content = text.BoldLabel,             IsChecked = state.Bold,          Margin = new Thickness(0, 0, 12, 4) };
+        var italicCheck    = new CheckBox { Content = text.ItalicLabel,           IsChecked = state.Italic,        Margin = new Thickness(0, 0, 12, 4) };
+        var underlineCheck = new CheckBox { Content = text.UnderlineLabel,        IsChecked = state.Underline,     Margin = new Thickness(0, 0, 12, 4) };
+        var strikeCheck    = new CheckBox { Content = text.StrikethroughLabel,    IsChecked = state.Strikethrough, Margin = new Thickness(0, 0, 12, 4) };
+        var doubleStrikeCheck = new CheckBox { Content = text.DoubleStrikethroughLabel, IsChecked = state.DoubleStrikethrough, Margin = new Thickness(0, 0, 12, 4) };
+        var hiddenCheck    = new CheckBox { Content = text.HiddenLabel,           IsChecked = state.Hidden,        Margin = new Thickness(0, 0, 12, 4) };
+        var smallCapsCheck = new CheckBox { Content = text.SmallCapsLabel,        IsChecked = state.SmallCaps,     Margin = new Thickness(0, 0, 12, 4) };
+        var allCapsCheck   = new CheckBox { Content = text.AllCapsLabel,          IsChecked = state.AllCaps,       Margin = new Thickness(0, 0, 12, 4) };
+        var superCheck     = new CheckBox { Content = text.SuperscriptLabel,      IsChecked = state.Superscript,   Margin = new Thickness(0, 0, 12, 4) };
+        var subCheck       = new CheckBox { Content = text.SubscriptLabel,        IsChecked = state.Subscript,     Margin = new Thickness(0, 0, 0, 4) };
 
         superCheck.Checked += (_, _) =>
         {
@@ -88,10 +89,10 @@ internal static class FontDialog
         colorBox.SelectedIndex = state.ColorIndex;
 
         var fontPanel = new StackPanel { Margin = new Thickness(10) };
-        FontRow(fontPanel, "Font family:", familyBox);
-        FontRow(fontPanel, "Size (pt):",   sizeBox);
-        FontRow(fontPanel, "Color:",       colorBox);
-        fontPanel.Children.Add(new TextBlock { Text = "Style:", Margin = new Thickness(0, 4, 0, 2) });
+        FontRow(fontPanel, text.FontFamilyLabel, familyBox);
+        FontRow(fontPanel, text.FontSizeLabel, sizeBox);
+        FontRow(fontPanel, text.ColorLabel, colorBox);
+        fontPanel.Children.Add(new TextBlock { Text = text.StyleLabel, Margin = new Thickness(0, 4, 0, 2) });
         var effectsWrap = new WrapPanel();
         foreach (var cb in new[] { boldCheck, italicCheck, underlineCheck, strikeCheck, doubleStrikeCheck, hiddenCheck, smallCapsCheck, allCapsCheck, superCheck, subCheck })
             effectsWrap.Children.Add(cb);
@@ -130,17 +131,17 @@ internal static class FontDialog
         numberSpacingBox.SelectedIndex = state.NumberSpacingIndex;
 
         var advPanel = new StackPanel { Margin = new Thickness(10) };
-        FontRow(advPanel, "Character spacing (pt):", spacingBox);
-        FontRow(advPanel, "Kerning min size (pt):",  kerningBox);
-        FontRow(advPanel, "Position (pt):",          positionBox);
-        FontRow(advPanel, "Ligatures:",              ligatureBox);
-        FontRow(advPanel, "Stylistic set (1–20):",   stylisticBox);
-        FontRow(advPanel, "Number form:",            numberFormBox);
-        FontRow(advPanel, "Number spacing:",         numberSpacingBox);
+        FontRow(advPanel, text.CharacterSpacingLabel, spacingBox);
+        FontRow(advPanel, text.KerningLabel, kerningBox);
+        FontRow(advPanel, text.PositionLabel, positionBox);
+        FontRow(advPanel, text.LigaturesLabel, ligatureBox);
+        FontRow(advPanel, text.StylisticSetLabel, stylisticBox);
+        FontRow(advPanel, text.NumberFormLabel, numberFormBox);
+        FontRow(advPanel, text.NumberSpacingLabel, numberSpacingBox);
 
         var tabs = new TabControl { Margin = new Thickness(0) };
-        tabs.Items.Add(new TabItem { Header = "Font",     Content = new ScrollViewer { Content = fontPanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
-        tabs.Items.Add(new TabItem { Header = "Advanced", Content = new ScrollViewer { Content = advPanel,  VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
+        tabs.Items.Add(new TabItem { Header = text.FontTab, Content = new ScrollViewer { Content = fontPanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
+        tabs.Items.Add(new TabItem { Header = text.AdvancedTab, Content = new ScrollViewer { Content = advPanel,  VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
 
         void Accept()
         {

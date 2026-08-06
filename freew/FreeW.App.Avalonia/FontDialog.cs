@@ -41,16 +41,16 @@ public sealed class FontDialog : FreeWDialogWindow
     private readonly TextBox _familyBox;
     private readonly ComboBox _sizeBox;
     private readonly ComboBox _colorBox;
-    private readonly CheckBox _boldChk = Check("Bold", threeState: true);
-    private readonly CheckBox _italicChk = Check("Italic", threeState: true);
-    private readonly CheckBox _underlineChk = Check("Underline", threeState: true);
-    private readonly CheckBox _strikeChk = Check("Strikethrough", threeState: true);
-    private readonly CheckBox _doubleStrikeChk = Check("Double strikethrough", threeState: true);
-    private readonly CheckBox _hiddenChk = Check("Hidden", threeState: true);
-    private readonly CheckBox _smallCapsChk = Check("Small Caps");
-    private readonly CheckBox _allCapsChk = Check("All Caps");
-    private readonly CheckBox _superChk = Check("Superscript");
-    private readonly CheckBox _subChk = Check("Subscript", trailingMargin: 0);
+    private readonly CheckBox _boldChk = Check(FontDialogPlanner.Text.BoldLabel, threeState: true);
+    private readonly CheckBox _italicChk = Check(FontDialogPlanner.Text.ItalicLabel, threeState: true);
+    private readonly CheckBox _underlineChk = Check(FontDialogPlanner.Text.UnderlineLabel, threeState: true);
+    private readonly CheckBox _strikeChk = Check(FontDialogPlanner.Text.StrikethroughLabel, threeState: true);
+    private readonly CheckBox _doubleStrikeChk = Check(FontDialogPlanner.Text.DoubleStrikethroughLabel, threeState: true);
+    private readonly CheckBox _hiddenChk = Check(FontDialogPlanner.Text.HiddenLabel, threeState: true);
+    private readonly CheckBox _smallCapsChk = Check(FontDialogPlanner.Text.SmallCapsLabel);
+    private readonly CheckBox _allCapsChk = Check(FontDialogPlanner.Text.AllCapsLabel);
+    private readonly CheckBox _superChk = Check(FontDialogPlanner.Text.SuperscriptLabel);
+    private readonly CheckBox _subChk = Check(FontDialogPlanner.Text.SubscriptLabel, trailingMargin: 0);
     private readonly TextBox _spacingBox;
     private readonly TextBox _kerningBox;
     private readonly TextBox _positionBox;
@@ -80,7 +80,8 @@ public sealed class FontDialog : FreeWDialogWindow
                 selection.HiddenIndeterminate),
             CultureInfo.CurrentCulture);
 
-        Title = "Font";
+        var text = FontDialogPlanner.Text;
+        Title = text.Title;
         Width = 460;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -154,10 +155,10 @@ public sealed class FontDialog : FreeWDialogWindow
             minWidth: 160);
 
         var fontPanel = new StackPanel { Margin = new Thickness(12, 12, 11, 6) };
-        AddField(fontPanel, "Font family:", _familyBox);
-        AddField(fontPanel, "Size (pt):", _sizeBox);
-        AddField(fontPanel, "Color:", _colorBox);
-        fontPanel.Children.Add(new TextBlock { Text = "Style:", Margin = new Thickness(0, 3, 0, 2) });
+        AddField(fontPanel, text.FontFamilyLabel, _familyBox);
+        AddField(fontPanel, text.FontSizeLabel, _sizeBox);
+        AddField(fontPanel, text.ColorLabel, _colorBox);
+        fontPanel.Children.Add(new TextBlock { Text = text.StyleLabel, Margin = new Thickness(0, 3, 0, 2) });
         var effects = new WrapPanel();
         foreach (var check in new[]
                  {
@@ -170,18 +171,18 @@ public sealed class FontDialog : FreeWDialogWindow
         fontPanel.Children.Add(effects);
 
         var advancedPanel = new StackPanel { Margin = new Thickness(10, 12, 10, 10) };
-        AddField(advancedPanel, "Character spacing (pt):", _spacingBox);
-        AddField(advancedPanel, "Kerning min size (pt):", _kerningBox);
-        AddField(advancedPanel, "Position (pt):", _positionBox);
-        AddField(advancedPanel, "Ligatures:", _ligatureBox);
-        AddField(advancedPanel, "Stylistic set (1-20):", _stylisticBox);
-        AddField(advancedPanel, "Number form:", _numberFormBox);
-        AddField(advancedPanel, "Number spacing:", _numberSpacingBox);
+        AddField(advancedPanel, text.CharacterSpacingLabel, _spacingBox);
+        AddField(advancedPanel, text.KerningLabel, _kerningBox);
+        AddField(advancedPanel, text.PositionLabel, _positionBox);
+        AddField(advancedPanel, text.LigaturesLabel, _ligatureBox);
+        AddField(advancedPanel, text.StylisticSetLabel, _stylisticBox);
+        AddField(advancedPanel, text.NumberFormLabel, _numberFormBox);
+        AddField(advancedPanel, text.NumberSpacingLabel, _numberSpacingBox);
 
         var tabs = new TabControl { Margin = new Thickness(0) };
         tabs.Items.Add(new TabItem
         {
-            Header = "Font",
+            Header = text.FontTab,
             Content = new ScrollViewer
             {
                 Content = fontPanel,
@@ -190,7 +191,7 @@ public sealed class FontDialog : FreeWDialogWindow
         });
         tabs.Items.Add(new TabItem
         {
-            Header = "Advanced",
+            Header = text.AdvancedTab,
             Content = new ScrollViewer
             {
                 Content = advancedPanel,
@@ -226,7 +227,7 @@ public sealed class FontDialog : FreeWDialogWindow
                          _familyBox, _spacingBox, _kerningBox, _positionBox, _stylisticBox,
                      })
                 FontParagraphDialogChrome.ApplyTextBox(box, DialogChromeStyle);
-            ApplyFontCheckBoxChrome();
+            ApplyCheckBoxChrome();
             _familyBox.Focus();
         };
         KeyDown += (_, args) =>
@@ -452,16 +453,6 @@ public sealed class FontDialog : FreeWDialogWindow
         {
             FontParagraphDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
         }
-    }
-
-    private void ApplyFontCheckBoxChrome()
-    {
-        foreach (var checkBox in new[]
-                 {
-                     _boldChk, _italicChk, _underlineChk, _strikeChk, _doubleStrikeChk, _hiddenChk,
-                     _smallCapsChk, _allCapsChk, _superChk, _subChk,
-                 })
-            FontParagraphDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
     }
 
 }

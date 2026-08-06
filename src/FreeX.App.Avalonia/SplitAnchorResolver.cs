@@ -1,3 +1,4 @@
+using FreeX.App.Presentation;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -26,20 +27,11 @@ internal static class SplitAnchorResolver
         IReadOnlyList<RowMetric>? viewportRowMetrics = null,
         IReadOnlyList<ColMetric>? viewportColMetrics = null)
     {
-        if (wasSplit)
-            return (null, null);
-
-        uint? splitRow = activeRow > 1 ? activeRow : null;
-        uint? splitColumn = activeCol > 1 ? activeCol : null;
-
-        if (splitRow is null && splitColumn is null)
-        {
-            if (viewportRowMetrics is { Count: > 1 })
-                splitRow = viewportRowMetrics[viewportRowMetrics.Count / 2].Row;
-            if (viewportColMetrics is { Count: > 1 })
-                splitColumn = viewportColMetrics[viewportColMetrics.Count / 2].Col;
-        }
-
-        return (splitRow, splitColumn);
+        return WorksheetStructureCommandPlanner.ResolveSplitTarget(
+            activeRow,
+            activeCol,
+            wasSplit,
+            viewportRowMetrics,
+            viewportColMetrics);
     }
 }

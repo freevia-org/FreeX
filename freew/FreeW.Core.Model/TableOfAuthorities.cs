@@ -37,10 +37,9 @@ public enum ToaTabLeader
 public sealed class ToaOptions
 {
     /// <summary>
-    /// When true, a citation that appears five or more times is listed as <c>passim</c> in the table
-    /// instead of individual page numbers. When the document builder can derive an explicit-break-based
-    /// page-reference segment, <c>passim</c> is emitted in that segment; otherwise the legacy text suffix is
-    /// kept so no caller receives invented page numbers. Default: <c>false</c>.
+    /// When true, a citation with five or more distinct page references is listed as <c>passim</c> instead
+    /// of individual page numbers. Without page evidence the legacy occurrence fallback is retained so
+    /// no caller receives invented page numbers. Default: <c>false</c>.
     /// </summary>
     public bool UsePassim { get; init; }
 
@@ -89,21 +88,23 @@ public delegate ToaCitationPageReference? ToaCitationPageResolver(
 /// the document's marked legal citations (see <see cref="TextDocument.Citations"/>). Lives in the model
 /// project so it is unit-testable without any UI, mirroring <see cref="DocumentIndex"/>.
 /// <para>
-/// <see cref="Build"/> produces ordinary styled <see cref="Paragraph"/>s — a "Table of Authorities"
-/// heading followed, for each category that has citations, by a category heading (e.g. "Cases") and the
-/// distinct long-form citations in that category sorted alphabetically (case-insensitive) with duplicates
-/// collapsed. The paragraphs carry dedicated style ids (<see cref="HeadingStyleId"/>,
-/// <see cref="CategoryStyleId"/> and <see cref="EntryStyleId"/>) so they:
+/// <see cref="Build"/> produces a heading followed, for each used category, by a category heading and the
+/// distinct long-form citations sorted alphabetically. Each category/result segment is owned by the same
+/// native Word <c>TOA</c> field that Word emits for that category. The paragraphs also carry dedicated
+/// style ids (<see cref="HeadingStyleId"/>, <see cref="CategoryStyleId"/> and <see cref="EntryStyleId"/>) so they:
 /// </para>
 /// <list type="bullet">
 /// <item>render with distinct formatting once <see cref="EnsureStyles"/> has registered them;</item>
-/// <item>round-trip through docx as normal styled paragraphs (no I/O changes needed); and</item>
+/// <item>round-trip through docx with their native field ownership intact; and</item>
 /// <item>act as a marker so a "refresh" can locate and replace a previously inserted region via
 /// <see cref="IsTableOfAuthoritiesParagraph"/>.</item>
 /// </list>
 /// </summary>
 public static class TableOfAuthorities
 {
+    /// <summary>Word's cached result when a specific TOA category has no marked entries.</summary>
+    public const string EmptyResultText = "No table of authorities entries found.";
+
     /// <summary>
     /// Default right-tab position for generated entries when the caller only supplies an enumerable of
     /// citations. It matches the writable width of Word's default letter page (8.5in page, 1in margins).
@@ -190,9 +191,9 @@ public static class TableOfAuthorities
     /// <paramref name="options"/>: a "Table of Authorities" heading (<see cref="HeadingStyleId"/>) followed,
     /// per non-empty category (limited by <see cref="ToaOptions.CategoryFilter"/> when set) in Word's display
     /// order, by a category heading (<see cref="CategoryStyleId"/>) and the distinct long-form citations of
-    /// that category sorted alphabetically with duplicates collapsed. When <see cref="ToaOptions.UsePassim"/>
-    /// is true, a citation that appears five or more times in <paramref name="document"/> is annotated with
-    /// " passim". Deterministic and side-effect free — it never mutates <paramref name="document"/>.
+    /// that category sorted alphabetically with duplicates collapsed. When page-reference evidence is
+    /// available, <see cref="ToaOptions.UsePassim"/> emits <c>passim</c> only for five or more distinct pages.
+    /// Deterministic and side-effect free — it never mutates <paramref name="document"/>.
     /// </summary>
     public static IReadOnlyList<Paragraph> Build(TextDocument document, ToaOptions options)
     {
@@ -353,6 +354,7 @@ public static class TableOfAuthorities
             if (distinct.Count == 0)
                 continue;
 
+            var categoryStart = paragraphs.Count;
             paragraphs.Add(new Paragraph(CategoryHeading(category)) { StyleId = CategoryStyleId });
             foreach (var entry in distinct)
             {
@@ -365,7 +367,7 @@ public static class TableOfAuthorities
                     && pageReferences.TryGetValue(key, out var pages)
                     && pages.Count > 0)
                 {
-                    pageReferenceText = FormatPageReference(entry, category, pages, options, occurrenceCounts);
+                    pageReferenceText = FormatPageReference(pages, options);
                 }
                 else if (options.UsePassim && IsPassimEntry(entry, category, occurrenceCounts))
                 {
@@ -376,9 +378,124 @@ public static class TableOfAuthorities
                 sourceFormatting?.TryGetValue(key, out runFormatting);
                 paragraphs.Add(CreateEntryParagraph(text, pageReferenceText, options, entryRightTabStopPt, runFormatting));
             }
+
+            // Word represents "All" as one TOA field per used category, not as category zero.
+            var field = new ComplexField(NativeFieldInstructionFor(options, category));
+            for (var index = categoryStart; index < paragraphs.Count; index++)
+                paragraphs[index].SpanningFieldOwner = field;
+            paragraphs[categoryStart].SpanningFieldStart = field;
+            paragraphs[^1].EndsSpanningField = true;
+        }
+
+        if (paragraphs.Count == 1 && options.CategoryFilter is { } emptyCategory)
+        {
+            var empty = CreateEntryParagraph(
+                EmptyResultText,
+                pageReferenceText: null,
+                options,
+                entryRightTabStopPt,
+                sourceFormatting: null);
+            empty.Runs.Clear();
+            empty.Runs.Add(Run.ComplexFieldRun(
+                NativeFieldInstructionFor(options, emptyCategory),
+                EmptyResultText));
+            paragraphs.Add(empty);
         }
 
         return paragraphs;
+    }
+
+    /// <summary>Builds Word's native Table of Authorities instruction for the generated result.</summary>
+    public static string NativeFieldInstructionFor(ToaOptions options, CitationCategory category)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var categoryNumber = ((int)category).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var instruction = $" TOA \\h \\c \"{categoryNumber}\"";
+        if (options.UsePassim)
+            instruction += " \\p";
+        if (!options.KeepOriginalFormatting)
+            instruction += " \\f";
+        return instruction + " ";
+    }
+
+    /// <summary>
+    /// Recovers options from an imported native TOA field. Word stores the tab leader in result
+    /// paragraph formatting rather than in the field instruction.
+    /// </summary>
+    public static ToaOptions? ExistingOptions(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var leader = document.Blocks.OfType<Paragraph>()
+            .Where(paragraph => paragraph.SpanningFieldStart is { Keyword: "TOA" }
+                || paragraph.SpanningFieldOwner is { Keyword: "TOA" }
+                || paragraph.Runs.Any(run => run.ComplexField is { Keyword: "TOA" }))
+            .SelectMany(paragraph => paragraph.Formatting.TabStops)
+            .Select(tab => FromTabLeader(tab.Leader))
+            .FirstOrDefault(ToaTabLeader.Dots);
+
+        var nativeOptions = document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs
+                .Select(run => run.ComplexField)
+                .Prepend(paragraph.SpanningFieldOwner)
+                .Prepend(paragraph.SpanningFieldStart))
+            .Where(field => field is { Keyword: "TOA" })
+            .Select(field => field!)
+            .GroupBy(field => field.Instruction, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .Select(field => TryGetNativeOptions(field, leader, out var options) ? options : null)
+            .Where(options => options is not null)
+            .Cast<ToaOptions>()
+            .ToArray();
+        if (nativeOptions.Length == 0)
+            return null;
+
+        var first = nativeOptions[0];
+        var categories = nativeOptions
+            .Select(options => options.CategoryFilter)
+            .Distinct()
+            .ToArray();
+        return new ToaOptions
+        {
+            CategoryFilter = categories.Length == 1 ? categories[0] : null,
+            UsePassim = first.UsePassim,
+            KeepOriginalFormatting = first.KeepOriginalFormatting,
+            TabLeader = leader
+        };
+    }
+
+    /// <summary>True when <paramref name="field"/> is a native TOA field and its options were parsed.</summary>
+    public static bool TryGetNativeOptions(
+        ComplexField? field,
+        ToaTabLeader tabLeader,
+        out ToaOptions options)
+    {
+        options = ToaOptions.Default;
+        if (field is not { Keyword: "TOA" })
+            return false;
+
+        CitationCategory? category = null;
+        var rawCategory = ComplexFieldEngine.SwitchValue(field.Instruction, 'c');
+        if (!string.IsNullOrWhiteSpace(rawCategory)
+            && int.TryParse(
+                rawCategory,
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var categoryNumber)
+            && Enum.IsDefined(typeof(CitationCategory), categoryNumber))
+        {
+            category = (CitationCategory)categoryNumber;
+        }
+
+        options = new ToaOptions
+        {
+            CategoryFilter = category,
+            UsePassim = ComplexFieldEngine.HasSwitch(field.Instruction, 'p'),
+            KeepOriginalFormatting = !ComplexFieldEngine.HasSwitch(field.Instruction, 'f'),
+            TabLeader = tabLeader
+        };
+        return true;
     }
 
     private static Paragraph CreateEntryParagraph(
@@ -417,13 +534,10 @@ public static class TableOfAuthorities
     }
 
     private static string FormatPageReference(
-        string entry,
-        CitationCategory category,
         IReadOnlyList<ToaCitationPageReference> pages,
-        ToaOptions options,
-        Dictionary<ToaEntryKey, int>? occurrenceCounts)
+        ToaOptions options)
     {
-        if (options.UsePassim && IsPassimEntry(entry, category, occurrenceCounts))
+        if (options.UsePassim && pages.Count >= PassimOccurrenceThreshold)
             return "passim";
 
         return string.Join(", ", pages.Select(page => page.DisplayText));
@@ -686,6 +800,14 @@ public static class TableOfAuthorities
         _ => TabLeader.Dots
     };
 
+    private static ToaTabLeader FromTabLeader(TabLeader leader) => leader switch
+    {
+        TabLeader.Dashes => ToaTabLeader.Dashes,
+        TabLeader.Underline => ToaTabLeader.Underline,
+        TabLeader.None => ToaTabLeader.None,
+        _ => ToaTabLeader.Dots
+    };
+
     private readonly record struct ToaEntryKey(string LongCitation, CitationCategory Category);
 
     private sealed record ToaCitationOccurrence(
@@ -723,9 +845,13 @@ public static class TableOfAuthorities
             || string.Equals(styleId, EntryStyleId, StringComparison.Ordinal);
     }
 
-    /// <summary>True when <paramref name="block"/> is a paragraph carrying a Table of Authorities style.</summary>
+    /// <summary>True when a paragraph is owned by a native TOA field or carries a generated TOA style.</summary>
     public static bool IsTableOfAuthoritiesParagraph(Block block) =>
-        block is Paragraph paragraph && IsTableOfAuthoritiesStyleId(paragraph.StyleId);
+        block is Paragraph paragraph
+        && (paragraph.SpanningFieldStart is { Keyword: "TOA" }
+            || paragraph.SpanningFieldOwner is { Keyword: "TOA" }
+            || paragraph.Runs.Any(run => run.ComplexField is { Keyword: "TOA" })
+            || IsTableOfAuthoritiesStyleId(paragraph.StyleId));
 
     /// <summary>
     /// Registers the Table of Authorities styles in <paramref name="document"/>'s style catalog if they are

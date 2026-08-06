@@ -341,16 +341,20 @@ public partial class MainWindow
 
     private void ExecuteShowHideNote(CellAddress address)
     {
-        var cmd = new ShowHideCommentCommand(_currentSheetId, address);
-        if (TryExecuteCommand(cmd, "Show/Hide Note"))
-            UpdateViewport();
+        var result = ReviewSessionController.ToggleNoteVisibility(address);
+        if (!result.Success)
+            return;
+
+        ApplyReviewRefreshPlan(result.RefreshPlan);
     }
 
     private void ExecuteShowAllNotes()
     {
-        var cmd = new ShowAllNotesCommand(_currentSheetId);
-        if (TryExecuteCommand(cmd, "Show All Notes"))
-            UpdateViewport();
+        var result = ReviewSessionController.ToggleAllNotesVisibility();
+        if (!result.Success)
+            return;
+
+        ApplyReviewRefreshPlan(result.RefreshPlan);
     }
 
     private void NavigateThreadedComment(bool previous)
@@ -532,61 +536,27 @@ public partial class MainWindow
             sheet.AllowEditRangePasswords) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
-        IWorkbookCommand? command = null;
-        string? successMessage = null;
-        switch (dialog.Result)
-        {
-            case { Action: AllowEditRangeAction.Add, Range: { } range }:
-                command = new CompositeWorkbookCommand(
-                    "Allow Edit Range",
-                    [
-                        new AllowEditRangeCommand(_currentSheetId, range),
-                        new SetAllowEditRangePasswordCommand(_currentSheetId, range, dialog.RangePassword)
-                    ]);
-                successMessage = UiText.Format("MainWindowMessage_AllowEditRangeAdded", range);
-                break;
-            case { Action: AllowEditRangeAction.Modify, PreviousRange: { } previousRange, Range: { } range }:
-                var modifyCommands = new List<IWorkbookCommand>
-                {
-                    new RemoveAllowEditRangeCommand(_currentSheetId, previousRange),
-                    new AllowEditRangeCommand(_currentSheetId, range)
-                };
-                // Only touch the stored password when the user actually typed into the password box
-                // this time (RangePasswordChanged); a modify with the box left blank keeps whatever
-                // password (if any) the range already had, matching Excel and AllowEditRangeDialog's
-                // own contract for RangePasswordChanged.
-                if (dialog.RangePasswordChanged)
-                {
-                    modifyCommands.Add(new SetAllowEditRangePasswordCommand(_currentSheetId, range, dialog.RangePassword));
-                }
-                else if (!range.Equals(previousRange) && sheet.AllowEditRangePasswords.TryGetValue(previousRange, out var carriedPassword))
-                {
-                    // The range's key changed (e.g. its bounds were edited) but the password was left
-                    // untouched -- carry the existing password over to the new key so it is not lost.
-                    modifyCommands.Add(new SetAllowEditRangePasswordCommand(_currentSheetId, range, carriedPassword));
-                }
-                command = new CompositeWorkbookCommand("Modify Allow Edit Range", modifyCommands);
-                successMessage = UiText.Format("MainWindowMessage_AllowEditRangeModified", range);
-                break;
-            case { Action: AllowEditRangeAction.Remove, Range: { } range }:
-                command = new CompositeWorkbookCommand(
-                    "Remove Allow Edit Range",
-                    [
-                        new RemoveAllowEditRangeCommand(_currentSheetId, range),
-                        new SetAllowEditRangePasswordCommand(_currentSheetId, range, null)
-                    ]);
-                successMessage = UiText.Format("MainWindowMessage_AllowEditRangeRemoved", range);
-                break;
-            case { Action: AllowEditRangeAction.Clear }:
-                command = new ClearAllowEditRangesCommand(_currentSheetId);
-                successMessage = UiText.Get("MainWindowMessage_AllowEditRangesCleared");
-                break;
-        }
-
-        if (command is null || successMessage is null)
+        var plan = AllowEditRangePlanner.CreateCommandPlan(
+            _currentSheetId,
+            dialog.Result,
+            dialog.RangePassword,
+            dialog.RangePasswordChanged,
+            sheet.AllowEditRangePasswords);
+        if (plan is null)
             return;
 
-        if (!TryExecuteCommand(command, "Allow Users to Edit Ranges"))
+        var successMessage = plan switch
+        {
+            { Action: AllowEditRangeAction.Add, Range: { } range } =>
+                UiText.Format("MainWindowMessage_AllowEditRangeAdded", range),
+            { Action: AllowEditRangeAction.Modify, Range: { } range } =>
+                UiText.Format("MainWindowMessage_AllowEditRangeModified", range),
+            { Action: AllowEditRangeAction.Remove, Range: { } range } =>
+                UiText.Format("MainWindowMessage_AllowEditRangeRemoved", range),
+            _ => UiText.Get("MainWindowMessage_AllowEditRangesCleared")
+        };
+
+        if (!TryExecuteCommand(plan.Command, "Allow Users to Edit Ranges"))
             return;
 
         _messageService.ShowInfo(successMessage, UiText.Get("MainWindowMessage_AllowEditRangesTitle"));

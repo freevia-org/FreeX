@@ -336,9 +336,11 @@ public sealed partial class MainWindow
                         option =>
                         {
                             flyout.Hide();
-                            RunAutoFilterCommand(
-                                AutoFilterDropdownMenuPlanner.CreateSortByColorCommand(_session.ActiveSheet.Id, range, columnOffset, option),
-                                UiText.Get("ShellLoc_SortedByColor"));
+                            RunAutoFilterResult(
+                                range,
+                                columnOffset,
+                                AutoFilterDialogCriteriaPlanner.BuildSortByColorResult(
+                                    new AutoFilterColorFilter(option.Kind, option.Color)));
                         },
                         "AutoFilter_SortByColor"));
                     break;
@@ -621,112 +623,78 @@ public sealed partial class MainWindow
             return;
         }
 
-        RunAutoFilter(range, columnOffset: 0, allowedValues: []);
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var plan = _filterWorkflowSession.CreateClearAllPlan(sheet, range);
+        var result = _session.ExecuteReviewCommand(plan.Command);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_FilterFailed"));
+            return;
+        }
+
+        _filterWorkflowSession.RecordSuccessfulClearAll(plan);
+        RecalculateAfterAutoFilterMutation();
+        RefreshShell(UiText.Get("ShellLoc_ClearedFilter"));
     }
 
     private void RunAutoFilter(GridRange range, uint columnOffset, IReadOnlyList<string> allowedValues)
-    {
-        if (!TryCommitPendingFormulaEdit())
-            return;
-
-        var result = _session.ExecuteReviewCommand(
-            new FilterCommand(_session.ActiveSheet.Id, range, columnOffset, allowedValues));
-        if (!result.Success)
-        {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_FilterFailed"));
-            return;
-        }
-
-        RecalculateAfterAutoFilterMutation();
-        RefreshShell(allowedValues.Count == 0 ? UiText.Get("ShellLoc_ClearedFilter") : UiText.Get("ShellLoc_AppliedFilter"));
-    }
-
-    private void RunAutoFilterSort(GridRange range, uint columnOffset, bool ascending)
-    {
-        if (!TryCommitPendingFormulaEdit())
-            return;
-
-        var result = _session.ExecuteReviewCommand(
-            new SortCommand(_session.ActiveSheet.Id, range, columnOffset, ascending));
-        if (!result.Success)
-        {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_SortFailed"));
-            return;
-        }
-
-        RecalculateAfterAutoFilterMutation();
-        RefreshShell(ascending ? UiText.Get("ShellLoc_SortedAToZ") : UiText.Get("ShellLoc_SortedZToA"));
-    }
+        => RunAutoFilterPlan(_filterWorkflowSession.PlanAllowedValues(
+            _session.ActiveSheet.Id,
+            range,
+            columnOffset,
+            allowedValues));
 
     private void RunAutoFilterResult(GridRange range, uint columnOffset, AutoFilterDialogResult result)
     {
-        if (result.Action == AutoFilterDialogAction.ClearFilter)
+        var plan = _filterWorkflowSession.PlanDialogResult(
+            _session.ActiveSheet.Id,
+            range,
+            columnOffset,
+            result);
+        if (!plan.Success)
         {
-            RunAutoFilter(range, columnOffset, allowedValues: []);
-            return;
-        }
-
-        if (result.SortDirection != AutoFilterSortDirection.None)
-        {
-            RunAutoFilterSort(range, columnOffset, result.SortDirection == AutoFilterSortDirection.Ascending);
-            return;
-        }
-
-        if (result.ColorFilter is { } colorFilter)
-        {
-            IWorkbookCommand? command = colorFilter.Kind switch
+            ShowEditIssue(plan.Error switch
             {
-                AutoFilterColorFilterKind.FontColor when colorFilter.Color is { } fontColor =>
-                    new CellFontColorFilterCommand(_session.ActiveSheet.Id, range, columnOffset, fontColor),
-                AutoFilterColorFilterKind.NoFill =>
-                    new CellNoFillColorFilterCommand(_session.ActiveSheet.Id, range, columnOffset),
-                AutoFilterColorFilterKind.CellFillColor when colorFilter.Color is { } fillColor =>
-                    new CellFillColorFilterCommand(_session.ActiveSheet.Id, range, columnOffset, fillColor),
-                _ => null
-            };
-            if (command is not null)
-                RunAutoFilterCommand(command, UiText.Get("ShellLoc_AppliedFilter"));
+                WorksheetFilterMutationError.InvalidCriteria => FormatFilterPromptPlanError(plan.PromptError),
+                WorksheetFilterMutationError.SelectionRequired => UiText.Get("MainWindowMessage_FilterSelectAtLeastOneItem"),
+                _ => UiText.Get("MainWindowMessage_FilterUnsupportedCriterion")
+            });
             return;
         }
 
-        var filterText = result.CriteriaText.TrimStart();
-        if (!string.IsNullOrWhiteSpace(filterText))
-        {
-            if (!FilterPromptPlanner.TryPlan(result.CriteriaText, out var promptPlan, out var promptError) || promptPlan is null)
-            {
-                ShowEditIssue(FormatFilterPromptPlanError(promptError));
-                return;
-            }
-
-            RunAutoFilterCommand(
-                promptPlan.CreateCommand(_session.ActiveSheet.Id, range, columnOffset),
-                UiText.Get("ShellLoc_AppliedFilter"));
-            return;
-        }
-
-        if (result.SelectedValues.Count == 0)
-        {
-            ShowEditIssue(UiText.Get("MainWindowMessage_FilterSelectAtLeastOneItem"));
-            return;
-        }
-
-        RunAutoFilter(range, columnOffset, result.SelectedValues);
+        RunAutoFilterPlan(plan);
     }
 
-    private void RunAutoFilterCommand(IWorkbookCommand command, string successMessage)
+    private void RunAutoFilterPlan(WorksheetFilterMutationPlan plan)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var result = _session.ExecuteReviewCommand(command);
+        var result = _session.ExecuteReviewCommand(plan.CreateCommand());
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_FilterFailed"));
+            var fallback = plan.Kind is
+                WorksheetFilterMutationKind.SortAscending or
+                WorksheetFilterMutationKind.SortDescending or
+                WorksheetFilterMutationKind.SortByColor
+                    ? UiText.Get("ShellLoc_SortFailed")
+                    : UiText.Get("ShellLoc_FilterFailed");
+            ShowEditIssue(result.ErrorMessage ?? fallback);
             return;
         }
 
+        _filterWorkflowSession.RecordSuccessfulMutation(plan);
         RecalculateAfterAutoFilterMutation();
-        RefreshShell(successMessage);
+        RefreshShell(plan.Kind switch
+        {
+            WorksheetFilterMutationKind.ClearFilter => UiText.Get("ShellLoc_ClearedFilter"),
+            WorksheetFilterMutationKind.SortAscending => UiText.Get("ShellLoc_SortedAToZ"),
+            WorksheetFilterMutationKind.SortDescending => UiText.Get("ShellLoc_SortedZToA"),
+            WorksheetFilterMutationKind.SortByColor => UiText.Get("ShellLoc_SortedByColor"),
+            _ => UiText.Get("ShellLoc_AppliedFilter")
+        });
     }
 
     // Filter visibility and sort order are workbook state, but they are not ordinary cell edits.

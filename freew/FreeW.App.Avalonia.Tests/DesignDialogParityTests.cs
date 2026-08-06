@@ -21,8 +21,11 @@ public sealed class DesignDialogParityTests
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "DesignDialogParity.cs"));
         source.Should().Contain("CustomizeThemeColorsDialogPlanner.BuildInitialState(current)");
         source.Should().Contain("CustomizeThemeColorsDialogPlanner.TryBuildResult(");
-        source.Should().Contain("CustomizeThemeFontsDialogPlanner.BuildInitialState(current)");
-        source.Should().Contain("CustomizeThemeFontsDialogPlanner.TryBuildResult(");
+        source.Should().Contain("CustomizeThemeFontsDialogPlanner.CreateSession(current)");
+        source.Should().Contain("_session.PlanAcceptance(");
+        source.Should().Contain("acceptance.FocusField == CustomizeThemeFontsDialogField.BodyFont");
+        source.Should().NotContain("CustomizeThemeFontsDialogPlanner.BuildInitialState(");
+        source.Should().NotContain("CustomizeThemeFontsDialogPlanner.TryBuildResult(");
         source.Should().Contain("PageColorDialogPlanner.TryBuildResult(");
         source.Should().Contain("SetAsDefaultConfirmationPlanner.BuildState()");
 

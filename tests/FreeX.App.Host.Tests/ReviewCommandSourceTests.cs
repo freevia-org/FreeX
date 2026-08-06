@@ -67,6 +67,10 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("new CommentListWindow(title, items, NavigateToCell) { Owner = this }");
         source.Should().Contain("window.Show();");
         source.Should().Contain("ReviewSessionController.NavigateNote(previous)");
+        source.Should().Contain("ReviewSessionController.ToggleNoteVisibility(address)");
+        source.Should().Contain("ReviewSessionController.ToggleAllNotesVisibility()");
+        source.Should().NotContain("new ShowHideCommentCommand");
+        source.Should().NotContain("new ShowAllNotesCommand");
         source.Should().Contain("CommentListWindow.CreateNoteItems(sheet.Comments)");
         source.Should().NotContain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
         source.Should().NotContain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
@@ -85,7 +89,8 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("SheetProtectionWorkflow.CreateCommand(sheet, result)");
         source.Should().Contain("WorkbookProtectionWorkflow.CreateCommand(_workbook, pwd)");
         source.Should().Contain("new AllowEditRangeDialog(");
-        source.Should().Contain("TryExecuteCommand(command, \"Allow Users to Edit Ranges\")");
+        source.Should().Contain("AllowEditRangePlanner.CreateCommandPlan(");
+        source.Should().Contain("TryExecuteCommand(plan.Command, \"Allow Users to Edit Ranges\")");
         source.Should().Contain("_messageService.ShowInfo(successMessage, UiText.Get(\"MainWindowMessage_AllowEditRangesTitle\"))");
         source.Should().Contain("WorkbookShareReadinessPlanner.CreatePlan(");
         source.Should().Contain("WorkbookShareSurface.WindowsShare");

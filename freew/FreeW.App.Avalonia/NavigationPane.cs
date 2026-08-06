@@ -6,7 +6,7 @@ using Avalonia.Media;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using FreeW.App.Avalonia.Editing;
-using FreeW.App.Presentation.ContextMenus;
+using FreeW.App.Presentation.Panes;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
@@ -33,12 +33,7 @@ public sealed class NavigationPane : SidePaneBase
     private readonly Button _prevButton;
     private readonly Button _nextButton;
     private readonly TextBlock _searchStatus;
-
-    /// <summary>Block indices (document order) where the current search term matches.</summary>
-    private readonly List<int> _searchHits = new();
-
-    /// <summary>Current position within <see cref="_searchHits"/> (-1 = no active result).</summary>
-    private int _searchHitIndex = -1;
+    private readonly NavigationPaneSession _session;
 
     // ── Public surface ────────────────────────────────────────────────────────
 
@@ -53,6 +48,16 @@ public sealed class NavigationPane : SidePaneBase
     public NavigationPane(DocumentView editor)
         : base(editor, "Navigation", width: 240, chromeBorderThickness: new Thickness(0, 0, 1, 0), includeSeparator: false)
     {
+        _session = new NavigationPaneSession(
+            () => editor.Document,
+            new NavigationPaneMutationActions(
+                editor.MoveHeading,
+                editor.PromoteHeading,
+                editor.DemoteHeading,
+                editor.CollapseHeading,
+                editor.ExpandHeading,
+                editor.IsHeadingCollapsed));
+
         // --- Heading list ---------------------------------------------------
         _headingList = new ListBox
         {
@@ -140,19 +145,28 @@ public sealed class NavigationPane : SidePaneBase
     /// </summary>
     public override void Refresh()
     {
-        var outline = DocumentOutline.Of(_editor.Document);
-        var term = _searchBox.Text ?? string.Empty;
+        Render(_session.Refresh());
+    }
 
-        IReadOnlyList<OutlineEntry> displayed = outline;
-        if (!string.IsNullOrEmpty(term) && outline.Count > 0)
-            displayed = FilterToMatches(outline, term);
-
-        // Suspend SelectionChanged while rebuilding so we don't fire scroll on repopulate.
+    private void Render(NavigationPaneOutcome outcome)
+    {
+        var state = outcome.State;
         _headingList.SelectionChanged -= OnHeadingSelected;
         _headingList.Items.Clear();
-        foreach (var entry in displayed)
-            _headingList.Items.Add(new OutlineItem(entry));
+        foreach (var heading in state.Headings)
+            _headingList.Items.Add(new OutlineItem(heading));
+        _headingList.SelectedIndex = state.SelectedHeadingBlockIndex is { } blockIndex
+            ? state.Headings.ToList().FindIndex(heading => heading.BlockIndex == blockIndex)
+            : -1;
         _headingList.SelectionChanged += OnHeadingSelected;
+
+        _searchStatus.Text = state.SearchStatusText;
+        _prevButton.IsEnabled = state.CanStepSearch;
+        _nextButton.IsEnabled = state.CanStepSearch;
+        RefreshHeadingContextMenu();
+
+        if (outcome.NavigateToBlockIndex is { } target)
+            ScrollEditorToBlock(target);
     }
 
     // ── Heading-click handler ─────────────────────────────────────────────────
@@ -160,18 +174,15 @@ public sealed class NavigationPane : SidePaneBase
     private void OnHeadingSelected(object? sender, SelectionChangedEventArgs e)
     {
         if (_headingList.SelectedItem is OutlineItem item)
-            ScrollEditorToBlock(item.Entry.BlockIndex);
+            Render(_session.SelectHeading(item.Entry.BlockIndex));
         RefreshHeadingContextMenu();
     }
 
     private void RefreshHeadingContextMenu()
     {
-        var blockIndex = _headingList.SelectedItem is OutlineItem selected ? selected.Entry.BlockIndex : -1;
-        var plan = FreeWContextMenuPlanner.BuildOutline(
-            _editor.Document.Blocks,
-            blockIndex,
-            blockIndex >= 0 && _editor.IsHeadingCollapsed(blockIndex));
-        var menu = AvaloniaContextMenuRenderer.BuildContextMenu(plan, ExecuteOutlineContextCommand);
+        var menu = AvaloniaContextMenuRenderer.BuildContextMenu(
+            _session.BuildOutlineMenu(),
+            ExecuteOutlineContextCommand);
         menu.Opened += (_, _) => menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled)?.Focus();
         _headingList.ContextMenu = menu;
     }
@@ -187,101 +198,19 @@ public sealed class NavigationPane : SidePaneBase
 
     private void ExecuteOutlineContextCommand(RibbonCommandId commandId)
     {
-        if (_headingList.SelectedItem is not OutlineItem selected)
-            return;
-
-        var blockIndex = selected.Entry.BlockIndex;
-        var newIndex = blockIndex;
-        switch (commandId.Value)
-        {
-            case FreeWContextMenuPlanner.OutlineMoveUp:
-                newIndex = _editor.MoveHeading(blockIndex, moveUp: true);
-                break;
-            case FreeWContextMenuPlanner.OutlineMoveDown:
-                newIndex = _editor.MoveHeading(blockIndex, moveUp: false);
-                break;
-            case FreeWContextMenuPlanner.OutlinePromote:
-                _editor.PromoteHeading(blockIndex);
-                break;
-            case FreeWContextMenuPlanner.OutlineDemote:
-                _editor.DemoteHeading(blockIndex);
-                break;
-            case FreeWContextMenuPlanner.OutlineCollapse:
-                _editor.CollapseHeading(blockIndex);
-                break;
-            case FreeWContextMenuPlanner.OutlineExpand:
-                _editor.ExpandHeading(blockIndex);
-                break;
-        }
-
-        Refresh();
-        SelectHeading(newIndex);
-        RefreshHeadingContextMenu();
-    }
-
-    private void SelectHeading(int blockIndex)
-    {
-        foreach (var item in _headingList.Items)
-        {
-            if (item is OutlineItem outlineItem && outlineItem.Entry.BlockIndex == blockIndex)
-            {
-                _headingList.SelectedItem = item;
-                return;
-            }
-        }
+        Render(_session.ExecuteOutlineCommand(commandId));
     }
 
     // ── Search logic ──────────────────────────────────────────────────────────
 
     private void RunSearch()
     {
-        _searchHits.Clear();
-        _searchHitIndex = -1;
-
-        var term = _searchBox.Text ?? string.Empty;
-        if (!string.IsNullOrEmpty(term))
-        {
-            var blocks = _editor.Document.Blocks;
-            for (var i = 0; i < blocks.Count; i++)
-            {
-                var text = blocks[i] is Paragraph p ? p.PlainText : string.Empty;
-                if (BlockContainsTerm(text, term))
-                    _searchHits.Add(i);
-            }
-
-            if (_searchHits.Count > 0)
-            {
-                _searchHitIndex = 0;
-                ScrollEditorToBlock(_searchHits[0]);
-            }
-        }
-
-        Refresh();         // re-filter heading list when term is active
-        UpdateSearchStatus();
+        Render(_session.SetQuery(_searchBox.Text));
     }
 
     private void StepSearch(bool forward)
     {
-        if (_searchHits.Count == 0)
-            return;
-
-        _searchHitIndex = forward
-            ? (_searchHitIndex + 1) % _searchHits.Count
-            : (_searchHitIndex - 1 + _searchHits.Count) % _searchHits.Count;
-
-        ScrollEditorToBlock(_searchHits[_searchHitIndex]);
-        UpdateSearchStatus();
-    }
-
-    private void UpdateSearchStatus()
-    {
-        var hasTerm = !string.IsNullOrEmpty(_searchBox.Text);
-        var hasHits = _searchHits.Count > 0;
-        _searchStatus.Text = !hasTerm
-            ? string.Empty
-            : hasHits ? $"{_searchHitIndex + 1} of {_searchHits.Count}" : "No matches";
-        _prevButton.IsEnabled = hasHits;
-        _nextButton.IsEnabled = hasHits;
+        Render(_session.StepSearch(forward ? 1 : -1));
     }
 
     // ── Scroll helper ─────────────────────────────────────────────────────────
@@ -304,45 +233,6 @@ public sealed class NavigationPane : SidePaneBase
         scroller.Offset = new Vector(scroller.Offset.X, target);
     }
 
-    // ── Outline filter ────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Keeps only entries whose heading text contains the term (case-insensitive), plus ancestor
-    /// headings that sit above any matching entry in the hierarchy.
-    /// </summary>
-    private static IReadOnlyList<OutlineEntry> FilterToMatches(IReadOnlyList<OutlineEntry> outline, string term)
-    {
-        var matched = new bool[outline.Count];
-        for (var i = 0; i < outline.Count; i++)
-            matched[i] = BlockContainsTerm(outline[i].Text, term);
-
-        // Include shallower ancestors of each matched entry.
-        for (var i = 0; i < outline.Count; i++)
-        {
-            if (!matched[i])
-                continue;
-            var depth = outline[i].Level;
-            for (var j = i - 1; j >= 0 && depth > 0; j--)
-            {
-                if (outline[j].Level < depth)
-                {
-                    matched[j] = true;
-                    depth = outline[j].Level;
-                }
-            }
-        }
-
-        var result = new List<OutlineEntry>(outline.Count);
-        for (var i = 0; i < outline.Count; i++)
-            if (matched[i])
-                result.Add(outline[i]);
-
-        return result;
-    }
-
-    private static bool BlockContainsTerm(string text, string term) =>
-        text.Contains(term, StringComparison.OrdinalIgnoreCase);
-
     // ── Test-support properties ───────────────────────────────────────────────
 
     /// <summary>Number of heading items currently shown in the list (for headless testing).</summary>
@@ -350,28 +240,22 @@ public sealed class NavigationPane : SidePaneBase
 
     /// <summary>
     /// Counts how many entries in <paramref name="doc"/>'s outline match <paramref name="term"/>
-    /// (case-insensitive), including ancestor headings — the same logic as <see cref="FilterToMatches"/>.
-    /// Exposed for headless tests only.
+    /// through the shared navigation-pane projection. Exposed for headless tests only.
     /// </summary>
-    internal int CountHeadingsMatching(string term, TextDocument doc)
-    {
-        var outline = DocumentOutline.Of(doc);
-        if (string.IsNullOrEmpty(term) || outline.Count == 0)
-            return outline.Count;
-        return FilterToMatches(outline, term).Count;
-    }
+    internal int CountHeadingsMatching(string term, TextDocument doc) =>
+        NavigationPaneSession.ProjectHeadings(doc, term).Count;
 
     // ── Item type ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// List item holding an <see cref="OutlineEntry"/>. The <see cref="ToString"/> provides the
+    /// List item holding a shared heading projection. The <see cref="ToString"/> provides the
     /// display label; <see cref="Indent"/> exposes the pixel indent used for hierarchy depth.
     /// </summary>
     internal sealed class OutlineItem
     {
-        public OutlineItem(OutlineEntry entry) => Entry = entry;
+        public OutlineItem(NavigationHeadingProjection entry) => Entry = entry;
 
-        public OutlineEntry Entry { get; }
+        public NavigationHeadingProjection Entry { get; }
 
         /// <summary>Left indent in pixels for this heading level.</summary>
         public double Indent => Entry.Level * IndentPerLevel;

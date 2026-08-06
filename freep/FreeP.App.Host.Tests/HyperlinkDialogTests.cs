@@ -60,7 +60,7 @@ public sealed class HyperlinkDialogTests
     }
 
     [Fact]
-    public void MainWindow_UsesPlannerForHyperlinkDialogRequestAndApplyPayload()
+    public void MainWindow_UsesSharedWorkflowForHyperlinkRequestAndApplyPayload()
     {
         var source = File.ReadAllText(Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
@@ -68,11 +68,12 @@ public sealed class HyperlinkDialogTests
             "FreeP.App.Host",
             "MainWindow.cs"));
 
-        source.Should().Contain("HyperlinkDialogPlanner.BuildDialogRequest(");
-        source.Should().Contain("HyperlinkDialogPlanner.BuildApplyPlan(");
+        source.Should().Contain("PresentationHyperlinkWorkflowSession _hyperlinkWorkflowSession");
+        source.Should().Contain("_hyperlinkWorkflowSession.BuildRequest(");
+        source.Should().Contain("_hyperlinkWorkflowSession.Apply(");
         source.Should().Contain("TryGetSelectedShapeRunHyperlink");
         source.Should().Contain("TryApplySelectedShapeRunHyperlink");
-        source.Should().Contain("Editor.SetShapeHyperlink(applyPlan.Url, applyPlan.TargetSlideId, applyPlan.Tooltip)");
+        source.Should().NotContain("Editor.SetShapeHyperlink(");
         source.Should().NotContain("new HyperlinkDialog(slides, current)");
         source.Should().NotContain("dialog.Result.Url");
     }

@@ -266,7 +266,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
             Content = "Allow overlap",
             IsThreeState = true,
             IsChecked = state.FloatingTableAllowsOverlap,
-            Margin = new Thickness(4, 4, 8, 4),
+            Margin = new Thickness(0, 4, 0, 4),
             IsEnabled = state.WrappingIndex == 1,
         };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_allowFloatingOverlap, DialogChromeStyle);
@@ -410,6 +410,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
     private Control BuildFloatingPositioningPanel()
     {
         var position = TwoColumnGrid(6, 137);
+        position.Margin = new Thickness(0, 0, 4, 0);
         AddRow(position, 0, "Horizontal relative to:", _floatingHorizontalAnchor);
         AddRow(position, 1, "Horizontal alignment:", _floatingHorizontalMode);
         AddRow(position, 2, "Horizontal position (pt):", _floatingHorizontalOffset);
@@ -619,7 +620,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
             Content = text,
             IsChecked = isChecked,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(4, 4, 8, 4),
+            Margin = new Thickness(0, 4, 8, 4),
         };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle);
         AutomationProperties.SetAutomationId(box, automationId);

@@ -640,7 +640,7 @@ public partial class MainWindow
         sheet.AutoFilter = new WorksheetAutoFilterModel(range.ToString(), null);
         sheet.FilterHiddenRows.Clear();
         sheet.HiddenRows.Clear();
-        ClearRememberedAutoFilterCommand();
+        _filterWorkflowSession.ResetAutoFilterState();
 
         var headerCell = range.Start;
         SetActiveCell(headerCell);
@@ -8333,7 +8333,7 @@ public partial class MainWindow
         sheet.GroupHiddenRows.Clear();
         sheet.RowOutlineLevels.Clear();
         sheet.ShowOutlineSymbols = true;
-        ClearRememberedAutoFilterCommand();
+        _filterWorkflowSession.ResetAutoFilterState();
 
         SetSelectionRange(tableRange, tableRange.Start);
         EnsureCellVisible(tableRange.Start);

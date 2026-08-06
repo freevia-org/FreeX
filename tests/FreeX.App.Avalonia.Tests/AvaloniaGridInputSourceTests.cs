@@ -27,8 +27,10 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("_sheetGridHost.PointerReleased += HeaderResizeCapturePointerReleased;");
         source.Should().Contain("GridResizeSizePlanner.ClampColumnSize(requestedSize)");
         source.Should().Contain("GridResizeSizePlanner.ClampRowSize(requestedSize)");
-        source.Should().Contain("new SetColumnWidthCommand(");
-        source.Should().Contain("new SetRowHeightCommand(");
+        source.Should().Contain("_session.SetColumnsWidthPixels(");
+        source.Should().Contain("_session.SetRowsHeightPixels(");
+        source.Should().NotContain("new SetColumnWidthCommand(");
+        source.Should().NotContain("new SetRowHeightCommand(");
         var commitResize = source[
             source.IndexOf("private void CommitHeaderResize(", StringComparison.Ordinal)..
             source.IndexOf("private void PreviewHeaderResize(", StringComparison.Ordinal)];
@@ -46,6 +48,20 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("AutoFitRowFromHeader(row);");
         source.Should().Contain("AutoFitSelectedColumnWidth();");
         source.Should().Contain("AutoFitSelectedRowHeight();");
+
+        var columnHandle = source[
+            source.IndexOf("private Control AddColumnResizeHandle(", StringComparison.Ordinal)..
+            source.IndexOf("private Control AddRowResizeHandle(", StringComparison.Ordinal)];
+        columnHandle.Should().Contain("if (args.ClickCount >= 2)");
+        columnHandle.IndexOf("if (args.ClickCount >= 2)", StringComparison.Ordinal)
+            .Should().BeLessThan(columnHandle.IndexOf("BeginHeaderResize(", StringComparison.Ordinal));
+
+        var rowHandle = source[
+            source.IndexOf("private Control AddRowResizeHandle(", StringComparison.Ordinal)..
+            source.IndexOf("private static Border CreateHeaderResizeHandle", StringComparison.Ordinal)];
+        rowHandle.Should().Contain("if (args.ClickCount >= 2)");
+        rowHandle.IndexOf("if (args.ClickCount >= 2)", StringComparison.Ordinal)
+            .Should().BeLessThan(rowHandle.IndexOf("BeginHeaderResize(", StringComparison.Ordinal));
     }
 
     [Fact]

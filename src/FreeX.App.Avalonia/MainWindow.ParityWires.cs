@@ -64,20 +64,9 @@ public sealed partial class MainWindow
     /// </summary>
     private void SplitPanesAtActiveCell()
     {
-        var sheet = _session.ActiveSheet;
-        var wasSplit = sheet.SplitRow is not null || sheet.SplitColumn is not null;
-        var cell = _session.ActiveCell;
-        var viewport = _session.Viewport;
-
-        var (splitRow, splitColumn) = SplitAnchorResolver.Resolve(
-            cell.Row,
-            cell.Col,
-            wasSplit,
-            viewport.RowMetrics,
-            viewport.ColMetrics);
-
-        var result = _session.ExecuteReviewCommand(
-            new SetSplitPanesCommand(sheet.Id, splitRow, splitColumn));
+        var wasSplit = _session.GetEffectiveSplitRow() is not null ||
+            _session.GetEffectiveSplitCol() is not null;
+        var result = _session.ToggleSplitPanesAtActiveCell();
         RefreshShell(result.Success
             ? (wasSplit
                 ? UiText.Get("InsertLoc_RemovedWindowSplit")

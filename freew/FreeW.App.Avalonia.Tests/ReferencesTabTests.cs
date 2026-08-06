@@ -300,7 +300,7 @@ public sealed class ReferencesTabTests
     });
 
     [Fact]
-    public Task RefreshTableOfAuthorities_preserves_passim_formatting_and_tab_leader_options() => RunOnUiThread(() =>
+    public Task RefreshTableOfAuthorities_uses_distinct_pages_for_passim_and_preserves_options() => RunOnUiThread(() =>
     {
         var blocks = new List<Block> { new Paragraph("Before") };
         for (var i = 0; i < 5; i++)
@@ -330,7 +330,7 @@ public sealed class ReferencesTabTests
         view.Document.Blocks.OfType<Paragraph>()
             .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Table of Authorities", "Cases", "Roe v. Wade\tpassim");
+            .Should().Equal("Table of Authorities", "Cases", "Roe v. Wade\t1");
         view.Document.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
             .Should().NotContain("Old Case")
             .And.EndWith("After");
@@ -339,7 +339,10 @@ public sealed class ReferencesTabTests
             .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
         entry.Formatting.TabStops.Should().Equal(
             new TabStop(530, TabStopAlignment.Right, TabLeader.Dashes));
-        entry.Runs.Select(run => run.Text).Should().Equal("Roe v. Wade", "\t", "passim");
+        entry.Runs.Select(run => run.Text).Should().Equal("Roe v. Wade", "\t", "1");
+        view.Document.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.CategoryStyleId)
+            .SpanningFieldStart!.Instruction.Should().Be(" TOA \\h \\c \"1\" \\p ");
         entry.Runs[0].Formatting.Should().Be(new RunFormatting
         {
             Bold = true,
@@ -1328,6 +1331,15 @@ public sealed class ReferencesTabTests
             .Count(paragraph => paragraph.StyleId == TableOfAuthorities.HeadingStyleId)
             .Should()
             .Be(1);
+        var toa = view.Document.Blocks.OfType<Paragraph>()
+            .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .ToList();
+        toa[0].SpanningFieldOwner.Should().BeNull();
+        toa.Skip(1).Should().OnlyContain(paragraph =>
+            paragraph.SpanningFieldOwner != null
+            && paragraph.SpanningFieldOwner.Instruction == " TOA \\h \\c \"1\" \\f ");
+        toa[1].SpanningFieldStart.Should().NotBeNull();
+        toa[^1].EndsSpanningField.Should().BeTrue();
     }
 
     [Fact]

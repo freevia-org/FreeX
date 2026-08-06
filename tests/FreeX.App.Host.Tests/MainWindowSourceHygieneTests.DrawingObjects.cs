@@ -26,14 +26,19 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void SelectionPaneDialog_RoutesKeyboardPolicyThroughSharedPlanner()
+    public void SelectionPaneDialog_RoutesStateAndKeyboardPolicyThroughSharedSession()
     {
         var source = DialogSourceTestSupport.ReadHostSources("SelectionPaneDialog.State.cs");
 
-        source.Should().Contain("SelectionPanePlanner.PlanKeyboardAction(");
-        source.Should().Contain("SelectionPaneKeyboardAction.MoveUp");
-        source.Should().Contain("SelectionPaneKeyboardAction.FocusRename");
-        source.Should().Contain("SelectionPaneKeyboardAction.ToggleVisibility");
+        source.Should().Contain("_session.HandleKeyboard(");
+        source.Should().Contain("_session.MoveSelected(");
+        source.Should().Contain("_session.RenameSelected(");
+        source.Should().Contain("_session.ToggleSelectedVisibility(");
+        source.Should().Contain("_session.SetAllVisibility(");
+        source.Should().Contain("_session.Drop(");
+        source.Should().NotContain("SelectionPanePlanner.PlanKeyboardAction(");
+        source.Should().NotContain("SelectionPanePlanner.PlanMove(");
+        source.Should().NotContain("SelectionPanePlanner.PlanDragReorder(");
         source.Should().NotContain("if (e.Key == Key.F2)");
         source.Should().NotContain("if (e.Key == Key.Space)");
         source.Should().NotContain("if (e.Key == Key.Up)");

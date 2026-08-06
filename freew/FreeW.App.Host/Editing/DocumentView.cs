@@ -118,6 +118,8 @@ public sealed class DocumentView : RichTextBox
 
     private DocumentCommandBus _commands => _editingSession.Commands;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
+    private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
+    private DocumentReferenceEditingCoordinator ReferenceEdits => _editingSession.References;
 
     private static DocumentObjectTarget ObjectTarget(
         int blockIndex,
@@ -934,9 +936,7 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Apply confirmed manual soft-hyphen insertions as one undoable body edit.</summary>
     public void ApplyManualHyphenation(IReadOnlyList<ManualHyphenationEdit> edits)
     {
-        ArgumentNullException.ThrowIfNull(edits);
-        if (edits.Count > 0)
-            _commands.Execute(new ApplyManualHyphenationCommand(edits));
+        _editingSession.ApplyManualHyphenation(edits);
     }
 
     public void ApplyPageNumberFormat(PageNumberFormatDialogResult result) =>
@@ -1444,7 +1444,8 @@ public sealed class DocumentView : RichTextBox
         IReadOnlyList<ModelParagraph> paragraphs)
     {
         CommitToModel();
-        _commands.Execute(new SetTableCellContentCommand(blockIndex, rowIndex, colIndex, paragraphs));
+        if (TableEdits.AddressFromCellIndex(blockIndex, rowIndex, colIndex) is { } address)
+            TableEdits.SetCellContent(address, paragraphs);
     }
 
     /// <summary>
@@ -1541,15 +1542,7 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph { PlainText.Length: 0 })
             return false;
 
-        foreach (var (id, style) in source.Styles)
-            _model.Styles.TryAdd(id, style);
-
-        var clones = DocumentMerge.CloneBlocksForInsertion(_model, source);
-        if (clones.Count == 0)
-            return false;
-
-        _commands.Execute(new ReplaceBlocksCommand(index, 1, clones));
-        return true;
+        return _editingSession.ReplaceEmptyParagraphWithDocument(index, source);
     }
 
     /// <summary>
@@ -1561,17 +1554,11 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertTableOfContents()
     {
-        // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-        TableOfContents.EnsureStyles(_model);
-
-        // Insert before the caret's block so the TOC reads as a front-matter region; fall back to the
-        // document start when the caret can't be mapped.
         var index = CaretBlockIndex();
         if (index < 0 || index > _model.Blocks.Count)
             index = 0;
-
-        InsertTocAt(index);
+        ReferenceEdits.InsertTableOfContents(index, BuildGeneratedPageTextResolver());
     }
 
     /// <summary>
@@ -1587,46 +1574,12 @@ public sealed class DocumentView : RichTextBox
     }
 
     private void RefreshTableOfContentsFromModel()
-    {
-        TableOfContents.EnsureStyles(_model);
-
-        // Find the contiguous run of existing TOC paragraphs (the marker region). They are inserted as
-        // a block, so the first TOC paragraph anchors the region and the rest follow consecutively.
-        var firstToc = -1;
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            if (TableOfContents.IsTocParagraph(_model.Blocks[i]))
-            {
-                firstToc = i;
-                break;
-            }
-        }
-
-        var insertAt = firstToc >= 0 ? firstToc : 0;
-
-        // Remove every existing TOC paragraph (reversible). Delete from the end so earlier indices stay
-        // valid; collect first to avoid mutating while scanning.
-        var tocIndices = new List<int>();
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            if (TableOfContents.IsTocParagraph(_model.Blocks[i]))
-                tocIndices.Add(i);
-        }
-        for (var i = tocIndices.Count - 1; i >= 0; i--)
-            _commands.Execute(new DeleteParagraphCommand(tocIndices[i]));
-
-        InsertTocAt(insertAt);
-    }
+        => ReferenceEdits.RefreshTableOfContents(BuildGeneratedPageTextResolver());
 
     // Insert the freshly built TOC paragraphs starting at block index `at`, one reversible
     // InsertParagraphCommand each (kept in order), then re-render. The bus's Changed event redraws.
     private void InsertTocAt(int at)
-    {
-        var toc = TableOfContents.Build(_model, BuildGeneratedPageTextResolver());
-        var index = Math.Clamp(at, 0, _model.Blocks.Count);
-        foreach (var paragraph in toc)
-            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
-    }
+        => ReferenceEdits.InsertTableOfContents(at, BuildGeneratedPageTextResolver());
 
     /// <summary>
     /// Prepend a simple cover page (a Title paragraph, an optional author Subtitle, and a spacer) at the
@@ -1638,8 +1591,7 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         var blocks = DocumentOps.BuildCoverPage(_model);
-        for (var i = 0; i < blocks.Count; i++)
-            _commands.Execute(new InsertBlockCommand(i, blocks[i]));
+        _editingSession.InsertBlocksAfter(-1, blocks, "Insert Cover Page");
     }
 
     /// <summary>
@@ -1651,8 +1603,7 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         var blocks = DocumentOps.BuildCoverPage(_model, preset);
-        for (var i = 0; i < blocks.Count; i++)
-            _commands.Execute(new InsertBlockCommand(i, blocks[i]));
+        _editingSession.InsertBlocksAfter(-1, blocks, "Insert Cover Page");
     }
 
     /// <summary>
@@ -1689,8 +1640,8 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>Insert a blank row above the caret's row in the table containing the caret.</summary>
-    public void InsertTableRowAbove() => MutateCaretTable((index, rowIndex, _) =>
-        new InsertTableRowCommand(index, rowIndex));
+    public void InsertTableRowAbove() => MutateCaretTable(address =>
+        TableEdits.InsertRow(address, after: false));
 
     /// <summary>
     /// Insert a page-number field run in a new paragraph after the caret's block, routing through the
@@ -1730,24 +1681,22 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>Insert a blank row below the caret's row in the table containing the caret.</summary>
-    public void InsertTableRow() => MutateCaretTable((index, rowIndex, _) =>
-        new InsertTableRowCommand(index, rowIndex + 1));
+    public void InsertTableRow() => MutateCaretTable(address =>
+        TableEdits.InsertRow(address, after: true));
 
     /// <summary>Delete the caret's row from the table containing the caret (no-op on the last row).</summary>
-    public void DeleteTableRow() => MutateCaretTable((index, rowIndex, _) =>
-        new DeleteTableRowCommand(index, rowIndex));
+    public void DeleteTableRow() => MutateCaretTable(TableEdits.DeleteRow);
 
     /// <summary>Insert a blank column to the left of the caret's column in the table containing the caret.</summary>
-    public void InsertTableColumnLeft() => MutateCaretTable((index, _, columnIndex) =>
-        new InsertTableColumnCommand(index, columnIndex));
+    public void InsertTableColumnLeft() => MutateCaretTable(address =>
+        TableEdits.InsertColumn(address, after: false));
 
     /// <summary>Insert a blank column to the right of the caret's column in the table containing the caret.</summary>
-    public void InsertTableColumn() => MutateCaretTable((index, _, columnIndex) =>
-        new InsertTableColumnCommand(index, columnIndex + 1));
+    public void InsertTableColumn() => MutateCaretTable(address =>
+        TableEdits.InsertColumn(address, after: true));
 
     /// <summary>Delete the caret's column from the table containing the caret (no-op on the last column).</summary>
-    public void DeleteTableColumn() => MutateCaretTable((index, _, columnIndex) =>
-        new DeleteTableColumnCommand(index, columnIndex));
+    public void DeleteTableColumn() => MutateCaretTable(TableEdits.DeleteColumn);
 
     /// <summary>Delete the entire table containing the caret from the document (routes through the undo/redo bus).</summary>
     public void DeleteTable()
@@ -1756,7 +1705,7 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, _, _) = CaretTableLocation();
         if (blockIndex < 0)
             return;
-        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, [new ModelParagraph(string.Empty)]));
+        TableEdits.DeleteTable(blockIndex, DocumentTableDeleteMode.ReplaceWithEmptyParagraph);
     }
 
     /// <summary>
@@ -1769,12 +1718,8 @@ public sealed class DocumentView : RichTextBox
     {
         Focus();
         CommitToModel();
-        var (blockIndex, rowIndex, _) = CaretTableLocation();
-        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable table)
-            return;
-        if (TableLayoutOperations.TryBuildSplitReplacement(table, rowIndex, out var replacement))
-            _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, replacement));
+        if (CaretTableAddress() is { } address)
+            TableEdits.SplitTable(address);
     }
 
     /// <summary>
@@ -1842,21 +1787,8 @@ public sealed class DocumentView : RichTextBox
     {
         Focus();
         CommitToModel();
-        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
-            return;
-        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
-            return;
-        var cells = table.Rows[rowIndex].Cells;
-        if (columnIndex < 0 || columnIndex >= cells.Count)
-            return;
-        _commands.Execute(new SetCellAlignmentCommand(
-            blockIndex,
-            rowIndex,
-            columnIndex,
-            verticalAlignment,
-            horizontalAlignment));
-        Render();
+        if (CaretTableAddress() is { } address)
+            TableEdits.SetCellAlignment([address], verticalAlignment, horizontalAlignment);
     }
 
     /// <summary>
@@ -1867,12 +1799,8 @@ public sealed class DocumentView : RichTextBox
     {
         Focus();
         CommitToModel();
-        var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable)
-            return;
-        _commands.Execute(new DistributeTableRowsCommand(blockIndex));
-        Render();
+        if (CaretTableAddress() is { } address)
+            TableEdits.DistributeRows(address);
     }
 
     /// <summary>
@@ -1883,12 +1811,8 @@ public sealed class DocumentView : RichTextBox
     {
         Focus();
         CommitToModel();
-        var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable)
-            return;
-        _commands.Execute(new DistributeTableColumnsCommand(blockIndex));
-        Render();
+        if (CaretTableAddress() is { } address)
+            TableEdits.DistributeColumns(address);
     }
 
     /// <summary>
@@ -1898,12 +1822,8 @@ public sealed class DocumentView : RichTextBox
     {
         Focus();
         CommitToModel();
-        var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable)
-            return;
-        _commands.Execute(new SetTableAutoFitCommand(blockIndex, mode));
-        Render();
+        if (CaretTableAddress() is { } address)
+            TableEdits.SetAutoFit(address, mode);
     }
 
     /// <summary>
@@ -1917,31 +1837,14 @@ public sealed class DocumentView : RichTextBox
     public void MergeSelectedCells()
     {
         CommitToModel();
-        var start = TableLocationOf(Selection.Start.Parent as TextElement);
-        var end = TableLocationOf(Selection.End.Parent as TextElement);
+        var start = TableAddressOf(Selection.Start.Parent as TextElement);
+        var end = TableAddressOf(Selection.End.Parent as TextElement);
 
         // Fall back to the caret cell when an endpoint is outside any table (e.g. collapsed selection).
-        if (start.BlockIndex < 0)
-            start = CaretTableLocation();
-        if (end.BlockIndex < 0)
-            end = start;
-        if (start.BlockIndex < 0 || start.BlockIndex != end.BlockIndex)
-            return;
-
-        var blockIndex = start.BlockIndex;
-        if (start.RowIndex == end.RowIndex && start.ColumnIndex != end.ColumnIndex)
-        {
-            _commands.Execute(new MergeCellsHorizontalCommand(blockIndex, start.RowIndex, start.ColumnIndex, end.ColumnIndex));
-        }
-        else if (start.ColumnIndex == end.ColumnIndex && start.RowIndex != end.RowIndex)
-        {
-            _commands.Execute(new MergeCellsVerticalCommand(blockIndex, start.ColumnIndex, start.RowIndex, end.RowIndex));
-        }
-        else if (start.RowIndex != end.RowIndex && start.ColumnIndex != end.ColumnIndex)
-        {
-            // Mixed rectangular selection: merge horizontally across the start row as a best-effort.
-            _commands.Execute(new MergeCellsHorizontalCommand(blockIndex, start.RowIndex, start.ColumnIndex, end.ColumnIndex));
-        }
+        start ??= CaretTableAddress();
+        end ??= start;
+        if (start is { } anchor && end is { } active)
+            TableEdits.MergeCells(anchor, active);
     }
 
     /// <summary>
@@ -1950,28 +1853,19 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void EraseTableBorderAtCaret()
     {
-        var start = TableLocationOf(Selection.Start.Parent as TextElement);
-        var end = TableLocationOf(Selection.End.Parent as TextElement);
-        var caret = CaretTableLocation();
+        var start = TableAddressOf(Selection.Start.Parent as TextElement);
+        var end = TableAddressOf(Selection.End.Parent as TextElement);
+        var caret = CaretTableAddress();
         CommitToModel();
-        if (start.BlockIndex >= 0 && end.BlockIndex == start.BlockIndex
-            && (start.RowIndex != end.RowIndex || start.ColumnIndex != end.ColumnIndex))
+        if (start is { } anchor && end is { } active && anchor.BlockIndex == active.BlockIndex
+            && (anchor.RowIndex != active.RowIndex || anchor.GridColumn != active.GridColumn))
         {
-            MergeSelectedCells();
+            TableEdits.MergeCells(anchor, active);
             return;
         }
 
-        var (blockIndex, rowIndex, columnIndex) = caret;
-        if (blockIndex < 0
-            || _model.Blocks[blockIndex] is not ModelTable table
-            || TableEraserCommandPlanner.PlanByCellIndex(table, rowIndex, columnIndex) is not { } plan)
-            return;
-
-        _commands.Execute(new MergeCellsHorizontalCommand(
-            blockIndex,
-            plan.RowIndex,
-            plan.FirstCellIndex,
-            plan.LastCellIndex));
+        if (caret is { } address)
+            TableEdits.EraseBorderAt(address);
     }
 
     /// <summary>
@@ -1979,8 +1873,7 @@ public sealed class DocumentView : RichTextBox
     /// <c>GridSpan</c> to 1 (re-adding empty cells), and a vertical merge clears the head and its
     /// continuations. Routes through the undo/redo bus. No-op outside a table or on an unmerged cell.
     /// </summary>
-    public void SplitCell() => MutateCaretTable((index, rowIndex, columnIndex) =>
-        new SplitCellCommand(index, rowIndex, columnIndex));
+    public void SplitCell() => MutateCaretTable(TableEdits.SplitCell);
 
     /// <summary>
     /// Set (or clear, when <paramref name="colorHex"/> is null/empty) the background shading of the
@@ -1989,10 +1882,8 @@ public sealed class DocumentView : RichTextBox
     public void SetCaretCellShading(string? colorHex)
     {
         CommitToModel();
-        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0)
-            return;
-        _commands.Execute(new SetCellShadingCommand(blockIndex, rowIndex, columnIndex, colorHex));
+        if (CaretTableAddress() is { } address)
+            TableEdits.SetCellShading([address], colorHex);
     }
 
     /// <summary>
@@ -2002,10 +1893,8 @@ public sealed class DocumentView : RichTextBox
     public void SetCaretCellBorders(CellBorders? borders)
     {
         CommitToModel();
-        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0)
-            return;
-        _commands.Execute(new SetCellBorderPayloadCommand(blockIndex, rowIndex, columnIndex, borders));
+        if (CaretTableAddress() is { } address)
+            TableEdits.SetCellBorders(address, borders);
     }
 
     /// <summary>
@@ -2015,10 +1904,8 @@ public sealed class DocumentView : RichTextBox
     public void SetCaretCellTextDirection(CellTextDirection direction)
     {
         CommitToModel();
-        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0)
-            return;
-        _commands.Execute(new SetCellTextDirectionCommand(blockIndex, rowIndex, columnIndex, direction));
+        if (CaretTableAddress() is { } address)
+            TableEdits.SetCellTextDirection(address, direction);
     }
 
     /// <summary>
@@ -2073,10 +1960,8 @@ public sealed class DocumentView : RichTextBox
     private void UpdateCaretTableFormatting(Func<TableFormatting, TableFormatting> update)
     {
         CommitToModel();
-        var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
-            return;
-        _commands.Execute(new SetTableFormattingCommand(blockIndex, update(table.Formatting)));
+        if (CaretTableAddress() is { } address)
+            TableEdits.UpdateFormatting(address, update);
     }
 
     /// <summary>
@@ -3436,34 +3321,7 @@ public sealed class DocumentView : RichTextBox
         var indices = SelectedModelParagraphIndices();
         if (indices.Count == 0)
             return;
-
-        _commands.BeginUndoGroup();
-        try
-        {
-            foreach (var index in indices)
-            {
-                if (_model.Blocks[index] is not ModelParagraph paragraph)
-                    continue;
-
-                var updated = MultilevelListDialogPlanner.ApplyDefinition(paragraph.Formatting, definition);
-                _commands.Execute(new SetParagraphFormattingCommand(
-                    index,
-                    updated));
-                var linkedStyleId = MultilevelListDialogPlanner.ResolveLinkedHeadingStyleId(
-                    updated.ListLevel,
-                    definition);
-                if (linkedStyleId is not null && _model.Styles.ContainsKey(linkedStyleId))
-                    _commands.Execute(new SetParagraphStyleCommand(index, linkedStyleId));
-            }
-
-            _commands.Execute(new SetMultiLevelNumberFormatsCommand(definition.NumberFormats));
-            _commands.CommitUndoGroup("Define Multilevel List");
-        }
-        catch
-        {
-            _commands.AbortUndoGroup();
-            throw;
-        }
+        _editingSession.ApplyMultilevelListDefinition(indices, definition);
     }
 
     /// <summary>
@@ -3688,13 +3546,7 @@ public sealed class DocumentView : RichTextBox
 
     // Apply a paragraph style id to the given model paragraph indices, one reversible command each.
     private void ApplyParagraphStyleToIndices(string? styleId, IReadOnlyList<int> indices)
-    {
-        foreach (var index in indices)
-        {
-            if (index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph)
-                _commands.Execute(new SetParagraphStyleCommand(index, styleId));
-        }
-    }
+        => _editingSession.SetParagraphStyles(indices, styleId);
 
     /// <summary>
     /// The <see cref="ModelParagraph.StyleId"/> of the paragraph at the caret (the first paragraph in the
@@ -3740,34 +3592,13 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         var targets = SelectedModelParagraphIndices();
-        DocumentStyle? created = null;
-
-        _commands.BeginUndoGroup();
-        try
-        {
-            _commands.Execute(new StyleCatalogCommand("New Style", doc =>
-            {
-                created = StyleManager.CreateStyle(doc, name, basedOnId, run, paragraph, nextStyleId);
-            }));
-
-            if (created is not null)
-            {
-                foreach (var index in targets)
-                {
-                    if (index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph)
-                        _commands.Execute(new SetParagraphStyleCommand(index, created.Id));
-                }
-            }
-
-            _commands.CommitUndoGroup("New Style");
-        }
-        catch
-        {
-            _commands.AbortUndoGroup();
-            throw;
-        }
-
-        return created;
+        return _editingSession.CreateParagraphStyleAndApply(
+            targets,
+            name,
+            basedOnId,
+            run,
+            paragraph,
+            nextStyleId);
     }
 
     /// <summary>Home &gt; Styles &gt; Manage Styles: modify a custom or built-in style definition.</summary>
@@ -3779,35 +3610,19 @@ public sealed class DocumentView : RichTextBox
         string? nextStyleId)
     {
         CommitToModel();
-        if (string.IsNullOrWhiteSpace(styleId) || !_model.Styles.ContainsKey(styleId))
-            return null;
-
-        DocumentStyle? updated = null;
-        _commands.Execute(new StyleCatalogCommand("Modify Style", doc =>
-        {
-            updated = StyleManager.ModifyStyle(doc, styleId,
-                run: run,
-                para: paragraph,
-                basedOnId: basedOnId,
-                clearBasedOn: basedOnId is null,
-                nextStyleId: nextStyleId,
-                clearNext: nextStyleId is null);
-        }));
-        return updated;
+        return _editingSession.ModifyParagraphStyle(
+            styleId,
+            run,
+            paragraph,
+            basedOnId,
+            nextStyleId);
     }
 
     /// <summary>Home &gt; Styles &gt; Manage Styles: delete a custom style through shared catalog rules.</summary>
     public bool DeleteParagraphStyle(string styleId)
     {
         CommitToModel();
-        if (string.IsNullOrWhiteSpace(styleId)
-            || StyleManager.IsBuiltIn(styleId)
-            || !_model.Styles.ContainsKey(styleId))
-            return false;
-
-        var deleted = false;
-        _commands.Execute(new StyleCatalogCommand("Delete Style", doc => deleted = StyleManager.DeleteStyle(doc, styleId)));
-        return deleted;
+        return _editingSession.DeleteParagraphStyle(styleId);
     }
 
     /// <summary>
@@ -3857,34 +3672,14 @@ public sealed class DocumentView : RichTextBox
         if (_collapsedHeadings.Count > 0)
             _collapsedHeadings.Clear();
 
-        var reordered = OutlineTools.MoveSubtree(_model.Blocks, modelBlockIndex, moveUp);
-        if (ReferenceEquals(reordered, _model.Blocks))
-            return modelBlockIndex; // nothing to move
-
-        var heading = _model.Blocks[modelBlockIndex];
-        _commands.Execute(new ReorderBlocksCommand(reordered));
-
-        for (var i = 0; i < reordered.Count; i++)
-        {
-            if (ReferenceEquals(reordered[i], heading))
-                return i;
-        }
-        return modelBlockIndex;
+        return _editingSession.MoveHeadingSubtree(modelBlockIndex, moveUp);
     }
 
     // Apply a pure style-id shift (promote/demote) to a single model paragraph via the undo/redo bus.
     private void ShiftHeadingStyle(int modelBlockIndex, Func<string?, string?> shift)
     {
         CommitToModel();
-        if (modelBlockIndex < 0 || modelBlockIndex >= _model.Blocks.Count
-            || _model.Blocks[modelBlockIndex] is not ModelParagraph paragraph)
-            return;
-
-        var next = shift(paragraph.StyleId);
-        if (string.Equals(next, paragraph.StyleId, StringComparison.Ordinal))
-            return; // no change (e.g. promoting Title, or demoting past the cap)
-
-        _commands.Execute(new SetParagraphStyleCommand(modelBlockIndex, next));
+        _editingSession.ShiftParagraphStyle(modelBlockIndex, shift);
     }
 
     /// <summary>
@@ -3992,9 +3787,7 @@ public sealed class DocumentView : RichTextBox
         var index = SelectedModelParagraphIndices().FirstOrDefault(-1);
         if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph)
             return;
-        _commands.Execute(new ReplaceParagraphRunsCommand(
-            index,
-            p => DropCap.ApplyDropCap(p, position, sizePt, lineSpan, distanceFromTextPt)));
+        _editingSession.ApplyDropCap(index, position, sizePt, lineSpan, distanceFromTextPt);
     }
 
     /// <summary>
@@ -4009,7 +3802,7 @@ public sealed class DocumentView : RichTextBox
         var index = SelectedModelParagraphIndices().FirstOrDefault(-1);
         if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph)
             return;
-        _commands.Execute(new ReplaceParagraphRunsCommand(index, DropCap.ClearFormatting));
+        _editingSession.ClearDropCap(index);
     }
 
     /// <summary>
@@ -4031,11 +3824,9 @@ public sealed class DocumentView : RichTextBox
 
         Focus();
         CommitToModel();
-        foreach (var index in SelectedModelParagraphIndices())
-        {
-            if (_model.Blocks[index] is ModelParagraph)
-                _commands.Execute(new FormatParagraphRunsCommand(index, _ => RunFormatting.Default));
-        }
+        _editingSession.FormatParagraphRuns(
+            SelectedModelParagraphIndices(),
+            _ => RunFormatting.Default);
     }
 
     /// <summary>
@@ -4101,26 +3892,13 @@ public sealed class DocumentView : RichTextBox
         if (first < 0 || last >= _model.Blocks.Count)
             return;
 
-        // The paragraph blocks within that span, in document order — only these get reordered.
-        var paragraphs = new List<ModelParagraph>();
-        for (var i = first; i <= last; i++)
-        {
-            if (_model.Blocks[i] is ModelParagraph paragraph)
-                paragraphs.Add(paragraph);
-        }
-        if (paragraphs.Count < 2)
-            return; // nothing to reorder
-
-        var sorted = ParagraphSort.Sort(paragraphs, kind, ascending, caseSensitive, hasHeaderRow);
-
-        // Rebuild the span: drop sorted paragraphs back into the paragraph slots, keeping any
-        // interleaved tables fixed at their own positions.
-        var replacement = new List<ModelBlock>(last - first + 1);
-        var nextSorted = 0;
-        for (var i = first; i <= last; i++)
-            replacement.Add(_model.Blocks[i] is ModelParagraph ? sorted[nextSorted++] : _model.Blocks[i]);
-
-        _commands.Execute(new ReplaceBlocksCommand(first, replacement.Count, replacement));
+        _editingSession.SortParagraphSpan(
+            first,
+            last,
+            kind,
+            ascending,
+            caseSensitive,
+            hasHeaderRow);
     }
 
     /// <summary>
@@ -4136,23 +3914,8 @@ public sealed class DocumentView : RichTextBox
         Focus();
         CommitToModel();
 
-        var (blockIndex, _, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable table)
-            return;
-        if (table.Rows.Count < 2)
-            return;
-
-        var keyColumn = columnIndex < 0 ? 0 : columnIndex;
-        var sorted = ParagraphSort.SortRows(table.Rows, keyColumn, kind, ascending, caseSensitive, hasHeaderRow);
-
-        // Rebuild the table preserving its formatting and column grid; only the row order changes (the
-        // same TableRow instances are reused, so cell content/shading travels with each row).
-        var replacement = new ModelTable { Formatting = table.Formatting };
-        replacement.ColumnWidthsPt.AddRange(table.ColumnWidthsPt);
-        replacement.Rows.AddRange(sorted);
-
-        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, new ModelBlock[] { replacement }));
+        if (CaretTableAddress() is { } address)
+            TableEdits.SortRows(address, kind, ascending, caseSensitive, hasHeaderRow);
     }
 
     /// <summary>
@@ -4170,23 +3933,7 @@ public sealed class DocumentView : RichTextBox
         if (indices.Count == 0)
             return;
 
-        var first = indices[0];
-        var last = indices[indices.Count - 1];
-        if (first < 0 || last >= _model.Blocks.Count)
-            return;
-
-        // Only paragraphs convert; if the span contains no paragraph there is nothing to turn into a table.
-        var paragraphs = new List<ModelParagraph>();
-        for (var i = first; i <= last; i++)
-        {
-            if (_model.Blocks[i] is ModelParagraph paragraph)
-                paragraphs.Add(paragraph);
-        }
-        if (paragraphs.Count == 0)
-            return;
-
-        var table = TextTableConvert.TextToTable(paragraphs, delimiter);
-        _commands.Execute(new ReplaceBlocksCommand(first, last - first + 1, new ModelBlock[] { table }));
+        _editingSession.ConvertParagraphsToTable(indices, delimiter, showBorders: false);
     }
 
     /// <summary>
@@ -4200,12 +3947,8 @@ public sealed class DocumentView : RichTextBox
         Focus();
         CommitToModel();
 
-        var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count || _model.Blocks[blockIndex] is not ModelTable table)
-            return;
-
-        var paragraphs = TextTableConvert.TableToText(table, delimiter);
-        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, [.. paragraphs]));
+        if (CaretTableAddress() is { } address)
+            TableEdits.ConvertToText(address, delimiter);
     }
 
     /// <summary>True while Format Painter is armed (captured formatting waiting to be stamped).</summary>
@@ -4436,11 +4179,7 @@ public sealed class DocumentView : RichTextBox
         Focus();
         CommitToModel();
         var indices = SelectedModelParagraphIndices();
-        foreach (var index in indices)
-        {
-            if (_model.Blocks[index] is ModelParagraph paragraph)
-                _commands.Execute(new SetParagraphFormattingCommand(index, transform(paragraph.Formatting)));
-        }
+        _editingSession.FormatParagraphs(indices, transform);
     }
 
     // The model paragraphs spanned by the current selection/caret (post-commit snapshot, for state checks).
@@ -4927,14 +4666,25 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
-    // Commit pending edits, locate the caret's table + cell, build a command for it, run it through the bus.
-    private void MutateCaretTable(Func<int, int, int, IDocumentCommand> build)
+    // Commit pending edits and project the native caret into the shared table coordinator.
+    private void MutateCaretTable(
+        Func<DocumentTableCellAddress, DocumentTableEditResult> mutate)
     {
         CommitToModel();
-        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0)
-            return;
-        _commands.Execute(build(blockIndex, rowIndex, columnIndex));
+        if (CaretTableAddress() is { } address)
+            mutate(address);
+    }
+
+    private DocumentTableCellAddress? CaretTableAddress() =>
+        TableAddressOf(CaretPosition?.Parent as TextElement);
+
+    private DocumentTableCellAddress? TableAddressOf(TextElement? element)
+    {
+        var location = TableLocationOf(element);
+        return TableEdits.AddressFromCellIndex(
+            location.BlockIndex,
+            location.RowIndex,
+            location.ColumnIndex);
     }
 
     // Locate the model block/row/column of the table containing the caret; blockIndex is -1 if not in a table.
@@ -12417,20 +12167,18 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable)
             return;
 
-        var command = new InsertTableCellFormulaCommand(
-            blockIndex,
-            rowIndex,
-            columnIndex,
-            paragraphIndex,
-            textOffset,
-            formula);
-        _commands.Execute(command);
+        var address = TableEdits.AddressFromCellIndex(blockIndex, rowIndex, columnIndex);
+        if (address is null)
+            return;
+        var result = TableEdits.InsertFormula(address.Value, paragraphIndex, textOffset, formula);
+        if (!result.Applied)
+            return;
         PlaceCaretAtTableCellTextOffset(
             blockIndex,
             rowIndex,
             columnIndex,
             paragraphIndex,
-            textOffset + command.InsertedTextLength);
+            result.TextOffset);
     }
 
     /// <summary>
@@ -12473,7 +12221,8 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0)
             return;
 
-        _commands.Execute(new ApplyTablePropertiesCommand(blockIndex, rowIndex, columnIndex, values));
+        if (TableEdits.AddressFromCellIndex(blockIndex, rowIndex, columnIndex) is { } address)
+            TableEdits.ApplyProperties(address, values);
     }
 
     /// <summary>Apply the five editable core properties as one undoable operation.</summary>
@@ -12499,7 +12248,7 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable)
             return;
 
-        _commands.Execute(new ApplyTableStyleCommand(blockIndex, style));
+        TableEdits.ApplyStyle(new DocumentTableCellAddress(blockIndex, 0, 0), style);
     }
 
     /// <summary>
@@ -15065,10 +14814,10 @@ public sealed class DocumentView : RichTextBox
             return false;
         }
 
-        var id = footnote ? _model.NextFootnoteId() : _model.NextEndnoteId();
-        _commands.Execute(new InsertNoteCommand(id, footnote, text ?? string.Empty, paragraphIndex, textOffset));
-        var markerLength = id.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
-        PlaceCaretAtModelTextOffset(paragraphIndex, textOffset + markerLength);
+        var result = ReferenceEdits.InsertNote(paragraphIndex, textOffset, text, footnote);
+        if (!result.Applied)
+            return false;
+        PlaceCaretAtModelTextOffset(paragraphIndex, result.TextOffset);
         return true;
     }
 
@@ -15085,23 +14834,22 @@ public sealed class DocumentView : RichTextBox
         }
 
         CommitToModel();
-        var id = footnote ? _model.NextFootnoteId() : _model.NextEndnoteId();
-        _commands.Execute(new InsertTableCellNoteCommand(
-            id,
-            footnote,
-            text ?? string.Empty,
-            tableBlockIndex,
-            rowIndex,
-            cellIndex,
+        if (TableEdits.AddressFromCellIndex(tableBlockIndex, rowIndex, cellIndex) is not { } address)
+            return false;
+        var result = TableEdits.InsertNote(
+            address,
             paragraphIndex,
-            textOffset));
-        var markerLength = id.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
+            textOffset,
+            text,
+            footnote);
+        if (!result.Applied)
+            return false;
         PlaceCaretAtTableCellTextOffset(
             tableBlockIndex,
             rowIndex,
             cellIndex,
             paragraphIndex,
-            textOffset + markerLength);
+            result.TextOffset);
         return true;
     }
 
@@ -15221,7 +14969,7 @@ public sealed class DocumentView : RichTextBox
     public void DeleteFootnote(int id)
     {
         CommitToModel();
-        _commands.Execute(new DeleteNoteCommand(id, footnote: true));
+        ReferenceEdits.DeleteNote(id, footnote: true);
     }
 
     /// <summary>
@@ -15231,7 +14979,7 @@ public sealed class DocumentView : RichTextBox
     public void DeleteEndnote(int id)
     {
         CommitToModel();
-        _commands.Execute(new DeleteNoteCommand(id, footnote: false));
+        ReferenceEdits.DeleteNote(id, footnote: false);
     }
 
     /// <summary>Replaces a note's rich content as one undoable edit.</summary>
@@ -15239,7 +14987,7 @@ public sealed class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(paragraphs);
         CommitToModel();
-        _commands.Execute(new ReplaceNoteContentCommand(id, footnote, paragraphs));
+        ReferenceEdits.ReplaceNoteContent(id, footnote, paragraphs);
     }
 
     public void ApplyFootnoteEndnoteOptions(FootnoteEndnoteOptionsDialogResult result)
@@ -15368,8 +15116,7 @@ public sealed class DocumentView : RichTextBox
         if (updated is null)
             return false;
 
-        _commands.Execute(new ReplaceContentControlRunCommand(blockIndex, runIndex, updated));
-        return true;
+        return ReferenceEdits.ReplaceContentControlRun(blockIndex, runIndex, updated);
     }
 
     private bool TryGetBodyContentControlRun(int blockIndex, int runIndex, out ModelRun run)
@@ -15871,11 +15618,8 @@ public sealed class DocumentView : RichTextBox
     public void ApplyCitationStyle(CitationStyle style)
     {
         CommitToModel();
-        if (_model.BibliographyStyle == style)
-            return;
-
-        _commands.Execute(new ApplyCitationStyleCommand(style));
-        Render();
+        if (ReferenceEdits.ApplyCitationStyle(style))
+            Render();
     }
 
     /// <summary>The document's bibliographic sources (Insert &gt; Citation reads/writes this list).</summary>
@@ -15923,7 +15667,7 @@ public sealed class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(sources);
         CommitToModel();
-        _commands.Execute(new ReplaceSourcesCommand(sources));
+        ReferenceEdits.ReplaceSources(sources);
     }
 
     /// <summary>
@@ -15979,25 +15723,11 @@ public sealed class DocumentView : RichTextBox
             "Update Bibliography");
 
     private void ApplyBibliographyPlan(BibliographyRegionPlan plan, string label)
-    {
-        _commands.BeginUndoGroup();
-        try
-        {
-            foreach (var deleteIndex in plan.DeleteIndicesDescending)
-                _commands.Execute(new DeleteParagraphCommand(deleteIndex));
-
-            var index = Math.Clamp(plan.InsertIndex, 0, _model.Blocks.Count);
-            foreach (var paragraph in plan.Paragraphs)
-                _commands.Execute(new InsertParagraphCommand(index++, paragraph));
-
-            _commands.CommitUndoGroup(label);
-        }
-        catch
-        {
-            _commands.AbortUndoGroup();
-            throw;
-        }
-    }
+        => ReferenceEdits.ApplyGeneratedRegion(
+            plan.DeleteIndicesDescending,
+            plan.InsertIndex,
+            plan.Paragraphs,
+            label);
 
     /// <summary>
     /// Marks <paramref name="term"/> for the document index by inserting Word's hidden <c>XE</c> field at
@@ -16013,19 +15743,15 @@ public sealed class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(mark);
         CommitToModel();
-        var markRun = DocumentIndex.MarkRun(mark);
-        if (DocumentIndex.MarkedEntry(markRun) is not { MainEntry.Length: > 0 } normalized)
-            return;
         if (!TryGetCurrentBodyCaretTarget(out var paragraphIndex, out var textOffset)
-            || _model.Blocks[paragraphIndex] is not ModelParagraph paragraph
-            || paragraph.Runs.Any(run => DocumentIndex.MarksEquivalent(DocumentIndex.MarkedEntry(run), normalized)))
+            || _model.Blocks[paragraphIndex] is not ModelParagraph)
         {
             return;
         }
 
-        _commands.Execute(new ReplaceParagraphRunsCommand(paragraphIndex, target =>
-            RevisionEditPlanner.InsertRunAtOffset(target, textOffset, markRun)));
-        PlaceCaretAtModelTextOffset(paragraphIndex, textOffset);
+        var result = ReferenceEdits.InsertIndexEntry(paragraphIndex, textOffset, mark);
+        if (result.Applied)
+            PlaceCaretAtModelTextOffset(result.HostBlockIndex, result.TextOffset);
     }
 
     /// <summary>Marks every matching body paragraph as one undoable Mark All operation.</summary>
@@ -16033,33 +15759,7 @@ public sealed class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(mark);
         CommitToModel();
-        var markRun = DocumentIndex.MarkRun(mark);
-        if (DocumentIndex.MarkedEntry(markRun) is not { MainEntry.Length: > 0 } normalized)
-            return 0;
-        var targets = DocumentIndex.MarkAllTargets(_model, sourceText, normalized);
-        if (targets.Count == 0)
-            return 0;
-
-        _commands.BeginUndoGroup();
-        try
-        {
-            foreach (var target in targets)
-            {
-                _commands.Execute(new ReplaceParagraphRunsCommand(target.BlockIndex, paragraph =>
-                    RevisionEditPlanner.InsertRunAtOffset(
-                        paragraph,
-                        target.TextOffset,
-                        DocumentIndex.MarkRun(normalized))));
-            }
-            _commands.CommitUndoGroup("Mark All Index Entries");
-        }
-        catch
-        {
-            _commands.AbortUndoGroup();
-            throw;
-        }
-
-        return targets.Count;
+        return ReferenceEdits.MarkAllIndexEntries(sourceText, mark);
     }
 
     /// <summary>
@@ -16083,8 +15783,7 @@ public sealed class DocumentView : RichTextBox
             index = _model.Blocks.Count;
 
         var entries = DocumentIndex.Build(_model, BuildGeneratedPageTextResolver(), identifier);
-        foreach (var paragraph in entries)
-            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+        ReferenceEdits.InsertGeneratedRegion(index, entries, "Insert Index");
     }
 
     /// <summary>
@@ -16110,13 +15809,12 @@ public sealed class DocumentView : RichTextBox
         }
 
         var insertAt = firstIndex >= 0 ? firstIndex : _model.Blocks.Count;
-        for (var i = indexParagraphs.Count - 1; i >= 0; i--)
-            _commands.Execute(new DeleteParagraphCommand(indexParagraphs[i]));
-
         var entries = DocumentIndex.Build(_model, BuildGeneratedPageTextResolver(), identifier);
-        var index = Math.Clamp(insertAt, 0, _model.Blocks.Count);
-        foreach (var paragraph in entries)
-            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+        ReferenceEdits.ApplyGeneratedRegion(
+            indexParagraphs,
+            insertAt,
+            entries,
+            "Update Index");
     }
 
     /// <summary>
@@ -16135,6 +15833,16 @@ public sealed class DocumentView : RichTextBox
             return;
 
         CommitToModel();
+
+        if (TryGetCurrentBodyCaretTarget(out var paragraphIndex, out var textOffset))
+        {
+            var result = ReferenceEdits.InsertAuthorityCitation(paragraphIndex, textOffset, citation);
+            if (result.Applied)
+            {
+                PlaceCaretAtModelTextOffset(result.HostBlockIndex, result.TextOffset);
+                return;
+            }
+        }
 
         var marker = BuildRun(ModelRun.CitationMark(citation), new ModelParagraph(), _model);
         var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
@@ -16193,12 +15901,17 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void RefreshTableOfAuthorities()
     {
-        RefreshTableOfAuthorities(ToaOptions.Default);
+        RefreshTableOfAuthoritiesCore(options: null);
     }
 
     public void RefreshTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        RefreshTableOfAuthoritiesCore(options);
+    }
+
+    private void RefreshTableOfAuthoritiesCore(ToaOptions? options)
+    {
         CommitToModel();
         ApplyTableOfAuthoritiesPlan(
             TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
@@ -16281,14 +15994,11 @@ public sealed class DocumentView : RichTextBox
     }
 
     private void ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlan plan)
-    {
-        foreach (var deleteIndex in plan.DeleteIndicesDescending)
-            _commands.Execute(new DeleteParagraphCommand(deleteIndex));
-
-        var index = Math.Clamp(plan.InsertIndex, 0, _model.Blocks.Count);
-        foreach (var paragraph in plan.Paragraphs)
-            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
-    }
+        => ReferenceEdits.ApplyGeneratedRegion(
+            plan.DeleteIndicesDescending,
+            plan.InsertIndex,
+            plan.Paragraphs,
+            "Update Table of Authorities");
 
     /// <summary>
     /// Insert a Table of Figures (or Table of Tables) generated from the document's <see cref="CaptionLabel"/>
@@ -16356,10 +16066,12 @@ public sealed class DocumentView : RichTextBox
             if (TableOfFigures.IsTableOfFiguresParagraph(_model.Blocks[i]))
                 indices.Add(i);
         }
-        for (var i = indices.Count - 1; i >= 0; i--)
-            _commands.Execute(new DeleteParagraphCommand(indices[i]));
-
-        InsertTableOfFiguresAt(insertAt, labelText);
+        var entries = TableOfFigures.Build(_model, labelText, BuildGeneratedPageTextResolver());
+        ReferenceEdits.ApplyGeneratedRegion(
+            indices,
+            insertAt,
+            entries,
+            "Update Table of Figures");
     }
 
     // Insert the freshly built table-of-figures paragraphs starting at block index `at`, one reversible
@@ -16367,9 +16079,7 @@ public sealed class DocumentView : RichTextBox
     private void InsertTableOfFiguresAt(int at, string labelText)
     {
         var entries = TableOfFigures.Build(_model, labelText, BuildGeneratedPageTextResolver());
-        var index = Math.Clamp(at, 0, _model.Blocks.Count);
-        foreach (var paragraph in entries)
-            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+        ReferenceEdits.InsertGeneratedRegion(at, entries, "Insert Table of Figures");
     }
 
     private Func<int, string?>? BuildGeneratedPageTextResolver()
@@ -16400,19 +16110,8 @@ public sealed class DocumentView : RichTextBox
 
     public void InsertCaption(string labelText, string text)
     {
-        // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-        labelText = Captions.NormalizeLabelText(labelText);
-        Captions.EnsureStyles(_model);
-
-        var number = Captions.NextCaptionNumber(_model, labelText);
-        var caption = Captions.BuildCaption(labelText, number, text);
-
-        // Insert after the caret's block so the caption sits under the selected image/table.
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-        _commands.Execute(new InsertParagraphCommand(index, caption));
+        ReferenceEdits.InsertCaption(CaretBlockIndex(), labelText, text);
     }
 
     /// <summary>
@@ -16431,36 +16130,13 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
 
         var sourceBlock = CaretBlockIndex();
-        var plan = CrossReferences.PlanInsertion(_model, type, target, insertAs, hyperlink, sourceBlock);
-
-        // Append the field run to the caret's paragraph (or the last paragraph / a fresh one). Keep creation,
-        // the hidden target bookmark, and field insertion in one undo step.
-        var caretBlock = sourceBlock >= 0 && sourceBlock < _model.Blocks.Count ? sourceBlock : -1;
-        if (caretBlock < 0 || _model.Blocks[caretBlock] is not ModelParagraph)
-        {
-            caretBlock = _model.Blocks.FindLastIndex(block => block is ModelParagraph);
-        }
-
-        _commands.BeginUndoGroup();
-        try
-        {
-            if (caretBlock < 0)
-            {
-                caretBlock = _model.Blocks.Count;
-                _commands.Execute(new InsertParagraphCommand(caretBlock, new ModelParagraph()));
-            }
-            _commands.Execute(new InsertCrossReferenceCommand(
-                caretBlock,
-                plan.FieldRun,
-                plan.Target.BlockIndex,
-                plan.BookmarkNameToAdd));
-            _commands.CommitUndoGroup("Insert Cross-reference");
-        }
-        catch
-        {
-            _commands.AbortUndoGroup();
-            throw;
-        }
+        ReferenceEdits.InsertCrossReference(
+            sourceBlock,
+            sourceBlock,
+            type,
+            target,
+            insertAs,
+            hyperlink);
         Render();
     }
 
@@ -17257,7 +16933,7 @@ public sealed class DocumentView : RichTextBox
         var index = CaretBlockIndex();
         if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph)
             return;
-        _commands.Execute(new SetParagraphBookmarkNameCommand(index, name));
+        ReferenceEdits.SetBookmark(index, name);
         Render();
     }
 

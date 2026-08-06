@@ -179,6 +179,36 @@ public sealed class KeyboardContextParityTests
         }
     }
 
+    [StaFact]
+    public void WpfChartContextMenuUsesSharedWaterfallStateAndCommands()
+    {
+        var window = new MainWindow(
+            new FreePOptions(),
+            messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var chart = window.Editor.InsertChart(ChartType.Waterfall);
+            var hit = new ChartSubtargetHit(
+                chart.Id,
+                ChartSubtargetKind.Point,
+                SeriesIndex: 0,
+                PointIndex: 1);
+
+            var menu = window.BuildChartContextMenuForTests(hit);
+            menu.Items.OfType<MenuItem>().First().Header.Should().Be("Set as Total");
+            menu.Items.OfType<MenuItem>().First()
+                .RaiseEvent(new System.Windows.RoutedEventArgs(MenuItem.ClickEvent));
+            chart.Chart!.WaterfallTotalPointIndices.Should().Contain(1);
+
+            window.BuildChartContextMenuForTests(hit)
+                .Items.OfType<MenuItem>().First().Header.Should().Be("Clear Total");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     private static void AssertMenuMatches(
         ContextMenu menu,
         IReadOnlyList<FreePContextMenuEntryPlan> expected)

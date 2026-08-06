@@ -13,7 +13,7 @@ public sealed partial class SelectionPaneDialog
     public static IReadOnlyList<SelectionPaneVisibilityChange> CreateVisibilityChanges(
         IReadOnlyList<SelectionPaneItem> originalItems,
         IReadOnlyList<(Guid Id, bool IsVisible, string Name)> currentStates) =>
-        SharedSelectionPanePlanner.CreateVisibilityChanges(originalItems, ToItemStates(originalItems, currentStates));
+        CreateSession(originalItems, currentStates).CreateResult().VisibilityChanges;
 
     public static IReadOnlyList<SelectionPaneVisibilityChange> CreateVisibilityChanges(
         IReadOnlyList<SelectionPaneItem> originalItems,
@@ -25,19 +25,14 @@ public sealed partial class SelectionPaneDialog
     public static IReadOnlyList<SelectionPaneRenameChange> CreateRenameChanges(
         IReadOnlyList<SelectionPaneItem> originalItems,
         IReadOnlyList<(Guid Id, bool IsVisible, string Name)> currentStates) =>
-        SharedSelectionPanePlanner.CreateRenameChanges(originalItems, ToItemStates(originalItems, currentStates));
+        CreateSession(originalItems, currentStates).CreateResult().RenameChanges;
 
     public static SelectionPaneDialogResult CreateResult(
         SelectionPaneDialogAction action,
         SelectionPaneItem? target,
         IReadOnlyList<SelectionPaneItem> originalItems,
         IReadOnlyList<(Guid Id, bool IsVisible, string Name)> currentStates) =>
-        SharedSelectionPanePlanner.CreateResult(
-            action,
-            target,
-            originalItems,
-            ToItemStates(originalItems, currentStates),
-            []);
+        CreateSession(originalItems, currentStates).CreateResult(action, target);
 
     public static SelectionPaneDialogResult CreateResult(
         SelectionPaneDialogAction action,
@@ -55,7 +50,7 @@ public sealed partial class SelectionPaneDialog
         Guid draggedId,
         Guid targetId,
         SelectionPaneDropPlacement placement = SelectionPaneDropPlacement.Before) =>
-        SharedSelectionPanePlanner.CreateDragMoveChanges(currentOrder, draggedId, targetId, placement);
+        CreateDragSession(currentOrder, draggedId, targetId, placement).MoveChanges;
 
     private static SelectionPanePlannerText CreateLocalizedPlannerText() =>
         new(
@@ -80,6 +75,36 @@ public sealed partial class SelectionPaneDialog
         }
 
         return states;
+    }
+
+    private static SelectionPaneSession CreateSession(
+        IReadOnlyList<SelectionPaneItem> originalItems,
+        IReadOnlyList<(Guid Id, bool IsVisible, string Name)> currentStates)
+    {
+        var session = new SelectionPaneSession(originalItems);
+        session.ApplyStates(ToItemStates(originalItems, currentStates));
+        return session;
+    }
+
+    private static SelectionPaneSession CreateDragSession(
+        IReadOnlyList<(SelectionPaneObjectKind Kind, Guid Id)> currentOrder,
+        Guid draggedId,
+        Guid targetId,
+        SelectionPaneDropPlacement placement)
+    {
+        var items = currentOrder
+            .Select(item => new SelectionPaneItem(
+                item.Kind,
+                item.Id,
+                item.Kind.ToString(),
+                IsVisible: true,
+                CanMoveUp: true,
+                CanMoveDown: true))
+            .ToList();
+        var session = new SelectionPaneSession(items);
+        session.BeginDrag(draggedId);
+        session.Drop(targetId, placement);
+        return session;
     }
 
     private static IReadOnlyList<(Guid Id, bool IsVisible, string Name)> ToNamedCurrentStates(

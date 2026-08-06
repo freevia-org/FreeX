@@ -106,27 +106,7 @@ public partial class MainWindow
     {
         SynchronizeWorkbookSessionSelection();
         result = execute();
-        var outcome = ToCommandOutcome(result.EditResult);
-        RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
-        {
-            ["command"] = result.CommandTitle,
-            ["status"] = outcome.Success ? "succeeded" : "failed"
-        });
-        if (outcome.Success)
-        {
-            if (outcome.IsNoOp)
-                return true;
-
-            _repeatPostAction = null;
-            InvalidateNavigationCaches();
-            ApplyWorkbookSessionSelectionToRenderer();
-            SyncWindowViewState([_currentSheetId]);
-            NotifyOtherWindowsOfWorkbookChange();
-            return true;
-        }
-
-        ShowCommandError(outcome, result.CommandTitle);
-        return false;
+        return CompleteWorksheetSessionCommand(result.EditResult, result.CommandTitle);
     }
 
     private IReadOnlyList<SheetId> CurrentGroupedEditSheetIds()

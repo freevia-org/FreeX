@@ -111,7 +111,7 @@ public sealed class FontDialogVisualParityTests
                     .SelectMany(check => check.GetVisualDescendants().OfType<Border>())
                     .Where(border => border.Bounds.Width == 14 && border.Bounds.Height == 13)
                     .ToArray();
-                indicators.Should().HaveCount(8);
+                indicators.Should().HaveCount(10);
             }
             finally
             {

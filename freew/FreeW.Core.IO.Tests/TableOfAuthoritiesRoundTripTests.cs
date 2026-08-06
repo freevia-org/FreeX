@@ -185,6 +185,79 @@ public class TableOfAuthoritiesRoundTripTests
     }
 
     [Fact]
+    public void GeneratedTableOfAuthorities_EmitsOneNativeOwnerAndRetainsOptionsAfterReopen()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var mark = new Paragraph();
+        mark.Runs.Add(Run.CitationMark(new Citation("17 U.S.C. 107", CitationCategory.Statutes)));
+        doc.Blocks.Add(mark);
+        var options = new ToaOptions
+        {
+            CategoryFilter = CitationCategory.Statutes,
+            UsePassim = true,
+            TabLeader = ToaTabLeader.Dashes
+        };
+        var generated = TableOfAuthorities.Build(doc, options);
+        for (var index = generated.Count - 1; index >= 0; index--)
+            doc.Blocks.Insert(0, generated[index]);
+
+        var docx = WriteDocx(doc);
+        var generatedXml = EntryXml(docx, "word/document.xml")
+            .Descendants(W + "p")
+            .Take(generated.Count)
+            .ToArray();
+        generatedXml[0].Descendants(W + "fldChar").Should().BeEmpty();
+        generatedXml.SelectMany(paragraph => paragraph.Descendants(W + "instrText"))
+            .Should().ContainSingle()
+            .Which.Value.Should().Be(" TOA \\h \\c \"2\" \\p \\f ");
+        generatedXml.SelectMany(paragraph => paragraph.Descendants(W + "fldChar"))
+            .Select(field => field.Attribute(W + "fldCharType")!.Value)
+            .Should().Equal("begin", "separate", "end");
+
+        var reopened = ReadDocx(docx);
+        var result = reopened.Blocks.Take(generated.Count).Cast<Paragraph>().ToArray();
+        result[0].SpanningFieldOwner.Should().BeNull();
+        result.Skip(1).Should().OnlyContain(paragraph =>
+            paragraph.SpanningFieldOwner != null
+            && paragraph.SpanningFieldOwner.Instruction == " TOA \\h \\c \"2\" \\p \\f ");
+        result[1].SpanningFieldStart!.Instruction.Should().Be(" TOA \\h \\c \"2\" \\p \\f ");
+        result[^1].EndsSpanningField.Should().BeTrue();
+        TableOfAuthorities.ExistingOptions(reopened)!.CategoryFilter.Should().Be(CitationCategory.Statutes);
+        TableOfAuthorities.ExistingOptions(reopened)!.UsePassim.Should().BeTrue();
+    }
+
+    [Fact]
+    public void EmptyFilteredTableOfAuthorities_RoundTripsNativeEmptyResult()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var generated = TableOfAuthorities.Build(
+            doc,
+            new ToaOptions { CategoryFilter = CitationCategory.Statutes });
+        doc.Blocks.AddRange(generated);
+
+        var docx = WriteDocx(doc);
+        var generatedXml = EntryXml(docx, "word/document.xml")
+            .Descendants(W + "p")
+            .Take(generated.Count)
+            .ToArray();
+        generatedXml[0].Descendants(W + "fldChar").Should().BeEmpty();
+        generatedXml[1].Descendants(W + "instrText").Should().ContainSingle()
+            .Which.Value.Should().Be(" TOA \\h \\c \"2\" \\f ");
+        generatedXml[1].Descendants(W + "fldChar")
+            .Select(field => field.Attribute(W + "fldCharType")!.Value)
+            .Should().Equal("begin", "separate", "end");
+
+        var reopened = ReadDocx(docx);
+        var result = reopened.Blocks.OfType<Paragraph>().Last();
+        result.PlainText.Should().Be(TableOfAuthorities.EmptyResultText);
+        result.Runs.Should().ContainSingle();
+        result.Runs[0].ComplexField!.Instruction.Should().Be(" TOA \\h \\c \"2\" \\f ");
+        TableOfAuthorities.IsTableOfAuthoritiesParagraph(result).Should().BeTrue();
+    }
+
+    [Fact]
     public void ReferencesHeavyFieldsFixture_RetainsSourcesFieldsAndToaPageNumbersThroughDocx()
     {
         var doc = ReferencesHeavyFieldsDocument();

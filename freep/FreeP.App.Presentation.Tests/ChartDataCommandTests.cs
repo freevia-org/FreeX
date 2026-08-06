@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml.Linq;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -47,6 +48,67 @@ public sealed class ChartDataCommandTests
 
         var bus = new PresentationCommandBus(p);
         return (p, bus, shape.Id);
+    }
+
+    private static (Presentation p, PresentationCommandBus bus, uint chartShapeId) MakeChartExPresentation()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cx = chartExUri;
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = new XDocument(
+                new XElement(cx + "chartSpace",
+                    new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                    new XElement(cx + "chartData",
+                        new XElement(cx + "data",
+                            new XAttribute("id", 0),
+                            new XElement(cx + "strDim",
+                                new XAttribute("type", "cat"),
+                                new XElement(cx + "lvl",
+                                    new XAttribute("ptCount", 2),
+                                    new XElement(cx + "pt", new XAttribute("idx", 0), "Q1"),
+                                    new XElement(cx + "pt", new XAttribute("idx", 1), "Q2"))),
+                            new XElement(cx + "numDim",
+                                new XAttribute("type", "val"),
+                                new XElement(cx + "lvl",
+                                    new XAttribute("ptCount", 2),
+                                    new XElement(cx + "pt", new XAttribute("idx", 0), "10"),
+                                    new XElement(cx + "pt", new XAttribute("idx", 1), "20"))))),
+                    new XElement(cx + "chart",
+                        new XElement(cx + "plotArea",
+                            new XElement(cx + "plotAreaRegion",
+                                new XElement(cx + "series",
+                                    new XAttribute("layoutId", "histogram"),
+                                    new XElement(cx + "tx",
+                                        new XElement(cx + "txData",
+                                            new XElement(cx + "v", "Revenue"))),
+                                    new XElement(cx + "dataId", new XAttribute("val", 0))))))))
+                .ToString(SaveOptions.DisableFormatting),
+        };
+        chart.Categories.AddRange(["Q1", "Q2"]);
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+
+        var slide = new Slide();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Name = "ChartEx1",
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 5486400,
+            ExtentCyEmu = 3657600,
+            Chart = chart,
+        };
+        slide.Shapes.Add(shape);
+        var presentation = new Presentation();
+        presentation.Slides.Add(slide);
+        return (presentation, new PresentationCommandBus(presentation), shape.Id);
     }
 
     private static EditingSession MakeSession()
@@ -1627,6 +1689,48 @@ public sealed class ChartDataCommandTests
         chart.DataLabels.Separator.Should().Be(" / ");
         chart.DataLabels.TextStyle.Should().NotBeNull();
         chart.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
+    }
+
+    [Fact]
+    public void SetChartDisplayOptions_NativeChartExLabelsUseSeriesOwnerAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartExPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+
+        bus.Execute(new SetChartDisplayOptionsCommand(
+            0,
+            id,
+            new ChartDisplayOptions(
+                null,
+                null,
+                true,
+                DataLabelPosition.OutsideEnd,
+                false,
+                false,
+                LabelNumberFormat: "0.0",
+                LabelSeparator: " | ")));
+
+        chart.DataLabels.Should().NotBeNull();
+        chart.Series.Should().ContainSingle(series =>
+            series.DataLabels != null
+            && series.DataLabels.ShowValue
+            && series.DataLabels.NumberFormat == "0.0"
+            && series.DataLabels.Separator == " | ");
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var reopened = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        reopened.IsChartEx.Should().BeTrue();
+        reopened.Series.Should().ContainSingle(series =>
+            series.DataLabels != null
+            && series.DataLabels.ShowValue
+            && series.DataLabels.NumberFormat == "0.0"
+            && series.DataLabels.Separator == " | ");
+
+        bus.Undo();
+        chart.DataLabels.Should().BeNull();
+        chart.Series.Should().ContainSingle(series => series.DataLabels == null);
     }
 
     [Fact]

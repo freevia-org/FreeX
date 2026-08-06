@@ -79,10 +79,8 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var range = _session.SelectedRange;
-        var (startRow, endRow) = SelectionRangeService.GetRowSpan(range);
-        var result = _session.ExecuteReviewCommand(
-            new SetRowsHiddenCommand(_session.ActiveSheet.Id, startRow, endRow, hidden));
+        var (startRow, endRow) = SelectionRangeService.GetRowSpan(_session.SelectedRange);
+        var result = _session.SetSelectedRowsHidden(hidden);
         if (result.Success)
             RefreshShell(hidden
                 ? UiText.Format("RowColumn_RowsHidden", endRow - startRow + 1)
@@ -96,10 +94,8 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var range = _session.SelectedRange;
-        var (startCol, endCol) = SelectionRangeService.GetColumnSpan(range);
-        var result = _session.ExecuteReviewCommand(
-            new SetColumnsHiddenCommand(_session.ActiveSheet.Id, startCol, endCol, hidden));
+        var (startCol, endCol) = SelectionRangeService.GetColumnSpan(_session.SelectedRange);
+        var result = _session.SetSelectedColumnsHidden(hidden);
         if (result.Success)
             RefreshShell(hidden
                 ? UiText.Format("RowColumn_ColumnsHidden", endCol - startCol + 1)

@@ -206,36 +206,43 @@ internal static class FreeWRibbonCommands
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
 
-        void Routed(string id, RoutedCommand command) =>
-            registry.Register(id, new RoutedEditCommand(editor, command));
+        void Routed(FreeWRibbonCommandAction action, RoutedCommand command) =>
+            FreeWRibbonCommandWorkflow.Register(
+                registry,
+                action,
+                new RoutedEditCommand(editor, command));
 
         void Toggle(
-            string id,
+            FreeWRibbonCommandAction action,
             RoutedCommand command,
             DependencyProperty property,
             Func<object?, bool> isOn,
             Func<bool>? tryModelToggle = null)
         {
             var cmd = new ToggleFormatCommand(editor, command, property, isOn, tryModelToggle);
-            registry.Register(id, cmd);
-            stateful.Add((id, cmd));
+            FreeWRibbonCommandWorkflow.Register(registry, action, cmd);
+            stateful.Add((FreeWRibbonCommandWorkflow.GetPrimaryCommandId(action), cmd));
         }
 
-        void PageSetting(string id, Action<PageSettings> apply, Func<PageSettings, bool>? isChecked = null)
+        void PageSetting(
+            FreeWRibbonCommandAction action,
+            Action<PageSettings> apply,
+            Func<PageSettings, bool>? isChecked = null)
         {
             var command = new PageCommand(editor, apply, isChecked);
-            registry.Register(id, command);
-            stateful.Add((id, command));
-            stateStore.SetState(id, command.GetState());
+            var commandId = FreeWRibbonCommandWorkflow.GetPrimaryCommandId(action);
+            FreeWRibbonCommandWorkflow.Register(registry, action, command);
+            stateful.Add((commandId, command));
+            stateStore.SetState(commandId, command.GetState());
         }
 
-        Toggle("freew.bold", EditingCommands.ToggleBold, TextElement.FontWeightProperty,
+        Toggle(FreeWRibbonCommandAction.Bold, EditingCommands.ToggleBold, TextElement.FontWeightProperty,
             v => v is FontWeight w && w >= FontWeights.Bold,
             () => editor.TryToggleSelectedRunFormatting(f => f.Bold, (f, value) => f with { Bold = value }));
-        Toggle("freew.italic", EditingCommands.ToggleItalic, TextElement.FontStyleProperty,
+        Toggle(FreeWRibbonCommandAction.Italic, EditingCommands.ToggleItalic, TextElement.FontStyleProperty,
             v => v is FontStyle s && s == FontStyles.Italic,
             () => editor.TryToggleSelectedRunFormatting(f => f.Italic, (f, value) => f with { Italic = value }));
-        Toggle("freew.underline", EditingCommands.ToggleUnderline, Inline.TextDecorationsProperty,
+        Toggle(FreeWRibbonCommandAction.Underline, EditingCommands.ToggleUnderline, Inline.TextDecorationsProperty,
             v => v is TextDecorationCollection d && d.Count > 0,
             () => editor.TryToggleSelectedRunFormatting(f => f.Underline, (f, value) => f with { Underline = value }));
 
@@ -252,45 +259,45 @@ internal static class FreeWRibbonCommands
 
         // Home > Font: character effects. Superscript/subscript are mutually exclusive baseline
         // offsets; small caps / all caps map to WPF typography. Each is a toggle over the selection.
-        registry.Register("freew.superscript", new CharacterEffectCommand(editor, CharacterEffect.Superscript));
-        registry.Register("freew.subscript", new CharacterEffectCommand(editor, CharacterEffect.Subscript));
-        registry.Register("freew.strikethrough", new CharacterEffectCommand(editor, CharacterEffect.Strikethrough));
-        registry.Register("freew.smallcaps", new CharacterEffectCommand(editor, CharacterEffect.SmallCaps));
-        registry.Register("freew.allcaps", new CharacterEffectCommand(editor, CharacterEffect.AllCaps));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Superscript, new CharacterEffectCommand(editor, CharacterEffect.Superscript));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Subscript, new CharacterEffectCommand(editor, CharacterEffect.Subscript));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Strikethrough, new CharacterEffectCommand(editor, CharacterEffect.Strikethrough));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Smallcaps, new CharacterEffectCommand(editor, CharacterEffect.SmallCaps));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Allcaps, new CharacterEffectCommand(editor, CharacterEffect.AllCaps));
 
         // Home > Font: character border and character shading (new W20 commands). These are model-only
         // run properties with full DOCX round-trip (w:rBdr / w:shd). Character Border opens a border-
         // colour/style picker; Character Shading opens a colour swatch picker like paragraph shading.
-        registry.Register("freew.char-border", new CharacterBorderCommand(editor));
-        registry.Register("freew.char-shading", new CharacterShadingCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CharBorder, new CharacterBorderCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CharShading, new CharacterShadingCommand(editor));
 
         // Review > Language > Set Proofing Language: opens a dialog listing common BCP-47 tags and
         // applies the chosen language to the selected runs (rPr/w:lang) for spell-check fidelity.
-        registry.Register("freew.set-proofing-language", new SetProofingLanguageCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SetProofingLanguage, new SetProofingLanguageCommand(editor));
 
-        Routed("freew.grow-font", EditingCommands.IncreaseFontSize);
-        Routed("freew.shrink-font", EditingCommands.DecreaseFontSize);
-        Routed("freew.align-left", EditingCommands.AlignLeft);
-        Routed("freew.align-center", EditingCommands.AlignCenter);
-        Routed("freew.align-right", EditingCommands.AlignRight);
-        Routed("freew.align-justify", EditingCommands.AlignJustify);
-        Routed("freew.bullets", EditingCommands.ToggleBullets);
-        Routed("freew.numbering", EditingCommands.ToggleNumbering);
-        Routed("freew.select", ApplicationCommands.SelectAll);
+        Routed(FreeWRibbonCommandAction.GrowFont, EditingCommands.IncreaseFontSize);
+        Routed(FreeWRibbonCommandAction.ShrinkFont, EditingCommands.DecreaseFontSize);
+        Routed(FreeWRibbonCommandAction.AlignLeft, EditingCommands.AlignLeft);
+        Routed(FreeWRibbonCommandAction.AlignCenter, EditingCommands.AlignCenter);
+        Routed(FreeWRibbonCommandAction.AlignRight, EditingCommands.AlignRight);
+        Routed(FreeWRibbonCommandAction.AlignJustify, EditingCommands.AlignJustify);
+        Routed(FreeWRibbonCommandAction.Bullets, EditingCommands.ToggleBullets);
+        Routed(FreeWRibbonCommandAction.Numbering, EditingCommands.ToggleNumbering);
+        Routed(FreeWRibbonCommandAction.Select, ApplicationCommands.SelectAll);
         if (onFindReplace is not null)
         {
-            registry.Register("freew.find", new ActionRibbonCommand(onFindReplace));
-            registry.Register("freew.replace", new ActionRibbonCommand(onFindReplace));
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Find, new ActionRibbonCommand(onFindReplace));
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Replace, new ActionRibbonCommand(onFindReplace));
         }
         // Home > Paragraph: apply multilevel/legal outline numbering (1, 1.1, 1.1.1) to the selected
         // paragraph(s); the outline definition persists to word/numbering.xml. Tab/Shift+Tab demote
         // and promote the outline depth (ListLevel) of the selected list paragraphs.
         // The top-level "freew.multilevel-list" id applies the first (standard decimal) preset directly
         // (clicking the button face vs. the dropdown arrow follows the same pattern as Word's gallery).
-        registry.Register("freew.multilevel-list", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MultilevelList, new ActionRibbonCommand(() =>
             editor.ApplyMultiLevelListDefinition(MultilevelListDialogPlanner.DefaultDefinition)));
-        registry.Register("freew.multilevel-demote", new ActionRibbonCommand(() => editor.ChangeListLevel(+1)));
-        registry.Register("freew.multilevel-promote", new ActionRibbonCommand(() => editor.ChangeListLevel(-1)));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MultilevelDemote, new ActionRibbonCommand(() => editor.ChangeListLevel(+1)));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MultilevelPromote, new ActionRibbonCommand(() => editor.ChangeListLevel(-1)));
         // Predefined multilevel list preset commands — three Word-parity presets shown in the gallery.
         foreach (var preset in MultilevelListDialogPlanner.Presets)
         {
@@ -303,20 +310,20 @@ internal static class FreeWRibbonCommands
         }
         // "Define New Multilevel List" dialog: captures backed options (number of levels, start-at, and
         // the first three per-level number styles).
-        registry.Register("freew.multilevel-define", new DefineMultilevelListCommand(editor));
-        Routed("freew.cut", ApplicationCommands.Cut);
-        Routed("freew.copy", ApplicationCommands.Copy);
-        Routed("freew.paste", ApplicationCommands.Paste);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MultilevelDefine, new DefineMultilevelListCommand(editor));
+        Routed(FreeWRibbonCommandAction.Cut, ApplicationCommands.Cut);
+        Routed(FreeWRibbonCommandAction.Copy, ApplicationCommands.Copy);
+        Routed(FreeWRibbonCommandAction.Paste, ApplicationCommands.Paste);
         // Home > Clipboard: paste-special. "Paste Text Only" strips all source formatting; "Merge
         // Formatting" matches the destination. In FreeW both resolve to match-destination insertion at
         // the caret (the pasted text inherits the caret run's formatting), routed through the editor's
         // undoable InsertText path. See DocumentView.PastePlainText / PasteMergeFormatting.
-        registry.Register("freew.paste-plain", new ActionRibbonCommand(() => editor.PastePlainText()));
-        registry.Register("freew.paste-merge", new ActionRibbonCommand(() => editor.PasteMergeFormatting()));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PastePlain, new ActionRibbonCommand(() => editor.PastePlainText()));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PasteMerge, new ActionRibbonCommand(() => editor.PasteMergeFormatting()));
 
         // Home > Clipboard > Format Painter: arm the painter from the current selection's run +
         // paragraph formatting; the editor stamps it onto the user's next mouse selection and disarms.
-        registry.Register("freew.format-painter", new FormatPainterCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.FormatPainter, new FormatPainterCommand(editor));
 
         var fontFamily = new SelectionValueCommand(editor,
             (selection, value) => selection.ApplyPropertyValue(TextElement.FontFamilyProperty, new FontFamily(value)),
@@ -324,7 +331,7 @@ internal static class FreeWRibbonCommands
                 formatting => string.Equals(formatting.FontFamily, value, StringComparison.OrdinalIgnoreCase),
                 formatting => formatting with { FontFamily = value }),
             () => editor.CurrentRunFormatting.FontFamily ?? string.Empty);
-        registry.Register("freew.font-family", fontFamily);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.FontFamily, fontFamily);
         stateful.Add(("freew.font-family", fontFamily));
         stateStore.SetState("freew.font-family", fontFamily.GetState());
 
@@ -341,7 +348,7 @@ internal static class FreeWRibbonCommands
                 formatting => formatting with { FontSizePt = points });
         }, () => (editor.CurrentRunFormatting.FontSizePt ?? 11).ToString(
             "0.##", System.Globalization.CultureInfo.InvariantCulture));
-        registry.Register("freew.font-size", fontSize);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.FontSize, fontSize);
         stateful.Add(("freew.font-size", fontSize));
         stateStore.SetState("freew.font-size", fontSize.GetState());
 
@@ -350,30 +357,30 @@ internal static class FreeWRibbonCommands
         // Insert > Pages > Cover Page gallery: Default (existing centred layout), Banded (dark-blue title
         // band), and Motion (right-aligned title with date). The top-level id inserts the default preset
         // so clicking the button face (not the dropdown arrow) always works as before.
-        registry.Register("freew.cover-page", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Default); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CoverPage, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Default); }));
         registry.Register("freew.cover-page-default", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Default); }));
         registry.Register("freew.cover-page-banded", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Banded); }));
         registry.Register("freew.cover-page-motion", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Motion); }));
-        registry.Register("freew.blank-page", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertBlankPage(); }));
-        registry.Register("freew.horizontal-rule", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertHorizontalRule(); }));
-        registry.Register("freew.page-break", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertPageBreak(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.BlankPage, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertBlankPage(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HorizontalRule, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertHorizontalRule(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PageBreak, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertPageBreak(); }));
 
         // Layout > Page Setup > Breaks: section/column breaks. The page-break item reuses the existing
         // command (registered above). Each section break inserts a paragraph whose SectionBreak property
         // is set to the appropriate SectionBreakKind, inheriting the current document's page settings.
-        registry.Register("freew.column-break", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertColumnBreak(); }));
-        registry.Register("freew.section-break-next-page", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.NextPage); }));
-        registry.Register("freew.section-break-continuous", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.Continuous); }));
-        registry.Register("freew.section-break-even-page", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.EvenPage); }));
-        registry.Register("freew.section-break-odd-page", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.OddPage); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ColumnBreak, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertColumnBreak(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SectionBreakNextPage, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.NextPage); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SectionBreakContinuous, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.Continuous); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SectionBreakEvenPage, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.EvenPage); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SectionBreakOddPage, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.OddPage); }));
 
         // Insert tab — insert a small 2x2 table at the caret (routes through the undo/redo bus).
-        registry.Register("freew.table", new InsertTableCommand(editor, rows: 2, columns: 2));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Table, new InsertTableCommand(editor, rows: 2, columns: 2));
         // Insert tab — Table Tools: structural edits to the table containing the caret (all undoable).
         registry.Register("freew.table-insert-row", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableRow(); }));
-        registry.Register("freew.table-delete-row", new ActionRibbonCommand(() => { editor.Focus(); editor.DeleteTableRow(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableDeleteRow, new ActionRibbonCommand(() => { editor.Focus(); editor.DeleteTableRow(); }));
         registry.Register("freew.table-insert-col", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableColumn(); }));
-        registry.Register("freew.table-delete-col", new ActionRibbonCommand(() => { editor.Focus(); editor.DeleteTableColumn(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableDeleteCol, new ActionRibbonCommand(() => { editor.Focus(); editor.DeleteTableColumn(); }));
         // Insert tab — Table Tools: merge the selected cells / split a merged cell (all undoable).
         registry.Register("freew.merge-cells", new ActionRibbonCommand(() => { editor.Focus(); editor.MergeSelectedCells(); }));
         registry.Register("freew.split-cell", new ActionRibbonCommand(() => { editor.Focus(); editor.SplitCell(); }));
@@ -381,88 +388,88 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.cell-shading", new CellShadingCommand(editor));
         // Insert tab — Table Tools: table-style toggles applied to the caret's table (sets model + re-renders).
         // Table Tools — Data: insert a computed formula field (=SUM(ABOVE) etc.) into the caret's cell.
-        registry.Register("freew.table-formula", new TableFormulaCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableFormula, new TableFormulaCommand(editor));
         // Table Tools — Properties: open the four-tab Table Properties dialog for the caret's table.
-        registry.Register("freew.table-properties", new TablePropertiesCommand(editor));
-        registry.Register("freew.table-header-row", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableHeaderRow(); }));
-        registry.Register("freew.table-banded-rows", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
-        registry.Register("freew.table-repeat-header", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableProperties, new TablePropertiesCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableHeaderRow, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableHeaderRow(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableBandedRows, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableRepeatHeader, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
 
         // Table Tools — Directional insert/delete
-        registry.Register("freew.table-insert-above", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableRowAbove(); }));
-        registry.Register("freew.table-insert-col-left", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableColumnLeft(); }));
-        registry.Register("freew.table-delete", new ActionRibbonCommand(() => { editor.Focus(); editor.DeleteTable(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableInsertAbove, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableRowAbove(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableInsertColLeft, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableColumnLeft(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableDelete, new ActionRibbonCommand(() => { editor.Focus(); editor.DeleteTable(); }));
         // Table Tools — Merge/Split enhancements
-        registry.Register("freew.split-table", new ActionRibbonCommand(() => { editor.Focus(); editor.SplitTable(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SplitTable, new ActionRibbonCommand(() => { editor.Focus(); editor.SplitTable(); }));
         // Table Tools — Select
-        registry.Register("freew.table-select-table", new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTable(); }));
-        registry.Register("freew.table-select-row", new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTableRow(); }));
-        registry.Register("freew.table-select-col", new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTableColumn(); }));
-        registry.Register("freew.table-select-cell", new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTableCell(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableSelectTable, new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTable(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableSelectRow, new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTableRow(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableSelectCol, new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTableColumn(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableSelectCell, new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTableCell(); }));
         // Table Tools — View Gridlines (toggle; display-only)
-        registry.Register("freew.table-view-gridlines", new ActionRibbonCommand(() => { editor.ViewGridlines = !editor.ViewGridlines; editor.Focus(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableViewGridlines, new ActionRibbonCommand(() => { editor.ViewGridlines = !editor.ViewGridlines; editor.Focus(); }));
         // Table Tools — Cell Size
-        registry.Register("freew.table-row-height", new TablePropertiesCommand(editor));
-        registry.Register("freew.table-col-width", new TablePropertiesCommand(editor));
-        registry.Register("freew.table-distribute-rows", new ActionRibbonCommand(() => { editor.Focus(); editor.DistributeTableRows(); }));
-        registry.Register("freew.table-distribute-cols", new ActionRibbonCommand(() => { editor.Focus(); editor.DistributeTableColumns(); }));
-        registry.Register("freew.table-autofit-contents", new ActionRibbonCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Contents); }));
-        registry.Register("freew.table-autofit-window", new ActionRibbonCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Window); }));
-        registry.Register("freew.table-autofit-fixed", new ActionRibbonCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Fixed); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableRowHeight, new TablePropertiesCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableColWidth, new TablePropertiesCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableDistributeRows, new ActionRibbonCommand(() => { editor.Focus(); editor.DistributeTableRows(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableDistributeCols, new ActionRibbonCommand(() => { editor.Focus(); editor.DistributeTableColumns(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableAutofitContents, new ActionRibbonCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Contents); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableAutofitWindow, new ActionRibbonCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Window); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableAutofitFixed, new ActionRibbonCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Fixed); }));
         // Table Tools — Cell Alignment (9-way)
-        registry.Register("freew.cell-align-top-left", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Left); }));
-        registry.Register("freew.cell-align-top-center", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Center); }));
-        registry.Register("freew.cell-align-top-right", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Right); }));
-        registry.Register("freew.cell-align-middle-left", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Left); }));
-        registry.Register("freew.cell-align-middle-center", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Center); }));
-        registry.Register("freew.cell-align-middle-right", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Right); }));
-        registry.Register("freew.cell-align-bottom-left", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Left); }));
-        registry.Register("freew.cell-align-bottom-center", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Center); }));
-        registry.Register("freew.cell-align-bottom-right", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Right); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CellAlignTopLeft, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Left); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CellAlignTopCenter, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Center); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CellAlignTopRight, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Right); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CellAlignMiddleLeft, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Left); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CellAlignMiddleCenter, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Center); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CellAlignMiddleRight, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Right); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CellAlignBottomLeft, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Left); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CellAlignBottomCenter, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Center); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CellAlignBottomRight, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Right); }));
         // Table Tools — Cell Margins (opens Table Properties dialog)
-        registry.Register("freew.table-cell-margins", new TablePropertiesCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableCellMargins, new TablePropertiesCommand(editor));
         // Table Design — Style Options toggles
-        registry.Register("freew.table-last-row", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableLastRow(); }));
-        registry.Register("freew.table-first-column", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableFirstColumn(); }));
-        registry.Register("freew.table-last-column", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableLastColumn(); }));
-        registry.Register("freew.table-banded-cols", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableBandedColumns(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableLastRow, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableLastRow(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableFirstColumn, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableFirstColumn(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableLastColumn, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableLastColumn(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableBandedCols, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableBandedColumns(); }));
         // Table Design > Draw Borders: drag-to-insert table (prompted dimensions) and eraser-merges right.
-        registry.Register("freew.draw-table", new DrawTableCommand(editor));
-        registry.Register("freew.eraser", new EraserCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.DrawTable, new DrawTableCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Eraser, new EraserCommand(editor));
         // Table Layout Data group — Convert to Text
-        registry.Register("freew.table-to-text", new ActionRibbonCommand(() => { editor.Focus(); editor.ConvertTableToText('\t'); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableToText, new ActionRibbonCommand(() => { editor.Focus(); editor.ConvertTableToText('\t'); }));
         // Table Design — Cell Borders picker (per-edge borders for the caret cell).
         registry.Register("freew.cell-borders", new CellBordersCommand(editor));
         // Table Layout > Alignment — Text Direction cycling (Horizontal → Rotate90 → Rotate270 → Horizontal).
-        registry.Register("freew.cell-text-direction-horizontal", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Horizontal); }));
-        registry.Register("freew.cell-text-direction-rotate90", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Rotate90); }));
-        registry.Register("freew.cell-text-direction-rotate270", new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Rotate270); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CellTextDirectionHorizontal, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Horizontal); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CellTextDirectionRotate90, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Rotate90); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CellTextDirectionRotate270, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Rotate270); }));
 
         // Insert tab — Text: pick a .docx file and insert its body content at the caret (block merge).
-        registry.Register("freew.insert-file", new InsertFileCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.InsertFile, new InsertFileCommand(editor));
         // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
-        registry.Register("freew.picture", new InsertPictureCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Picture, new InsertPictureCommand(editor));
         // Insert tab — Illustrations: open the searchable icon picker and insert the chosen SVG
         // icon as a rasterised InlineImage (same round-trip path as Insert Picture).
-        registry.Register("freew.insert-icon", new InsertIconCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.InsertIcon, new InsertIconCommand(editor));
         // Insert tab — Illustrations > Screenshot: the top-level "freew.screenshot" id only opens the
         // dropdown (no direct insert, so it isn't registered — mirroring "freew.shapes" above). "Screen
         // Clipping" drag-selects a screen region and inserts the captured PNG as an inline image through
         // the exact same InsertImage path as Insert Picture.
-        registry.Register("freew.screen-clipping", new ScreenClippingCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ScreenClipping, new ScreenClippingCommand(editor));
         // Insert tab — Illustrations: resize the selected inline image (height scales proportionally).
-        registry.Register("freew.image-size", new ImageSizeCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageSize, new ImageSizeCommand(editor));
         // Insert tab — Illustrations: set the selected image's accessibility alt text (wp:docPr @descr),
         // and align the image's (image-only) paragraph left/center/right. Both mutate the model + re-render.
-        registry.Register("freew.image-alt-text", new ImageAltTextCommand(editor));
-        registry.Register("freew.image-align-left", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Left));
-        registry.Register("freew.image-align-center", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
-        registry.Register("freew.image-align-right", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageAltText, new ImageAltTextCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageAlignLeft, new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Left));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageAlignCenter, new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageAlignRight, new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
         // Picture Format > Arrange — align floating images relative to page or margin, or distribute evenly.
-        registry.Register("freew.image-align-to-page",   new FloatingAlignCommand(editor, FloatingObjectArrangeKind.AlignToPage));
-        registry.Register("freew.image-align-to-margin", new FloatingAlignCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
-        registry.Register("freew.image-distribute-h", new FloatingDistributeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
-        registry.Register("freew.image-distribute-v", new FloatingDistributeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageAlignToPage,   new FloatingAlignCommand(editor, FloatingObjectArrangeKind.AlignToPage));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageAlignToMargin, new FloatingAlignCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageDistributeH, new FloatingDistributeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageDistributeV, new FloatingDistributeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
         foreach (var command in ObjectFormatCommandPlanner.WrapCommands(ObjectFormatTarget.Picture))
             registry.Register(command.CommandId, new ImageWrapCommand(editor, command.Wrapping));
         // Picture Format tab — Arrange > Rotate / Flip.
@@ -471,46 +478,46 @@ internal static class FreeWRibbonCommands
         // Picture Format tab — Arrange > Position.
         registry.Register("freew.image-position", new ImagePositionCommand(editor));
         // Picture Format tab — Adjust > Corrections (brightness/contrast presets + dialog).
-        registry.Register("freew.image-brightness-plus20",  new ImageBrightnessPresetCommand(editor, +20));
-        registry.Register("freew.image-brightness-plus40",  new ImageBrightnessPresetCommand(editor, +40));
-        registry.Register("freew.image-brightness-minus20", new ImageBrightnessPresetCommand(editor, -20));
-        registry.Register("freew.image-brightness-minus40", new ImageBrightnessPresetCommand(editor, -40));
-        registry.Register("freew.image-contrast-plus20",    new ImageContrastPresetCommand(editor, +20));
-        registry.Register("freew.image-contrast-minus20",   new ImageContrastPresetCommand(editor, -20));
-        registry.Register("freew.image-adjust-dialog",      new ImageAdjustDialogCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageBrightnessPlus20,  new ImageBrightnessPresetCommand(editor, +20));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageBrightnessPlus40,  new ImageBrightnessPresetCommand(editor, +40));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageBrightnessMinus20, new ImageBrightnessPresetCommand(editor, -20));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageBrightnessMinus40, new ImageBrightnessPresetCommand(editor, -40));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageContrastPlus20,    new ImageContrastPresetCommand(editor, +20));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageContrastMinus20,   new ImageContrastPresetCommand(editor, -20));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageAdjustDialog,      new ImageAdjustDialogCommand(editor));
         // Picture Format tab — Adjust > Color (saturation presets + dialog).
-        registry.Register("freew.image-saturation-0",       new ImageSaturationPresetCommand(editor, 0));
-        registry.Register("freew.image-saturation-50",      new ImageSaturationPresetCommand(editor, 50));
-        registry.Register("freew.image-saturation-200",     new ImageSaturationPresetCommand(editor, 200));
-        registry.Register("freew.image-color-dialog",       new ImageColorDialogCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageSaturation0,       new ImageSaturationPresetCommand(editor, 0));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageSaturation50,      new ImageSaturationPresetCommand(editor, 50));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageSaturation200,     new ImageSaturationPresetCommand(editor, 200));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageColorDialog,       new ImageColorDialogCommand(editor));
         // Picture Format tab — Adjust > Transparency (presets + dialog).
-        registry.Register("freew.image-transparency-25",    new ImageTransparencyPresetCommand(editor, 25));
-        registry.Register("freew.image-transparency-50",    new ImageTransparencyPresetCommand(editor, 50));
-        registry.Register("freew.image-transparency-75",    new ImageTransparencyPresetCommand(editor, 75));
-        registry.Register("freew.image-transparency-dialog",new ImageTransparencyDialogCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageTransparency25,    new ImageTransparencyPresetCommand(editor, 25));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageTransparency50,    new ImageTransparencyPresetCommand(editor, 50));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageTransparency75,    new ImageTransparencyPresetCommand(editor, 75));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageTransparencyDialog,new ImageTransparencyDialogCommand(editor));
         // Picture Format tab — Adjust > Crop / Reset / Border.
-        registry.Register("freew.image-crop",   new ImageCropCommand(editor));
-        registry.Register("freew.image-reset",  new ImageResetCommand(editor));
-        registry.Register("freew.image-border", new ImageBorderCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageCrop,   new ImageCropCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageReset,  new ImageResetCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageBorder, new ImageBorderCommand(editor));
         // Picture Format tab — Adjust > Color > Recolor presets.
-        registry.Register("freew.image-recolor-grayscale",  new ImageRecolorPresetCommand(editor, ImageRecolorMode.Grayscale));
-        registry.Register("freew.image-recolor-sepia",      new ImageRecolorPresetCommand(editor, ImageRecolorMode.Sepia));
-        registry.Register("freew.image-recolor-washout",    new ImageRecolorPresetCommand(editor, ImageRecolorMode.Washout));
-        registry.Register("freew.image-recolor-blackwhite", new ImageRecolorPresetCommand(editor, ImageRecolorMode.BlackWhite));
-        registry.Register("freew.image-recolor-none",       new ImageRecolorPresetCommand(editor, ImageRecolorMode.None));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageRecolorGrayscale,  new ImageRecolorPresetCommand(editor, ImageRecolorMode.Grayscale));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageRecolorSepia,      new ImageRecolorPresetCommand(editor, ImageRecolorMode.Sepia));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageRecolorWashout,    new ImageRecolorPresetCommand(editor, ImageRecolorMode.Washout));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageRecolorBlackwhite, new ImageRecolorPresetCommand(editor, ImageRecolorMode.BlackWhite));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageRecolorNone,       new ImageRecolorPresetCommand(editor, ImageRecolorMode.None));
         // Picture Format tab — Adjust > Color > Color Tone presets.
-        registry.Register("freew.image-colortemp-warm",    new ImageColorTempCommand(editor, +60));
-        registry.Register("freew.image-colortemp-cool",    new ImageColorTempCommand(editor, -60));
-        registry.Register("freew.image-colortemp-neutral", new ImageColorTempCommand(editor, 0));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageColortempWarm,    new ImageColorTempCommand(editor, +60));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageColortempCool,    new ImageColorTempCommand(editor, -60));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageColortempNeutral, new ImageColorTempCommand(editor, 0));
         // Picture Format tab — Adjust > Picture Effects: Shadow presets.
-        registry.Register("freew.image-shadow-none", new ImageShadowPresetCommand(editor, 0));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageShadowNone, new ImageShadowPresetCommand(editor, 0));
         registry.Register("freew.image-shadow-1",    new ImageShadowPresetCommand(editor, 1));
         registry.Register("freew.image-shadow-2",    new ImageShadowPresetCommand(editor, 2));
         registry.Register("freew.image-shadow-3",    new ImageShadowPresetCommand(editor, 3));
         registry.Register("freew.image-shadow-4",    new ImageShadowPresetCommand(editor, 4));
         registry.Register("freew.image-shadow-5",    new ImageShadowPresetCommand(editor, 5));
         // Picture Format tab — Adjust > Picture Effects: Reflection presets.
-        registry.Register("freew.image-reflection-none", new ImageReflectionPresetCommand(editor, 0));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageReflectionNone, new ImageReflectionPresetCommand(editor, 0));
         registry.Register("freew.image-reflection-1",    new ImageReflectionPresetCommand(editor, 1));
         registry.Register("freew.image-reflection-2",    new ImageReflectionPresetCommand(editor, 2));
         registry.Register("freew.image-reflection-3",    new ImageReflectionPresetCommand(editor, 3));
@@ -529,7 +536,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-softedge-5",     new ImageSoftEdgeCommand(editor, 5));
         registry.Register("freew.image-softedge-10",    new ImageSoftEdgeCommand(editor, 10));
         // Picture Format tab — Adjust > Picture Effects: Bevel presets.
-        registry.Register("freew.image-bevel-none", new ImageBevelPresetCommand(editor, 0));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ImageBevelNone, new ImageBevelPresetCommand(editor, 0));
         registry.Register("freew.image-bevel-1",    new ImageBevelPresetCommand(editor, 1));
         registry.Register("freew.image-bevel-2",    new ImageBevelPresetCommand(editor, 2));
         registry.Register("freew.image-bevel-3",    new ImageBevelPresetCommand(editor, 3));
@@ -567,8 +574,8 @@ internal static class FreeWRibbonCommands
             registry.Register(command.CommandId, new FloatingZOrderCommand(
                 editor, ObjectFormatTarget.Picture, command.Operation));
         // Picture Format / Drawing Format — Arrange > Group / Ungroup (Phase 4).
-        registry.Register("freew.object-group",   new ObjectGroupCommand(editor));
-        registry.Register("freew.object-ungroup", new ObjectUngroupCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ObjectGroup,   new ObjectGroupCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ObjectUngroup, new ObjectUngroupCommand(editor));
         // Insert tab — Illustrations > Shapes: a small gallery of preset DrawingML shapes. Each menu item
         // inserts the matching Shape (preset geometry, or a text box carrying placeholder text) at the caret
         // via DocumentView.InsertShape. Round-trips through docx as an inline w:drawing/wps:wsp (see
@@ -597,7 +604,7 @@ internal static class FreeWRibbonCommands
         // Each routes through the editor's undoable insert path (mirroring InsertShape) and round-trips
         // through docx (the model + IO already exist; this surfaces them in the ribbon). Sample content is a
         // starting point the user can replace.
-        registry.Register("freew.equation", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Equation, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.InsertEquation(SampleEquation());
@@ -630,7 +637,7 @@ internal static class FreeWRibbonCommands
             new Equation([MathRun.FunctionApply("sin", "x")]))));
         registry.Register("freew.equation-groupchr", new ActionRibbonCommand(() => InsertEquationPreset(editor,
             new Equation([MathRun.GroupCharOf("x+y")]))));
-        registry.Register("freew.chart", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Chart, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var chart = InsertChartDialog.Prompt(Application.Current?.MainWindow);
@@ -649,13 +656,13 @@ internal static class FreeWRibbonCommands
             }));
         }
         // Add Chart Element — toggle Legend.
-        registry.Register("freew.chart-toggle-legend", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ChartToggleLegend, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.ToggleSelectedChartLegend();
         }));
         // Add Chart Element — set/clear Chart Title.
-        registry.Register("freew.chart-title", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ChartTitle, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var chart = editor.SelectedChart();
@@ -665,7 +672,7 @@ internal static class FreeWRibbonCommands
                 editor.SetSelectedChartTitle(newTitle);
         }));
         // Add Chart Element — set axis titles.
-        registry.Register("freew.chart-axis-titles", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ChartAxisTitles, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var chart = editor.SelectedChart();
@@ -675,7 +682,7 @@ internal static class FreeWRibbonCommands
                 editor.SetSelectedChartAxisTitles(result.Value.CategoryTitle, result.Value.ValueTitle);
         }));
         // Edit Data — reopen the data grid dialog.
-        registry.Register("freew.chart-edit-data", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ChartEditData, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var chart = editor.SelectedChart();
@@ -694,8 +701,8 @@ internal static class FreeWRibbonCommands
             if (result is not null)
                 editor.SetSelectedChartSize(result.Value.WidthPt, result.Value.HeightPt);
         });
-        registry.Register("freew.chart-size", chartSizeCommand);
-        registry.Register("freew.chart-size-dialog", chartSizeCommand);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ChartSize, chartSizeCommand);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ChartSizeDialog, chartSizeCommand);
         // ── Chart Design galleries — Quick Layout, Chart Styles, Change Colors ──────────────────────
         // Each gallery command applies one catalog entry to the selected chart and re-renders.
         // The MainWindow replaces the rendered ribbon buttons with live-preview swatches (ChartDesignGallery),
@@ -727,12 +734,12 @@ internal static class FreeWRibbonCommands
         }
         // ── Drawing Format contextual tab — Shape/Drawing/TextBox/WordArt commands ─────────────────
         // Edit Shape > Convert to Freeform / Edit Points (W25).
-        registry.Register("freew.shape-edit-shape", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeEditShape, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose 'Convert to Freeform' or 'Edit Points' from the menu.", "Edit Shape");
         }));
-        registry.Register("freew.shape-convert-freeform", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeConvertFreeform, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var shape = editor.SelectedShape();
@@ -743,7 +750,7 @@ internal static class FreeWRibbonCommands
             }
             editor.ConvertSelectedShapeToFreeform();
         }));
-        registry.Register("freew.shape-edit-points", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeEditPoints, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var shape = editor.SelectedShape();
@@ -758,7 +765,7 @@ internal static class FreeWRibbonCommands
             editor.BeginShapeEditPoints();
         }));
         // Change Shape: picker over ShapeKind; no model work — ShapeKind already exists.
-        registry.Register("freew.shape-change-rectangle", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeChangeRectangle, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -768,7 +775,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeKind(FreeW.Core.Model.ShapeKind.Rectangle);
         }));
-        registry.Register("freew.shape-change-rounded", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeChangeRounded, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -778,7 +785,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeKind(FreeW.Core.Model.ShapeKind.RoundedRectangle);
         }));
-        registry.Register("freew.shape-change-ellipse", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeChangeEllipse, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -846,12 +853,12 @@ internal static class FreeWRibbonCommands
             editor.SetSelectedShapeOutline(shape.OutlineColorHex ?? "000000", Math.Max(0.75, shape.OutlineWidthPt), "sysDot");
         }));
         // Text Direction: Horizontal / Rotate 90 / Rotate 270 — text-box only.
-        registry.Register("freew.shape-text-direction", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeTextDirection, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose a text direction from the dropdown.", "Text Direction");
         }));
-        registry.Register("freew.shape-text-horizontal", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeTextHorizontal, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -861,7 +868,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeTextDirection(FreeW.Core.Model.ShapeTextDirection.Horizontal);
         }));
-        registry.Register("freew.shape-text-rotate90", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeTextRotate90, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -871,7 +878,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeTextDirection(FreeW.Core.Model.ShapeTextDirection.Rotate90);
         }));
-        registry.Register("freew.shape-text-rotate270", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeTextRotate270, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -882,7 +889,7 @@ internal static class FreeWRibbonCommands
             editor.SetSelectedShapeTextDirection(FreeW.Core.Model.ShapeTextDirection.Rotate270);
         }));
         // Shape Size: reuse ImageSizeDialog (same W/H in points).
-        registry.Register("freew.shape-size", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeSize, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var shape = editor.SelectedShape();
@@ -895,16 +902,16 @@ internal static class FreeWRibbonCommands
                 editor.SetSelectedShapeSize(sz.Width, sz.Height);
         }));
         // Alt Text: text prompt for shape or WordArt.
-        registry.Register("freew.shape-alt-text", new ShapeAltTextCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeAltText, new ShapeAltTextCommand(editor));
         // Shape align left/center/right (paragraph alignment of the containing run paragraph).
-        registry.Register("freew.shape-align-left",   new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Left));
-        registry.Register("freew.shape-align-center", new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
-        registry.Register("freew.shape-align-right",  new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeAlignLeft,   new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Left));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeAlignCenter, new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeAlignRight,  new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
         // Drawing Tools > Arrange — align floating shapes relative to page or margin, or distribute evenly.
-        registry.Register("freew.shape-align-to-page",   new FloatingAlignCommand(editor, FloatingObjectArrangeKind.AlignToPage));
-        registry.Register("freew.shape-align-to-margin", new FloatingAlignCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
-        registry.Register("freew.shape-distribute-h", new FloatingDistributeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
-        registry.Register("freew.shape-distribute-v", new FloatingDistributeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeAlignToPage,   new FloatingAlignCommand(editor, FloatingObjectArrangeKind.AlignToPage));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeAlignToMargin, new FloatingAlignCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeDistributeH, new FloatingDistributeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeDistributeV, new FloatingDistributeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
         // Drawing Tools > Arrange — Wrap Text (6 modes for shapes, mirrors image-wrap-* pattern).
         foreach (var command in ObjectFormatCommandPlanner.WrapCommands(ObjectFormatTarget.Shape))
             registry.Register(command.CommandId, new ShapeWrapCommand(editor, command.Wrapping));
@@ -919,7 +926,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.shape-position", new ShapePositionCommand(editor));
 
         // ── Shape Styles gallery (W24) ────────────────────────────────────────────────────────────
-        registry.Register("freew.shape-styles-gallery", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeStylesGallery, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose a shape style from the gallery.", "Shape Styles");
@@ -975,12 +982,12 @@ internal static class FreeWRibbonCommands
         }));
 
         // ── Shape Effects (W24) ───────────────────────────────────────────────────────────────────
-        registry.Register("freew.shape-effects", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeEffects, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose an effect from the dropdown.", "Shape Effects");
         }));
-        registry.Register("freew.shape-effects-none", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeEffectsNone, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -990,7 +997,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeEffects(null);
         }));
-        registry.Register("freew.shape-effect-shadow", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeEffectShadow, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -1000,7 +1007,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeEffects(new ShapeEffectLst { HasShadow = true });
         }));
-        registry.Register("freew.shape-effect-glow", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeEffectGlow, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -1010,7 +1017,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeEffects(new ShapeEffectLst { HasGlow = true });
         }));
-        registry.Register("freew.shape-effect-soft-edge", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeEffectSoftEdge, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -1020,7 +1027,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeEffects(new ShapeEffectLst { HasSoftEdge = true });
         }));
-        registry.Register("freew.shape-effect-reflection", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeEffectReflection, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -1030,7 +1037,7 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedShapeEffects(new ShapeEffectLst { HasReflection = true });
         }));
-        registry.Register("freew.shape-effect-bevel", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShapeEffectBevel, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             if (editor.SelectedShape() is null)
@@ -1128,12 +1135,12 @@ internal static class FreeWRibbonCommands
         }
         // ── End Drawing Format commands ───────────────────────────────────────────────────────────
 
-        registry.Register("freew.wordart", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Wordart, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.InsertWordArt(WordArt.Create("WordArt", WordArtStyle.GradientFill));
         }));
-        registry.Register("freew.smartart", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Smartart, new ActionRibbonCommand(() =>
         {
             var owner = Application.Current?.MainWindow;
             var result = InsertSmartArtDialog.Prompt(owner);
@@ -1142,64 +1149,67 @@ internal static class FreeWRibbonCommands
             editor.InsertSmartArt(result);
         }));
         // SmartArt Design contextual tab — node mutation commands.
-        registry.Register("freew.smartart-add-shape", new SmartArtStructureRibbonCommand(
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SmartartAddShape, new SmartArtStructureRibbonCommand(
             editor, SmartArtStructureOperation.AddShape, editor.SmartArtAddShape));
-        registry.Register("freew.smartart-remove-shape", new SmartArtStructureRibbonCommand(
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SmartartRemoveShape, new SmartArtStructureRibbonCommand(
             editor, SmartArtStructureOperation.RemoveShape, editor.SmartArtRemoveShape));
-        registry.Register("freew.smartart-promote", new SmartArtStructureRibbonCommand(
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SmartartPromote, new SmartArtStructureRibbonCommand(
             editor, SmartArtStructureOperation.Promote, editor.SmartArtPromote));
-        registry.Register("freew.smartart-demote", new SmartArtStructureRibbonCommand(
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SmartartDemote, new SmartArtStructureRibbonCommand(
             editor, SmartArtStructureOperation.Demote, editor.SmartArtDemote));
-        registry.Register("freew.smartart-move-up", new SmartArtStructureRibbonCommand(
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SmartartMoveUp, new SmartArtStructureRibbonCommand(
             editor, SmartArtStructureOperation.MoveUp, editor.SmartArtMoveUp));
-        registry.Register("freew.smartart-move-down", new SmartArtStructureRibbonCommand(
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SmartartMoveDown, new SmartArtStructureRibbonCommand(
             editor, SmartArtStructureOperation.MoveDown, editor.SmartArtMoveDown));
-        registry.Register("freew.smartart-edit-text", new SmartArtEditTextRibbonCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SmartartEditText, new SmartArtEditTextRibbonCommand(editor));
         // SmartArt Design contextual tab — gallery placeholder commands (no-ops; galleries are injected
         // as live-preview custom content via InjectGallery; these ids must be registered so the ribbon
         // renderer does not log "unknown command" warnings for the stub buttons).
         registry.Register("freew.smartart-change-layout", EmptyRibbonCommand.Instance);
         registry.Register("freew.smartart-change-colors", EmptyRibbonCommand.Instance);
-        registry.Register("freew.smartart-change-style", new SmartArtStyleRibbonCommand(editor));
-        registry.Register("freew.object", new ActionRibbonCommand(() =>
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SmartartChangeStyle, new SmartArtStyleRibbonCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Object, new ActionRibbonCommand(() =>
         {
             editor.Focus();
             editor.InsertEmbeddedObject(SampleEmbeddedObject());
         }));
         // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
-        registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Hyperlink, new InsertHyperlinkCommand(editor));
         // Insert tab — Links: manage the hyperlink at the caret — change its URL, remove it, or set a ScreenTip.
-        registry.Register("freew.edit-hyperlink", new EditHyperlinkCommand(editor));
-        registry.Register("freew.remove-hyperlink", new RemoveHyperlinkCommand(editor));
-        registry.Register("freew.hyperlink-tooltip", new HyperlinkTooltipCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.EditHyperlink, new EditHyperlinkCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.RemoveHyperlink, new RemoveHyperlinkCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HyperlinkTooltip, new HyperlinkTooltipCommand(editor));
         // Insert tab — References: prompt for footnote text and insert a footnote reference at the caret.
-        registry.Register("freew.footnote", new InsertFootnoteCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Footnote, new InsertFootnoteCommand(editor));
         // Insert tab — References: prompt for endnote text and insert an endnote reference at the caret.
-        registry.Register("freew.endnote", new InsertEndnoteCommand(editor));
-        registry.Register("freew.next-footnote", new NavigateNoteCommand(editor, footnote: true, previous: false));
-        registry.Register("freew.previous-footnote", new NavigateNoteCommand(editor, footnote: true, previous: true));
-        registry.Register("freew.next-endnote", new NavigateNoteCommand(editor, footnote: false, previous: false));
-        registry.Register("freew.previous-endnote", new NavigateNoteCommand(editor, footnote: false, previous: true));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Endnote, new InsertEndnoteCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.NextFootnote, new NavigateNoteCommand(editor, footnote: true, previous: false));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PreviousFootnote, new NavigateNoteCommand(editor, footnote: true, previous: true));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.NextEndnote, new NavigateNoteCommand(editor, footnote: false, previous: false));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PreviousEndnote, new NavigateNoteCommand(editor, footnote: false, previous: true));
         if (onToggleNotesPane is not null && isNotesPaneVisible is not null)
         {
-            var notesPaneCmd = new FreeWStatefulToggleCommand(
+            var notesPaneCmd = FreeWRibbonCommandWorkflow.RegisterToggle(
+                registry,
+                FreeWRibbonCommandAction.ShowNotes,
                 onToggleNotesPane,
                 isNotesPaneVisible,
-                editor.CommitToModel);
-            registry.Register("freew.show-notes", notesPaneCmd);
-            stateful.Add(("freew.show-notes", notesPaneCmd));
+                prepareExecution: editor.CommitToModel);
+            stateful.Add((
+                FreeWRibbonCommandWorkflow.GetPrimaryCommandId(FreeWRibbonCommandAction.ShowNotes),
+                notesPaneCmd));
         }
         else
         {
-            registry.Register("freew.show-notes", new ShowNotesCommand(editor));
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShowNotes, new ShowNotesCommand(editor));
         }
         // Insert tab — References: open the Footnote and Endnote numbering options dialog (number format,
         // start-at, restart mode). Applies to w:footnotePr / w:endnotePr in settings.xml.
-        registry.Register("freew.footnote-endnote-options", new FootnoteEndnoteOptionsCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.FootnoteEndnoteOptions, new FootnoteEndnoteOptionsCommand(editor));
         // Insert tab — References: generate a Table of Contents from the heading outline at the caret,
         // and rebuild it in place (remove the prior TOC region + re-insert). Both route through the bus.
-        registry.Register("freew.toc", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfContents(); }));
-        registry.Register("freew.toc-refresh", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfContents(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Toc, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfContents(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TocRefresh, new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfContents(); }));
         registry.Register("freew.toc-add-text", new ApplyTocStyleCommand(editor, "Heading1"));
         registry.Register("freew.toc-addtext-none", new ApplyTocStyleCommand(editor, "Normal"));
         registry.Register("freew.toc-addtext-level1", new ApplyTocStyleCommand(editor, "Heading1"));
@@ -1207,91 +1217,91 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.toc-addtext-level3", new ApplyTocStyleCommand(editor, "Heading3"));
         // Insert tab — References: insert an in-text citation (pick an existing source or add a new one),
         // and insert a bibliography built from the document's sources at the caret (reversible).
-        registry.Register("freew.citation", new InsertCitationCommand(editor));
-        registry.Register("freew.manage-sources", new ManageSourcesCommand(editor));
-        registry.Register("freew.bibliography", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertBibliography(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Citation, new InsertCitationCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ManageSources, new ManageSourcesCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Bibliography, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertBibliography(); }));
         // Insert tab — References: select the active citation/bibliography style (APA / MLA / Chicago) used
         // by the citation + bibliography commands. The combo box delivers its label as SelectedValue.
         var citationStyle = new CitationStyleCommand(editor, stateStore);
-        registry.Register("freew.citation-style", citationStyle);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CitationStyle, citationStyle);
         stateful.Add(("freew.citation-style", citationStyle));
         stateStore.SetState("freew.citation-style", citationStyle.GetState());
         // Insert tab — References: insert a numbered figure/table caption under the caret's block.
-        registry.Register("freew.caption", new InsertCaptionCommand(editor));
-        registry.Register("freew.insert-caption.figure", new InsertCaptionLabelCommand(editor, CaptionLabel.Figure));
-        registry.Register("freew.insert-caption.table", new InsertCaptionLabelCommand(editor, CaptionLabel.Table));
-        registry.Register("freew.insert-caption.equation", new InsertCaptionLabelCommand(editor, CaptionLabel.Equation));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Caption, new InsertCaptionCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.InsertCaption_Figure, new InsertCaptionLabelCommand(editor, CaptionLabel.Figure));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.InsertCaption_Table, new InsertCaptionLabelCommand(editor, CaptionLabel.Table));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.InsertCaption_Equation, new InsertCaptionLabelCommand(editor, CaptionLabel.Equation));
         // Insert tab — References: insert a cross-reference (heading/bookmark/caption/footnote) at the caret.
-        registry.Register("freew.cross-reference", new InsertCrossReferenceCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CrossReference, new InsertCrossReferenceCommand(editor));
         // Insert tab — References: mark the selection (or a prompted term) for the document index, and
         // insert an alphabetical index built from the marked terms at the caret (reversibly via the bus).
-        registry.Register("freew.index-mark", new MarkIndexEntryCommand(editor));
-        registry.Register("freew.index-insert", new InsertIndexCommand(editor));
-        registry.Register("freew.index-refresh", new UpdateIndexCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.IndexMark, new MarkIndexEntryCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.IndexInsert, new InsertIndexCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.IndexRefresh, new UpdateIndexCommand(editor));
         // Insert tab — References: generate a Table of Figures from the document's figure captions at the
         // caret, and rebuild it in place (remove the prior region + re-insert). Both route through the bus.
-        registry.Register("freew.tof", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(); }));
-        registry.Register("freew.tof.figure", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(CaptionLabel.Figure); }));
-        registry.Register("freew.tof.table", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(CaptionLabel.Table); }));
-        registry.Register("freew.tof.equation", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(CaptionLabel.Equation); }));
-        registry.Register("freew.tof-refresh", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(); }));
-        registry.Register("freew.tof-refresh.figure", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(CaptionLabel.Figure); }));
-        registry.Register("freew.tof-refresh.table", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(CaptionLabel.Table); }));
-        registry.Register("freew.tof-refresh.equation", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(CaptionLabel.Equation); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Tof, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Tof_Figure, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(CaptionLabel.Figure); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Tof_Table, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(CaptionLabel.Table); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Tof_Equation, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(CaptionLabel.Equation); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TofRefresh, new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TofRefresh_Figure, new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(CaptionLabel.Figure); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TofRefresh_Table, new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(CaptionLabel.Table); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TofRefresh_Equation, new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(CaptionLabel.Equation); }));
         // Insert tab — References: mark the selection as a legal citation (a hidden TA field), and insert /
         // rebuild a Table of Authorities built from those marks, grouped by category (reversibly via the bus).
-        registry.Register("freew.mark-citation", new MarkCitationCommand(editor));
-        registry.Register("freew.table-of-authorities", new InsertTableOfAuthoritiesCommand(editor));
-        registry.Register("freew.table-of-authorities-refresh", new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfAuthorities(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MarkCitation, new MarkCitationCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableOfAuthorities, new InsertTableOfAuthoritiesCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableOfAuthoritiesRefresh, new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfAuthorities(); }));
         // Insert tab — Links: name the caret's paragraph as a bookmark target (an invisible marker).
-        registry.Register("freew.bookmark", new InsertBookmarkCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Bookmark, new InsertBookmarkCommand(editor));
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
-        registry.Register("freew.link-bookmark", new LinkToBookmarkCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.LinkBookmark, new LinkToBookmarkCommand(editor));
         // Insert tab — Links: open the Bookmark Manager (list bookmarks with Go To + Delete).
-        registry.Register("freew.bookmark-manager", new BookmarkManagerCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.BookmarkManager, new BookmarkManagerCommand(editor));
 
         // Insert tab — Quick Parts (AutoText): a shared snippet library persisted under FreeW's data
         // folder. "Save Selection" captures the selection's text and stores it under a prompted name;
         // "Insert Quick Part" picks a saved snippet and drops its text at the caret (reversibly).
         var quickParts = QuickPartLibrary.Load();
-        registry.Register("freew.save-quickpart", new SaveQuickPartCommand(editor, quickParts));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SaveQuickpart, new SaveQuickPartCommand(editor, quickParts));
         registry.Register("freew.insert-quickpart", new InsertQuickPartCommand(editor, quickParts));
         // "Building Blocks Organizer" opens a manager over that same library: list + preview, Insert, Delete.
-        registry.Register("freew.building-blocks-organizer", new BuildingBlocksOrganizerCommand(editor, quickParts));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.BuildingBlocksOrganizer, new BuildingBlocksOrganizerCommand(editor, quickParts));
 
         // Insert tab — Controls: insert a content control (w:sdt) around the selection. The plain-text
         // control wraps the selection (or a placeholder) as an editable region; the checkbox control
         // drops a toggleable ☐/☒ checkbox. Both round-trip through docx as a w:sdt.
-        registry.Register("freew.cc-text", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertPlainTextControl(); }));
-        registry.Register("freew.cc-richtext", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertRichTextControl(); }));
-        registry.Register("freew.cc-checkbox", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCheckBoxControl(); }));
-        registry.Register("freew.cc-date", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertDatePickerControl(); }));
-        registry.Register("freew.cc-dropdown", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertDropDownListControl(); }));
-        registry.Register("freew.cc-combo", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertComboBoxControl(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CcText, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertPlainTextControl(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CcRichtext, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertRichTextControl(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CcCheckbox, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCheckBoxControl(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CcDate, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertDatePickerControl(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CcDropdown, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertDropDownListControl(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CcCombo, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertComboBoxControl(); }));
 
         // Review tab — Comments: prompt for comment text and attach it over the current selection.
-        registry.Register("freew.new-comment", new NewCommentCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.NewComment, new NewCommentCommand(editor));
         // Review tab — Comments: reply to / resolve the comment thread covering the caret (modern threaded
         // comments). Reply prompts for text and appends a child comment; Resolve toggles the thread's done flag.
-        registry.Register("freew.reply-comment", new ReplyCommentCommand(editor));
-        registry.Register("freew.resolve-comment", new ResolveCommentCommand(editor));
-        registry.Register("freew.delete-comment", new DeleteCommentCommand(editor));
-        registry.Register("freew.previous-comment", new NavigateCommentCommand(editor, previous: true));
-        registry.Register("freew.next-comment", new NavigateCommentCommand(editor, previous: false));
-        registry.Register("freew.show-comments", new ShowCommentsCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ReplyComment, new ReplyCommentCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ResolveComment, new ResolveCommentCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.DeleteComment, new DeleteCommentCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PreviousComment, new NavigateCommentCommand(editor, previous: true));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.NextComment, new NavigateCommentCommand(editor, previous: false));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShowComments, new ShowCommentsCommand(editor));
 
         // Review tab — Proofing: open the read-only Word Count / Statistics dialog. Commits pending
         // edits first so the counts reflect the current text, then computes from the model.
-        registry.Register("freew.statistics", new StatisticsCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Statistics, new StatisticsCommand(editor));
 
         // Review tab — Proofing > Thesaurus (Shift+F7): opens the Thesaurus docked pane and looks up
         // synonyms for the selected/caret word in the bundled compact synonym dictionary (~3 000 headwords,
         // Moby II derivative, public domain). The action callback supplied by the host toggles the pane
         // and triggers a lookup; a no-op is registered when no host callback is wired (e.g. unit tests).
         if (onToggleThesaurus is not null)
-            registry.Register("freew.thesaurus", new ActionRibbonCommand(onToggleThesaurus));
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Thesaurus, new ActionRibbonCommand(onToggleThesaurus));
         else
-            registry.Register("freew.thesaurus", new ActionRibbonCommand(() =>
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Thesaurus, new ActionRibbonCommand(() =>
             {
                 DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
                     "Thesaurus: no synonyms pane is wired. Host must supply onToggleThesaurus.", "Thesaurus");
@@ -1302,9 +1312,9 @@ internal static class FreeWRibbonCommands
         // anchored text by dashed leader lines, in a 200px strip to the right of the editor. The callback
         // is supplied by the host (BalloonOverlay.Toggle()); a no-op is registered in unit-test contexts.
         if (onToggleBalloons is not null)
-            registry.Register("freew.show-markup-balloons", new ActionRibbonCommand(onToggleBalloons));
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShowMarkupBalloons, new ActionRibbonCommand(onToggleBalloons));
         else
-            registry.Register("freew.show-markup-balloons", EmptyRibbonCommand.Instance);
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ShowMarkupBalloons, EmptyRibbonCommand.Instance);
 
         // Review tab — Proofing: custom dictionary + spelling options. The custom dictionary is a
         // word-per-line .lex file persisted under FreeW's data folder; its Uri is registered with the
@@ -1313,9 +1323,9 @@ internal static class FreeWRibbonCommands
         // it is no longer underlined. "Spell Check" is a stateful toggle over SpellCheck.IsEnabled.
         var customDictionary = CustomDictionaryStore.Load();
             editor.RegisterCustomDictionary(customDictionary.EnsurePersisted());
-        registry.Register("freew.add-to-dictionary", new AddToDictionaryCommand(editor, customDictionary));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.AddToDictionary, new AddToDictionaryCommand(editor, customDictionary));
         var spellCheckToggle = new SpellCheckToggleCommand(editor);
-        registry.Register("freew.spellcheck-toggle", spellCheckToggle);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SpellcheckToggle, spellCheckToggle);
         stateful.Add(("freew.spellcheck-toggle", spellCheckToggle));
 
         // Review tab — Speech > Read Aloud: a stateful toggle over an in-box text-to-speech read-through
@@ -1327,7 +1337,7 @@ internal static class FreeWRibbonCommands
         // machine with no installed voice (the engine degrades to a no-op rather than crashing).
         var readAloud = new ReadAloudToggleCommand(editor);
         readAloud.StateChanged += () => stateStore.SetState("freew.read-aloud", readAloud.GetState());
-        registry.Register("freew.read-aloud", readAloud);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ReadAloud, readAloud);
         stateful.Add(("freew.read-aloud", readAloud));
 
         // Review tab — Tracking/Changes: toggle Track Changes mode (stateful so the ribbon reflects it). When
@@ -1391,23 +1401,31 @@ internal static class FreeWRibbonCommands
         // dockable revisions list; Accept/Reject act on the SELECTED single change and Previous/Next step
         // through them. All four delegate to the host, which owns the pane and drives the pure RevisionList.
         if (onToggleReviewingPane is not null && isReviewingPaneVisible is not null)
-            registry.Register("freew.reviewing-pane",
-                new ToggleActionCommand(onToggleReviewingPane, isReviewingPaneVisible));
+        {
+            var reviewingPane = FreeWRibbonCommandWorkflow.RegisterToggle(
+                registry,
+                FreeWRibbonCommandAction.ReviewingPane,
+                onToggleReviewingPane,
+                isReviewingPaneVisible);
+            stateful.Add((
+                FreeWRibbonCommandWorkflow.GetPrimaryCommandId(FreeWRibbonCommandAction.ReviewingPane),
+                reviewingPane));
+        }
         if (onAcceptThisChange is not null)
-            registry.Register("freew.accept-this", new ActionRibbonCommand(onAcceptThisChange));
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.AcceptThis, new ActionRibbonCommand(onAcceptThisChange));
         if (onRejectThisChange is not null)
-            registry.Register("freew.reject-this", new ActionRibbonCommand(onRejectThisChange));
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.RejectThis, new ActionRibbonCommand(onRejectThisChange));
         if (onPreviousChange is not null)
-            registry.Register("freew.previous-change", new ActionRibbonCommand(onPreviousChange));
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PreviousChange, new ActionRibbonCommand(onPreviousChange));
         if (onNextChange is not null)
-            registry.Register("freew.next-change", new ActionRibbonCommand(onNextChange));
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.NextChange, new ActionRibbonCommand(onNextChange));
 
         // Review tab — Protect: Mark as Final. A stateful toggle over Word's advisory read-only flag:
         // turning it on makes the editor read-only, shows the "Marked as Final" banner and persists the
         // _MarkAsFinal custom property; "Edit Anyway" (or toggling off) clears it. The checked state
         // reflects whether the document is currently marked final.
         var markAsFinal = new MarkAsFinalToggleCommand(editor);
-        registry.Register("freew.mark-as-final", markAsFinal);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MarkAsFinal, markAsFinal);
         stateful.Add(("freew.mark-as-final", markAsFinal));
 
         // Review tab — Protect: Restrict Editing. Opens the Restrict Editing pane to choose the allowed
@@ -1415,41 +1433,41 @@ internal static class FreeWRibbonCommands
         // or stop protection. The chosen mode is enforced on the live editor and emits word/settings.xml's
         // w:documentProtection on save. The toggle reflects whether protection is currently enforced.
         var restrictEditing = new RestrictEditingToggleCommand(editor);
-        registry.Register("freew.restrict-editing", restrictEditing);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.RestrictEditing, restrictEditing);
         stateful.Add(("freew.restrict-editing", restrictEditing));
 
         // Review tab — Compare: open a second .docx and load a comparison of the current document against
         // it as tracked changes (insertions/deletions relative to the opened "original").
-        registry.Register("freew.compare", new CompareDocumentsCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Compare, new CompareDocumentsCommand(editor));
 
         // Review tab — Combine: open the original (base) document plus a second reviewer's revised copy and
         // merge BOTH reviewers' edits (the current document is reviewer A, the opened file is reviewer B)
         // into one document whose tracked changes preserve each reviewer's authorship.
-        registry.Register("freew.combine", new CombineDocumentsCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Combine, new CombineDocumentsCommand(editor));
 
         // Review tab — Inspect Document: report the metadata the document carries (comments, tracked
         // changes, document properties, bookmarks) via the pure DocumentInspector, and let the user
         // selectively remove categories. Applied removals mutate editor.Model in place and re-render.
-        registry.Register("freew.inspect-document", new InspectDocumentCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.InspectDocument, new InspectDocumentCommand(editor));
 
         // Review tab — Inspect > Check Accessibility: commit pending edits, run the pure AccessibilityChecker
         // over the model, and show the report (issues grouped by severity) in a read-only modal. Read-only.
-        registry.Register("freew.check-accessibility", new CheckAccessibilityCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CheckAccessibility, new CheckAccessibilityCommand(editor));
 
         // Insert tab — Header & Footer: prompt for header/footer text, or drop a page-number field
         // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
-        registry.Register("freew.header", new HeaderFooterCommand(editor, isFooter: false, askHeaderFooterText: askHeaderFooterText));
-        registry.Register("freew.footer", new HeaderFooterCommand(editor, isFooter: true, askHeaderFooterText: askHeaderFooterText));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Header, new HeaderFooterCommand(editor, isFooter: false, askHeaderFooterText: askHeaderFooterText));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Footer, new HeaderFooterCommand(editor, isFooter: true, askHeaderFooterText: askHeaderFooterText));
         // Insert > Header & Footer > Page Number gallery: top/bottom/current position + format dialog.
         // The top-level id inserts into the footer (Word's default button-face action).
-        registry.Register("freew.page-number", new InsertPageNumberCommand(editor, PageNumberPosition.Bottom));
-        registry.Register("freew.page-number-top", new InsertPageNumberCommand(editor, PageNumberPosition.Top));
-        registry.Register("freew.page-number-bottom", new InsertPageNumberCommand(editor, PageNumberPosition.Bottom));
-        registry.Register("freew.page-number-current", new InsertPageNumberCommand(editor, PageNumberPosition.Current));
-        registry.Register("freew.page-number-format", new PageNumberFormatCommand(editor));
-        registry.Register("freew.field", new InsertFieldCommand(editor));
-        registry.Register("freew.toggle-field-codes", new ToggleFieldCodesCommand(editor));
-        registry.Register("freew.update-fields", new UpdateFieldsCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PageNumber, new InsertPageNumberCommand(editor, PageNumberPosition.Bottom));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PageNumberTop, new InsertPageNumberCommand(editor, PageNumberPosition.Top));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PageNumberBottom, new InsertPageNumberCommand(editor, PageNumberPosition.Bottom));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PageNumberCurrent, new InsertPageNumberCommand(editor, PageNumberPosition.Current));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PageNumberFormat, new PageNumberFormatCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Field, new InsertFieldCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ToggleFieldCodes, new ToggleFieldCodesCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.UpdateFields, new UpdateFieldsCommand(editor));
 
         // Header & Footer Design contextual tab — per-slot editors.
         // Slot naming: "header"/"footer" = default; "even-header"/"even-footer" = even pages;
@@ -1460,77 +1478,77 @@ internal static class FreeWRibbonCommands
             onOpenHeaderFooterPane is not null
                 ? new OpenHeaderFooterPaneCommand(editor, slot, onOpenHeaderFooterPane)
                 : new EditHeaderSlotCommand(editor, slot);
-        registry.Register("freew.hf-edit-header",       HfEditCmd("header"));
-        registry.Register("freew.hf-edit-footer",       HfEditCmd("footer"));
-        registry.Register("freew.hf-edit-even-header",  HfEditCmd("even-header"));
-        registry.Register("freew.hf-edit-even-footer",  HfEditCmd("even-footer"));
-        registry.Register("freew.hf-edit-first-header", HfEditCmd("first-header"));
-        registry.Register("freew.hf-edit-first-footer", HfEditCmd("first-footer"));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfEditHeader,       HfEditCmd("header"));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfEditFooter,       HfEditCmd("footer"));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfEditEvenHeader,  HfEditCmd("even-header"));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfEditEvenFooter,  HfEditCmd("even-footer"));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfEditFirstHeader, HfEditCmd("first-header"));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfEditFirstFooter, HfEditCmd("first-footer"));
 
         // Header & Footer Design contextual tab — options toggles (stateful so IsChecked reflects model).
         var diffFirstPage = new DifferentFirstPageToggleCommand(editor);
-        registry.Register("freew.hf-different-first-page", diffFirstPage);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfDifferentFirstPage, diffFirstPage);
         stateful.Add(("freew.hf-different-first-page", diffFirstPage));
 
         var diffOddEven = new DifferentOddEvenPagesCommand(editor);
-        registry.Register("freew.hf-different-odd-even", diffOddEven);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfDifferentOddEven, diffOddEven);
         stateful.Add(("freew.hf-different-odd-even", diffOddEven));
 
         // Header & Footer Design contextual tab — position numerics (stateful so the value tracks model).
         var headerFromTop = new HeaderFromTopCommand(editor);
-        registry.Register("freew.hf-header-from-top", headerFromTop);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfHeaderFromTop, headerFromTop);
         stateful.Add(("freew.hf-header-from-top", headerFromTop));
 
         var footerFromBottom = new FooterFromBottomCommand(editor);
-        registry.Register("freew.hf-footer-from-bottom", footerFromBottom);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfFooterFromBottom, footerFromBottom);
         stateful.Add(("freew.hf-footer-from-bottom", footerFromBottom));
 
         // Header & Footer Design contextual tab — navigation + close.
         // Go-to-header / go-to-footer open the pane (when available) for the default slots.
-        registry.Register("freew.hf-go-to-header",
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfGoToHeader,
             onOpenHeaderFooterPane is not null
                 ? new OpenHeaderFooterPaneCommand(editor, "header", onOpenHeaderFooterPane)
                 : new GoToHeaderCommand(editor));
-        registry.Register("freew.hf-go-to-footer",
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfGoToFooter,
             onOpenHeaderFooterPane is not null
                 ? new OpenHeaderFooterPaneCommand(editor, "footer", onOpenHeaderFooterPane)
                 : new GoToFooterCommand(editor));
         // Close Header and Footer: hides the pane (when available) and returns focus to the body.
-        registry.Register("freew.hf-close",
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfClose,
             onCloseHeaderFooterPane is not null
                 ? new ActionRibbonCommand(onCloseHeaderFooterPane)
                 : new CloseHeaderFooterCommand(editor));
 
         // Header & Footer Design contextual tab — insert into default header/footer slot.
-        registry.Register("freew.hf-insert-page-number",  new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.PageNumber));
-        registry.Register("freew.hf-insert-page-number-footer", new InsertIntoHeaderSlotCommand(editor, isFooter: true,  InsertSlotKind.PageNumber));
-        registry.Register("freew.hf-insert-datetime",     new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.DateTime));
-        registry.Register("freew.hf-insert-field",        new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.DocumentInfo));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfInsertPageNumber,  new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.PageNumber));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfInsertPageNumberFooter, new InsertIntoHeaderSlotCommand(editor, isFooter: true,  InsertSlotKind.PageNumber));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfInsertDatetime,     new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.DateTime));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HfInsertField,        new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.DocumentInfo));
 
         // Insert tab — Symbols: pick a glyph from a grid, or a formatted current date/time string, and
         // insert it at the caret as ordinary text (flows through the normal edit/undo path).
-        registry.Register("freew.symbol", new InsertSymbolCommand(editor));
-        registry.Register("freew.datetime", new InsertDateTimeCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Symbol, new InsertSymbolCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Datetime, new InsertDateTimeCommand(editor));
 
         // Home > Font > Text Colour / Highlight: pick a colour from a small palette and apply it to
         // the selection (foreground reuses TextElement.Foreground; highlight uses TextElement.Background).
-        registry.Register("freew.font-color", new ColorPickCommand(editor, isHighlight: false));
-        registry.Register("freew.highlight", new ColorPickCommand(editor, isHighlight: true));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.FontColor, new ColorPickCommand(editor, isHighlight: false));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Highlight, new ColorPickCommand(editor, isHighlight: true));
 
         // Home > Font: clear all character formatting in the selection (reset every run to the document
         // default, keeping text). Insert > Pages: apply a drop cap (enlarged leading letter) to the
         // caret's paragraph. Both route through the view's undo/redo bus and re-render.
-        registry.Register("freew.clear-formatting", new ActionRibbonCommand(() => editor.ClearFormatting()));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ClearFormatting, new ActionRibbonCommand(() => editor.ClearFormatting()));
         // Drop Cap top-level button: apply default (Dropped, 3 lines, 42 pt). Dropdown items:
         // Dropped / In Margin (apply with explicit position) / None (remove) / Options dialog.
-        registry.Register("freew.drop-cap",          new ActionRibbonCommand(() => editor.ApplyDropCap()));
-        registry.Register("freew.drop-cap-dropped",  new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
-        registry.Register("freew.drop-cap-in-margin",new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
-        registry.Register("freew.drop-cap-none",     new ActionRibbonCommand(() => editor.ClearDropCap()));
-        registry.Register("freew.drop-cap-options",  new DropCapOptionsCommand(editor));
-        registry.Register("freew.drop-cap.dropped",  new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
-        registry.Register("freew.drop-cap.in-margin",new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
-        registry.Register("freew.drop-cap.none",     new ActionRibbonCommand(() => editor.ClearDropCap()));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.DropCap,          new ActionRibbonCommand(() => editor.ApplyDropCap()));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.DropCapDropped,  new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.DropCapInMargin,new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.DropCapNone,     new ActionRibbonCommand(() => editor.ClearDropCap()));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.DropCapOptions,  new DropCapOptionsCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.DropCap_Dropped,  new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.DropCap_InMargin,new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.DropCap_None,     new ActionRibbonCommand(() => editor.ClearDropCap()));
 
         // Insert > Text Box gallery: preset-styled text boxes.  Simple is the plain box (matches the
         // existing freew.shape-textbox behaviour); Sidebar/Banded adds a dark accent fill; Quote
@@ -1571,34 +1589,34 @@ internal static class FreeWRibbonCommands
         // Home > Font > Change Case: open a small menu to pick a target case (UPPERCASE / lowercase /
         // Sentence case / Capitalize Each Word / tOGGLE cASE) and recase the selection's text via the
         // pure ChangeCase helper. The replacement flows through the editor's normal edit/undo path.
-        registry.Register("freew.change-case", new ChangeCaseCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ChangeCase, new ChangeCaseCommand(editor));
 
         // Home > Paragraph: set line spacing (a multiplier on the default font size) over the selection,
         // and toggle Add/Remove Space Before/After. All route through the view's undo/redo bus.
         var lineSpacing = new LineSpacingCommand(editor);
-        registry.Register("freew.line-spacing", lineSpacing);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.LineSpacing, lineSpacing);
         stateful.Add(("freew.line-spacing", lineSpacing));
         stateStore.SetState("freew.line-spacing", lineSpacing.GetState());
-        registry.Register("freew.space-before-toggle", new ActionRibbonCommand(() => editor.ToggleSpaceBefore()));
-        registry.Register("freew.space-after-toggle", new ActionRibbonCommand(() => editor.ToggleSpaceAfter()));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SpaceBeforeToggle, new ActionRibbonCommand(() => editor.ToggleSpaceBefore()));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SpaceAfterToggle, new ActionRibbonCommand(() => editor.ToggleSpaceAfter()));
 
         // Layout > Paragraph > numeric indent/spacing combos: exact-value controls that mirror Word's
         // Layout tab Paragraph group. Each is stateful so SelectionChanged can push the live value
         // back into the ribbon combo and the displayed number tracks the current paragraph.
         var indentLeft = new IndentLeftCommand(editor);
-        registry.Register("freew.indent-left", indentLeft);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.IndentLeft, indentLeft);
         stateful.Add(("freew.indent-left", indentLeft));
 
         var indentRight = new IndentRightCommand(editor);
-        registry.Register("freew.indent-right", indentRight);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.IndentRight, indentRight);
         stateful.Add(("freew.indent-right", indentRight));
 
         var spaceBefore = new SpaceBeforeCommand(editor);
-        registry.Register("freew.space-before", spaceBefore);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SpaceBefore, spaceBefore);
         stateful.Add(("freew.space-before", spaceBefore));
 
         var spaceAfter = new SpaceAfterCommand(editor);
-        registry.Register("freew.space-after", spaceAfter);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.SpaceAfter, spaceAfter);
         stateful.Add(("freew.space-after", spaceAfter));
 
         // Home > Font > Font dialog-launcher (freew.font-dialog): opens a two-tab dialog (Font tab +
@@ -1606,126 +1624,126 @@ internal static class FreeWRibbonCommands
         // advanced typography fields (CharacterSpacingPt, KerningMinSizePt, PositionPt, Ligatures,
         // StylisticSet, NumberForm, NumberSpacing) on the Advanced tab. Applies via ApplyFontFormatting
         // which pushes both WPF property values and model-only fields through the undo/redo bus.
-        registry.Register("freew.font-dialog", new FontDialogCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.FontDialog, new FontDialogCommand(editor));
 
         // Home > Paragraph: increase/decrease the left indent by one 0.5in step over the selection, and
         // open the Paragraph dialog to set left/right/first-line (incl. hanging) indents. All reversible.
-        registry.Register("freew.indent-increase", new ActionRibbonCommand(() => { editor.Focus(); editor.IncreaseIndent(); }));
-        registry.Register("freew.indent-decrease", new ActionRibbonCommand(() => { editor.Focus(); editor.DecreaseIndent(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.IndentIncrease, new ActionRibbonCommand(() => { editor.Focus(); editor.IncreaseIndent(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.IndentDecrease, new ActionRibbonCommand(() => { editor.Focus(); editor.DecreaseIndent(); }));
         // freew.paragraph-dialog now opens the full two-tab Paragraph dialog (Indents and Spacing +
         // Line and Page Breaks), replacing the previous single-tab ParagraphIndentCommand. All fields
         // that ParagraphIndentCommand previously handled are present on the Indents and Spacing tab.
-        registry.Register("freew.paragraph-dialog", new ParagraphDialogCommand(editor));
-        registry.Register("freew.tabs-dialog", new TabsCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ParagraphDialog, new ParagraphDialogCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TabsDialog, new TabsCommand(editor));
 
         // Home > Clipboard: Paste Special offers source-preserving RTF at an empty paragraph, plus
         // merge-destination and text-only paths. It uses real System.Windows.Clipboard format checks.
-        registry.Register("freew.paste-special", new PasteSpecialCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PasteSpecial, new PasteSpecialCommand(editor));
 
         // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
-        registry.Register("freew.para-border", new ActionRibbonCommand(() => editor.ToggleParagraphBorder()));
-        registry.Register("freew.para-shading", new ParagraphShadingCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ParaBorder, new ActionRibbonCommand(() => editor.ToggleParagraphBorder()));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ParaShading, new ParagraphShadingCommand(editor));
         // Home / Design > Borders and Shading…: the full dialog (paragraph border, page border, shading).
-        registry.Register("freew.borders-shading", new BordersAndShadingCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.BordersShading, new BordersAndShadingCommand(editor));
 
         // Home > Paragraph (Line and Page Breaks): flow-control toggles over the selected paragraph(s).
         // Each flips its pPr flag (keepNext/keepLines/widowControl) reversibly through the undo/redo bus.
-        registry.Register("freew.keep-with-next", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleKeepWithNext(); }));
-        registry.Register("freew.keep-lines", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleKeepLinesTogether(); }));
-        registry.Register("freew.widow-control", new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleWidowControl(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.KeepWithNext, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleKeepWithNext(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.KeepLines, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleKeepLinesTogether(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.WidowControl, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleWidowControl(); }));
 
         // Layout > Sort: open a small dialog (A→Z / Z→A + case-sensitive option) and sort the selected
         // paragraphs in place through the view's undo/redo bus.
-        registry.Register("freew.sort", new SortCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Sort, new SortCommand(editor));
 
         // Layout > Table conversions: turn the selected paragraphs into a table (splitting on a chosen
         // delimiter) and turn the caret's table back into delimited paragraphs. Both route through the bus.
-        registry.Register("freew.text-to-table", new TextToTableCommand(editor));
-        registry.Register("freew.table-to-text", new TableToTextCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TextToTable, new TextToTableCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.TableToText, new TableToTextCommand(editor));
 
-        registry.Register("freew.style-normal", new ApplyStyleCommand(editor, 11, bold: false, colorHex: null));
-        registry.Register("freew.style-heading1", new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
-        registry.Register("freew.style-heading2", new ApplyTocStyleCommand(editor, "Heading2"));
-        registry.Register("freew.style-heading3", new ApplyTocStyleCommand(editor, "Heading3"));
-        registry.Register("freew.style-title", new ApplyStyleCommand(editor, 28, bold: true, colorHex: null));
-        registry.Register("freew.style-clear", new ActionRibbonCommand(() => { editor.Focus(); editor.SetParagraphStyle(null); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StyleNormal, new ApplyStyleCommand(editor, 11, bold: false, colorHex: null));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StyleHeading1, new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StyleHeading2, new ApplyTocStyleCommand(editor, "Heading2"));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StyleHeading3, new ApplyTocStyleCommand(editor, "Heading3"));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StyleTitle, new ApplyStyleCommand(editor, 28, bold: true, colorHex: null));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StyleClear, new ActionRibbonCommand(() => { editor.Focus(); editor.SetParagraphStyle(null); }));
 
         // Home > Styles: the styles dropdown. Picking an entry sets the selected paragraph(s)' StyleId
         // (reversible via the bus), then re-renders so the style's run/paragraph formatting resolves.
         var paragraphStyle = new ApplyParagraphStyleCommand(editor);
-        registry.Register("freew.style", paragraphStyle);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Style, paragraphStyle);
         stateful.Add(("freew.style", paragraphStyle));
         stateStore.SetState("freew.style", paragraphStyle.GetState());
 
         // Home > Styles: New Style opens a dialog capturing name + formatting + based-on, creates a custom
         // DocumentStyle via the pure StyleManager and applies it to the selection. Manage Styles lets the
         // user modify or delete the catalog's styles (built-ins are guarded against deletion).
-        registry.Register("freew.new-style", new NewStyleCommand(editor));
-        registry.Register("freew.manage-styles", new ManageStylesCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.NewStyle, new NewStyleCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ManageStyles, new ManageStylesCommand(editor));
 
         // Design > Document Formatting: Themes apply a full preset, Colors preserve fonts while applying
         // a palette, Style Sets rewrite built-in styles, and Fonts preserve colours while applying a
         // heading/body font pair. All are backed document-wide style changes.
         var theme = new ApplyThemeCommand(editor);
-        registry.Register("freew.theme", theme);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Theme, theme);
         stateful.Add(("freew.theme", theme));
         stateStore.SetState("freew.theme", theme.GetState());
         var styleSet = new ApplyStyleSetCommand(editor);
-        registry.Register("freew.style-set", styleSet);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StyleSet, styleSet);
         stateful.Add(("freew.style-set", styleSet));
         stateStore.SetState("freew.style-set", styleSet.GetState());
-        registry.Register("freew.reset-style-set", new ResetStyleSetCommand(editor));
-        registry.Register("freew.theme-colors", new ApplyThemeColorsCommand(editor));
-        registry.Register("freew.customize-colors", new CustomizeColorsCommand(editor));
-        registry.Register("freew.theme-fonts", new ApplyFontSetCommand(editor));
-        registry.Register("freew.customize-fonts", new CustomizeFontsCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ResetStyleSet, new ResetStyleSetCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ThemeColors, new ApplyThemeColorsCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CustomizeColors, new CustomizeColorsCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ThemeFonts, new ApplyFontSetCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CustomizeFonts, new CustomizeFontsCommand(editor));
         registry.Register("freew.paragraph-spacing", new ApplyParagraphSpacingSetCommand(editor));
-        registry.Register("freew.custom-paragraph-spacing", new CustomParagraphSpacingCommand(editor));
-        registry.Register("freew.theme-effects", new ApplyEffectSetCommand(editor));
-        registry.Register("freew.undo", new ActionRibbonCommand(() => { if (editor.CanUndo) editor.Undo(); }));
-        registry.Register("freew.redo", new ActionRibbonCommand(() => { if (editor.CanRedo) editor.Redo(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CustomParagraphSpacing, new CustomParagraphSpacingCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ThemeEffects, new ApplyEffectSetCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Undo, new ActionRibbonCommand(() => { if (editor.CanUndo) editor.Undo(); }));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Redo, new ActionRibbonCommand(() => { if (editor.CanRedo) editor.Redo(); }));
 
         // Layout tab — page settings (applied to the model; honoured by docx save + print).
-        PageSetting("freew.orientation", PageLayoutCommandPlanner.ToggleOrientation);
-        PageSetting("freew.margins", PageLayoutCommandPlanner.ToggleNormalNarrowMargins);
-        PageSetting("freew.size", PageLayoutCommandPlanner.ToggleLetterA4Paper);
+        PageSetting(FreeWRibbonCommandAction.Orientation, PageLayoutCommandPlanner.ToggleOrientation);
+        PageSetting(FreeWRibbonCommandAction.Margins, PageLayoutCommandPlanner.ToggleNormalNarrowMargins);
+        PageSetting(FreeWRibbonCommandAction.Size, PageLayoutCommandPlanner.ToggleLetterA4Paper);
         // Columns: open the Columns dialog or apply Word's backed preset menu choices directly, mutating
         // PageSettings and re-rendering so the live document flow changes immediately.
-        registry.Register("freew.columns", new ColumnsCommand(editor));
-        PageSetting("freew.columns-one",
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Columns, new ColumnsCommand(editor));
+        PageSetting(FreeWRibbonCommandAction.ColumnsOne,
             page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.One),
             page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.One));
-        PageSetting("freew.columns-two",
+        PageSetting(FreeWRibbonCommandAction.ColumnsTwo,
             page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Two),
             page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Two));
-        PageSetting("freew.columns-three",
+        PageSetting(FreeWRibbonCommandAction.ColumnsThree,
             page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Three),
             page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Three));
-        PageSetting("freew.columns-left",
+        PageSetting(FreeWRibbonCommandAction.ColumnsLeft,
             page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Left),
             page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Left));
-        PageSetting("freew.columns-right",
+        PageSetting(FreeWRibbonCommandAction.ColumnsRight,
             page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Right),
             page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Right));
-        registry.Register("freew.columns-more", new ColumnsCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.ColumnsMore, new ColumnsCommand(editor));
         // Page Setup: the unified Margins / Paper / Layout dialog (Word's Layout > Page Setup launcher). The
         // "Custom Margins…" / "More Paper Sizes…" entry points open the same dialog on the Margins / Paper tab.
-        registry.Register("freew.page-setup", new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
-        registry.Register("freew.custom-margins", new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
-        registry.Register("freew.more-paper-sizes", new PageSetupCommand(editor, PageSetupDialog.Tab.Paper));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PageSetup, new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CustomMargins, new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MorePaperSizes, new PageSetupCommand(editor, PageSetupDialog.Tab.Paper));
         // Line Numbers: Word-style menu items set the backed mode explicitly, while the top-level command keeps
         // the existing cycle behavior for quick access (shown in print preview and the live page adorner).
-        PageSetting("freew.line-numbers", PageLayoutCommandPlanner.CycleLineNumberMode);
-        PageSetting("freew.line-numbers-none", page => page.LineNumberMode = LineNumberMode.None,
+        PageSetting(FreeWRibbonCommandAction.LineNumbers, PageLayoutCommandPlanner.CycleLineNumberMode);
+        PageSetting(FreeWRibbonCommandAction.LineNumbersNone, page => page.LineNumberMode = LineNumberMode.None,
             page => PageLayoutCommandPlanner.IsLineNumberModeChecked(page, LineNumberMode.None));
-        PageSetting("freew.line-numbers-continuous", page => page.LineNumberMode = LineNumberMode.Continuous,
+        PageSetting(FreeWRibbonCommandAction.LineNumbersContinuous, page => page.LineNumberMode = LineNumberMode.Continuous,
             page => PageLayoutCommandPlanner.IsLineNumberModeChecked(page, LineNumberMode.Continuous));
-        PageSetting("freew.line-numbers-restart-page", page => page.LineNumberMode = LineNumberMode.RestartEachPage,
+        PageSetting(FreeWRibbonCommandAction.LineNumbersRestartPage, page => page.LineNumberMode = LineNumberMode.RestartEachPage,
             page => PageLayoutCommandPlanner.IsLineNumberModeChecked(page, LineNumberMode.RestartEachPage));
-        PageSetting("freew.line-numbers-restart-section", page => page.LineNumberMode = LineNumberMode.RestartEachSection,
+        PageSetting(FreeWRibbonCommandAction.LineNumbersRestartSection, page => page.LineNumberMode = LineNumberMode.RestartEachSection,
             page => PageLayoutCommandPlanner.IsLineNumberModeChecked(page, LineNumberMode.RestartEachSection));
         // Line Numbering Options…: dedicated dialog (Start At / Count By / Restart mode), not Page Setup.
-        registry.Register("freew.line-numbers-options", new LineNumberOptionsCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.LineNumbersOptions, new LineNumberOptionsCommand(editor));
 
         // Page setup polish — all mutate PageSettings via ApplyPageSettings (commit + re-render) and
         // round-trip through docx save.
@@ -1735,13 +1753,13 @@ internal static class FreeWRibbonCommands
         //    the live document (settings.xml w:autoHyphenation + zone/limit/caps sub-options).
         //  - Page Vertical Alignment: cycle Top -> Center -> Justified (-> Bottom) (sectPr w:vAlign).
         //  - Different First Page: toggle a distinct first-page header/footer (sectPr w:titlePg).
-        PageSetting("freew.hyphenation", PageLayoutCommandPlanner.ToggleHyphenation, page => page.AutoHyphenation);
-        PageSetting("freew.hyphenation-none", page => page.AutoHyphenation = false, page => !page.AutoHyphenation);
-        PageSetting("freew.hyphenation-auto", page => page.AutoHyphenation = true, page => page.AutoHyphenation);
-        registry.Register("freew.hyphenation-manual", new HyphenationManualCommand(editor));
-        registry.Register("freew.hyphenation-options", new HyphenationOptionsCommand(editor));
-        registry.Register("freew.page-valign", new PageVerticalAlignmentCommand(editor));
-        PageSetting("freew.different-first-page",
+        PageSetting(FreeWRibbonCommandAction.Hyphenation, PageLayoutCommandPlanner.ToggleHyphenation, page => page.AutoHyphenation);
+        PageSetting(FreeWRibbonCommandAction.HyphenationNone, page => page.AutoHyphenation = false, page => !page.AutoHyphenation);
+        PageSetting(FreeWRibbonCommandAction.HyphenationAuto, page => page.AutoHyphenation = true, page => page.AutoHyphenation);
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HyphenationManual, new HyphenationManualCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HyphenationOptions, new HyphenationOptionsCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PageValign, new PageVerticalAlignmentCommand(editor));
+        PageSetting(FreeWRibbonCommandAction.DifferentFirstPage,
             page => page.DifferentFirstPage = !page.DifferentFirstPage,
             page => page.DifferentFirstPage);
 
@@ -1749,12 +1767,12 @@ internal static class FreeWRibbonCommands
         // and Watermark sets/clears the page watermark. Both ultimately mutate PageSettings via
         // ApplyPageSettings (commit + re-render) and round-trip through docx save.
         registry.Register("freew.page-border", new BordersAndShadingCommand(editor));
-        registry.Register("freew.watermark", new WatermarkCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Watermark, new WatermarkCommand(editor));
 
         // Design tab — Page Background: pick the whole-page background colour (Word's Page Color). Opens a
         // swatch palette + No Color + More Colors... and sets the model's page BackgroundColorHex (which
         // already round-trips as w:background in docx); the editor recolours the page sheet immediately.
-        registry.Register("freew.page-color", new PageColorCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.PageColor, new PageColorCommand(editor));
 
         var viewRibbon = ViewRibbonWorkflow.Register(
             registry,
@@ -1803,25 +1821,30 @@ internal static class FreeWRibbonCommands
         // space-dot / tab-arrow overlay. The marks are drawn as a non-editable adorner computed from the
         // document's text geometry, so they never enter the model/text; executing flips the overlay and
         // (being in `stateful`) pushes the new state into the shared store so the ribbon button reflects it.
-        var formattingMarks = new ToggleActionCommand(() => editor.ToggleFormattingMarks(), () => editor.ShowFormattingMarks);
-        registry.Register("freew.formatting-marks", formattingMarks);
-        stateful.Add(("freew.formatting-marks", formattingMarks));
+        var formattingMarks = FreeWRibbonCommandWorkflow.RegisterToggle(
+            registry,
+            FreeWRibbonCommandAction.FormattingMarks,
+            () => editor.ToggleFormattingMarks(),
+            () => editor.ShowFormattingMarks);
+        stateful.Add((
+            FreeWRibbonCommandWorkflow.GetPrimaryCommandId(FreeWRibbonCommandAction.FormattingMarks),
+            formattingMarks));
 
         if (viewRibbon.Gridlines is { } viewGridlines)
             stateful.Add(("freew.gridlines", viewGridlines));
 
         if (onHelpOnline is not null)
-            registry.Register("freew.help-online", new ActionRibbonCommand(onHelpOnline));
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.HelpOnline, new ActionRibbonCommand(onHelpOnline));
         if (onFeedback is not null)
-            registry.Register("freew.feedback", new ActionRibbonCommand(onFeedback));
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.Feedback, new ActionRibbonCommand(onFeedback));
         if (onCopyDiagnostics is not null)
-            registry.Register("freew.copy-diagnostics", new ActionRibbonCommand(onCopyDiagnostics));
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CopyDiagnostics, new ActionRibbonCommand(onCopyDiagnostics));
         if (onCheckForUpdates is not null)
-            registry.Register("freew.check-updates", new ActionRibbonCommand(onCheckForUpdates));
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.CheckUpdates, new ActionRibbonCommand(onCheckForUpdates));
         if (onAbout is not null)
-            registry.Register("freew.about", new ActionRibbonCommand(onAbout));
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.About, new ActionRibbonCommand(onAbout));
         if (onLegalNotices is not null)
-            registry.Register("freew.legal-notices", new ActionRibbonCommand(onLegalNotices));
+            FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.LegalNotices, new ActionRibbonCommand(onLegalNotices));
 
         // Mailings tab — a simple mail merge. Field placeholders are the literal text «FieldName»
         // (ordinary run text, so they round-trip through docx as plain text). The four commands share a
@@ -1831,53 +1854,53 @@ internal static class FreeWRibbonCommands
         // navigation commands move through real recipient rows; "Finish & Merge" combines every merged
         // record according to the selected output mode.
         var mergeSession = new MailMergeSession();
-        registry.Register("freew.start-mail-merge", new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Letters));
-        registry.Register("freew.start-mail-merge-letters", new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Letters));
-        registry.Register("freew.start-mail-merge-directory", new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Directory));
-        registry.Register("freew.start-mail-merge-normal", new ClearMergeSessionCommand(mergeSession));
-        registry.Register("freew.merge-data", new SetMergeDataCommand(editor, mergeSession));
-        registry.Register("freew.merge-edit-recipients", new SetMergeDataCommand(editor, mergeSession));
-        registry.Register("freew.merge-field", new InsertMergeFieldCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StartMailMerge, new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Letters));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StartMailMergeLetters, new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Letters));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StartMailMergeDirectory, new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Directory));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.StartMailMergeNormal, new ClearMergeSessionCommand(mergeSession));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeData, new SetMergeDataCommand(editor, mergeSession));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeEditRecipients, new SetMergeDataCommand(editor, mergeSession));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeField, new InsertMergeFieldCommand(editor));
         // Write & Insert Fields — Address Block, Greeting Line, Match Fields (Word parity).
-        registry.Register("freew.merge-address-block", new InsertAddressBlockCommand(editor, mergeSession));
-        registry.Register("freew.merge-greeting-line", new InsertGreetingLineCommand(editor, mergeSession));
-        registry.Register("freew.merge-match-fields", new MatchFieldsCommand(editor, mergeSession));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeAddressBlock, new InsertAddressBlockCommand(editor, mergeSession));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeGreetingLine, new InsertGreetingLineCommand(editor, mergeSession));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeMatchFields, new MatchFieldsCommand(editor, mergeSession));
         // Special merge fields use Word's native NEXT/MERGEREC/MERGESEQ instructions. Their cached
         // result remains the familiar guillemet label until a merge evaluates the field.
-        registry.Register("freew.merge-next-record", new InsertSpecialMergeFieldCommand(editor, MailMerge.NextRecordField));
-        registry.Register("freew.merge-record-number", new InsertSpecialMergeFieldCommand(editor, MailMerge.MergeRecordNumberField));
-        registry.Register("freew.merge-sequence-number", new InsertSpecialMergeFieldCommand(editor, MailMerge.MergeSequenceNumberField));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeNextRecord, new InsertSpecialMergeFieldCommand(editor, MailMerge.NextRecordField));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeRecordNumber, new InsertSpecialMergeFieldCommand(editor, MailMerge.MergeRecordNumberField));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeSequenceNumber, new InsertSpecialMergeFieldCommand(editor, MailMerge.MergeSequenceNumberField));
         // Rules dropdown — each sub-command inserts the appropriate rule instruction via a dialog.
-        registry.Register("freew.merge-rules", EmptyRibbonCommand.Instance); // dropdown host: no action of its own
-        registry.Register("freew.merge-rule-if", new InsertMergeRuleIfCommand(editor, mergeSession));
-        registry.Register("freew.merge-rule-skip-record-if", new InsertMergeRuleCondCommand(editor, mergeSession, RuleCondKind.SkipRecordIf));
-        registry.Register("freew.merge-rule-next-record-if", new InsertMergeRuleCondCommand(editor, mergeSession, RuleCondKind.NextRecordIf));
-        registry.Register("freew.merge-rule-fill-in", new InsertMergeRuleFillInCommand(editor));
-        registry.Register("freew.merge-rule-ask", new InsertMergeRuleAskCommand(editor));
-        registry.Register("freew.merge-rule-set", new InsertMergeRuleSetCommand(editor));
-        registry.Register("freew.merge-rule-ref", new InsertMergeRuleRefCommand(editor));
-        registry.Register("freew.merge-preview", new PreviewMergeRecordCommand(editor, mergeSession));
-        registry.Register("freew.merge-preview-first", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.First));
-        registry.Register("freew.merge-preview-previous", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Previous));
-        registry.Register("freew.merge-preview-next", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Next));
-        registry.Register("freew.merge-preview-last", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Last));
-        registry.Register("freew.merge-find-recipient", new FindMergeRecipientCommand(editor, mergeSession));
-        registry.Register("freew.merge-check-errors", new CheckMergeErrorsCommand(
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeRules, EmptyRibbonCommand.Instance); // dropdown host: no action of its own
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeRuleIf, new InsertMergeRuleIfCommand(editor, mergeSession));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeRuleSkipRecordIf, new InsertMergeRuleCondCommand(editor, mergeSession, RuleCondKind.SkipRecordIf));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeRuleNextRecordIf, new InsertMergeRuleCondCommand(editor, mergeSession, RuleCondKind.NextRecordIf));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeRuleFillIn, new InsertMergeRuleFillInCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeRuleAsk, new InsertMergeRuleAskCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeRuleSet, new InsertMergeRuleSetCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeRuleRef, new InsertMergeRuleRefCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergePreview, new PreviewMergeRecordCommand(editor, mergeSession));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergePreviewFirst, new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.First));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergePreviewPrevious, new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Previous));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergePreviewNext, new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Next));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergePreviewLast, new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Last));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeFindRecipient, new FindMergeRecipientCommand(editor, mergeSession));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeCheckErrors, new CheckMergeErrorsCommand(
             editor,
             mergeSession,
             openReportDocument: onOpenMailMergeErrorReport));
-        registry.Register("freew.merge-finish", new FinishMergeCommand(
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeFinish, new FinishMergeCommand(
             editor,
             mergeSession,
             printDocument: onPrintMailMergeDocument));
-        registry.Register("freew.merge-email", new EmailMergeCommand(editor, mergeSession));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeEmail, new EmailMergeCommand(editor, mergeSession));
         // Filter & Sort: refines the active session's MergeData (include/exclude rows, sort column/direction)
         // without touching the merge template. No-ops gracefully when there is no active session or data.
-        registry.Register("freew.merge-filter-sort", new FilterSortRecipientsCommand(editor, mergeSession));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeFilterSort, new FilterSortRecipientsCommand(editor, mergeSession));
         // Envelopes / Labels: set up the page geometry (and optionally a table grid for labels) via the
         // backed ApplyPageSettings / InsertTable paths. No SMTP or print path — page-setup only.
-        registry.Register("freew.merge-envelopes", new EnvelopesCommand(editor));
-        registry.Register("freew.merge-labels", new LabelsCommand(editor, mergeSession));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeEnvelopes, new EnvelopesCommand(editor));
+        FreeWRibbonCommandWorkflow.Register(registry, FreeWRibbonCommandAction.MergeLabels, new LabelsCommand(editor, mergeSession));
 
         RefreshStatefulCommands();
         return registry;
@@ -2087,15 +2110,6 @@ internal static class FreeWRibbonCommands
             window.ShowDialog();
             return result;
         }
-    }
-
-    // A stateful toggle command: executing runs the host action (e.g. show/hide a panel) and its
-    // checked-ness is read back from a host predicate, so the ribbon toggle reflects the live state.
-    private sealed class ToggleActionCommand(Action toggle, Func<bool> isChecked) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) => toggle();
-
-        public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: isChecked());
     }
 
     private static string? ComboValue(RibbonCommandContext context)

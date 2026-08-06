@@ -18,7 +18,8 @@ public sealed class DataSubmittedWorkflowsScreenshotTourTests
 
         tourSource.Should().Contain("EnsureDataSubmittedWorkflowsTourContext");
         tourSource.Should().Contain("new SortCommand(");
-        tourSource.Should().Contain("new FilterCommand(context.Sheet.Id, currentRange, filterColOffset: 3, allowedValues: [\"Open\"])");
+        tourSource.Should().Contain("_filterWorkflowSession.PlanAllowedValues(");
+        tourSource.Should().Contain("TryExecuteAutoFilterMutation(filterPlan)");
         tourSource.Should().Contain("ReapplyAutoFilter()");
         tourSource.Should().Contain("new AdvancedFilterCommand(");
         tourSource.Should().Contain("TextToColumnsDialog.CreateResult(");

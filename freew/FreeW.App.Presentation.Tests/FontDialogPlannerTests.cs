@@ -8,6 +8,11 @@ public sealed class FontDialogPlannerTests
     [Fact]
     public void Catalogs_ExposeWordFontDialogChoicesInDisplayOrder()
     {
+        FontDialogPlanner.Text.Title.Should().Be("Font");
+        FontDialogPlanner.Text.FontFamilyLabel.Should().Be("Font family:");
+        FontDialogPlanner.Text.DoubleStrikethroughLabel.Should().Be("Double strikethrough");
+        FontDialogPlanner.Text.StylisticSetLabel.Should().Be("Stylistic set (1–20):");
+
         FontDialogPlanner.ColorChoices.Select(choice => choice.Label)
             .Should().Equal("Automatic", "Black", "Dark Red", "Red", "Blue accent", "Blue", "Green", "Purple", "Grey");
 
@@ -375,6 +380,31 @@ public sealed class FontDialogPlannerTests
     }
 
     [Fact]
+    public void Session_UnchangedFormattingProducesNoApplyCommands()
+    {
+        var original = RunFormatting.Default with
+        {
+            FontFamily = "Aptos",
+            FontSizePt = 11,
+            CharacterSpacingPt = 1.25,
+            KerningMinSizePt = 8,
+            PositionPt = -2,
+            Ligatures = LigatureMode.Standard,
+            StylisticSet = 4,
+            NumberForm = NumberForm.Lining,
+            NumberSpacing = NumberSpacing.Tabular,
+        };
+        var session = FontDialogPlanner.CreateSession(original, CultureInfo.InvariantCulture);
+
+        var acceptance = session.PlanAcceptance(session.InitialState);
+        var plan = session.BuildApplyPlan(acceptance.Result!);
+
+        acceptance.IsAccepted.Should().BeTrue();
+        acceptance.Result!.AdvancedChanged.Should().BeFalse();
+        plan.Commands.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Session_ExplicitMixedControlChangesProduceOrderedApplyPlan()
     {
         var session = FontDialogPlanner.CreateSession(
@@ -400,6 +430,7 @@ public sealed class FontDialogPlannerTests
 
         acceptance.IsAccepted.Should().BeTrue();
         acceptance.Result!.Bold.Should().BeFalse();
+        acceptance.Result.AdvancedChanged.Should().BeTrue();
         plan.UndoLabel.Should().Be(FontDialogSession.UndoLabel);
         plan.Commands.Should().SatisfyRespectively(
             command => command.Should().BeOfType<FontDialogApplyCommand.SetFamily>(),

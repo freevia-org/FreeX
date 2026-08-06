@@ -8,10 +8,17 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-internal sealed class SelectionPaneDialogItem(SelectionPaneItem item)
+internal sealed class SelectionPaneDialogItem(
+    SelectionPaneSession session,
+    SelectionPaneSessionItem item)
 {
-    public SelectionPaneItem Source { get; } = item;
-    public string Name { get; set; } = item.Name;
+    public SelectionPaneItem Source => item.Source;
+    public string Name
+    {
+        get => item.Name;
+        set => session.SetName(item.Id, value);
+    }
+
     public string AutomationId { get; } = CreateAutomationId(item.Kind, item.Id);
     public string VisibilityAutomationId => AutomationId + "VisibilityBox";
     public string NameAutomationId => AutomationId + "NameBox";
@@ -23,9 +30,19 @@ internal sealed class SelectionPaneDialogItem(SelectionPaneItem item)
         SelectionPaneObjectKind.TextBox => UiText.Get("SelectionPane_ObjectKindTextBox"),
         _ => Source.Kind.ToString()
     };
-    public bool IsVisible { get; set; } = item.IsVisible;
-    public bool IsDropBefore { get; set; }
-    public bool IsDropAfter { get; set; }
+    public bool IsVisible
+    {
+        get => item.IsVisible;
+        set => session.SetVisibility(item.Id, value);
+    }
+
+    public bool IsDropBefore =>
+        session.DropVisual is { IsAllowed: true, Placement: SelectionPaneDropPlacement.Before } plan &&
+        plan.TargetId == item.Id;
+
+    public bool IsDropAfter =>
+        session.DropVisual is { IsAllowed: true, Placement: SelectionPaneDropPlacement.After } plan &&
+        plan.TargetId == item.Id;
 
     private static string CreateAutomationId(SelectionPaneObjectKind kind, Guid id) =>
         $"SelectionPaneItem{kind}{id:N}";
@@ -40,9 +57,8 @@ public sealed partial class SelectionPaneDialog : Window
     private const double DialogMinimumWidth = 460d;
     private const double DialogMinimumHeight = 360d;
 
-    private readonly IReadOnlyList<SelectionPaneItem> _sourceItems;
+    private readonly SelectionPaneSession _session;
     private readonly List<SelectionPaneDialogItem> _items;
-    private readonly List<SelectionPaneMoveChange> _moveChanges = [];
     private readonly ListBox _list = new() { MinHeight = 140 };
     private readonly TextBox _searchBox = new() { MinWidth = 160, Margin = new Thickness(0, 0, 10, 0) };
     private readonly ComboBox _filterBox = new() { MinWidth = 130, Margin = new Thickness(0, 0, 0, 0) };
@@ -55,13 +71,14 @@ public sealed partial class SelectionPaneDialog : Window
     private readonly Button _hideAllButton = new() { Content = UiText.Get("SelectionPane_HideAllButton"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
     private Point? _dragStartPoint;
     private SelectionPaneDialogItem? _dragItem;
+    private bool _isRebinding;
 
     public SelectionPaneDialogResult Result { get; private set; }
 
     public SelectionPaneDialog(IReadOnlyList<SelectionPaneItem> items)
     {
-        _sourceItems = items;
-        Result = new SelectionPaneDialogResult(SelectionPaneDialogAction.ApplyVisibility, null, [], [], []);
+        _session = new SelectionPaneSession(items);
+        Result = _session.CreateResult();
         Title = UiText.Get("SelectionPane_Title");
         Width = DialogDefaultWidth;
         Height = DialogDefaultHeight;
@@ -83,10 +100,12 @@ public sealed partial class SelectionPaneDialog : Window
         _list.DragLeave += List_DragLeave;
         _list.Drop += List_Drop;
         _list.KeyDown += List_KeyDown;
-        _items = items.Select(item => new SelectionPaneDialogItem(item)).ToList();
+        _items = _session.Items.Select(item => new SelectionPaneDialogItem(_session, item)).ToList();
         _list.ItemsSource = _items;
         _list.SelectionChanged += (_, _) =>
         {
+            if (!_isRebinding)
+                _session.Select((_list.SelectedItem as SelectionPaneDialogItem)?.Source.Id);
             UpdateMoveButtons();
             UpdateRenameBox();
         };

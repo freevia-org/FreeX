@@ -63,9 +63,12 @@ public partial class MainWindow
                 "sort-after-amount-descending"));
 
             context.Sheet.AutoFilter = new WorksheetAutoFilterModel(context.FilterRange.ToString(), null);
-            var filterFactory = (GridRange currentRange) =>
-                new FilterCommand(context.Sheet.Id, currentRange, filterColOffset: 3, allowedValues: ["Open"]);
-            if (!TryExecuteRememberedAutoFilterCommand("Filter", context.FilterRange, filterFactory))
+            var filterPlan = _filterWorkflowSession.PlanAllowedValues(
+                context.Sheet.Id,
+                context.FilterRange,
+                columnOffset: 3,
+                allowedValues: ["Open"]);
+            if (!TryExecuteAutoFilterMutation(filterPlan))
                 throw new InvalidOperationException("Data submitted workflows tour could not apply the Status=Open AutoFilter.");
 
             await WaitForDataSubmittedWorkflowsWindowAsync(context.FilterRange.Start);
@@ -78,7 +81,7 @@ public partial class MainWindow
                 "freex_data_submitted_workflows_autofilter_applied_open",
                 context.FilterRange,
                 "Worksheet grid after the real FilterCommand hid rows whose Status is not Open.",
-                "TryExecuteRememberedAutoFilterCommand(\"Filter\", tableRange, range => new FilterCommand(sheet.Id, range, 3, [\"Open\"]))"));
+                "WorksheetFilterWorkflowSession.PlanAllowedValues followed by TryExecuteAutoFilterMutation"));
 
             ExecuteDataSubmittedWorkflowsTourCommand(
                 new FilterCommand(context.Sheet.Id, context.FilterRange, filterColOffset: 3, allowedValues: []),
@@ -105,12 +108,12 @@ public partial class MainWindow
                 "Worksheet grid",
                 "freex_data_submitted_workflows_autofilter_reapplied_open",
                 context.FilterRange,
-                "Worksheet grid after the host ReapplyAutoFilter path replayed the remembered Status=Open command.",
-                "ReapplyAutoFilter() using the remembered FilterCommand factory"));
+                "Worksheet grid after the host ReapplyAutoFilter path replayed the shared Status=Open intent.",
+                "ReapplyAutoFilter() using WorksheetFilterWorkflowSession"));
             workflows.Add(CreateActualDataSubmittedWorkflow(
                 "AutoFilter apply, clear, and reapply",
                 ["UI-CAT-DATA-001", "UI-CMD-DATA-002"],
-                "TryExecuteRememberedAutoFilterCommand, FilterCommand clear, ReapplyAutoFilter",
+                "WorksheetFilterWorkflowSession apply, FilterCommand clear, ReapplyAutoFilter",
                 "autofilter-applied-open",
                 "autofilter-cleared-all-rows-visible",
                 "autofilter-reapplied-open"));
@@ -359,7 +362,7 @@ public partial class MainWindow
         sheet.GroupHiddenRows.Clear();
         sheet.RowOutlineLevels.Clear();
         sheet.DataValidations.Clear();
-        ClearRememberedAutoFilterCommand();
+        _filterWorkflowSession.ResetAutoFilterState();
 
         var filterRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 9, 5));
         var advancedFilterCriteriaRange = new GridRange(new CellAddress(sheet.Id, 1, 7), new CellAddress(sheet.Id, 2, 7));
@@ -613,7 +616,7 @@ public partial class MainWindow
             [
                 "This slice submits real FreeX command/service paths where they are deterministic in process.",
                 "The tour does not synthesize foreground mouse, keytip, dropdown keyboard, access-key, range-picker, or UI Automation Invoke workflows.",
-                "The AutoFilter clear capture uses the same FilterCommand clear path while preserving the remembered command factory so ReapplyAutoFilter can be captured in the same deterministic run.",
+                "The AutoFilter clear capture uses the same FilterCommand clear path while preserving the shared live filter intent so ReapplyAutoFilter can be captured in the same deterministic run.",
                 "The Data Validation proof captures invalid-data detection/selection rather than the foreground ComboBox dropdown popup or modal invalid-entry alert.",
                 "Remove Duplicates is seeded near the end of the sheet because the command deletes worksheet rows; the tour keeps that mutation isolated from earlier captures.",
                 "No Microsoft Excel counterpart screenshots are produced by this tool."

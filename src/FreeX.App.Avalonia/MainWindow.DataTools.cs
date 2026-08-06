@@ -3,12 +3,10 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 
+using FreeX.App.Presentation.Filtering;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-
-using PresentationAdvancedFilterReapplyPlanner = FreeX.App.Presentation.Filtering.AdvancedFilterReapplyPlanner;
-using PresentationAdvancedFilterReapplyState = FreeX.App.Presentation.Filtering.AdvancedFilterReapplyState;
 
 namespace FreeX.App.Avalonia;
 
@@ -20,7 +18,7 @@ public sealed partial class MainWindow
     // arrows): we keep the active invalid-cell set in this field and repaint it on every overlay rebuild
     // (RefreshShell -> BuildSheetGrid -> BuildDrawingObjectOverlay). Clearing empties the set and refreshes.
     private readonly List<CellAddress> _validationCircleCells = new();
-    private PresentationAdvancedFilterReapplyState? _lastInPlaceAdvancedFilter;
+    private readonly WorksheetFilterWorkflowSession _filterWorkflowSession = new();
 
     // ── Reapply ─────────────────────────────────────────────────────────────────
     //
@@ -34,42 +32,18 @@ public sealed partial class MainWindow
             return;
 
         var sheet = _session.ActiveSheet;
-        var sheetId = sheet.Id;
         var selectedRange = _session.SelectedRange;
         var selectedRanges = _session.SelectedRanges;
         var activeCell = _session.ActiveCell;
-        var commands = new List<IWorkbookCommand>();
-
-        // AdvancedFilterCommand replaces the visibility decisions in its list range. Appending the
-        // AutoFilter commands after it lets FilterCommand's ownership-aware recompute add the active
-        // AutoFilter exclusions without un-hiding rows that Advanced Filter just excluded. The
-        // resulting FilterHiddenRows set is therefore the AND of both mechanisms.
-        if (_lastInPlaceAdvancedFilter is not null)
-        {
-            var plan = PresentationAdvancedFilterReapplyPlanner.CreatePlan(_lastInPlaceAdvancedFilter);
-            commands.Add(plan.CreateCommand());
-        }
-
-        if (TryGetAutoFilterReapplyRange(sheet, out var filterRange))
-        {
-            foreach (var column in sheet.AutoFilter!.FilterColumns.ToArray())
-            {
-                if (column.ColumnId < 0 || (uint)column.ColumnId >= filterRange.ColCount)
-                    continue;
-
-                if (TryBuildAutoFilterColumnReapplyCommand(sheetId, filterRange, column) is { } columnCommand)
-                    commands.Add(columnCommand);
-            }
-        }
-
-        if (commands.Count == 0)
+        var plan = _filterWorkflowSession.CreateReapplyPlan(sheet);
+        if (plan is null)
         {
             RefreshShell(UiText.Get("TableLoc_NoReapplyableFilterOrSort"));
             return;
         }
 
         var result = _session.ExecuteReviewCommand(
-            new CompositeWorkbookCommand("Reapply Filters", commands),
+            plan.CreateCommand("Reapply Filters"),
             activeCell);
         if (!result.Success)
         {
@@ -86,134 +60,8 @@ public sealed partial class MainWindow
         // after the atomic command succeeds.
         _session.SelectRanges(selectedRange, selectedRanges, activeCell);
         RefreshShell(UiText.Format(
-            commands.Count == 1 ? "TableLoc_ReapplyedDefinitionsOne" : "TableLoc_ReapplyedDefinitionsMany",
-            commands.Count));
-    }
-
-    private static bool TryGetAutoFilterReapplyRange(Sheet sheet, out GridRange range)
-    {
-        range = default;
-        if (sheet.AutoFilter is not { } autoFilter ||
-            autoFilter.FilterColumns.Count == 0 ||
-            string.IsNullOrWhiteSpace(autoFilter.Reference))
-        {
-            return false;
-        }
-
-        try
-        {
-            range = GridRange.Parse(autoFilter.Reference, sheet.Id);
-            return true;
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// R120-avalonia-datatools-reapply-1: builds the ONE live command that replays a single AutoFilter
-    /// column's currently-active criterion against the sheet's current data, dispatching on whichever
-    /// of the persisted <see cref="WorksheetAutoFilterColumnModel"/> fields is populated -- mirrors
-    /// WPF's <c>_activeAutoFilterColumnFactories</c> (MainWindow.DataFilterCommands.cs) replaying
-    /// value-list, Top 10/Above-Average, custom-condition, and color criteria alike, except this reads
-    /// durable worksheet metadata instead of an in-session factory. Excel allows only one active
-    /// criterion per column, so at most one branch below should ever apply to any real column; returns
-    /// null (skip the column) for a button-only column with nothing to filter, or one whose criterion
-    /// this shell has no live command for (an icon-set filter, the default date-grouped Year/Month/Day
-    /// checklist, or unrecognized native-only filter data -- see
-    /// XlsxWorksheetAutoFilterMaterializer.BuildFilters' identical "unsupported" bucket for the same
-    /// two cases at file-load time).
-    /// </summary>
-    private static IWorkbookCommand? TryBuildAutoFilterColumnReapplyCommand(
-        SheetId sheetId,
-        GridRange filterRange,
-        WorksheetAutoFilterColumnModel column)
-    {
-        var columnOffset = (uint)column.ColumnId;
-
-        // R120-avalonia-datatools-reapply-1: a plain value-list filter's allowed set may include an
-        // allowed blank, represented (mirroring FilterCommand.SplitBlankSentinel) as a literal ""
-        // sentinel appended to the non-blank allowed values -- omitting it here (as the previous
-        // implementation did) would silently stop allowing blanks through on Reapply.
-        if (column.Values.Count > 0 || column.IncludeBlank)
-        {
-            var allowedValues = column.IncludeBlank && !column.Values.Contains("")
-                ? [.. column.Values, ""]
-                : column.Values;
-            return new FilterCommand(sheetId, filterRange, columnOffset, allowedValues);
-        }
-
-        if (column.Top10 is { } top10)
-        {
-            var count = (uint)Math.Max(0, top10.Value ?? 10);
-            return top10.Percent
-                ? TopBottomFilterCommand.Percent(sheetId, filterRange, columnOffset, count, top10.Top)
-                : new TopBottomFilterCommand(sheetId, filterRange, columnOffset, count, top10.Top);
-        }
-
-        if (column.DynamicFilter is { } dynamicFilter && TryGetAverageDirection(dynamicFilter, out var above))
-            return new AverageFilterCommand(sheetId, filterRange, columnOffset, above);
-
-        if (column.ColorFilter is { } colorFilter)
-            return TryBuildColorFilterReapplyCommand(sheetId, filterRange, columnOffset, colorFilter);
-
-        if (column.CustomFilters.Count > 0 &&
-            CustomFilterModelReconstructor.Reconstruct(column.CustomFilters, column.CustomFiltersAnd) is { } criterion)
-        {
-            return new FilterConditionCommand(sheetId, filterRange, columnOffset, criterion);
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// FreeX only ever writes a "dynamicFilter" for Above/Below Average (AverageFilterCommand) -- any
-    /// other dynamicFilter type (e.g. a native file's "today"/"nextMonth"/quarter-relative filter) has
-    /// no live command here, mirroring XlsxWorksheetAutoFilterMaterializer.IsAverageDynamicFilter's
-    /// identical load-time gate.
-    /// </summary>
-    private static bool TryGetAverageDirection(WorksheetAutoFilterDynamicFilterModel dynamicFilter, out bool above)
-    {
-        above = true;
-        if (string.Equals(dynamicFilter.Type, "aboveAverage", StringComparison.OrdinalIgnoreCase))
-            return true;
-        if (string.Equals(dynamicFilter.Type, "belowAverage", StringComparison.OrdinalIgnoreCase))
-        {
-            above = false;
-            return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Mirrors the exact (CellColor, Color) shapes CellFillColorFilterCommand/CellNoFillColorFilterCommand/
-    /// CellFontColorFilterCommand persist (FreeX.Core.Commands/FilterCommand.cs) back into the matching
-    /// live command. CellColor:false with a null Color ("no font color") has no dedicated command --
-    /// Excel's AutoFilter color checklist never offers it as a font-color option -- so that shape is
-    /// left unsupported like any other native-only filter kind.
-    /// </summary>
-    private static IWorkbookCommand? TryBuildColorFilterReapplyCommand(
-        SheetId sheetId,
-        GridRange filterRange,
-        uint columnOffset,
-        WorksheetAutoFilterColorFilterModel colorFilter)
-    {
-        if (colorFilter.CellColor)
-        {
-            return colorFilter.Color is { } fillColor
-                ? new CellFillColorFilterCommand(sheetId, filterRange, columnOffset, fillColor)
-                : new CellNoFillColorFilterCommand(sheetId, filterRange, columnOffset);
-        }
-
-        return colorFilter.Color is { } fontColor
-            ? new CellFontColorFilterCommand(sheetId, filterRange, columnOffset, fontColor)
-            : null;
+            plan.DefinitionCount == 1 ? "TableLoc_ReapplyedDefinitionsOne" : "TableLoc_ReapplyedDefinitionsMany",
+            plan.DefinitionCount));
     }
 
     // ── Circle Invalid Data / Clear Validation Circles ───────────────────────────
