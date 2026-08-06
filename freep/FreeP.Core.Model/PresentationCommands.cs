@@ -1502,6 +1502,8 @@ public sealed class SetMediaPlaybackOptionsCommand : IPresentationCommand
     private readonly bool _afterShowWhenStopped;
     private readonly bool _beforeRewindAfterPlaying;
     private readonly bool _afterRewindAfterPlaying;
+    private readonly bool _beforePlayFullScreen;
+    private readonly bool _afterPlayFullScreen;
 
     public SetMediaPlaybackOptionsCommand(
         int slideIndex,
@@ -1513,7 +1515,9 @@ public sealed class SetMediaPlaybackOptionsCommand : IPresentationCommand
         bool beforeShowWhenStopped = true,
         bool afterShowWhenStopped = true,
         bool beforeRewindAfterPlaying = false,
-        bool afterRewindAfterPlaying = false)
+        bool afterRewindAfterPlaying = false,
+        bool beforePlayFullScreen = false,
+        bool afterPlayFullScreen = false)
     {
         _slideIndex = slideIndex;
         _shapeId = shapeId;
@@ -1525,6 +1529,8 @@ public sealed class SetMediaPlaybackOptionsCommand : IPresentationCommand
         _afterShowWhenStopped = afterShowWhenStopped;
         _beforeRewindAfterPlaying = beforeRewindAfterPlaying;
         _afterRewindAfterPlaying = afterRewindAfterPlaying;
+        _beforePlayFullScreen = beforePlayFullScreen;
+        _afterPlayFullScreen = afterPlayFullScreen;
     }
 
     public string Label => "Set Media Playback Options";
@@ -1536,14 +1542,15 @@ public sealed class SetMediaPlaybackOptionsCommand : IPresentationCommand
             && (media.PlaybackStartMode != _afterStartMode
                 || media.Loop != _afterLoop
                 || media.ShowWhenStopped != _afterShowWhenStopped
-                || media.RewindAfterPlaying != _afterRewindAfterPlaying);
+                || media.RewindAfterPlaying != _afterRewindAfterPlaying
+                || media.PlayFullScreen != _afterPlayFullScreen);
     }
 
     public void Apply(Presentation presentation) => SetOptions(
-        FindMedia(presentation), _afterStartMode, _afterLoop, _afterShowWhenStopped, _afterRewindAfterPlaying);
+        FindMedia(presentation), _afterStartMode, _afterLoop, _afterShowWhenStopped, _afterRewindAfterPlaying, _afterPlayFullScreen);
 
     public void Revert(Presentation presentation) => SetOptions(
-        FindMedia(presentation), _beforeStartMode, _beforeLoop, _beforeShowWhenStopped, _beforeRewindAfterPlaying);
+        FindMedia(presentation), _beforeStartMode, _beforeLoop, _beforeShowWhenStopped, _beforeRewindAfterPlaying, _beforePlayFullScreen);
 
     private MediaInfo? FindMedia(Presentation presentation)
     {
@@ -1571,7 +1578,8 @@ public sealed class SetMediaPlaybackOptionsCommand : IPresentationCommand
         MediaPlaybackStartMode startMode,
         bool loop,
         bool showWhenStopped,
-        bool rewindAfterPlaying)
+        bool rewindAfterPlaying,
+        bool playFullScreen)
     {
         if (media is null)
             return;
@@ -1580,6 +1588,7 @@ public sealed class SetMediaPlaybackOptionsCommand : IPresentationCommand
         media.Loop = loop;
         media.ShowWhenStopped = showWhenStopped;
         media.RewindAfterPlaying = rewindAfterPlaying;
+        media.PlayFullScreen = playFullScreen && media.IsVideo;
     }
 }
 

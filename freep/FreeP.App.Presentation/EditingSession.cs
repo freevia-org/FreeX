@@ -2433,7 +2433,8 @@ public sealed class EditingSession
         MediaPlaybackStartMode startMode,
         bool loop,
         bool showWhenStopped = true,
-        bool rewindAfterPlaying = false)
+        bool rewindAfterPlaying = false,
+        bool playFullScreen = false)
     {
         var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
             CurrentSlide,
@@ -2452,7 +2453,9 @@ public sealed class EditingSession
             media.ShowWhenStopped,
             showWhenStopped,
             media.RewindAfterPlaying,
-            rewindAfterPlaying));
+            rewindAfterPlaying,
+            media.PlayFullScreen,
+            playFullScreen));
         return true;
     }
 

@@ -102,6 +102,45 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Media_PlayFullScreen_RoundTripsThroughVideoFile()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 70,
+            Name = "Full-screen video",
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                PlayFullScreen = true,
+                Bytes = [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70],
+                ContentType = "video/mp4",
+            },
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+            ReadXml(zip, "ppt/slides/slide1.xml")
+                .Descendants(a + "videoFile")
+                .Single()
+                .Attribute("fullScrn")!.Value.Should().Be("1");
+        }
+
+        ms.Position = 0;
+        PptxPackageReader.Read(ms).Slides[0].Shapes[0].Media!
+            .PlayFullScreen.Should().BeTrue();
+    }
+
+    [Fact]
     public void Media_LoopPlayback_RoundTripsThroughPresentationTiming()
     {
         var pres = new Presentation();

@@ -4785,6 +4785,9 @@ public static class PptxPackageReader
                                ?? mediaEl.Attribute(R + "embed")?.Value;
 
                 var mediaInfo = new MediaInfo { IsVideo = isVideo };
+                mediaInfo.PlayFullScreen = isVideo && ReadBooleanOrDefault(
+                    mediaEl.Attribute("fullScrn")?.Value,
+                    defaultValue: false);
                 ReadMediaTiming(nvPr, mediaInfo);
 
                 if (!string.IsNullOrWhiteSpace(mediaRelId))

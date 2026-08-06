@@ -211,6 +211,9 @@ public sealed class MediaInfo
     /// <summary>Whether playback returns to the trim start after reaching its end.</summary>
     public bool RewindAfterPlaying { get; set; }
 
+    /// <summary>Whether an authored video expands to the slideshow viewport while playing.</summary>
+    public bool PlayFullScreen { get; set; }
+
     /// <summary>Whether the media poster remains visible while playback is stopped or paused.</summary>
     public bool ShowWhenStopped { get; set; } = true;
 
