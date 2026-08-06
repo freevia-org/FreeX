@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Free.Shared.Ribbon;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
@@ -12,12 +13,9 @@ namespace FreeX.App.Avalonia;
 //
 // Design mirrors the WPF host's WorkbookWindowRegistry approach, but without that registry (which is a
 // WPF-only DI singleton that depends on IWorkbookWindow/Rect/SystemParameters).  Instead we keep a
-// lightweight static state machine directly in the Avalonia shell:
-//
-//   _sideBySidePrimary   — the window that activated Side by Side (or null when inactive)
-//   _sideBySidePartner   — the other window in the pair (or null when inactive)
-//   _synchronousScroll   — true when scroll sync is on (only meaningful while a pair is active)
-//   _suppressScrollBroadcast — re-entrancy guard: prevents the receiving window from echoing back
+// portable WorkbookSideBySideCoordinator for pair and synchronous-scroll policy, while keeping the
+// native window tiling and scroll application in this shell. _suppressScrollBroadcast is a local
+// re-entrancy guard that prevents the receiving window from echoing a native scroll event back.
 //
 // Scroll sync is hooked into the two places that change the viewport origin in the Avalonia shell:
 //   1. WorksheetScrollBar_ValueChanged (scrollbar drag / click)
@@ -37,9 +35,7 @@ public sealed partial class MainWindow : Window
     // Static so that both windows in a pair can observe each other's state.
     // (The Avalonia shell does not have a shared DI registry like the WPF host; the pairing is
     // stored as object references directly into the two MainWindow instances.)
-    private static MainWindow? _sideBySidePrimary;
-    private static MainWindow? _sideBySidePartner;
-    private static bool _synchronousScroll;
+    private static readonly WorkbookSideBySideCoordinator<MainWindow> SideBySideCoordinator = new();
 
     // Per-instance guard: this window is currently applying an incoming scroll offset and must
     // not echo it back to the partner.
@@ -47,15 +43,11 @@ public sealed partial class MainWindow : Window
 
     // ── State queries ─────────────────────────────────────────────────────────
 
-    private static bool IsSideBySideActive =>
-        _sideBySidePrimary is not null && _sideBySidePartner is not null;
+    private static bool IsSideBySideActive => SideBySideCoordinator.IsActive;
 
-    private static bool IsSynchronousScrollActive =>
-        IsSideBySideActive && _synchronousScroll;
+    private static bool IsSynchronousScrollActive => SideBySideCoordinator.IsSynchronousScrollActive;
 
-    private bool IsInSideBySidePair =>
-        IsSideBySideActive &&
-        (ReferenceEquals(this, _sideBySidePrimary) || ReferenceEquals(this, _sideBySidePartner));
+    private bool IsInSideBySidePair => SideBySideCoordinator.Contains(this);
 
     // ── View Side by Side toggle ──────────────────────────────────────────────
 
@@ -96,31 +88,22 @@ public sealed partial class MainWindow : Window
             scaling,
             [primaryBounds, partnerBounds]);
 
-        _sideBySidePrimary = this;
-        _sideBySidePartner = partner;
+        SideBySideCoordinator.Enable(this, partner);
 
         // Restore Normal state and position both windows.
         TileThisWindowToWorkArea(tiles[0]);
         partner.TileThisWindowToWorkArea(tiles[1]);
     }
 
-    private static void DisableSideBySide()
-    {
-        _sideBySidePrimary = null;
-        _sideBySidePartner = null;
-        _synchronousScroll = false;
-    }
+    private static void DisableSideBySide() => SideBySideCoordinator.Disable();
 
     // ── Synchronous Scrolling toggle ──────────────────────────────────────────
 
     // Command handler for "Synchronous Scrolling"
     private void ToggleSynchronousScrolling()
     {
-        if (!IsSideBySideActive)
-            return; // Guard: sync scrolling requires an active side-by-side pair.
-
-        _synchronousScroll = !_synchronousScroll;
-        RefreshSideBySideRibbonState();
+        if (SideBySideCoordinator.ToggleSynchronousScroll())
+            RefreshSideBySideRibbonState();
     }
 
     // ── Scroll broadcasting ───────────────────────────────────────────────────
@@ -132,16 +115,15 @@ public sealed partial class MainWindow : Window
     /// </summary>
     internal void BroadcastScrollOffsetToSideBySidePartner()
     {
-        if (!IsSynchronousScrollActive || _suppressScrollBroadcast)
-            return;
-
-        var partner = SideBySidePartnerOf(this);
-        if (partner is null)
+        if (_suppressScrollBroadcast)
             return;
 
         var row = _verticalWorksheetScrollBar.Value;
         var col = _horizontalWorksheetScrollBar.Value;
-        partner.ApplySynchronizedScrollOffset(row, col);
+        SideBySideCoordinator.ApplyToSynchronousPartner(
+            this,
+            (Row: row, Column: col),
+            static (partner, offset) => partner.ApplySynchronizedScrollOffset(offset.Row, offset.Column));
     }
 
     private void ApplySynchronizedScrollOffset(double row, double col)
@@ -229,15 +211,7 @@ public sealed partial class MainWindow : Window
     }
 
     private static MainWindow? SideBySidePartnerOf(MainWindow window)
-    {
-        if (!IsSideBySideActive)
-            return null;
-        if (ReferenceEquals(window, _sideBySidePrimary))
-            return _sideBySidePartner;
-        if (ReferenceEquals(window, _sideBySidePartner))
-            return _sideBySidePrimary;
-        return null;
-    }
+        => SideBySideCoordinator.PartnerOf(window);
 
     /// <summary>Applies translated SideBySideLayoutPlanner bounds while preserving local window policy.</summary>
     private void TileThisWindowToWorkArea(AvaloniaWindowTile tile)

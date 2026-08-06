@@ -99,11 +99,7 @@ public sealed class WorkbookWindowRegistry
     private readonly WorkbookWindowRegistryCore<IWorkbookWindow> _core;
     private readonly HashSet<IWorkbookWindow> _hidden = [];
 
-    // Side-by-side / synchronous-scroll state. The pair is the two windows that were tiled together.
-    private IWorkbookWindow? _sideBySidePrimary;
-    private IWorkbookWindow? _sideBySidePartner;
-    private bool _synchronousScroll;
-    private bool _applyingBroadcast;
+    private readonly WorkbookSideBySideCoordinator<IWorkbookWindow> _sideBySide = new();
 
     public WorkbookWindowRegistry()
     {
@@ -132,10 +128,10 @@ public sealed class WorkbookWindowRegistry
     public IReadOnlyList<IWorkbookWindow> HiddenWindows => _core.Windows.Where(_hidden.Contains).ToList();
 
     /// <summary>True when View Side by Side is currently tiling a pair of windows.</summary>
-    public bool IsSideBySideActive => _sideBySidePrimary is not null && _sideBySidePartner is not null;
+    public bool IsSideBySideActive => _sideBySide.IsActive;
 
     /// <summary>True when scrolling one side-by-side window mirrors into its partner.</summary>
-    public bool IsSynchronousScrollActive => IsSideBySideActive && _synchronousScroll;
+    public bool IsSynchronousScrollActive => _sideBySide.IsSynchronousScrollActive;
 
     /// <summary>True when the window is registered and not hidden.</summary>
     public bool IsVisible(IWorkbookWindow window) =>
@@ -155,7 +151,7 @@ public sealed class WorkbookWindowRegistry
             return false;
 
         _hidden.Add(window);
-        if (IsSideBySideEndpoint(window))
+        if (_sideBySide.Contains(window))
             DisableSideBySide();
         window.SetWindowVisible(false);
         return true;
@@ -190,7 +186,7 @@ public sealed class WorkbookWindowRegistry
     {
         ArgumentNullException.ThrowIfNull(window);
         _hidden.Remove(window);
-        if (ReferenceEquals(window, _sideBySidePrimary) || ReferenceEquals(window, _sideBySidePartner))
+        if (_sideBySide.Contains(window))
             DisableSideBySide();
         _core.Unregister(window);
     }
@@ -373,7 +369,7 @@ public sealed class WorkbookWindowRegistry
         // behavior). A restricted one only breaks it if the pair is actually among the windows
         // being re-tiled -- arranging one workbook's windows must not silently un-pair an unrelated
         // side-by-side comparison between two OTHER documents.
-        if (restrictToDocumentId is null || visibleWindows.Any(IsSideBySideEndpoint))
+        if (restrictToDocumentId is null || visibleWindows.Any(_sideBySide.Contains))
             DisableSideBySide();
 
         for (var index = 0; index < visibleWindows.Count; index++)
@@ -406,9 +402,7 @@ public sealed class WorkbookWindowRegistry
         primary.TileToWorkArea(new Rect(primaryBounds.X, primaryBounds.Y, primaryBounds.Width, primaryBounds.Height));
         partner.TileToWorkArea(new Rect(partnerBounds.X, partnerBounds.Y, partnerBounds.Width, partnerBounds.Height));
 
-        _sideBySidePrimary = primary;
-        _sideBySidePartner = partner;
-        return true;
+        return _sideBySide.Enable(primary, partner);
     }
 
     /// <summary>
@@ -422,7 +416,7 @@ public sealed class WorkbookWindowRegistry
     /// </summary>
     public bool ResetSideBySidePair(double workAreaWidth, double workAreaHeight)
     {
-        if (_sideBySidePrimary is not { } primary || _sideBySidePartner is not { } partner)
+        if (!_sideBySide.TryGetPair(out var primary, out var partner))
             return false;
 
         var (primaryBounds, partnerBounds) = SideBySideLayoutPlanner.Tile(workAreaWidth, workAreaHeight);
@@ -432,12 +426,7 @@ public sealed class WorkbookWindowRegistry
     }
 
     /// <summary>Stops side-by-side mode. Layout is left as-is; synchronous scrolling is also turned off.</summary>
-    public void DisableSideBySide()
-    {
-        _sideBySidePrimary = null;
-        _sideBySidePartner = null;
-        _synchronousScroll = false;
-    }
+    public void DisableSideBySide() => _sideBySide.Disable();
 
     /// <summary>
     /// Stops side-by-side mode only if <paramref name="requester"/> is actually one of the paired
@@ -452,11 +441,7 @@ public sealed class WorkbookWindowRegistry
     public bool DisableSideBySideFor(IWorkbookWindow requester)
     {
         ArgumentNullException.ThrowIfNull(requester);
-        if (!IsSideBySideActive || !IsSideBySideEndpoint(requester))
-            return false;
-
-        DisableSideBySide();
-        return true;
+        return _sideBySide.DisableFor(requester);
     }
 
     /// <summary>
@@ -465,11 +450,7 @@ public sealed class WorkbookWindowRegistry
     /// </summary>
     public bool SetSynchronousScroll(bool active)
     {
-        if (active && !IsSideBySideActive)
-            return false;
-
-        _synchronousScroll = active;
-        return true;
+        return _sideBySide.SetSynchronousScroll(active);
     }
 
     /// <summary>
@@ -480,39 +461,11 @@ public sealed class WorkbookWindowRegistry
     public void BroadcastScrollOffset(IWorkbookWindow origin, WorkbookScrollOffset offset)
     {
         ArgumentNullException.ThrowIfNull(origin);
-        if (!IsSynchronousScrollActive || _applyingBroadcast)
-            return;
-
-        var target = SideBySidePartnerOf(origin);
-        if (target is null)
-            return;
-
-        _applyingBroadcast = true;
-        try
-        {
-            target.SetScrollOffset(offset);
-        }
-        finally
-        {
-            _applyingBroadcast = false;
-        }
+        _sideBySide.ApplyToSynchronousPartner(
+            origin,
+            offset,
+            static (target, synchronizedOffset) => target.SetScrollOffset(synchronizedOffset));
     }
-
-    /// <summary>The side-by-side partner of <paramref name="window"/>, or null if it is not part of the pair.</summary>
-    private IWorkbookWindow? SideBySidePartnerOf(IWorkbookWindow window)
-    {
-        if (!IsSideBySideActive)
-            return null;
-        if (ReferenceEquals(window, _sideBySidePrimary))
-            return _sideBySidePartner;
-        if (ReferenceEquals(window, _sideBySidePartner))
-            return _sideBySidePrimary;
-        return null;
-    }
-
-    private bool IsSideBySideEndpoint(IWorkbookWindow window) =>
-        ReferenceEquals(window, _sideBySidePrimary) ||
-        ReferenceEquals(window, _sideBySidePartner);
 
     /// <summary>The next visible window after <paramref name="window"/> in the switch cycle, skipping hidden windows.</summary>
     private IWorkbookWindow? NextVisibleWindow(IWorkbookWindow window)
