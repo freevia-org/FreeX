@@ -12,12 +12,4 @@
     <ProjectReference Include="..\Free.Shared.Localization\Free.Shared.Localization.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Portable shell helpers exposed to their FreeX/FreeW consumers. ExportAtomicWriter remains a
-         public compatibility adapter over AppServices atomic I/O; the rest stay internal-visible. -->
-    <InternalsVisibleTo Include="FreeX.App.Host" />
-    <InternalsVisibleTo Include="FreeX.App.Host.Tests" />
-    <InternalsVisibleTo Include="FreeX.App.Host.Logic.Tests" />
-  </ItemGroup>
-
 </Project>

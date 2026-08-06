@@ -19,10 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Domain-neutral app-service helpers extracted from FreeX.App.Services. Kept
-         internal-visible to their existing FreeX consumers until promoted to the
-         public shared API for FreeW. -->
-    <InternalsVisibleTo Include="FreeX.App.Services" />
+    <!-- Tests exercise the internal normalization and recovery policy hooks directly. -->
     <InternalsVisibleTo Include="FreeX.App.Services.Tests" />
   </ItemGroup>
 

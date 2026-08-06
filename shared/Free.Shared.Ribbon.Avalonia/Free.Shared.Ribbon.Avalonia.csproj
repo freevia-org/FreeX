@@ -22,8 +22,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- FreeX renderer tests verify the internal palette and theme application helpers. -->
     <InternalsVisibleTo Include="FreeX.App.Avalonia.Tests" />
-    <InternalsVisibleTo Include="FreeW.App.Avalonia.Tests" />
   </ItemGroup>
 
 </Project>

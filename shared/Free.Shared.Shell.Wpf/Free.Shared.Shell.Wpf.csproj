@@ -17,11 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- WPF-coupled shell helpers extracted from FreeX.App.Host. Kept internal-visible
-         to their existing FreeX consumers until promoted to the public shared API. -->
-    <InternalsVisibleTo Include="FreeX.App.Host" />
+    <!-- Host tests exercise internal dialog sizing and startup diagnostics contracts. -->
     <InternalsVisibleTo Include="FreeX.App.Host.Tests" />
-    <InternalsVisibleTo Include="FreeX.App.Host.Logic.Tests" />
     <InternalsVisibleTo Include="FreeW.App.Host.Tests" />
   </ItemGroup>
 

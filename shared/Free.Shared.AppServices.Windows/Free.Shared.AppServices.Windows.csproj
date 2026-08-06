@@ -15,11 +15,4 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Windows file-association registrar extracted from FreeX.App.Host. Kept internal-visible
-         to its existing FreeX consumers until promoted to the public shared API. -->
-    <InternalsVisibleTo Include="FreeX.App.Host" />
-    <InternalsVisibleTo Include="FreeX.App.Host.Tests" />
-  </ItemGroup>
-
 </Project>
