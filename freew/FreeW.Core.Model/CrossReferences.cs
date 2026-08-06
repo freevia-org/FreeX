@@ -26,7 +26,8 @@ public enum CrossRefType
 /// WordprocessingML field that backs each: plain <see cref="Text"/> and <see cref="HeadingNumber"/> /
 /// <see cref="ParagraphNumber"/> are <c>REF</c> fields (the latter with the <c>\n</c>/<c>\w</c> switch),
 /// <see cref="PageNumber"/> is a <c>PAGEREF</c> field, <see cref="AboveBelow"/> is a <c>REF … \p</c>
-/// field, and a foot/endnote number is a <c>NOTEREF</c> field.
+/// field, caption variants are plain <c>REF</c> fields over distinct bookmark spans, and a foot/endnote
+/// number is a <c>NOTEREF</c> field.
 /// </summary>
 public enum CrossRefInsertAs
 {
@@ -43,7 +44,13 @@ public enum CrossRefInsertAs
     AboveBelow,
 
     /// <summary>The target's paragraph/list number (e.g. "1)"). A <c>REF … \n</c> field.</summary>
-    ParagraphNumber
+    ParagraphNumber,
+
+    /// <summary>A caption's label and sequence number without its descriptive text.</summary>
+    CaptionLabelAndNumber,
+
+    /// <summary>A caption's descriptive text without its label, number, or separator.</summary>
+    CaptionText
 }
 
 /// <summary>
@@ -104,7 +111,9 @@ public sealed record CrossReferenceInsertionPlan(
     string? BookmarkNameToAdd,
     int? TargetRunIndex = null,
     int? TargetNoteId = null,
-    bool? TargetIsFootnote = null);
+    bool? TargetIsFootnote = null,
+    int? TargetTextStartOffset = null,
+    int? TargetTextEndOffset = null);
 
 /// <summary>The WordprocessingML field keyword a cross-reference uses.</summary>
 public enum CrossRefFieldKind
@@ -161,8 +170,8 @@ public static class CrossReferences
     /// <summary>
     /// The "Insert reference to" choices valid for <paramref name="type"/>, in the order Word lists them.
     /// Foot/endnotes offer their note number and page; numbered items and headings add the number/position
-    /// options; bookmarks/captions offer text, page, and (for captions) the caption's number machinery via
-    /// paragraph number. Always non-empty (every type at least offers a usable option).
+    /// options; captions offer entire-caption, label-and-number, caption-text, page, and position variants.
+    /// Always non-empty (every type at least offers a usable option).
     /// </summary>
     public static IReadOnlyList<CrossRefInsertAs> InsertOptions(CrossRefType type) => type switch
     {
@@ -171,7 +180,8 @@ public static class CrossReferences
         CrossRefType.Bookmark =>
             [CrossRefInsertAs.Text, CrossRefInsertAs.PageNumber, CrossRefInsertAs.ParagraphNumber, CrossRefInsertAs.AboveBelow],
         CrossRefType.Figure or CrossRefType.Table or CrossRefType.Equation =>
-            [CrossRefInsertAs.Text, CrossRefInsertAs.PageNumber, CrossRefInsertAs.ParagraphNumber, CrossRefInsertAs.AboveBelow],
+            [CrossRefInsertAs.Text, CrossRefInsertAs.CaptionLabelAndNumber, CrossRefInsertAs.CaptionText,
+                CrossRefInsertAs.PageNumber, CrossRefInsertAs.AboveBelow],
         CrossRefType.Footnote or CrossRefType.Endnote =>
             [CrossRefInsertAs.Text, CrossRefInsertAs.PageNumber, CrossRefInsertAs.AboveBelow],
         CrossRefType.NumberedItem =>
@@ -232,10 +242,14 @@ public static class CrossReferences
             && targetBlock >= 0
             && targetBlock < doc.Blocks.Count
             && doc.Blocks[targetBlock] is Paragraph;
-        var needsAnchor = string.IsNullOrEmpty(target.Anchor)
+        var captionRange = CaptionRangeFor(doc, type, target, insertAs);
+        var selectedAnchor = captionRange is { } range
+            ? FindBookmarkForTextRange((Paragraph)doc.Blocks[target.BlockIndex!.Value], range.Start, range.End)
+            : target.Anchor;
+        var needsAnchor = string.IsNullOrEmpty(selectedAnchor)
             && (isNoteTarget || isBodyParagraphTarget);
         var bookmarkNameToAdd = needsAnchor ? AllocateCrossReferenceAnchor(doc) : null;
-        var resolved = bookmarkNameToAdd is null ? target : target with { Anchor = bookmarkNameToAdd };
+        var resolved = target with { Anchor = bookmarkNameToAdd ?? selectedAnchor };
         var field = BuildField(type, resolved, insertAs, hyperlink);
         return new CrossReferenceInsertionPlan(
             resolved,
@@ -243,15 +257,18 @@ public static class CrossReferences
             bookmarkNameToAdd,
             bookmarkNameToAdd is null ? null : resolved.RunIndex,
             bookmarkNameToAdd is null || !isNoteTarget ? null : resolved.NoteId,
-            bookmarkNameToAdd is null || !isNoteTarget ? null : type == CrossRefType.Footnote);
+            bookmarkNameToAdd is null || !isNoteTarget ? null : type == CrossRefType.Footnote,
+            bookmarkNameToAdd is null ? null : captionRange?.Start,
+            bookmarkNameToAdd is null ? null : captionRange?.End);
     }
 
     /// <summary>
     /// The cached display text a freshly-inserted reference shows, computed from <paramref name="doc"/>.
     /// <see cref="CrossRefInsertAs.Text"/> is the target's text/mark; <see cref="CrossRefInsertAs.AboveBelow"/>
-    /// is "above"/"below" relative to <paramref name="sourceBlockIndex"/>; the number options use the
-    /// outline/list numbering; <see cref="CrossRefInsertAs.PageNumber"/> falls back to "1" (real pagination
-    /// is an app-layer concern). Deterministic and side-effect free.
+    /// is "above"/"below" relative to <paramref name="sourceBlockIndex"/>; caption variants select their
+    /// exact label/number or descriptive-text span; the number options use outline/list numbering; and
+    /// <see cref="CrossRefInsertAs.PageNumber"/> falls back to "1" (real pagination is an app-layer concern).
+    /// Deterministic and side-effect free.
     /// </summary>
     public static string ResolveText(
         TextDocument doc, CrossRefType type, CrossRefTarget target, CrossRefInsertAs insertAs, int sourceBlockIndex)
@@ -262,6 +279,8 @@ public static class CrossReferences
             CrossRefInsertAs.Text when type is CrossRefType.Footnote or CrossRefType.Endnote
                 => ResolveNoteDisplayText(doc, type, target, target.Display),
             CrossRefInsertAs.Text => target.Display,
+            CrossRefInsertAs.CaptionLabelAndNumber => CaptionTextFor(doc, type, target, labelAndNumber: true),
+            CrossRefInsertAs.CaptionText => CaptionTextFor(doc, type, target, labelAndNumber: false),
             CrossRefInsertAs.PageNumber => "1",
             CrossRefInsertAs.HeadingNumber => HeadingNumberAt(doc, target.BlockIndex),
             CrossRefInsertAs.ParagraphNumber => ParagraphNumberAt(doc, target.BlockIndex),
@@ -385,14 +404,13 @@ public static class CrossReferences
 
     private static List<CrossRefTarget> CaptionTargets(TextDocument doc, CaptionLabel label)
     {
-        var prefix = Captions.LabelText(label) + " ";
         var targets = new List<CrossRefTarget>();
         var blocks = doc.Blocks;
         for (var i = 0; i < blocks.Count; i++)
         {
             if (blocks[i] is Paragraph paragraph
                 && Captions.IsCaptionParagraph(paragraph)
-                && paragraph.PlainText.StartsWith(prefix, StringComparison.Ordinal))
+                && TryCaptionRanges(paragraph, Captions.LabelText(label), out _, out _, out _))
                 targets.Add(new CrossRefTarget(paragraph.PlainText, AnchorAt(doc, i), i));
         }
         return targets;
@@ -418,6 +436,115 @@ public static class CrossReferences
                 marker?.RunIndex));
         }
         return targets;
+    }
+
+    private static TextRange? CaptionRangeFor(
+        TextDocument doc,
+        CrossRefType type,
+        CrossRefTarget target,
+        CrossRefInsertAs insertAs)
+    {
+        if (type is not (CrossRefType.Figure or CrossRefType.Table or CrossRefType.Equation)
+            || target.BlockIndex is not { } blockIndex
+            || blockIndex < 0
+            || blockIndex >= doc.Blocks.Count
+            || doc.Blocks[blockIndex] is not Paragraph paragraph
+            || !TryCaptionRanges(
+                paragraph, CaptionLabelFor(type), out var whole, out var labelAndNumber, out var captionText))
+        {
+            return null;
+        }
+
+        return insertAs switch
+        {
+            CrossRefInsertAs.CaptionLabelAndNumber => labelAndNumber,
+            CrossRefInsertAs.CaptionText => captionText,
+            CrossRefInsertAs.Text or CrossRefInsertAs.PageNumber or CrossRefInsertAs.AboveBelow => whole,
+            _ => null
+        };
+    }
+
+    private static string CaptionTextFor(
+        TextDocument doc,
+        CrossRefType type,
+        CrossRefTarget target,
+        bool labelAndNumber)
+    {
+        var range = CaptionRangeFor(
+            doc,
+            type,
+            target,
+            labelAndNumber ? CrossRefInsertAs.CaptionLabelAndNumber : CrossRefInsertAs.CaptionText);
+        if (range is not { } selected
+            || target.BlockIndex is not { } blockIndex
+            || doc.Blocks[blockIndex] is not Paragraph paragraph)
+        {
+            return target.Display;
+        }
+
+        return paragraph.PlainText[selected.Start..selected.End];
+    }
+
+    private static bool TryCaptionRanges(
+        Paragraph paragraph,
+        string expectedLabel,
+        out TextRange whole,
+        out TextRange labelAndNumber,
+        out TextRange captionText)
+    {
+        whole = default;
+        labelAndNumber = default;
+        captionText = default;
+        if (!Captions.IsCaptionParagraph(paragraph))
+            return false;
+
+        var sequenceRunIndex = paragraph.Runs.FindIndex(run =>
+            run.ComplexField is { Keyword: "SEQ" } field
+            && string.Equals(SequenceLabel(field.Instruction), expectedLabel, StringComparison.Ordinal));
+        if (sequenceRunIndex < 0)
+            return false;
+
+        var plainText = paragraph.PlainText;
+        var labelEnd = paragraph.Runs.Take(sequenceRunIndex + 1).Sum(run => run.Text.Length);
+        var textStart = labelEnd;
+        while (textStart < plainText.Length && char.IsWhiteSpace(plainText[textStart]))
+            textStart++;
+        if (textStart < plainText.Length && plainText[textStart] is ':' or '.' or '-' or '\u2013' or '\u2014')
+            textStart++;
+        while (textStart < plainText.Length && char.IsWhiteSpace(plainText[textStart]))
+            textStart++;
+
+        whole = new TextRange(0, plainText.Length);
+        labelAndNumber = new TextRange(0, labelEnd);
+        captionText = new TextRange(textStart, plainText.Length);
+        return true;
+    }
+
+    private static string CaptionLabelFor(CrossRefType type) => type switch
+    {
+        CrossRefType.Figure => Captions.FigureLabelText,
+        CrossRefType.Table => Captions.TableLabelText,
+        CrossRefType.Equation => Captions.EquationLabelText,
+        _ => string.Empty
+    };
+
+    private static string SequenceLabel(string instruction)
+    {
+        var span = instruction.AsSpan().Trim();
+        var keywordEnd = span.IndexOfAny(' ', '\t', '\\');
+        if (keywordEnd < 0)
+            return string.Empty;
+        span = span[keywordEnd..].TrimStart();
+        if (span.Length == 0)
+            return string.Empty;
+        if (span[0] == '"')
+        {
+            var closingQuote = span[1..].IndexOf('"');
+            return closingQuote < 0 ? string.Empty : span.Slice(1, closingQuote).ToString();
+        }
+
+        var end = span.IndexOfAny(' ', '\t', '\\');
+        return (end < 0 ? span : span[..end]).ToString();
     }
 
     private static List<CrossRefTarget> NumberedItemTargets(TextDocument doc)
@@ -486,7 +613,8 @@ public static class CrossReferences
 
         return field.InsertAs switch
         {
-            CrossRefInsertAs.Text => NonEmptyOrCached(ParagraphTextAt(doc, targetBlock), cached),
+            CrossRefInsertAs.Text or CrossRefInsertAs.CaptionLabelAndNumber or CrossRefInsertAs.CaptionText
+                => TryBookmarkedText(doc, field.Target, out var bookmarkedText) ? bookmarkedText : cached,
             CrossRefInsertAs.HeadingNumber => NonEmptyOrCached(HeadingNumberAt(doc, targetBlock), cached),
             CrossRefInsertAs.ParagraphNumber => NonEmptyOrCached(ParagraphNumberAt(doc, targetBlock), cached),
             CrossRefInsertAs.AboveBelow => AboveBelow(targetBlock, sourceBlockIndex),
@@ -694,6 +822,100 @@ public static class CrossReferences
         return null;
     }
 
+    private static bool TryBookmarkedText(TextDocument doc, string name, out string text)
+    {
+        text = string.Empty;
+        if (string.IsNullOrEmpty(name))
+            return false;
+
+        var paragraphs = doc.Blocks.SelectMany(ParagraphsIn).ToList();
+        for (var paragraphIndex = 0; paragraphIndex < paragraphs.Count; paragraphIndex++)
+        {
+            var paragraph = paragraphs[paragraphIndex];
+            if (!paragraph.BookmarkNames.Contains(name, StringComparer.Ordinal))
+                continue;
+
+            var start = paragraph.BookmarkBoundaries.FirstOrDefault(boundary =>
+                boundary.Kind == BookmarkBoundaryKind.Start
+                && string.Equals(boundary.Name, name, StringComparison.Ordinal));
+            if (start is null)
+            {
+                text = paragraph.PlainText.TrimEnd();
+                return true;
+            }
+
+            for (var endParagraphIndex = paragraphIndex; endParagraphIndex < paragraphs.Count; endParagraphIndex++)
+            {
+                var endParagraph = paragraphs[endParagraphIndex];
+                var end = endParagraph.BookmarkBoundaries.FirstOrDefault(boundary =>
+                    boundary.Kind == BookmarkBoundaryKind.End
+                    && string.Equals(boundary.PairKey, start.PairKey, StringComparison.Ordinal));
+                if (end is null)
+                    continue;
+
+                var from = Math.Clamp(start.RunIndex, 0, paragraph.Runs.Count);
+                var to = Math.Clamp(end.RunIndex, 0, endParagraph.Runs.Count);
+                if (endParagraphIndex == paragraphIndex)
+                {
+                    to = Math.Max(from, to);
+                    text = string.Concat(paragraph.Runs.Skip(from).Take(to - from).Select(run => run.Text));
+                    return true;
+                }
+
+                var parts = new List<string>
+                {
+                    string.Concat(paragraph.Runs.Skip(from).Select(run => run.Text))
+                };
+                for (var index = paragraphIndex + 1; index < endParagraphIndex; index++)
+                    parts.Add(paragraphs[index].PlainText);
+                parts.Add(string.Concat(endParagraph.Runs.Take(to).Select(run => run.Text)));
+                text = string.Join('\n', parts);
+                return true;
+            }
+
+            return false;
+        }
+
+        return false;
+    }
+
+    private static string? FindBookmarkForTextRange(Paragraph paragraph, int startOffset, int endOffset)
+    {
+        var offsets = RunOffsets(paragraph);
+        foreach (var start in paragraph.BookmarkBoundaries.Where(boundary =>
+                     boundary.Kind == BookmarkBoundaryKind.Start
+                     && boundary.Name is { Length: > 0 } name
+                     && paragraph.BookmarkNames.Contains(name, StringComparer.Ordinal)))
+        {
+            var end = paragraph.BookmarkBoundaries.FirstOrDefault(boundary =>
+                boundary.Kind == BookmarkBoundaryKind.End
+                && string.Equals(boundary.PairKey, start.PairKey, StringComparison.Ordinal));
+            if (end is not null
+                && offsets[Math.Clamp(start.RunIndex, 0, paragraph.Runs.Count)] == startOffset
+                && offsets[Math.Clamp(end.RunIndex, 0, paragraph.Runs.Count)] == endOffset)
+            {
+                return start.Name;
+            }
+        }
+
+        if (startOffset != 0 || endOffset != paragraph.PlainText.Length)
+            return null;
+
+        return paragraph.BookmarkNames.FirstOrDefault(name =>
+            name is { Length: > 0 }
+            && !paragraph.BookmarkBoundaries.Any(boundary =>
+                boundary.Kind == BookmarkBoundaryKind.Start
+                && string.Equals(boundary.Name, name, StringComparison.Ordinal)));
+    }
+
+    private static int[] RunOffsets(Paragraph paragraph)
+    {
+        var offsets = new int[paragraph.Runs.Count + 1];
+        for (var index = 0; index < paragraph.Runs.Count; index++)
+            offsets[index + 1] = offsets[index] + paragraph.Runs[index].Text.Length;
+        return offsets;
+    }
+
     private static string ParagraphTextAt(TextDocument doc, int blockIndex) =>
         doc.Blocks[blockIndex] is Paragraph paragraph ? paragraph.PlainText.TrimEnd() : string.Empty;
 
@@ -801,6 +1023,8 @@ public static class CrossReferences
         && doc.Blocks[blockIndex] is Paragraph { BookmarkName: { Length: > 0 } name }
             ? name
             : null;
+
+    private readonly record struct TextRange(int Start, int End);
 
     private static string AllocateCrossReferenceAnchor(TextDocument doc)
     {

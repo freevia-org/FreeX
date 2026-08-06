@@ -8,9 +8,12 @@ public sealed class InsertCrossReferenceCommand(
     string? bookmarkName,
     int? targetRunIndex = null,
     int? targetNoteId = null,
-    bool? targetIsFootnote = null) : IDocumentCommand
+    bool? targetIsFootnote = null,
+    int? targetTextStartOffset = null,
+    int? targetTextEndOffset = null) : IDocumentCommand
 {
     private Run[]? _previousHostRuns;
+    private Run[]? _previousTargetRuns;
     private string[]? _previousTargetBookmarks;
     private BookmarkBoundary[]? _previousTargetBookmarkBoundaries;
 
@@ -27,20 +30,28 @@ public sealed class InsertCrossReferenceCommand(
         {
             _previousTargetBookmarks = [.. target.BookmarkNames];
             _previousTargetBookmarkBoundaries = [.. target.BookmarkBoundaries];
+            _previousTargetRuns = [.. target.Runs];
             if (!target.BookmarkNames.Contains(bookmarkName, StringComparer.Ordinal))
                 target.BookmarkNames.Add(bookmarkName);
-            if (targetRunIndex is { } runIndex && runIndex >= 0 && runIndex < target.Runs.Count)
+            if (targetTextStartOffset is { } textStart
+                && targetTextEndOffset is { } textEnd
+                && textStart >= 0
+                && textEnd >= textStart
+                && textEnd <= target.PlainText.Length)
             {
-                var pairKey = "auto:" + bookmarkName;
-                target.BookmarkBoundaries.Add(new BookmarkBoundary(
-                    pairKey,
-                    BookmarkBoundaryKind.Start,
-                    runIndex,
-                    bookmarkName));
-                target.BookmarkBoundaries.Add(new BookmarkBoundary(
-                    pairKey,
-                    BookmarkBoundaryKind.End,
-                    runIndex + 1));
+                var previousBoundaryPositions = BookmarkBoundaryMapper.Capture(target);
+                BookmarkBoundaryMapper.EnsureRunBoundaryAtTextOffset(target, textEnd);
+                BookmarkBoundaryMapper.EnsureRunBoundaryAtTextOffset(target, textStart);
+                BookmarkBoundaryMapper.Restore(target, previousBoundaryPositions);
+                AddBookmarkBoundaries(
+                    target,
+                    bookmarkName,
+                    BookmarkBoundaryMapper.EnsureRunBoundaryAtTextOffset(target, textStart),
+                    BookmarkBoundaryMapper.EnsureRunBoundaryAtTextOffset(target, textEnd));
+            }
+            else if (targetRunIndex is { } runIndex && runIndex >= 0 && runIndex < target.Runs.Count)
+            {
+                AddBookmarkBoundaries(target, bookmarkName, runIndex, runIndex + 1);
             }
         }
 
@@ -60,13 +71,34 @@ public sealed class InsertCrossReferenceCommand(
         {
             target.BookmarkNames.Clear();
             target.BookmarkNames.AddRange(_previousTargetBookmarks);
+            target.Runs.Clear();
+            target.Runs.AddRange(_previousTargetRuns ?? []);
             target.BookmarkBoundaries.Clear();
             target.BookmarkBoundaries.AddRange(_previousTargetBookmarkBoundaries ?? []);
         }
 
         _previousHostRuns = null;
+        _previousTargetRuns = null;
         _previousTargetBookmarks = null;
         _previousTargetBookmarkBoundaries = null;
+    }
+
+    private static void AddBookmarkBoundaries(
+        Paragraph target,
+        string bookmarkName,
+        int startRunIndex,
+        int endRunIndex)
+    {
+        var pairKey = "auto:" + bookmarkName;
+        target.BookmarkBoundaries.Add(new BookmarkBoundary(
+            pairKey,
+            BookmarkBoundaryKind.Start,
+            startRunIndex,
+            bookmarkName));
+        target.BookmarkBoundaries.Add(new BookmarkBoundary(
+            pairKey,
+            BookmarkBoundaryKind.End,
+            endRunIndex));
     }
 
     private static Paragraph? ParagraphAt(IDocumentCommandContext context, int blockIndex) =>

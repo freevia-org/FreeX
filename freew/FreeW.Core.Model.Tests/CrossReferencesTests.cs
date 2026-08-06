@@ -128,6 +128,52 @@ public class CrossReferencesTests
     }
 
     [Fact]
+    public void Targets_CaptionTypes_RequireNativeSequenceField()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Figure 1: Styled text only") { StyleId = Captions.StyleId });
+
+        CrossReferences.Targets(doc, CrossRefType.Figure).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Targets_CaptionTypes_AcceptTabbedSequenceInstructionAndRequireMatchingLabel()
+    {
+        var doc = new TextDocument();
+        var figure = new Paragraph { StyleId = Captions.StyleId };
+        figure.Runs.Add(new Run("Figure "));
+        figure.Runs.Add(Run.ComplexFieldRun("SEQ\tFigure \\* ARABIC", "1"));
+        figure.Runs.Add(new Run(". Sample"));
+        var mismatched = new Paragraph { StyleId = Captions.StyleId };
+        mismatched.Runs.Add(new Run("Figure "));
+        mismatched.Runs.Add(Run.ComplexFieldRun("SEQ Table \\* ARABIC", "2"));
+        mismatched.Runs.Add(new Run(". Wrong sequence"));
+        doc.Blocks.Add(figure);
+        doc.Blocks.Add(mismatched);
+
+        CrossReferences.Targets(doc, CrossRefType.Figure)
+            .Should().ContainSingle().Which.BlockIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void Targets_CaptionTypes_UseSequenceLabelWhenVisibleLabelIsExcludedOrNonbreaking()
+    {
+        var doc = new TextDocument();
+        var excludedLabel = new Paragraph { StyleId = Captions.StyleId };
+        excludedLabel.Runs.Add(Run.ComplexFieldRun(" SEQ Figure \\* ARABIC ", "1"));
+        excludedLabel.Runs.Add(new Run(": Hidden label"));
+        var nonbreaking = new Paragraph { StyleId = Captions.StyleId };
+        nonbreaking.Runs.Add(new Run("Figure\u00A0"));
+        nonbreaking.Runs.Add(Run.ComplexFieldRun(" SEQ Figure \\* ARABIC ", "2"));
+        nonbreaking.Runs.Add(new Run(": Nonbreaking space"));
+        doc.Blocks.Add(excludedLabel);
+        doc.Blocks.Add(nonbreaking);
+
+        CrossReferences.Targets(doc, CrossRefType.Figure)
+            .Select(target => target.BlockIndex).Should().Equal(0, 1);
+    }
+
+    [Fact]
     public void Targets_Footnote_EnumeratesByAscendingIdWithNoteId()
     {
         var doc = new TextDocument();
@@ -255,6 +301,116 @@ public class CrossReferencesTests
         CrossReferences.InsertOptions(CrossRefType.Heading).Should().Contain(CrossRefInsertAs.HeadingNumber);
     }
 
+    [Fact]
+    public void InsertOptions_CaptionsUseWordCaptionVariants()
+    {
+        CrossReferences.InsertOptions(CrossRefType.Figure).Should().Equal(
+            CrossRefInsertAs.Text,
+            CrossRefInsertAs.CaptionLabelAndNumber,
+            CrossRefInsertAs.CaptionText,
+            CrossRefInsertAs.PageNumber,
+            CrossRefInsertAs.AboveBelow);
+    }
+
+    [Theory]
+    [InlineData(CrossRefInsertAs.Text, "Figure 1: Sample caption text", 0, 29)]
+    [InlineData(CrossRefInsertAs.CaptionLabelAndNumber, "Figure 1", 0, 8)]
+    [InlineData(CrossRefInsertAs.CaptionText, "Sample caption text", 10, 29)]
+    [InlineData(CrossRefInsertAs.PageNumber, "1", 0, 29)]
+    [InlineData(CrossRefInsertAs.AboveBelow, "above", 0, 29)]
+    public void PlanInsertion_CaptionVariantUsesExactWordBookmarkSpan(
+        CrossRefInsertAs insertAs,
+        string expectedText,
+        int expectedStart,
+        int expectedEnd)
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(Captions.BuildCaption(CaptionLabel.Figure, 1, "Sample caption text"));
+        doc.Blocks.Add(new Paragraph("Reference"));
+        var target = CrossReferences.Targets(doc, CrossRefType.Figure).Single();
+
+        var plan = CrossReferences.PlanInsertion(
+            doc, CrossRefType.Figure, target, insertAs, hyperlink: true, sourceBlockIndex: 1);
+
+        plan.BookmarkNameToAdd.Should().Be("_Ref1");
+        plan.TargetTextStartOffset.Should().Be(expectedStart);
+        plan.TargetTextEndOffset.Should().Be(expectedEnd);
+        plan.FieldRun.Text.Should().Be(expectedText);
+        plan.FieldRun.CrossReference!.Kind.Should().Be(
+            insertAs == CrossRefInsertAs.PageNumber ? CrossRefFieldKind.PageRef : CrossRefFieldKind.Ref);
+    }
+
+    [Fact]
+    public void PlanInsertion_CaptionVariantReusesOnlyItsExactBookmarkSpan()
+    {
+        var doc = new TextDocument();
+        var caption = Captions.BuildCaption(CaptionLabel.Figure, 1, "Sample caption text");
+        caption.BookmarkNames.AddRange(["_RefWhole", "_RefLabel"]);
+        caption.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "whole", BookmarkBoundaryKind.Start, 0, "_RefWhole"));
+        caption.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "whole", BookmarkBoundaryKind.End, 3));
+        caption.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "label", BookmarkBoundaryKind.Start, 0, "_RefLabel"));
+        caption.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "label", BookmarkBoundaryKind.End, 2));
+        doc.Blocks.Add(caption);
+        var target = CrossReferences.Targets(doc, CrossRefType.Figure).Single();
+
+        var labelPlan = CrossReferences.PlanInsertion(
+            doc, CrossRefType.Figure, target, CrossRefInsertAs.CaptionLabelAndNumber, true, 1);
+        var textPlan = CrossReferences.PlanInsertion(
+            doc, CrossRefType.Figure, target, CrossRefInsertAs.CaptionText, true, 1);
+
+        labelPlan.BookmarkNameToAdd.Should().BeNull();
+        labelPlan.FieldRun.CrossReference!.Target.Should().Be("_RefLabel");
+        textPlan.BookmarkNameToAdd.Should().Be("_Ref1");
+        textPlan.FieldRun.CrossReference!.Target.Should().Be("_Ref1");
+    }
+
+    [Fact]
+    public void PlanInsertion_CaptionDoesNotReusePartialBookmarkAsWholeCaption()
+    {
+        var doc = new TextDocument();
+        var caption = Captions.BuildCaption(CaptionLabel.Figure, 1, "Sample caption text");
+        caption.BookmarkNames.Add("_RefLabel");
+        caption.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "label", BookmarkBoundaryKind.Start, 0, "_RefLabel"));
+        caption.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "label", BookmarkBoundaryKind.End, 2));
+        doc.Blocks.Add(caption);
+        var target = CrossReferences.Targets(doc, CrossRefType.Figure).Single();
+
+        var plan = CrossReferences.PlanInsertion(
+            doc, CrossRefType.Figure, target, CrossRefInsertAs.Text, true, 1);
+
+        plan.BookmarkNameToAdd.Should().Be("_Ref1");
+        plan.FieldRun.CrossReference!.Target.Should().Be("_Ref1");
+    }
+
+    [Theory]
+    [InlineData(". Sample caption text", "Sample caption text")]
+    [InlineData(" -   Sample caption text", "Sample caption text")]
+    [InlineData("\u2013 Sample caption text", "Sample caption text")]
+    [InlineData("\u2014  Sample caption text", "Sample caption text")]
+    public void PlanInsertion_CaptionTextExcludesWordSeparatorVariants(string suffix, string expected)
+    {
+        var doc = new TextDocument();
+        var caption = new Paragraph { StyleId = Captions.StyleId };
+        caption.Runs.Add(new Run("Figure "));
+        caption.Runs.Add(Run.ComplexFieldRun(" SEQ Figure \\* ARABIC ", "1"));
+        caption.Runs.Add(new Run(suffix));
+        doc.Blocks.Add(caption);
+        var target = CrossReferences.Targets(doc, CrossRefType.Figure).Single();
+
+        var plan = CrossReferences.PlanInsertion(
+            doc, CrossRefType.Figure, target, CrossRefInsertAs.CaptionText, true, 1);
+
+        plan.FieldRun.Text.Should().Be(expected);
+        caption.PlainText[plan.TargetTextStartOffset!.Value..plan.TargetTextEndOffset!.Value]
+            .Should().Be(expected);
+    }
+
     [Theory]
     [InlineData(CrossRefType.Heading, CrossRefInsertAs.Text, CrossRefFieldKind.Ref)]
     [InlineData(CrossRefType.Heading, CrossRefInsertAs.PageNumber, CrossRefFieldKind.PageRef)]
@@ -359,6 +515,48 @@ public class CrossReferencesTests
 
         CrossReferences.ResolveField(doc, run.CrossReference!, run.Text, sourceBlockIndex: 1)
             .Should().Be("Chapter Two");
+    }
+
+    [Fact]
+    public void ResolveField_RefText_UsesCrossParagraphBookmarkRange()
+    {
+        var doc = new TextDocument();
+        var first = new Paragraph { Runs = { new Run("Before "), new Run("First") } };
+        first.BookmarkNames.Add("multi");
+        first.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "multi-pair", BookmarkBoundaryKind.Start, 1, "multi"));
+        var second = new Paragraph { Runs = { new Run("Second"), new Run(" after") } };
+        second.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "multi-pair", BookmarkBoundaryKind.End, 1));
+        doc.Blocks.Add(first);
+        doc.Blocks.Add(second);
+
+        CrossReferences.ResolveField(
+                doc,
+                new CrossReferenceField(CrossRefFieldKind.Ref, "multi", CrossRefInsertAs.Text, false),
+                "stale",
+                sourceBlockIndex: 1)
+            .Should().Be("First\nSecond");
+    }
+
+    [Fact]
+    public void ResolveField_RefText_ValidEmptyBookmarkClearsCachedResult()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph("Target");
+        paragraph.BookmarkNames.Add("empty");
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "empty-pair", BookmarkBoundaryKind.Start, 1, "empty"));
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "empty-pair", BookmarkBoundaryKind.End, 1));
+        doc.Blocks.Add(paragraph);
+
+        CrossReferences.ResolveField(
+                doc,
+                new CrossReferenceField(CrossRefFieldKind.Ref, "empty", CrossRefInsertAs.Text, false),
+                "stale",
+                sourceBlockIndex: 0)
+            .Should().BeEmpty();
     }
 
     [Fact]

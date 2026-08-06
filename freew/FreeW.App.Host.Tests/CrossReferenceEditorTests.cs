@@ -129,6 +129,30 @@ public sealed class CrossReferenceEditorTests
     }
 
     [StaFact]
+    public void InsertCrossReference_CaptionText_WrapsOnlyDescriptiveText()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(Captions.BuildCaption(CaptionLabel.Figure, 1, "Sample caption text"));
+        doc.Blocks.Add(new Paragraph("See "));
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var target = CrossReferences.Targets(view.Model, CrossRefType.Figure).Single();
+        view.InsertCrossReference(CrossRefType.Figure, target, CrossRefInsertAs.CaptionText, hyperlink: true);
+        view.CommitToModel();
+
+        var caption = (Paragraph)view.Model.Blocks[0];
+        caption.Runs.Where(run => run.CrossReference is null).Select(run => run.Text)
+            .Should().Equal("Figure ", "1", ": ", "Sample caption text");
+        caption.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.Start, 3, "_Ref1"));
+        caption.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.End, 4));
+        InsertedField(view).Text.Should().Be("Sample caption text");
+    }
+
+    [StaFact]
     public void UpdateFields_CrossReference_RefreshesCachedHeadingText()
     {
         var doc = TextDocument.CreateEmpty();

@@ -60,7 +60,7 @@ public static class CrossReferenceDialogPlanner
 
     public static IReadOnlyList<CrossReferenceInsertAsChoice> BuildInsertAsChoices(CrossRefType type) =>
         CrossReferences.InsertOptions(type)
-            .Select(insertAs => new CrossReferenceInsertAsChoice(insertAs, LabelForInsertAs(insertAs)))
+            .Select(insertAs => new CrossReferenceInsertAsChoice(insertAs, LabelForInsertAs(type, insertAs)))
             .ToArray();
 
     public static IReadOnlyList<CrossReferenceTargetChoice> BuildTargetChoices(
@@ -136,6 +136,14 @@ public static class CrossReferenceDialogPlanner
             CrossRefInsertAs.HeadingNumber => "Heading number",
             CrossRefInsertAs.AboveBelow => "Above/below",
             CrossRefInsertAs.ParagraphNumber => "Paragraph number",
+            CrossRefInsertAs.CaptionLabelAndNumber => "Only label and number",
+            CrossRefInsertAs.CaptionText => "Only caption text",
             _ => insertAs.ToString()
         };
+
+    public static string LabelForInsertAs(CrossRefType type, CrossRefInsertAs insertAs) =>
+        type is CrossRefType.Figure or CrossRefType.Table or CrossRefType.Equation
+        && insertAs == CrossRefInsertAs.Text
+            ? "Entire caption"
+            : LabelForInsertAs(insertAs);
 }
